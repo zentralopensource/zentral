@@ -16,6 +16,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='printerppd',
             name='file',
-            field=models.FileField(blank=True, upload_to=zentral.contrib.monolith.models.ppd_path),
+            field=models.FileField(blank=True, upload_to="legacy_path"),
         ),
     ]

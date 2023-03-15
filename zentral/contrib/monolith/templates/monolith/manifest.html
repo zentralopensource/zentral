@@ -227,62 +227,6 @@
 </table>
 {% endif %}
 
-{% if perms.monolith.view_printer %}
-<h3 id="printers">{{ manifest_printers|length }} Printer{{ manifest_printers|length|pluralize }}</h3>
-
-{% if perms.monolith.add_printer %}
-<p><a class="btn btn-default" href="{% url 'monolith:add_manifest_printer' object.id %}">Add</a></p>
-{% endif %}
-
-<table class="table">
-  <thead>
-    <tr>
-      <th>name</th>
-      <th>model</th>
-      <th>version</th>
-      <th>tags</th>
-      {% if perms.monolith.change_printer or perms.monolith.delete_printer %}
-      <th></th>
-      {% endif %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for manifest_printer in manifest_printers %}
-    <tr>
-      <td>
-        {{ manifest_printer.name }}
-      </td>
-      <td>
-        <a href="{% url 'monolith:ppd' manifest_printer.ppd.id %}">{{ manifest_printer.ppd.model_name }}</a>
-      </td>
-      <td>
-        {{ manifest_printer.version }}
-      </td>
-      <td>
-        {% for tag in manifest_printer.tags.all %}
-        {% inventory_tag tag %}
-        {% endfor %}
-      </td>
-      {% if perms.monolith.change_printer or perms.monolith.delete_printer %}
-      <td width="15%">
-        {% if perms.monolith.change_printer %}
-        <a class="btn btn-default" href="{% url 'monolith:update_manifest_printer' object.id manifest_printer.id %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-        </a>
-        {% endif %}
-        {% if perms.monolith.delete_printer %}
-        <a class="btn btn-danger" href="{% url 'monolith:delete_manifest_printer' object.id manifest_printer.id %}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
-        {% endif %}
-      </td>
-      {% endif %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-
 {% if perms.monolith.view_manifestsubmanifest %}
 <h3 id="submanifests">{{ manifest_sub_manifests|length }} Sub manifest{{ manifest_sub_manifests|length|pluralize }}</h3>
 

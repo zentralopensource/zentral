@@ -1,6 +1,5 @@
 import hashlib
 import os
-import plistlib
 import shutil
 import subprocess
 import tempfile
@@ -41,53 +40,6 @@ class AttachmentFile(object):
                    'version': str(sub_manifest_attachment.version)}
         pkginfo.update(self.get_extra_pkginfo(sub_manifest_attachment))
         return pkginfo
-
-
-class MobileconfigFile(AttachmentFile):
-    type = "configuration_profile"
-
-    def __init__(self, f):
-        try:
-            self._pl = plistlib.load(f)
-        except plistlib.InvalidFileException:
-            # maybe a signed plist
-            infile, _ = self.save_tempory_file(f)
-            outfile_fd, outfile = tempfile.mkstemp()
-            outfile_f = os.fdopen(outfile_fd, "rb")
-            try:
-                # TODO: noverify -> verify signature ???
-                subprocess.check_call(["/usr/bin/openssl", "smime", "-verify",
-                                       "-in", infile, "-inform", "DER",
-                                       "-noverify", "-out", outfile])
-            except subprocess.CalledProcessError:
-                # not a valid
-                raise AttachmentError("Unable to read plist")
-            else:
-                try:
-                    self._pl = plistlib.load(outfile_f)
-                except plistlib.InvalidFileException:
-                    raise AttachmentError("Signed data not a plist")
-            finally:
-                os.remove(infile)
-                outfile_f.close()
-                os.unlink(outfile)
-
-        # extract attributes
-        for attr, pl_attr in (("name", "PayloadDisplayName"),
-                              ("identifier", "PayloadIdentifier")):
-            try:
-                setattr(self, attr, self._pl[pl_attr])
-            except KeyError:
-                raise AttachmentError("Plist without {}".format(pl_attr))
-
-    def get_extra_pkginfo(self, sub_manifest_attachment):
-        return {'installer_type': 'profile',
-                'minimum_munki_version': '2.2',
-                'minimum_os_version': '10.9.0',  # TODO: HARDCODED !!!
-                'PayloadDisplayName': self.name,
-                'PayloadIdentifier': self.identifier,
-                'installer_item_size': 1,
-                'uninstall_method': 'remove_profile'}
 
 
 class PackageFile(AttachmentFile):

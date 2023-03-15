@@ -19,11 +19,6 @@ urlpatterns = [
          views.PkgInfoNameEventsStoreRedirectView.as_view(),
          name='pkg_info_name_events_store_redirect'),
 
-    # PPDs
-    path('ppds/', views.PPDsView.as_view(), name='ppds'),
-    path('ppds/upload/', views.UploadPPDView.as_view(), name='upload_ppd'),
-    path('ppds/<int:pk>/', views.PPDView.as_view(), name='ppd'),
-
     # catalogs
     path('catalogs/', views.CatalogsView.as_view(), name='catalogs'),
     path('catalogs/create/', views.CreateCatalogView.as_view(), name='create_catalog'),
@@ -94,14 +89,6 @@ urlpatterns = [
     path('manifests/<int:pk>/delete_enrollment_package/<int:mep_pk>/',
          views.DeleteManifestEnrollmentPackageView.as_view(), name='delete_manifest_enrollment_package'),
 
-    # manifest printers
-    path('manifests/<int:m_pk>/add_printer/',
-         views.AddManifestPrinterView.as_view(), name='add_manifest_printer'),
-    path('manifests/<int:m_pk>/printers/<int:pk>/update/',
-         views.UpdateManifestPrinterView.as_view(), name='update_manifest_printer'),
-    path('manifests/<int:m_pk>/printers/<int:pk>/delete/',
-         views.DeleteManifestPrinterView.as_view(), name='delete_manifest_printer'),
-
     # manifest sub manifests
     path('manifests/<int:pk>/sub_manifests/add/',
          views.AddManifestSubManifestView.as_view(), name='add_manifest_sub_manifest'),
@@ -113,10 +100,6 @@ urlpatterns = [
     # manifest cache servers
     path('manifests/<int:pk>/delete_cache_server/<int:cs_pk>/',
          views.DeleteManifestCacheServerView.as_view(), name='delete_manifest_cache_server'),
-
-    # extra
-    path('download_printer_ppd/<str:token>/', views.DownloadPrinterPPDView.as_view(),
-         name='download_printer_ppd'),
 
     # managedsoftwareupdate API
     path('munki_repo/catalogs/<path:name>',
@@ -137,7 +120,6 @@ main_menu_cfg = {
     'items': (
         ('catalogs', 'Catalogs', False, ("monolith.view_catalog",)),
         ('pkg_infos', 'PkgInfos', False, ("monolith.view_pkginfo",)),
-        ('ppds', 'Printer PPDs', False, ("monolith.view_printerppd",)),
         ('conditions', 'Conditions', False, ("monolith.view_condition",)),
         ('manifests', 'Manifests', False, ("monolith.view_manifest",)),
         ('sub_manifests', 'Sub manifests', False, ("monolith.view_submanifest",)),

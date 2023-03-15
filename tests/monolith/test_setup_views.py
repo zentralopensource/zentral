@@ -2,7 +2,6 @@ from datetime import datetime
 from functools import reduce
 from io import BytesIO
 import operator
-import plistlib
 from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -171,22 +170,6 @@ class MonolithSetupViewsTestCase(TestCase):
                                    args=(self.pkginfo_name_1.pk,)))
         # dev store cannot redirect
         self.assertRedirects(response, reverse("monolith:pkg_info_name_events", args=(self.pkginfo_name_1.pk,)))
-
-    # PPDs
-
-    def test_ppds_login_redirect(self):
-        self._login_redirect(reverse("monolith:ppds"))
-
-    def test_ppds_permission_denied(self):
-        self._login()
-        response = self.client.get(reverse("monolith:ppds"))
-        self.assertEqual(response.status_code, 403)
-
-    def test_ppds(self):
-        self._login("monolith.view_printerppd")
-        response = self.client.get(reverse("monolith:ppds"))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/printerppd_list.html")
 
     # catalogs
 
@@ -500,36 +483,12 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "monolith/edit_sub_manifest_attachment.html")
         self.assertFormError(
             response, "form", "file",
-            "Unable to read plist, Not a component package or a product archive"
+            "Not a component package or a product archive"
         )
         self.assertFormError(
             response, "form", "featured_item",
             "Only optional install items can be featured"
         )
-
-    def test_add_sub_manifest_attachment_post(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login("monolith.add_submanifestattachment", "monolith.view_submanifest")
-        name = get_random_string(12)
-        fake_file = BytesIO(plistlib.dumps({
-            "PayloadContent": [],
-            "PayloadDisplayName": name,
-            "PayloadIdentifier": "1",
-            "PayloadType": "Configuration",
-            "PayloadUUID": "1",
-            "PayloadVersion": "1"
-        }))
-        fake_file.name = f"{name}.mobileconfig"
-        response = self.client.post(
-            reverse("monolith:sub_manifest_add_attachment", args=(submanifest.pk,)),
-            {"file": fake_file,
-             "key": "optional_installs",
-             "featured_item": "on"},
-            follow=True,
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
-        self.assertContains(response, name)
 
     # add submanifest script
 

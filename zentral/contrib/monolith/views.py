@@ -35,16 +35,14 @@ from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManif
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
                     EnrollmentForm,
-                    ManifestForm, ManifestPrinterForm, ManifestSearchForm,
+                    ManifestForm, ManifestSearchForm,
                     PkgInfoSearchForm,
                     SubManifestForm, SubManifestSearchForm,
-                    SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm,
-                    UploadPPDForm)
+                    SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm)
 from .models import (MunkiNameError, parse_munki_name,
                      Catalog, CacheServer,
                      EnrolledMachine,
                      Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
-                     Printer, PrinterPPD,
                      Condition,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
 from .utils import (filter_catalog_data, filter_sub_manifest_data,
@@ -208,35 +206,6 @@ class FetchPkgInfoNameEventsView(EventsMixin, FetchEventsView):
 
 class PkgInfoNameEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     permission_required = ("monolith.view_pkginfo", "monolith.view_pkginfoname")
-
-
-# PPDs
-
-
-class PPDsView(PermissionRequiredMixin, ListView):
-    permission_required = "monolith.view_printerppd"
-    model = PrinterPPD
-
-
-class UploadPPDView(PermissionRequiredMixin, CreateView):
-    permission_required = "monolith.add_printerppd"
-    model = PrinterPPD
-    form_class = UploadPPDForm
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["title"] = "Upload PPD file"
-        return ctx
-
-
-class PPDView(PermissionRequiredMixin, DetailView):
-    permission_required = "monolith.view_printerppd"
-    model = PrinterPPD
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["printers"] = list(ctx["object"].printer_set.filter(trashed_at__isnull=True))
-        return ctx
 
 
 # catalogs
@@ -842,10 +811,6 @@ class ManifestView(PermissionRequiredMixin, DetailView):
         context['manifest_catalogs'] = list(manifest.manifestcatalog_set
                                                     .prefetch_related("tags")
                                                     .select_related("catalog").all())
-        context['manifest_printers'] = list(manifest.printer_set
-                                                    .prefetch_related("tags")
-                                                    .select_related("ppd")
-                                                    .filter(trashed_at__isnull=True))
         context['manifest_sub_manifests'] = list(manifest.manifestsubmanifest_set
                                                          .prefetch_related("tags")
                                                          .select_related("sub_manifest").all())
@@ -1281,88 +1246,6 @@ class DeleteManifestEnrollmentPackageView(PermissionRequiredMixin, TemplateView)
         return redirect(manifest)
 
 
-# manifest printers
-
-
-class AddManifestPrinterView(PermissionRequiredMixin, CreateView):
-    permission_required = "monolith.add_printer"
-    model = Printer
-    form_class = ManifestPrinterForm
-    template_name = "monolith/manifest_printer_form.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.manifest = get_object_or_404(Manifest, pk=kwargs["m_pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["manifest"] = self.manifest
-        return ctx
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['manifest'] = self.manifest
-        return kwargs
-
-    def form_valid(self, form):
-        printer = form.save(commit=False)
-        printer.manifest = self.manifest
-        printer.save()
-        form.save_m2m()
-        self.manifest.bump_version()
-        return HttpResponseRedirect("{}#printers".format(self.manifest.get_absolute_url()))
-
-
-class UpdateManifestPrinterView(PermissionRequiredMixin, UpdateView):
-    permission_required = "monolith.change_printer"
-    model = Printer
-    form_class = ManifestPrinterForm
-    template_name = "monolith/manifest_printer_form.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.manifest = get_object_or_404(Manifest, pk=kwargs["m_pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["manifest"] = self.manifest
-        return ctx
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['manifest'] = self.manifest
-        return kwargs
-
-    def form_valid(self, *args, **kwargs):
-        response = super().form_valid(*args, **kwargs)
-        self.manifest.bump_version()
-        return response
-
-    def get_success_url(self):
-        return "{}#printers".format(self.manifest.get_absolute_url())
-
-
-class DeleteManifestPrinterView(PermissionRequiredMixin, DeleteView):
-    permission_required = "monolith.delete_printer"
-    model = Printer
-    template_name = "monolith/delete_manifest_printer.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.manifest = get_object_or_404(Manifest, pk=kwargs["m_pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["manifest"] = self.manifest
-        return ctx
-
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        self.object.mark_as_trashed()
-        self.manifest.bump_version()
-        return HttpResponseRedirect("{}#printers".format(self.manifest.get_absolute_url()))
-
-
 # manifest sub manifests
 
 
@@ -1412,30 +1295,6 @@ class DeleteManifestCacheServerView(PermissionRequiredMixin, View):
         manifest = cache_server.manifest
         cache_server.delete()
         return HttpResponseRedirect("{}#cache-servers".format(manifest.get_absolute_url()))
-
-
-# extra
-
-
-class DownloadPrinterPPDView(View):
-    @cached_property
-    def _redirect_to_files(self):
-        return file_storage_has_signed_urls()
-
-    def get(self, request, *args, **kwargs):
-        try:
-            printer_ppd = PrinterPPD.objects.get_with_token(kwargs["token"])
-        except ValueError:
-            logger.error("Invalid token %s", kwargs["token"])
-            raise Http404
-        except PrinterPPD.DoesNotExist:
-            logger.warning("Could not find printer PPD with token %s", kwargs["token"])
-            raise Http404
-        else:
-            if self._redirect_to_files:
-                return HttpResponseRedirect(default_storage.url(printer_ppd.file.name))
-            else:
-                return FileResponse(printer_ppd.file)
 
 
 # managedsoftwareupdate API
@@ -1732,7 +1591,6 @@ class MRPackageView(MRNameView):
             except TypeError:
                 for pkginfo in chain(self.manifest.pkginfos_with_deps_and_updates(self.tags),
                                      self.manifest.enrollment_packages_pkginfo_deps(self.tags),
-                                     self.manifest.printers_pkginfo_deps(self.tags),
                                      self.manifest.default_managed_installs_deps(self.tags)):
                     if pkginfo.pk == pk:
                         pkginfo_name = pkginfo.name.name

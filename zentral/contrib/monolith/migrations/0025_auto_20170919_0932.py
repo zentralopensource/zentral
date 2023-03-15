@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
                 ('product', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=256), editable=False, size=None)),
                 ('file_version', models.CharField(editable=False, max_length=256)),
                 ('pc_file_name', models.CharField(editable=False, max_length=12)),
-                ('file', models.FileField(upload_to=zentral.contrib.monolith.models.ppd_path)),
+                ('file', models.FileField(upload_to="legacy_path")),
                 ('file_compressed', models.BooleanField(editable=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
             ],

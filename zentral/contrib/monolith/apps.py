@@ -16,8 +16,6 @@ class ZentralMonolithAppConfig(ZentralAppConfig):
         "manifestsubmanifest",
         "pkginfo",
         "pkginfoname",
-        "printer",
-        "printerppd",
         "submanifest",
         "submanifestattachment",
         "submanifestpkginfo",

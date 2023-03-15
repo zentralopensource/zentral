@@ -41,9 +41,6 @@
   {% if total.pkginfo %}
   {{ total.pkginfo }} Repository Package{{ total.pkginfo|pluralize }},
   {% endif %}
-  {% if total.configuration_profile %}
-  {{ total.configuration_profile }} Configuration Profile{{ total.configuration_profile|pluralize }},
-  {% endif %}
   {% if total.package %}
   {{ total.package }} Package{{ total.package|pluralize }}
   {% endif %}
@@ -64,7 +61,7 @@
     <li><a href="{% url 'monolith:sub_manifest_add_pkg_info' object.id %}">Repository Package</a>
     {% endif %}
     {% if perms.monolith.add_submanifestattachment %}
-    <li><a href="{% url 'monolith:sub_manifest_add_attachment' object.id %}">Configuration Profile or Package</a>
+    <li><a href="{% url 'monolith:sub_manifest_add_attachment' object.id %}">Package</a>
     <li><a href="{% url 'monolith:sub_manifest_add_script' object.id %}">Script</a>
     {% endif %}
   </ul>
