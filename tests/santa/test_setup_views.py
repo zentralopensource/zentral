@@ -12,6 +12,7 @@ from django.utils.crypto import get_random_string
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, File, Tag
 from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, Target
+from zentral.core.events.base import AuditEvent
 
 
 def get_random_sha256():
@@ -20,6 +21,8 @@ def get_random_sha256():
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class SantaSetupViewsTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         # user
@@ -241,27 +244,64 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/configuration_form.html")
         self.assertContains(response, "Santa configuration")
 
-    def test_post_create_configuration_view(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_create_configuration_view(self, post_event):
         self._login("santa.add_configuration", "santa.view_configuration")
-        response = self.client.post(reverse("santa:create_configuration"),
-                                    {"name": get_random_string(64),
-                                     "batch_size": 50,
-                                     "client_mode": "1",
-                                     "full_sync_interval": 602,
-                                     "allow_unknown_shard": 87,
-                                     "enable_all_event_upload_shard": 65,
-                                     "sync_incident_severity": 0,
-                                     }, follow=True)
-        configuration = response.context["object"]
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("santa:create_configuration"),
+                                        {"name": name,
+                                         "batch_size": 50,
+                                         "client_mode": "1",
+                                         "full_sync_interval": 602,
+                                         "allow_unknown_shard": 87,
+                                         "enable_all_event_upload_shard": 65,
+                                         "sync_incident_severity": 0,
+                                         }, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertContains(response, name)
+        configuration = response.context["object"]
+        self.assertEqual(configuration.name, name)
         self.assertEqual(configuration.full_sync_interval, 602)
         self.assertEqual(configuration.allow_unknown_shard, 87)
         self.assertEqual(configuration.enable_all_event_upload_shard, 65)
         self.assertEqual(configuration.sync_incident_severity, 0)
         self.assertFalse(configuration.block_usb_mount)
         self.assertEqual(configuration.remount_usb_mode, [])
-        self.assertTemplateUsed(response, "santa/configuration_detail.html")
-        self.assertContains(response, configuration.name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "santa.configuration",
+                 "pk": str(configuration.pk),
+                 "new_value": {
+                     "pk": configuration.pk,
+                     "name": name,
+                     "client_mode": "Monitor",
+                     "client_certificate_auth": False,
+                     "batch_size": 50,
+                     "full_sync_interval": 602,
+                     "enable_bundles": False,
+                     "enable_transitive_rules": False,
+                     "allowed_path_regex": "",
+                     "blocked_path_regex": "",
+                     "block_usb_mount": False,
+                     "remount_usb_mode": [],
+                     "allow_unknown_shard": 87,
+                     "enable_all_event_upload_shard": 65,
+                     "sync_incident_severity": 0,
+                     "created_at": configuration.created_at,
+                     "updated_at": configuration.updated_at
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"santa_configuration": [str(configuration.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
     def test_post_update_configuration_view_permission_denied(self):
         self._login("santa.add_configuration", "santa.view_configuration")
@@ -277,21 +317,25 @@ class SantaSetupViewsTestCase(TestCase):
                                      }, follow=True)
         self.assertEqual(response.status_code, 403)
 
-    def test_post_update_configuration_view(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_update_configuration_view(self, post_event):
         self._login("santa.add_configuration", "santa.change_configuration", "santa.view_configuration")
         configuration = self._force_configuration()
-        response = self.client.post(reverse("santa:update_configuration", args=(configuration.pk,)),
-                                    {"name": configuration.name,
-                                     "batch_size": 50,
-                                     "client_mode": "1",
-                                     "full_sync_interval": 603,
-                                     "allow_unknown_shard": 91,
-                                     "enable_all_event_upload_shard": 76,
-                                     "sync_incident_severity": 300,
-                                     "block_usb_mount": "on",
-                                     "remount_usb_mode": "rdonly, noexec"
-                                     }, follow=True)
+        prev_updated_at = configuration.updated_at
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("santa:update_configuration", args=(configuration.pk,)),
+                                        {"name": configuration.name,
+                                         "batch_size": 50,
+                                         "client_mode": "1",
+                                         "full_sync_interval": 603,
+                                         "allow_unknown_shard": 91,
+                                         "enable_all_event_upload_shard": 76,
+                                         "sync_incident_severity": 300,
+                                         "block_usb_mount": "on",
+                                         "remount_usb_mode": "rdonly, noexec"
+                                         }, follow=True)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertEqual(len(callbacks), 1)
         configuration = response.context["object"]
         self.assertEqual(configuration.full_sync_interval, 603)
         self.assertEqual(configuration.allow_unknown_shard, 91)
@@ -299,6 +343,57 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(configuration.sync_incident_severity, 300)
         self.assertTrue(configuration.block_usb_mount)
         self.assertEqual(configuration.remount_usb_mode, ["rdonly", "noexec"])
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "santa.configuration",
+                 "pk": str(configuration.pk),
+                 "prev_value": {
+                     "pk": configuration.pk,
+                     "name": configuration.name,
+                     "client_mode": "Monitor",
+                     "client_certificate_auth": False,
+                     "batch_size": 50,
+                     "full_sync_interval": 600,
+                     "enable_bundles": False,
+                     "enable_transitive_rules": False,
+                     "allowed_path_regex": "",
+                     "blocked_path_regex": "",
+                     "block_usb_mount": False,
+                     "remount_usb_mode": [],
+                     "allow_unknown_shard": 100,
+                     "enable_all_event_upload_shard": 0,
+                     "sync_incident_severity": 0,
+                     "created_at": configuration.created_at,
+                     "updated_at": prev_updated_at
+                 },
+                 "new_value": {
+                     "pk": configuration.pk,
+                     "name": configuration.name,
+                     "client_mode": "Monitor",
+                     "client_certificate_auth": False,
+                     "batch_size": 50,
+                     "full_sync_interval": 603,
+                     "enable_bundles": False,
+                     "enable_transitive_rules": False,
+                     "allowed_path_regex": "",
+                     "blocked_path_regex": "",
+                     "block_usb_mount": True,
+                     "remount_usb_mode": ["rdonly", "noexec"],
+                     "allow_unknown_shard": 91,
+                     "enable_all_event_upload_shard": 76,
+                     "sync_incident_severity": 300,
+                     "created_at": configuration.created_at,
+                     "updated_at": configuration.updated_at
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"santa_configuration": [str(configuration.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
     def test_post_update_configuration_view_remount_usb_mode_error(self):
         self._login("santa.add_configuration", "santa.change_configuration", "santa.view_configuration")
