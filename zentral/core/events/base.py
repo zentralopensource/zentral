@@ -65,7 +65,7 @@ class EventObserver(object):
         if self.content_type and self.pk:
             try:
                 app_label, model = self.content_type.split(".")
-                ct = ContentType.objects.get(app_label=app_label, model=model)
+                ct = ContentType.objects.get_by_natural_key(app_label, model)
                 return ct.get_object_for_this_type(pk=self.pk)
             except ObjectDoesNotExist:
                 pass
@@ -510,7 +510,16 @@ class AuditEvent(BaseEvent):
         return cls(EventMetadata(request=event_request, tags=[instance._meta.app_label]), payload)
 
     def get_linked_objects_keys(self):
-        return {self.payload["object"]["model"]: [(self.payload["object"]["pk"],)]}
+        app_label, model = self.payload["object"]["model"].split(".")
+        ct = ContentType.objects.get_by_natural_key(app_label, model)
+        model_class = ct.model_class()
+        if model_class:
+            key = model_class._meta.verbose_name.replace(" ", "_")
+            if app_label != "inventory":  # shorter names for the inventory objects
+                key = f"{app_label}_{key}"
+            return {key: ((self.payload["object"]["pk"],),)}
+        else:
+            return {}
 
 
 register_event_type(AuditEvent)
