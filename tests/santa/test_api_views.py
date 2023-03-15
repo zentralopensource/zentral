@@ -16,10 +16,13 @@ from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.santa.events import SantaRuleUpdateEvent
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment, Bundle
+from zentral.core.events.base import AuditEvent
 from zentral.utils.payloads import get_payload_identifier
 
 
 class APIViewsTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         cls.configuration = Configuration.objects.create(name=get_random_string(256))
@@ -838,7 +841,7 @@ class APIViewsTestCase(TestCase):
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {'custom_msg': [f'Can only be set on BLOCKLIST rules']})
+        self.assertEqual(response.json(), {'custom_msg': ['Can only be set on BLOCKLIST rules']})
         self.assertEqual(Rule.objects.count(), 0)
 
     def test_create_rule_bundle_not_bundle_policy_error(self):
@@ -1321,7 +1324,7 @@ class APIViewsTestCase(TestCase):
         bundle_target_identifier2 = get_random_string(length=64, allowed_chars='abcdef0123456789')
         configuration = self.force_configuration()
         rule = self.force_rule(configuration=configuration, target_identifier=bundle_target_identifier1, bundle=True)
-        new_bundle = self.force_bundle(target_identifier=bundle_target_identifier2, fake_upload=True)
+        self.force_bundle(target_identifier=bundle_target_identifier2, fake_upload=True)
         self.set_permissions("santa.change_rule")
         data = {
             "configuration": configuration.pk,
@@ -1351,7 +1354,7 @@ class APIViewsTestCase(TestCase):
         }
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {'custom_msg': [f'Can only be set on BLOCKLIST rules']})
+        self.assertEqual(response.json(), {'custom_msg': ['Can only be set on BLOCKLIST rules']})
         rule.refresh_from_db()
         self.assertNotEqual(rule.custom_msg, "This should not be here")
         self.assertEqual(rule.policy, Rule.BLOCKLIST)
@@ -1395,7 +1398,7 @@ class APIViewsTestCase(TestCase):
         target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
         configuration = self.force_configuration()
         rule = self.force_rule(configuration=configuration, target_identifier=target_identifier)
-        bundle = self.force_bundle(target_identifier=target_identifier, fake_upload=True)
+        self.force_bundle(target_identifier=target_identifier, fake_upload=True)
         self.set_permissions("santa.change_rule")
         data = {
             "configuration": configuration.pk,
@@ -1757,15 +1760,6 @@ class APIViewsTestCase(TestCase):
 
     # create configuration
 
-    def test_create_configuration(self):
-        self.set_permissions("santa.add_configuration")
-        data = {'name': 'Configuration0'}
-        response = self.post_json_data(reverse('santa_api:configurations'), data)
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(Configuration.objects.filter(name='Configuration0').count(), 1)
-        configuration = Configuration.objects.get(name="Configuration0")
-        self.assertEqual(configuration.name, 'Configuration0')
-
     def test_create_configuration_unauthorized(self):
         data = {'name': 'Configuration0'}
         self.set_permissions("santa.configurations")
@@ -1776,6 +1770,48 @@ class APIViewsTestCase(TestCase):
         data = {'name': 'Configuration0'}
         response = self.post_json_data(reverse('santa_api:configurations'), data)
         self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_configuration(self, post_event):
+        self.set_permissions("santa.add_configuration")
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post_json_data(reverse('santa_api:configurations'), {'name': name})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
+        configuration = Configuration.objects.get(name=name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "santa.configuration",
+                 "pk": str(configuration.pk),
+                 "new_value": {
+                     "pk": configuration.pk,
+                     "name": name,
+                     "client_mode": "Monitor",
+                     "client_certificate_auth": False,
+                     "batch_size": 50,
+                     "full_sync_interval": 600,
+                     "enable_bundles": False,
+                     "enable_transitive_rules": False,
+                     "allowed_path_regex": "",
+                     "blocked_path_regex": "",
+                     "block_usb_mount": False,
+                     "remount_usb_mode": [],
+                     "allow_unknown_shard": 100,
+                     "enable_all_event_upload_shard": 0,
+                     "sync_incident_severity": 0,
+                     "created_at": configuration.created_at,
+                     "updated_at": configuration.updated_at
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"santa_configuration": [str(configuration.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
     # update configuration
 
@@ -1796,15 +1832,70 @@ class APIViewsTestCase(TestCase):
             data)
         self.assertEqual(response.status_code, 403)
 
-    def test_update_configuration(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_configuration(self, post_event):
         config = self.force_configuration()
+        prev_name = config.name
+        prev_updated_at = config.updated_at
         new_name = get_random_string(12)
-        data = {'name': new_name}
         self.set_permissions("santa.change_configuration")
-        response = self.put_json_data(reverse('santa_api:configuration', args=(config.pk,)), data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put_json_data(reverse('santa_api:configuration', args=(config.pk,)), {"name": new_name})
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         config.refresh_from_db()
         self.assertEqual(config.name, new_name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "santa.configuration",
+                 "pk": str(config.pk),
+                 "prev_value": {
+                     "pk": config.pk,
+                     "name": prev_name,
+                     "client_mode": "Monitor",
+                     "client_certificate_auth": False,
+                     "batch_size": 50,
+                     "full_sync_interval": 600,
+                     "enable_bundles": False,
+                     "enable_transitive_rules": False,
+                     "allowed_path_regex": "",
+                     "blocked_path_regex": "",
+                     "block_usb_mount": False,
+                     "remount_usb_mode": [],
+                     "allow_unknown_shard": 100,
+                     "enable_all_event_upload_shard": 0,
+                     "sync_incident_severity": 0,
+                     "created_at": config.created_at,
+                     "updated_at": prev_updated_at
+                 },
+                 "new_value": {
+                     "pk": config.pk,
+                     "name": new_name,
+                     "client_mode": "Monitor",
+                     "client_certificate_auth": False,
+                     "batch_size": 50,
+                     "full_sync_interval": 600,
+                     "enable_bundles": False,
+                     "enable_transitive_rules": False,
+                     "allowed_path_regex": "",
+                     "blocked_path_regex": "",
+                     "block_usb_mount": False,
+                     "remount_usb_mode": [],
+                     "allow_unknown_shard": 100,
+                     "enable_all_event_upload_shard": 0,
+                     "sync_incident_severity": 0,
+                     "created_at": config.created_at,
+                     "updated_at": config.updated_at
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"santa_configuration": [str(config.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
     def test_update_configuration_name_exists(self):
         config0 = self.force_configuration()
@@ -1829,11 +1920,47 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse("santa_api:configuration", args=(config.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_configuration(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_configuration(self, post_event):
         config = self.force_configuration()
+        prev_pk = config.pk
         self.set_permissions("santa.delete_configuration")
-        response = self.delete(reverse('santa_api:configuration', args=(config.pk,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse('santa_api:configuration', args=(config.pk,)))
         self.assertEqual(response.status_code, 204)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "santa.configuration",
+                 "pk": str(prev_pk),
+                 "prev_value": {
+                     "pk": prev_pk,
+                     "name": config.name,
+                     "client_mode": "Monitor",
+                     "client_certificate_auth": False,
+                     "batch_size": 50,
+                     "full_sync_interval": 600,
+                     "enable_bundles": False,
+                     "enable_transitive_rules": False,
+                     "allowed_path_regex": "",
+                     "blocked_path_regex": "",
+                     "block_usb_mount": False,
+                     "remount_usb_mode": [],
+                     "allow_unknown_shard": 100,
+                     "enable_all_event_upload_shard": 0,
+                     "sync_incident_severity": 0,
+                     "created_at": config.created_at,
+                     "updated_at": config.updated_at
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"santa_configuration": [str(prev_pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
     def test_delete_configuration_error(self):
         config = self.force_configuration()
