@@ -495,7 +495,19 @@ class AuditEvent(BaseEvent):
 
     @classmethod
     def build_from_request_and_instance(cls, request, instance, action, prev_value=None, new_value=None):
-        event_request = EventRequest.build_from_request(request)
+        # metadata
+        metadata = EventMetadata(
+            request=EventRequest.build_from_request(request),
+            tags=[instance._meta.app_label]
+        )
+        try:
+            metadata.add_objects(instance.linked_objects_keys_for_event())
+        except AttributeError:
+            key = instance._meta.verbose_name.replace(" ", "_")
+            if instance._meta.app_label != "inventory":  # shorter names for the inventory objects
+                key = f"{instance._meta.app_label}_{key}"
+            metadata.add_objects({key: ((instance.pk,),)})
+        # payload
         payload = {
             "action": action,
             "object": {
@@ -507,19 +519,7 @@ class AuditEvent(BaseEvent):
             payload["object"]["prev_value"] = prev_value
         if new_value:
             payload["object"]["new_value"] = new_value
-        return cls(EventMetadata(request=event_request, tags=[instance._meta.app_label]), payload)
-
-    def get_linked_objects_keys(self):
-        app_label, model = self.payload["object"]["model"].split(".")
-        ct = ContentType.objects.get_by_natural_key(app_label, model)
-        model_class = ct.model_class()
-        if model_class:
-            key = model_class._meta.verbose_name.replace(" ", "_")
-            if app_label != "inventory":  # shorter names for the inventory objects
-                key = f"{app_label}_{key}"
-            return {key: ((self.payload["object"]["pk"],),)}
-        else:
-            return {}
+        return cls(metadata, payload)
 
 
 register_event_type(AuditEvent)

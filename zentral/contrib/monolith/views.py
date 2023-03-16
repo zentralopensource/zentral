@@ -28,6 +28,7 @@ from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRe
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls
 from zentral.utils.text import get_version_sort_key, shard as compute_shard, encode_args
+from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit
 from .conf import monolith_conf
 from .events import (post_monolith_enrollment_event,
                      post_monolith_munki_request, post_monolith_repository_updates)
@@ -36,15 +37,15 @@ from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManif
                     AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
                     EnrollmentForm,
                     ManifestForm, ManifestSearchForm,
-                    PkgInfoSearchForm,
+                    PackageForm, PkgInfoSearchForm,
                     SubManifestForm, SubManifestSearchForm,
-                    SubManifestPkgInfoForm, SubManifestAttachmentForm, SubManifestScriptForm)
+                    SubManifestPkgInfoForm)
 from .models import (MunkiNameError, parse_munki_name,
                      Catalog, CacheServer,
                      EnrolledMachine,
                      Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      Condition,
-                     SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestAttachment, SubManifestPkgInfo)
+                     SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestPkgInfo)
 from .utils import (filter_catalog_data, filter_sub_manifest_data,
                     test_monolith_object_inclusion, test_pkginfo_catalog_inclusion)
 
@@ -105,6 +106,19 @@ class PkgInfosView(PermissionRequiredMixin, TemplateView):
         return ctx
 
 
+class UploadPackageView(PermissionRequiredMixin, CreateViewWithAudit):
+    permission_required = "monolith.add_pkginfo"
+    template_name = "monolith/package_form.html"
+    form_class = PackageForm
+
+
+class UpdatePackageView(PermissionRequiredMixin, UpdateViewWithAudit):
+    permission_required = "monolith.change_pkginfo"
+    queryset = PkgInfo.objects.filter(file__gt="")
+    template_name = "monolith/package_form.html"
+    form_class = PackageForm
+
+
 class UpdatePkgInfoCatalogView(PermissionRequiredMixin, UpdateView):
     permission_required = "monolith.change_pkginfo"
     model = PkgInfo
@@ -130,6 +144,12 @@ class UpdatePkgInfoCatalogView(PermissionRequiredMixin, UpdateView):
                                                "action": "updated"}],
                                              self.request)
         return response
+
+
+class CreatePkgInfoNameView(PermissionRequiredMixin, CreateViewWithAudit):
+    permission_required = "monolith.add_pkginfoname"
+    model = PkgInfoName
+    fields = ("name",)
 
 
 class PkgInfoNameView(PermissionRequiredMixin, DetailView):
@@ -392,10 +412,6 @@ class ConditionView(PermissionRequiredMixin, DetailView):
             pkg_infos.append((smp.sub_manifest, smp.pkg_info_name.name,
                               smp.get_absolute_url(),
                               "repository package", smp.get_key_display()))
-        for sma in condition.submanifestattachment_set.select_related("sub_manifest"):
-            pkg_infos.append((sma.sub_manifest, sma.name,
-                              sma.get_absolute_url(),
-                              sma.get_type_display(), sma.get_key_display()))
         pkg_infos.sort(key=lambda t: (t[0].name, t[1], t[3], t[4]))
         context['pkg_infos'] = pkg_infos
         return context
@@ -501,7 +517,7 @@ class SubManifestView(PermissionRequiredMixin, DetailView):
         context = super(SubManifestView, self).get_context_data(**kwargs)
         sub_manifest = context['object']
         context['monolith'] = True
-        pkg_info_dict = sub_manifest.pkg_info_dict(include_trashed_attachments=True)
+        pkg_info_dict = sub_manifest.pkg_info_dict()
         keys = pkg_info_dict.pop("keys")
         sorted_keys = []
         for key, _ in SUB_MANIFEST_PKG_INFO_KEY_CHOICES:
@@ -597,156 +613,6 @@ class DeleteSubManifestPkgInfoView(PermissionRequiredMixin, DeleteView):
         for _, manifest in sub_manifest.manifests_with_tags():
             manifest.bump_version()
         return redirect(sub_manifest)
-
-
-class SubManifestAddAttachmentView(PermissionRequiredMixin, FormView):
-    permission_required = "monolith.add_submanifestattachment"
-    form_class = SubManifestAttachmentForm
-    template_name = 'monolith/edit_sub_manifest_attachment.html'
-
-    def dispatch(self, request, *args, **kwargs):
-        self.sub_manifest = SubManifest.objects.get(pk=kwargs['pk'])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['sub_manifest'] = self.sub_manifest
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['monolith'] = True
-        context['sub_manifest'] = self.sub_manifest
-        return context
-
-    def form_valid(self, form):
-        smpi = form.save(commit=False)
-        smpi.sub_manifest = self.sub_manifest
-        smpi.save()
-        for _, manifest in self.sub_manifest.manifests_with_tags():
-            manifest.bump_version()
-        return redirect(smpi)
-
-
-class SubManifestAddScriptView(PermissionRequiredMixin, FormView):
-    permission_required = "monolith.add_submanifestattachment"
-    form_class = SubManifestScriptForm
-    template_name = 'monolith/edit_sub_manifest_script.html'
-
-    def dispatch(self, request, *args, **kwargs):
-        self.sub_manifest = SubManifest.objects.get(pk=kwargs['pk'])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['sub_manifest'] = self.sub_manifest
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['monolith'] = True
-        context['sub_manifest'] = self.sub_manifest
-        return context
-
-    def form_valid(self, form):
-        smpi = form.save(commit=False)
-        smpi.sub_manifest = self.sub_manifest
-        smpi.save()
-        for _, manifest in self.sub_manifest.manifests_with_tags():
-            manifest.bump_version()
-        return redirect(smpi)
-
-
-class SubManifestUpdateScriptView(PermissionRequiredMixin, FormView):
-    permission_required = "monolith.change_submanifestattachment"
-    form_class = SubManifestScriptForm
-    template_name = 'monolith/edit_sub_manifest_script.html'
-
-    def dispatch(self, request, *args, **kwargs):
-        self.sub_manifest = SubManifest.objects.get(pk=kwargs['sm_pk'])
-        self.script = SubManifestAttachment.objects.get(sub_manifest=self.sub_manifest, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['sub_manifest'] = self.sub_manifest
-        kwargs['script'] = self.script
-        kwargs['initial'] = {'name': self.script.name,
-                             'key': self.script.key}
-        for attr in ('description', 'installcheck_script',
-                     'postinstall_script', 'uninstall_script'):
-            kwargs['initial'][attr] = self.script.pkg_info.get(attr, "")
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['monolith'] = True
-        context['sub_manifest'] = self.sub_manifest
-        context['script'] = self.script
-        return context
-
-    def form_valid(self, form):
-        smpi = form.save(commit=False)
-        smpi.sub_manifest = self.sub_manifest
-        smpi.save()
-        for _, manifest in self.sub_manifest.manifests_with_tags():
-            manifest.bump_version()
-        return redirect(smpi)
-
-
-class DeleteSubManifestAttachmentView(PermissionRequiredMixin, DeleteView):
-    permission_required = "monolith.delete_submanifestattachment"
-    model = SubManifestAttachment
-    template_name = "monolith/delete_sub_manifest_attachment.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['monolith'] = True
-        return context
-
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        sub_manifest = self.object.sub_manifest
-        SubManifestAttachment.objects.trash(sub_manifest, self.object.name)
-        for _, manifest in sub_manifest.manifests_with_tags():
-            manifest.bump_version()
-        return redirect(self.object)
-
-
-class PurgeSubManifestAttachmentView(PermissionRequiredMixin, DeleteView):
-    permission_required = "monolith.delete_submanifestattachment"
-    model = SubManifestAttachment
-    template_name = "monolith/purge_sub_manifest_attachment.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['monolith'] = True
-        return context
-
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        sub_manifest = self.object.sub_manifest
-        self.object.delete()
-        for _, manifest in sub_manifest.manifests_with_tags():
-            manifest.bump_version()
-        return redirect(sub_manifest)
-
-
-class DownloadSubManifestAttachmentView(PermissionRequiredMixin, View):
-    permission_required = "monolith.view_submanifestattachment"
-
-    def get(self, request, *args, **kwargs):
-        sma = get_object_or_404(SubManifestAttachment, pk=kwargs["pk"])
-        if not sma.can_be_downloaded():
-            raise Http404
-        response = FileResponse(sma.file)
-        content_type = sma.get_content_type()
-        if content_type:
-            response["Content-Type"] = content_type
-        download_name = sma.get_download_name()
-        if download_name:
-            response["Content-Disposition"] = 'attachment;filename="{}"'.format(download_name)
-        return response
 
 
 # manifests
@@ -958,10 +824,10 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
             sub_manifest_objects = {}
             for sub_manifest in manifest.sub_manifests(machine.tags):
                 for key, key_d in sub_manifest.pkg_info_dict()['keys'].items():
-                    for _, smo in key_d['key_list']:
-                        name = smo.get_name()
+                    for _, smpi in key_d['key_list']:
+                        name = smpi.get_name()
                         shard_repr = default_shard_repr = excluded_tag_names = tag_shards = None
-                        options = getattr(smo, "options", None)
+                        options = getattr(smpi, "options", None)
                         if options:
                             excluded_tag_names = options.get("excluded_tags")
                             if excluded_tag_names:
@@ -1010,8 +876,8 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
                     (pkginfo, status, excluded_tags, shard_repr, default_shard_repr, prepared_tag_shards, included)
                 )
 
-            for sub_manifest, smo_list in sub_manifest_objects.items():
-                for name, key, excluded_tag_names, shard_repr, default_shard_repr, tag_shards, included in smo_list:
+            for sub_manifest, smpi_list in sub_manifest_objects.items():
+                for name, key, excluded_tag_names, shard_repr, default_shard_repr, tag_shards, included in smpi_list:
                     # rehydrate excluded tags using seen tags
                     excluded_tags = []
                     if excluded_tag_names:
@@ -1541,53 +1407,12 @@ class MRPackageView(MRNameView):
                     return HttpResponseRedirect(default_storage.url(filename))
                 else:
                     return FileResponse(default_storage.open(filename))
-        elif model == "sub_manifest_attachment":
-            # intercept calls for sub manifest attachments
-            # the sma key is sub_manifest, name, version, but we encoded only sub_manifest id and sma id
-            # we need to recover the name before we can look for an active version.
-            sm_id, sma_id = key
-            event_payload["sub_manifest"] = {"id": sm_id}
-            event_payload["sub_manifest_attachment"] = {"req_id": sma_id}
-            sub_manifest_name = sma = None
-            try:
-                sub_manifest_name, sma = cache.get(cache_key)
-            except TypeError:
-                sub_manifest = self.manifest.sub_manifest(sm_id, self.tags)
-                if sub_manifest:
-                    sub_manifest_name = sub_manifest.name
-                    try:
-                        req_sma = SubManifestAttachment.objects.get(sub_manifest=sub_manifest, pk=sma_id)
-                    except SubManifestAttachment.DoesNotExist:
-                        pass
-                    else:
-                        try:
-                            sma = SubManifestAttachment.objects.active().get(sub_manifest=sub_manifest,
-                                                                             name=req_sma.name)
-                        except SubManifestAttachment.DoesNotExist:
-                            pass
-                # set the cache value, even if sub_manifest_name and sma are None
-                cache.set(cache_key, (sub_manifest_name, sma), timeout=None)
-            else:
-                event_payload["cache"]["hit"] = True
-            if sub_manifest_name:
-                event_payload["sub_manifest"]["name"] = sub_manifest_name
-            if sma:
-                event_payload["sub_manifest_attachment"].update({
-                    "id": sma.id,
-                    "name": sma.name,
-                    "filename": sma.file.name
-                })
-                # see https://github.com/django/django/commit/f600e3fad6e92d9fe1ad8b351dc8446415f24345
-                if self._redirect_to_files:
-                    return HttpResponseRedirect(default_storage.url(sma.file.name))
-                else:
-                    return FileResponse(default_storage.open(sma.file.name))
         elif model == "repository_package":
             pk = key
             event_payload["repository_package"] = {"id": pk}
-            pkginfo_name = pkginfo_version = pkginfo_iil = None
+            pkginfo_name = pkginfo_version = pkginfo_iil = pkginfo_fn = None
             try:
-                pkginfo_name, pkginfo_version, pkginfo_iil = cache.get(cache_key)
+                pkginfo_name, pkginfo_version, pkginfo_iil, pkginfo_fn = cache.get(cache_key)
             except TypeError:
                 for pkginfo in chain(self.manifest.pkginfos_with_deps_and_updates(self.tags),
                                      self.manifest.enrollment_packages_pkginfo_deps(self.tags),
@@ -1595,10 +1420,13 @@ class MRPackageView(MRNameView):
                     if pkginfo.pk == pk:
                         pkginfo_name = pkginfo.name.name
                         pkginfo_version = pkginfo.version
-                        pkginfo_iil = pkginfo.data["installer_item_location"]
+                        if pkginfo.file:
+                            pkginfo_fn = pkginfo.file.name
+                        else:
+                            pkginfo_iil = pkginfo["installer_item_location"]
                         break
                 # set the cache value, even if pkginfo_name, pkginfo_version and pkginfo_iil are None
-                cache.set(cache_key, (pkginfo_name, pkginfo_version, pkginfo_iil), timeout=None)
+                cache.set(cache_key, (pkginfo_name, pkginfo_version, pkginfo_iil, pkginfo_fn), timeout=None)
             else:
                 event_payload["cache"]["hit"] = True
             if pkginfo_name is not None:
@@ -1609,6 +1437,14 @@ class MRPackageView(MRNameView):
                 return monolith_conf.repository.make_munki_repository_response(
                     "pkgs", pkginfo_iil, cache_server=self._get_cache_server()
                 )
+            elif pkginfo_fn:
+                if self._redirect_to_files:
+                    return HttpResponseRedirect(default_storage.url(pkginfo_fn))
+                else:
+                    return FileResponse(default_storage.open(pkginfo_fn))
+            else:
+                # should never happen
+                return HttpResponseNotFound("Not found!")
 
 
 class MRRedirectView(MRBaseView):

@@ -50,7 +50,6 @@
 
 {% if perms.monolith.view_pkginfo %}
 <h4>{{ pkg_infos|length }} version{{ pkg_infos|length|pluralize }}</h4>
-
 {% if pkg_infos %}
 <table class="table">
   <thead>
@@ -61,7 +60,7 @@
       <th>Def. shard</th>
       <th>Tag shards</th>
       <th>Installs</th>
-      {% if manual_catalog_management %}
+      {% if perms.change_pkginfo %}
       <th></th>
       {% endif %}
     </tr>
@@ -103,11 +102,19 @@
       <td>-</td>
       {% endif %}
       <td>{{ pkg_info.count }}{% if pkg_info.percent %} - {{ pkg_info.percent|floatformat }}%{% endif %}</td>
-      {% if manual_catalog_management and perms.monolith.change_pkginfo %}
+      {% if perms.monolith.change_pkginfo %}
       <td>
-        <a class="btn btn-default" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.id %}">
+        {% if pkg_info.local %}
+        <a class="btn btn-default" href="{% url 'monolith:update_package' pkg_info.pk %}">
+          Update
+        </a>
+        {% else %}
+        {% if manual_catalog_management %}
+        <a class="btn btn-default" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.pk %}">
           Update catalog
         </a>
+        {% endif %}
+        {% endif %}
       </td>
       {% endif %}
     </tr>

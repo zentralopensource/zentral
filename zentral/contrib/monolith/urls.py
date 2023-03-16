@@ -5,9 +5,12 @@ app_name = "monolith"
 urlpatterns = [
     # pkg infos
     path('pkg_infos/', views.PkgInfosView.as_view(), name='pkg_infos'),
+    path('pkg_infos/upload_package/', views.UploadPackageView.as_view(), name='upload_package'),
+    path('pkg_infos/<int:pk>/update_package/', views.UpdatePackageView.as_view(), name='update_package'),
     path('pkg_infos/<int:pk>/update_catalog/',
          views.UpdatePkgInfoCatalogView.as_view(),
          name='update_pkg_info_catalog'),
+    path('pkg_info_names/create/', views.CreatePkgInfoNameView.as_view(), name='create_pkg_info_name'),
     path('pkg_info_names/<int:pk>/', views.PkgInfoNameView.as_view(), name='pkg_info_name'),
     path('pkg_info_names/<int:pk>/events/',
          views.PkgInfoNameEventsView.as_view(),
@@ -48,18 +51,6 @@ urlpatterns = [
          views.UpdateSubManifestPkgInfoView.as_view(), name='update_sub_manifest_pkg_info'),
     path('sub_manifests/<int:sm_pk>/pkg_infos/<int:pk>/delete/',
          views.DeleteSubManifestPkgInfoView.as_view(), name='delete_sub_manifest_pkg_info'),
-    path('sub_manifests/<int:pk>/add_attachment/',
-         views.SubManifestAddAttachmentView.as_view(), name='sub_manifest_add_attachment'),
-    path('sub_manifests/<int:pk>/add_script/',
-         views.SubManifestAddScriptView.as_view(), name='sub_manifest_add_script'),
-    path('sub_manifests/<int:sm_pk>/script/<int:pk>/update/',
-         views.SubManifestUpdateScriptView.as_view(), name='sub_manifest_update_script'),
-    path('sub_manifests_attachment/<int:pk>/delete/',
-         views.DeleteSubManifestAttachmentView.as_view(), name='delete_sub_manifest_attachment'),
-    path('sub_manifests_attachment/<int:pk>/purge/',
-         views.PurgeSubManifestAttachmentView.as_view(), name='purge_sub_manifest_attachment'),
-    path('sub_manifests_attachment/<int:pk>/download/',
-         views.DownloadSubManifestAttachmentView.as_view(), name='download_sub_manifest_attachment'),
 
     # manifests
     path('manifests/', views.ManifestsView.as_view(), name='manifests'),

@@ -1,6 +1,5 @@
 from datetime import datetime
 from functools import reduce
-from io import BytesIO
 import operator
 from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
@@ -447,85 +446,6 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertContains(response, pkginfo_name.name)
-
-    # add submanifest attachment
-
-    def test_add_sub_manifest_attachment_redirect(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login_redirect(reverse("monolith:sub_manifest_add_attachment", args=(submanifest.pk,)))
-
-    def test_add_sub_manifest_attachment_permission_denied(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login()
-        response = self.client.get(reverse("monolith:sub_manifest_add_attachment", args=(submanifest.pk,)))
-        self.assertEqual(response.status_code, 403)
-
-    def test_add_sub_manifest_attachment_get(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login("monolith.add_submanifestattachment")
-        response = self.client.get(reverse("monolith:sub_manifest_add_attachment", args=(submanifest.pk,)))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/edit_sub_manifest_attachment.html")
-
-    def test_add_sub_manifest_attachment_post_errors(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login("monolith.add_submanifestattachment")
-        fake_file = BytesIO(b"yolo")
-        fake_file.name = "yolo.mobileconfig"
-        response = self.client.post(
-            reverse("monolith:sub_manifest_add_attachment", args=(submanifest.pk,)),
-            {"file": fake_file,
-             "key": "managed_installs",
-             "featured_item": "on"},
-            follow=True,
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/edit_sub_manifest_attachment.html")
-        self.assertFormError(
-            response, "form", "file",
-            "Not a component package or a product archive"
-        )
-        self.assertFormError(
-            response, "form", "featured_item",
-            "Only optional install items can be featured"
-        )
-
-    # add submanifest script
-
-    def test_add_sub_manifest_script_redirect(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login_redirect(reverse("monolith:sub_manifest_add_script", args=(submanifest.pk,)))
-
-    def test_add_sub_manifest_script_permission_denied(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login()
-        response = self.client.get(reverse("monolith:sub_manifest_add_script", args=(submanifest.pk,)))
-        self.assertEqual(response.status_code, 403)
-
-    def test_add_sub_manifest_script_get(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login("monolith.add_submanifestattachment")
-        response = self.client.get(reverse("monolith:sub_manifest_add_script", args=(submanifest.pk,)))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/edit_sub_manifest_script.html")
-
-    def test_add_sub_manifest_script_post(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login("monolith.add_submanifestattachment", "monolith.view_submanifest")
-        name = get_random_string(12)
-        response = self.client.post(
-            reverse("monolith:sub_manifest_add_script", args=(submanifest.pk,)),
-            {"name": name,
-             "description": get_random_string(12),
-             "installcheck_script": "#!/bin/bash\n\nexit 0",
-             "postinstall_script": "#!/bin/bash\n\nexit 0",
-             "key": "managed_installs",
-             "featured_item": "on"},
-            follow=True,
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
-        self.assertContains(response, name)
 
     # manifests
 

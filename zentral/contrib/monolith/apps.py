@@ -17,6 +17,5 @@ class ZentralMonolithAppConfig(ZentralAppConfig):
         "pkginfo",
         "pkginfoname",
         "submanifest",
-        "submanifestattachment",
         "submanifestpkginfo",
     )

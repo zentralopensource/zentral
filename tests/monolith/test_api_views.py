@@ -15,7 +15,7 @@ from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.monolith.models import (CacheServer, Catalog, Condition, Enrollment,
                                              Manifest, ManifestCatalog, ManifestSubManifest,
                                              PkgInfoName,
-                                             SubManifest, SubManifestAttachment, SubManifestPkgInfo)
+                                             SubManifest, SubManifestPkgInfo)
 
 
 class MonolithAPIViewsTestCase(TestCase):
@@ -152,18 +152,6 @@ class MonolithAPIViewsTestCase(TestCase):
             name=get_random_string(12),
             description=get_random_string(12),
             meta_business_unit=meta_business_unit
-        )
-
-    def force_sub_manifest_attachment(self, sub_manifest=None, condition=None):
-        if sub_manifest is None:
-            sub_manifest = self.force_sub_manifest()
-        return SubManifestAttachment.objects.create(
-            sub_manifest=sub_manifest,
-            key="managed_installs",
-            type="script",
-            name=get_random_string(12),
-            condition=condition,
-            pkg_info={}
         )
 
     def force_sub_manifest_pkg_info(self, sub_manifest=None, options=None):
@@ -819,7 +807,11 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_delete_condition_not_ok(self):
         condition = self.force_condition()
-        self.force_sub_manifest_attachment(condition=condition)
+        SubManifestPkgInfo.objects.create(
+            sub_manifest=self.force_sub_manifest(),
+            pkg_info_name=self.force_pkg_info_name(),
+            condition=condition
+        )
         self._set_permissions("monolith.delete_condition")
         response = self.delete(reverse("monolith_api:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 400)

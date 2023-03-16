@@ -1,13 +1,11 @@
 from django import forms
-from django.db import IntegrityError, transaction
-from django.db.models import F, Max, Q
+from django.db.models import Q
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from .attachments import PackageFile
 from .exceptions import AttachmentError
 from .models import (Catalog, Enrollment,
                      Manifest, ManifestCatalog, ManifestSubManifest,
-                     PkgInfoName, SubManifest,
-                     SubManifestPkgInfo, SubManifestAttachment)
+                     PkgInfo, PkgInfoName, SubManifest, SubManifestPkgInfo)
 
 
 class PkgInfoSearchForm(forms.Form):
@@ -57,8 +55,7 @@ class SubManifestSearchForm(forms.Form):
             qs = qs.distinct().filter(Q(name__icontains=keywords)
                                       | Q(description__icontains=keywords)
                                       | Q(meta_business_unit__name__icontains=keywords)
-                                      | Q(submanifestpkginfo__pkg_info_name__name__icontains=keywords)
-                                      | Q(submanifestattachment__name__icontains=keywords))
+                                      | Q(submanifestpkginfo__pkg_info_name__name__icontains=keywords))
         return qs
 
 
@@ -175,64 +172,84 @@ class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
         fields = ('pkg_info_name', 'key', 'condition', 'featured_item')
 
 
-class SubManifestAttachmentForm(SubManifestItemFormMixin, forms.ModelForm):
+class PackageForm(forms.ModelForm):
+    file = forms.FileField(required=True)
+    display_name = forms.CharField(required=False)
+    description = forms.CharField(widget=forms.Textarea(attrs={"rows": 10}), required=False)
+    field_order = (
+        "file",
+        "name", "version", "catalogs",
+        "display_name", "description", "category",
+        "requires", "update_for"
+    )
+
     def __init__(self, *args, **kwargs):
-        self.sub_manifest = kwargs.pop('sub_manifest')
         super().__init__(*args, **kwargs)
+        self.fields["name"].queryset = self.fields["name"].queryset.exclude(pkginfo__file="")
+        data = self.instance.data
+        if data:
+            display_name = data.get("display_name")
+            if display_name:
+                self.fields["display_name"].initial = display_name 
+            description = data.get("description")
+            if description:
+                self.fields["description"].initial = description
 
     class Meta:
-        model = SubManifestAttachment
-        fields = ('key', 'condition', 'featured_item', 'file',)
+        model = PkgInfo
+        fields = ("file",
+                  "name", "catalogs",
+                  "category",
+                  "requires", "update_for",
+                  "file")
 
     def clean_file(self):
-        f = self.cleaned_data["file"]
-        if not f:
-            raise forms.ValidationError("You need to select a file.")
-        error_messages = []
-        for file_class in (PackageFile,):
-            try:
-                af = file_class(f)
-            except AttachmentError as e:
-                error_messages.append(e.message)
-            else:
-                break
-        else:
-            raise forms.ValidationError(", ".join(error_messages))
-        self.attachment_file = af
-        return f
+        uploaded_file = self.cleaned_data["file"]
+        if not uploaded_file:
+            raise forms.ValidationError("Please select a file.")
+        try:
+            self.cleaned_data["package_file"] = PackageFile(uploaded_file)
+        except AttachmentError as e:
+            raise forms.ValidationError(e.message)
+        return None
+
+    def clean(self):
+        data = {}
+        pin = self.cleaned_data["name"]
+        if pin:
+            data["name"] = pin.name
+        display_name = self.cleaned_data["display_name"]
+        if display_name:
+            data["display_name"] = display_name
+        description = self.cleaned_data["description"]
+        if description:
+            data["description"] = description
+        category = self.cleaned_data["category"]
+        if category:
+            data["category"] = category.name
+        requires = self.cleaned_data["requires"]
+        if requires:
+            data["requires"] = [pin.name for pin in requires]
+        update_for = self.cleaned_data["update_for"]
+        if update_for:
+            data["update_for"] = [pin.name for pin in update_for]
+        uf = self.cleaned_data.get("uploaded_file")
+        if uf and uf.name:
+            data["installer_item_location"] = uf.name
+        pf = self.cleaned_data.get("package_file")
+        if pf:
+            data.update(pf.get_pkginfo_data())
+        self.instance.data = data
+        self.instance.version = data.get("version")
 
     def save(self, *args, **kwargs):
-        sma = super().save(commit=False)
-        sma.sub_manifest = self.sub_manifest
-        sma.type = self.attachment_file.type
-        sma.name = self.attachment_file.name
-        sma.identifier = self.attachment_file.identifier
-        for i in range(10):  # 10 trials max
-            max_version = SubManifestAttachment.objects.filter(
-                sub_manifest=self.sub_manifest,
-                name=sma.name
-            ).aggregate(Max("version"))["version__max"]
-            sma.version = (max_version or 0) + 1
-            sma.pkg_info = self.attachment_file.make_package_info(sma)
-            try:
-                with transaction.atomic():
-                    sma.save()
-            except IntegrityError:
-                raise
-            else:
-                break
-        else:
-            raise Exception("Could not find valid version #")
-        # trash other versions
-        for sma_with_different_version in (SubManifestAttachment.objects.filter(
-                                               sub_manifest=self.sub_manifest,
-                                               name=sma.name
-                                           ).exclude(version=sma.version)):
-            sma_with_different_version.mark_as_trashed()
-        return sma
+        pi = super().save()
+        pi.file = self.cleaned_data["package_file"].uploaded_file
+        pi.save()
+        return pi
 
 
-class SubManifestScriptForm(forms.Form):
+class ScriptForm(forms.Form):
     DEFAULT_INSTALL_CHECK_SCRIPT = (
         "#!/bin/bash\n\n"
         "# WARNING: executed at every Munki run!\n\n"
@@ -289,23 +306,6 @@ class SubManifestScriptForm(forms.Form):
         if uninstall_script:
             pkg_info["uninstall_method"] = "uninstall_script"
             pkg_info["uninstall_script"] = uninstall_script
-        if not self.script:
-            self.script = SubManifestAttachment(
-                sub_manifest=self.sub_manifest,
-                type="script",
-                key=key,
-                name=name,
-                pkg_info=pkg_info,
-                version=1,
-            )
-            self.script.save()
-        else:
-            self.script.name = name
-            self.script.key = key
-            self.script.version = F("version") + 1
-            self.script.pkg_info = pkg_info
-            self.script.save()
-            self.script.refresh_from_db()
         self.script.pkg_info["version"] = "{}.0".format(self.script.version)
         self.script.save()
         return self.script

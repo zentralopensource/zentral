@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from itertools import chain
 import json
 import logging
@@ -95,6 +95,16 @@ class Catalog(models.Model):
                 and self.pkginfo_set.filter(archived_at__isnull=True).count() == 0
                 and self.manifestcatalog_set.count() == 0)
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({"created_at": self.created_at,
+                  "updated_at": self.updated_at})
+        if self.archived_at:
+            d["archived_at"] = self.archived_at
+        return d
+
 
 class PkgInfoCategory(models.Model):
     name = models.CharField(max_length=256, unique=True)
@@ -102,6 +112,13 @@ class PkgInfoCategory(models.Model):
 
     def __str__(self):
         return self.name
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d["created_at"] = self.created_at
+        return d
 
 
 class PkgInfoName(models.Model):
@@ -118,13 +135,23 @@ class PkgInfoName(models.Model):
     def has_active_pkginfos(self):
         return self.pkginfo_set.filter(archived_at__isnull=True).count() > 0
 
+    def get_absolute_url(self):
+        return reverse("monolith:pkg_info_name", args=(self.pk,))
+
+    def serialize_for_event(self):
+        return {"pk": self.pk, "name": self.name, "created_at": self.created_at}
+
+    def linked_objects_keys_for_event(self):
+        return {"munki_pkginfo_name": ((self.name,),)}
+
 
 class PkgInfoManager(models.Manager):
     def alles(self, **kwargs):
         params = []
         # first we aggregate the package info, with the munki managed installs
         aggregated_pi_query = (
-            "select pn.id as pn_pk, pn.name, pi.id as pi_pk, pi.version, pi.data -> 'zentral_monolith' as pi_opts,"
+            "select pn.id as pn_pk, pn.name, pi.id as pi_pk, pi.version,"
+            "pi.file is not null as local, pi.data -> 'zentral_monolith' as pi_opts,"
             "count(mi.*), sum(count(mi.*)) over (partition by pn.id) as pn_total "
             "from monolith_pkginfoname as pn "
             "join monolith_pkginfo as pi on (pi.name_id = pn.id) "
@@ -159,7 +186,7 @@ class PkgInfoManager(models.Manager):
             params.append(catalog.id)
             query += " and c.id = %s"
         query += (
-            " group by api.pn_pk, api.name, api.pi_pk, api.version, api.pi_opts, api.count, api.pn_total "
+            " group by api.pn_pk, api.name, api.pi_pk, api.version, api.local, api.pi_opts, api.count, api.pn_total "
             "order by api.name, api.pn_pk, api.pi_pk"
         )
 
@@ -171,11 +198,12 @@ class PkgInfoManager(models.Manager):
         pkg_name_list = []
         seen_tag_names = set([])
         pi_opts_with_tags = []
-        for pn_pk, pn_name, pi_pk, version, pi_opts, count, pn_total, percent, catalogs in cursor.fetchall():
+        for pn_pk, pn_name, pi_pk, version, pi_local, pi_opts, count, pn_total, percent, catalogs in cursor.fetchall():
             info_c += 1
             pi = {'pk': pi_pk,
                   'version': version,
                   'version_sort': get_version_sort_key(version),
+                  'local': pi_local,
                   'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
                   'count': int(count),
                   'percent': percent}
@@ -233,14 +261,21 @@ class PkgInfoManager(models.Manager):
         return name_c, info_c, pkg_name_list
 
 
+def pkg_info_path(instance, filename):
+    # WARNING only works once the instance has been saved
+    _, ext = os.path.splitext(filename)
+    return f"monolith/packages/{instance.pk:08d}{ext}"
+
+
 class PkgInfo(models.Model):
     name = models.ForeignKey(PkgInfoName, on_delete=models.PROTECT)
     version = models.CharField(max_length=256)
     catalogs = models.ManyToManyField(Catalog)
     category = models.ForeignKey(PkgInfoCategory, on_delete=models.SET_NULL, null=True, blank=True)
-    requires = models.ManyToManyField(PkgInfoName, related_name="required_by")
-    update_for = models.ManyToManyField(PkgInfoName, related_name="updated_by")
+    requires = models.ManyToManyField(PkgInfoName, related_name="required_by", blank=True)
+    update_for = models.ManyToManyField(PkgInfoName, related_name="updated_by", blank=True)
     data = models.JSONField()
+    file = models.FileField(upload_to=pkg_info_path, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     archived_at = models.DateTimeField(blank=True, null=True)
@@ -256,6 +291,10 @@ class PkgInfo(models.Model):
 
     def __str__(self):
         return "{} {}".format(self.name, self.version)
+
+    @property
+    def local(self):
+        return True if self.file else False
 
     def active_catalogs(self):
         return self.catalogs.filter(archived_at__isnull=True)
@@ -273,6 +312,29 @@ class PkgInfo(models.Model):
 
     def get_absolute_url(self):
         return "{}#{}".format(reverse("monolith:pkg_info_name", args=(self.name.id,)), self.pk)
+
+    def serialize_for_event(self, keys_only=False):
+        d = {
+            "pk": self.pk,
+            "name": self.name.name,
+            "version": self.version
+        }
+        if keys_only:
+            return d
+        d.update({
+            "catalogs": [c.serialize_for_event(keys_only=True) for c in self.catalogs.all()],
+            "requires": [pin.name for pin in self.requires.all().order_by("name")],
+            "update_for": [pin.name for pin in self.requires.all().order_by("name")],
+            "data": self.data,
+            "local": self.local
+        })
+        if self.category:
+            d["category"] = self.category.serialize_for_event(keys_only=True)
+        return d
+
+    def linked_objects_keys_for_event(self):
+        return {"munki_pkginfo_name": ((self.name.name,),),
+                "munki_pkginfo": ((self.pk,),)}
 
 
 SUB_MANIFEST_PKG_INFO_KEY_CHOICES = (
@@ -308,10 +370,7 @@ class SubManifest(models.Model):
     def get_absolute_url(self):
         return reverse('monolith:sub_manifest', args=(self.pk,))
 
-    def has_attachments(self):
-        return SubManifestAttachment.objects.filter(sub_manifest=self).count() > 0
-
-    def pkg_info_dict(self, include_trashed_attachments=False):
+    def pkg_info_dict(self):
         pkg_info_d = {'keys': {},
                       'total': {'pkginfo': 0}}
 
@@ -320,8 +379,6 @@ class SubManifest(models.Model):
             if key == "default_installs":
                 yield "optional_installs", SUB_MANIFEST_PKG_INFO_KEY_CHOICES_DICT["optional_installs"]
 
-        for sma_type in SUB_MANIFEST_ATTACHMENT_TYPES:
-            pkg_info_d['total'][sma_type] = 0
         for smpi in self.submanifestpkginfo_set.select_related('pkg_info_name', 'condition'):
             for key, key_display in iter_keys(smpi.key):
                 key_dict = pkg_info_d['keys'].setdefault(key,
@@ -329,17 +386,6 @@ class SubManifest(models.Model):
                                                           'key_list': []})
                 key_dict['key_list'].append((smpi.pkg_info_name.name, smpi))
             pkg_info_d['total']['pkginfo'] += 1
-        if not include_trashed_attachments:
-            sma_qs = SubManifestAttachment.objects.active()
-        else:
-            sma_qs = SubManifestAttachment.objects.all()
-        for sma in sma_qs.select_related('condition').filter(sub_manifest=self):
-            for key, key_display in iter_keys(sma.key):
-                key_dict = pkg_info_d['keys'].setdefault(key,
-                                                         {'key_display': key_display,
-                                                          'key_list': []})
-                key_dict['key_list'].append((sma.name, sma))
-            pkg_info_d['total'][sma.type] += 1
         for key, key_d in pkg_info_d['keys'].items():
             key_d['key_list'].sort(key=lambda t: (t[0], -1 * t[1].pk))
         return pkg_info_d
@@ -350,16 +396,15 @@ class SubManifest(models.Model):
     def build(self):
         condition_d = {}
         featured_items = set()
-        included_sma_names = set()
         for key, key_d in self.pkg_info_dict()['keys'].items():
-            for _, smo in key_d['key_list']:
-                if smo.condition:
-                    condition = smo.condition.predicate
+            for _, smpi in key_d['key_list']:
+                if smpi.condition:
+                    condition = smpi.condition.predicate
                 else:
                     condition = None
-                name = smo.get_name()
-                if isinstance(smo, SubManifestPkgInfo):
-                    options = smo.options
+                name = smpi.get_name()
+                if isinstance(smpi, SubManifestPkgInfo):
+                    options = smpi.options
                 else:
                     options = None
                 if key in ('managed_installs', 'optional_installs'):
@@ -367,10 +412,8 @@ class SubManifest(models.Model):
                 else:
                     val = name
                 condition_d.setdefault(condition, {}).setdefault(key, []).append(val)
-                if key != "managed_uninstalls" and smo.featured_item:
+                if key != "managed_uninstalls" and smpi.featured_item:
                     featured_items.add(name)
-                if isinstance(smo, SubManifestAttachment):
-                    included_sma_names.add(smo.name)
         data = {}
         if featured_items:
             data["featured_items"] = sorted(featured_items)
@@ -380,9 +423,6 @@ class SubManifest(models.Model):
             else:
                 condition_key_d["condition"] = condition
                 data.setdefault("conditional_items", []).append(condition_key_d)
-        # force uninstall on the not included attachments
-        qs = SubManifestAttachment.objects.filter(sub_manifest=self).exclude(name__in=included_sma_names)
-        data.setdefault('managed_uninstalls', []).extend({sma.get_name() for sma in qs})
         return data
 
     def can_be_deleted(self):
@@ -410,12 +450,11 @@ class Condition(models.Model):
         return reverse("monolith:condition", args=(self.pk,))
 
     def can_be_deleted(self):
-        return not self.submanifestpkginfo_set.count() and not self.submanifestattachment_set.count()
+        return not self.submanifestpkginfo_set.count()
 
     def manifests(self):
         return Manifest.objects.distinct().filter(
-            Q(manifestsubmanifest__sub_manifest__submanifestpkginfo__condition=self)
-            | Q(manifestsubmanifest__sub_manifest__submanifestattachment__condition=self)
+            manifestsubmanifest__sub_manifest__submanifestpkginfo__condition=self
         )
 
 
@@ -477,88 +516,6 @@ def attachment_path(instance, filename):
         instance.name,
         instance.version
     )
-
-
-SUB_MANIFEST_ATTACHMENT_TYPES = {
-    "package": {'name': 'package',
-                'extension': '.pkg'},
-    "script": {'name': 'script'},
-}
-
-SUB_MANIFEST_ATTACHMENT_TYPE_CHOICES = [
-    (k, v['name']) for k, v in SUB_MANIFEST_ATTACHMENT_TYPES.items()
-]
-
-
-class SubManifestAttachmentManager(models.Manager):
-    def newest(self):
-        return self.order_by('name', '-version').distinct('name')
-
-    def active(self):
-        return self.newest().filter(trashed_at__isnull=True)
-
-    def trash(self, sub_manifest, name):
-        for sma in self.filter(sub_manifest=sub_manifest, name=name):
-            sma.mark_as_trashed()
-
-
-class SubManifestAttachment(models.Model):
-    sub_manifest = models.ForeignKey(SubManifest, on_delete=models.CASCADE)
-    key = models.CharField(max_length=32, choices=SUB_MANIFEST_PKG_INFO_KEY_CHOICES)
-    type = models.CharField(max_length=32, choices=SUB_MANIFEST_ATTACHMENT_TYPE_CHOICES)
-    name = models.CharField(max_length=256)
-    featured_item = models.BooleanField(default=False)
-    condition = models.ForeignKey(Condition, on_delete=models.PROTECT, null=True, blank=True)
-    identifier = models.TextField(blank=True, null=True)
-    version = models.PositiveSmallIntegerField(default=0)
-    file = models.FileField(upload_to=attachment_path, blank=True)
-    pkg_info = models.JSONField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    trashed_at = models.DateTimeField(null=True)
-
-    objects = SubManifestAttachmentManager()
-
-    class Meta:
-        unique_together = (('sub_manifest', 'name', 'version'),)
-
-    def get_absolute_url(self):
-        return "{}#sma_{}".format(reverse('monolith:sub_manifest', args=(self.sub_manifest.pk,)), self.pk)
-
-    def get_name(self):
-        # remove the "-" from the name, because munki thinks it is a separator for a version number,
-        # and will split it to get the name of the package info, before searching for it in the catalogs.
-        name = re.sub(r'-+', '_', self.name)
-        return "sub manifest {} {} {}".format(self.sub_manifest.id,
-                                              self.get_type_display(),
-                                              name)
-
-    def can_be_downloaded(self):
-        return self.type in ("package",)
-
-    def get_download_name(self):
-        if self.can_be_downloaded():
-            return build_munki_name(
-                "sub_manifest_attachment",
-                [self.sub_manifest.id, self.id],
-                self.name,
-                SUB_MANIFEST_ATTACHMENT_TYPES[self.type]['extension']
-            )
-
-    def get_pkg_info(self):
-        pkg_info = self.pkg_info.copy()
-        pkg_info['name'] = self.get_name()
-        if self.can_be_downloaded():
-            pkg_info['installer_item_location'] = self.get_download_name()
-        return pkg_info
-
-    def get_content_type(self):
-        if self.type == "package":
-            return "application/octet-stream"
-
-    def mark_as_trashed(self):
-        self.trashed_at = datetime.now()
-        self.save()
 
 
 class Manifest(models.Model):
@@ -727,10 +684,6 @@ class Manifest(models.Model):
                                        .filter(archived_at__isnull=True,
                                                catalogs__in=self.catalogs(tags))):
             pkginfo_list.append(pkginfo.get_pkg_info())
-
-        # the sub manifests attachments
-        for sma in SubManifestAttachment.objects.newest().filter(sub_manifest__in=self.sub_manifests(tags)):
-            pkginfo_list.append(sma.get_pkg_info())
 
         # the enrollment packages
 

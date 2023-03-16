@@ -39,39 +39,21 @@
 
 <h3>
   {% if total.pkginfo %}
-  {{ total.pkginfo }} Repository Package{{ total.pkginfo|pluralize }},
-  {% endif %}
-  {% if total.package %}
-  {{ total.package }} Package{{ total.package|pluralize }}
-  {% endif %}
-  {% if total.script %}
-  {{ total.script }} Script{{ total.script|pluralize }}
+  {{ total.pkginfo }} Package{{ total.pkginfo|pluralize }}
   {% endif %}
 </h3>
 
-{% if perms.monolith.add_submanifestpkginfo or perms.monolith.add_submanifestattachment %}
-<div class="dropdown">
-  <button class="btn btn-default dropdown-toggle" type="button" id="addAttachment"
-          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+{% if perms.monolith.add_submanifestpkginfo %}
+<p>
+  <a class="btn btn-default" type="button" href="{% url 'monolith:sub_manifest_add_pkg_info' object.id %}">
     Add
-    <span class="caret"></span>
-  </button>
-  <ul class="dropdown-menu" aria-labelledby="addAttachment">
-    {% if perms.monolith.add_submanifestpkginfo %}
-    <li><a href="{% url 'monolith:sub_manifest_add_pkg_info' object.id %}">Repository Package</a>
-    {% endif %}
-    {% if perms.monolith.add_submanifestattachment %}
-    <li><a href="{% url 'monolith:sub_manifest_add_attachment' object.id %}">Package</a>
-    <li><a href="{% url 'monolith:sub_manifest_add_script' object.id %}">Script</a>
-    {% endif %}
-  </ul>
-</div>
+  </a>
+</p>
 {% endif %}
 
 <table class="table">
   <thead>
     <th>Name</th>
-    <th>Type</th>
     <th>Feat.</th>
     <th>Condition</th>
     <th>Excl. tags</th>
@@ -85,117 +67,64 @@
       <h4>{{ key_display }}</h4>
     </td>
   </tr>
-  {% for name, smo in key_list %}
-  <tr{% if smo.type and smo.trashed_at %} class="warning"{% endif %}{% if smo.pkg_info_name and not smo.pkg_info_name.has_active_pkginfos %} class="danger"{% endif %}>
+  {% for name, smpi in key_list %}
+  <tr{% if not smpi.pkg_info_name.has_active_pkginfos %} class="danger"{% endif %}>
     <td>
-      {% if smo.pkg_info_name %}
-      {% if perms.monolith.view_pkginfoname %}
-      <a name="smp_{{ smo.pk }}" href="{% url 'monolith:pkg_info_name' smo.pkg_info_name.id %}">{{ name }}</a>
-      {% else %}
-      {{ name }}
-      {% endif %}
-      {% else %}
-      {% if smo.can_be_downloaded %}
-      {% if perms.monolith.view_submanifestattachment %}
-      <a name="sma_{{ smo.pk }}" href="{% url 'monolith:download_sub_manifest_attachment' smo.id %}" >{{ name }}</a>
-      {% else %}
-      {{ name }}
-      {% endif %}
-      {% else %}
-      <a name="sma_{{ smo.pk }}"></a>{{ name }}
-      {% endif %}
-      <br><b>uploaded: </b>{{ smo.created_at|date:"r" }}
-      {% if smo.trashed_at %}
-      <br><b class="text-danger">trashed: </b><span class="text-danger">{{ smo.trashed_at|timesince }} ago</span>
-      {% endif %}
-      {% endif %}
-    </td>
-    {% if smo.type %}
-    <td>{{ smo.get_type_display }}</td>
-    {% else %}
-    <td>rep. pkg</td>
-    {% endif %}
-    <td>
-      {{ smo.featured_item|yesno:"★,-" }}
+        {% if perms.monolith.view_pkginfoname %}
+        <a name="smp_{{ smpi.pk }}" href="{% url 'monolith:pkg_info_name' smpi.pkg_info_name.id %}">{{ name }}</a>
+        {% else %}
+        {{ name }}
+        {% endif %}
     </td>
     <td>
-      {% if smo.condition %}
+      {{ smpi.featured_item|yesno:"★,-" }}
+    </td>
+    <td>
+      {% if smpi.condition %}
       {% if perms.monolith.view_condition %}
-      <a href="{{ smo.condition.get_absolute_url }}"
+      <a href="{{ smpi.condition.get_absolute_url }}"
          data-toggle="tooltip" data-placement="top"
-         title="{{ smo.condition.predicate }}">{{ smo.condition }}</a>
+         title="{{ smpi.condition.predicate }}">{{ smpi.condition }}</a>
       {% else %}
-      {{ smo.condition }}
+      {{ smpi.condition }}
       {% endif %}
       {% else %}
       -
       {% endif %}
     </td>
     <td>
-      {% if not smo.type %}
-        {% for tag in smo.excluded_tags %}
-        {% inventory_tag tag %}
-        {% empty %}
-        -
-        {% endfor %}
+      {% for tag in smpi.excluded_tags %}
+      {% inventory_tag tag %}
+      {% empty %}
+      -
+      {% endfor %}
+    </td>
+    <td>
+      {{ smpi.default_shard }}/{{ smpi.shard_modulo }}
+    </td>
+    <td>
+      {% if smpi.tag_shards %}
+      <table>
+      {% for tag_shard in smpi.tag_shards %}
+      <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag_shard.tag %}</td><td>{{ tag_shard.shard }}</td></tr>
+      {% endfor %}
+      </table>
       {% else %}
+      -
       {% endif %}
     </td>
     <td>
-      {% if not smo.type %}
-        {{ smo.default_shard }}/{{ smo.shard_modulo }}
-      {% endif %}
-    </td>
-    <td>
-      {% if not smo.type %}
-        {% if smo.tag_shards %}
-        <table>
-        {% for tag_shard in smo.tag_shards %}
-        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag_shard.tag %}</td><td>{{ tag_shard.shard }}</td></tr>
-        {% endfor %}
-        </table>
-        {% else %}
-        -
-        {% endif %}
-      {% endif %}
-    </td>
-    {% if smo.type %}
-    <td>
-      {% if smo.trashed_at %}
-        {% if perms.monolith.delete_submanifestattachment %}
-        <a class="btn btn-danger" href="{% url 'monolith:purge_sub_manifest_attachment' smo.id %}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
-        {% endif %}
-      {% else %}
-        {% if smo.type == 'script' %}
-          {% if perms.monolith.change_submanifestattachment %}
-          <a class="btn btn-default" href="{% url 'monolith:sub_manifest_update_script' object.id smo.id %}">
-            <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-          </a>
-          {% endif %}
-        {% endif %}
-        {% if perms.monolith.delete_submanifestattachment %}
-        <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_attachment' smo.id %}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
-        {% endif %}
-      {% endif %}
-    </td>
-    {% else %}
-    <td>
-      {% if smo.pkg_info_name.has_active_pkginfos and perms.monolith.change_submanifestpkginfo %}
-      <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest_pkg_info' object.id smo.id %}">
+      {% if smpi.pkg_info_name.has_active_pkginfos and perms.monolith.change_submanifestpkginfo %}
+      <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest_pkg_info' object.id smpi.id %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>
       {% endif %}
       {% if perms.monolith.delete_submanifestpkginfo %}
-      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_pkg_info' object.id smo.id %}">
+      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_pkg_info' object.id smpi.id %}">
         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
       </a>
       {% endif %}
     </td>
-    {% endif %}
   </tr>
   {% endfor %}
 {% endfor %}
