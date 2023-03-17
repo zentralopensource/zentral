@@ -263,6 +263,8 @@ class PackageForm(forms.ModelForm):
         if pf:
             pi.file = pf.uploaded_file
             pi.save()
+        for manifest in pi.name.manifests():
+            manifest.bump_version()
         return pi
 
 

@@ -135,6 +135,9 @@ class PkgInfoName(models.Model):
     def has_active_pkginfos(self):
         return self.pkginfo_set.filter(archived_at__isnull=True).count() > 0
 
+    def manifests(self):
+        return Manifest.objects.filter(manifestsubmanifest__sub_manifest__submanifestpkginfo__pkg_info_name=self)
+
     def get_absolute_url(self):
         return reverse("monolith:pkg_info_name", args=(self.pk,))
 
