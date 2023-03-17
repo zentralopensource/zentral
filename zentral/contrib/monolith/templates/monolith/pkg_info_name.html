@@ -22,6 +22,25 @@
     <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
   </a>
   {% endfor %}
+  {% if perms.monolith.add_pkginfo %}
+  <div class="btn-group">
+    <button class="btn btn-default dropdown-toggle" type="button" id="pkgInfoAdd"
+            data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+      Add
+      <span class="caret"></span>
+    </button>
+    <ul class="dropdown-menu" aria-labelledby="pkgInfoAdd">
+      {% if perms.monolith.add_pkginfo %}
+      <li><a href="{% url 'monolith:upload_package' %}?pin_id={{ object.pk}}">Package</a></li>
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if perms.monolith.delete_pkginfo and object.can_be_deleted %}
+  <a class="btn btn-danger" href="{% url 'monolith:delete_pkg_info_name' object.pk %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span> Delete
+  </a>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -60,7 +79,7 @@
       <th>Def. shard</th>
       <th>Tag shards</th>
       <th>Installs</th>
-      {% if perms.change_pkginfo %}
+      {% if perms.monolith.change_pkginfo %}
       <th></th>
       {% endif %}
     </tr>
@@ -116,7 +135,7 @@
         </a>
         {% endif %}
         {% else %}
-        {% if perms.change_pkginfo and manual_catalog_management %}
+        {% if perms.monolith.change_pkginfo and manual_catalog_management %}
         <a class="btn btn-default" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.pk %}">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>

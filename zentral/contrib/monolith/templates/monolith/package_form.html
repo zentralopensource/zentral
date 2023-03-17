@@ -9,6 +9,9 @@
   <li><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
   <li class="active">Update version {{ object.version }}</li>
   {% else %}
+  {% if pkg_info_name %}
+  <li><a href="{{ pkg_info_name.get_absolute_url }}">{{ pkg_info_name }}</a></li>
+  {% endif %}
   <li class="active">Upload package</li>
   {% endif %}
 </ol>
@@ -27,7 +30,11 @@
     {% if object %}
     <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
     {% else %}
+    {% if pkg_info_name %}
+    <a class="btn btn-default" href="{{ pkg_info_name.get_absolute_url }}">Cancel</a>
+    {% else %}
     <a class="btn btn-default" href="{% url 'monolith:pkg_infos' %}">Cancel</a>
+    {% endif %}
     {% endif %}
     <button class="btn btn-primary" type="submit">Save</button>
   </p>

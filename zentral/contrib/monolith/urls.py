@@ -22,6 +22,7 @@ urlpatterns = [
     path('pkg_info_names/<int:pk>/events/store_redirect/',
          views.PkgInfoNameEventsStoreRedirectView.as_view(),
          name='pkg_info_name_events_store_redirect'),
+    path('pkg_info_names/<int:pk>/delete/', views.DeletePkgInfoNameView.as_view(), name='delete_pkg_info_name'),
 
     # catalogs
     path('catalogs/', views.CatalogsView.as_view(), name='catalogs'),

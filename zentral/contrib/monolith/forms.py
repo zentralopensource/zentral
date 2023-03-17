@@ -184,6 +184,7 @@ class PackageForm(forms.ModelForm):
     ]
 
     def __init__(self, *args, **kwargs):
+        self.pkg_info_name = kwargs.pop("pkg_info_name", None)
         super().__init__(*args, **kwargs)
         # do not show names with pkg infos from the repository
         self.fields["name"].queryset = self.fields["name"].queryset.exclude(pkginfo__file="")
@@ -199,6 +200,9 @@ class PackageForm(forms.ModelForm):
             # remove the file field
             del self.fields["file"]
             # remove the name field
+            del self.fields["name"]
+        # hide name field if necessary
+        if self.pkg_info_name:
             del self.fields["name"]
 
     class Meta:
@@ -256,6 +260,8 @@ class PackageForm(forms.ModelForm):
             if uf.name:
                 data["installer_item_location"] = uf.name
             self.instance.version = data.get("version")
+        if self.pkg_info_name:
+            self.instance.name = self.pkg_info_name
 
     def save(self, *args, **kwargs):
         pi = super().save()

@@ -96,7 +96,10 @@ class PkgInfosView(PermissionRequiredMixin, TemplateView):
         form = PkgInfoSearchForm(self.request.GET)
         form.is_valid()
         ctx['form'] = form
-        ctx['name_number'], ctx['info_number'], ctx['pkg_names'] = PkgInfo.objects.alles(**form.cleaned_data)
+        ctx['name_number'], ctx['info_number'], ctx['pkg_names'] = PkgInfo.objects.alles(
+            include_empty_names=True,
+            **form.cleaned_data
+        )
         if not form.is_initial():
             bc = [(reverse("monolith:pkg_infos"), "Monolith pkg infos"),
                   (None, "Search")]
@@ -110,6 +113,23 @@ class UploadPackageView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "monolith.add_pkginfo"
     template_name = "monolith/package_form.html"
     form_class = PackageForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.pkg_info_name = None
+        pin_id = request.GET.get("pin_id")
+        if pin_id:
+            self.pkg_info_name = get_object_or_404(PkgInfoName, pk=pin_id)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["pkg_info_name"] = self.pkg_info_name
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["pkg_info_name"] = self.pkg_info_name
+        return ctx
 
 
 class UpdatePackageView(PermissionRequiredMixin, UpdateViewWithAudit):
@@ -234,6 +254,13 @@ class FetchPkgInfoNameEventsView(EventsMixin, FetchEventsView):
 
 class PkgInfoNameEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     permission_required = ("monolith.view_pkginfo", "monolith.view_pkginfoname")
+
+
+class DeletePkgInfoNameView(PermissionRequiredMixin, DeleteViewWithAudit):
+    permission_required = "monolith.delete_pkginfoname"
+    model = PkgInfoName
+    queryset = PkgInfoName.objects.for_deletion()
+    success_url = reverse_lazy("monolith:pkg_infos")
 
 
 # catalogs

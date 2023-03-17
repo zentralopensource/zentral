@@ -9,7 +9,7 @@ import unicodedata
 import urllib.parse
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models, connection
-from django.db.models import F, Q
+from django.db.models import Count, F, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -121,9 +121,21 @@ class PkgInfoCategory(models.Model):
         return d
 
 
+class PkgInfoNameManager(models.Manager):
+    def for_deletion(self):
+        return self.annotate(
+            # no active pkg info
+            pkginfo_count=Count("pkginfo", filter=Q(pkginfo__archived_at__isnull=True)),
+            # not included in a sub manifest
+            submanifest_count=Count("submanifestpkginfo")
+        ).filter(pkginfo_count=0, submanifest_count=0)
+
+
 class PkgInfoName(models.Model):
     name = models.CharField(max_length=256, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = PkgInfoNameManager()
 
     class Meta:
         ordering = ('name',)
@@ -137,6 +149,12 @@ class PkgInfoName(models.Model):
 
     def manifests(self):
         return Manifest.objects.filter(manifestsubmanifest__sub_manifest__submanifestpkginfo__pkg_info_name=self)
+
+    def can_be_deleted(self):
+        return (
+            self.submanifestpkginfo_set.count() == 0
+            and self.pkginfo_set.filter(archived_at__isnull=True).count() == 0
+        )
 
     def get_absolute_url(self):
         return reverse("monolith:pkg_info_name", args=(self.pk,))
@@ -153,18 +171,19 @@ class PkgInfoManager(models.Manager):
         return self.filter(file__gt="")
 
     def alles(self, **kwargs):
+        include_empty_names = kwargs.get("include_empty_names", False)
         params = []
         # first we aggregate the package info, with the munki managed installs
         aggregated_pi_query = (
             "select pn.id as pn_pk, pn.name, pi.id as pi_pk, pi.version,"
             "pi.file is not null as local, pi.data -> 'zentral_monolith' as pi_opts,"
-            "count(mi.*), sum(count(mi.*)) over (partition by pn.id) as pn_total "
+            "count(mi.id), sum(count(mi.id)) over (partition by pn.id) as pn_total "
             "from monolith_pkginfoname as pn "
-            "join monolith_pkginfo as pi on (pi.name_id = pn.id) "
+            "{left}join monolith_pkginfo as pi on (pi.name_id = pn.id) "
             "left join munki_managedinstall as mi on "
             "(pn.name = mi.name and pi.version = mi.installed_version) "
             "where pi.archived_at is null"
-        )
+        ).format(left="left " if include_empty_names else "")
         name = kwargs.get("name")
         if name:
             params.append("%{}%".format(connection.ops.prep_for_like_query(name)))
@@ -183,10 +202,10 @@ class PkgInfoManager(models.Manager):
             "case when pn_total=0 then null else 100.0 * count / pn_total end as percent,"
             "json_agg(distinct jsonb_build_object('pk', c.id, 'name', c.name, 'priority', c.priority)) as catalogs "
             "from aggregated_pi as api "
-            "join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = api.pi_pk) "
-            "join monolith_catalog as c on (c.id = pc.catalog_id) "
+            "{left}join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = api.pi_pk) "
+            "{left}join monolith_catalog as c on (c.id = pc.catalog_id) "
             "where c.archived_at is null "
-        )
+        ).format(left="left " if include_empty_names else "")
         catalog = kwargs.get("catalog")
         if catalog:
             params.append(catalog.id)
@@ -206,27 +225,6 @@ class PkgInfoManager(models.Manager):
         pi_opts_with_tags = []
         for pn_pk, pn_name, pi_pk, version, pi_local, pi_opts, count, pn_total, percent, catalogs in cursor.fetchall():
             info_c += 1
-            pi = {'pk': pi_pk,
-                  'version': version,
-                  'version_sort': get_version_sort_key(version),
-                  'local': pi_local,
-                  'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
-                  'count': int(count),
-                  'percent': percent}
-            if pi_opts:
-                pi_opts = json.loads(pi_opts)
-                pi['options'] = pi_opts
-                excluded_tags = pi_opts.get("excluded_tags")
-                shards = pi_opts.setdefault("shards", {})
-                modulo = shards.setdefault("modulo", 100)
-                shards.setdefault("default", modulo)
-                tag_shards = shards.get("tags")
-                if isinstance(excluded_tags, list) or isinstance(tag_shards, dict):
-                    if excluded_tags:
-                        seen_tag_names.update(excluded_tags)
-                    if tag_shards:
-                        seen_tag_names.update(tag_shards.keys())
-                    pi_opts_with_tags.append(pi_opts)
             if pn_pk != current_pn_pk:
                 if current_pn is not None:
                     current_pn['pkg_infos'].sort(key=lambda pi: pi["version_sort"], reverse=True)
@@ -237,7 +235,29 @@ class PkgInfoManager(models.Manager):
                               'name': pn_name,
                               'count': int(pn_total),
                               'pkg_infos': []}
-            current_pn['pkg_infos'].append(pi)
+            if pi_pk:
+                pi = {'pk': pi_pk,
+                      'version': version,
+                      'version_sort': get_version_sort_key(version),
+                      'local': pi_local,
+                      'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
+                      'count': int(count),
+                      'percent': percent}
+                if pi_opts:
+                    pi_opts = json.loads(pi_opts)
+                    pi['options'] = pi_opts
+                    excluded_tags = pi_opts.get("excluded_tags")
+                    shards = pi_opts.setdefault("shards", {})
+                    modulo = shards.setdefault("modulo", 100)
+                    shards.setdefault("default", modulo)
+                    tag_shards = shards.get("tags")
+                    if isinstance(excluded_tags, list) or isinstance(tag_shards, dict):
+                        if excluded_tags:
+                            seen_tag_names.update(excluded_tags)
+                        if tag_shards:
+                            seen_tag_names.update(tag_shards.keys())
+                        pi_opts_with_tags.append(pi_opts)
+                current_pn['pkg_infos'].append(pi)
         if current_pn:
             current_pn['pkg_infos'].sort(key=lambda pi: pi["version_sort"], reverse=True)
             pkg_name_list.append(current_pn)
@@ -274,7 +294,7 @@ def pkg_info_path(instance, filename):
 
 
 class PkgInfo(models.Model):
-    name = models.ForeignKey(PkgInfoName, on_delete=models.PROTECT)
+    name = models.ForeignKey(PkgInfoName, on_delete=models.CASCADE)
     version = models.CharField(max_length=256)
     catalogs = models.ManyToManyField(Catalog)
     category = models.ForeignKey(PkgInfoCategory, on_delete=models.SET_NULL, null=True, blank=True)
