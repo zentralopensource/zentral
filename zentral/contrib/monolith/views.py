@@ -105,6 +105,7 @@ class PkgInfosView(PermissionRequiredMixin, TemplateView):
                   (None, "Search")]
         else:
             bc = [(None, "Monolith pkg infos")]
+        ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
         ctx["breadcrumbs"] = bc
         return ctx
 
@@ -213,7 +214,6 @@ class PkgInfoNameView(PermissionRequiredMixin, DetailView):
             # should never happen
             logger.error("Could not get pkg infos for name ID %d", pkg_info_name.pk)
             ctx["pkg_infos"] = []
-        # to display update catalog links or not
         ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
         return ctx
 

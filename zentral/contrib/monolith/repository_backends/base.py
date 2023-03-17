@@ -107,6 +107,9 @@ class BaseRepository(object):
             else:
                 diff = {}
 
+            # update the local attribute
+            pkg_info.local = False
+
             # update category if necessary
             pkg_info_old_category = pkg_info.category
             if pkg_info_old_category != pkg_info_category:
@@ -195,7 +198,7 @@ class BaseRepository(object):
                                            "type": "catalog",
                                            "action": "archived"})
         # archive old pkg_infos
-        for pkg_info in PkgInfo.objects.select_related("name").filter(archived_at__isnull=True):
+        for pkg_info in PkgInfo.objects.local().select_related("name").filter(archived_at__isnull=True):
             if pkg_info.get_key() not in found_pkg_infos:
                 pkg_info.archived_at = datetime.now()
                 pkg_info.save()

@@ -168,7 +168,7 @@ class PkgInfoName(models.Model):
 
 class PkgInfoManager(models.Manager):
     def local(self):
-        return self.filter(file__gt="")
+        return self.filter(local=True)
 
     def alles(self, **kwargs):
         include_empty_names = kwargs.get("include_empty_names", False)
@@ -176,7 +176,7 @@ class PkgInfoManager(models.Manager):
         # first we aggregate the package info, with the munki managed installs
         aggregated_pi_query = (
             "select pn.id as pn_pk, pn.name, pi.id as pi_pk, pi.version,"
-            "pi.file is not null as local, pi.data -> 'zentral_monolith' as pi_opts,"
+            "pi.local, pi.data -> 'zentral_monolith' as pi_opts,"
             "count(mi.id), sum(count(mi.id)) over (partition by pn.id) as pn_total "
             "from monolith_pkginfoname as pn "
             "{left}join monolith_pkginfo as pi on (pi.name_id = pn.id) "
@@ -301,6 +301,7 @@ class PkgInfo(models.Model):
     requires = models.ManyToManyField(PkgInfoName, related_name="required_by", blank=True)
     update_for = models.ManyToManyField(PkgInfoName, related_name="updated_by", blank=True)
     data = models.JSONField()
+    local = models.BooleanField(default=False)
     file = models.FileField(upload_to=pkg_info_path, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -317,10 +318,6 @@ class PkgInfo(models.Model):
 
     def __str__(self):
         return "{} {}".format(self.name, self.version)
-
-    @property
-    def local(self):
-        return True if self.file else False
 
     def active_catalogs(self):
         return self.catalogs.filter(archived_at__isnull=True)

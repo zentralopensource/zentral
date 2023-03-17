@@ -79,7 +79,7 @@
       <th>Def. shard</th>
       <th>Tag shards</th>
       <th>Installs</th>
-      {% if perms.monolith.change_pkginfo %}
+      {% if perms.monolith.delete_pkginfo or perms.monolith.change_pkginfo %}
       <th></th>
       {% endif %}
     </tr>

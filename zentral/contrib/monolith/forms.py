@@ -222,6 +222,7 @@ class PackageForm(forms.ModelForm):
         return None
 
     def clean(self):
+        self.instance.local = True
         if self.instance.data is None:
             self.instance.data = {}
         data = self.instance.data
