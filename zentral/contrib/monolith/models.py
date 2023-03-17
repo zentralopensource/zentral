@@ -386,15 +386,20 @@ class PkgInfo(models.Model):
             "requires": [pin.name for pin in self.requires.all().order_by("name")],
             "update_for": [pin.name for pin in self.requires.all().order_by("name")],
             "data": self.data,
-            "local": self.local
+            "local": self.local,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+
         })
+        if self.archived_at:
+            d["archived_at"] = self.archived_at
         if self.category:
             d["category"] = self.category.serialize_for_event(keys_only=True)
         return d
 
     def linked_objects_keys_for_event(self):
         return {"munki_pkginfo_name": ((self.name.name,),),
-                "munki_pkginfo": ((self.pk,),)}
+                "munki_pkginfo": ((self.name.name, self.version),)}
 
 
 SUB_MANIFEST_PKG_INFO_KEY_CHOICES = (
