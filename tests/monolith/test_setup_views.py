@@ -13,6 +13,7 @@ from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, Enr
                                              Manifest, ManifestCatalog, PkgInfo, PkgInfoName,
                                              SubManifest, SubManifestPkgInfo)
 from zentral.contrib.munki.models import ManagedInstall
+from zentral.core.events.base import AuditEvent
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -83,6 +84,9 @@ class MonolithSetupViewsTestCase(TestCase):
             condition=condition
         )
         return submanifest, submanifest_pkginfo
+
+    def _force_pkg_info_name(self):
+        return PkgInfoName.objects.create(name=get_random_string(12))
 
     # pkg infos
 
@@ -169,6 +173,93 @@ class MonolithSetupViewsTestCase(TestCase):
                                    args=(self.pkginfo_name_1.pk,)))
         # dev store cannot redirect
         self.assertRedirects(response, reverse("monolith:pkg_info_name_events", args=(self.pkginfo_name_1.pk,)))
+
+    # create pkg info name
+
+    def test_create_pkg_info_name_login_redirect(self):
+        self._login_redirect(reverse("monolith:create_pkg_info_name"))
+
+    def test_create_pkg_info_name_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("monolith:create_pkg_info_name"))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_pkg_info_name(self, post_event):
+        self._login("monolith.add_pkginfoname", "monolith.view_pkginfoname")
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:create_pkg_info_name"), {"name": name}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/pkg_info_name.html")
+        self.assertContains(response, name)
+        pkg_info_name = response.context["object"]
+        self.assertEqual(pkg_info_name.name, name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "monolith.pkginfoname",
+                 "pk": str(pkg_info_name.pk),
+                 "new_value": {
+                     "pk": pkg_info_name.pk,
+                     "name": name,
+                     "created_at": pkg_info_name.created_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_pkginfo_name": [name]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    # delete pkg info name
+
+    def test_delete_pkg_info_name_login_redirect(self):
+        self._login_redirect(reverse("monolith:delete_pkg_info_name", args=(self.pkginfo_name_1.pk,)))
+
+    def test_delete_pkg_info_name_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("monolith:delete_pkg_info_name", args=(self.pkginfo_name_1.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_pkg_info_name_404(self):
+        self._login("monolith.delete_pkginfoname")
+        response = self.client.post(reverse("monolith:delete_pkg_info_name", args=(self.pkginfo_name_1.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_pkg_info_name(self, post_event):
+        self._login("monolith.delete_pkginfoname", "monolith.view_pkginfo")
+        pkg_info_name = self._force_pkg_info_name()
+        prev_pk = pkg_info_name.pk
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:delete_pkg_info_name", args=(pkg_info_name.pk,)),
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/pkg_info_list.html")
+        self.assertNotContains(response, pkg_info_name.name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "monolith.pkginfoname",
+                 "pk": str(prev_pk),
+                 "prev_value": {
+                     "pk": prev_pk,
+                     "name": pkg_info_name.name,
+                     "created_at": pkg_info_name.created_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_pkginfo_name": [pkg_info_name.name]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # catalogs
 
