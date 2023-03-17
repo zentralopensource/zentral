@@ -176,11 +176,18 @@ class PackageForm(forms.ModelForm):
     file = forms.FileField(required=True)
     display_name = forms.CharField(required=False)
     description = forms.CharField(widget=forms.Textarea(attrs={"rows": 10}), required=False)
+    excluded_tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(), required=False)
+    shard_modulo = forms.IntegerField(min_value=1, max_value=1000, required=False, initial=100)
+    default_shard = forms.IntegerField(min_value=0, max_value=1000, required=False, initial=100)
     field_order = [
         "file",
-        "name", "catalogs",
+        "name",
         "display_name", "description", "category",
-        "requires", "update_for"
+        "requires", "update_for",
+        "catalogs",
+        "excluded_tags",
+        "shard_modulo",
+        "default_shard",
     ]
 
     def __init__(self, *args, **kwargs):
@@ -201,9 +208,26 @@ class PackageForm(forms.ModelForm):
             del self.fields["file"]
             # remove the name field
             del self.fields["name"]
+            # prepare the shards fields
+            self.fields["excluded_tags"].initial = [tag.pk for tag in self.instance.excluded_tags]
+            self.fields["default_shard"].initial = self.instance.default_shard
+            self.fields["shard_modulo"].initial = self.instance.shard_modulo
         # hide name field if necessary
         if self.pkg_info_name:
             del self.fields["name"]
+        # tags
+        tag_qs = Tag.objects.select_related("meta_business_unit", "taxonomy").all()
+        self.fields['excluded_tags'].queryset = tag_qs
+        # tags shards
+        self.tag_shards = []
+        existing_tag_shard_dict = {}
+        if self.instance.pk:
+            existing_tag_shard_dict = {ts["tag"]: ts["shard"] for ts in self.instance.tag_shards}
+        for tag in tag_qs:
+            self.tag_shards.append(
+                (tag, tag in existing_tag_shard_dict, existing_tag_shard_dict.get(tag, self.instance.shard_modulo))
+            )
+        self.tag_shards.sort(key=lambda t: t[0].name.lower())
 
     class Meta:
         model = PkgInfo
@@ -226,6 +250,33 @@ class PackageForm(forms.ModelForm):
         if self.instance.data is None:
             self.instance.data = {}
         data = self.instance.data
+        # shards
+        default_shard = self.cleaned_data.get("default_shard")
+        shard_modulo = self.cleaned_data.get("shard_modulo")
+        if default_shard and shard_modulo and shard_modulo < default_shard:
+            self.add_error("default_shard", "Must be less than or equal to the shard modulo")
+        # zentral options
+        zentral_options = {}
+        excluded_tags = self.cleaned_data.get("excluded_tags")
+        if excluded_tags:
+            zentral_options["excluded_tags"] = [tag.name for tag in excluded_tags]
+        if default_shard is not None:
+            zentral_options.setdefault("shards", {})["default"] = default_shard
+        if shard_modulo is not None:
+            zentral_options.setdefault("shards", {})["modulo"] = shard_modulo
+        tag_shards = {}
+        for tag, _, _ in self.tag_shards:
+            try:
+                shard = int(self.data[f"tag-shard-{tag.pk}"])
+            except Exception:
+                continue
+            if isinstance(shard_modulo, int):
+                shard = min(shard, shard_modulo)
+            tag_shards[tag.name] = shard
+        if tag_shards:
+            zentral_options.setdefault("shards", {})["tags"] = tag_shards
+        if zentral_options:
+            data["zentral_monolith"] = zentral_options
         pin = self.cleaned_data.get("name")
         if pin:
             data["name"] = pin.name

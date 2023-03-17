@@ -336,6 +336,43 @@ class PkgInfo(models.Model):
     def get_absolute_url(self):
         return "{}#{}".format(reverse("monolith:pkg_info_name", args=(self.name.id,)), self.pk)
 
+    # shards
+
+    @property
+    def zentral_options(self):
+        try:
+            return self.data.get("zentral_monolith", {})
+        except AttributeError:
+            return {}
+
+    @property
+    def excluded_tags(self):
+        return Tag.objects.filter(name__in=self.zentral_options.get("excluded_tags", []))
+
+    @property
+    def default_shard(self):
+        shards = self.zentral_options.get("shards", {})
+        return shards.get("default", 100)
+
+    @property
+    def shard_modulo(self):
+        shards = self.zentral_options.get("shards", {})
+        return shards.get("modulo", 100)
+
+    @property
+    def tag_shards(self):
+        tag_shards = self.zentral_options.get("shards", {}).get("tags")
+        if not tag_shards:
+            return []
+        tags = (
+            Tag.objects.select_related("meta_business_unit", "taxonomy")
+                       .filter(name__in=tag_shards.keys())
+                       .order_by("name")
+        )
+        return [{"tag": tag, "shard": tag_shards[tag.name]} for tag in tags]
+
+    # events
+
     def serialize_for_event(self, keys_only=False):
         d = {
             "pk": self.pk,
@@ -514,7 +551,7 @@ class SubManifestPkgInfo(models.Model):
     def tag_shards(self):
         tag_shards = self.options.get("shards", {}).get("tags")
         if not tag_shards:
-            return {}
+            return []
         tags = (
             Tag.objects.select_related("meta_business_unit", "taxonomy")
                        .filter(name__in=tag_shards.keys())
