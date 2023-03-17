@@ -6,8 +6,8 @@
   <li><a href="/">Home</a></li>
   <li><a href="{%  url 'monolith:pkg_infos' %}">Monolith pkg infos</a></li>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">Update package</li>
+  <li><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
+  <li class="active">Update version {{ object.version }}</li>
   {% else %}
   <li class="active">Upload package</li>
   {% endif %}
@@ -16,6 +16,12 @@
 <h2>{% if object %}Update{% else %}Upload{% endif %} package</h2>
 
 <form class="form", method="POST" enctype="multipart/form-data">{% csrf_token %}
+  {% if object %}
+  <div class="form-group">
+    <label class="control-label">File</label>
+    <div>{{ object.data.installer_item_location|default:"-" }}</div>
+  </div>
+  {% endif %}
   {{ form|bootstrap }}
   <p>
     {% if object %}

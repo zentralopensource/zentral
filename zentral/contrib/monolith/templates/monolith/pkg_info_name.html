@@ -102,16 +102,23 @@
       <td>-</td>
       {% endif %}
       <td>{{ pkg_info.count }}{% if pkg_info.percent %} - {{ pkg_info.percent|floatformat }}%{% endif %}</td>
-      {% if perms.monolith.change_pkginfo %}
+      {% if perms.monolith.change_pkginfo or perms.monolith.delete_pkginfo %}
       <td>
         {% if pkg_info.local %}
+        {% if perms.monolith.change_pkginfo %}
         <a class="btn btn-default" href="{% url 'monolith:update_package' pkg_info.pk %}">
-          Update
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
+        {% endif %}
+        {% if perms.monolith.delete_pkginfo %}
+        <a class="btn btn-danger" href="{% url 'monolith:delete_pkg_info' pkg_info.pk %}">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
         {% else %}
-        {% if manual_catalog_management %}
+        {% if perms.change_pkginfo and manual_catalog_management %}
         <a class="btn btn-default" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.pk %}">
-          Update catalog
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
         {% endif %}
         {% endif %}

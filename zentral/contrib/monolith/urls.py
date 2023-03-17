@@ -10,6 +10,7 @@ urlpatterns = [
     path('pkg_infos/<int:pk>/update_catalog/',
          views.UpdatePkgInfoCatalogView.as_view(),
          name='update_pkg_info_catalog'),
+    path('pkg_infos/<int:pk>/delete/', views.DeletePkgInfoView.as_view(), name='delete_pkg_info'),
     path('pkg_info_names/create/', views.CreatePkgInfoNameView.as_view(), name='create_pkg_info_name'),
     path('pkg_info_names/<int:pk>/', views.PkgInfoNameView.as_view(), name='pkg_info_name'),
     path('pkg_info_names/<int:pk>/events/',

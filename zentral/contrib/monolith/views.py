@@ -28,7 +28,7 @@ from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRe
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls
 from zentral.utils.text import get_version_sort_key, shard as compute_shard, encode_args
-from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from .conf import monolith_conf
 from .events import (post_monolith_enrollment_event,
                      post_monolith_munki_request, post_monolith_repository_updates)
@@ -114,7 +114,7 @@ class UploadPackageView(PermissionRequiredMixin, CreateViewWithAudit):
 
 class UpdatePackageView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "monolith.change_pkginfo"
-    queryset = PkgInfo.objects.filter(file__gt="")
+    queryset = PkgInfo.objects.local()
     template_name = "monolith/package_form.html"
     form_class = PackageForm
 
@@ -144,6 +144,14 @@ class UpdatePkgInfoCatalogView(PermissionRequiredMixin, UpdateView):
                                                "action": "updated"}],
                                              self.request)
         return response
+
+
+class DeletePkgInfoView(PermissionRequiredMixin, DeleteViewWithAudit):
+    permission_required = "monolith.delete_pkginfo"
+    queryset = PkgInfo.objects.local()
+
+    def get_success_url(self):
+        return reverse("monolith:pkg_info_name", args=(self.object.name.pk,))
 
 
 class CreatePkgInfoNameView(PermissionRequiredMixin, CreateViewWithAudit):

@@ -146,6 +146,9 @@ class PkgInfoName(models.Model):
 
 
 class PkgInfoManager(models.Manager):
+    def local(self):
+        return self.filter(file__gt="")
+
     def alles(self, **kwargs):
         params = []
         # first we aggregate the package info, with the munki managed installs

@@ -176,24 +176,30 @@ class PackageForm(forms.ModelForm):
     file = forms.FileField(required=True)
     display_name = forms.CharField(required=False)
     description = forms.CharField(widget=forms.Textarea(attrs={"rows": 10}), required=False)
-    field_order = (
+    field_order = [
         "file",
-        "name", "version", "catalogs",
+        "name", "catalogs",
         "display_name", "description", "category",
         "requires", "update_for"
-    )
+    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # do not show names with pkg infos from the repository
         self.fields["name"].queryset = self.fields["name"].queryset.exclude(pkginfo__file="")
         data = self.instance.data
         if data:
+            # re-hydrate some form fields with the pkg info data
             display_name = data.get("display_name")
             if display_name:
-                self.fields["display_name"].initial = display_name 
+                self.fields["display_name"].initial = display_name
             description = data.get("description")
             if description:
                 self.fields["description"].initial = description
+            # remove the file field
+            del self.fields["file"]
+            # remove the name field
+            del self.fields["name"]
 
     class Meta:
         model = PkgInfo
@@ -205,8 +211,6 @@ class PackageForm(forms.ModelForm):
 
     def clean_file(self):
         uploaded_file = self.cleaned_data["file"]
-        if not uploaded_file:
-            raise forms.ValidationError("Please select a file.")
         try:
             self.cleaned_data["package_file"] = PackageFile(uploaded_file)
         except AttachmentError as e:
@@ -214,38 +218,51 @@ class PackageForm(forms.ModelForm):
         return None
 
     def clean(self):
-        data = {}
-        pin = self.cleaned_data["name"]
+        if self.instance.data is None:
+            self.instance.data = {}
+        data = self.instance.data
+        pin = self.cleaned_data.get("name")
         if pin:
             data["name"] = pin.name
         display_name = self.cleaned_data["display_name"]
         if display_name:
             data["display_name"] = display_name
+        elif "display_name" in data:
+            del data["display_name"]
         description = self.cleaned_data["description"]
         if description:
             data["description"] = description
+        elif "description" in data:
+            del data["description"]
         category = self.cleaned_data["category"]
         if category:
             data["category"] = category.name
+        elif "category" in data:
+            del data["category"]
         requires = self.cleaned_data["requires"]
         if requires:
             data["requires"] = [pin.name for pin in requires]
+        elif "requires" in data:
+            del data["requires"]
         update_for = self.cleaned_data["update_for"]
         if update_for:
             data["update_for"] = [pin.name for pin in update_for]
-        uf = self.cleaned_data.get("uploaded_file")
-        if uf and uf.name:
-            data["installer_item_location"] = uf.name
+        elif "update_for" in data:
+            del data["update_for"]
         pf = self.cleaned_data.get("package_file")
         if pf:
             data.update(pf.get_pkginfo_data())
-        self.instance.data = data
-        self.instance.version = data.get("version")
+            uf = pf.uploaded_file
+            if uf.name:
+                data["installer_item_location"] = uf.name
+            self.instance.version = data.get("version")
 
     def save(self, *args, **kwargs):
         pi = super().save()
-        pi.file = self.cleaned_data["package_file"].uploaded_file
-        pi.save()
+        pf = self.cleaned_data.get("package_file")
+        if pf:
+            pi.file = pf.uploaded_file
+            pi.save()
         return pi
 
 
