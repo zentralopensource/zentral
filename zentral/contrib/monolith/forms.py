@@ -277,7 +277,7 @@ class PackageForm(forms.ModelForm):
             zentral_options.setdefault("shards", {})["tags"] = tag_shards
         if zentral_options:
             data["zentral_monolith"] = zentral_options
-        pin = self.cleaned_data.get("name")
+        pin = self.cleaned_data.get("name", self.pkg_info_name)
         if pin:
             data["name"] = pin.name
         display_name = self.cleaned_data["display_name"]
