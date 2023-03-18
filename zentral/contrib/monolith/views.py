@@ -1458,7 +1458,7 @@ class MRPackageView(MRNameView):
                         if pkginfo.file:
                             pkginfo_fn = pkginfo.file.name
                         else:
-                            pkginfo_iil = pkginfo["installer_item_location"]
+                            pkginfo_iil = pkginfo.data.get("installer_item_location")
                         break
                 # set the cache value, even if pkginfo_name, pkginfo_version and pkginfo_iil are None
                 cache.set(cache_key, (pkginfo_name, pkginfo_version, pkginfo_iil, pkginfo_fn), timeout=None)
