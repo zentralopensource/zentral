@@ -653,6 +653,55 @@ class MonolithSetupViewsTestCase(TestCase):
         )
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
+    # delete pkg info
+
+    def test_delete_pkg_info_login_redirect(self):
+        pkg_info = self._force_pkg_info()
+        self._login_redirect(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)))
+
+    def test_delete_pkg_info_permission_denied(self):
+        pkg_info = self._force_pkg_info()
+        self._login()
+        response = self.client.get(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_pkg_info_404(self):
+        pkg_info = self._force_pkg_info(local=False)
+        self._login("monolith.delete_pkginfo")
+        response = self.client.post(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_pkg_info(self, post_event):
+        self._login("monolith.delete_pkginfo", "monolith.view_pkginfo", "monolith.view_pkginfoname")
+        pkg_info = self._force_pkg_info()
+        prev_value = pkg_info.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)),
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/pkg_info_name.html")
+        self.assertEqual(response.context["object"], pkg_info.name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "monolith.pkginfo",
+                 "pk": str(prev_value["pk"]),
+                 "prev_value": prev_value
+             }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(
+            metadata["objects"],
+            {"munki_pkginfo": [f"{pkg_info.name.name}|1.0"],
+             "munki_pkginfo_name": [pkg_info.name.name]}
+        )
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
     # catalogs
 
     def test_catalogs_login_redirect(self):
