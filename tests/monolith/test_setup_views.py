@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 from functools import reduce
 from io import BytesIO
@@ -93,16 +94,56 @@ class MonolithSetupViewsTestCase(TestCase):
     def _force_pkg_info_name(self):
         return PkgInfoName.objects.create(name=get_random_string(12))
 
-    def _force_pkg_info(self, local=True, version="1.0", archived=False):
+    def _force_pkg_info(self, local=True, version="1.0", archived=False, alles=False):
         pkg_info_name = self._force_pkg_info_name()
-        return PkgInfo.objects.create(
+        data = {"name": pkg_info_name.name,
+                "version": version}
+        pi = PkgInfo.objects.create(
             name=pkg_info_name, version=version, local=local,
             archived_at=datetime.utcnow() if archived else None,
-            data={
-                "name": pkg_info_name.name,
-                "version": version
-            }
+            data=data
         )
+        if alles:
+            pkg_info_category = PkgInfoCategory.objects.create(name=get_random_string(12))
+            pi.catalogs.add(Catalog.objects.create(name=get_random_string(12)))
+            pi.category = pkg_info_category
+            data["category"] = pkg_info_category.name
+            pkg_info_name_required = self._force_pkg_info_name()
+            pi.requires.add(pkg_info_name_required)
+            data["requires"] = [pkg_info_name_required.name]
+            pkg_info_name_update_for = self._force_pkg_info_name()
+            pi.update_for.add(pkg_info_name_update_for)
+            data["update_for"] = [pkg_info_name_update_for.name]
+            data.update({
+                'display_name': get_random_string(12),
+                'description': get_random_string(12),
+                'autoremove': False,
+                'installed_size': 111,
+                'installer_item_hash': get_random_string(64, allowed_chars="0123456789abcdef"),
+                'installer_item_location': get_random_string(12),
+                'installer_item_size': 55,
+                'minimum_os_version': '10.11.0',
+                'receipts': [{
+                    'installed_size': 111,
+                    'packageid': 'io.zentral.{}'.format(slugify(pkg_info_name.name)),
+                    'version': version
+                }],
+                'unattended_install': True,
+                'unattended_uninstall': True,
+                'uninstall_method': 'removepackages',
+                'uninstallable': True,
+                'version': version,
+                'zentral_monolith': {
+                    "excluded_tag": [Tag.objects.create(name=get_random_string(12)).name],
+                    "shards": {
+                        "modulo": 5,
+                        "default": 2,
+                        "tags": {Tag.objects.create(name=get_random_string(12)).name: 5}
+                    }
+                }
+            })
+            pi.save()
+        return pi
 
     # pkg infos
 
@@ -293,6 +334,7 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:upload_package"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/package_form.html")
+        self.assertContains(response, "Upload package")
         choices = list(response.context["form"].fields["name"].queryset.all())
         self.assertEqual(set(choices), {pkg_info_name, self.pkginfo_name_1})
 
@@ -302,6 +344,7 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:upload_package"), {"pin_id": pkg_info_name.pk})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/package_form.html")
+        self.assertContains(response, "Upload package")
         self.assertNotIn("name", response.context["form"].fields)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -542,6 +585,71 @@ class MonolithSetupViewsTestCase(TestCase):
             metadata["objects"],
             {"munki_pkginfo": [f"{pkg_info_name.name}|1.0"],
              "munki_pkginfo_name": [pkg_info_name.name]}
+        )
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    # update package
+
+    def test_update_package_login_redirect(self):
+        pkg_info = self._force_pkg_info()
+        self._login_redirect(reverse("monolith:update_package", args=(pkg_info.pk,)))
+
+    def test_update_package_permission_denied(self):
+        pkg_info = self._force_pkg_info()
+        self._login()
+        response = self.client.get(reverse("monolith:update_package", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_package_get_no_name(self):
+        pkg_info = self._force_pkg_info()
+        self._login("monolith.change_pkginfo")
+        response = self.client.get(reverse("monolith:update_package", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/package_form.html")
+        self.assertContains(response, "Update package")
+        self.assertNotIn("name", response.context["form"].fields)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_package(self, post_event):
+        pkg_info = self._force_pkg_info(alles=True)
+        prev_value = pkg_info.serialize_for_event()
+        self._login("monolith.change_pkginfo", "monolith.view_pkginfo", "monolith.view_pkginfoname")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("monolith:update_package", args=(pkg_info.pk,)),
+                {"catalogs": [self.catalog_1.pk]},
+                follow=True
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/pkg_info_name.html")
+        pkg_info.refresh_from_db()
+        self.assertTrue(pkg_info.local is True)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        new_value = copy.deepcopy(prev_value)
+        del new_value["category"]
+        new_value["updated_at"] = pkg_info.updated_at
+        new_value["catalogs"] = [{"pk": self.catalog_1.pk, "name": self.catalog_1.name}]
+        new_value["requires"] = []
+        new_value["update_for"] = []
+        for key in ("zentral_monolith", "category", "display_name", "description", "requires", "update_for"):
+            del new_value["data"][key]
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.pkginfo",
+                 "pk": str(pkg_info.pk),
+                 "new_value": new_value,
+                 "prev_value": prev_value,
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(
+            metadata["objects"],
+            {"munki_pkginfo": [f"{pkg_info.name.name}|1.0"],
+             "munki_pkginfo_name": [pkg_info.name.name]}
         )
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 

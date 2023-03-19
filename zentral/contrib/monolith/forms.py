@@ -302,6 +302,8 @@ class PackageForm(forms.ModelForm):
             zentral_options.setdefault("shards", {})["tags"] = tag_shards
         if zentral_options:
             data["zentral_monolith"] = zentral_options
+        else:
+            data.pop("zentral_monolith", None)
         # display name → data
         display_name = self.cleaned_data["display_name"]
         if display_name:
