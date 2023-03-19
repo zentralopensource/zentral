@@ -250,20 +250,47 @@ class PackageForm(forms.ModelForm):
         if self.instance.data is None:
             self.instance.data = {}
         data = self.instance.data
-        # shards
+        pin = self.cleaned_data.get("name", self.pkg_info_name)
+        # file
+        pf = self.cleaned_data.get("package_file")
+        if pf:
+            data.update(pf.get_pkginfo_data())
+            version = data.get("version")
+            if version:
+                try:
+                    existing_pi = PkgInfo.objects.get(name=pin, version=version)
+                except PkgInfo.DoesNotExist:
+                    pass
+                else:
+                    if existing_pi.archived_at:
+                        # use the existing archived PkgInfo
+                        self.instance = existing_pi
+                        self.instance.local = True
+                        self.instance.archived_at = None
+                        self.instance.data = data
+                    else:
+                        self.add_error("file", "A PkgInfo with the same name and version already exists.")
+            self.instance.version = version
+            uf = pf.uploaded_file
+            if uf.name:
+                data["installer_item_location"] = uf.name
+        # name → data, instance
+        if pin:
+            self.instance.name = pin
+            data["name"] = pin.name
+        # zentral options → data
+        zentral_options = {}
         default_shard = self.cleaned_data.get("default_shard")
         shard_modulo = self.cleaned_data.get("shard_modulo")
         if default_shard and shard_modulo and shard_modulo < default_shard:
             self.add_error("default_shard", "Must be less than or equal to the shard modulo")
-        # zentral options
-        zentral_options = {}
-        excluded_tags = self.cleaned_data.get("excluded_tags")
-        if excluded_tags:
-            zentral_options["excluded_tags"] = [tag.name for tag in excluded_tags]
         if default_shard is not None:
             zentral_options.setdefault("shards", {})["default"] = default_shard
         if shard_modulo is not None:
             zentral_options.setdefault("shards", {})["modulo"] = shard_modulo
+        excluded_tags = self.cleaned_data.get("excluded_tags")
+        if excluded_tags:
+            zentral_options["excluded_tags"] = [tag.name for tag in excluded_tags]
         tag_shards = {}
         for tag, _, _ in self.tag_shards:
             try:
@@ -277,50 +304,36 @@ class PackageForm(forms.ModelForm):
             zentral_options.setdefault("shards", {})["tags"] = tag_shards
         if zentral_options:
             data["zentral_monolith"] = zentral_options
-        pin = self.cleaned_data.get("name", self.pkg_info_name)
-        if pin:
-            data["name"] = pin.name
+        # display name → data
         display_name = self.cleaned_data["display_name"]
         if display_name:
             data["display_name"] = display_name
         elif "display_name" in data:
             del data["display_name"]
+        # description → data
         description = self.cleaned_data["description"]
         if description:
             data["description"] = description
         elif "description" in data:
             del data["description"]
+        # category → data
         category = self.cleaned_data["category"]
         if category:
             data["category"] = category.name
         elif "category" in data:
             del data["category"]
+        # requires → data
         requires = self.cleaned_data["requires"]
         if requires:
             data["requires"] = [pin.name for pin in requires]
         elif "requires" in data:
             del data["requires"]
+        # update for → data
         update_for = self.cleaned_data["update_for"]
         if update_for:
             data["update_for"] = [pin.name for pin in update_for]
         elif "update_for" in data:
             del data["update_for"]
-        pf = self.cleaned_data.get("package_file")
-        if pf:
-            data.update(pf.get_pkginfo_data())
-            version = data.get("version")
-            if version:
-                qs = PkgInfo.objects.filter(name=pin, version=version)
-                if self.instance.pk:
-                    qs = qs.exclude(pk=self.instance.pk)
-                if qs.count():
-                    self.add_error("file", "A PkgInfo with the same name and version already exists.")
-            self.instance.version = version
-            uf = pf.uploaded_file
-            if uf.name:
-                data["installer_item_location"] = uf.name
-        if self.pkg_info_name:
-            self.instance.name = self.pkg_info_name
 
     def save(self, *args, **kwargs):
         pi = super().save()

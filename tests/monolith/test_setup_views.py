@@ -6,8 +6,9 @@ from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
-from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
+from django.utils.crypto import get_random_string
+from django.utils.text import slugify
 from accounts.models import User
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, EnrolledMachine,
@@ -92,10 +93,11 @@ class MonolithSetupViewsTestCase(TestCase):
     def _force_pkg_info_name(self):
         return PkgInfoName.objects.create(name=get_random_string(12))
 
-    def _force_pkg_info(self, local=True, version="1.0"):
+    def _force_pkg_info(self, local=True, version="1.0", archived=False):
         pkg_info_name = self._force_pkg_info_name()
         return PkgInfo.objects.create(
             name=pkg_info_name, version=version, local=local,
+            archived_at=datetime.utcnow() if archived else None,
             data={
                 "name": pkg_info_name.name,
                 "version": version
@@ -480,6 +482,69 @@ class MonolithSetupViewsTestCase(TestCase):
             response, "form", "file",
             "A PkgInfo with the same name and version already exists."
         )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_upload_package_existing_archived_package(self, post_event):
+        self._login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
+        pkg_info = self._force_pkg_info(archived=True)
+        pkg_info_name = pkg_info.name
+        file = BytesIO(build_dummy_package(pkg_info_name.name, pkg_info.version))
+        file.name = "{}.pkg".format(get_random_string(12))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("monolith:upload_package"),
+                {"file": file,
+                 "name": pkg_info_name.pk,
+                 "catalogs": [self.catalog_1.pk]},
+                follow=True
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/pkg_info_name.html")
+        pkg_info = pkg_info_name.pkginfo_set.first()
+        self.assertTrue(pkg_info.local is True)
+        self.assertEqual(pkg_info.file.name, f"monolith/packages/{pkg_info.pk:08d}.pkg")
+        self.assertEqual(pkg_info.data["installer_item_location"], file.name)
+        self.assertEqual(pkg_info.data["name"], pkg_info_name.name)
+        self.assertEqual(
+            pkg_info.data["receipts"],
+            [{'installed_size': 0,
+              'packageid': 'io.zentral.{}'.format(slugify(pkg_info_name.name)),
+              'version': '1.0'}]
+        )
+        self.assertEqual(pkg_info.data["version"], "1.0")
+        self.assertEqual(pkg_info.version, "1.0")
+        self.assertIsNone(pkg_info.archived_at)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        event_payload_data = event.payload["object"]["new_value"].pop("data")
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "monolith.pkginfo",
+                 "pk": str(pkg_info.pk),
+                 "new_value": {
+                     "pk": pkg_info.pk,
+                     "local": True,
+                     "name": pkg_info_name.name,
+                     "catalogs":  [{"pk": self.catalog_1.pk, "name": self.catalog_1.name}],
+                     "requires": [],
+                     "update_for": [],
+                     "version": "1.0",
+                     "created_at": pkg_info.created_at,
+                     "updated_at": pkg_info.updated_at,
+                 }
+              }}
+        )
+        self.assertEqual(event_payload_data["name"], pkg_info_name.name)
+        metadata = event.metadata.serialize()
+        self.assertEqual(
+            metadata["objects"],
+            {"munki_pkginfo": [f"{pkg_info_name.name}|1.0"],
+             "munki_pkginfo_name": [pkg_info_name.name]}
+        )
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # catalogs
 
