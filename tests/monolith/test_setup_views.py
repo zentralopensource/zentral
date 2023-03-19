@@ -294,8 +294,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/package_form.html")
         choices = list(response.context["form"].fields["name"].queryset.all())
-        self.assertIn(pkg_info_name, choices)
-        self.assertNotIn(self.pkginfo_name_1, choices)
+        self.assertEqual(set(choices), {pkg_info_name, self.pkginfo_name_1})
 
     def test_upload_package_get_name(self):
         self._login("monolith.add_pkginfo")

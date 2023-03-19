@@ -193,8 +193,6 @@ class PackageForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.pkg_info_name = kwargs.pop("pkg_info_name", None)
         super().__init__(*args, **kwargs)
-        # do not show names with pkg infos from the repository
-        self.fields["name"].queryset = self.fields["name"].queryset.exclude(pkginfo__local=False)
         data = self.instance.data
         if data:
             # re-hydrate some form fields with the pkg info data
