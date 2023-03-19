@@ -1,14 +1,14 @@
 import os
 import shutil
 import tempfile
+from django.utils.text import slugify
 from zentral.utils.osx_package import PackageBuilder
 
 
 class DummyPackageBuilder(PackageBuilder):
-    package_name = "test123"
-    base_package_identifier = "io.zentral.test123"
-
-    def __init__(self):
+    def __init__(self, name, version):
+        self.package_name = name
+        self.base_package_identifier = "io.zentral.{}".format(slugify(name))
         self.build_tmpl_dir = tempfile.mkdtemp()
         # package template dir
         base_pkg_path = os.path.join(self.build_tmpl_dir, "base.pkg")
@@ -32,14 +32,14 @@ class DummyPackageBuilder(PackageBuilder):
         os.mkdir(os.path.join(self.build_tmpl_dir, "scripts"))
         # root
         os.mkdir(os.path.join(self.build_tmpl_dir, "root"))
-        super().__init__(None)
+        super().__init__(None, version=version)
 
     def cleanup(self):
         shutil.rmtree(self.build_tmpl_dir)
 
 
-def build_dummy_package():
-    builder = DummyPackageBuilder()
+def build_dummy_package(name="test123", version="1.0"):
+    builder = DummyPackageBuilder(name, version)
     _, _, content = builder.build()
     builder.cleanup()
     return content

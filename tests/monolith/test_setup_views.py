@@ -9,9 +9,9 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import User
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, EnrolledMachine,
-                                             Manifest, ManifestCatalog, PkgInfo, PkgInfoName,
+                                             Manifest, ManifestCatalog, PkgInfo, PkgInfoCategory, PkgInfoName,
                                              SubManifest, SubManifestPkgInfo)
 from zentral.contrib.munki.models import ManagedInstall
 from zentral.core.events.base import AuditEvent
@@ -91,6 +91,16 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def _force_pkg_info_name(self):
         return PkgInfoName.objects.create(name=get_random_string(12))
+
+    def _force_pkg_info(self, local=True, version="1.0"):
+        pkg_info_name = self._force_pkg_info_name()
+        return PkgInfo.objects.create(
+            name=pkg_info_name, version=version, local=local,
+            data={
+                "name": pkg_info_name.name,
+                "version": version
+            }
+        )
 
     # pkg infos
 
@@ -353,6 +363,123 @@ class MonolithSetupViewsTestCase(TestCase):
              "munki_pkginfo_name": [pkg_info_name.name]}
         )
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_upload_package_from_pkg_info_name(self, post_event):
+        self._login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
+        pkg_info_category = PkgInfoCategory.objects.create(name=get_random_string(12))
+        pkg_info_name = self._force_pkg_info_name()
+        pkg_info_name_required = self._force_pkg_info_name()
+        pkg_info_name_update_for = self._force_pkg_info_name()
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+        shard_tag = Tag.objects.create(name=get_random_string(12))
+        file = BytesIO(build_dummy_package())
+        file.name = "test123.pkg"
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                "{}?pin_id={}".format(reverse("monolith:upload_package"), pkg_info_name.pk),
+                {"file": file,
+                 "display_name": "Yolo",
+                 "description": "Fomo",
+                 "catalogs": [self.catalog_1.pk],
+                 "category": pkg_info_category.pk,
+                 "requires": [pkg_info_name_required.pk],
+                 "update_for": [pkg_info_name_update_for.pk],
+                 "excluded_tags": [excluded_tag.pk],
+                 "shard_modulo": 5,
+                 "default_shard": 2,
+                 f"tag-shard-{shard_tag.pk}": 5},
+                follow=True
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/pkg_info_name.html")
+        pkg_info = pkg_info_name.pkginfo_set.first()
+        self.assertTrue(pkg_info.local is True)
+        self.assertEqual(pkg_info.file.name, f"monolith/packages/{pkg_info.pk:08d}.pkg")
+        data = {
+            'name': pkg_info_name.name,
+            'version': '1.0',
+            'category': pkg_info_category.name,
+            'receipts': [{'version': '1.0',
+                          'packageid': 'io.zentral.test123',
+                          'installed_size': 0}],
+            'requires': [pkg_info_name_required.name],
+            'autoremove': False,
+            'update_for': [pkg_info_name_update_for.name],
+            'description': 'Fomo',
+            'display_name': 'Yolo',
+            'uninstallable': True,
+            'installed_size': 0,
+            'uninstall_method': 'removepackages',
+            'zentral_monolith': {
+                'shards': {
+                    'tags': {
+                        shard_tag.name: 5
+                    },
+                    'modulo': 5,
+                    'default': 2
+                 },
+                'excluded_tags': [excluded_tag.name]
+            },
+            'minimum_os_version': '10.11.0',
+            'unattended_install': True,
+            'installer_item_size': 2,
+            'installer_item_hash': pkg_info.data["installer_item_hash"],
+            'unattended_uninstall': True,
+            'installer_item_location': 'test123.pkg'
+        }
+        self.assertEqual(pkg_info.data, data)
+        self.assertEqual(pkg_info.version, "1.0")
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "monolith.pkginfo",
+                 "pk": str(pkg_info.pk),
+                 "new_value": {
+                     "pk": pkg_info.pk,
+                     "local": True,
+                     "name": pkg_info_name.name,
+                     "category": {"name": pkg_info_category.name, "pk": pkg_info_category.pk},
+                     "catalogs":  [{"pk": self.catalog_1.pk, "name": self.catalog_1.name}],
+                     "data": data,
+                     "requires": [pkg_info_name_required.name],
+                     "update_for": [pkg_info_name_update_for.name],
+                     "version": "1.0",
+                     "created_at": pkg_info.created_at,
+                     "updated_at": pkg_info.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(
+            metadata["objects"],
+            {"munki_pkginfo": [f"{pkg_info_name.name}|1.0"],
+             "munki_pkginfo_name": [pkg_info_name.name]}
+        )
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    def test_upload_package_conflict(self):
+        self._login("monolith.add_pkginfo")
+        pkg_info = self._force_pkg_info()
+        file = BytesIO(build_dummy_package(name=pkg_info.name.name, version=pkg_info.version))
+        file.name = "{}.pkg".format(get_random_string(12))
+        response = self.client.post(
+            reverse("monolith:upload_package"),
+            {"file": file,
+             "name": pkg_info.name.pk,
+             "catalogs": [self.catalog_1.pk]},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/package_form.html")
+        self.assertFormError(
+            response, "form", "file",
+            "A PkgInfo with the same name and version already exists."
+        )
 
     # catalogs
 

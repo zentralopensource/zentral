@@ -194,7 +194,7 @@ class PackageForm(forms.ModelForm):
         self.pkg_info_name = kwargs.pop("pkg_info_name", None)
         super().__init__(*args, **kwargs)
         # do not show names with pkg infos from the repository
-        self.fields["name"].queryset = self.fields["name"].queryset.exclude(pkginfo__file="")
+        self.fields["name"].queryset = self.fields["name"].queryset.exclude(pkginfo__local=False)
         data = self.instance.data
         if data:
             # re-hydrate some form fields with the pkg info data
@@ -308,10 +308,17 @@ class PackageForm(forms.ModelForm):
         pf = self.cleaned_data.get("package_file")
         if pf:
             data.update(pf.get_pkginfo_data())
+            version = data.get("version")
+            if version:
+                qs = PkgInfo.objects.filter(name=pin, version=version)
+                if self.instance.pk:
+                    qs = qs.exclude(pk=self.instance.pk)
+                if qs.count():
+                    self.add_error("file", "A PkgInfo with the same name and version already exists.")
+            self.instance.version = version
             uf = pf.uploaded_file
             if uf.name:
                 data["installer_item_location"] = uf.name
-            self.instance.version = data.get("version")
         if self.pkg_info_name:
             self.instance.name = self.pkg_info_name
 

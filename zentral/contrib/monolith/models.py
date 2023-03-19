@@ -384,7 +384,7 @@ class PkgInfo(models.Model):
         d.update({
             "catalogs": [c.serialize_for_event(keys_only=True) for c in self.catalogs.all()],
             "requires": [pin.name for pin in self.requires.all().order_by("name")],
-            "update_for": [pin.name for pin in self.requires.all().order_by("name")],
+            "update_for": [pin.name for pin in self.update_for.all().order_by("name")],
             "data": self.data,
             "local": self.local,
             "created_at": self.created_at,
