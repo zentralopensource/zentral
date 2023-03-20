@@ -1,6 +1,9 @@
 import copy
+import os.path
 import plistlib
+import shutil
 import uuid
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
@@ -104,7 +107,8 @@ class MonolithAPIViewsTestCase(TestCase):
         sub_manifest=None,
         sub_manifest_key=None,
         zentral_monolith=None,
-        smo_options=None
+        smo_options=None,
+        local_pkg_content=None
     ):
         if catalog is None:
             catalog = Catalog.objects.create(name=get_random_string(12))
@@ -136,6 +140,11 @@ class MonolithAPIViewsTestCase(TestCase):
             data=data
         )
         pkg_info.catalogs.set([catalog])
+        if local_pkg_content:
+            name = get_random_string(12)
+            pkg_info.file.save(name, SimpleUploadedFile(name, local_pkg_content), save=False)
+            pkg_info.data["installer_item_location"] = pkg_info.file.name
+            pkg_info.save()
         SubManifestPkgInfo.objects.get_or_create(
             sub_manifest=sub_manifest,
             pkg_info_name=pkg_info_name,
@@ -438,3 +447,37 @@ class MonolithAPIViewsTestCase(TestCase):
             sub_manifest,
             {'managed_installs': ['deuxième nom']}
         )
+
+    # repository package
+
+    def test_repository_package_not_found(self):
+        pkg_info, _, _ = self._force_smpi()
+        api_path = pkg_info.get_pkg_info()["installer_item_location"]
+        response = self._make_munki_request(reverse("monolith:repository_package", args=(api_path,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_repository_package(self):
+        pkg_info, _, _ = self._force_smpi()
+        local_path = os.path.join("/tmp/pkgs", pkg_info.data["installer_item_location"])
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(b"yolo")
+        api_path = pkg_info.get_pkg_info()["installer_item_location"]
+        response = self._make_munki_request(reverse("monolith:repository_package", args=(api_path,)))
+        self.assertEqual(b"".join(response.streaming_content), b"yolo")
+        shutil.rmtree("/tmp/pkgs")
+
+    def test_unknown_repository_package(self):
+        pkg_info, _, _ = self._force_smpi()
+        api_path = pkg_info.get_pkg_info()["installer_item_location"]
+        api_path = api_path.replace("." + str(pkg_info.pk) + ".", ".0.")  # no pkg info with pk == 0
+        response = self._make_munki_request(reverse("monolith:repository_package", args=(api_path,)))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, b"PkgInfo not found!")
+
+    def test_local_repository_package(self):
+        pkg_info, _, _ = self._force_smpi(local_pkg_content=b"fomo")
+        api_path = pkg_info.get_pkg_info()["installer_item_location"]
+        response = self._make_munki_request(reverse("monolith:repository_package", args=(api_path,)))
+        self.assertEqual(b"".join(response.streaming_content), b"fomo")
+        pkg_info.file.delete(save=False)

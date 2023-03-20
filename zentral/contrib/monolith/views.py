@@ -1372,7 +1372,7 @@ class MRPackageView(MRNameView):
                     return FileResponse(default_storage.open(pkginfo_fn))
             else:
                 # should never happen
-                return HttpResponseNotFound("Not found!")
+                return HttpResponseNotFound("PkgInfo not found!")
 
 
 class MRRedirectView(MRBaseView):

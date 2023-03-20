@@ -183,7 +183,7 @@
       "munki_repository": {
         "manual_catalog_management": false,
         "backend": "zentral.contrib.monolith.repository_backends.local",
-        "root": "/zentral/tests/monolith/repository"
+        "root": "/tmp"
       }
     },
     "zentral.contrib.nagios": {},
