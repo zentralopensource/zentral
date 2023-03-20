@@ -1,6 +1,7 @@
 from datetime import datetime
 import plistlib
 from unittest.mock import call, patch, Mock
+from django.db.models.expressions import CombinedExpression
 from django.http import HttpResponseRedirect
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -84,14 +85,17 @@ class MonolithRepositoriesTestCase(TestCase):
 
     @patch("zentral.contrib.monolith.repository_backends.local.Repository.get_all_catalog_content")
     def test_sync_catalogs(self, get_all_catalog_content):
-        catalog_name = get_random_string(12)
+        catalog = self._force_catalog()
+        manifest = catalog.manifestcatalog_set.first().manifest
+        m_prev_value = manifest.serialize_for_event()
+        self.assertEqual(manifest.version, 1)
         category_name = get_random_string(12)
         name = get_random_string(12)
         requires_pin_name = get_random_string(12)
         update_for_pin_name = get_random_string(12)
         now = datetime.utcnow()
         get_all_catalog_content.return_value = self._build_all_catalog([
-            {"catalogs": [catalog_name],
+            {"catalogs": [catalog.name],
              "name": name,
              "category": category_name,
              "requires": [requires_pin_name],
@@ -101,7 +105,6 @@ class MonolithRepositoriesTestCase(TestCase):
         ])
         audit_callback = Mock()
         monolith_conf.repository.sync_catalogs(audit_callback)
-        catalog = Catalog.objects.get(name=catalog_name)
         pkg_info = PkgInfo.objects.get(name__name=name, version="3.0")
         pin = PkgInfoName.objects.get(name=name)
         category = PkgInfoCategory.objects.get(name=category_name)
@@ -109,12 +112,12 @@ class MonolithRepositoriesTestCase(TestCase):
         update_for_pin = PkgInfoName.objects.get(name=update_for_pin_name)
         self.assertEqual(
             audit_callback.call_args_list,
-            [call(catalog, AuditEvent.Action.CREATED),
-             call(pin, AuditEvent.Action.CREATED),
+            [call(pin, AuditEvent.Action.CREATED),
              call(category, AuditEvent.Action.CREATED),
              call(requires_pin, AuditEvent.Action.CREATED),
              call(update_for_pin, AuditEvent.Action.CREATED),
-             call(pkg_info, AuditEvent.Action.CREATED)]
+             call(pkg_info, AuditEvent.Action.CREATED),
+             call(manifest, AuditEvent.Action.UPDATED, m_prev_value)]
         )
         self.assertEqual(list(pkg_info.catalogs.all()), [catalog])
         self.assertEqual(pkg_info.name, pin)
@@ -123,6 +126,12 @@ class MonolithRepositoriesTestCase(TestCase):
         self.assertEqual(list(pkg_info.requires.all()), [requires_pin])
         self.assertEqual(list(pkg_info.update_for.all()), [update_for_pin])
         self.assertEqual(pkg_info.data["yolo"], now.isoformat().split(".")[0])
+        audit_callback_manifest = audit_callback.call_args_list[5].args[0]
+        self.assertIsInstance(audit_callback_manifest.version, CombinedExpression)  # updated
+        m_new_value = audit_callback_manifest.serialize_for_event()
+        self.assertEqual(m_new_value["version"], 2)  # refreshed from db for JSON serialization
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     @patch("zentral.contrib.monolith.repository_backends.local.Repository.get_all_catalog_content")
     def test_missing_catalog(self, get_all_catalog_content):

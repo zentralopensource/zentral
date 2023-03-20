@@ -836,6 +836,10 @@ class Manifest(models.Model):
         d = {"pk": self.pk, "name": self.name}
         if keys_only:
             return d
+        if not isinstance(self.version, int):
+            # version was updated with a CombinedExpression
+            # it needs to be fetched from the DB for the JSON serialization
+            self.refresh_from_db()
         d.update({
             "meta_business_unit": self.meta_business_unit.serialize_for_event(keys_only=True),
             "version": self.version,
