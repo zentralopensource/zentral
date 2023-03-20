@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 import logging
 import os.path
 import re
@@ -490,16 +491,30 @@ register_event_type(BaseEvent)
 
 
 class AuditEvent(BaseEvent):
+
+    class Action(Enum):
+        CREATED = "created"
+        UPDATED = "updated"
+        DELETED = "deleted"
+
     event_type = "zentral_audit"
     tags = ["zentral"]
 
     @classmethod
-    def build_from_request_and_instance(cls, request, instance, action, prev_value=None, new_value=None):
-        # metadata
-        metadata = EventMetadata(
-            request=EventRequest.build_from_request(request),
-            tags=[instance._meta.app_label]
-        )
+    def build(
+        cls,
+        instance, action, prev_value=None,
+        event_uuid=None, event_index=None,
+        event_request=None
+    ):
+        em_kwargs = {"tags": [instance._meta.app_label]}
+        if event_uuid is not None:
+            em_kwargs["uuid"] = event_uuid
+        if event_index is not None:
+            em_kwargs["index"] = event_index
+        if event_request:
+            em_kwargs["request"] = event_request
+        metadata = EventMetadata(**em_kwargs)
         try:
             metadata.add_objects(instance.linked_objects_keys_for_event())
         except AttributeError:
@@ -509,7 +524,7 @@ class AuditEvent(BaseEvent):
             metadata.add_objects({key: ((instance.pk,),)})
         # payload
         payload = {
-            "action": action,
+            "action": action.value,
             "object": {
                 "model": instance._meta.label_lower,
                 "pk": str(instance.pk),
@@ -517,9 +532,16 @@ class AuditEvent(BaseEvent):
         }
         if prev_value:
             payload["object"]["prev_value"] = prev_value
-        if new_value:
-            payload["object"]["new_value"] = new_value
+        if action in (cls.Action.CREATED, cls.Action.UPDATED):
+            payload["object"]["new_value"] = instance.serialize_for_event()
         return cls(metadata, payload)
+
+    @classmethod
+    def build_from_request_and_instance(cls, request, instance, action, prev_value=None):
+        event_request = EventRequest.build_from_request(request)
+        return cls.build(
+            instance, action, prev_value, event_request=event_request
+        )
 
 
 register_event_type(AuditEvent)

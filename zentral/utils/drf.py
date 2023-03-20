@@ -47,8 +47,7 @@ class ListCreateAPIViewWithAudit(generics.ListCreateAPIView):
         super().perform_create(serializer)
         event = AuditEvent.build_from_request_and_instance(
             self.request, serializer.instance,
-            action="created",
-            new_value=serializer.instance.serialize_for_event(),
+            action=AuditEvent.Action.CREATED,
         )
         transaction.on_commit(lambda: event.post())
 
@@ -61,9 +60,8 @@ class RetrieveUpdateDestroyAPIViewWithAudit(generics.RetrieveUpdateDestroyAPIVie
         super().perform_update(serializer)
         event = AuditEvent.build_from_request_and_instance(
             self.request, serializer.instance,
-            action="updated",
+            action=AuditEvent.Action.UPDATED,
             prev_value=prev_value,
-            new_value=serializer.instance.serialize_for_event(),
         )
         transaction.on_commit(lambda: event.post())
 
@@ -74,7 +72,7 @@ class RetrieveUpdateDestroyAPIViewWithAudit(generics.RetrieveUpdateDestroyAPIVie
         instance.pk = prev_pk  # re-hydrate the primary key
         event = AuditEvent.build_from_request_and_instance(
             self.request, instance,
-            action="deleted",
+            action=AuditEvent.Action.DELETED,
             prev_value=prev_value,
         )
         transaction.on_commit(lambda: event.post())
