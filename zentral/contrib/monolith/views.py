@@ -3,12 +3,10 @@ import logging
 import plistlib
 import random
 from urllib.parse import urlencode
-from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.core.files.storage import default_storage
-from django.db.models import ProtectedError
 from django.urls import reverse_lazy
 from django.http import (FileResponse,
                          Http404,
@@ -30,8 +28,7 @@ from zentral.utils.storage import file_storage_has_signed_urls
 from zentral.utils.text import get_version_sort_key, shard as compute_shard, encode_args
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from .conf import monolith_conf
-from .events import (post_monolith_enrollment_event,
-                     post_monolith_munki_request, post_monolith_repository_updates)
+from .events import post_monolith_enrollment_event, post_monolith_munki_request
 from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
@@ -140,31 +137,10 @@ class UpdatePackageView(PermissionRequiredMixin, UpdateViewWithAudit):
     form_class = PackageForm
 
 
-class UpdatePkgInfoCatalogView(PermissionRequiredMixin, UpdateView):
+class UpdatePkgInfoCatalogView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "monolith.change_pkginfo"
     model = PkgInfo
     fields = ['catalogs']
-
-    def form_valid(self, form):
-        old_catalogs = set(self.model.objects.get(pk=self.object.pk).catalogs.all())
-        response = super().form_valid(form)
-        new_catalogs = set(self.object.catalogs.all())
-        if old_catalogs != new_catalogs:
-            attr_diff = {}
-            removed = old_catalogs - new_catalogs
-            if removed:
-                attr_diff["removed"] = sorted(str(c) for c in removed)
-            added = new_catalogs - old_catalogs
-            if added:
-                attr_diff["added"] = sorted(str(c) for c in added)
-            post_monolith_repository_updates(monolith_conf.repository,
-                                             [{"pkg_info": {"name": self.object.name.name,
-                                                            "version": self.object.version,
-                                                            "diff": {"catalogs": attr_diff}},
-                                               "type": "pkg_info",
-                                               "action": "updated"}],
-                                             self.request)
-        return response
 
 
 class DeletePkgInfoView(PermissionRequiredMixin, DeleteViewWithAudit):
@@ -321,7 +297,7 @@ class ManualCatalogManagementRequiredMixin(PermissionRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
 
-class CreateCatalogView(ManualCatalogManagementRequiredMixin, CreateView):
+class CreateCatalogView(ManualCatalogManagementRequiredMixin, CreateViewWithAudit):
     permission_required = "monolith.add_catalog"
     model = Catalog
     fields = ['name', 'priority']
@@ -331,82 +307,33 @@ class CreateCatalogView(ManualCatalogManagementRequiredMixin, CreateView):
         ctx['title'] = "Create catalog"
         return ctx
 
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        post_monolith_repository_updates(monolith_conf.repository,
-                                         [{"catalog": {"name": self.object.name,
-                                                       "id": self.object.id,
-                                                       "priority": self.object.priority},
-                                           "type": "catalog",
-                                           "action": "added"}],
-                                         self.request)
-        return response
 
-
-class UpdateCatalogMixin(object):
-    def form_valid(self, form):
-        before_object = self.model.objects.get(pk=self.object.pk)
-        before = {f: getattr(before_object, f) for f in self.fields}
-        response = super().form_valid(form)
-        diff = {}
-        for f in self.fields:
-            before_val = before[f]
-            after_val = getattr(self.object, f)
-            if after_val != before_val:
-                diff[f] = {"removed": before_val,
-                           "added": after_val}
-        if diff:
-            post_monolith_repository_updates(monolith_conf.repository,
-                                             [{"catalog": {"name": self.object.name,
-                                                           "id": self.object.id,
-                                                           "diff": diff},
-                                               "type": "catalog",
-                                               "action": "updated"}],
-                                             self.request)
-        return response
-
-
-class UpdateCatalogView(ManualCatalogManagementRequiredMixin, UpdateCatalogMixin, UpdateView):
+class UpdateCatalogView(ManualCatalogManagementRequiredMixin, UpdateViewWithAudit):
     permission_required = "monolith.change_catalog"
     model = Catalog
     fields = ['name', 'priority']
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['title'] = "Update catalog {}".format(ctx["object"])
+        ctx['title'] = f"Update catalog {self.object}"
         return ctx
 
 
-class UpdateCatalogPriorityView(PermissionRequiredMixin, UpdateCatalogMixin, UpdateView):
+class UpdateCatalogPriorityView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "monolith.change_catalog"
     model = Catalog
     fields = ['priority']
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['title'] = "Update catalog {} priority".format(ctx["object"])
+        ctx['title'] = f"Update catalog {self.object} priority"
         return ctx
 
 
-class DeleteCatalogView(PermissionRequiredMixin, DeleteView):
+class DeleteCatalogView(ManualCatalogManagementRequiredMixin, DeleteViewWithAudit):
     permission_required = "monolith.delete_catalog"
-    model = Catalog
+    queryset = Catalog.objects.for_deletion()
     success_url = reverse_lazy("monolith:catalogs")
-
-    def get_object(self, queryset=None):
-        obj = super().get_object(queryset)
-        if not obj.can_be_deleted():
-            raise Http404("Catalog {} can't be deleted".format(obj))
-        return obj
-
-    def delete(self, request, *args, **kwargs):
-        response = super().delete(request, *args, **kwargs)
-        post_monolith_repository_updates(monolith_conf.repository,
-                                         [{"catalog": {"name": self.object.name},
-                                           "type": "catalog",
-                                           "action": "deleted"}],
-                                         request)
-        return response
 
 
 # conditions
@@ -416,20 +343,14 @@ class ConditionsView(PermissionRequiredMixin, ListView):
     permission_required = "monolith.view_condition"
     model = Condition
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['monolith'] = True
-        return context
 
-
-class CreateConditionView(PermissionRequiredMixin, CreateView):
+class CreateConditionView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "monolith.add_condition"
     model = Condition
     fields = ["name", "predicate"]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['monolith'] = True
         context['title'] = "Create condition"
         return context
 
@@ -440,7 +361,6 @@ class ConditionView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['monolith'] = True
         condition = context["object"]
         pkg_infos = []
         for smp in condition.submanifestpkginfo_set.select_related("sub_manifest", "pkg_info_name"):
@@ -452,49 +372,27 @@ class ConditionView(PermissionRequiredMixin, DetailView):
         return context
 
 
-class UpdateConditionView(PermissionRequiredMixin, UpdateView):
+class UpdateConditionView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "monolith.change_condition"
     model = Condition
     fields = ["name", "predicate"]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['monolith'] = True
-        condition = context["object"]
-        context['title'] = "Update condition {}".format(condition.name)
+        context['title'] = f"Update condition {self.object}"
         return context
 
     def form_valid(self, form):
-        condition = form.save()
-        for manifest in condition.manifests():
+        response = super().form_valid(form)
+        for manifest in self.object.manifests():
             manifest.bump_version()
-        return redirect(condition)
+        return response
 
 
-class DeleteConditionView(PermissionRequiredMixin, TemplateView):
+class DeleteConditionView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "monolith.delete_condition"
-    template_name = "monolith/condition_confirm_delete.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.condition = get_object_or_404(Condition, pk=kwargs["pk"])
-        if not self.condition.can_be_deleted():
-            messages.warning(request, "This condition cannot be deleted")
-            return redirect(self.condition)
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["object"] = self.condition
-        return context
-
-    def post(self, request, *args, **kwargs):
-        try:
-            self.condition.delete()
-        except ProtectedError:
-            messages.warning(request, "This condition cannot be deleted")
-            return redirect(self.condition)
-        else:
-            return redirect("monolith:conditions")
+    queryset = Condition.objects.for_deletion()
+    success_url = reverse_lazy("monolith:conditions")
 
 
 # sub manifests

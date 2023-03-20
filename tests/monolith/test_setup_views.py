@@ -13,7 +13,8 @@ from django.utils.text import slugify
 from accounts.models import User
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, EnrolledMachine,
-                                             Manifest, ManifestCatalog, PkgInfo, PkgInfoCategory, PkgInfoName,
+                                             Manifest, ManifestCatalog, ManifestSubManifest,
+                                             PkgInfo, PkgInfoCategory, PkgInfoName,
                                              SubManifest, SubManifestPkgInfo)
 from zentral.contrib.munki.models import ManagedInstall
 from zentral.core.events.base import AuditEvent
@@ -80,6 +81,12 @@ class MonolithSetupViewsTestCase(TestCase):
         else:
             self.group.permissions.clear()
         self.client.force_login(self.user)
+
+    def _force_catalog(self):
+        return Catalog.objects.create(name=get_random_string(12))
+
+    def _force_condition(self, submanifest=False):
+        return Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
 
     def _force_sub_manifest(self, condition=None):
         submanifest = SubManifest.objects.create(name=get_random_string(12))
@@ -718,6 +725,234 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/catalog_list.html")
 
+    # catalog
+
+    def test_catalog_login_redirect(self):
+        catalog = self._force_catalog()
+        self._login_redirect(reverse("monolith:catalog", args=(catalog.pk,)))
+
+    def test_catalog_permission_denied(self):
+        catalog = self._force_catalog()
+        self._login()
+        response = self.client.get(reverse("monolith:catalog", args=(catalog.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_catalog(self):
+        catalog = self._force_catalog()
+        self._login("monolith.view_catalog")
+        response = self.client.get(reverse("monolith:catalog", args=(catalog.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/catalog_detail.html")
+        self.assertContains(response, catalog.name)
+
+    # create catalog
+
+    def test_create_catalog_auto_permission_denied(self):
+        response = self.client.get(reverse("monolith:create_catalog"))
+        self.assertContains(response, "Automatic catalog management", status_code=403)
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    def test_create_catalog_login_redirect(self, repository):
+        repository.manual_catalog_management = True
+        self._login_redirect(reverse("monolith:create_catalog"))
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    def test_create_catalog_permission_denied(self, repository):
+        repository.manual_catalog_management = True
+        self._login()
+        response = self.client.get(reverse("monolith:create_catalog"))
+        self.assertContains(response, "Forbidden", status_code=403)
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_catalog(self, post_event, repository):
+        repository.manual_catalog_management = True
+        self._login("monolith.add_catalog", "monolith.view_catalog")
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:create_catalog"),
+                                        {"name": name, "priority": 17},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/catalog_detail.html")
+        catalog = response.context["object"]
+        self.assertEqual(catalog.name, name)
+        self.assertEqual(catalog.priority, 17)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "monolith.catalog",
+                 "pk": str(catalog.pk),
+                 "new_value": catalog.serialize_for_event(),
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_catalog": [str(catalog.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    # update catalog
+
+    def test_update_catalog_auto_permission_denied(self):
+        catalog = self._force_catalog()
+        response = self.client.get(reverse("monolith:update_catalog", args=(catalog.pk,)))
+        self.assertContains(response, "Automatic catalog management", status_code=403)
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    def test_update_catalog_login_redirect(self, repository):
+        repository.manual_catalog_management = True
+        catalog = self._force_catalog()
+        self._login_redirect(reverse("monolith:update_catalog", args=(catalog.pk,)))
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    def test_update_catalog_permission_denied(self, repository):
+        repository.manual_catalog_management = True
+        catalog = self._force_catalog()
+        self._login()
+        response = self.client.get(reverse("monolith:update_catalog", args=(catalog.pk,)))
+        self.assertContains(response, "Forbidden", status_code=403)
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_catalog(self, post_event, repository):
+        repository.manual_catalog_management = True
+        catalog = self._force_catalog()
+        prev_value = catalog.serialize_for_event()
+        self._login("monolith.change_catalog", "monolith.view_catalog")
+        new_name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:update_catalog", args=(catalog.pk,)),
+                                        {"name": new_name, "priority": 42},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/catalog_detail.html")
+        self.assertEqual(catalog, response.context["object"])
+        catalog.refresh_from_db()
+        self.assertEqual(catalog.name, new_name)
+        self.assertEqual(catalog.priority, 42)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.catalog",
+                 "pk": str(catalog.pk),
+                 "prev_value": prev_value,
+                 "new_value": catalog.serialize_for_event(),
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_catalog": [str(catalog.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    # update catalog priority
+
+    def test_update_catalog_priority_login_redirect(self):
+        catalog = self._force_catalog()
+        self._login_redirect(reverse("monolith:update_catalog_priority", args=(catalog.pk,)))
+
+    def test_update_catalog_priority_permission_denied(self):
+        catalog = self._force_catalog()
+        self._login()
+        response = self.client.get(reverse("monolith:update_catalog_priority", args=(catalog.pk,)))
+        self.assertContains(response, "Forbidden", status_code=403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_catalog_priority(self, post_event):
+        catalog = self._force_catalog()
+        prev_value = catalog.serialize_for_event()
+        self._login("monolith.change_catalog", "monolith.view_catalog")
+        new_name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:update_catalog_priority", args=(catalog.pk,)),
+                                        {"name": new_name, "priority": 43},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/catalog_detail.html")
+        self.assertEqual(catalog, response.context["object"])
+        catalog.refresh_from_db()
+        self.assertEqual(catalog.name, prev_value["name"])  # not updated
+        self.assertEqual(catalog.priority, 43)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.catalog",
+                 "pk": str(catalog.pk),
+                 "prev_value": prev_value,
+                 "new_value": catalog.serialize_for_event(),
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_catalog": [str(catalog.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    # delete catalog
+
+    def test_delete_catalog_auto_permission_denied(self):
+        catalog = self._force_catalog()
+        response = self.client.get(reverse("monolith:delete_catalog", args=(catalog.pk,)))
+        self.assertContains(response, "Automatic catalog management", status_code=403)
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    def test_delete_catalog_login_redirect(self, repository):
+        repository.manual_catalog_management = True
+        catalog = self._force_catalog()
+        self._login_redirect(reverse("monolith:delete_catalog", args=(catalog.pk,)))
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    def test_delete_catalog_permission_denied(self, repository):
+        repository.manual_catalog_management = True
+        catalog = self._force_catalog()
+        self._login()
+        response = self.client.get(reverse("monolith:delete_catalog", args=(catalog.pk,)))
+        self.assertContains(response, "Forbidden", status_code=403)
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    def test_delete_catalog_cannot_be_deleted(self, repository):
+        repository.manual_catalog_management = True
+        self._login("monolith.delete_catalog")
+        response = self.client.get(reverse("monolith:delete_catalog", args=(self.catalog_1.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_catalog(self, post_event, repository):
+        repository.manual_catalog_management = True
+        catalog = self._force_catalog()
+        prev_pk = catalog.pk
+        prev_value = catalog.serialize_for_event()
+        self._login("monolith.delete_catalog", "monolith.view_catalog")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:delete_catalog", args=(catalog.pk,)),
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/catalog_list.html")
+        self.assertEqual(Catalog.objects.filter(name=catalog.name).count(), 0)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "monolith.catalog",
+                 "pk": str(prev_pk),
+                 "prev_value": prev_value,
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_catalog": [str(prev_pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
     # conditions
 
     def test_conditions_login_redirect(self):
@@ -733,6 +968,8 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:conditions"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/condition_list.html")
+
+    # condition
 
     def test_condition_login_redirect(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
@@ -763,7 +1000,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
 
     def test_condition_cannot_delete(self):
-        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
+        condition = self._force_condition()
         submanifest, _ = self._force_sub_manifest(condition=condition)
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
@@ -771,6 +1008,100 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "monolith/condition_detail.html")
         self.assertContains(response, condition.name)
         self.assertNotContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
+
+    # create condition
+
+    def test_create_condition_login_redirect(self):
+        self._login_redirect(reverse("monolith:create_condition"))
+
+    def test_create_condition_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("monolith:create_condition"))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_condition(self, post_event):
+        self._login("monolith.add_condition", "monolith.view_condition")
+        name = get_random_string(12)
+        predicate = 'machine_type == "laptop"'
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:create_condition"),
+                                        {"name": name, "predicate": predicate},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/condition_detail.html")
+        condition = response.context["object"]
+        self.assertEqual(condition.name, name)
+        self.assertEqual(condition.predicate, predicate)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "monolith.condition",
+                 "pk": str(condition.pk),
+                 "new_value": condition.serialize_for_event(),
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_condition": [str(condition.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    # update condition
+
+    def test_update_condition_login_redirect(self):
+        condition = self._force_condition()
+        self._login_redirect(reverse("monolith:update_condition", args=(condition.pk,)))
+
+    def test_update_condition_permission_denied(self):
+        condition = self._force_condition()
+        self._login()
+        response = self.client.get(reverse("monolith:update_condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_condition(self, post_event):
+        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
+        prev_value = condition.serialize_for_event()
+        sub_manifest, _ = self._force_sub_manifest(condition=condition)
+        manifest = Manifest.objects.create(name=get_random_string(12), meta_business_unit=self.mbu)
+        self.assertEqual(manifest.version, 1)
+        ManifestSubManifest.objects.create(manifest=manifest, sub_manifest=sub_manifest)
+        self._login("monolith.change_condition", "monolith.view_condition")
+        new_name = get_random_string(12)
+        new_predicate = 'machine_type == "desktop"'
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:update_condition", args=(condition.pk,)),
+                                        {"name": new_name, "predicate": new_predicate},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/condition_detail.html")
+        self.assertEqual(condition, response.context["object"])
+        condition.refresh_from_db()
+        self.assertEqual(condition.name, new_name)
+        self.assertEqual(condition.predicate, new_predicate)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.condition",
+                 "pk": str(condition.pk),
+                 "prev_value": prev_value,
+                 "new_value": condition.serialize_for_event(),
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_condition": [str(condition.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
+
+    # delete condition
 
     def test_delete_condition_login_redirect(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
@@ -789,31 +1120,53 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/condition_confirm_delete.html")
 
-    def test_delete_condition_post(self):
+    def test_delete_condition_cannot_delete(self):
+        condition = self._force_condition()
+        submanifest, _ = self._force_sub_manifest(condition=condition)
+        self._login("monolith.delete_condition")
+        response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_condition_post(self, post_event):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
+        prev_pk = condition.pk
+        prev_value = condition.serialize_for_event()
         self._login("monolith.view_condition", "monolith.delete_condition")
-        response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "monolith/condition_list.html")
         self.assertEqual(Condition.objects.filter(pk=condition.pk).count(), 0)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "monolith.condition",
+                 "pk": str(prev_pk),
+                 "prev_value": prev_value
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_condition": [str(prev_pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     def test_delete_condition_get_blocked(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         submanifest, _ = self._force_sub_manifest(condition=condition)
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/condition_detail.html")
-        self.assertContains(response, "cannot be deleted")
+        self.assertEqual(response.status_code, 404)
 
     def test_delete_condition_post_blocked(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         submanifest, _ = self._force_sub_manifest(condition=condition)
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/condition_detail.html")
-        self.assertContains(response, "cannot be deleted")
+        self.assertEqual(response.status_code, 404)
 
     # sub manifests
 

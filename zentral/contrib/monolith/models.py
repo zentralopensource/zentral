@@ -70,12 +70,24 @@ def parse_munki_name(name):
         raise MunkiNameError
 
 
+class CatalogManager(models.Manager):
+    def for_deletion(self):
+        return self.annotate(
+            # no active pkg info
+            pkginfo_count=Count("pkginfo", filter=Q(pkginfo__archived_at__isnull=True)),
+            # not included in a manifest
+            manifestcatalog_count=Count("manifestcatalog")
+        ).filter(pkginfo_count=0, manifestcatalog_count=0)
+
+
 class Catalog(models.Model):
     name = models.CharField(max_length=256, unique=True)
     priority = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     archived_at = models.DateTimeField(blank=True, null=True)
+
+    objects = CatalogManager()
 
     class Meta:
         ordering = ('-archived_at', '-priority', 'name')
@@ -502,11 +514,21 @@ class SubManifest(models.Model):
         return mwt
 
 
+class ConditionManager(models.Manager):
+    def for_deletion(self):
+        return self.annotate(
+            # not linked to any sub manifest pkg info
+            submanifestpkginfo_count=Count("submanifestpkginfo")
+        ).filter(submanifestpkginfo_count=0)
+
+
 class Condition(models.Model):
     name = models.CharField(max_length=256, unique=True)
     predicate = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = ConditionManager()
 
     def __str__(self):
         return self.name
@@ -521,6 +543,17 @@ class Condition(models.Model):
         return Manifest.objects.distinct().filter(
             manifestsubmanifest__sub_manifest__submanifestpkginfo__condition=self
         )
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "predicate": self.predicate,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        })
+        return d
 
 
 class SubManifestPkgInfo(models.Model):
@@ -796,6 +829,20 @@ class Manifest(models.Model):
 
     def serialize(self, tags):
         return plistlib.dumps(self.build(tags))
+
+    # events
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "meta_business_unit": self.meta_business_unit.serialize_for_event(keys_only=True),
+            "version": self.version,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        })
+        return d
 
 
 class ManifestCatalog(models.Model):
