@@ -88,6 +88,9 @@ class MonolithSetupViewsTestCase(TestCase):
     def _force_condition(self, submanifest=False):
         return Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
 
+    def _force_manifest(self):
+        return Manifest.objects.create(name=get_random_string(12), meta_business_unit=self.mbu)
+
     def _force_sub_manifest(self, condition=None):
         submanifest = SubManifest.objects.create(name=get_random_string(12))
         submanifest_pkginfo = SubManifestPkgInfo.objects.create(
@@ -1066,7 +1069,7 @@ class MonolithSetupViewsTestCase(TestCase):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         prev_value = condition.serialize_for_event()
         sub_manifest, _ = self._force_sub_manifest(condition=condition)
-        manifest = Manifest.objects.create(name=get_random_string(12), meta_business_unit=self.mbu)
+        manifest = self._force_manifest()
         self.assertEqual(manifest.version, 1)
         ManifestSubManifest.objects.create(manifest=manifest, sub_manifest=sub_manifest)
         self._login("monolith.change_condition", "monolith.view_condition")
@@ -1380,6 +1383,105 @@ class MonolithSetupViewsTestCase(TestCase):
             response, reverse("monolith_api:enrollment_plist", args=(self.enrollment.pk,)))
         self.assertContains(
             response, reverse("monolith_api:enrollment_configuration_profile", args=(self.enrollment.pk,)))
+
+    # create manifest
+
+    def test_create_manifest_login_redirect(self):
+        self._login_redirect(reverse("monolith:create_manifest"))
+
+    def test_create_manifest_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("monolith:create_manifest"))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_manifest(self, post_event):
+        self._login("monolith.add_manifest", "monolith.view_manifest")
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:create_manifest"),
+                                        {"name": name,
+                                         "meta_business_unit": self.mbu.pk},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/manifest.html")
+        manifest = response.context["object"]
+        self.assertEqual(manifest.name, name)
+        self.assertEqual(manifest.meta_business_unit, self.mbu)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "monolith.manifest",
+                 "pk": str(manifest.pk),
+                 "new_value": {
+                     "pk": manifest.pk,
+                     "name": name,
+                     "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
+                     "version": 1,
+                     "created_at": manifest.created_at,
+                     "updated_at": manifest.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest": [str(manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    # update manifest
+
+    def test_update_manifest_login_redirect(self):
+        manifest = self._force_manifest()
+        self._login_redirect(reverse("monolith:update_manifest", args=(manifest.pk,)))
+
+    def test_update_manifest_permission_denied(self):
+        manifest = self._force_manifest()
+        self._login()
+        response = self.client.get(reverse("monolith:update_manifest", args=(manifest.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_manifest(self, post_event):
+        manifest = self._force_manifest()
+        prev_value = manifest.serialize_for_event()
+        self._login("monolith.change_manifest", "monolith.view_manifest")
+        new_name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:update_manifest", args=(manifest.pk,)),
+                                        {"name": new_name,
+                                         "meta_business_unit": self.mbu.pk},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/manifest.html")
+        manifest = response.context["object"]
+        self.assertEqual(manifest.name, new_name)
+        self.assertEqual(manifest.meta_business_unit, self.mbu)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.manifest",
+                 "pk": str(manifest.pk),
+                 "new_value": {
+                     "pk": manifest.pk,
+                     "name": new_name,
+                     "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
+                     "version": 1,  # not incremented!
+                     "created_at": manifest.created_at,
+                     "updated_at": manifest.updated_at,
+                 },
+                 "prev_value": prev_value,
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest": [str(manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # manifest machine info
 

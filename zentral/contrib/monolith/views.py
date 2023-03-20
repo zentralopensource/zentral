@@ -584,15 +584,10 @@ class ManifestsView(PermissionRequiredMixin, ListView):
         return context
 
 
-class CreateManifestView(PermissionRequiredMixin, CreateView):
+class CreateManifestView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "monolith.add_manifest"
     model = Manifest
     form_class = ManifestForm
-
-    def get_context_data(self, **kwargs):
-        context = super(CreateManifestView, self).get_context_data(**kwargs)
-        context['monolith'] = True
-        return context
 
 
 class ManifestView(PermissionRequiredMixin, DetailView):
@@ -622,7 +617,7 @@ class ManifestView(PermissionRequiredMixin, DetailView):
         return context
 
 
-class UpdateManifestView(PermissionRequiredMixin, UpdateView):
+class UpdateManifestView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "monolith.change_manifest"
     model = Manifest
     form_class = ManifestForm
