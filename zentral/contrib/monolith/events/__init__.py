@@ -1,5 +1,4 @@
 import logging
-import uuid
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 
 logger = logging.getLogger('zentral.contrib.monolith.events')
@@ -41,17 +40,6 @@ class MonolithUpdateCacheServerRequestEvent(BaseEvent):
 register_event_type(MonolithUpdateCacheServerRequestEvent)
 
 
-class MonolithRepositoryUpdateEvent(BaseEvent):
-    event_type = "monolith_repository_update"
-    tags = ["monolith"]
-    payload_aggregations = [
-        ("action", {"type": "terms", "bucket_number": 4, "label": "Decisions"}),
-    ]
-
-
-register_event_type(MonolithRepositoryUpdateEvent)
-
-
 # Utility functions
 
 
@@ -80,20 +68,6 @@ def post_monolith_cache_server_update_request(request, cache_server=None, errors
         payload["status"] = 1
     event = event_class(metadata, payload)
     event.post()
-
-
-def post_monolith_repository_updates(repository, payloads, request=None):
-    event_class = MonolithRepositoryUpdateEvent
-    repository_serialized_info = repository.serialize_for_event()
-    if request:
-        request = EventRequest.build_from_request(request)
-    event_uuid = uuid.uuid4()
-    for index, payload in enumerate(payloads):
-        metadata = EventMetadata(uuid=event_uuid, index=index,
-                                 request=request)
-        payload.update({"repository": repository_serialized_info})
-        event = event_class(metadata, payload)
-        event.post()
 
 
 def post_monolith_enrollment_event(msn, user_agent, ip, data):

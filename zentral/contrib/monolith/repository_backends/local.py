@@ -8,16 +8,9 @@ class Repository(BaseRepository):
         super().__init__(config)
         self.root = config["root"]
 
-    def serialize_for_event(self):
-        d = super().serialize_for_event()
-        d["root"] = self.root
-        return d
-
-    def get_all_catalog_local_path(self):
-        return os.path.join(self.root, "catalogs", "all")
-
-    def download_all_catalog(self):
-        return self.get_all_catalog_local_path()
+    def get_all_catalog_content(self):
+        with open(os.path.join(self.root, "catalogs", "all"), "rb") as f:
+            return f.read()
 
     def make_munki_repository_response(self, section, name, cache_server=None):
         filepath = os.path.join(self.root, section, name)

@@ -23,22 +23,15 @@ logger = logging.getLogger("zentral.contrib.monolith.repository_backends.s3")
 class Repository(BaseRepository):
     def __init__(self, config):
         super().__init__(config)
-        # K/V added to all the events
-        self._event_extras = {}
 
         # bucket (required)
         self.bucket = config["bucket"]
-        self._event_extras["bucket"] = self.bucket
 
         # bucket region (optional, can be fetched)
         self.region_name = config.get("region_name")
-        if self.region_name:
-            self._event_extras["region"] = self.region_name
 
         # relative path to the repository in the bucket (optional, default = the root of the bucket)
         self.prefix = config.get("prefix", "")
-        if self.prefix:
-            self._event_extras["prefix"] = self.prefix
 
         # fixed credentials (optional)
         self.credentials = {}
@@ -107,25 +100,18 @@ class Repository(BaseRepository):
             resp = requests.head("https://s3.amazonaws.com", headers={"Host": f"{self.bucket}.s3.amazonaws.com"})
             self.region_name = resp.headers["x-amz-bucket-region"]
             logger.info("Got bucket region %s", self.region_name)
-            self._event_extras["region"] = self.region_name
         return self._session.client("s3", region_name=self.region_name, endpoint_url=self.endpoint_url,
                                     config=Config(signature_version=self.signature_version))
 
-    def serialize_for_event(self):
-        d = super().serialize_for_event()
-        d.update(self._event_extras)
-        return d
-
-    def download_all_catalog(self):
-        filepath = self.get_all_catalog_local_path()
+    def get_all_catalog_content(self):
         try:
-            self._client.download_file(self.bucket,
-                                       os.path.join(self.prefix, "catalogs/all"),
-                                       filepath)
+            return self._client.get_object(
+                Bucket=self.bucket,
+                Key=os.path.join(self.prefix, "catalogs/all")
+            )['Body'].read()
         except Exception:
             logger.exception("Could not download all catalog")
             raise RepositoryError
-        return filepath
 
     def make_munki_repository_response(self, section, name, cache_server=None):
         expires_in = 180  # 3 minutes

@@ -2,6 +2,7 @@ from datetime import datetime
 from functools import reduce
 import json
 import operator
+import plistlib
 from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -12,10 +13,12 @@ from accounts.models import APIToken, User
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.contrib.monolith.events import MonolithSyncCatalogsRequestEvent
 from zentral.contrib.monolith.models import (CacheServer, Catalog, Condition, Enrollment,
                                              Manifest, ManifestCatalog, ManifestSubManifest,
-                                             PkgInfoName,
+                                             PkgInfo, PkgInfoName,
                                              SubManifest, SubManifestPkgInfo)
+from zentral.core.events.base import AuditEvent
 
 
 class MonolithAPIViewsTestCase(TestCase):
@@ -176,19 +179,50 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._post_json_data(reverse("monolith_api:sync_repository"), {})
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.contrib.monolith.api_views.monolith_conf.repository.sync_catalogs")
-    def test_sync_repository(self, sync_catalogs):
-        sync_catalogs.returns = True
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.monolith.repository_backends.local.Repository.get_all_catalog_content")
+    def test_sync_repository(self, get_all_catalog_content, post_event):
+        catalog_name = get_random_string(12)
+        pkg_info_name = get_random_string(12)
+        get_all_catalog_content.return_value = plistlib.dumps([
+            {"catalogs": [catalog_name],
+             "name": pkg_info_name,
+             "version": "1.0"}
+        ])
         self._set_permissions(
             "monolith.view_catalog", "monolith.add_catalog", "monolith.change_catalog",
             "monolith.view_pkginfoname", "monolith.add_pkginfoname", "monolith.change_pkginfoname",
             "monolith.view_pkginfo", "monolith.add_pkginfo", "monolith.change_pkginfo",
             "monolith.change_manifest"
         )
-        response = self._post_json_data(reverse("monolith_api:sync_repository"), {})
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data(reverse("monolith_api:sync_repository"), {})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {"status": 0})
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(len(post_event.call_args_list), 4)
+        mscr_evt = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(mscr_evt, MonolithSyncCatalogsRequestEvent)
+        mca_evt = post_event.call_args_list[1].args[0]
+        self.assertIsInstance(mca_evt, AuditEvent)
+        self.assertEqual(mca_evt.payload["action"], "created")
+        self.assertEqual(mca_evt.payload["object"]["model"], "monolith.catalog")
+        self.assertEqual(mca_evt.payload["object"]["pk"],
+                         str(Catalog.objects.get(name=catalog_name).pk))
+        mpina_evt = post_event.call_args_list[2].args[0]
+        self.assertIsInstance(mpina_evt, AuditEvent)
+        self.assertEqual(mpina_evt.payload["action"], "created")
+        self.assertEqual(mpina_evt.payload["object"]["model"], "monolith.pkginfoname")
+        self.assertEqual(mpina_evt.payload["object"]["pk"],
+                         str(PkgInfoName.objects.get(name=pkg_info_name).pk))
+        mpia_evt = post_event.call_args_list[3].args[0]
+        self.assertIsInstance(mpia_evt, AuditEvent)
+        self.assertEqual(mpia_evt.payload["action"], "created")
+        self.assertEqual(mpia_evt.payload["object"]["model"], "monolith.pkginfo")
+        self.assertEqual(mpia_evt.payload["object"]["pk"],
+                         str(PkgInfo.objects.get(name__name=pkg_info_name,
+                                                 version="1.0").pk))
 
     # update cache server
 
