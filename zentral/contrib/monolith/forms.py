@@ -346,68 +346,6 @@ class PackageForm(forms.ModelForm):
         return pi
 
 
-class ScriptForm(forms.Form):
-    DEFAULT_INSTALL_CHECK_SCRIPT = (
-        "#!/bin/bash\n\n"
-        "# WARNING: executed at every Munki run!\n\n"
-        "exit 0"
-    )
-    name = forms.CharField(max_length=256, required=True)
-    key = forms.ChoiceField(choices=(("managed_installs", "Managed Installs"),
-                                     ("managed_uninstalls", "Managed Uninstalls")),
-                            required=True)
-    description = forms.CharField(required=True, widget=forms.Textarea())
-    installcheck_script = forms.CharField(
-        label="install check script",
-        help_text="This script is executed to determine if an item needs to be installed. "
-                  "A return code of 0 means install is needed.",
-        required=True,
-        initial=DEFAULT_INSTALL_CHECK_SCRIPT,
-        widget=forms.Textarea(),
-    )
-    postinstall_script = forms.CharField(
-        label="post install script",
-        help_text="The main script.",
-        required=True,
-        widget=forms.Textarea(),
-    )
-    uninstall_script = forms.CharField(
-        label="uninstall script",
-        help_text="Script that performs an uninstall.",
-        required=False,
-        widget=forms.Textarea(),
-    )
-
-    def __init__(self, *args, **kwargs):
-        self.sub_manifest = kwargs.pop('sub_manifest')
-        self.script = kwargs.pop('script', None)
-        super().__init__(*args, **kwargs)
-
-    def save(self, *args, **kwargs):
-        name = self.cleaned_data["name"]
-        key = self.cleaned_data["key"]
-        pkg_info = {
-            'display_name': name,
-            'description': self.cleaned_data["description"],
-            'autoremove': False,
-            'unattended_install': True,
-            'installer_type': 'nopkg',
-            'uninstallable': True,
-            'unattended_uninstall': True,
-            'minimum_munki_version': '2.2',
-            'minimum_os_version': '10.6.0',  # TODO: HARDCODED !!!
-            'installcheck_script': self.cleaned_data["installcheck_script"],
-            'postinstall_script': self.cleaned_data["postinstall_script"],
-        }
-        uninstall_script = self.cleaned_data["uninstall_script"]
-        if uninstall_script:
-            pkg_info["uninstall_method"] = "uninstall_script"
-            pkg_info["uninstall_script"] = uninstall_script
-        self.script.pkg_info["version"] = "{}.0".format(self.script.version)
-        self.script.save()
-        return self.script
-
-
 class AddManifestCatalogForm(forms.Form):
     catalog = forms.ModelChoiceField(queryset=Catalog.objects.filter(archived_at__isnull=True))
     tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.none(), required=False)
