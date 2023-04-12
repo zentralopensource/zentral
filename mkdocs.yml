@@ -37,3 +37,4 @@ nav:
 - Development:
   - Intro: development/index.md
   - Secure coding notes: development/secure-coding.md
+  - EE Split: development/ee-split.md
