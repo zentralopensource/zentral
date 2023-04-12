@@ -11,6 +11,7 @@ extra_css:
 nav:
 - Introduction:
   - Welcome to Zentral: index.md
+  - Architecture overview: architecture/index.md
 - Configuration:
   - Intro: configuration/index.md
   - API: configuration/api.md
