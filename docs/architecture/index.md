@@ -114,7 +114,7 @@ Queue workers can be scaled vertically and horizontally. Event stores too.
 
 Zentral ensures the **confidentiality**, **integrity**, and **availability** of endpoint data. Here are some of the key security and privacy features implemented:
 
-**Secure connections**: all data transmitted between Zentral and any 3rd party is encrypted using **mTLS**.
+**Secure connections**: all data transmitted between Zentral and any 3rd party is encrypted using **TLS**.
 
 **Encryption**: Zentral can be configured to [**encrypt some DB fields**](/configuration/secret_engines/) that are considered secrets. Secret engines supported: AWS Key Mgmt Service, Fernet backend, Google Cloud Key Mgmt.
 
