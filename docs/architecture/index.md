@@ -9,7 +9,7 @@
 
 **Threat Detection**: helps in identifying and responding to advanced threats, malware, and suspicious activities through its advanced threat detection features, including behavior-based analytics, network traffic analysis, and log monitoring.
 
-Incident Response: provides a robust incident response system that enables teams to investigate security incidents and respond to them effectively.
+**Incident Response**: provides a robust incident response system that enables teams to investigate security incidents and respond to them effectively.
 
 **Compliance**: assists in maintaining regulatory compliance by providing automated auditing, reporting, and compliance management features.
 
@@ -103,8 +103,6 @@ A brief description of the Architecture decisions, Frameworks and tools used in 
 **Storage Flexibility**: the platform supports a range of different technologies to store events, including Elasticsearch, Kinesis, Splunk, Humio, OpenSearch and Azure. This flexibility enables organizations to choose the database technology that best fits their needs and requirements.
 
 **RESTful API**: Zentral provides a RESTful API that enables developers to build custom integrations and extensions, as well as to automate tasks and workflows within the platform (e.g. reporting).
-
-**Container-Based Deployment**: The platform is designed to be deployed using [Docker](/deployment/docker-compose), a containerization technology that provides a standardized and reproducible way of deploying and managing the platform.  [Images on AWS and GCP: ZAIO (Zentral all in one)](/deployment/) are also provided.
 
 ## System performance and scalability
 
