@@ -8,6 +8,7 @@
 **Endpoint Security**: provides an all-in-one solution for endpoint security that includes continuous monitoring, vulnerability scanning, and malware detection.
 
 **Threat Detection**: helps in identifying and responding to advanced threats, malware, and suspicious activities through its advanced threat detection features, including behavior-based analytics, network traffic analysis, and log monitoring.
+
 Incident Response: provides a robust incident response system that enables teams to investigate security incidents and respond to them effectively.
 
 **Compliance**: assists in maintaining regulatory compliance by providing automated auditing, reporting, and compliance management features.
@@ -18,7 +19,8 @@ Incident Response: provides a robust incident response system that enables teams
 **Advanced Threat Detection**: advanced threat detection features enable organizations to detect and respond to advanced threats, malware, and suspicious activities in real-time.
 
 **Automate Incident Response**: provides a powerful incident response system that enables organizations to automate and streamline their incident response processes, reducing response times and minimizing the impact of security incidents.
-Comprehensive Compliance Management: helps organizations stay compliant with various regulations and standards by providing automated auditing, reporting, and compliance management features.
+
+**Comprehensive Compliance Management**: helps organizations stay compliant with various regulations and standards by providing automated auditing, reporting, and compliance management features.
 
 **Open Source Platform**: is an open-source platform, which means it's highly customizable and can be extended with custom plugins and integrations.
 
@@ -45,13 +47,13 @@ Comprehensive Compliance Management: helps organizations stay compliant with var
 
 **Zentral Server**: is the core component of the platform that manages device registration, data ingestion, and data processing.
 
-**Workers**: to perform background tasks, such as data ingestion, device registration, and alerting, including Celery and RabbitMQ is being used.
+**Workers**: to perform background tasks, such as data ingestion, event enrichment and alerting.
 
 **Messaging**: Several messaging destinations can be configured. Slack, email, Google chat, Freshdesk and more.
 
 ##### External and Interfaces
 
-**Inventory sources**: Watchman, Puppet, Jamf, Filewave and other means can be used to import a large collection of endpoints into Zentral.
+**Inventory sources**: Puppet, Jamf, Workspace one and other means can be used to import a large collection of endpoints into Zentral.
 
 **Data Stores**: leverages various data stores to preserve device information, events, and logs. Can also store data to external data stores and interact with POST endpoints.
 
@@ -73,7 +75,7 @@ Some examples of Events and Status received from Endpoints  are:
 
 **Heartbeat**: CPU usage, memory usage, disk space among others. 
 
-**Security**: type of attack or event,  the affected system components, and any remediation actions taken.
+**Security**: type of attack or event, the affected system components, and any remediation actions taken.
 
 **Inventory**: installed applications, OS version, hardware specifications  and network configurations.
 
@@ -83,7 +85,7 @@ Some examples of Configurations, Assets, Activations and Managements sent to End
 
 **Configuration/Assets**: updates and changes to security policies or software.
 
-**Security Alert**: blocking traffic from suspicious IP addresses or blocking access to certain network resources.
+**Security Policies**: blocking traffic from suspicious IP addresses or blocking access to certain network resources.
 
 **Management**: variety of purposes, such as initiating a system reboot, performing a network scan, or running a diagnostic tool.
 
@@ -102,29 +104,27 @@ A brief description of the Architecture decisions, Frameworks and tools used in 
 
 **RESTful API**: Zentral provides a RESTful API that enables developers to build custom integrations and extensions, as well as to automate tasks and workflows within the platform (e.g. reporting).
 
-**Docker-Based Deployment**: The platform is designed to be deployed using [Docker](/deployment/docker-compose), a containerization technology that provides a standardized and reproducible way of deploying and managing the platform.  [Images on AWS and GCP: ZAIO (Zentral all in one)](/deployment/) are also provided.
+**Container-Based Deployment**: The platform is designed to be deployed using [Docker](/deployment/docker-compose), a containerization technology that provides a standardized and reproducible way of deploying and managing the platform.  [Images on AWS and GCP: ZAIO (Zentral all in one)](/deployment/) are also provided.
 
 ## System performance and scalability
 
-Cloud Based deployments, using [ZAIO (Zentral all in one images)](/deployment/) in AWS and GCP. Also Terraform configuration is provided for Enterprise and SaaS plans.
+Cloud Based deployment (VMs or containers) can be scaled horizontally and vertically in AWS and GCP. Also Terraform configuration is provided for Enterprise plan.
 
-With Django Framework using PostgreSQL, the database can be scaled vertically and horizontally independently. Django also support RabbitMQ/Celery for Asynchronous processing to support high loads.
+Queue workers can be scaled vertically and horizontally. Event stores too.
 
 ## Security and privacy
 
 Zentral ensures the **confidentiality**, **integrity**, and **availability** of endpoint data. Here are some of the key security and privacy features implemented:
 
-**Secure connections**: all data transmitted between the endpoints and Zentral is encrypted using **TLS** and **mTLS**.
+**Secure connections**: all data transmitted between Zentral and any 3rd party is encrypted using **mTLS**.
 
 **Encryption**: Zentral can be configured to [**encrypt some DB fields**](/configuration/secret_engines/) that are considered secrets. Secret engines supported: AWS Key Mgmt Service, Fernet backend, Google Cloud Key Mgmt.
 
-**MDM requires multiple certificates to operate**, including an **APNs certificate** to talk to clients (push notifications) and an **SSL certificate** to communicate securely.
-
-Django provides default security characteristics (API tokens, Authentication, password hashes). For authentication, [Okta](/configuration/okta_saml/) (or any other SAMLs) can be integrated with Zentral, hence Two-Factor-Authentication (**2FA**) is supported.
+Django provides default security characteristics (API tokens, Authentication, password hashes). For authentication, [Okta](/configuration/okta_saml/) (or any other Identity Provider) can be integrated with Zentral, hence Two-Factor-Authentication (**2FA**) is supported. Two factor (WebAuthN, TOTP) also supported natively for the local accounts.
 
 ## Development process
 
 OWASP Secure coding practices are linked in the section [Development intro](/development/). To develop in Zentral, Open Source standard workflow (repo forking) is used, in combination of a Dokerized App for local development with TLS certificates.
 
 Regarding Testing, local automated testing and github workflow CI is being used, with coverage analysis in Coveralls: [![Coverage Status](https://coveralls.io/repos/github/zentralopensource/zentral/badge.svg?branch=main)](https://coveralls.io/github/zentralopensource/zentral?branch=main).
-Besides testing, on Githun CI there are automated security checks using CodeQL.
+Besides testing, on Github CI there are automated security checks using CodeQL.
