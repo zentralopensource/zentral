@@ -31,7 +31,7 @@
 
 ### Key Components
 
-![Software Architecture overview](../../images/architecture/key_components.svg)
+![Software Architecture overview](../images/architecture/key_components.svg)
 
 #### Description
 
@@ -63,7 +63,7 @@
 
 A module refers to a **pluggable standalone component or extension** that provides additional functionality to the platform. Some of the ones supported by Zentral are shown in the following diagram.
 
-![Software Architecture Modules](../../images/architecture/modules.svg)
+![Software Architecture Modules](../images/architecture/modules.svg)
 
 ### Interactions with Endpoints
 
