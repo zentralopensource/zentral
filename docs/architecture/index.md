@@ -116,13 +116,13 @@ Zentral ensures the **confidentiality**, **integrity**, and **availability** of 
 
 **Secure connections**: all data transmitted between Zentral and any 3rd party is encrypted using **TLS**.
 
-**Encryption**: Zentral can be configured to [**encrypt some DB fields**](/configuration/secret_engines/) that are considered secrets. Secret engines supported: AWS Key Mgmt Service, Fernet backend, Google Cloud Key Mgmt.
+**Encryption**: Zentral can be configured to [**encrypt some DB fields**](../configuration/secret_engines/) that are considered secrets. Secret engines supported: AWS Key Mgmt Service, Fernet backend, Google Cloud Key Mgmt.
 
-Django provides default security characteristics (API tokens, Authentication, password hashes). For authentication, [Okta](/configuration/okta_saml/) (or any other Identity Provider) can be integrated with Zentral, hence Two-Factor-Authentication (**2FA**) is supported. Two factor (WebAuthN, TOTP) also supported natively for the local accounts.
+Django provides default security characteristics (API tokens, Authentication, password hashes). For authentication, [Okta](../configuration/okta_saml/) (or any other Identity Provider) can be integrated with Zentral, hence Two-Factor-Authentication (**2FA**) is supported. Two factor (WebAuthN, TOTP) also supported natively for the local accounts.
 
 ## Development process
 
-OWASP Secure coding practices are linked in the section [Development intro](/development/). To develop in Zentral, Open Source standard workflow (repo forking) is used, in combination of a Dokerized App for local development with TLS certificates.
+OWASP Secure coding practices are linked in the section [Development intro](../development/). To develop in Zentral, Open Source standard workflow (repo forking) is used, in combination of a Dokerized App for local development with TLS certificates.
 
 Regarding Testing, local automated testing and github workflow CI is being used, with coverage analysis in Coveralls: [![Coverage Status](https://coveralls.io/repos/github/zentralopensource/zentral/badge.svg?branch=main)](https://coveralls.io/github/zentralopensource/zentral?branch=main).
 Besides testing, on Github CI there are automated security checks using CodeQL.
