@@ -1335,6 +1335,28 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertContains(response, pkginfo_name.name)
 
+    def test_add_default_install_sub_manifest_pkg_info_shard(self):
+        submanifest, _ = self._force_sub_manifest()
+        self._login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        pkginfo_name = PkgInfoName.objects.create(name=get_random_string(12))
+        PkgInfo.objects.create(name=pkginfo_name, version="1.0",
+                               data={"name": pkginfo_name.name,
+                                     "version": "1.0"})
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)),
+            {"pkg_info_name": pkginfo_name.pk,
+             "key": "default_installs",
+             "featured_item": "on",
+             "default_shard": 90,
+             "shard_modulo": 100},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        self.assertContains(response, pkginfo_name.name)
+        smpi = submanifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
+        self.assertEqual(smpi.options, {"shards": {"default": 90, "modulo": 100}})
+
     # manifests
 
     def test_manifests_login_redirect(self):

@@ -146,7 +146,7 @@ class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
             self.add_error("default_shard", "Must be less than or equal to the shard modulo")
         # options
         options = {}
-        if self.cleaned_data.get("key") in ("managed_installs", "optional_installs"):
+        if self.cleaned_data.get("key") in ("default_installs", "managed_installs", "optional_installs"):
             excluded_tags = self.cleaned_data.get("excluded_tags")
             if excluded_tags:
                 options["excluded_tags"] = [tag.name for tag in excluded_tags]
