@@ -20,8 +20,10 @@ from zentral.contrib.mdm.declarations import (get_blueprint_tokens_response,
                                               update_blueprint_activation,
                                               update_blueprint_declaration_items)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.models import (Blueprint, DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
-                                        OTAEnrollmentSession, UserEnrollmentSession, ReEnrollmentSession)
+from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion, Blueprint,
+                                        Channel, DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
+                                        OTAEnrollmentSession, Platform,
+                                        Profile, UserEnrollmentSession, ReEnrollmentSession)
 from .utils import (force_dep_enrollment_session,
                     force_enrolled_user,
                     force_ota_enrollment_session,
@@ -38,7 +40,7 @@ class MDMViewsTestCase(TestCase):
 
     # utility methods
 
-    def _put(self, url, payload, session=None, serial_number=None, sign_message=False, bad_signature=False):
+    def _call(self, method, url, payload, session=None, serial_number=None, sign_message=False, bad_signature=False):
         kwargs = {}
         if payload:
             kwargs["data"] = plistlib.dumps(payload)
@@ -95,7 +97,7 @@ class MDMViewsTestCase(TestCase):
                 si['digest_algorithm'] = asn1crypto.util.OrderedDict([("algorithm", "sha1"), ("parameters", None)])
                 si['signature_algorithm'] = asn1crypto.util.OrderedDict([
                     ("algorithm", "sha1_rsa"), ("parameters", None)])
-                si['signature'] = privkey.sign(kwargs["data"] if not bad_signature else b"yolo",
+                si['signature'] = privkey.sign(kwargs.get("data", b"") if not bad_signature else b"yolo",
                                                padding.PKCS1v15(), hashes.SHA1())
                 si['sid'] = asn1crypto.cms.SignerIdentifier({
                     "issuer_and_serial_number": asn1crypto.cms.IssuerAndSerialNumber({
@@ -108,7 +110,13 @@ class MDMViewsTestCase(TestCase):
                 sig['content_type'] = "signed_data"
                 sig['content'] = sd
                 kwargs["HTTP_MDM_SIGNATURE"] = base64.b64encode(sig.dump())
-        return self.client.put(url, **kwargs)
+        return method(url, **kwargs)
+
+    def _put(self, url, payload, session=None, serial_number=None, sign_message=False, bad_signature=False):
+        return self._call(self.client.put, url, payload, session, serial_number, sign_message, bad_signature)
+
+    def _get(self, url, session, sign_message=False):
+        return self._call(self.client.get, url, payload=None, session=session, sign_message=sign_message)
 
     def _assertAbort(self, post_event, reason, **kwargs):
         last_event = post_event.call_args.args[0]
@@ -135,6 +143,37 @@ class MDMViewsTestCase(TestCase):
         session.enrolled_device.blueprint = blueprint
         session.enrolled_device.save()
         return blueprint
+
+    def _force_profile(self):
+        artifact_name = get_random_string(12)
+        artifact = Artifact.objects.create(
+            name=artifact_name,
+            type=ArtifactType.Profile.name,
+            channel=Channel.Device.name,
+            platforms=[Platform.macOS.name],
+        )
+        artifact_version = ArtifactVersion.objects.create(
+            artifact=artifact, version=0
+        )
+        payload_identifier = str(uuid.uuid4())
+        return Profile.objects.create(
+            artifact_version=artifact_version,
+            filename=f"{artifact_name}.mobileconfig",
+            source=plistlib.dumps(
+                {
+                    "PayloadContent": [],
+                    "PayloadDisplayName": artifact_name,
+                    "PayloadIdentifier": payload_identifier,
+                    "PayloadRemovalDisallowed": False,
+                    "PayloadType": "Configuration",
+                    "PayloadUUID": str(uuid.uuid4()),
+                    "PayloadVersion": 1,
+                }
+            ),
+            payload_identifier=payload_identifier,
+            payload_display_name=artifact_name,
+            payload_description="",
+        )
 
     # checkin - authenticate
 
@@ -581,3 +620,19 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(mdm_payload["IdentityCertificateUUID"], scep_payload["PayloadUUID"])
         self.assertEqual(scep_payload["PayloadContent"]["Subject"][0][0],
                          ["CN", f"MDM$RE${resession.enrollment_secret.secret}"])
+
+    # profile download view
+
+    def test_profile_download_view(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        profile = self._force_profile()
+        response = self._get(reverse("mdm:profile_download_view", args=(profile.artifact_version.pk,)), session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['Content-Type'], "application/x-apple-aspen-config")
+
+    def test_profile_download_view_signed_message(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        profile = self._force_profile()
+        response = self._get(reverse("mdm:profile_download_view", args=(profile.artifact_version.pk,)), session, True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['Content-Type'], "application/x-apple-aspen-config")
