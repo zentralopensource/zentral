@@ -61,7 +61,10 @@ class MDMView(PostEventMixin, View):
                 certs, raw_payload = verify_signed_payload(request.body, base64.b64decode(header_signature))
             except Exception:
                 self.abort("Invalid header signature")
-            self.payload = plistlib.loads(raw_payload)
+            try:
+                self.payload = plistlib.loads(raw_payload)
+            except plistlib.InvalidFileException:
+                self.payload = {}
             _, _, self.certificate = certs[0]
             subject = self.certificate.subject
             cert_cn = subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
@@ -73,7 +76,10 @@ class MDMView(PostEventMixin, View):
             dn = request.META.get("HTTP_X_SSL_CLIENT_S_DN")
             if not dn:
                 self.abort("missing DN in request headers")
-            self.payload = plistlib.loads(request.body)
+            try:
+                self.payload = plistlib.loads(request.body)
+            except plistlib.InvalidFileException:
+                self.payload = {}
             dn_d = parse_dn(dn)
             cert_cn = dn_d.get("CN")
             cert_o = dn_d.get("O")
