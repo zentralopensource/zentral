@@ -171,7 +171,7 @@ class SubManifestPkgInfoSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(errors)
 
         options = {}
-        if data["key"] in ("managed_installs", "optional_installs"):
+        if data["key"] in ("default_installs", "managed_installs", "optional_installs"):
             if excluded_tags:
                 options["excluded_tags"] = [t.name for t in excluded_tags]
             options["shards"] = {

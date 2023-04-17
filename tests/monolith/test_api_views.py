@@ -1929,7 +1929,7 @@ class MonolithAPIViewsTestCase(TestCase):
             'sub_manifest': sub_manifest.pk,
             'pkg_info_name': pkg_info_name.name,
             'featured_item': True,
-            'key': 'managed_installs',
+            'key': 'default_installs',
             'excluded_tags': [],
             'tag_shards': []
         })
@@ -1939,7 +1939,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {
             'id': sub_manifest_pkg_info.pk,
             'sub_manifest': sub_manifest_pkg_info.sub_manifest.pk,
-            'key': 'managed_installs',
+            'key': 'default_installs',
             'pkg_info_name': sub_manifest_pkg_info.pkg_info_name.name,
             'featured_item': True,
             'condition': None,
@@ -1950,7 +1950,7 @@ class MonolithAPIViewsTestCase(TestCase):
             'created_at': sub_manifest_pkg_info.created_at.isoformat(),
             'updated_at': sub_manifest_pkg_info.updated_at.isoformat(),
         })
-        self.assertEqual(sub_manifest_pkg_info.key, "managed_installs")
+        self.assertEqual(sub_manifest_pkg_info.key, "default_installs")
         self.assertTrue(sub_manifest_pkg_info.featured_item)
         self.assertEqual(sub_manifest_pkg_info.options,
                          {"shards": {"modulo": 100, "default": 100}})
