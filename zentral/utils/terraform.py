@@ -192,10 +192,15 @@ class Resource(metaclass=ResourceMetaclass):
 
 
 def iter_all_resources(parent_resource, seen_resources):
-    parent_resource_key = (parent_resource.tf_type, parent_resource.instance.pk)
-    if parent_resource_key in seen_resources:
+    # we use the terraform import arguments as key
+    # because we will need them later
+    parent_resource_import_args = (
+        f"{parent_resource.tf_type}.{parent_resource.local_name}",
+        parent_resource.instance.pk
+    )
+    if parent_resource_import_args in seen_resources:
         return
-    seen_resources.add(parent_resource_key)
+    seen_resources.add(parent_resource_import_args)
     for resource in parent_resource.iter_dependencies():
         yield from iter_all_resources(resource, seen_resources)
     yield parent_resource
@@ -206,6 +211,15 @@ def build_temporary_provider_config():
     with os.fdopen(pc_fh, "w") as pc_f:
         pc_f.write((DEFAULT_PROVIDER_CONFIGURATION % settings["api"]["fqdn"]).strip())
     return pc_p
+
+
+def build_import_commands_file(seen_resources):
+    ic_fh, ic_p = tempfile.mkstemp()
+    with os.fdopen(ic_fh, "w") as ic_f:
+        ic_f.write("#!/bin/zsh\n\n")
+        for address, instance_pk in seen_resources:
+            ic_f.write(f"terraform import {address} {instance_pk}\n")
+    return ic_p
 
 
 def build_zip_file(resource_iterator):
@@ -223,9 +237,14 @@ def build_zip_file(resource_iterator):
             tf_file.write(resource.to_representation())
             tf_file.write("\n\n")
     zip_fh, zip_p = tempfile.mkstemp()
-    with zipfile.ZipFile(zip_p, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_a:
+    zip_f = os.fdopen(zip_fh, mode="wb")
+    with zipfile.ZipFile(zip_f, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_a:
         pc_p = build_temporary_provider_config()
         zip_a.write(pc_p, "provider.tf")
+        os.unlink(pc_p)
+        ic_p = build_import_commands_file(seen_resources)
+        zip_a.write(ic_p, "terraform_import.zsh")
+        os.unlink(ic_p)
         for tf_filename, (tf_file_p, tf_file) in tf_files.items():
             tf_file.close()
             zip_a.write(tf_file_p, arcname=tf_filename)
