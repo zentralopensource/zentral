@@ -128,6 +128,24 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertTrue(response.context["request"].user.is_authenticated)
         self.assertEqual(response.context["request"].user, self.ui_user)
 
+    def test_login_totp_empty_error(self):
+        UserTOTP.objects.create(
+            user=self.ui_user,
+            name=get_random_string(12),
+            secret=pyotp.random_base32(),
+        )
+        response = self.client.post(reverse("login"),
+                                    {"username": self.ui_user.username, "password": self.ui_user_pwd},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/verify_totp.html")
+        self.assertFalse(response.context["request"].user.is_authenticated)
+        response = self.client.post(reverse("accounts:verify_totp"),
+                                    {"verification_code": " "},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/verify_totp.html")
+        self.assertFalse(response.context["request"].user.is_authenticated)
+        self.assertFormError(response, "form", "verification_code", 'This field is required.')
+
     # login + webauthn
 
     def test_login_webauthn_not_ok(self):

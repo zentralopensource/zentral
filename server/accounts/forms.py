@@ -245,12 +245,16 @@ class VerifyTOTPForm(BaseVerifyForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        verification_code = cleaned_data["verification_code"]
-        for verification_device in self.user.usertotp_set.all():
-            if verification_device.verify(verification_code):
-                break
+        try:
+            verification_code = cleaned_data["verification_code"]
+        except KeyError:
+            pass
         else:
-            self.add_error("verification_code", _("Invalid code"))
+            for verification_device in self.user.usertotp_set.all():
+                if verification_device.verify(verification_code):
+                    break
+            else:
+                self.add_error("verification_code", _("Invalid code"))
         return cleaned_data
 
 
