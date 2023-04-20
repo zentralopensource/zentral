@@ -198,7 +198,7 @@ Response:
 [{
   "id": 1,
   "name": "default",
-  "meta_business_unit_id": 1,
+  "meta_business_unit": 1,
   "version": 1,
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004"
@@ -218,7 +218,7 @@ manifest.json
 ```json
 {
   "name": "default",
-  "meta_business_unit_id": 1
+  "meta_business_unit": 1
 }
 ```
 
@@ -237,7 +237,7 @@ Response:
 {
   "id": 1,
   "name": "default",
-  "meta_business_unit_id": 1,
+  "meta_business_unit": 1,
   "version": 1,
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004"
@@ -266,7 +266,7 @@ Response:
 {
   "id": 1,
   "name": "default",
-  "meta_business_unit_id": 1,
+  "meta_business_unit": 1,
   "version": 1,
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004"
@@ -287,7 +287,7 @@ manifest.json
 ```json
 {
   "name": "default2",
-  "meta_business_unit_id": 2
+  "meta_business_unit": 2
 }
 ```
 
@@ -306,7 +306,7 @@ Response:
 {
   "id": 1,
   "name": "default2",
-  "meta_business_unit_id": 2,
+  "meta_business_unit": 2,
   "version": 1,
   "created_at": "2023-01-30T09:49:35.965003",
   "updated_at": "2023-01-30T09:49:35.965004"
@@ -447,7 +447,7 @@ catalog.json
 ```json
 {
   "name": "production2",
-  "meta_business_unit_id": 2
+  "priority": 2
 }
 ```
 
@@ -518,7 +518,7 @@ Response:
 [{
   "id": 1,
   "name": "laptop",
-  "predicate": "machine_type == \"laptop\""
+  "predicate": "machine_type == \"laptop\"",
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004",
 }]
@@ -537,7 +537,7 @@ condition.json
 ```json
 {
   "name": "laptop",
-  "predicate": "machine_type == \"laptop\"",
+  "predicate": "machine_type == \"laptop\""
 }
 ```
 
@@ -558,7 +558,7 @@ Response:
   "name": "laptop",
   "predicate": "machine_type == \"laptop\"",
   "created_at": "2023-01-30T09:39:35.965003",
-  "updated_at": "2023-01-30T09:39:35.965004",
+  "updated_at": "2023-01-30T09:39:35.965004"
 }
 ```
 
@@ -586,7 +586,7 @@ Response:
   "name": "laptop",
   "predicate": "machine_type == \"laptop\"",
   "created_at": "2023-01-30T09:39:35.965003",
-  "updated_at": "2023-01-30T09:39:35.965004",
+  "updated_at": "2023-01-30T09:39:35.965004"
 }
 ```
 
@@ -603,8 +603,8 @@ condition.json
 
 ```json
 {
-  "name": "desktop",
-  "predicate": "machine_type == \"desktop\""
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\""
 }
 ```
 
@@ -622,10 +622,10 @@ Response:
 ```
 {
   "id": 1,
-  "name": "desktop",
-  "predicate": "machine_type == \"desktop\"",
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\"",
   "created_at": "2023-01-30T09:49:35.965003",
-  "updated_at": "2023-01-30T09:49:35.965004",
+  "updated_at": "2023-01-30T09:49:35.965004"
 }
 ```
 
