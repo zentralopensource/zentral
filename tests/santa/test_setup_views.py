@@ -771,3 +771,21 @@ class SantaSetupViewsTestCase(TestCase):
         team_ids = response.context["team_ids"]
         self.assertEqual(len(team_ids), 1)
         self.assertEqual(team_ids[0][0].organizational_unit, self.file_team_id)
+
+    # terraform export
+
+    def test_terraform_export_redirect(self):
+        self._login_redirect(reverse("santa:terraform_export"))
+
+    def test_terraform_export_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:terraform_export"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_terraform_export(self):
+        self._login("santa.view_configuration", "santa.view_enrollment", "santa.view_rule")
+        configuration = self._force_configuration()
+        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        Rule.objects.create(configuration=configuration, target=target, policy=Rule.BLOCKLIST)
+        response = self.client.get(reverse("santa:terraform_export"))
+        self.assertEqual(response.status_code, 200)
