@@ -170,7 +170,7 @@ Response:
 * Required permission: `monolith.view_manifest`
 * Optional filter parameters:
     * `name`: name of the manifest
-    * `meta_business_unit`: ID of the meta business unit
+    * `meta_business_unit_id`: ID of the meta business unit
 
 Examples:
 
@@ -517,8 +517,8 @@ Response:
 ```json
 [{
   "id": 1,
-  "name": "Target Apple Silicon Architecture",
-  "predicate": "arch == \"arm64\"",
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\"",
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004",
 }]
@@ -536,8 +536,8 @@ condition.json
 
 ```json
 {
-  "name": "Target Apple Silicon Architecture",
-  "predicate": "arch == \"arm64\""
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\""
 }
 ```
 
@@ -555,8 +555,8 @@ Response:
 ```json
 {
   "id": 1,
-  "name": "Target Apple Silicon Architecture",
-  "predicate": "arch == \"arm64\"",
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\"",
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004"
 }
@@ -583,8 +583,8 @@ Response:
 ```json
 {
   "id": 1,
-  "name": "Target Apple Silicon Architecture",
-  "predicate": "arch == \"arm64\"",
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\"",
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004"
 }
@@ -603,8 +603,8 @@ condition.json
 
 ```json
 {
-  "name": "Target Apple Silicon - arm64 Architecture",
-  "predicate": "arch == \"arm64\""
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\""
 }
 ```
 
@@ -622,8 +622,8 @@ Response:
 ```
 {
   "id": 1,
-  "name": "Target Apple Silicon - arm64 Architecture",
-  "predicate": "arch == \"arm64\"",
+  "name": "laptop",
+  "predicate": "machine_type == \"laptop\"",
   "created_at": "2023-01-30T09:49:35.965003",
   "updated_at": "2023-01-30T09:49:35.965004"
 }
