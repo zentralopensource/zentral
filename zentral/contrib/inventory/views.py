@@ -9,7 +9,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import F
 from django.urls import reverse, reverse_lazy
-from django.http import Http404, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
@@ -20,7 +20,7 @@ from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
-from zentral.utils.terraform import build_zip_file_content
+from zentral.utils.terraform import build_config_response
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from .compliance_checks import InventoryJMESPathCheck
 from .events import JMESPathCheckCreated, JMESPathCheckUpdated, JMESPathCheckDeleted
@@ -1137,13 +1137,7 @@ class ComplianceCheckTerraformExportView(PermissionRequiredMixin, View):
     permission_required = "inventory.view_jmespathcheck"
 
     def get(self, request, *args, **kwargs):
-        return HttpResponse(
-            build_zip_file_content(iter_compliance_check_resources()),
-            headers={
-                "Content-Type": "application/zip",
-                "Content-Disposition": 'attachment; filename="terraform_jmespath_checks.zip"',
-            }
-        )
+        return build_config_response(iter_compliance_check_resources(), "terraform_jmespath_checks")
 
 
 # tags

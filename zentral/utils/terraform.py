@@ -1,6 +1,7 @@
 import os
 import tempfile
 import zipfile
+from django.http import HttpResponse
 
 
 DEFAULT_PROVIDER_CONFIGURATION = """
@@ -237,3 +238,13 @@ def build_zip_file_content(resource_iterator):
         content = zip_f.read()
     os.unlink(zip_p)
     return content
+
+
+def build_config_response(resource_iterator, filename):
+    return HttpResponse(
+        build_zip_file_content(resource_iterator),
+        headers={
+            "Content-Type": "application/zip",
+            "Content-Disposition": f'attachment; filename="{filename}.zip"',
+        }
+    )
