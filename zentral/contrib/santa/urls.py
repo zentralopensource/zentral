@@ -1,5 +1,4 @@
 from django.urls import path
-from django.views.decorators.csrf import csrf_exempt
 from . import views
 
 app_name = "santa"
@@ -89,6 +88,11 @@ urlpatterns = [
          views.FetchTeamIDEventsView.as_view(), name="fetch_teamid_events"),
     path('targets/teamids/<str:identifier>/events/store_redirect/',
          views.TeamIDEventsStoreRedirectView.as_view(), name="teamid_events_store_redirect"),
+
+    # terraform
+    path('terraform_export/',
+         views.TerraformExportView.as_view(),
+         name='terraform_export'),
 ]
 
 

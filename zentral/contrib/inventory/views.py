@@ -11,7 +11,6 @@ from django.db.models import F
 from django.urls import reverse, reverse_lazy
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
-from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
 from zentral.conf import settings
@@ -21,6 +20,7 @@ from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
+from zentral.utils.terraform import build_zip_file_content
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from .compliance_checks import InventoryJMESPathCheck
 from .events import JMESPathCheckCreated, JMESPathCheckUpdated, JMESPathCheckDeleted
@@ -36,6 +36,7 @@ from .models import (BusinessUnit,
                      MetaMachine,
                      MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
                      JMESPathCheck)
+from .terraform import iter_compliance_check_resources
 from .utils import (AndroidAppFilter, AndroidAppFilterForm,
                     BundleFilter, BundleFilterForm,
                     ComplianceCheckStatusFilter, ComplianceCheckStatusFilterForm,
@@ -1136,21 +1137,11 @@ class ComplianceCheckTerraformExportView(PermissionRequiredMixin, View):
     permission_required = "inventory.view_jmespathcheck"
 
     def get(self, request, *args, **kwargs):
-        tags = set()
-        compliance_checks = []
-        for cc in (JMESPathCheck.objects.select_related("compliance_check")
-                                        .prefetch_related("tags").all().order_by("pk")):
-            tags.update(cc.tags.all())
-            compliance_checks.append(cc)
         return HttpResponse(
-            render_to_string(
-                "inventory/compliancecheck_export.tf",
-                {"tags": sorted(tags, key=lambda t: t.pk),
-                 "compliance_checks": compliance_checks}
-            ).strip(),
+            build_zip_file_content(iter_compliance_check_resources()),
             headers={
-                "Content-Type": "text/plain",
-                "Content-Disposition": 'attachment; filename="jmespath_checks.tf"',
+                "Content-Type": "application/zip",
+                "Content-Disposition": 'attachment; filename="terraform_jmespath_checks.zip"',
             }
         )
 

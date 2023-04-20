@@ -10,11 +10,17 @@
 
 <h3>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h3>
 
-{% if perms.santa.add_configuration %}
 <p>
+  {% if perms.santa.add_configuration %}
   <a href="{% url 'santa:create_configuration' %}" class="btn btn-default">Create</a>
+  {% endif %}
+  {% if perms.santa.view_enrollment and perms.santa.view_rule %}
+  <a href="{% url 'santa:terraform_export' %}" class="btn btn-default">
+    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+    Terraform config
+  </a>
+  {% endif %}
 </p>
-{% endif %}
 
 <table class="table">
   <thead>
