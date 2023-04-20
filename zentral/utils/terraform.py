@@ -135,6 +135,8 @@ class RefAttr(Attr):
 
     def iter_resources(self, instance, attr_name):
         value = self.get_value(instance, attr_name)
+        if not value:
+            return
         if not self.many:
             value = (value,)
         for i in value:
@@ -187,9 +189,14 @@ class Resource(metaclass=ResourceMetaclass):
                 yield from attr.iter_resources(self.instance, attr_name)
 
 
-def iter_all_resources(resource):
-    yield from resource.iter_dependencies()
-    yield resource
+def iter_all_resources(parent_resource, seen_resources):
+    parent_resource_key = (parent_resource.tf_type, parent_resource.instance.pk)
+    if parent_resource_key in seen_resources:
+        return
+    seen_resources.add(parent_resource_key)
+    for resource in parent_resource.iter_dependencies():
+        yield from iter_all_resources(resource, seen_resources)
+    yield parent_resource
 
 
 def build_temporary_provider_config():
@@ -203,11 +210,7 @@ def build_zip_file(resource_iterator):
     seen_resources = set([])
     tf_files = {}
     for parent_resource in resource_iterator:
-        for resource in iter_all_resources(parent_resource):
-            resource_key = (resource.tf_type, resource.instance.pk)
-            if resource_key in seen_resources:
-                continue
-            seen_resources.add(resource_key)
+        for resource in iter_all_resources(parent_resource, seen_resources):
             tf_filename = f"{resource.tf_grouping_key}.tf"
             try:
                 _, tf_file = tf_files[tf_filename]
