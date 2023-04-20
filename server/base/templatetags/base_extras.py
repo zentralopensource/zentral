@@ -11,7 +11,6 @@ from django.utils.safestring import mark_safe
 from pygments import lexers, highlight
 from pygments.formatters import HtmlFormatter
 from django.conf import settings
-from zentral.utils.terraform import make_terraform_quoted_str
 from zentral.utils.time import duration_repr as _duration_repr
 
 register = template.Library()
@@ -186,9 +185,3 @@ def duration_repr(val):
         return _duration_repr(val)
     except Exception:
         return "-"
-
-
-@register.filter(is_safe=True)
-@stringfilter
-def tf_quoted_str(val):
-    return make_terraform_quoted_str(val)
