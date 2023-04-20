@@ -2,6 +2,7 @@ import os
 import tempfile
 import zipfile
 from django.http import HttpResponse
+from zentral.conf import settings
 
 
 DEFAULT_PROVIDER_CONFIGURATION = """
@@ -17,7 +18,7 @@ terraform {
 provider "zentral" {
   // URL where the API endpoints are mounted in the Zentral deployment.
   // The ZTL_API_BASE_URL environment variable can be used instead.
-  base_url = "https://zentral.example.com/api/"
+  base_url = "https://%s/api/"
 
   // Zentral service account (better) or user API token.
   // This is a secret, it must be managed using a variable.
@@ -202,8 +203,8 @@ def iter_all_resources(parent_resource, seen_resources):
 
 def build_temporary_provider_config():
     pc_fh, pc_p = tempfile.mkstemp()
-    with open(pc_fh, "w") as pc_f:
-        pc_f.write(DEFAULT_PROVIDER_CONFIGURATION.strip())
+    with os.fdopen(pc_fh, "w") as pc_f:
+        pc_f.write((DEFAULT_PROVIDER_CONFIGURATION % settings["api"]["fqdn"]).strip())
     return pc_p
 
 
