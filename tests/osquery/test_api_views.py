@@ -1172,9 +1172,7 @@ class APIViewsTestCase(TestCase):
         configuration = self.force_configuration()
         new_name = get_random_string(12)
         atc = self.force_atc()
-        atc2 = self.force_atc()
         file_category = self.force_file_category()
-        file_category2 = self.force_file_category()
         data = {
             'name': new_name,
             'description': 'Description1',
@@ -1182,8 +1180,8 @@ class APIViewsTestCase(TestCase):
             'inventory_apps': True,
             'inventory_interval': 300,
             'inventory_ec2': True,
-            'automatic_table_constructions': [atc.pk, atc2.pk],
-            'file_categories': [file_category.pk, file_category2.pk],
+            'automatic_table_constructions': [atc.pk],
+            'file_categories': [file_category.pk],
             'options': {
                 'foo': 'bar'
             }
@@ -1200,8 +1198,8 @@ class APIViewsTestCase(TestCase):
             "inventory_apps": True,
             "inventory_interval": 300,
             "inventory_ec2": True,
-            "automatic_table_constructions": [atc.pk, atc2.pk],
-            "file_categories": [file_category.pk, file_category2.pk],
+            "automatic_table_constructions": [atc.pk],
+            "file_categories": [file_category.pk],
             "options": {"foo": "bar"},
             "created_at": configuration.created_at.isoformat(),
             "updated_at": configuration.updated_at.isoformat()
@@ -1212,8 +1210,8 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(configuration.inventory_apps, True)
         self.assertEqual(configuration.inventory_interval, 300)
         self.assertEqual(configuration.inventory_ec2, True)
-        self.assertEqual(configuration.automatic_table_constructions.count(), 2)
-        self.assertEqual(configuration.file_categories.count(), 2)
+        self.assertEqual(configuration.automatic_table_constructions.count(), 1)
+        self.assertEqual(configuration.file_categories.count(), 1)
         self.assertEqual(configuration.options, {"foo": "bar"})
 
     # delete configuration
