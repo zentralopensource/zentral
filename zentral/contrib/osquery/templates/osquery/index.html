@@ -44,6 +44,14 @@
     {% if perms.osquery.view_filecategory %}
     <p><a href="{% url 'osquery:file_categories' %}">File categories</a></p>
     {% endif %}
+    {% if show_terraform_export %}
+    <p>
+      <a href="{% url 'osquery:terraform_export' %}" class="btn btn-default">
+        <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        Terraform config
+      </a>
+    </p>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

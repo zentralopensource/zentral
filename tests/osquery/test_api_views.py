@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from django.utils.http import http_date
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from accounts.models import APIToken, User
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
@@ -19,6 +19,7 @@ from zentral.contrib.osquery.models import (Configuration, DistributedQuery, Enr
 from zentral.core.compliance_checks.models import ComplianceCheck
 
 
+@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class APIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -35,13 +36,15 @@ class APIViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
-    def force_configuration(self, force_atc=False, force_file_categories=False, force_pack=False):
+    # utility methods
+
+    def force_configuration(self, force_atc=False, force_file_category=False, force_pack=False):
         if force_atc:
             atc = self.force_atc()
             conf = Configuration.objects.create(name=get_random_string(12))
             conf.automatic_table_constructions.set([atc])
             return conf, atc
-        if force_file_categories:
+        if force_file_category:
             file_category = self.force_file_category()
             conf = Configuration.objects.create(name=get_random_string(12))
             conf.file_categories.set([file_category])
@@ -150,9 +153,9 @@ class APIViewsTestCase(TestCase):
             permission_filter = reduce(operator.or_, (
                 Q(content_type__app_label=app_label, codename=codename)
                 for app_label, codename in (
-                permission.split(".")
-                for permission in permissions
-            )
+                    permission.split(".")
+                    for permission in permissions
+                )
             ))
             self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
         else:
@@ -177,6 +180,10 @@ class APIViewsTestCase(TestCase):
     def login(self, *permissions):
         self.set_permissions(*permissions)
         self.client.force_login(self.user)
+
+    def login_redirect(self, url):
+        response = self.client.get(url)
+        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
 
     def get(self, url, data=None, include_token=True):
         kwargs = {}
@@ -578,8 +585,8 @@ class APIViewsTestCase(TestCase):
 
     def test_get_file_categories_filter_by_configuration_id(self):
         for _ in range(3):
-            self.force_configuration(force_file_categories=True)
-        configuration, file_category = self.force_configuration(force_file_categories=True)
+            self.force_configuration(force_file_category=True)
+        configuration, file_category = self.force_configuration(force_file_category=True)
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse('osquery_api:file_categories'),
                             data={"configuration_id": configuration.id})
@@ -1135,7 +1142,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(configuration.automatic_table_constructions.all()[0], atc)
 
     def test_update_configuration_change_file_category(self):
-        configuration, _ = self.force_configuration(force_file_categories=True)
+        configuration, _ = self.force_configuration(force_file_category=True)
         file_category = self.force_file_category()
         self.set_permissions("osquery.change_configuration")
         data = {
@@ -3483,3 +3490,30 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse("osquery_api:pack_query", args=[pack_query.pk]))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(PackQuery.objects.count(), 0)
+
+    # terraform export
+
+    def test_terraform_export_redirect(self):
+        self.login_redirect(reverse("osquery:terraform_export"))
+
+    def test_terraform_export_permission_denied(self):
+        self.login("osquery.view_configuration")
+        response = self.client.get(reverse("osquery:terraform_export"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_terraform_export(self):
+        self.login(
+            "osquery.view_automatictableconstruction",
+            "osquery.view_configuration",
+            "osquery.view_configurationpack",
+            "osquery.view_enrollment",
+            "osquery.view_filecategory",
+            "osquery.view_pack",
+            "osquery.view_packquery",
+            "osquery.view_query",
+        )
+        self.force_configuration(force_atc=True, force_file_category=True, force_pack=True)
+        self.force_enrollment()
+        self.force_pack_query()
+        response = self.client.get(reverse("osquery:terraform_export"))
+        self.assertEqual(response.status_code, 200)

@@ -28,7 +28,7 @@ provider "zentral" {
 """
 
 
-def make_terraform_quoted_str(i):
+def quote(i):
     """make a Terraform quoted string literal from a python string"""
     o = ""
     escaped_c = None
@@ -104,7 +104,20 @@ class StringAttr(Attr):
     def value_representation(self, value):
         if not isinstance(value, str):
             value = str(value)
-        return make_terraform_quoted_str(value)
+        return quote(value)
+
+
+class StringMapAttr(Attr):
+    def __init__(self, many=False, required=False, source=None, default=None):
+        if not many and not required and default is None:
+            default = {}
+        super().__init__(many=many, required=required, source=source, default=default)
+
+    def value_representation(self, value):
+        return "{%s}" % ", ".join(
+            '{} = {}'.format(k, quote(str(v)))
+            for k, v in value.items()
+        )
 
 
 class IntAttr(Attr):

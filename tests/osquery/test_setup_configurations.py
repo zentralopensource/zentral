@@ -18,7 +18,7 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
-    # utiliy methods
+    # utility methods
 
     def _login_redirect(self, url):
         response = self.client.get(url)
