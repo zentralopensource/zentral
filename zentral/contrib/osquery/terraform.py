@@ -44,7 +44,7 @@ class ConfigurationResource(Resource):
 
 
 class EnrollmentResource(Resource):
-    tf_type = "zentral_osquery_enrollement"
+    tf_type = "zentral_osquery_enrollment"
     tf_grouping_key = "osquery_configurations"
 
     configuration_id = RefAttr(ConfigurationResource, required=True)
