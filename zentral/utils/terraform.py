@@ -62,7 +62,7 @@ def quote(i):
 
 
 class Attr:
-    def __init__(self, many=False, required=False, source=None, default=None):
+    def __init__(self, many=False, required=False, source=None, default=None, call_value=True):
         self.many = many
         self.required = required
         self.source = source
@@ -71,6 +71,7 @@ class Attr:
         if callable(default):
             default = default()
         self.default = default
+        self.call_value = call_value
 
     def value_representation(self, value):
         raise NotImplementedError
@@ -80,6 +81,8 @@ class Attr:
         raw_value = instance
         for elem in path.split("."):
             raw_value = getattr(raw_value, elem)
+        if self.call_value and callable(raw_value):
+            raw_value = raw_value()
         return raw_value
 
     def iter_representation_lines(self, instance, attr_name):
@@ -133,7 +136,7 @@ class BoolAttr(Attr):
 class RefAttr(Attr):
     def __init__(self, resource_cls, many=False, required=False, source=None, default=None):
         self.resource_cls = resource_cls
-        super().__init__(many=many, required=required, source=source, default=default)
+        super().__init__(many=many, required=required, source=source, default=default, call_value=False)
 
     def get_value(self, instance, attr_name):
         if self.many and attr_name.endswith("_ids"):
