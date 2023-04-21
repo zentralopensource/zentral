@@ -3,11 +3,14 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
-from zentral.contrib.osquery.models import DistributedQuery, Pack, PackQuery, Query
-from zentral.contrib.osquery.terraform import QueryResource
+from zentral.contrib.osquery.models import Configuration, DistributedQuery, Pack, PackQuery, Query
+from zentral.contrib.osquery.terraform import ConfigurationResource, QueryResource
 
 
 class OsqueryTerraformTestCase(TestCase):
+
+    # utility methods
+
     def _force_pack(self):
         name = get_random_string(12)
         return Pack.objects.create(name=name, slug=slugify(name))
@@ -35,6 +38,8 @@ class OsqueryTerraformTestCase(TestCase):
             )
         return query, pack, distributed_query
 
+    # compliance check
+
     def test_compliance_check_false(self):
         query, _, _ = self._force_query(force_compliance_check=False)
         resource = QueryResource(query)
@@ -44,3 +49,15 @@ class OsqueryTerraformTestCase(TestCase):
         query, _, _ = self._force_query(force_compliance_check=True)
         resource = QueryResource(query)
         self.assertIn("compliance_check_enabled = true", resource.to_representation())
+
+    # configuration
+
+    def test_configuration_options_bool(self):
+        configuration = Configuration.objects.create(name=get_random_string(12), options={"disable_audit": False})
+        resource = ConfigurationResource(configuration)
+        self.assertIn('disable_audit = "false"', resource.to_representation())
+
+    def test_configuration_options_int(self):
+        configuration = Configuration.objects.create(name=get_random_string(12), options={"config_refresh": 60})
+        resource = ConfigurationResource(configuration)
+        self.assertIn('config_refresh = "60"', resource.to_representation())

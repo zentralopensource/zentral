@@ -116,9 +116,17 @@ class StringMapAttr(Attr):
             default = {}
         super().__init__(many=many, required=required, source=source, default=default)
 
+    @staticmethod
+    def value_value_representation(value):
+        if isinstance(value, bool):
+            value = "true" if value else "false"
+        elif not isinstance(value, str):
+            value = str(value)
+        return quote(value)
+
     def value_representation(self, value):
         return "{%s}" % ", ".join(
-            '{} = {}'.format(k, quote(str(v)))
+            '{} = {}'.format(k, self.value_value_representation(v))
             for k, v in value.items()
         )
 
