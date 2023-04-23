@@ -417,6 +417,7 @@ class MonolithSetupViewsTestCase(TestCase):
              "munki_pkginfo_name": [pkg_info_name.name]}
         )
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        pkg_info.file.delete()
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_upload_package_from_pkg_info_name(self, post_event):
@@ -515,6 +516,7 @@ class MonolithSetupViewsTestCase(TestCase):
              "munki_pkginfo_name": [pkg_info_name.name]}
         )
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        pkg_info.file.delete()
 
     def test_upload_package_conflict(self):
         self._login("monolith.add_pkginfo")
@@ -597,6 +599,7 @@ class MonolithSetupViewsTestCase(TestCase):
              "munki_pkginfo_name": [pkg_info_name.name]}
         )
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        pkg_info.file.delete()
 
     # update package
 
