@@ -100,6 +100,10 @@ class BaseRepository:
             updated = False
             if audit_callback:
                 prev_value = pkg_info.serialize_for_event()
+            # unarchive if necessary
+            if pkg_info.archived_at:
+                pkg_info.archived_at = None
+                updated = True
             # update the local attribute
             if pkg_info.local:
                 pkg_info.local = False

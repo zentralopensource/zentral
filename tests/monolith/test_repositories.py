@@ -237,3 +237,28 @@ class MonolithRepositoriesTestCase(TestCase):
         # local_pkg_info not archived
         local_pkg_info.refresh_from_db()
         self.assertIsNone(local_pkg_info.archived_at)
+
+    @patch("zentral.contrib.monolith.repository_backends.local.Repository.get_all_catalog_content")
+    def test_sync_catalogs_pkg_info_unarchived(self, get_all_catalog_content):
+        pkg_info_to_unarchive = self._force_pkg_info(local=False)
+        pkg_info_to_unarchive.archived_at = datetime.utcnow()
+        pkg_info_to_unarchive.save()
+        prev_value = pkg_info_to_unarchive.serialize_for_event()
+        catalog = pkg_info_to_unarchive.catalogs.first()
+        manifest = catalog.manifestcatalog_set.first().manifest
+        manifest_prev_value = manifest.serialize_for_event()
+        get_all_catalog_content.return_value = self._build_all_catalog([
+            {"catalogs": [pkg_info_to_unarchive.catalogs.first().name],
+             "name": pkg_info_to_unarchive.name.name,
+             "version": pkg_info_to_unarchive.version}
+        ])
+        audit_callback = Mock()
+        monolith_conf.repository.sync_catalogs(audit_callback)
+        # pkg_info_to_unarchive archived at is None, because present in the catalog
+        pkg_info_to_unarchive.refresh_from_db()
+        self.assertIsNone(pkg_info_to_unarchive.archived_at)
+        self.assertEqual(
+            audit_callback.call_args_list,
+            [call(pkg_info_to_unarchive, AuditEvent.Action.UPDATED, prev_value),
+             call(manifest, AuditEvent.Action.UPDATED, manifest_prev_value)]
+        )

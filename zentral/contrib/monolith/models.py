@@ -401,7 +401,6 @@ class PkgInfo(models.Model):
             "local": self.local,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-
         })
         if self.archived_at:
             d["archived_at"] = self.archived_at
