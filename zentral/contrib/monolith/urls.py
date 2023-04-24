@@ -105,6 +105,11 @@ urlpatterns = [
          views.MRRedirectView.as_view(section="icons"), name='repository_icon'),
     path('munki_repo/client_resources/<path:name>',
          views.MRRedirectView.as_view(section="client_resources"), name='repository_client_resource'),
+
+    # terraform
+    path('terraform_export/',
+         views.TerraformExportView.as_view(),
+         name='terraform_export'),
 ]
 
 

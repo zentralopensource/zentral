@@ -80,7 +80,10 @@ class Attr:
         path = self.source or attr_name
         raw_value = instance
         for elem in path.split("."):
-            raw_value = getattr(raw_value, elem)
+            if isinstance(raw_value, dict):
+                raw_value = raw_value[elem]
+            else:
+                raw_value = getattr(raw_value, elem)
         if self.call_value and callable(raw_value):
             raw_value = raw_value()
         return raw_value
@@ -169,7 +172,7 @@ class RefAttr(Attr):
             yield self.resource_cls(i)
 
 
-class ResourceMetaclass(type):
+class ObjectMetaclass(type):
     def __new__(mcs, name, bases, attrs):
         attrs["declared_attrs"] = {
             key: attrs.pop(key) for key, value in list(attrs.items())
@@ -178,12 +181,38 @@ class ResourceMetaclass(type):
         return super().__new__(mcs, name, bases, attrs)
 
 
-class Resource(metaclass=ResourceMetaclass):
+class MapAttr(Attr, metaclass=ObjectMetaclass):
+    def value_representation(self, value):
+        return "{{ {} }}".format(
+            ", ".join(
+                "{} = {}".format(attr_name, ", ".join(attr.iter_representation_lines(value, attr_name)))
+                for attr_name, attr in self.declared_attrs.items()
+            )
+        )
+
+    def iter_resources(self, instance, attr_name):
+        value = self.get_value(instance, attr_name)
+        if not value:
+            return
+        if not self.many:
+            value = (value,)
+        for i in value:
+            for attr_attr_name, attr_attr in self.declared_attrs.items():
+                if isinstance(attr_attr, (MapAttr, RefAttr)):
+                    yield from attr_attr.iter_resources(i, attr_attr_name)
+
+
+class Resource(metaclass=ObjectMetaclass):
     tf_type = None
     tf_grouping_key = None
 
     def __init__(self, instance):
         self.instance = instance
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.instance == other.instance
 
     @classmethod
     def build_local_name(cls, instance):
@@ -211,7 +240,7 @@ class Resource(metaclass=ResourceMetaclass):
 
     def iter_dependencies(self):
         for attr_name, attr in self.declared_attrs.items():
-            if isinstance(attr, RefAttr):
+            if isinstance(attr, (MapAttr, RefAttr)):
                 yield from attr.iter_resources(self.instance, attr_name)
 
 

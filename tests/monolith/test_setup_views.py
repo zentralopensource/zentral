@@ -1543,3 +1543,28 @@ class MonolithSetupViewsTestCase(TestCase):
                              [],
                              True)]})]
         )
+
+    # terraform export
+
+    def test_terraform_export_redirect(self):
+        self._login_redirect(reverse("monolith:terraform_export"))
+
+    def test_terraform_export_permission_denied(self):
+        self._login("monolith.view_manifest")  # no enough
+        response = self.client.get(reverse("monolith:terraform_export"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_terraform_export(self):
+        self._login(
+            "monolith.view_catalog",
+            "monolith.view_condition",
+            "monolith.view_enrollment",
+            "monolith.view_manifest",
+            "monolith.view_submanifest",
+        )
+        self._force_catalog()
+        condition = self._force_condition()
+        self._force_manifest()
+        self._force_sub_manifest(condition)
+        response = self.client.get(reverse("monolith:terraform_export"))
+        self.assertEqual(response.status_code, 200)

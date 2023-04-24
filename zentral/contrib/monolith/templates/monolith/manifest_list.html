@@ -8,7 +8,17 @@
 </ol>
 
 <h2>{{ paginator.count }} Manifest{{ paginator.count|pluralize }}</h2>
-<p><a class="btn btn-default" href="{% url 'monolith:create_manifest' %}">Create</a></p>
+<p>
+  {% if perms.monolith.add_manifest %}
+  <a class="btn btn-default" href="{% url 'monolith:create_manifest' %}">Create</a>
+  {% endif %}
+  {% if show_terraform_export %}
+  <a href="{% url 'monolith:terraform_export' %}" class="btn btn-default">
+    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+    Terraform config
+  </a>
+  {% endif %}
+</p>
 
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
     <div class="form-group">
