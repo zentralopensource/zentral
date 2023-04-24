@@ -14,10 +14,6 @@ class FileCategoryResource(Resource):
     file_paths_queries = StringAttr(many=True)
     access_monitoring = BoolAttr(default=False)
 
-    @classmethod
-    def build_local_name(cls, instance):
-        return instance.slug
-
 
 class ATCResource(Resource):
     tf_type = "zentral_osquery_atc"
@@ -70,10 +66,6 @@ class PackResource(Resource):
     shard = IntAttr()
     event_routing_key = StringAttr()
 
-    @classmethod
-    def build_local_name(cls, instance):
-        return instance.slug
-
 
 class QueryResource(Resource):
     tf_type = "zentral_osquery_query"
@@ -99,10 +91,6 @@ class PackQueryResource(Resource):
     snapshot_mode = BoolAttr(default=False)
     shard = IntAttr()
     can_be_denylisted = BoolAttr(default=True)
-
-    @classmethod
-    def build_local_name(cls, instance):
-        return instance.slug
 
 
 class ConfigurationPackResource(Resource):
