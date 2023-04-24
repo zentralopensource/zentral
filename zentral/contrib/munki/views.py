@@ -19,10 +19,12 @@ from zentral.core.probes.models import ProbeSource
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
+from zentral.utils.terraform import build_config_response
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
 from .models import (Configuration, EnrolledMachine, Enrollment, ManagedInstall, MunkiState,
                      PrincipalUserDetectionSource)
+from .terraform import iter_resources
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
 logger = logging.getLogger('zentral.contrib.munki.views')
@@ -39,6 +41,16 @@ class ConfigurationListView(PermissionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["configuration_count"] = ctx["object_list"].count()
         return ctx
+
+
+class TerraformExportView(PermissionRequiredMixin, View):
+    permission_required = (
+        "munki.view_configuration",
+        "munki.view_enrollment",
+    )
+
+    def get(self, request, *args, **kwargs):
+        return build_config_response(iter_resources(), "terraform_munki")
 
 
 class CreateConfigurationView(PermissionRequiredMixin, CreateView):

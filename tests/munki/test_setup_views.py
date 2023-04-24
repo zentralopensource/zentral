@@ -271,3 +271,19 @@ class MunkiSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("munki:delete_enrollment", args=(enrollment.configuration.pk,
                                                                             enrollment.pk)))
         self.assertEqual(response.status_code, 404)
+
+    # terraform export
+
+    def test_terraform_export_redirect(self):
+        self._login_redirect(reverse("munki:terraform_export"))
+
+    def test_terraform_export_permission_denied(self):
+        self._login("munki.view_configuration")  # not enough
+        response = self.client.get(reverse("munki:terraform_export"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_terraform_export(self):
+        self._login("munki.view_configuration", "munki.view_enrollment")
+        self._force_enrollment()
+        response = self.client.get(reverse("munki:terraform_export"))
+        self.assertEqual(response.status_code, 200)

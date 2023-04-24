@@ -29,7 +29,12 @@ urlpatterns = [
     # API
     path('enroll/', csrf_exempt(views.EnrollView.as_view()), name='enroll'),
     path('job_details/', csrf_exempt(views.JobDetailsView.as_view()), name="job_details"),
-    path('post_job/', csrf_exempt(views.PostJobView.as_view()), name="post_job")
+    path('post_job/', csrf_exempt(views.PostJobView.as_view()), name="post_job"),
+
+    # terraform
+    path('terraform_export/',
+         views.TerraformExportView.as_view(),
+         name='terraform_export'),
 ]
 
 
