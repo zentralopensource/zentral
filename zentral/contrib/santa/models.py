@@ -167,6 +167,14 @@ class Configuration(models.Model):
         except ValueError:
             return
 
+    def get_preflight_client_mode(self):
+        if self.client_mode == self.MONITOR_MODE:
+            return self.PREFLIGHT_MONITOR_MODE
+        elif self.client_mode == self.LOCKDOWN_MODE:
+            return self.PREFLIGHT_LOCKDOWN_MODE
+        else:
+            raise ValueError(f"Unknown santa client mode: {self.client_mode}")
+
     def is_monitor_mode(self):
         return self.client_mode == self.MONITOR_MODE
 
@@ -175,12 +183,7 @@ class Configuration(models.Model):
                   for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
 
         # translate client mode
-        if self.client_mode == self.MONITOR_MODE:
-            config["client_mode"] = self.PREFLIGHT_MONITOR_MODE
-        elif self.client_mode == self.LOCKDOWN_MODE:
-            config["client_mode"] = self.PREFLIGHT_LOCKDOWN_MODE
-        else:
-            raise NotImplementedError("Unknown santa client mode: {}".format(self.client_mode))
+        config['client_mode'] = self.get_preflight_client_mode()
 
         # provide non matching regexp if the regexp are empty
         for attr in ("allowed_path_regex",
@@ -684,11 +687,14 @@ class Rule(models.Model):
     def get_absolute_url(self):
         return reverse("santa:configuration_rules", args=(self.configuration_id,)) + f"#rule-{self.pk}"
 
+    def get_translated_policy(self):
+        return translate_rule_policy(self.policy)
+
     def serialize_for_event(self):
         d = {
             "configuration": self.configuration.serialize_for_event(keys_only=True),
             "target": self.target.serialize_for_event(),
-            "policy": translate_rule_policy(self.policy),
+            "policy": self.get_translated_policy(),
         }
         if self.ruleset:
             d["ruleset"] = self.ruleset.serialize_for_event()

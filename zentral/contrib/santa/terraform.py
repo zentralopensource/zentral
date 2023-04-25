@@ -8,7 +8,7 @@ class ConfigurationResource(Resource):
     tf_grouping_key = "santa_configurations"
 
     name = StringAttr(required=True)
-    client_mode = IntAttr(default=1)
+    client_mode = StringAttr(default=1, source="get_preflight_client_mode")
     client_certificate_auth = BoolAttr(default=False)
     batch_size = IntAttr(default=50)
     full_sync_interval = IntAttr(default=600)
@@ -40,7 +40,7 @@ class RuleResource(Resource):
     tf_grouping_key = "santa_configurations"
 
     configuration_id = RefAttr(ConfigurationResource, required=True)
-    policy = IntAttr(required=True)
+    policy = StringAttr(required=True, source="get_translated_policy")
     target_type = StringAttr(required=True, source="target.type")
     target_identifier = StringAttr(required=True, source="target.identifier")
     description = StringAttr()
