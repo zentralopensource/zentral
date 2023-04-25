@@ -2769,6 +2769,16 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertEqual(Query.objects.filter(pk=query.pk).count(), 0)
 
+    def test_delete_query_cannot_be_deleted(self):
+        query = self.force_query(pack_query_mode="diff")
+        self.set_permissions("osquery.delete_query")
+        response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            [f"This query is included in pack {query.packquery.pack.pk}"]
+        )
+
     def test_delete_query_unauthorized(self):
         query = self.force_query()
         response = self.delete(reverse("osquery_api:query", args=(query.pk,)), include_token=False)

@@ -475,6 +475,12 @@ class QueryDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = QuerySerializer
 
+    def perform_destroy(self, instance):
+        if hasattr(instance, "packquery"):
+            raise ValidationError(f"This query is included in pack {instance.packquery.pack.id}")
+        else:
+            return super().perform_destroy(instance)
+
 
 # Configuration Packs
 
