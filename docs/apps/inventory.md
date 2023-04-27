@@ -1,6 +1,8 @@
 # Inventory
 
-The Zentral Inventory app is used to store all the information about the hardware, software and configuration assets. The information comes from the agents managed by Zentral, or from third party inventory sources when an agent managed by Zentral cannot be deployed on the devices. It is mandatory in a Zentral deployment.
+The Zentral Inventory app is used to store all the information about the hardware, software and configuration assets in a unified model. The information comes from the agents managed by Zentral, or from third party inventory sources when an agent managed by Zentral cannot be deployed on the devices. Compliance checks can be configured to run on each device inventory update.
+
+This Zentral module is mandatory in each deployment.
 
 ## Available sources
 
@@ -73,7 +75,7 @@ This is similar to the Git object store: device snapshots can be compared to Git
 
 The retention of the snapshots [can be configured](#snapshot_retention_days). A background task is scheduled to prune the older snapshots while preserving the most recent one for each device and source.
 
-### Inventory update events
+### Inventory events
 
 When an updated inventory snapshot is received for a device and a source, Zentral computes the difference with the previous snapshot, and emits events for each asset update. This is a list of all the Zentral machine update events:
 
@@ -119,6 +121,56 @@ When an updated inventory snapshot is received for a device and a source, Zentra
 |Puppet Node|`remove_machine_puppet_node`|`machine`, `machine_update`, `machine_remove_update`|
 
 All the above events are standard Zentral events, with the Zentral event metadata containing the machine information, event type, event tags. They are processed by the Zentral event pipeline, and can be filtered and shipped to third party event stores. Event probes can also be configured in Zentral to filter the events and trigger actions.
+
+The inventory snapshot updates, even if they are not different from the stored snapshots, are also run through the compliance checks. For each compliance check in scope for the source / device / platform, the status is computed, and if the status has changed, an `inventory_jmespath_check_status_updated` event is created.
+
+## Compliance checks
+
+### How it works
+
+Compliance checks can be configured to verify the device inventory snapshots. When an inventory update is received (agent) or pulled (3rd party inventory), Zentral fetches the compliance checks in scope for the update, and for each one of them computes its status. If the status has changed, the status for the given device and compliance check is updated in the main database (PostgreSQL) and an `inventory_jmespath_check_status_updated` event is created.
+
+The Zentral inventory compliance checks are scoped using 3 criteria:
+
+ * Inventory source
+ * Platforms (Linux, macOS,  Windows, Android, iOS, iPadOS, tvOS)
+ * Device tags
+
+The check itself is a [JMESPath](https://jmespath.org/) expression that is evaluated against the full device inventory snapshot tree.
+
+### Example
+
+To test an inventory compliance check:
+
+ * Go to *Inventory > Compliance checks*, and click on the [DevTool] button. This will allow you to evaluate a JMESPath expression against the inventory snapshot tree of a given device and source.
+
+ * Pick a source, and a serial number.
+
+ * In the *JMESPath expression* field, use the following expression to check that the OS version on the device is `13.3.1`:
+
+    ```
+    os_version.major == `13` && os_version.minor == `3` && os_version.patch == `1`
+    ```
+
+ * Click on the [Test] button. You will see the result of the JMESPath expression, and also a full inventory snapshot tree for the source and device. You can now iterate on the JMESPath expression, and for example update it for the current version of macOS.
+
+ * Once the JMESPath expression is correct, you can click on the [Create] button. This will bring you to a formular where you can pick a name, a description, and a source. You can also scope the compliance check to have it run only on some platforms, or for devices with some given tags.
+
+ * Click on the [Save] button to finish creating the inventory compliance check.
+
+The newly created inventory compliance check will now be evaluated for each scoped inventory update. The last status is available in each device inventory detail page. It will also contribute to the overall compliance status of the devices.
+
+The same configuration can be achieved using a Terraform resource:
+
+```tf
+resource "zentral_jmespath_check" "macos-up-to-date" {
+  name                = "macOS up to date"
+  description         = "Check that the latest macOS version is running."
+  source_name         = "munki"
+  platforms           = ["MACOS"]
+  jmespath_expression = "os_version.major == `13` && os_version.minor == `3` && os_version.patch == `1`"
+}
+```
 
 ## Zentral configuration
 
