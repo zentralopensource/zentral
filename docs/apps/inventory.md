@@ -18,6 +18,8 @@ This Zentral module is mandatory in each deployment.
 
 ## Architecture
 
+![Zentral inventory architecture](../../images/apps/inventory/architecture.svg)
+
 ### Inventory data collection
 
 #### Agents
