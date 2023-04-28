@@ -1,6 +1,6 @@
 # Monolith
 
-Monolith is a Munki server. You need to have a Munki repository. With Monolith you will be able to assemble manifests, enroll your client, monitor all requests, and configure osquery and santa.
+Monolith is a Munki server that adds dynamic manifests, catalogs, with progressive patch rollouts to your existing Munki repository.
 
 ## Zentral configuration
 
@@ -8,7 +8,7 @@ To activate monolith, you need to add a `zentral.contrib.monolith` section to th
 
 ### Local repository with osquery optional enrollment
 
-The Munki repository is on the same server as Zentral. Only osquery is proposed for enrollment. The Munki enrollment is always enabled. `munkitools_core` and `osquery` are present in your repository.
+The Munki repository is on the same server as Zentral. Only osquery is proposed for enrollment. The Munki enrollment is always enabled. `munkitools_core` and `osquery` must be present in your repository.
 
 ```json
 {
@@ -31,9 +31,9 @@ The Munki repository is on the same server as Zentral. Only osquery is proposed 
 }
 ```
 
-### S3 repository with santa optional enrollment
+### S3 repository with osquery optional enrollment
 
-The Munki repository is in a S3 bucket. Only santa is proposed for enrollment. The Munki enrollment is always enabled. `munkitools_core` and `santa` are present in your repository.
+The Munki repository is in a S3 bucket. Only osquery is proposed for enrollment. The Munki enrollment is always enabled. `munkitools_core` and `osquery` must be present in your repository.
 
 ```json
 {
@@ -43,8 +43,8 @@ The Munki repository is in a S3 bucket. Only santa is proposed for enrollment. T
         "requires": ["munkitools_core"],
         "optional": false
       },
-      "zentral.contrib.santa.osx_package.builder.SantaZentralEnrollPkgBuilder": {
-        "requires": ["santa"],
+      "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
+        "requires": ["osquery"],
         "optional": true
       }
     },
@@ -85,13 +85,11 @@ Once you have created a manifest, add catalogs to it. You can add tags to a cata
 
 With the exception of enrollments (mentioned below), for all configuration locations within the Zentral interface where tags are applicable, they're evaluated with "OR" logic. Therefore if a machine has any of the tags attached to a catalog, it will be considered applicable. The lack of tags on a catalog means it would be applied to all machines that either have no tags or are not covered by other tagged catalogs, and you should only have one in that state, set to the lowest priority.
 
-Using a numeric "priority" designation alongside tagging for catalogs helps you assign a 'weighting' where higher numbers 'win'. Consider this scenario; if you have catalogs named 'dev' 'test' and 'prod' to indicate successively wider testing tracks, they could be assigned priority 3, 2, and 1 accordingly. Attaching tags named 'development' and 'testing' to the respective catalogs (one tag for one catalog) will cause machines with both the 'development' and 'testing' tags to claim the 'dev' catalog, whereas one with just 'testing' would claim 'test', and those with no tags (or tags not applied to the other catalogs) would get 'prod'.
-
 ### Add automatic enrollments
 
-Depending on your configuration, you will have the possibility to add enrollment packages. If you have configured monolith following the second configuration example, you can now add one or more santa enrollment packages, with different tags or configurations. One could have a santa in [MONITOR](https://github.com/google/santa/wiki/Configuration#clientmode) mode, as the default, for the whole fleet, and in [LOCKDOWN](https://github.com/google/santa/wiki/Configuration#clientmode) mode on a subset of machines carrying a certain tag (or exact tag combinations). Same as with catalogs above, the lack of tags on an enrollment means it would be applied to all machines that either have no tags or are not covered by other tagged enrollments, and you should only have one in that state.
+Depending on your configuration, you will have the possibility to add enrollment packages. If you have configured monolith following the second configuration example, you can now add one or more osquery enrollment packages, with different tags or configurations. Same as with catalogs above, the lack of tags on an enrollment means it would be applied to all machines that either have no tags or are not covered by other tagged enrollments, and you should only have one in that state.
 
-It's important to note that, unlike how tagging works for catalogs, enrollments employ "AND" logic, meaning all tags added to the enrollment must be present on the machine you'd like them applied to. This is most applicable with Osquery, as it's treated like a package that Monolith adds dynamically to the manifest of 'scoped' machines when it's configured as a 'distributor'. You can use the contained configuration (standalone and separate from the osquery software itself) multiple times with each individual tag you'd like to apply it to, or no tag if you'd like to distribute it to all (untagged) machines. (Santa's configuration can alternately be entirely delivered via a configuration profile you'd distribute with MDM, just as you can distribute Osquery and its configuration through any standalone method you prefer, but these notes are applicable if you're using Zentrals available 'apps' in concert.)
+It's important to note that, unlike how tagging works for catalogs, enrollments employ "AND" logic, meaning all tags added to the enrollment must be present on the machine you'd like them applied to. This is most applicable with Osquery, as it's treated like a package that Monolith adds dynamically to the manifest of 'scoped' machines when it's configured as a 'distributor'. You can use the contained configuration (standalone and separate from the osquery software itself) multiple times with each individual tag you'd like to apply it to, or no tag if you'd like to distribute it to all (untagged) machines.
 
 
 ### Add software via sub-manifests
