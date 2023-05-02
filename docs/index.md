@@ -25,10 +25,12 @@ You can deploy it on your machine with [Docker](./deployment/docker-compose), or
 
 ## Inventory sources
 
-* Filewave
 * Jamf
 * Puppet
+* Workspace One
 * Watchman
+* Filewave
+
 
 ## Event stores
 
