@@ -47,13 +47,16 @@ class MDMInventoryTestCase(TestCase):
         self.assertEqual(ms_tree["os_version"]["major"], 13)
         self.assertEqual(ms_tree["os_version"]["minor"], 0)
         self.assertEqual(ms_tree["os_version"]["patch"], 0)
+        self.assertEqual(ms_tree["os_version"]["build"], "22A5321d")
         self.assertNotIn("version", ms_tree["os_version"])
 
     def test_ms_tree_from_payload_extra_version(self):
         device_information = self.read_plist("device_information.plist")
         device_information["QueryResponses"]["SupplementalOSVersionExtra"] = "(a)"
+        device_information["QueryResponses"]["SupplementalBuildVersion"] = "22E772610a"
         ms_tree = ms_tree_from_payload(device_information["QueryResponses"])
         self.assertEqual(ms_tree["os_version"]["version"], "(a)")
+        self.assertEqual(ms_tree["os_version"]["build"], "22E772610a")
 
     def test_full_inventory_tree(self):
         step1 = datetime.utcnow()
