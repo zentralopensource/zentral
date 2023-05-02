@@ -31,7 +31,7 @@ class MachineSnapshotTestCase(TestCase):
                           'major': 10,
                           'minor': 11,
                           'patch': 1}
-        cls.os_version2 = dict(cls.os_version, patch=2)
+        cls.os_version_2 = dict(cls.os_version, patch=2, version="(a)")
         cls.osx_app = {'bundle_id': 'io.zentral.baller',
                        'bundle_name': 'Baller.app',
                        'bundle_version': '123',
@@ -93,23 +93,23 @@ class MachineSnapshotTestCase(TestCase):
         cls.machine_snapshot2 = {'source': copy.deepcopy(cls.source),
                                  'business_unit': cls.business_unit_tree,
                                  'serial_number': cls.serial_number,
-                                 'os_version': cls.os_version,
+                                 'os_version': cls.os_version_2,
                                  'osx_app_instances': [cls.osx_app_instance]}
         cls.machine_snapshot3 = {'source': copy.deepcopy(cls.source),
                                  'business_unit': cls.business_unit_tree,
                                  'serial_number': cls.serial_number,
-                                 'os_version': cls.os_version,
+                                 'os_version': cls.os_version_2,
                                  'osx_app_instances': [cls.osx_app_instance, cls.osx_app_instance2]}
         cls.machine_snapshot4 = {'source': copy.deepcopy(cls.source),
                                  'business_unit': cls.business_unit_tree,
                                  'serial_number': cls.serial_number,
-                                 'os_version': cls.os_version,
+                                 'os_version': cls.os_version_2,
                                  'osx_app_instances': [cls.osx_app_instance],
                                  'extra_facts': cls.extra_facts}
         cls.machine_snapshot5 = {'source': copy.deepcopy(cls.source),
                                  'business_unit': cls.business_unit_tree,
                                  'serial_number': cls.serial_number,
-                                 'os_version': cls.os_version,
+                                 'os_version': cls.os_version_2,
                                  'osx_app_instances': [cls.osx_app_instance],
                                  'extra_facts': cls.extra_facts,
                                  'certificates': [cls.certificate1, cls.certificate2]}
@@ -197,17 +197,18 @@ class MachineSnapshotTestCase(TestCase):
         osx_app_instance_diff = copy.deepcopy(self.osx_app_instance)
         prepare_diff_dict(osx_app_instance_diff)
         self.assertEqual(msc2.update_diff(),
-                         {"os_version": {"added": self.os_version},
+                         {"os_version": {"added": self.os_version_2},
                           "osx_app_instances": {"added": [osx_app_instance_diff]},
                           "last_seen": {"added": msc2.last_seen,
                                         "removed": msc1.last_seen},
                           "platform": {"added": MACOS}})  # don't forget platform !!!
+        events = list(inventory_events_from_machine_snapshot_commit(msc2))
         self.assertEqual(
-            list(inventory_events_from_machine_snapshot_commit(msc2)),
+            events,
             [('add_machine_osx_app_instance', None,
               {"osx_app_instance": osx_app_instance_diff, "source": self.source}),
              ('add_machine_os_version', None,
-              {'os_version': self.os_version, 'source': self.source}),
+              {'os_version': self.os_version_2, 'source': self.source}),
              ('inventory_heartbeat', msc2.last_seen, {'source': self.source})]
         )
         tree = copy.deepcopy(self.machine_snapshot3)
@@ -415,7 +416,7 @@ class MachineSnapshotTestCase(TestCase):
             {'business_unit': {'key': self.business_unit.get_short_key(),
                                'name': self.business_unit.name,
                                'reference': self.business_unit.reference},
-             'os_version': 'OS X 10.11.1'}
+             'os_version': 'OS X 10.11.2 (a)'}
         )
 
         mm.archive()

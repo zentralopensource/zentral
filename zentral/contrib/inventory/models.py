@@ -1209,7 +1209,8 @@ class MetaMachine:
             # os versions
             "select ms.src, 'os_version' as key,"
             "jsonb_build_object("
-            "  'name', osv.name, 'major', osv.major, 'minor', osv.minor, 'patch', osv.patch, 'build', osv.build"
+            "  'name', osv.name, 'major', osv.major, 'minor', osv.minor, 'patch', osv.patch, "
+            "  'build', osv.build, 'version', osv.version"
             ") "
             "from inventory_osversion as osv join ms on (ms.os_version_id = osv.id) "
 
@@ -1346,13 +1347,7 @@ class MetaMachine:
             if key == "system_info":
                 d["name"] = agg["computer_name"] or agg["hostname"]
             elif key == "os_version":
-                build = agg.get("build")
-                os_version_items = (
-                    agg.get("name"),
-                    ".".join(str(v) for v in (agg.get(k) for k in ('major', 'minor', 'patch')) if v is not None),
-                    f"({build})" if build else None
-                )
-                os_version_str = " ".join(s for s in os_version_items if s)
+                os_version_str = os_version_display(agg)
                 if os_version_str:
                     d[key] = os_version_str
             elif key in ("types", "platforms"):

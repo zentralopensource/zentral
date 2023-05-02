@@ -243,7 +243,7 @@ def macos_version_from_build(build):
             major = minor - 5
             minor = patch
             if build in ("21A558", "21A559", "21D62", "21E258", "21G83", "21G217",
-                         "22A400", "22D68", "22E261"):
+                         "22A400", "22D68", "22E261", "22E772610a"):
                 patch = 1
             elif build in ("21G309", "21G320"):
                 patch = 2
@@ -283,13 +283,17 @@ def macos_version_from_build(build):
                 patch = 0
         else:
             major = 10
-        return {
+        os_version = {
             "name": name,
             "major": major,
             "minor": minor,
             "patch": patch,
             "build": build
         }
+        # RSR
+        if build == "22E772610a":
+            os_version["version"] = "(a)"
+        return os_version
     else:
         raise ValueError("Bad build number")
 
