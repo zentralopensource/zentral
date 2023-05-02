@@ -1,6 +1,7 @@
 import datetime
 import logging
 from django.db import transaction
+from django.db.models import Q
 import requests
 from .crypto import IPHONE_DEVICE_CA_FULLCHAIN
 from .models import SoftwareUpdate, SoftwareUpdateDeviceID
@@ -20,7 +21,7 @@ def _parse_date(date):
 
 
 def _iter_software_updates(response):
-    for attr, public in (("PublicAssetSets", True), ("AssetSets", False)):
+    for attr, public in (("PublicAssetSets", True), ("AssetSets", False), ("PublicRapidSecurityResponses", True)):
         products = response.get(attr)
         if not products:
             continue
@@ -41,6 +42,12 @@ def _iter_software_updates(response):
                                        (int(s) for s in product_info["ProductVersion"].split(".")))))
                 if kwargs.get("patch") is None:
                     kwargs["patch"] = 0
+                if attr == "PublicRapidSecurityResponses":
+                    kwargs["extra"] = product_info["ProductVersionExtra"]
+                    kwargs["prerequisite_build"] = product_info["PrerequisiteBuild"]
+                else:
+                    kwargs["extra"] = ""
+                    kwargs["prerequisite_build"] = ""
                 # defaults
                 yield kwargs, product_info["SupportedDevices"]
 
@@ -60,30 +67,31 @@ def sync_software_updates():
 
 
 def available_software_updates(enrolled_device, date=None):
-    major_update = minor_update = patch_update = None
+    major_update = minor_update = patch_update = rsr_update = None
     current_comparable_os_version = enrolled_device.comparable_os_version
-    if current_comparable_os_version == (0, 0, 0):
+    if current_comparable_os_version == (0, 0, 0, ""):
         logger.debug("Enrolled device %s: no comparable OS version", enrolled_device.udid)
-        return major_update, minor_update, patch_update
-    current_major, current_minor, current_patch = current_comparable_os_version
+        return major_update, minor_update, patch_update, rsr_update
+    current_major, current_minor, current_patch, current_extra = current_comparable_os_version
     try:
         device_id = enrolled_device.device_information["SoftwareUpdateDeviceID"]
     except (KeyError, TypeError):
         logger.debug("Enrolled device %s: no SoftwareUpdateDeviceID found", enrolled_device.udid)
-        return major_update, minor_update, patch_update
+        return major_update, minor_update, patch_update, rsr_update
     if not isinstance(device_id, str):
         # should never happen
         logger.error("Enrolled device %s: SoftwareUpdateDeviceID is not a str", enrolled_device.udid)
-        return major_update, minor_update, patch_update
+        return major_update, minor_update, patch_update, rsr_update
     if not device_id:
         # should never happen
         logger.error("Enrolled device %s: SoftwareUpdateDeviceID is an empty str", enrolled_device.udid)
-        return major_update, minor_update, patch_update
+        return major_update, minor_update, patch_update, rsr_update
     # filter the choices
     if date is None:
         date = datetime.date.today()
     for software_update in SoftwareUpdate.objects.filter(
-        public=False,
+        Q(public=False) | Q(extra__gt=""),
+        Q(prerequisite_build="") | Q(prerequisite_build=enrolled_device.current_build_version),
         availability__contains=date,
         softwareupdatedeviceid__device_id=device_id
     ):
@@ -99,7 +107,10 @@ def available_software_updates(enrolled_device, date=None):
         elif software_update.patch != current_patch:
             if patch_update is None or (patch_update.comparable_os_version < software_update.comparable_os_version):
                 patch_update = software_update
-    return major_update, minor_update, patch_update
+        elif software_update.extra != current_extra:
+            if rsr_update is None or (rsr_update.comparable_os_version < software_update.comparable_os_version):
+                rsr_update = software_update
+    return major_update, minor_update, patch_update, rsr_update
 
 
 def iter_available_software_updates(enrolled_device, date=None):

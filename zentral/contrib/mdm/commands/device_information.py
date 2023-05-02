@@ -142,6 +142,18 @@ class DeviceInformation(Command):
         os_version = query_responses.get("OSVersion")
         if os_version:
             self.enrolled_device.os_version = os_version
+        # OS version extra
+        os_version_extra = query_responses.get("SupplementalOSVersionExtra")
+        if os_version_extra:
+            self.enrolled_device.os_version_extra = os_version_extra
+        # Build version
+        build_version = query_responses.get("BuildVersion")
+        if build_version:
+            self.enrolled_device.build_version = build_version
+        # Build version extra
+        build_version_extra = query_responses.get("SupplementalBuildVersion")
+        if build_version_extra:
+            self.enrolled_device.build_version_extra = build_version_extra
         # Apple silicon
         apple_silicon = query_responses.get("IsAppleSilicon")
         if apple_silicon is not None:

@@ -101,5 +101,19 @@
         ]
       }
     ]
+  },
+  "PublicRapidSecurityResponses": {
+    "macOS": [
+      {
+        "ProductVersion": "13.3.1",
+        "ProductVersionExtra": "(a)",
+        "PrerequisiteBuild": "22E261",
+        "PostingDate": "2023-05-01",
+        "ExpirationDate": "2023-07-31",
+        "SupportedDevices": [
+          "J413AP"
+        ]
+      }
+    ]
   }
 }

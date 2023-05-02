@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 import os.path
 import plistlib
@@ -108,8 +109,27 @@ class DeviceInformationCommandTestCase(TestCase):
         self.assertTrue(enrolled_device.device_information_updated_at > start)
         self.assertEqual(enrolled_device.platform, "macOS")
         self.assertEqual(enrolled_device.os_version, "13.0")
+        self.assertIsNone(enrolled_device.os_version_extra)
+        self.assertEqual(enrolled_device.build_version, "22A5321d")
+        self.assertIsNone(enrolled_device.build_version_extra)
+        self.assertEqual(enrolled_device.full_os_version, "13.0 (22A5321d)")
         self.assertTrue(enrolled_device.apple_silicon)
         self.assertTrue(enrolled_device.supervised)
+
+    def test_process_acknowledged_response_rsr(self):
+        response = copy.deepcopy(self.device_information)
+        response["QueryResponses"]["SupplementalBuildVersion"] = "22E772610a"
+        response["QueryResponses"]["SupplementalOSVersionExtra"] = "(a)"
+        cmd = DeviceInformation.create_for_device(
+            self.dep_enrollment_session.enrolled_device
+        )
+        cmd.process_response(response, self.dep_enrollment_session, self.mbu)
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        self.assertEqual(enrolled_device.os_version, "13.0")
+        self.assertEqual(enrolled_device.os_version_extra, "(a)")
+        self.assertEqual(enrolled_device.build_version, "22A5321d")
+        self.assertEqual(enrolled_device.build_version_extra, "22E772610a")
+        self.assertEqual(enrolled_device.full_os_version, "13.0 (a) (22E772610a)")
 
     # _update_inventory
 

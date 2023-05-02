@@ -488,6 +488,9 @@ class EnrolledDevice(models.Model):
     serial_number = models.TextField(db_index=True)
     platform = models.CharField(max_length=64, choices=Platform.choices())
     os_version = models.CharField(max_length=64, null=True)
+    os_version_extra = models.CharField(max_length=32, null=True)
+    build_version = models.CharField(max_length=32, null=True)
+    build_version_extra = models.CharField(max_length=32, null=True)
     apple_silicon = models.BooleanField(null=True)
 
     # notifications
@@ -628,15 +631,34 @@ class EnrolledDevice(models.Model):
     @property
     def comparable_os_version(self):
         try:
-            return tuple(
+            osv = [
                 i or j for i, j in zip_longest(
                   (int(i) for i in self.os_version.split(".")),
                   (0, 0, 0)
                 )
-            )
+            ]
+            osv.append(self.os_version_extra or "")
+            return tuple(osv)
         except Exception:
             logger.warning("Cannot get enrolled device %s comparable OS version", self.pk)
-            return (0, 0, 0)
+            return (0, 0, 0, "")
+
+    @property
+    def full_os_version(self):
+        items = []
+        if self.os_version:
+            items.append(self.os_version)
+        if self.os_version_extra:
+            items.append(self.os_version_extra)
+        if self.build_version_extra:
+            items.append(f"({self.build_version_extra})")
+        elif self.build_version:
+            items.append(f"({self.build_version})")
+        return " ".join(items)
+
+    @property
+    def current_build_version(self):
+        return self.build_version_extra or self.build_version or ""
 
     def get_architecture_for_display(self):
         if self.apple_silicon:
@@ -2120,24 +2142,31 @@ class SoftwareUpdate(models.Model):
     major = models.PositiveIntegerField()
     minor = models.PositiveIntegerField()
     patch = models.PositiveIntegerField()
+    extra = models.CharField(max_length=32, blank=True)
+    prerequisite_build = models.CharField(max_length=32, blank=True)
     public = models.BooleanField()
     availability = DateRangeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("platform", "major", "minor", "patch", "public", "availability"),)
+        unique_together = (
+            ("platform", "major", "minor", "patch", "extra", "prerequisite_build", "public", "availability"),
+        )
 
     @property
     def comparable_os_version(self):
-        return (self.major, self.minor, self.patch)
+        return (self.major, self.minor, self.patch, self.extra)
 
     def __str__(self):
-        return ".".join(
+        s = ".".join(
             str(i)
             for a, i in ((a, getattr(self, a)) for a in ("major", "minor", "patch"))
             if i or a != "patch"
         )
+        if self.extra:
+            s = f"{s} {self.extra}"
+        return s
 
 
 class SoftwareUpdateDeviceID(models.Model):

@@ -38,9 +38,11 @@
       <th>Platform</th>
       <td>
         {% with object.get_architecture_for_display as architecture %}
+        {% with object.full_os_version as full_os_version %}
         {{ object.get_platform_display }}
-        {% if object.os_version %} - {{ object.os_version }}{% endif %}
+        {% if full_os_version %} - {{ full_os_version }}{% endif %}
         {% if architecture %} - {{ architecture }}{% endif %}
+        {% endwith %}
         {% endwith %}
       </td>
     </tr>
