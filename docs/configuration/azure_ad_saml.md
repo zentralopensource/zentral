@@ -70,8 +70,6 @@ In the Azure AD Enterprise app, update the SAML settings in the `Basic SAML Conf
 
 You can check if everything is working using the 🕶 button in the Zentral realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
 
-To make the login button visible for SSO at the Zentral login, reload the zentral_web_app service using `sudo systemctl reload zentral_web_app.service` while connected to the Zentral instance via SSH.
-
 ## Optional: Group mappings
 
 You can map some Azure AD claim/value pairs to Zentral groups, see details [here](https://learn.microsoft.com/en-us/azure/active-directory/hybrid/how-to-connect-fed-group-claims) 
