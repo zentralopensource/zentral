@@ -1,3 +1,4 @@
+from unittest.mock import patch, Mock
 import uuid
 from django.test import SimpleTestCase
 from django.utils.crypto import get_random_string
@@ -11,7 +12,8 @@ class TestSplunkStore(SimpleTestCase):
         super().setUpClass()
         cls.store = EventStore({"store_name": get_random_string(12),
                                 "hec_url": "https://splunk.example.com:8088",
-                                "hec_token": get_random_string(12)})
+                                "hec_token": get_random_string(12),
+                                "batch_size": 2})
 
     @staticmethod
     def build_login_event():
@@ -79,3 +81,63 @@ class TestSplunkStore(SimpleTestCase):
         event = self.store._deserialize_event(serialized_event)
         self.assertEqual(event.metadata.uuid, uuid.UUID("f83b54ef-d3de-42c9-ae61-76669dcac0a9"))
         self.store.custom_host_field = None
+
+    @patch("zentral.core.stores.backends.splunk.EventStore.hec_session")
+    @patch("zentral.core.stores.backends.splunk.time.sleep")
+    def test_store_event_error_retry(self, sleep, hec_session):
+        response = Mock()
+        response.ok = False
+        response.status_code = 501
+        response.raise_for_status.side_effect = Exception("BOOM!")
+        hec_session.post.return_value = response
+        event = self.build_login_event()
+        with self.assertRaises(Exception) as cm:
+            self.store.store(event)
+        self.assertEqual(cm.exception.args[0], "BOOM!")
+        self.assertEqual(len(hec_session.post.call_args_list), 3)
+        self.assertEqual(len(sleep.call_args_list), 2)
+
+    @patch("zentral.core.stores.backends.splunk.EventStore.hec_session")
+    @patch("zentral.core.stores.backends.splunk.time.sleep")
+    def test_store_event_error_no_retry(self, sleep, hec_session):
+        response = Mock()
+        response.ok = False
+        response.status_code = 500
+        response.raise_for_status.side_effect = Exception("BOOM!")
+        hec_session.post.return_value = response
+        event = self.build_login_event()
+        with self.assertRaises(Exception) as cm:
+            self.store.store(event)
+        self.assertEqual(cm.exception.args[0], "BOOM!")
+        self.assertEqual(len(hec_session.post.call_args_list), 1)
+        self.assertEqual(len(sleep.call_args_list), 0)
+
+    @patch("zentral.core.stores.backends.splunk.EventStore.hec_session")
+    @patch("zentral.core.stores.backends.splunk.time.sleep")
+    def test_bulk_store_events_error_retry(self, sleep, hec_session):
+        response = Mock()
+        response.ok = False
+        response.status_code = 501
+        response.raise_for_status.side_effect = Exception("BOOM!")
+        hec_session.post.return_value = response
+        events = [self.build_login_event(), self.build_login_event()]
+        with self.assertRaises(Exception) as cm:
+            self.store.bulk_store(events)
+        self.assertEqual(cm.exception.args[0], "BOOM!")
+        self.assertEqual(len(hec_session.post.call_args_list), 3)
+        self.assertEqual(len(sleep.call_args_list), 2)
+
+    @patch("zentral.core.stores.backends.splunk.EventStore.hec_session")
+    @patch("zentral.core.stores.backends.splunk.time.sleep")
+    def test_bulk_store_events_error_no_retry(self, sleep, hec_session):
+        response = Mock()
+        response.ok = False
+        response.status_code = 400
+        response.raise_for_status.side_effect = Exception("BOOM!")
+        hec_session.post.return_value = response
+        events = [self.build_login_event(), self.build_login_event()]
+        with self.assertRaises(Exception) as cm:
+            self.store.bulk_store(events)
+        self.assertEqual(cm.exception.args[0], "BOOM!")
+        self.assertEqual(len(hec_session.post.call_args_list), 1)
+        self.assertEqual(len(sleep.call_args_list), 0)

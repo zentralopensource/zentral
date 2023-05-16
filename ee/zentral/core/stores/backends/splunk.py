@@ -154,10 +154,10 @@ class EventStore(BaseEventStore):
             if r.ok:
                 return
             if r.status_code > 500:
-                logger.error("HEC status code %s", r.status_code)
+                logger.error("HEC status code %s for store request", r.status_code)
                 if i + 1 < self.max_retries:
                     seconds = random.uniform(3, 4) * (i + 1)
-                    logger.error("Retry in %.1fs", seconds)
+                    logger.error("Retry HEC store request in %.1fs", seconds)
                     time.sleep(seconds)
                     continue
             r.raise_for_status()
@@ -179,10 +179,10 @@ class EventStore(BaseEventStore):
             if r.ok:
                 return event_keys
             if r.status_code > 500:
-                logger.error("Temporary server error")
+                logger.error("HEC status code %s for bulk store request", r.status_code)
                 if i + 1 < self.max_retries:
                     seconds = random.uniform(3, 4) * (i + 1)
-                    logger.error("Retry in %.1fs", seconds)
+                    logger.error("Retry HEC bulk store request in %.1fs", seconds)
                     time.sleep(seconds)
                     continue
             r.raise_for_status()
