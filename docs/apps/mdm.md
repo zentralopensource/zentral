@@ -69,3 +69,30 @@ Navigate to the Zentral *MDM > Push certificates* section, and either select an 
 **IMPORTANT** do not let the push/APNS certificates expire! Remember to renew them ahead of their expiry!
 
 To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it it important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button. In the Zentral *MDM > Push certificates* section, find the certificate and click on the *Update* button, and do not *Add* a new certificate.
+
+## HTTP API
+
+### `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`
+
+ * method: `POST`
+ * required_permission: `mdm.view_depvirtualserver`
+
+Use this endpoint to trigger a DEP virtual server devices sync.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/dep/virtual_servers/1/sync_devices/ \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd4",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd4/"
+}
+```

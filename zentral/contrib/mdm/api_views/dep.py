@@ -5,9 +5,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from zentral.contrib.mdm.models import DEPVirtualServer
 from zentral.contrib.mdm.tasks import sync_dep_virtual_server_devices_task
+from zentral.utils.drf import DjangoPermissionRequired
 
 
 class DEPVirtualServerSyncDevicesView(APIView):
+    permission_required = "mdm.view_depvirtualserver"
+    permission_classes = [DjangoPermissionRequired]
+
     def post(self, request, *args, **kwargs):
         server = get_object_or_404(DEPVirtualServer, pk=kwargs["pk"])
         result = sync_dep_virtual_server_devices_task.apply_async((server.pk,))
