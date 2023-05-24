@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
             name='Tenant',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.TextField(unique=True)),
+                ('name', models.CharField(max_length=256, unique=True)),
                 ('description', models.TextField(blank=True, null=True)),
                 ('tenant_id', models.TextField(help_text='The microsoft Azure Tenant ID')),
                 ('client_id', models.TextField(help_text='The client ID of your app registration')),

@@ -11,7 +11,7 @@ logger = logging.getLogger("zentral.contrib.intune.models")
 
 class Tenant(models.Model):
     business_unit = models.ForeignKey("inventory.BusinessUnit", on_delete=models.PROTECT)
-    name = models.TextField(unique=True)
+    name = models.CharField(max_length=256, unique=True)
     description = models.TextField(blank=True, null=True)
     # Authentication
     tenant_id = models.TextField(help_text="The microsoft Azure Tenant ID")
