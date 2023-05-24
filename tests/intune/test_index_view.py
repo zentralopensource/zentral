@@ -71,6 +71,7 @@ class IntuneViewsTestCase(TestCase):
         response = self.client.get(reverse("intune:tenants"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, tenant.name)
+        self.assertTemplateUsed(response, "intune/tenant_list.html")
 
     # Create Tenant
 
