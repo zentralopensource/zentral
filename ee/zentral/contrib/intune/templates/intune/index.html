@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li class="active">Microsoft Intune Inventory</li>
+</ol>
+
+<div class="row">
+  <div class="col-md-12">
+    <h2>Microsoft Intune Inventory</h2>
+  </div>
+  <div class="col-md-12">
+    {% if perms.intune.view_tenant %}
+    <h3>{{ tenant_count }} Tenant{{ tenant_count|pluralize }}</h3>
+    <table class="table">
+      <thead>
+        <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Business Unit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tenant in tenants %}
+        <tr>
+          <td><a href="{{ tenant.get_absolute_url }}">{{ tenant.name }}</a></td>
+          <td>{{ tenant.description }}</td>
+          <td>{{ tenant.business_unit }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

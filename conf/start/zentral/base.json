@@ -89,6 +89,8 @@
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {
       "metrics": true
-    }
+    },
+    "zentral.contrib.wsone": {},
+    "zentral.contrib.intune": {}
   }
 }
