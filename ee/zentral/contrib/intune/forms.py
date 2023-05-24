@@ -8,14 +8,8 @@ class TenantForm(forms.ModelForm):
 
     class Meta:
         model = Tenant
-        fields = (
-            "business_unit",
-            "name",
-            "description",
-            "tenant_id",
-            "client_id",
-            "client_secret",
-        )
+        fields = "__all__"
+
         widgets = {
             "client_id": forms.TextInput,
             "name": forms.TextInput,
