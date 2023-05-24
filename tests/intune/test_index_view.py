@@ -6,12 +6,14 @@ import operator
 from django.contrib.auth.models import Permission
 from django.db.models import Q
 from django.utils.crypto import get_random_string
-from accounts.models import APIToken, User
+from django.test import override_settings
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.intune.models import Tenant
 
 
+@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class IntuneViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
