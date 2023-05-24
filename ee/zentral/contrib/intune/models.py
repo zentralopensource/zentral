@@ -14,8 +14,8 @@ class Tenant(models.Model):
     name = models.CharField(max_length=256, unique=True)
     description = models.TextField(blank=True, null=True)
     # Authentication
-    tenant_id = models.TextField(help_text="The microsoft Azure Tenant ID")
-    client_id = models.TextField(help_text="The client ID of your app registration")
+    tenant_id = models.CharField(max_length=256, help_text="The microsoft Azure Tenant ID")
+    client_id = models.UUIDField(help_text="The client ID of your app registration")
     client_secret = models.TextField(help_text="The client secret of your app registration")
     # Versioning
     version = models.PositiveIntegerField(editable=False)

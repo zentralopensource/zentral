@@ -2,6 +2,7 @@
 
 from django.db import migrations, models
 import django.db.models.deletion
+import uuid
 
 
 class Migration(migrations.Migration):
@@ -19,8 +20,8 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=256, unique=True)),
                 ('description', models.TextField(blank=True, null=True)),
-                ('tenant_id', models.TextField(help_text='The microsoft Azure Tenant ID')),
-                ('client_id', models.TextField(help_text='The client ID of your app registration')),
+                ('tenant_id', models.CharField(max_length=256, help_text='The microsoft Azure Tenant ID')),
+                ('client_id', models.UUIDField(default=uuid.uuid4, help_text='The client ID of your app registration')),
                 ('client_secret', models.TextField(help_text='The client secret of your app registration')),
                 ('version', models.PositiveIntegerField(editable=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),

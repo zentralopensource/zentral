@@ -3,6 +3,7 @@ from django.test import TestCase
 
 from functools import reduce
 import operator
+import uuid
 from django.contrib.auth.models import Permission
 from django.db.models import Q
 from django.utils.crypto import get_random_string
@@ -51,7 +52,7 @@ class IntuneViewsTestCase(TestCase):
             name=get_random_string(12),
             description=get_random_string(30),
             tenant_id=get_random_string(12),
-            client_id=get_random_string(12),
+            client_id=str(uuid.uuid4()),
         )
         tenant.set_client_secret(get_random_string(12))
         tenant.save()
@@ -96,7 +97,7 @@ class IntuneViewsTestCase(TestCase):
         name = get_random_string(12)
         description = get_random_string(12)
         tenant_id = get_random_string(12)
-        client_id = get_random_string(12)
+        client_id = str(uuid.uuid4())
         client_secret = get_random_string(12)
         response = self.client.post(reverse("intune:create_tenant"),
                                     {"business_unit": self.bu.pk,
@@ -112,7 +113,7 @@ class IntuneViewsTestCase(TestCase):
         self.assertEqual(tenant.name, name)
         self.assertEqual(tenant.description, description)
         self.assertEqual(tenant.tenant_id, tenant_id)
-        self.assertEqual(tenant.client_id, client_id)
+        self.assertEqual(str(tenant.client_id), client_id)
         self.assertEqual(tenant.get_client_secret(), client_secret)
 
 
@@ -141,7 +142,7 @@ class IntuneViewsTestCase(TestCase):
         name = get_random_string(12)
         description = get_random_string(12)
         tenant_id = get_random_string(12)
-        client_id = get_random_string(12)
+        client_id = str(uuid.uuid4())
         client_secret = get_random_string(12)
         response = self.client.post(reverse("intune:update_tenant", args=(tenant.pk,)),
                                     {"business_unit": self.bu.pk,
@@ -157,7 +158,7 @@ class IntuneViewsTestCase(TestCase):
         self.assertEqual(tenant2.name, name)
         self.assertEqual(tenant2.description, description)
         self.assertEqual(tenant2.tenant_id, tenant_id)
-        self.assertEqual(tenant2.client_id, client_id)
+        self.assertEqual(str(tenant2.client_id), client_id)
         self.assertEqual(tenant2.get_client_secret(), client_secret)
 
     # Delete Tenant
