@@ -12,10 +12,10 @@ logger = logging.getLogger("zentral.contrib.intune.models")
 class Tenant(models.Model):
     business_unit = models.ForeignKey("inventory.BusinessUnit", on_delete=models.PROTECT)
     name = models.CharField(max_length=256, unique=True)
-    description = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True)
     # Authentication
-    tenant_id = models.CharField(max_length=256, help_text="The microsoft Azure Tenant ID")
-    client_id = models.UUIDField(help_text="The client ID of your app registration")
+    tenant_id = models.CharField(max_length=256, unique=True, help_text="The microsoft Azure Tenant ID")
+    client_id = models.UUIDField(unique=True, help_text="The client ID of your app registration")
     client_secret = models.TextField(help_text="The client secret of your app registration")
     # Versioning
     version = models.PositiveIntegerField(editable=False)
