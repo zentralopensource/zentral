@@ -46,6 +46,10 @@
   </tbody>
 </table>
 {% else %}
-<h4 style="text-align: center;">There are no Tenants crated</h4>
+<h4 style="text-align: center;">No Tenants found</h4>
+{% if perms.intune.add_tenant %}
+<h5 style="text-align: center;">Start using the Intune module by <a href="{% url 'intune:create_tenant' %}">creating a Tenant</a></h5>
+{% endif %}
 {% endif %}
 {% endblock %}
+
