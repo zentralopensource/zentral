@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'intune:index' %}">Microsoft Intune Inventory</a></li>
+  <li class="active">Tenant{{ tenant_count|pluralize }}</li>
+</ol>
+
+<h2>{{ tenant_count }} Microsoft Intune Inventory Tenant{{ tenant_count|pluralize }}</h2>
+
+{% if perms.intune.add_tenant %}
+<p>
+  <a href="{% url 'intune:create_tenant' %}" class="btn btn-default">Create</a>
+</p>
+{% endif %}
+
+{% if object_list %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Description</th>
+      <th>Business unit</th>
+      {% if perms.intune.change_tenant %}
+      <th></th>
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for tenant in object_list %}
+    <tr>
+      <td><a href="{{ tenant.get_absolute_url }}">{{ tenant.name }}</a></td>
+      <td>{{ tenant.description }}</td>
+      <td>{{ tenant.business_unit }}</td>
+      {% if perms.intune.change_tenant %}
+      <td>
+        <a href="{% url 'intune:update_tenant' tenant.pk %}" class="btn btn-default">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>Update
+        </a>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<h4 style="text-align: center;">No Tenants found</h4>
+{% if perms.intune.add_tenant %}
+<h5 style="text-align: center;">Start using the Intune module by <a href="{% url 'intune:create_tenant' %}">creating a Tenant</a></h5>
+{% endif %}
+{% endif %}
+{% endblock %}
+
