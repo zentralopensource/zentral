@@ -110,6 +110,7 @@ class IntuneViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "intune/tenant_detail.html")
         tenant = response.context["object"]
+        self.assertContains(response, tenant.get_client_secret())
         self.assertEqual(tenant.name, name)
         self.assertEqual(tenant.description, description)
         self.assertEqual(tenant.tenant_id, tenant_id)
