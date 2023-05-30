@@ -1,6 +1,7 @@
 -c constraints.txt
 
 asn1crypto                      # MDM, mTLS, SCEP
+azure-identity
 boto3                           # conf, monolith, events (kinesis, sns/sqs)
 celery<6
 django-celery-results==2.4.0
@@ -19,6 +20,7 @@ ipython
 jmespath                        # inventory compliance checks
 jinja2                          # events templates
 kombu<6                         # events queues
+msgraph-sdk
 pip
 prometheus_client               # publish prometheus metrics
 psycopg2
