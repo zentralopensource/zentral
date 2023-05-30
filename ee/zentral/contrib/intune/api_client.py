@@ -5,21 +5,23 @@ from asgiref.sync import async_to_sync
 from kiota_authentication_azure.azure_identity_authentication_provider import AzureIdentityAuthenticationProvider
 from azure.identity.aio import ClientSecretCredential
 from msgraph import GraphRequestAdapter, GraphServiceClient
+from msgraph.generated.me.managed_devices.managed_devices_request_builder import ManagedDevicesRequestBuilder
 from zentral.contrib.inventory.conf import windows_version_from_build
-
+import asyncio
 
 logger = logging.getLogger("zentral.contrib.intune.api_client")
 
 
 class Client:
     scopes = ['https://graph.microsoft.com/.default']
+    paginate_by = 500
 
     def __init__(self, business_unit, tenant_id, client_id, client_secret):
         self.business_unit = business_unit
         self.tenant_id = tenant_id
         self.client_id = client_id
         self.client_secret = client_secret
-        self.session = requests.Session()
+        self.loop = asyncio.get_event_loop()
         # Auth conf
         self.auth_provider = AzureIdentityAuthenticationProvider(
             ClientSecretCredential(
@@ -44,33 +46,39 @@ class Client:
         return client
 
     def iter_machine_snapshot_trees(self):
-        # TODO: Use batches for processing
-        # https://learn.microsoft.com/en-us/graph/query-parameters?tabs=http
-        results = []
+        page_number = 0
 
-        @async_to_sync
-        async def consume_data():
-            async for device in self.iter_devices():
-                results.append(device)
-        consume_data()
+        # FIXME: Handle loop properly!
+        while True:
+            results = self.loop.run_until_complete(self.get_devices(page_number))
 
-        # FIXME: get a batch of devices to avoid a big results array
-        for device in results:
-            try:
-                yield self.build_machine_snapshot_tree(device)
-            except Exception:
-                logger.exception("Device %s: could not build machine snapshot tree", device.id)
+            if not results:
+                break
+            for device in results:
+                try:
+                    yield self.build_machine_snapshot_tree(device)
+                except Exception:
+                    logger.exception("Device %s: could not build machine snapshot tree", device.id)
+            page_number += 1
 
-    async def iter_devices(self):
-        ''' TODO:
-            - Use device_batch_size to retrieve results
-            - Order by device id, and use the "top" query parameter,
-              and device id > last seen device id if possible.
-            - How to sort the call and paginate
-        '''
-        resp = await self.graph_client.device_management.managed_devices.get()
-        for managed_device in resp.value:
-            yield managed_device
+    async def get_devices(self, page_number):
+        offset = page_number * self.paginate_by
+        query_params_kwargs = {
+            "top": self.paginate_by + offset,
+            "orderby": "id",
+        }
+        if offset:
+            query_params_kwargs["skip"] = offset
+
+        query_params = ManagedDevicesRequestBuilder.ManagedDevicesRequestBuilderGetQueryParameters(
+            **query_params_kwargs
+        )
+        request_config = ManagedDevicesRequestBuilder.ManagedDevicesRequestBuilderGetRequestConfiguration(
+            query_parameters=query_params
+        )
+
+        resp = await self.graph_client.device_management.managed_devices.get(request_configuration=request_config)
+        return resp.value
 
     def build_machine_snapshot_tree(self, device):
         ''' TODO:
