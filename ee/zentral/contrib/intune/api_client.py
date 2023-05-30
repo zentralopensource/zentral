@@ -5,8 +5,7 @@ from asgiref.sync import async_to_sync
 from kiota_authentication_azure.azure_identity_authentication_provider import AzureIdentityAuthenticationProvider
 from azure.identity.aio import ClientSecretCredential
 from msgraph import GraphRequestAdapter, GraphServiceClient
-from datetime import datetime
-from zentral.contrib.inventory.conf import cleanup_windows_os_version, windows_version_from_build
+from zentral.contrib.inventory.conf import windows_version_from_build
 
 
 logger = logging.getLogger("zentral.contrib.intune.api_client")
@@ -100,10 +99,7 @@ class Client:
                 "hardware_model": device.model,
             }
         }
-        try:
-            ms_tree["last_seen"] = device.last_sync_date_time
-        except (KeyError, TypeError, ValueError):
-            logger.warning("Device %s: could not parse last seen timestamp", device.id)
+        ms_tree["last_seen"] = device.last_sync_date_time
 
         self.add_ms_tree_extra_facts(ms_tree, device)
         self.add_ms_tree_os_version(ms_tree, device)
@@ -131,14 +127,12 @@ class Client:
         compliance_status = device.compliance_state
         if isinstance(compliance_status, str):
             extra_facts["compliance_status"] = compliance_status
-        partner_reported_threat_state = self.add_ms_tree_extra_facts_partner_reported_threat_state(device)
-        if isinstance(partner_reported_threat_state, str):
-            extra_facts["partner_reported_threat_state"] = partner_reported_threat_state
+        extra_facts["partner_reported_threat_state"] = self.translate_partner_reported_threat_state(device)
         extra_facts["azure_ad_device_id"] = device.azure_a_d_device_id
         if extra_facts:
             ms_tree["extra_facts"] = extra_facts
 
-    def add_ms_tree_extra_facts_partner_reported_threat_state(self, device):
+    def translate_partner_reported_threat_state(self, device):
         match device.partner_reported_threat_state:
             case 0:
                 return "Unknown"
@@ -163,64 +157,44 @@ class Client:
         return None
 
     def add_ms_tree_os_version(self, ms_tree, device):
-
-        def apple_version_tuple_to_parse(device):
+        operating_system = device.operating_system.lower()
+        if operating_system == "windows":
+            os_build = ".".join(device.os_version.split('.')[-2:])
             try:
-                os_version_tuple = tuple(int(s) for s in device.os_version.split()[0].split('.'))
-                os_version = dict(zip(('major', 'minor', 'patch'), os_version_tuple))
-            except (TypeError, ValueError):
-                logger.warning("Device %s: could not parse OS version", device.id)
+                os_version_d = windows_version_from_build(os_build)
+            except ValueError:
+                logging.exception("Device %s: could not parse OS version", device.id)
                 return
+        elif operating_system in ("ios", "ipados", "macos", "tvos"):
             try:
-                os_build = device.os_version.split()[1].translate(str.maketrans("", "", "()"))
-                if os_build:
-                    os_version["build"] = os_build
-            except (TypeError, ValueError):
-                logger.warning("Device %s: could not parse build version", device.id)
-            return os_version_tuple, os_version
-
-        manufacturer = device.manufacturer
-        if manufacturer == "Apple":
-            os_name = "iOS"
-            os_version_tuple, os_version = apple_version_tuple_to_parse(device)
-            if "ipad" in device.model.lower() and os_version_tuple >= (13, 1):
-                os_name = "iPadOS"
-            os_version["name"] = os_name
-        elif manufacturer == "AppleOsX":
-            os_name = "macOS"
-            os_version_tuple, os_version = apple_version_tuple_to_parse(device)
-            if os_version_tuple < (10, 12):
-                os_name = "OS X"
-            os_version["name"] = os_name
-        elif manufacturer == "WinRT" or manufacturer == "Microsoft Corporation":
-            os_version = ".".join(device.os_version.split('.')[-2:])
-            os_version = windows_version_from_build(os_version)
-            os_version = cleanup_windows_os_version(os_version)
-        elif manufacturer == "Android":
-            os_version["name"] = "Android"
+                version, build = device.os_version.split()
+                build = build.strip("()")
+                os_version_tuple = tuple(int(s) for s in version.split('.'))
+                os_version_d = dict(zip(('major', 'minor', 'patch'), os_version_tuple))
+            except (ValueError, AttributeError):
+                logger.exception("Device %s: could not parse OS version", device.id)
+                return
+            os_version_d["name"] = device.operating_system
+            if build:
+                os_version_d["build"] = build
         else:
-            raise ValueError(f"Unknown platform {manufacturer}")
+            raise ValueError(f"Unknown Operating System: {operating_system}")
 
-        if os_version.get("major"):
-            ms_tree["os_version"] = os_version
+        if os_version_d.get("major"):
+            ms_tree["os_version"] = os_version_d
 
     def add_ms_tree_disk(self, ms_tree, device):
-        try:
-            device_capacity = device.total_storage_space_in_bytes
-        except KeyError:
-            logger.debug("Device %s: missing device capacity", device.id)
-        except (TypeError, ValueError):
-            logger.debug("Device %s: could not parse device capacity", device.id)
-        else:
-            if device_capacity > 0:
-                ms_tree["disks"] = [{"name": "root", "size": device_capacity}]
+        device_capacity = device.total_storage_space_in_bytes
+        if device_capacity > 0:
+            ms_tree["disks"] = [{"name": "root", "size": device_capacity}]
 
     def add_ms_tree_network_interfaces(self, ms_tree, device):
-
         network_interfaces = ms_tree.setdefault("network_interfaces", [])
-        if mac := device.ethernet_mac_address:
+        mac = device.ethernet_mac_address
+        if mac:
             network_interfaces.append({"interface": "ethernet", "mac": mac})
-        if mac := device.wi_fi_mac_address:
+        mac = device.wi_fi_mac_address
+        if mac:
             network_interfaces.append({"interface": "wifi", "mac": mac})
 
     def add_ms_tree_principal_user(self, ms_tree, device):
