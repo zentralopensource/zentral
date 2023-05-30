@@ -24,9 +24,9 @@ class Client:
         # Auth conf
         self.auth_provider = AzureIdentityAuthenticationProvider(
             ClientSecretCredential(
-                str(self.tenant_id),
+                self.tenant_id,
                 str(self.client_id),
-                str(self.client_secret),
+                self.client_secret,
             ),
             scopes=self.scopes
             )
