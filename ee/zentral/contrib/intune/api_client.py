@@ -58,7 +58,6 @@ class Client:
         # FIXME: get a batch of devices to avoid a big results array
         for device in results:
             try:
-                # TODO check last_sync_date_time
                 yield self.build_machine_snapshot_tree(device)
             except Exception:
                 logger.exception("Device %s: could not build machine snapshot tree", device.id)
@@ -66,7 +65,8 @@ class Client:
     async def iter_devices(self):
         ''' TODO:
             - Use device_batch_size to retrieve results
-            - Use last_sync_date_time to limit results
+            - Order by device id, and use the "top" query parameter,
+              and device id > last seen device id if possible.
             - How to sort the call and paginate
         '''
         resp = await self.graph_client.device_management.managed_devices.get()
@@ -75,7 +75,7 @@ class Client:
 
     def build_machine_snapshot_tree(self, device):
         ''' TODO:
-            - add to the tree apps (another API call) and profiles.
+            - add to the tree apps (another API call)
             - add groups
         '''
 
