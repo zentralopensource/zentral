@@ -80,10 +80,9 @@ class Client:
         '''
 
         device_id = device.id
-        device_uuid = device.azure_a_d_device_id
         serial_number = device.serial_number
         if not serial_number:
-            raise ValueError(f"Device {device_uuid}: no serial number")
+            raise ValueError(f"Device {device.id}: no serial number")
         ms_tree = {
             "source": self.get_source_d(),
             "reference": device_id,
@@ -102,7 +101,7 @@ class Client:
             }
         }
         try:
-            ms_tree["last_seen"] = datetime.fromisoformat(str(device.last_sync_date_time))
+            ms_tree["last_seen"] = device.last_sync_date_time
         except (KeyError, TypeError, ValueError):
             logger.warning("Device %s: could not parse last seen timestamp", device.id)
 
