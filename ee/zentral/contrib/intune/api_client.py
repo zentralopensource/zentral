@@ -5,9 +5,10 @@ from asgiref.sync import async_to_sync
 from kiota_authentication_azure.azure_identity_authentication_provider import AzureIdentityAuthenticationProvider
 from azure.identity.aio import ClientSecretCredential
 from msgraph import GraphRequestAdapter, GraphServiceClient
+from msgraph_core import GraphClientFactory
 from msgraph.generated.me.managed_devices.managed_devices_request_builder import ManagedDevicesRequestBuilder
 from zentral.contrib.inventory.conf import windows_version_from_build
-import asyncio
+import httpx
 
 logger = logging.getLogger("zentral.contrib.intune.api_client")
 
@@ -19,20 +20,22 @@ class Client:
     def __init__(self, business_unit, tenant_id, client_id, client_secret):
         self.business_unit = business_unit
         self.tenant_id = tenant_id
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.loop = asyncio.get_event_loop()
         # Auth conf
         self.auth_provider = AzureIdentityAuthenticationProvider(
             ClientSecretCredential(
-                self.tenant_id,
-                str(self.client_id),
-                self.client_secret,
+                tenant_id,
+                str(client_id),
+                client_secret,
             ),
             scopes=self.scopes
             )
-        self.request_adapter = GraphRequestAdapter(self.auth_provider)
-        self.graph_client = GraphServiceClient(self.request_adapter)
+
+    def graph_service_client_factory(self):
+        # We need to build a client with a new httpx.AsyncClient() every time we use async_to_sync
+        # to avoid the RuntimeError('Event loop is closed')
+        http_client = GraphClientFactory.create_with_default_middleware(client=httpx.AsyncClient())
+        request_adapter = GraphRequestAdapter(self.auth_provider, http_client)
+        return GraphServiceClient(request_adapter)
 
     @classmethod
     def from_tenant(cls, tenant):
@@ -47,10 +50,8 @@ class Client:
 
     def iter_machine_snapshot_trees(self):
         page_number = 0
-
-        # FIXME: Handle loop properly!
         while True:
-            results = self.loop.run_until_complete(self.get_devices(page_number))
+            results = self.get_devices(page_number)
 
             if not results:
                 break
@@ -61,10 +62,11 @@ class Client:
                     logger.exception("Device %s: could not build machine snapshot tree", device.id)
             page_number += 1
 
+    @async_to_sync
     async def get_devices(self, page_number):
         offset = page_number * self.paginate_by
         query_params_kwargs = {
-            "top": self.paginate_by + offset,
+            "top": offset + self.paginate_by,
             "orderby": "id",
         }
         if offset:
@@ -77,7 +79,8 @@ class Client:
             query_parameters=query_params
         )
 
-        resp = await self.graph_client.device_management.managed_devices.get(request_configuration=request_config)
+        client = self.graph_service_client_factory()
+        resp = await client.device_management.managed_devices.get(request_configuration=request_config)
         return resp.value
 
     def build_machine_snapshot_tree(self, device):
