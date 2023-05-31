@@ -22,7 +22,7 @@ class Command(BaseCommand):
             return
         tenant_id = kwargs.get("tenant_id")
         if not tenant_id:
-            return
+            raise CommandError("A Intune tenant_id is needed")
         try:
             tenant = Tenant.objects.get(tenant_id=tenant_id)
         except Tenant.DoesNotExist:
