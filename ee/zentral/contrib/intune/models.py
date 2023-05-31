@@ -35,6 +35,18 @@ class Tenant(models.Model):
             self.version = F("version") + 1
         super().save(*args, **kwargs)
 
+    def serialize_for_event(self):
+        return {
+            'business_unit': self.business_unit.pk,
+            'name': self.name,
+            'description': self.description,
+            'tenant_id': self.tenant_id,
+            'client_id': str(self.client_id),
+            'client_secret': self.client_secret,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at,
+        }
+
     # Secrets
 
     def set_client_secret(self, client_secret):

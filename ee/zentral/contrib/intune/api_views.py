@@ -4,13 +4,14 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from zentral.core.events.base import EventRequest
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from .models import Tenant
 from .serializers import TenantSerializer
 from .tasks import sync_inventory
 
 
-class TenantList(generics.ListAPIView):
+class TenantList(ListCreateAPIViewWithAudit):
     """
     List all Tenants
     """
@@ -19,7 +20,7 @@ class TenantList(generics.ListAPIView):
     serializer_class = TenantSerializer
 
 
-class TenantDetail(generics.RetrieveAPIView):
+class TenantDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve a Tenant
     """
