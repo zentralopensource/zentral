@@ -23,7 +23,7 @@ class Command(BaseCommand):
                 print("ID:", instance.pk, "URL:", instance.server_url)
         instance_pk = kwargs.get("instance_pk")
         if not instance_pk:
-            return
+            raise CommandError("A Workspace ONE instance_pk is needed")
         try:
             instance = Instance.objects.get(pk=instance_pk)
         except Instance.DoesNotExist:

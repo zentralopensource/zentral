@@ -14,7 +14,6 @@ logger = logging.getLogger("zentral.contrib.intune.api_client")
 
 
 class Client:
-    scopes = ['https://graph.microsoft.com/.default']
     paginate_by = 500
 
     def __init__(self, business_unit, tenant_id, client_id, client_secret):
@@ -26,9 +25,8 @@ class Client:
                 tenant_id,
                 str(client_id),
                 client_secret,
-            ),
-            scopes=self.scopes
             )
+        )
 
     def graph_service_client_factory(self):
         # We need to build a client with a new httpx.AsyncClient() every time we use async_to_sync
