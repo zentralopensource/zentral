@@ -121,7 +121,7 @@ class PreflightView(BaseSyncView):
             'santa_version': self.request_data['santa_version'],
         }
         # cleanup rule counts
-        for prefix in ("binary", "certificate", "compiler", "transitive", "teamid"):
+        for prefix in ("binary", "certificate", "compiler", "signingid", "transitive", "teamid"):
             key = f"{prefix}_rule_count"
             val = self.request_data.get(key)
             if isinstance(val, int):

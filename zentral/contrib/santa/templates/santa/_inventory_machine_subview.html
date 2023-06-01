@@ -24,6 +24,8 @@
   <dd>{{ certificate_rule_count }}</dd>
   <dt>Compiler rule{% if compiler_rule_count != "-" %}{{ compiler_rule_count|pluralize }}{% else %}s{% endif %}</dt>
   <dd>{{ compiler_rule_count }}</dd>
+  <dt>Signing ID rule{% if signingid_rule_count != "-" %}{{ signingid_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd>{{ signingid_rule_count }}</dd>
   <dt>Transitive rule{% if transitive_rule_count != "-" %}{{ transitive_rule_count|pluralize }}{% else %}s{% endif %}</dt>
   <dd>{{ transitive_rule_count }}</dd>
   <dt>Team ID rule{% if teamid_rule_count != "-" %}{{ teamid_rule_count|pluralize }}{% else %}s{% endif %}</dt>

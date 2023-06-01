@@ -281,6 +281,7 @@ class EnrolledMachine(models.Model):
     binary_rule_count = models.IntegerField(null=True)
     certificate_rule_count = models.IntegerField(null=True)
     compiler_rule_count = models.IntegerField(null=True)
+    signingid_rule_count = models.IntegerField(null=True)
     transitive_rule_count = models.IntegerField(null=True)
     teamid_rule_count = models.IntegerField(null=True)
     last_sync_ok = models.BooleanField(null=True)
@@ -312,6 +313,7 @@ class EnrolledMachine(models.Model):
         ok = True
         for target_type, attr in ((Target.BINARY, "binary_rule_count"),
                                   (Target.CERTIFICATE, "certificate_rule_count"),
+                                  (Target.SIGNING_ID, "signingid_rule_count"),
                                   (Target.TEAM_ID, "teamid_rule_count")):
             synced_count = synced_rules.get(target_type, 0)
             reported_count = getattr(self, attr) or 0
@@ -528,11 +530,13 @@ class Target(models.Model):
     BINARY = "BINARY"
     BUNDLE = "BUNDLE"
     CERTIFICATE = "CERTIFICATE"
+    SIGNING_ID = "SIGNINGID"
     TEAM_ID = "TEAMID"
     TYPE_CHOICES = (
         (BINARY, "Binary"),
         (BUNDLE, "Bundle"),
         (CERTIFICATE, "Certificate"),
+        (SIGNING_ID, "Signing ID"),
         (TEAM_ID, "Team ID"),
     )
     type = models.CharField(choices=TYPE_CHOICES, max_length=16)
@@ -545,6 +549,13 @@ class Target(models.Model):
 
     def get_absolute_url(self):
         return reverse(f"santa:{self.type.lower()}", args=(self.identifier,))
+
+    @cached_property
+    def team_id(self):
+        if self.type == self.SIGNING_ID:
+            return self.identifier.split(":")[0]
+        elif self.type == self.TEAM_ID:
+            return self.identifier
 
     @cached_property
     def files(self):
@@ -562,14 +573,16 @@ class Target(models.Model):
 
     @cached_property
     def team_ids(self):
-        if self.type == self.TEAM_ID:
-            return Target.objects.get_teamid_objects(self.identifier)
+        if self.team_id:
+            return Target.objects.get_teamid_objects(self.team_id)
         else:
             return []
 
     def serialize_for_event(self):
         d = {"type": self.type}
-        if self.type == self.TEAM_ID:
+        if self.type == self.SIGNING_ID:
+            d["signing_id"] = self.identifier
+        elif self.type == self.TEAM_ID:
             d["team_id"] = self.identifier
         else:
             d["sha256"] = self.identifier
@@ -848,7 +861,7 @@ class MachineRuleManager(models.Manager):
             version = rule.pop("version")
             if policy == MachineRule.REMOVE or not rule["custom_msg"]:
                 rule.pop("custom_msg", None)
-            if use_sha256_attr and rule["rule_type"] != Target.TEAM_ID:
+            if use_sha256_attr and rule["rule_type"] not in (Target.SIGNING_ID, Target.TEAM_ID):
                 rule["sha256"] = rule.pop("identifier")
             self.update_or_create(enrolled_machine=enrolled_machine,
                                   target=Target(pk=target_id),

@@ -183,6 +183,8 @@ class APIViewsTestCase(TestCase):
             {'Bundle Name': '1Password 7',
              'Bundle Version': '70700015',
              'Bundle Version Str': '7.7',
+             'Team ID': '2BUA8C4S2C',
+             'Signing ID': 'com.1password.1password',
              'Code-signed': 'Yes',
              'Path': '/Applications/1Password 7.app/Contents/MacOS/1Password 7',
              'Rule': 'Allowed (Unknown)',
@@ -771,6 +773,19 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {'target_identifier': ['Invalid Team ID']})
         self.assertEqual(Rule.objects.count(), 0)
 
+    def test_create_rule_signing_id_failed(self):
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": self.configuration.pk,
+            "policy": Rule.ALLOWLIST,
+            "target_type": Target.SIGNING_ID,
+            "target_identifier": get_random_string(32)
+        }
+        response = self.post_json_data(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {'target_identifier': ['Invalid Signing ID target identifier']})
+        self.assertEqual(Rule.objects.count(), 0)
+
     def test_create_rule_sha256_error(self):
         self.set_permissions("santa.add_rule")
         data = {
@@ -999,8 +1014,8 @@ class APIViewsTestCase(TestCase):
         data = {
             "configuration": configuration.pk,
             "policy": "invalid",
-            "target_type": Target.BINARY,
-            "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789')
+            "target_type": Target.SIGNING_ID,
+            "target_identifier": "platform:com.apple.curl",
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

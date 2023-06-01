@@ -164,6 +164,15 @@ def test_sha256(sha256):
     return re.match(r'^[a-f0-9]{64}\Z', sha256) is not None
 
 
+def test_signing_id_identifier(identifier):
+    if ":" not in identifier:
+        return False
+    team_id, signing_id = identifier.split(":", 1)
+    if not test_team_id(team_id) and team_id != "platform":
+        return False
+    return re.match(r'^([0-9a-zA-Z]+\.)*([0-9a-zA-Z]+)\Z', signing_id) is not None
+
+
 def test_team_id(team_id):
     return re.match(r'^[0-9A-Z]{10}\Z', team_id) is not None
 
@@ -227,7 +236,10 @@ class RuleForm(RuleFormMixin, forms.Form):
 
         # identifier
         if target_identifier:
-            if target_type == Target.TEAM_ID:
+            if target_type == Target.SIGNING_ID:
+                if not test_signing_id_identifier(target_identifier):
+                    self.add_error("target_identifier", "Invalid Signing ID target identifier")
+            elif target_type == Target.TEAM_ID:
                 target_identifier = target_identifier.upper()
                 if not test_team_id(target_identifier):
                     self.add_error("target_identifier", "Invalid Team ID")

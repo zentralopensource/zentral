@@ -54,15 +54,16 @@ class SantaAPIViewsTestCase(TestCase):
             "os_build": "20C69",
             "santa_version": "2022.1",
             "hostname": "hostname",
-            "transitive_rule_count": 0,
             "os_version": "11.1",
-            "certificate_rule_count": 0,
             "client_mode": "LOCKDOWN",
             "serial_num": serial_number,
-            "binary_rule_count": 0,
             "primary_user": "mark.torpedo@example.com",
+            "binary_rule_count": 0,
+            "certificate_rule_count": 0,
             "compiler_rule_count": 0,
-            "teamid_rule_count": 0
+            "signingid_rule_count": 0,
+            "teamid_rule_count": 0,
+            "transitive_rule_count": 0,
         }
         return data, serial_number, hardware_uuid
 
@@ -90,7 +91,13 @@ class SantaAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight(self, post_event):
         data, serial_number, hardware_uuid = self._get_preflight_data()
-        data["binary_rule_count"] = 17
+        for idx, key in enumerate(("binary_rule_count",
+                                   "certificate_rule_count",
+                                   "compiler_rule_count",
+                                   "signingid_rule_count",
+                                   "teamid_rule_count",
+                                   "transitive_rule_count")):
+            data[key] = idx + 1
         url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
 
         # MONITOR mode
@@ -117,7 +124,12 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(enrolled_machine.primary_user, data["primary_user"])
         self.assertEqual(enrolled_machine.santa_version, data["santa_version"])
         self.assertEqual(enrolled_machine.client_mode, Configuration.LOCKDOWN_MODE)
-        self.assertEqual(enrolled_machine.binary_rule_count, 17)
+        self.assertEqual(enrolled_machine.binary_rule_count, 1)
+        self.assertEqual(enrolled_machine.certificate_rule_count, 2)
+        self.assertEqual(enrolled_machine.compiler_rule_count, 3)
+        self.assertEqual(enrolled_machine.signingid_rule_count, 4)
+        self.assertEqual(enrolled_machine.teamid_rule_count, 5)
+        self.assertEqual(enrolled_machine.transitive_rule_count, 6)
 
         # LOCKDOWN mode
         Configuration.objects.update(client_mode=Configuration.LOCKDOWN_MODE)
@@ -418,7 +430,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_rule_download(self):
-        url = reverse("santa_public:ruledownload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:ruledownload",
+                      args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         # no rules
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 200)
@@ -588,7 +601,8 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_from': 1146001236,
                                'valid_until': 2054670036}]
         }
-        url = reverse("santa_public:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:eventupload",
+                      args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -648,7 +662,8 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_from': 1146001236,
                                'valid_until': 2054670036}]
         }
-        url = reverse("santa_public:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:eventupload",
+                      args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -710,7 +725,8 @@ class SantaAPIViewsTestCase(TestCase):
             target=t,
             defaults={"binary_count": event_d["file_bundle_binary_count"]}
         )
-        url = reverse("santa_public:eventupload", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:eventupload",
+                      args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -732,7 +748,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_postflight(self):
-        url = reverse("santa_public:postflight", args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
+        url = reverse("santa_public:postflight",
+                      args=(self.enrollment_secret.secret, self.enrolled_machine.hardware_uuid))
         response = self.post_as_json(url, {})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()

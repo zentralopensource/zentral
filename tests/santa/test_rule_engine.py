@@ -5,10 +5,19 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
                                           MachineRule, Rule, Target, translate_rule_policy)
+from zentral.contrib.santa.forms import test_signing_id_identifier
 
 
 def new_sha256():
     return get_random_string(length=64, allowed_chars='abcdef0123456789')
+
+
+def new_team_id():
+    return get_random_string(10, allowed_chars="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+def new_signing_id_identifier():
+    return ":".join((new_team_id(), get_random_string(10, allowed_chars="abcdefghij")))
 
 
 class SantaRuleEngineTestCase(TestCase):
@@ -34,8 +43,16 @@ class SantaRuleEngineTestCase(TestCase):
                                                                client_mode=Configuration.MONITOR_MODE,
                                                                santa_version="2022.1")
 
+    # utils
+
     def create_rule(self, target_type=Target.BINARY, policy=Rule.ALLOWLIST, configuration=None):
-        target = Target.objects.create(type=target_type, identifier=new_sha256())
+        if target_type == Target.TEAM_ID:
+            identifier = new_team_id()
+        elif target_type == Target.SIGNING_ID:
+            identifier = new_signing_id_identifier()
+        else:
+            identifier = new_sha256()
+        target = Target.objects.create(type=target_type, identifier=identifier)
         if configuration is None:
             configuration = self.configuration
         rule = Rule.objects.create(configuration=configuration, target=target, policy=policy)
@@ -85,6 +102,16 @@ class SantaRuleEngineTestCase(TestCase):
             serialized_rule["custom_msg"] = rule.custom_msg
         return target, rule, serialized_rule
 
+    # tests
+
+    def test_sining_id_identifier(self):
+        for identifier, result in (("platform:com.apple.curl", True),
+                                   ("yolo", False),
+                                   ("yolo:com.apple.curl", False),
+                                   ("EQHXZ8M8AV:com.google.Chrome", True),
+                                   ("EQHXZ8M8AV", False)):
+            self.assertEqual(test_signing_id_identifier(identifier), result)
+
     def test_no_rule_sync_ok(self):
         self.assertTrue(self.enrolled_machine.sync_ok())
         self.assertTrue(self.enrolled_machine2.sync_ok())
@@ -104,6 +131,7 @@ class SantaRuleEngineTestCase(TestCase):
                 )
         self.enrolled_machine.binary_rule_count = 3
         self.enrolled_machine.certificate_rule_count = 2
+        self.enrolled_machine.signingid_rule_count = 0
         self.enrolled_machine.teamid_rule_count = 0
         self.assertFalse(self.enrolled_machine.sync_ok())
 
@@ -124,6 +152,7 @@ class SantaRuleEngineTestCase(TestCase):
                 )
         self.enrolled_machine.binary_rule_count = 3
         self.enrolled_machine.certificate_rule_count = 2
+        self.enrolled_machine.signingid_rule_count = 0
         self.enrolled_machine.teamid_rule_count = 1
         self.assertFalse(self.enrolled_machine.sync_ok())
 
@@ -142,11 +171,15 @@ class SantaRuleEngineTestCase(TestCase):
                 )
         self.enrolled_machine.binary_rule_count = 3
         self.enrolled_machine.certificate_rule_count = 2
+        self.enrolled_machine.signingid_rule_count = 0
         self.enrolled_machine.teamid_rule_count = 1
         self.assertFalse(self.enrolled_machine.sync_ok())
 
     def test_multiple_rules_sync_ok(self):
-        for target_type, count in ((Target.BINARY, 3), (Target.CERTIFICATE, 2), (Target.TEAM_ID, 4)):
+        for target_type, count in ((Target.BINARY, 3),
+                                   (Target.CERTIFICATE, 2),
+                                   (Target.SIGNING_ID, 1),
+                                   (Target.TEAM_ID, 4)):
             for i in range(count):
                 # create rule
                 target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
@@ -160,6 +193,7 @@ class SantaRuleEngineTestCase(TestCase):
                 )
         self.enrolled_machine.binary_rule_count = 3
         self.enrolled_machine.certificate_rule_count = 2
+        self.enrolled_machine.signingid_rule_count = 1
         self.enrolled_machine.teamid_rule_count = 4
         self.assertTrue(self.enrolled_machine.sync_ok())
 

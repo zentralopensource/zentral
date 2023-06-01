@@ -12,7 +12,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .events import post_santa_rule_update_event
 from .models import Bundle, Configuration, Rule, Target, Enrollment, translate_rule_policy
-from .forms import test_sha256, test_team_id
+from .forms import test_sha256, test_signing_id_identifier, test_team_id
 
 
 logger = logging.getLogger("zentral.contrib.santa.serializers")
@@ -103,7 +103,10 @@ class RuleSerializer(serializers.ModelSerializer):
 
         # identifier
         if target_identifier:
-            if target_type is Target.TEAM_ID:
+            if target_type == Target.SIGNING_ID:
+                if not test_signing_id_identifier(target_identifier):
+                    raise serializers.ValidationError({"target_identifier": "Invalid Signing ID target identifier"})
+            elif target_type is Target.TEAM_ID:
                 target_identifier = target_identifier.upper()
                 if not test_team_id(target_identifier):
                     raise serializers.ValidationError({"target_identifier": "Invalid Team ID"})

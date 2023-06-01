@@ -91,7 +91,7 @@
     <tr>
       <td>{{ target.get_type_display }}</td>
       <td>
-        {% if perms.santa.view_target %}
+        {% if target.type != "SIGNINGID" and perms.santa.view_target %}
         <a href="{{ target.get_absolute_url }}"><code>{{ target.identifier }}</code></a>
         {% else %}
         <code>{{ target.identifier }}</code>
@@ -146,7 +146,7 @@
         </dl>
         {% endfor %}
         {% endif %}
-        {% if target.type == "TEAMID" %}
+        {% if target.type == "TEAMID" or target.type == "SIGNINGID" %}
         {% for team_id in target.team_ids %}
         <dl class="dl-horizontal">
           <dt>organization</dt>
