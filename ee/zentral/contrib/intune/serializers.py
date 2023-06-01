@@ -5,6 +5,9 @@ from .models import Tenant
 class TenantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
-        fields = ("id", "business_unit", "name", "description",
-                  "tenant_id", "client_id", "client_secret",
-                  "version", "created_at", "updated_at")
+        fields = '__all__'
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['client_secret'] = instance.get_client_secret()
+        return data
