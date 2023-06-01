@@ -102,11 +102,11 @@ class DeviceInformation(Command):
     def verify_channel_and_device(channel, enrolled_device):
         return (
             (
-                channel == Channel.Device
-                or enrolled_device.platform in (Platform.macOS.name, Platform.iPadOS.name)
+                channel == Channel.DEVICE
+                or enrolled_device.platform in (Platform.MACOS, Platform.IPADOS)
             ) and (
                 not enrolled_device.user_enrollment
-                or enrolled_device.platform in (Platform.iOS.name, Platform.macOS.name)
+                or enrolled_device.platform in (Platform.IOS, Platform.MACOS)
             )
         )
 

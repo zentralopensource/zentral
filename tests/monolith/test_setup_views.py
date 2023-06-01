@@ -18,7 +18,7 @@ from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, Enr
                                              SubManifest, SubManifestPkgInfo)
 from zentral.contrib.munki.models import ManagedInstall
 from zentral.core.events.base import AuditEvent
-from .utils import build_dummy_package
+from utils.packages import build_dummy_package
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -381,7 +381,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(pkg_info.data["name"], pkg_info_name.name)
         self.assertEqual(
             pkg_info.data["receipts"],
-            [{'installed_size': 0,
+            [{'installed_size': 12,
               'packageid': 'io.zentral.test123',
               'version': '1.0'}]
         )
@@ -458,14 +458,14 @@ class MonolithSetupViewsTestCase(TestCase):
             'category': pkg_info_category.name,
             'receipts': [{'version': '1.0',
                           'packageid': 'io.zentral.test123',
-                          'installed_size': 0}],
+                          'installed_size': 12}],
             'requires': [pkg_info_name_required.name],
             'autoremove': False,
             'update_for': [pkg_info_name_update_for.name],
             'description': 'Fomo',
             'display_name': 'Yolo',
             'uninstallable': True,
-            'installed_size': 0,
+            'installed_size': 12,
             'uninstall_method': 'removepackages',
             'zentral_monolith': {
                 'shards': {
@@ -562,7 +562,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(pkg_info.data["name"], pkg_info_name.name)
         self.assertEqual(
             pkg_info.data["receipts"],
-            [{'installed_size': 0,
+            [{'installed_size': 12,
               'packageid': 'io.zentral.{}'.format(slugify(pkg_info_name.name)),
               'version': '1.0'}]
         )

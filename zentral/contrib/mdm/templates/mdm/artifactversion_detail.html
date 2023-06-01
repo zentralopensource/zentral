@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load bootstrap base_extras inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
+  <li><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
+  <li class="active">v{{ object.version }}</li>
+</ol>
+
+<h3>Artifact version v{{ object.version }}</h3>
+
+<p>
+  {% if perms.mdm.change_artifactversion %}
+  <a class="btn btn-default" href="{% url 'mdm:update_artifact_version' artifact.pk object.pk %}">
+    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    Update scope
+  </a>
+  {% endif %}
+  {% if artifact.type == "Profile" %}
+  <a class="btn btn-default" href="{% url 'mdm:download_profile' object.pk %}">
+    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+    Download
+  </a>
+  {% endif %}
+  {% if perms.mdm.delete_artifactversion and object.can_be_deleted %}
+  <a class="btn btn-danger" href="{% url 'mdm:delete_artifact_version' artifact.pk object.pk %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </a>
+  {% endif %}
+</p>
+
+<table class="table">
+  <tbody>
+    {% if enterprise_app %}
+    {% include "mdm/_enterprise_app_detail.html" %}
+    {% endif %}
+    {% if profile %}
+    {% include "mdm/_profile_detail.html" %}
+    {% endif %}
+    {% if store_app %}
+    {% include "mdm/_store_app_detail.html" %}
+    {% endif %}
+    <tr>
+      <td colspan="2"><h4>Scope</h4></td>
+    </tr>
+    <tr>
+      <th style="width:33vw">Version</th>
+      <td>{{ object.version }}</td>
+    </tr>
+    <tr>
+      <th>Platforms</th>
+      <td>
+        {% if object.platforms %}
+        <ul class="list-unstyled">
+        {% for platform, versions in object.platforms.items %}
+        <li>{% if versions.min %}{{ versions.min }} ≤ {% endif %}{{ platform }}{% if versions.max %} < {{ versions.max }}{% endif %}</li>
+        {% endfor %}
+        </ul>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <th>Excluded tags</th>
+      <td>
+        {% for tag in object.excluded_tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+    </tr>
+    <tr>
+      <th>Default shards</th>
+      <td>{{ object.default_shard }}/{{ object.shard_modulo }}</td>
+    </tr>
+    <tr>
+      <th>Tag shards</th>
+      <td>
+        {% if object.tag_shards %}
+        <table>
+        {% for tag, shard in object.tag_shards.items %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% endfor %}
+        </table>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    </tr>
+  </tbody>
+</table>
+<dl class="dl-horizontal">
+  <dt class="small text-muted">Created at</dt>
+  <dd class="small text-muted">{{ object.created_at|date:'r' }}</dd>
+  <dt class="small text-muted">Updated at</dt>
+  <dd class="small text-muted">{{ object.updated_at|date:'r' }}</dd>
+</dl>
+{% endblock %}

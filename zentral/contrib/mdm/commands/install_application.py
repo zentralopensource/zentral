@@ -1,5 +1,5 @@
 import logging
-from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform, TargetArtifactStatus
+from zentral.contrib.mdm.models import Artifact, Channel, Platform, TargetArtifact
 from zentral.contrib.mdm.payloads import substitute_variables
 from .base import register_command, Command
 from .managed_application_list import ManagedApplicationList
@@ -10,17 +10,17 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.install_application")
 
 class InstallApplication(Command):
     request_type = "InstallApplication"
-    artifact_operation = ArtifactOperation.Installation
+    artifact_operation = Artifact.Operation.INSTALLATION
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
         return (
             (
-                channel == Channel.Device
-                or enrolled_device.platform == Platform.macOS.name
+                channel == Channel.DEVICE
+                or enrolled_device.platform == Platform.MACOS
             ) and (
                 not enrolled_device.user_enrollment
-                or enrolled_device.platform in (Platform.iOS.name, Platform.macOS.name)
+                or enrolled_device.platform in (Platform.IOS, Platform.MACOS)
             )
         )
 
@@ -57,30 +57,23 @@ class InstallApplication(Command):
         if not identifier:
             identifier = self.artifact_version.store_app.location_asset.asset.bundle_id
         if identifier:
-            DeviceArtifact.objects.update_or_create(
-                enrolled_device=self.enrolled_device,
-                artifact_version=self.artifact_version,
-                defaults={"status": TargetArtifactStatus.AwaitingConfirmation.name}
+            self.target.update_target_artifact(
+                self.artifact_version,
+                TargetArtifact.Status.AWAITING_CONFIRMATION
             )
             # queue a managed application list command
             first_delay_seconds = 15  # TODO hardcoded
-            ManagedApplicationList.create_for_device(
-                self.enrolled_device,
+            ManagedApplicationList.create_for_target(
+                self.target,
                 self.artifact_version,
                 kwargs={"identifiers": [identifier]},  # TODO version will not be checked!
                 queue=True, delay=first_delay_seconds
             )
         else:
-            # cleanup
-            (DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device,
-                                           artifact_version__artifact=self.artifact)
-                                   .exclude(artifact_version=self.artifact_version)
-                                   .delete())
-            # update or create new record
-            DeviceArtifact.objects.update_or_create(
-                enrolled_device=self.enrolled_device,
-                artifact_version=self.artifact_version,
-                defaults={"status": TargetArtifactStatus.Acknowledged.name}
+            self.target.update_target_artifact(
+                self.artifact_version,
+                TargetArtifact.Status.ACKNOWLEDGED,
+                allow_reinstall=True,
             )
 
 

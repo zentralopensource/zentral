@@ -51,6 +51,15 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
             enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
         )
 
+    # rewrap secret
+
+    def test_push_certificate_rewrap_secret(self):
+        push_certificate = force_push_certificate()
+        private_key = push_certificate.get_private_key()
+        self.assertIsNotNone(private_key)
+        push_certificate.rewrap_secrets()
+        self.assertEqual(push_certificate.get_private_key(), private_key)
+
     # add push certificate
 
     def test_add_push_certificate_redirect(self):

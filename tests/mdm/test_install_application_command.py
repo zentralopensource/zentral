@@ -5,14 +5,15 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from unittest.mock import patch
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands import InstallApplication, ManagedApplicationList
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.scheduling import _install_artifacts
-from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion,
+from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Asset, Blueprint, BlueprintArtifact, DeviceArtifact, DeviceCommand, Channel,
                                         Location, LocationAsset,
                                         Platform, RequestStatus, StoreApp,
-                                        TargetArtifactStatus)
+                                        TargetArtifact)
 from .utils import force_dep_enrollment_session
 
 
@@ -35,29 +36,30 @@ class InstallApplicationCommandTestCase(TestCase):
         cls.enrolled_device.save()
         cls.artifact = Artifact.objects.create(
             name=get_random_string(32),
-            type=ArtifactType.StoreApp.name,
-            channel=Channel.Device.name,
-            platforms=[Platform.macOS.name],
+            type=Artifact.Type.STORE_APP,
+            channel=Channel.DEVICE,
+            platforms=[Platform.MACOS],
+            auto_update=True,
         )
         cls.artifact_version0 = ArtifactVersion.objects.create(
             artifact=cls.artifact,
-            version=0
+            version=0,
+            macos=True,
         )
         DeviceArtifact.objects.create(
             enrolled_device=cls.enrolled_device,
             artifact_version=cls.artifact_version0,
-            status=TargetArtifactStatus.Installed.name
+            status=TargetArtifact.Status.INSTALLED,
         )
-        BlueprintArtifact.objects.create(
+        BlueprintArtifact.objects.get_or_create(
             blueprint=cls.blueprint,
             artifact=cls.artifact,
-            install_before_setup_assistant=True,
-            auto_update=True,
-            priority=100
+            defaults={"macos": True},
         )
         cls.artifact_version = ArtifactVersion.objects.create(
             artifact=cls.artifact,
-            version=1
+            version=1,
+            macos=True,
         )
         cls.asset = Asset.objects.create(
             adam_id="1234567890",
@@ -65,7 +67,7 @@ class InstallApplicationCommandTestCase(TestCase):
             product_type=Asset.ProductType.APP,
             device_assignable=True,
             revocable=True,
-            supported_platforms=[Platform.macOS.name]
+            supported_platforms=[Platform.MACOS]
         )
         location = Location(
             server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
@@ -102,25 +104,26 @@ class InstallApplicationCommandTestCase(TestCase):
             remove_on_unenroll=True,
             prevent_backup=True,
         )
+        update_blueprint_serialized_artifacts(cls.blueprint)
 
     # verify_channel_and_device
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.Device, Platform.iOS, False, True),
-            (Channel.Device, Platform.iPadOS, False, True),
-            (Channel.Device, Platform.macOS, False, True),
-            (Channel.Device, Platform.tvOS, False, True),
-            (Channel.User, Platform.iOS, False, False),
-            (Channel.User, Platform.iPadOS, False, False),
-            (Channel.User, Platform.macOS, False, True),
-            (Channel.User, Platform.tvOS, False, False),
-            (Channel.Device, Platform.iOS, True, True),
-            (Channel.Device, Platform.iPadOS, True, False),
-            (Channel.Device, Platform.macOS, True, True),
-            (Channel.Device, Platform.tvOS, True, False),
+            (Channel.DEVICE, Platform.IOS, False, True),
+            (Channel.DEVICE, Platform.IPADOS, False, True),
+            (Channel.DEVICE, Platform.MACOS, False, True),
+            (Channel.DEVICE, Platform.TVOS, False, True),
+            (Channel.USER, Platform.IOS, False, False),
+            (Channel.USER, Platform.IPADOS, False, False),
+            (Channel.USER, Platform.MACOS, False, True),
+            (Channel.USER, Platform.TVOS, False, False),
+            (Channel.DEVICE, Platform.IOS, True, True),
+            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.MACOS, True, True),
+            (Channel.DEVICE, Platform.TVOS, True, False),
         ):
-            self.enrolled_device.platform = platform.name
+            self.enrolled_device.platform = platform
             self.enrolled_device.user_enrollment = user_enrollment
             self.assertEqual(
                 result,
@@ -222,7 +225,7 @@ class InstallApplicationCommandTestCase(TestCase):
         da0, da1 = list(qs)
         self.assertEqual(da0.artifact_version, self.artifact_version0)
         self.assertEqual(da1.artifact_version, self.artifact_version)
-        self.assertEqual(da1.status, TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertEqual(da1.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
         qs = DeviceCommand.objects.filter(
             enrolled_device=self.enrolled_device,
             time__isnull=True
@@ -253,7 +256,7 @@ class InstallApplicationCommandTestCase(TestCase):
         da0, da1 = list(qs)
         self.assertEqual(da0.artifact_version, self.artifact_version0)
         self.assertEqual(da1.artifact_version, self.artifact_version)
-        self.assertEqual(da1.status, TargetArtifactStatus.AwaitingConfirmation.name)
+        self.assertEqual(da1.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
         qs = DeviceCommand.objects.filter(
             enrolled_device=self.enrolled_device,
             time__isnull=True
@@ -282,7 +285,7 @@ class InstallApplicationCommandTestCase(TestCase):
         self.assertEqual(qs.count(), 1)
         da = qs.first()
         self.assertEqual(da.artifact_version, self.artifact_version)
-        self.assertEqual(da.status, TargetArtifactStatus.Acknowledged.name)
+        self.assertEqual(da.status, TargetArtifact.Status.ACKNOWLEDGED)
         self.assertEqual(
             DeviceCommand.objects.filter(
                 enrolled_device=self.enrolled_device,
@@ -297,10 +300,9 @@ class InstallApplicationCommandTestCase(TestCase):
     def test_install_artifacts_noop(self, ensure_enrolled_device_location_asset_association):
         ensure_enrolled_device_location_asset_association.return_value = False
         self.assertIsNone(_install_artifacts(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None
+            RequestStatus.IDLE,
         ))
         ensure_enrolled_device_location_asset_association.assert_called_once_with(self.enrolled_device,
                                                                                   self.location_asset)
@@ -309,10 +311,9 @@ class InstallApplicationCommandTestCase(TestCase):
     def test_install_artifacts(self, ensure_enrolled_device_location_asset_association):
         ensure_enrolled_device_location_asset_association.return_value = True
         cmd = _install_artifacts(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, InstallApplication)
         self.assertEqual(cmd.artifact_version, self.artifact_version)

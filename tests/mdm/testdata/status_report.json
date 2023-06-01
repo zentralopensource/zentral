@@ -1,0 +1,101 @@
+{
+  "StatusItems": {
+    "management": {
+      "declarations": {
+        "activations": [
+          {
+            "active": true,
+            "identifier": "zentral.blueprint.1.activation",
+            "valid": "valid",
+            "server-token": "1e191dd7-9231-4e21-a565-5782997e0a8a"
+          }
+        ],
+        "configurations": [
+          {
+            "active": true,
+            "identifier": "zentral.blueprint.1.management-status-subscriptions",
+            "valid": "valid",
+            "server-token": "2"
+          },
+          {
+            "active": true,
+            "identifier": "zentral.legacy-profile.10e26c4a-600b-400e-a922-f07c24e453fe",
+            "valid": "valid",
+            "server-token": "709fd1a7-391c-40f7-b164-0d038438f2e7"
+          }
+        ],
+        "assets": [],
+        "management": []
+      },
+      "client-capabilities": {
+        "supported-versions": [
+          "1.0.0"
+        ],
+        "supported-payloads": {
+          "declarations": {
+            "activations": [
+              "com.apple.activation.simple"
+            ],
+            "assets": [],
+            "configurations": [
+              "com.apple.configuration.legacy",
+              "com.apple.configuration.legacy.interactive",
+              "com.apple.configuration.management.status-subscriptions",
+              "com.apple.configuration.management.test",
+              "com.apple.configuration.passcode.settings"
+            ],
+            "management": [
+              "com.apple.management.organization-info",
+              "com.apple.management.properties",
+              "com.apple.management.server-capabilities"
+            ]
+          },
+          "status-items": [
+            "device.identifier.serial-number",
+            "device.identifier.udid",
+            "device.model.family",
+            "device.model.identifier",
+            "device.model.marketing-name",
+            "device.operating-system.build-version",
+            "device.operating-system.family",
+            "device.operating-system.marketing-name",
+            "device.operating-system.supplemental.build-version",
+            "device.operating-system.supplemental.extra-version",
+            "device.operating-system.version",
+            "management.client-capabilities",
+            "management.declarations",
+            "test.array-value",
+            "test.boolean-value",
+            "test.dictionary-value",
+            "test.error-value",
+            "test.integer-value",
+            "test.real-value",
+            "test.string-value"
+          ]
+        },
+        "supported-features": {}
+      }
+    },
+    "device": {
+      "model": {
+        "identifier": "Macmini9,1",
+        "family": "Mac",
+        "marketing-name": "Mac mini (M1, 2020)"
+      },
+      "identifier": {
+        "serial-number": "000000000000",
+        "udid": "00000000-0000000000000000"
+      },
+      "operating-system": {
+        "marketing-name": "macOS 13.3.1",
+        "family": "macOS",
+        "build-version": "22E261",
+        "supplemental": {
+          "extra-version": "(a)"
+        },
+        "version": "13.3.1"
+      }
+    }
+  },
+  "Errors": []
+}

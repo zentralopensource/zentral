@@ -13,12 +13,13 @@ from urllib.parse import urljoin
 from base.utils import deployment_info
 from zentral.conf import settings
 from zentral.core.events.base import EventMetadata
+from .artifacts import Target
 from .commands.install_application import InstallApplication
 from .events import (AssetCreatedEvent, AssetUpdatedEvent,
                      DeviceAssignmentCreatedEvent, DeviceAssignmentDeletedEvent,
                      LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
 from .incidents import MDMAssetAvailabilityIncident
-from .models import (Asset, ArtifactType, ArtifactVersion, DeviceAssignment,
+from .models import (Asset, Artifact, DeviceAssignment,
                      EnrolledDeviceLocationAssetAssociation,
                      Location, LocationAsset)
 
@@ -373,16 +374,11 @@ def queue_install_application_command_if_necessary(location, serial_number, adam
             logger.error("enrolled device %s asset %s/%s/%s: no awaiting association found",
                          serial_number, location.name, adam_id, pricing_param)
         else:
-            enrolled_device = edlaa.enrolled_device
+            target = Target(edlaa.enrolled_device)
             # find the latest artifact version to install for this asset
-            for artifact_version in ArtifactVersion.objects.next_to_install(enrolled_device, fetch_all=True):
-                if (
-                    artifact_version.artifact.type == ArtifactType.StoreApp.name
-                    and artifact_version.store_app.location_asset == edlaa.location_asset
-                ):
-                    InstallApplication.create_for_device(
-                        enrolled_device, artifact_version, queue=True
-                    )
+            for artifact_version in target.all_to_install(included_types=(Artifact.Type.STORE_APP,)):
+                if artifact_version.store_app.location_asset == edlaa.location_asset:
+                    InstallApplication.create_for_target(target, artifact_version, queue=True)
                     break
             else:
                 logger.error("enrolled device %s asset %s/%s/%s: no artifact version to install found",

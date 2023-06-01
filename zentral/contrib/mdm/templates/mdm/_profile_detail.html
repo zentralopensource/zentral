@@ -1,0 +1,40 @@
+<tr>
+  <th colspan="2"><h4>Profile</h4></td>
+</tr>
+<tr>
+  <th>Payload identifier</th>
+  <td><code>{{ profile.payload_identifier }}</code></th>
+</tr>
+<tr>
+  <th>Payload description</th>
+  <td>{{ profile.get_payload_description|default:"-" }}</td>
+</tr>
+<tr>
+  <th>Content</th>
+  <td>
+    {% if profile.payloads %}
+    <table class="table table-condensed">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Display name</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for payload_type, payload_display_name in profile.payloads %}
+        <tr>
+          <td>{{ payload_type }}</td>
+          <td>{{ payload_display_name }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    -
+    {% endif %}
+  </td>
+</tr>
+<tr>
+  <th>Installed payload identifier</th>
+  <td><code>{{ profile.installed_payload_identifier }}</code></th>
+</tr>

@@ -70,6 +70,15 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
             enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
         )
 
+    # rewrap challenge
+
+    def test_rewrap_secrets(self):
+        scep_config = self._force_scep_config()
+        challenge_kwargs = scep_config.get_challenge_kwargs()
+        self.assertIsNotNone(challenge_kwargs)
+        scep_config.rewrap_secrets()
+        self.assertEqual(scep_config.get_challenge_kwargs(), challenge_kwargs)
+
     # create SCEP config
 
     def test_create_scep_config_redirect(self):

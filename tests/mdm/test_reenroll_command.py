@@ -5,6 +5,7 @@ import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import Reenroll
 from zentral.contrib.mdm.commands.scheduling import _reenroll
 from zentral.contrib.mdm.models import (
@@ -41,24 +42,24 @@ class ReenrollCommandTestCase(TestCase):
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.Device, Platform.iOS, False, True),
-            (Channel.Device, Platform.iPadOS, False, True),
-            (Channel.Device, Platform.macOS, False, True),
-            (Channel.Device, Platform.tvOS, False, True),
-            (Channel.User, Platform.iOS, False, False),
-            (Channel.User, Platform.iPadOS, False, False),
-            (Channel.User, Platform.macOS, False, False),
-            (Channel.User, Platform.tvOS, False, False),
-            (Channel.Device, Platform.iOS, True, True),
-            (Channel.Device, Platform.iPadOS, True, True),
-            (Channel.Device, Platform.macOS, True, True),
-            (Channel.Device, Platform.tvOS, True, True),
-            (Channel.User, Platform.iOS, True, False),
-            (Channel.User, Platform.iPadOS, True, False),
-            (Channel.User, Platform.macOS, True, False),
-            (Channel.User, Platform.tvOS, True, False),
+            (Channel.DEVICE, Platform.IOS, False, True),
+            (Channel.DEVICE, Platform.IPADOS, False, True),
+            (Channel.DEVICE, Platform.MACOS, False, True),
+            (Channel.DEVICE, Platform.TVOS, False, True),
+            (Channel.USER, Platform.IOS, False, False),
+            (Channel.USER, Platform.IPADOS, False, False),
+            (Channel.USER, Platform.MACOS, False, False),
+            (Channel.USER, Platform.TVOS, False, False),
+            (Channel.DEVICE, Platform.IOS, True, True),
+            (Channel.DEVICE, Platform.IPADOS, True, True),
+            (Channel.DEVICE, Platform.MACOS, True, True),
+            (Channel.DEVICE, Platform.TVOS, True, True),
+            (Channel.USER, Platform.IOS, True, False),
+            (Channel.USER, Platform.IPADOS, True, False),
+            (Channel.USER, Platform.MACOS, True, False),
+            (Channel.USER, Platform.TVOS, True, False),
         ):
-            self.enrolled_device.platform = platform.name
+            self.enrolled_device.platform = platform
             self.enrolled_device.user_enrollment = user_enrollment
             self.assertEqual(
                 result,
@@ -113,33 +114,27 @@ class ReenrollCommandTestCase(TestCase):
     def test_reenroll_user_channel_noop(self):
         self.assertIsNone(
             _reenroll(
-                Channel.User,
-                RequestStatus.Idle,
+                Target(self.enrolled_device, self.enrolled_user),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user,
+                RequestStatus.IDLE,
             )
         )
 
     def test_reenroll_device_channel_notnow_noop(self):
         self.assertIsNone(
             _reenroll(
-                Channel.Device,
-                RequestStatus.NotNow,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user,
+                RequestStatus.NOT_NOW,
             )
         )
 
     def test_reenroll_device_channel_no_cert_not_valid_after(self):
         self.enrolled_device.cert_not_valid_after = None
         command = _reenroll(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, Reenroll)
         self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
@@ -157,11 +152,9 @@ class ReenrollCommandTestCase(TestCase):
         )
         self.assertIsNone(
             _reenroll(
-                Channel.Device,
-                RequestStatus.Idle,
+                Target(self.enrolled_device),
+                RequestStatus.IDLE,
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user,
             )
         )
 
@@ -169,11 +162,9 @@ class ReenrollCommandTestCase(TestCase):
         self.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=10)
         self.enrolled_device.save()
         command = _reenroll(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, Reenroll)
         self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
@@ -192,11 +183,9 @@ class ReenrollCommandTestCase(TestCase):
         )
         self.assertIsNone(
             _reenroll(
-                Channel.Device,
-                RequestStatus.Idle,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user,
+                RequestStatus.IDLE,
             )
         )
 
@@ -210,11 +199,9 @@ class ReenrollCommandTestCase(TestCase):
             created_at=datetime.utcnow() - timedelta(hours=8)
         )
         command = _reenroll(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, Reenroll)
         self.assertIsInstance(command.reenrollment_session, ReEnrollmentSession)
@@ -230,10 +217,8 @@ class ReenrollCommandTestCase(TestCase):
         self.enrolled_device.save()
         self.assertIsNone(
             _reenroll(
-                Channel.Device,
-                RequestStatus.Idle,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user,
+                RequestStatus.IDLE,
             )
         )

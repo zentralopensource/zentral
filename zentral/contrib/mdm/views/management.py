@@ -3,23 +3,20 @@ import logging
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
-from django.core.files.uploadhandler import TemporaryFileUploadHandler
 from django.db import transaction
 from django.db.models import Count, Max
 from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.utils import timezone
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from realms.models import RealmUser
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.mdm.commands.base import load_command, registered_commands
-from zentral.contrib.mdm.declarations import update_blueprint_activation, update_blueprint_declaration_items
+from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
-from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
+from zentral.contrib.mdm.forms import (ArtifactVersionForm,
+                                       AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
                                        CreateDEPEnrollmentForm, UpdateDEPEnrollmentForm,
                                        CreateAssetArtifactForm,
                                        EnrolledDeviceSearchForm,
@@ -27,8 +24,10 @@ from zentral.contrib.mdm.forms import (AssignDEPDeviceEnrollmentForm, BlueprintA
                                        SCEPConfigForm,
                                        UpdateArtifactForm,
                                        UserEnrollmentForm, UserEnrollmentEnrollForm,
+                                       UpgradeEnterpriseAppForm, UpgradeProfileForm, UpgradeStoreAppForm,
                                        UploadEnterpriseAppForm, UploadProfileForm)
-from zentral.contrib.mdm.models import (Artifact, ArtifactType, Asset, Blueprint, BlueprintArtifact,
+from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
+                                        Asset, Blueprint, BlueprintArtifact,
                                         Channel,
                                         DEPDevice, DEPEnrollment,
                                         DeviceCommand, UserCommand,
@@ -370,7 +369,7 @@ class OTAEnrollmentEnrollView(View):
             pk=kwargs["pk"],
             realm__isnull=False
         )
-        if not ota_enrollment.enrollment_secret.is_valid():
+        if not ota_enrollment.enrollment_secret.is_valid()[0]:
             # should not happen
             raise SuspiciousOperation
         # check the auth
@@ -573,52 +572,26 @@ class ArtifactListView(PermissionRequiredMixin, ListView):
     model = Artifact
 
     def get_queryset(self):
-        return super().get_queryset().filter(trashed_at__isnull=True).annotate(Count("blueprintartifact"))
+        return super().get_queryset().annotate(Count("blueprintartifact")).order_by("name")
 
 
 class BaseUploadArtifactView(PermissionRequiredMixin, FormView):
     permission_required = "mdm.add_artifact"
-    form_class = None
-    template_name = None
 
     def form_valid(self, form):
-        self.artifact, operation = form.save()
-        if operation:
-            messages.info(self.request, f"Artifact {operation}")
-        else:
-            messages.warning(self.request, "Artifact already exists")
+        self.artifact = form.save()
+        messages.info(self.request, "Artifact created")
         return redirect(self.artifact)
 
 
-@method_decorator(csrf_protect, 'post')
 class UploadEnterpriseAppView(BaseUploadArtifactView):
     form_class = UploadEnterpriseAppForm
     template_name = "mdm/enterpriseapp_form.html"
-
-    @method_decorator(csrf_exempt)
-    def dispatch(self, request, *args, **kwargs):
-        # for temporary file, for xar.
-        # see https://docs.djangoproject.com/en/3.1/topics/http/file-uploads/#modifying-upload-handlers-on-the-fly
-        request.upload_handlers = [TemporaryFileUploadHandler(request)]
-        return super().dispatch(request, *args, **kwargs)
 
 
 class UploadProfileView(BaseUploadArtifactView):
     form_class = UploadProfileForm
     template_name = "mdm/profile_form.html"
-
-
-class DownloadProfileView(PermissionRequiredMixin, View):
-    permission_required = "mdm.view_artifact"
-
-    def get(self, request, **kwargs):
-        profile = get_object_or_404(Profile, artifact_version__pk=kwargs["artifact_version_pk"])
-        return FileResponse(
-            io.BytesIO(profile.source),
-            content_type="application/x-plist",
-            as_attachment=True,
-            filename=profile.filename or f"profile_{profile.artifact_version.pk}.mobileconfig"
-        )
 
 
 class ArtifactView(PermissionRequiredMixin, DetailView):
@@ -627,20 +600,32 @@ class ArtifactView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        model_class = None
-        if self.object.type == ArtifactType.Profile.name:
-            model_class = Profile
-        elif self.object.type == ArtifactType.EnterpriseApp.name:
+        model_class = upgrade_view = None
+        select_related_extra = ()
+        if self.object.is_enterprise_app:
             model_class = EnterpriseApp
-        elif self.object.type == ArtifactType.StoreApp.name:
+            upgrade_view = "upgrade_enterprise_app"
+        elif self.object.is_profile:
+            model_class = Profile
+            upgrade_view = "upgrade_profile"
+        elif self.object.is_store_app:
             model_class = StoreApp
+            upgrade_view = "upgrade_store_app"
+            select_related_extra = ("location_asset__asset", "location_asset__location")
         if model_class:
-            ctx[f"{model_class._meta.model_name}_list"] = qs = (
-                model_class.objects.select_related("artifact_version")
+            ctx[f"{model_class._meta.model_name}_list"] = (
+                model_class.objects.select_related("artifact_version", *select_related_extra)
                                    .filter(artifact_version__artifact=self.object)
                                    .order_by("-artifact_version__version")
             )
-            ctx["versions_count"] = qs.count()
+        if upgrade_view and self.request.user.has_perm("mdm.add_artifactversion"):
+            ctx["upgrade_link"] = reverse(f"mdm:{upgrade_view}", args=(self.object.pk,))
+        ctx["versions"] = (
+            ArtifactVersion.objects.select_related("artifact", "enterprise_app", "profile", "store_app")
+                                   .filter(artifact=self.object)
+                                   .order_by("-version")
+        )
+        ctx["versions_count"] = ctx["versions"].count()
         ctx["blueprint_artifacts"] = (self.object.blueprintartifact_set.select_related("blueprint")
                                                                        .order_by("blueprint__name"))
         ctx["blueprint_artifacts_count"] = ctx["blueprint_artifacts"].count()
@@ -652,23 +637,17 @@ class UpdateArtifactView(PermissionRequiredMixin, UpdateView):
     model = Artifact
     form_class = UpdateArtifactForm
 
-    def get_queryset(self):
-        return super().get_queryset().exclude(type=ArtifactType.EnterpriseApp.name)
 
-
-class TrashArtifactView(PermissionRequiredMixin, DeleteView):
+class DeleteArtifactView(PermissionRequiredMixin, DeleteView):
     permission_required = "mdm.delete_artifact"
     model = Artifact
+    success_url = reverse_lazy("mdm:artifacts")
 
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        try:
-            self.object.delete()
-        except Exception:
-            # TODO verify
-            self.object.trashed_at = timezone.now()
-            self.object.save()
-        return redirect("mdm:artifacts")
+    def get_queryset(self):
+        return Artifact.objects.can_be_deleted()
+
+
+# Blueprint artifacts
 
 
 class CreateBlueprintArtifactView(PermissionRequiredMixin, CreateView):
@@ -693,8 +672,7 @@ class CreateBlueprintArtifactView(PermissionRequiredMixin, CreateView):
     def form_valid(self, form):
         response = super().form_valid(form)
         blueprint = self.object.blueprint
-        update_blueprint_activation(blueprint, commit=False)
-        update_blueprint_declaration_items(blueprint, commit=True)
+        update_blueprint_serialized_artifacts(blueprint)
         return response
 
 
@@ -741,9 +719,176 @@ class DeleteBlueprintArtifactView(PermissionRequiredMixin, DeleteView):
         self.object = self.get_object()
         blueprint = self.object.blueprint
         self.object.delete()
-        update_blueprint_activation(blueprint, commit=False)
-        update_blueprint_declaration_items(blueprint, commit=True)
+        update_blueprint_serialized_artifacts(blueprint)
         return redirect(self.artifact)
+
+
+# Artifact versions
+
+
+class ArtifactVersionView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_artifactversion"
+    model = ArtifactVersion
+
+    def dispatch(self, request, *args, **kwargs):
+        self.artifact = get_object_or_404(Artifact, pk=kwargs["artifact_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return super().get_queryset().filter(artifact=self.artifact)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["artifact"] = self.artifact
+        if self.artifact.is_enterprise_app:
+            ctx["enterprise_app"] = self.object.enterprise_app
+        elif self.artifact.is_profile:
+            ctx["profile"] = self.object.profile
+        elif self.artifact.is_store_app:
+            ctx["store_app"] = self.object.store_app
+        return ctx
+
+
+class UpdateArtifactVersionView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_artifactversion"
+    model = ArtifactVersion
+    form_class = ArtifactVersionForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.artifact = get_object_or_404(Artifact, pk=kwargs["artifact_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return super().get_queryset().filter(artifact=self.artifact)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["artifact"] = self.artifact
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["artifact"] = self.artifact
+        return ctx
+
+
+class BaseUpgradeArtifactVersionView(PermissionRequiredMixin, TemplateView):
+    permission_required = "mdm.add_artifactversion"
+    template_name = "mdm/artifact_upgrade_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.artifact = get_object_or_404(Artifact, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_latest_artifact_version(self):
+        return self.artifact.artifactversion_set.select_related(self.model).order_by("-version").first()
+
+    def get_latest_object(self):
+        latest_artifact_version = self.get_latest_artifact_version()
+        if latest_artifact_version:
+            return getattr(latest_artifact_version, self.model)
+
+    def get_form_kwargs(self):
+        kwargs = {}
+        if self.request.method == "POST":
+            kwargs.update({
+                "data": self.request.POST,
+                "files": self.request.FILES
+            })
+        return kwargs
+
+    def get_object_form(self):
+        return self.form(
+            artifact=self.artifact,
+            instance=self.get_latest_object(),
+            **self.get_form_kwargs()
+        )
+
+    def get_version_form(self):
+        return ArtifactVersionForm(
+            artifact=self.artifact,
+            instance=self.get_latest_artifact_version(),
+            **self.get_form_kwargs()
+        )
+
+    def forms_valid(self, object_form, version_form):
+        artifact_version = version_form.save(force_insert=True)
+        object_form.save(artifact_version=artifact_version)
+        for blueprint in self.artifact.blueprints():
+            update_blueprint_serialized_artifacts(blueprint)
+        return HttpResponseRedirect(artifact_version.get_absolute_url())
+
+    def forms_invalid(self, object_form, version_form):
+        return self.render_to_response(
+            self.get_context_data(
+                object_form=object_form,
+                version_form=version_form
+            )
+        )
+
+    def get_context_data(self, **kwargs):
+        kwargs["model_display"] = self.model_display
+        kwargs["artifact"] = self.artifact
+        kwargs["latest_object"] = self.get_latest_object()
+        if "object_form" not in kwargs:
+            kwargs["object_form"] = self.get_object_form()
+        if "version_form" not in kwargs:
+            kwargs["version_form"] = self.get_version_form()
+        return super().get_context_data(**kwargs)
+
+    def post(self, request, *args, **kwargs):
+        object_form = self.get_object_form()
+        version_form = self.get_version_form()
+        if object_form.is_valid() and version_form.is_valid():
+            return self.forms_valid(object_form, version_form)
+        else:
+            return self.forms_invalid(object_form, version_form)
+
+
+class UpgradeEnterpriseAppView(BaseUpgradeArtifactVersionView):
+    form = UpgradeEnterpriseAppForm
+    model = "enterprise_app"
+    model_display = "Enterprise app"
+
+
+class UpgradeProfileView(BaseUpgradeArtifactVersionView):
+    form = UpgradeProfileForm
+    model = "profile"
+    model_display = "Profile"
+
+
+class UpgradeStoreAppView(BaseUpgradeArtifactVersionView):
+    form = UpgradeStoreAppForm
+    model = "store_app"
+    model_display = "Store app"
+
+
+class DeleteArtifactVersionView(PermissionRequiredMixin, DeleteView):
+    permission_required = "mdm.delete_artifactversion"
+    model = ArtifactVersion
+
+    def dispatch(self, request, *args, **kwargs):
+        self.artifact = get_object_or_404(Artifact, pk=kwargs["artifact_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return ArtifactVersion.objects.can_be_deleted().filter(artifact=self.artifact)
+
+    def get_success_url(self):
+        return self.artifact.get_absolute_url()
+
+
+class DownloadProfileView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_artifact"
+
+    def get(self, request, **kwargs):
+        profile = get_object_or_404(Profile, artifact_version__pk=kwargs["artifact_version_pk"])
+        return FileResponse(
+            io.BytesIO(profile.source),
+            content_type="application/x-plist",
+            as_attachment=True,
+            filename=profile.filename or f"profile_{profile.artifact_version.pk}.mobileconfig"
+        )
 
 
 # Assets
@@ -789,7 +934,8 @@ class CreateAssetArtifactView(PermissionRequiredMixin, FormView):
 
     def form_valid(self, form):
         store_app = form.save()
-        return redirect(store_app)
+        messages.info(self.request, "Artifact created")
+        return redirect(store_app.artifact_version.artifact)
 
 
 # Blueprints
@@ -818,8 +964,7 @@ class CreateBlueprintView(PermissionRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        update_blueprint_activation(self.object, commit=False)
-        update_blueprint_declaration_items(self.object, commit=True)
+        update_blueprint_serialized_artifacts(self.object)
         return response
 
 
@@ -831,9 +976,7 @@ class BlueprintView(PermissionRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         ctx["artifacts"] = (self.object.blueprintartifact_set.select_related("artifact")
                                                              .annotate(Max("artifact__artifactversion__version"))
-                                                             .order_by(
-                                                                 "-install_before_setup_assistant",
-                                                                 "-priority", "artifact__name"))
+                                                             .order_by("artifact__name"))
         ctx["artifacts_count"] = ctx["artifacts"].count()
         for enrollment_type in ("dep", "ota", "user"):
             ctx[f"{enrollment_type}_enrollments"] = list(
@@ -853,8 +996,7 @@ class UpdateBlueprintView(PermissionRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        update_blueprint_activation(self.object, commit=False)
-        update_blueprint_declaration_items(self.object, commit=True)
+        update_blueprint_serialized_artifacts(self.object)
         return response
 
 
@@ -1069,11 +1211,11 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
                                                   .get(serial_number=self.object.serial_number))
         except DEPDevice.DoesNotExist:
             pass
-        ctx["installed_artifacts"] = (self.object.installed_artifacts
-                                                 .select_related("artifact_version__artifact")
-                                                 .all()
-                                                 .order_by("-updated_at"))
-        ctx["installed_artifacts_count"] = ctx["installed_artifacts"].count()
+        ctx["target_artifacts"] = (self.object.target_artifacts
+                                              .select_related("artifact_version__artifact")
+                                              .all()
+                                              .order_by("-updated_at"))
+        ctx["target_artifacts_count"] = ctx["target_artifacts"].count()
         commands_qs = (
             self.object.commands
                        .select_related("artifact_version__artifact")
@@ -1161,11 +1303,11 @@ class EnrolledUserView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["enrolled_device"] = ctx["object"].enrolled_device
-        ctx["installed_artifacts"] = (self.object.installed_artifacts
-                                                 .select_related("artifact_version__artifact")
-                                                 .all()
-                                                 .order_by("-updated_at"))
-        ctx["installed_artifacts_count"] = ctx["installed_artifacts"].count()
+        ctx["target_artifacts"] = (self.object.target_artifacts
+                                              .select_related("artifact_version__artifact")
+                                              .all()
+                                              .order_by("-updated_at"))
+        ctx["target_artifacts_count"] = ctx["target_artifacts"].count()
         commands_qs = (
             self.object.commands
                        .select_related("artifact_version__artifact")
@@ -1257,7 +1399,7 @@ class CreateEnrolledDeviceCommandView(PermissionRequiredMixin, FormView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["channel"] = Channel.Device
+        kwargs["channel"] = Channel.DEVICE
         kwargs["enrolled_device"] = self.enrolled_device
         return kwargs
 

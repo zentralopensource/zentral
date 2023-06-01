@@ -1,13 +1,14 @@
 from datetime import datetime, timedelta
-import enum
 import hashlib
-from itertools import zip_longest
 import logging
 import plistlib
 import uuid
 from django.contrib.postgres.fields import ArrayField, DateRangeField
 from django.core.validators import MinLengthValidator, MinValueValidator, MaxValueValidator
 from django.db import connection, models
+from django.db.models import Count
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -16,11 +17,12 @@ from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmUser
 from zentral.conf import settings
-from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaMachine
+from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaMachine, Tag
 from zentral.core.incidents.models import Severity
 from zentral.core.secret_engines import decrypt, decrypt_str, encrypt, encrypt_str, rewrap
 from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
 from zentral.utils.iso_639_1 import ISO_639_1_CHOICES
+from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.payloads import get_payload_identifier
 from .exceptions import EnrollmentSessionStatusError
 from .scep import SCEPChallengeType, get_scep_challenge, load_scep_challenge
@@ -29,28 +31,21 @@ from .scep import SCEPChallengeType, get_scep_challenge, load_scep_challenge
 logger = logging.getLogger("zentral.contrib.mdm.models")
 
 
-class Channel(enum.Enum):
-    Device = "Device"
-    User = "User"
-
-    @classmethod
-    def choices(cls):
-        return tuple((i.name, i.value) for i in cls)
+class Channel(models.TextChoices):
+    DEVICE = "Device"
+    USER = "User"
 
 
-class Platform(enum.Enum):
-    iOS = "iOS"
-    iPadOS = "iPadOS"
-    macOS = "macOS"
-    tvOS = "tvOS"
+class Platform(models.TextChoices):
+    IOS = "iOS"
+    IPADOS = "iPadOS"
+    MACOS = "macOS"
+    TVOS = "tvOS"
 
-    @classmethod
-    def choices(cls):
-        return tuple((i.name, i.value) for i in cls)
 
-    @classmethod
-    def all_values(cls):
-        return [i.value for i in cls]
+# used only for an ArrayField to avoid triggering the warning about shared default objects
+def get_platform_values():
+    return Platform.values
 
 
 # Push certificates
@@ -110,8 +105,7 @@ class Blueprint(models.Model):
 
     name = models.CharField(max_length=256, unique=True)
 
-    activation = models.JSONField(default=dict, editable=False)
-    declaration_items = models.JSONField(default=dict, editable=False)
+    serialized_artifacts = models.JSONField(default=dict, editable=False)
 
     # inventory
     inventory_interval = models.IntegerField(
@@ -144,10 +138,6 @@ class Blueprint(models.Model):
 
     def get_absolute_url(self):
         return reverse("mdm:blueprint", args=(self.pk,))
-
-    @property
-    def declarations_token(self):
-        return uuid.UUID(self.declaration_items["DeclarationsToken"])
 
     def get_inventory_interval_display(self):
         now = datetime.utcnow()
@@ -312,7 +302,7 @@ class Asset(models.Model):
     product_type = models.CharField(max_length=4, choices=ProductType.choices)
     device_assignable = models.BooleanField()
     revocable = models.BooleanField()
-    supported_platforms = ArrayField(models.CharField(max_length=64, choices=Platform.choices()))
+    supported_platforms = ArrayField(models.CharField(max_length=64, choices=Platform.choices))
 
     metadata = models.JSONField(null=True)
     name = models.TextField(null=True)
@@ -486,7 +476,7 @@ class EnrolledDevice(models.Model):
     udid = models.CharField(max_length=255, unique=True)
     enrollment_id = models.TextField(null=True)
     serial_number = models.TextField(db_index=True)
-    platform = models.CharField(max_length=64, choices=Platform.choices())
+    platform = models.CharField(max_length=64, choices=Platform.choices)
     os_version = models.CharField(max_length=64, null=True)
     os_version_extra = models.CharField(max_length=32, null=True)
     build_version = models.CharField(max_length=32, null=True)
@@ -515,7 +505,7 @@ class EnrolledDevice(models.Model):
 
     # declarative management
     declarative_management = models.BooleanField(default=False)
-    declarations_token = models.UUIDField(null=True)
+    declarations_token = models.CharField(max_length=40, default="")
 
     # information
     device_information = models.JSONField(null=True)
@@ -606,7 +596,7 @@ class EnrolledDevice(models.Model):
         self.supervised = None
         self.save()
         self.commands.all().delete()
-        self.installed_artifacts.all().delete()
+        self.target_artifacts.all().delete()
         self.enrolleduser_set.all().delete()
         # TODO purge tokens?
         # TODO revoke assets?
@@ -630,18 +620,10 @@ class EnrolledDevice(models.Model):
 
     @property
     def comparable_os_version(self):
-        try:
-            osv = [
-                i or j for i, j in zip_longest(
-                  (int(i) for i in self.os_version.split(".")),
-                  (0, 0, 0)
-                )
-            ]
-            osv.append(self.os_version_extra or "")
-            return tuple(osv)
-        except Exception:
-            logger.warning("Cannot get enrolled device %s comparable OS version", self.pk)
-            return (0, 0, 0, "")
+        return (
+            *make_comparable_os_version(self.os_version),
+            self.os_version_extra or ""
+        )
 
     @property
     def full_os_version(self):
@@ -663,7 +645,7 @@ class EnrolledDevice(models.Model):
     def get_architecture_for_display(self):
         if self.apple_silicon:
             return "Apple silicon"
-        elif self.apple_silicon is False and self.platform == Platform.macOS.name:
+        elif self.apple_silicon is False and self.platform == Platform.MACOS:
             return "Intel"
 
     def iter_enrollment_session_info(self):
@@ -726,6 +708,10 @@ class EnrolledUser(models.Model):
     enrollment_id = models.TextField(null=True)
     long_name = models.TextField()
     short_name = models.TextField()
+
+    # declarative management
+    declarative_management = models.BooleanField(default=False)
+    declarations_token = models.CharField(max_length=40, default="")
 
     # notifications
     token = models.BinaryField()
@@ -1707,35 +1693,66 @@ class ReEnrollmentSession(EnrollmentSession):
 # Artifacts
 
 
-class ArtifactType(enum.Enum):
-    EnterpriseApp = "Enterprise App"
-    Profile = "Profile"
-    StoreApp = "Store App"
-
-    @classmethod
-    def choices(cls):
-        return tuple((i.name, i.value) for i in cls)
-
-
-class ArtifactOperation(enum.Enum):
-    Installation = "Installation"
-    Removal = "Removal"
-
-    @classmethod
-    def choices(cls):
-        return tuple((i.name, i.value) for i in cls)
+class ArtifactManager(models.Manager):
+    def can_be_deleted(self):
+        return self.annotate(
+            bpa_count=Count("blueprintartifact"),
+            da_count=Count("artifactversion__deviceartifact"),
+            ua_count=Count("artifactversion__userartifact"),
+            dc_count=Count("artifactversion__devicecommand"),
+            uc_count=Count("artifactversion__usercommand"),
+        ).filter(
+            bpa_count=0,
+            da_count=0,
+            ua_count=0,
+            dc_count=0,
+            uc_count=0,
+        )
 
 
 class Artifact(models.Model):
+
+    class Operation(models.TextChoices):
+        INSTALLATION = "Installation"
+        REMOVAL = "Removal"
+
+    class Type(models.TextChoices):
+        ENTERPRISE_APP = "Enterprise App"
+        PROFILE = "Profile"
+        STORE_APP = "Store App"
+
+    class ReinstallOnOSUpdate(models.TextChoices):
+        NO = "No"
+        MAJOR = "Major"
+        MINOR = "Minor"
+        PATCH = "Patch"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=256, unique=True)
-    type = models.CharField(max_length=64, choices=ArtifactType.choices(), editable=False)
-    channel = models.CharField(max_length=64, choices=Channel.choices(), editable=False)
-    platforms = ArrayField(models.CharField(max_length=64, choices=Platform.choices()), default=Platform.all_values)
+    type = models.CharField(max_length=64, choices=Type.choices, editable=False)
+    # targets
+    channel = models.CharField(max_length=64, choices=Channel.choices, editable=False)
+    platforms = ArrayField(models.CharField(max_length=64, choices=Platform.choices), default=get_platform_values)
+    # when to install or reinstall
+    requires = models.ManyToManyField("mdm.Artifact", related_name="requiredby_set", blank=True)
+    install_during_setup_assistant = models.BooleanField(default=False)
+    auto_update = models.BooleanField(default=True)
+    reinstall_interval = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(366)],
+        default=0,
+        help_text="In days, the time interval after which the artifact will be reinstalled. "
+                  "If 0, the artifact will not be reinstalled. Defaults to 0."
+    )
+    reinstall_on_os_update = models.CharField(
+        max_length=5,
+        choices=ReinstallOnOSUpdate.choices,
+        default=ReinstallOnOSUpdate.NO,
+    )
 
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True, editable=False)
-    trashed_at = models.DateTimeField(null=True, editable=False)
+
+    objects = ArtifactManager()
 
     def __str__(self):
         return self.name
@@ -1743,189 +1760,137 @@ class Artifact(models.Model):
     def get_absolute_url(self):
         return reverse("mdm:artifact", args=(self.pk,))
 
+    def get_type(self):
+        return self.Type(self.type)
 
-class BlueprintArtifact(models.Model):
+    def get_channel(self):
+        return Channel(self.channel)
+
+    @property
+    def can_be_removed(self):
+        return self.get_type() in (self.Type.PROFILE, self.Type.STORE_APP)
+
+    def blueprints(self):
+        return Blueprint.objects.filter(blueprintartifact__artifact=self)
+
+    def can_be_deleted(self):
+        return Artifact.objects.can_be_deleted().filter(pk=self.pk).count() == 1
+
+    @property
+    def is_enterprise_app(self):
+        return self.get_type() == self.Type.ENTERPRISE_APP
+
+    @property
+    def is_profile(self):
+        return self.get_type() == self.Type.PROFILE
+
+    @property
+    def is_store_app(self):
+        return self.get_type() == self.Type.STORE_APP
+
+
+class FilteredBlueprintItem(models.Model):
+    # platforms
+    ios = models.BooleanField(default=False)
+    ios_min_version = models.CharField(max_length=32, blank=True)
+    ios_max_version = models.CharField(max_length=32, blank=True)
+    ipados = models.BooleanField(default=False)
+    ipados_min_version = models.CharField(max_length=32, blank=True)
+    ipados_max_version = models.CharField(max_length=32, blank=True)
+    macos = models.BooleanField(default=False)
+    macos_min_version = models.CharField(max_length=32, blank=True)
+    macos_max_version = models.CharField(max_length=32, blank=True)
+    tvos = models.BooleanField(default=False)
+    tvos_min_version = models.CharField(max_length=32, blank=True)
+    tvos_max_version = models.CharField(max_length=32, blank=True)
+    # shards
+    shard_modulo = models.IntegerField(
+        validators=[MinValueValidator(2), MaxValueValidator(100)],
+        default=100,
+    )
+    default_shard = models.IntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        default=100,
+    )
+    excluded_tags = models.ManyToManyField(Tag, related_name="+", blank=True)
+
+    class Meta:
+        abstract = True
+
+    @cached_property
+    def tag_shards(self):
+        fbpit_qs = (
+            self.item_tags
+            .select_related("tag__meta_business_unit", "tag__taxonomy")
+            .all()
+        )
+        return {fbpit.tag: fbpit.shard for fbpit in fbpit_qs}
+
+    @property
+    def platforms(self):
+        platforms = {}
+        for platform in Platform:
+            fieldname = platform.value.lower()
+            if getattr(self, fieldname):
+                platform_d = platforms.setdefault(platform, {})
+                min_version = getattr(self, f"{fieldname}_min_version")
+                if min_version:
+                    platform_d["min"] = min_version
+                max_version = getattr(self, f"{fieldname}_max_version")
+                if max_version:
+                    platform_d["max"] = max_version
+        return platforms
+
+
+class FilteredBlueprintItemTag(models.Model):
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name="+")
+    shard = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(100)], default=100)
+
+    class Meta:
+        abstract = True
+
+
+class BlueprintArtifact(FilteredBlueprintItem):
     blueprint = models.ForeignKey(Blueprint, on_delete=models.CASCADE)
     artifact = models.ForeignKey(Artifact, on_delete=models.CASCADE)
-    install_before_setup_assistant = models.BooleanField(default=False)
-    auto_update = models.BooleanField(default=True)
-    priority = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True, editable=False)
+
+    class Meta:
+        unique_together = (("blueprint", "artifact"),)
 
     def get_absolute_url(self):
         return "{}#ba-{}".format(self.artifact.get_absolute_url(), self.pk)
 
 
+class BlueprintArtifactTag(FilteredBlueprintItemTag):
+    blueprint_artifact = models.ForeignKey(BlueprintArtifact, on_delete=models.CASCADE, related_name="item_tags")
+
+    class Meta:
+        unique_together = (("blueprint_artifact", "tag"),)
+
+
 class ArtifactVersionManager(models.Manager):
-    def _next_to(
-        self,
-        target,
-        select,
-        artifact_operation,
-        fetch_all=False,
-        extra_args=None,
-        included_types=None,
-    ):
-        if isinstance(target, EnrolledDevice):
-            enrolled_device = target
-            channel = Channel.Device
-            command_table = "mdm_devicecommand"
-            target_table = "mdm_deviceartifact"
-            target_attr = "enrolled_device_id"
-        elif isinstance(target, EnrolledUser):
-            enrolled_device = target.enrolled_device
-            channel = Channel.User
-            command_table = "mdm_usercommand"
-            target_table = "mdm_userartifact"
-            target_attr = "enrolled_user_id"
-        else:
-            raise ValueError("Target must be an EnrolledDevice or an EnrolledUser")
-
-        blueprint = enrolled_device.blueprint
-        if blueprint is None and artifact_operation == ArtifactOperation.Installation:
-            return [] if fetch_all else None
-
-        # Sorry… use -1 as blueprint pk when no blueprint is configured
-        # will return 0 blueprint artifact versions
-        # used to remove all installed artifact versions
-        args = [channel.name, enrolled_device.platform, blueprint.pk if blueprint else -1]
-        ba_where_list = ["a.channel = %s", "%s = ANY(a.platforms)", "ba.blueprint_id = %s"]
-        if enrolled_device.awaiting_configuration:
-            args.append(True)
-            ba_where_list.append("ba.install_before_setup_assistant = %s")
-        if included_types:
-            args.append(tuple(t.name for t in included_types))
-            ba_where_list.append("a.type IN %s")
-        ba_wheres = " and ".join(ba_where_list)
-        args.extend([target.pk, target.pk, artifact_operation.name])
-        if extra_args:
-            args.extend(extra_args)
-        query = (
-            "with all_blueprint_artifact_versions as ("  # All blueprint artifact versions, ranked by version
-            "  select av.id, av.version, av.artifact_id, av.created_at,"
-            "  rank() over (partition by av.artifact_id order by version desc) rank,"
-            "  ba.auto_update, ba.priority"
-            "  from mdm_artifactversion as av"
-            "  join mdm_artifact as a on (a.id = av.artifact_id)"
-            "  join mdm_blueprintartifact as ba on (ba.artifact_id = a.id)"
-            f"  where {ba_wheres}"
-            "), blueprint_artifact_versions as ("  # Keep only the latest versions of each artifact
-            "  select id, version, created_at, artifact_id, auto_update, priority"
-            "  from all_blueprint_artifact_versions"
-            "  where rank=1"
-            "), all_target_artifact_versions as ("  # All the artifact versions installed on the target
-            "  select av.id, av.version, av.artifact_id, av.created_at,"
-            "  rank() over (partition by av.artifact_id order by version desc) rank"
-            "  from mdm_artifactversion as av"
-            f"  join {target_table} as ta on (ta.artifact_version_id = av.id)"
-            f"  where ta.{target_attr} = %s"
-            "), target_artifact_versions as ("  # Keep only the latest versions of each target artifact
-            "  select id, version, artifact_id, created_at"
-            "  from all_target_artifact_versions"
-            "  where rank=1"
-            "), failed_artifact_version_operations as ("  # All the artifact versions with failed operations
-            "  select distinct artifact_version_id as id"
-            f"  from {command_table}"
-            f"  where {target_attr} = %s and artifact_operation = %s and status = 'Error'"
-            f") {select}"
-        )
-        if not fetch_all:
-            query += " limit 1"
-
-        cursor = connection.cursor()
-        cursor.execute(query, args)
-        pk_list = [t[0] for t in cursor.fetchall()]
-        qs = self.select_related(
-            "artifact",
-            "profile",
-            "enterprise_app",
-            "store_app__location_asset__asset",
-            "store_app__location_asset__location"
-        )
-        if fetch_all:
-            artifact_version_list = list(qs.filter(pk__in=pk_list))
-            artifact_version_list.sort(key=lambda artifact_version: pk_list.index(artifact_version.pk))
-            return artifact_version_list
-        else:
-            if pk_list:
-                return qs.get(pk=pk_list[0])
-
-    def next_to_install(self, target, fetch_all=False, included_types=None):
-        select = (
-            # Present in the blueprint
-            "select bav.id from blueprint_artifact_versions as bav "
-            "left join failed_artifact_version_operations as favo on (favo.id = bav.id) "
-            "left join target_artifact_versions as tav on (tav.artifact_id = bav.artifact_id) "
-            # - No previous installation error AND
-            #   - Not installed on the target OR
-            #   - Installed but with a different version, if auto update is true
-            # if auto update is false, a more recent version will not be installed.
-            # The version number is not used, because different artifact versions of the same artifact
-            # can end up having the same version number.
-            "where favo.id is null and (tav.id is null or (bav.id <> tav.id and bav.auto_update)) "
-            "order by bav.priority desc, bav.created_at asc"
-        )
-        return self._next_to(
-            target, select, ArtifactOperation.Installation,
-            fetch_all=fetch_all, included_types=included_types
+    def can_be_deleted(self):
+        return self.annotate(
+            da_count=Count("deviceartifact"),
+            ua_count=Count("userartifact"),
+            dc_count=Count("devicecommand"),
+            uc_count=Count("usercommand"),
+        ).filter(
+            da_count=0,
+            ua_count=0,
+            dc_count=0,
+            uc_count=0,
         )
 
-    def next_to_remove(self, target, fetch_all=False, included_types=None):
-        # Only profiles and store apps can be removed
-        removable_types = {
-            ArtifactType.Profile,
-            ArtifactType.StoreApp
-        }
-        if included_types:
-            removable_types.intersection_update(included_types)
-        extra_args = [tuple(t.name for t in removable_types)]
-        select = (
-            # Installed on the target
-            "select tav.id from target_artifact_versions as tav "
-            "left join mdm_artifact as a on (tav.artifact_id = a.id) "
-            "left join failed_artifact_version_operations as favo on (favo.id = tav.id) "
-            "left join blueprint_artifact_versions as bav on (bav.artifact_id = tav.artifact_id) "
-            # - Only removable types
-            # - No previous removal error AND
-            # - Not present in the blueprint
-            "where a.type IN %s and favo.id is null and bav.id is null "
-            "order by tav.created_at asc"
-        )
-        return self._next_to(
-            target, select, ArtifactOperation.Removal,
-            fetch_all=fetch_all, extra_args=extra_args
-        )
 
-    def latest_for_blueprint(self, blueprint, artifact_type=None):
-        ba_where_list = ["ba.blueprint_id = %s", "a.channel = %s"]
-        args = [blueprint.pk, Channel.Device.name]
-        if artifact_type:
-            ba_where_list.append("a.type = %s")
-            args.append(artifact_type.name)
-        ba_wheres = " and ".join(ba_where_list)
-        query = (
-            "with all_blueprint_artifact_versions as ("  # All blueprint artifact versions, ranked by version
-            "  select av.artifact_id, av.id,"
-            "  rank() over (partition by av.artifact_id order by version desc) rank"
-            "  from mdm_artifactversion as av"
-            "  join mdm_artifact as a on (a.id = av.artifact_id)"
-            "  join mdm_blueprintartifact as ba on (ba.artifact_id = a.id)"
-            f"  where {ba_wheres}"
-            ") select artifact_id, id "
-            "from all_blueprint_artifact_versions "
-            "where rank=1"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query, args)
-        return cursor.fetchall()
-
-
-class ArtifactVersion(models.Model):
+class ArtifactVersion(FilteredBlueprintItem):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     artifact = models.ForeignKey(Artifact, on_delete=models.CASCADE)
     version = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True, editable=False)
 
     objects = ArtifactVersionManager()
 
@@ -1933,10 +1898,21 @@ class ArtifactVersion(models.Model):
         return f"{self.artifact} v{self.version}"
 
     def get_absolute_url(self):
-        return "{}#{}".format(self.artifact.get_absolute_url(), self.pk)
+        return reverse("mdm:artifact_version", args=(self.artifact.pk, self.pk))
 
     class Meta:
         unique_together = (("artifact", "version"),)
+        ordering = ("-version",)
+
+    def can_be_deleted(self):
+        return ArtifactVersion.objects.can_be_deleted().filter(pk=self.pk).count() == 1
+
+
+class ArtifactVersionTag(FilteredBlueprintItemTag):
+    artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.CASCADE, related_name="item_tags")
+
+    class Meta:
+        unique_together = (("artifact_version", "tag"),)
 
 
 class Profile(models.Model):
@@ -1980,12 +1956,32 @@ class EnterpriseApp(models.Model):
     product_version = models.TextField()
     bundles = models.JSONField(default=list)
     manifest = models.JSONField()
+    ios_app = models.BooleanField(default=False)
+    configuration = models.BinaryField(null=True)
+    install_as_managed = models.BooleanField(default=False)
+    remove_on_unenroll = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.product_id} {self.product_version}"
 
     class Meta:
         indexes = [models.Index(fields=["product_id", "product_version"])]
+
+    def get_configuration(self):
+        if self.configuration:
+            return plistlib.loads(self.configuration)
+
+    def has_configuration(self):
+        return self.configuration is not None
+
+
+@receiver(post_delete, sender=EnterpriseApp)
+def post_delete_enterprise_app(sender, instance, *args, **kwargs):
+    """Delete package"""
+    try:
+        instance.package.delete(save=False)
+    except Exception:
+        logger.exception("Could not delete enteprise app package")
 
 
 class StoreApp(models.Model):
@@ -2038,23 +2034,35 @@ class EnrolledDeviceLocationAssetAssociation(models.Model):
         unique_together = (("enrolled_device", "location_asset"),)
 
 
-class TargetArtifactStatus(enum.Enum):
-    Acknowledged = "Acknowledged"
-    AwaitingConfirmation = "Awaiting confirmation"
-    Installed = "Installed"
-
-    @classmethod
-    def choices(cls):
-        return tuple((i.name, i.name) for i in cls)
-
-
 class TargetArtifact(models.Model):
+
+    class Status(models.TextChoices):
+        ACKNOWLEDGED = "Acknowledged"
+        AWAITING_CONFIRMATION = "AwaitingConfirmation"
+        INSTALLED = "Installed"
+        UNINSTALLED = "Uninstalled"
+        FAILED = "Failed"
+        REMOVAL_FAILED = "RemovalFailed"
+
+        @property
+        def present(self):
+            return self.value in (self.ACKNOWLEDGED, self.INSTALLED)
+
     artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT)
     status = models.CharField(
         max_length=64,
-        choices=TargetArtifactStatus.choices(),
-        default=TargetArtifactStatus.Acknowledged.name
+        choices=Status.choices,
+        default=Status.ACKNOWLEDGED
     )
+    extra_info = models.JSONField(default=dict)
+
+    # for reinstall interval
+    installed_at = models.DateTimeField(null=True)
+    # for reinstall at OS update
+    os_version_at_install_time = models.CharField(max_length=64, null=True)
+    # to better identify reinstalls
+    unique_install_identifier = models.CharField(max_length=256, default="")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2063,14 +2071,14 @@ class TargetArtifact(models.Model):
 
 
 class DeviceArtifact(TargetArtifact):
-    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="installed_artifacts")
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="target_artifacts")
 
     class Meta:
         unique_together = ("enrolled_device", "artifact_version")
 
 
 class UserArtifact(TargetArtifact):
-    enrolled_user = models.ForeignKey(EnrolledUser, on_delete=models.CASCADE, related_name="installed_artifacts")
+    enrolled_user = models.ForeignKey(EnrolledUser, on_delete=models.CASCADE, related_name="target_artifacts")
 
     class Meta:
         unique_together = ("enrolled_user", "artifact_version")
@@ -2079,41 +2087,38 @@ class UserArtifact(TargetArtifact):
 # Commands
 
 
-class CommandStatus(enum.Enum):
-    Acknowledged = "Acknowledged"
-    CommandFormatError = "CommandFormatError"
-    Error = "Error"
-    NotNow = "NotNow"
+class RequestStatus(models.TextChoices):
+    ACKNOWLEDGED = "Acknowledged"
+    COMMAND_FORMAT_ERROR = "CommandFormatError"
+    ERROR = "Error"
+    IDLE = "Idle"
+    NOT_NOW = "NotNow"
 
-    @classmethod
-    def choices(cls):
-        return tuple((i.name, i.value) for i in cls)
-
-
-class RequestStatus(enum.Enum):
-    Acknowledged = "Acknowledged"
-    CommandFormatError = "CommandFormatError"
-    Error = "Error"
-    Idle = "Idle"
-    NotNow = "NotNow"
-
+    @property
     def is_error(self):
-        return self in (RequestStatus.Error, RequestStatus.CommandFormatError)
+        return self in (RequestStatus.ERROR, RequestStatus.COMMAND_FORMAT_ERROR)
 
 
 class Command(models.Model):
+
+    class Status(models.TextChoices):
+        ACKNOWLEDGED = "Acknowledged"
+        COMMAND_FORMAT_ERROR = "CommandFormatError"
+        ERROR = "Error"
+        NOT_NOW = "NotNow"
+
     uuid = models.UUIDField(unique=True, editable=False)
 
     name = models.CharField(max_length=128)
     artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT, null=True)
-    artifact_operation = models.CharField(max_length=64, choices=ArtifactOperation.choices(), null=True)
+    artifact_operation = models.CharField(max_length=64, choices=Artifact.Operation.choices, null=True)
     kwargs = models.JSONField(default=dict)
 
     not_before = models.DateTimeField(null=True)
     time = models.DateTimeField(null=True)  # no time => queued
     result = models.BinaryField(null=True)  # to store the result of some commands
     result_time = models.DateTimeField(null=True)
-    status = models.CharField(max_length=64, choices=CommandStatus.choices(), null=True)
+    status = models.CharField(max_length=64, choices=Status.choices, null=True)
     error_chain = models.JSONField(null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -2138,7 +2143,7 @@ class UserCommand(Command):
 
 
 class SoftwareUpdate(models.Model):
-    platform = models.CharField(max_length=64, choices=Platform.choices())
+    platform = models.CharField(max_length=64, choices=Platform.choices)
     major = models.PositiveIntegerField()
     minor = models.PositiveIntegerField()
     patch = models.PositiveIntegerField()

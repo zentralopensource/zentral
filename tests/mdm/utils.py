@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import hashlib
+import plistlib
 import uuid
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -8,12 +9,21 @@ from cryptography.x509.oid import NameOID
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmUser
 from zentral.contrib.inventory.models import EnrollmentSecret
+from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.crypto import load_push_certificate_and_key
-from zentral.contrib.mdm.models import (DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
+from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
+                                        Blueprint, BlueprintArtifact,
+                                        Channel, Platform,
+                                        DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
+                                        EnterpriseApp, Location, LocationAsset,
                                         OTAEnrollment, OTAEnrollmentSession,
-                                        PushCertificate, SCEPConfig,
+                                        Profile, PushCertificate, SCEPConfig,
+                                        StoreApp,
                                         UserEnrollment, UserEnrollmentSession)
+
+
+# realm
 
 
 def force_realm():
@@ -37,6 +47,9 @@ def force_realm_user():
         email=email,
     )
     return realm, realm_user
+
+
+# push certificate
 
 
 def force_push_certificate_material(topic=None, reduced_key_size=True):
@@ -100,6 +113,9 @@ def force_push_certificate(topic=None, with_material=False, reduced_key_size=Tru
     return push_certificate
 
 
+# SCEP config
+
+
 def force_scep_config():
     scep_config = SCEPConfig(
         name=get_random_string(12),
@@ -110,6 +126,9 @@ def force_scep_config():
     scep_config.set_challenge_kwargs({"challenge": get_random_string(12)})
     scep_config.save()
     return scep_config
+
+
+# DEP virtual server
 
 
 def force_dep_virtual_server(server_uuid=None):
@@ -134,6 +153,9 @@ def force_dep_virtual_server(server_uuid=None):
     )
 
 
+# enrollments
+
+
 def force_dep_enrollment(mbu, push_certificate=None):
     if push_certificate is None:
         push_certificate = force_push_certificate()
@@ -148,12 +170,13 @@ def force_dep_enrollment(mbu, push_certificate=None):
     )
 
 
-def force_ota_enrollment(mbu):
+def force_ota_enrollment(mbu, realm=None):
     return OTAEnrollment.objects.create(
         push_certificate=force_push_certificate(),
         scep_config=force_scep_config(),
         name=get_random_string(12),
-        enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu)
+        enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu),
+        realm=realm,
     )
 
 
@@ -245,13 +268,17 @@ def force_dep_enrollment_session(
     return session, device_udid, serial_number
 
 
-def force_ota_enrollment_session(mbu, phase3=False, authenticated=False, completed=False):
+def force_ota_enrollment_session(mbu, phase3=False, authenticated=False, completed=False, realm_user=False):
     ota_enrollment = force_ota_enrollment(mbu)
     serial_number = get_random_string(12)
     device_udid = str(uuid.uuid4())
     session = OTAEnrollmentSession.objects.create_from_machine_info(
         ota_enrollment, serial_number, device_udid
     )
+    if realm_user:
+        session.ota_enrollment.realm, session.realm_user = force_realm_user()
+        session.ota_enrollment.save()
+        session.save()
     if phase3 or authenticated or completed:
         session.set_phase3_status()
         if completed:
@@ -284,3 +311,141 @@ def force_enrolled_user(enrolled_device):
         short_name=get_random_string(12),
         token=get_random_string(12).encode("utf-8")
     )
+
+
+# artifacts
+
+
+def force_blueprint():
+    return Blueprint.objects.create(name=get_random_string(12))
+
+
+def force_artifact(
+    version_count=1,
+    artifact_type=Artifact.Type.PROFILE,
+    channel=Channel.DEVICE,
+    platforms=None,
+    install_during_setup_assistant=False,
+    auto_update=True,
+    requires=None,
+):
+    if platforms is None:
+        platforms = [Platform.MACOS]
+    artifact = Artifact.objects.create(
+        name=get_random_string(12),
+        type=artifact_type,
+        channel=channel,
+        platforms=platforms,
+        install_during_setup_assistant=install_during_setup_assistant,
+        auto_update=auto_update,
+    )
+    if requires:
+        if not isinstance(requires, list):
+            requires = [requires]
+        artifact.requires.set(requires)
+    artifact_versions = []
+    for version in range(version_count, 0, -1):
+        artifact_version = ArtifactVersion.objects.create(
+            artifact=artifact,
+            version=version,
+            macos=True,
+        )
+        artifact_versions.append(artifact_version)
+        if artifact_type == Artifact.Type.PROFILE:
+            payload_identifier = "{}.{}.{}".format(get_random_string(2),
+                                                   get_random_string(4),
+                                                   str(uuid.uuid4()).upper())
+            payload_uuid = str(uuid.uuid4()).upper()
+            payload_display_name = get_random_string(16)
+            payload_description = get_random_string(32)
+            Profile.objects.create(
+                artifact_version=artifact_version,
+                source=plistlib.dumps(
+                    {
+                        "PayloadContent": [],
+                        "PayloadDisplayName": payload_display_name,
+                        "PayloadDescription": payload_description,
+                        "PayloadIdentifier": payload_identifier,
+                        "PayloadScope": "System" if channel == Channel.DEVICE else "User",
+                        "PayloadRemovalDisallowed": False,
+                        "PayloadType": "Configuration",
+                        "PayloadUUID": payload_uuid,
+                        "PayloadVersion": 1,
+                    }
+                ),
+                payload_identifier=payload_identifier,
+                payload_uuid=payload_uuid,
+                payload_display_name=payload_display_name,
+                payload_description=payload_description
+            )
+        elif artifact_type == Artifact.Type.ENTERPRISE_APP:
+            EnterpriseApp.objects.create(
+                artifact_version=artifact_version,
+                filename="{}.pkg".format(get_random_string(17)),
+                product_id="{}.{}.{}".format(get_random_string(2), get_random_string(4), get_random_string(8)),
+                product_version="17",
+                manifest={"items": [{"assets": [{}]}]}
+            )
+        elif artifact_type == Artifact.Type.STORE_APP:
+            asset = Asset.objects.create(
+                adam_id="1234567890",
+                pricing_param="STDQ",
+                product_type=Asset.ProductType.APP,
+                device_assignable=True,
+                revocable=True,
+                supported_platforms=[Platform.MACOS]
+            )
+            location = Location(
+                server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
+                server_token=get_random_string(12),
+                server_token_expiration_date=date(2050, 1, 1),
+                organization_name=get_random_string(12),
+                country_code="DE",
+                library_uid=str(uuid.uuid4()),
+                name=get_random_string(12),
+                platform="enterprisestore",
+                website_url="https://business.apple.com",
+                mdm_info_id=uuid.uuid4(),
+            )
+            location.set_notification_auth_token()
+            location.save()
+            location_asset = LocationAsset.objects.create(
+                asset=asset,
+                location=location
+            )
+            StoreApp.objects.create(
+                artifact_version=artifact_version,
+                location_asset=location_asset
+            )
+    return artifact, artifact_versions
+
+
+def force_blueprint_artifact(
+    version_count=1,
+    artifact_type=Artifact.Type.PROFILE,
+    channel=Channel.DEVICE,
+    platforms=None,
+    install_during_setup_assistant=False,
+    auto_update=True,
+    requires=None,
+    blueprint=None,
+):
+    artifact, artifact_versions = force_artifact(
+        version_count,
+        artifact_type,
+        channel,
+        platforms,
+        install_during_setup_assistant,
+        auto_update,
+        requires,
+    )
+    if not blueprint:
+        blueprint = force_blueprint()
+    pf_kwargs = {pf.name.lower(): True for pf in artifact.platforms}
+    blueprint_artifact, _ = BlueprintArtifact.objects.get_or_create(
+        blueprint=blueprint,
+        artifact=artifact,
+        defaults=pf_kwargs,
+    )
+    update_blueprint_serialized_artifacts(blueprint)
+    return blueprint_artifact, artifact, artifact_versions

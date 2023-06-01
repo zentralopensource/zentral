@@ -13,7 +13,7 @@ class Reenroll(Command):
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
-        return channel == Channel.Device
+        return channel == Channel.DEVICE
 
     def load_kwargs(self):
         self.reenrollment_session = None

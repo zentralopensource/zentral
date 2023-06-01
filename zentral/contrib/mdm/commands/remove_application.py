@@ -1,5 +1,5 @@
 import logging
-from zentral.contrib.mdm.models import ArtifactOperation, Channel, DeviceArtifact, Platform
+from zentral.contrib.mdm.models import Artifact, Channel, Platform, TargetArtifact
 from .base import register_command, Command
 
 
@@ -8,15 +8,15 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.remove_application")
 
 class RemoveApplication(Command):
     request_type = "RemoveApplication"
-    artifact_operation = ArtifactOperation.Removal
+    artifact_operation = Artifact.Operation.REMOVAL
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
         return (
-            channel == Channel.Device
+            channel == Channel.DEVICE
             and (
                 not enrolled_device.user_enrollment
-                or enrolled_device.platform == Platform.iOS.name
+                or enrolled_device.platform == Platform.IOS
             )
         )
 
@@ -28,9 +28,10 @@ class RemoveApplication(Command):
         return {"Identifier": asset.bundle_id}
 
     def command_acknowledged(self):
-        # cleanup
-        DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device,
-                                      artifact_version__artifact=self.artifact).delete()
+        self.target.update_target_artifact(
+            self.artifact_version,
+            TargetArtifact.Status.UNINSTALLED
+        )
         # disassociate asset
         # TODO async?
         location_asset = self.artifact_version.store_app.location_asset
@@ -47,6 +48,13 @@ class RemoveApplication(Command):
             if not response.get("eventId"):
                 logger.warning("enrolled device %s asset %s/%s/%s: disassociation response without eventId",
                                self.enrolled_device.serial_number, location.name, asset.adam_id, asset.pricing_param)
+
+    def command_error(self):
+        # TODO extra infos
+        self.target.update_target_artifact(
+            self.artifact_version,
+            TargetArtifact.Status.REMOVAL_FAILED
+        )
 
 
 register_command(RemoveApplication)

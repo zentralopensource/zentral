@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load bootstrap inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
+  <li><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
+  <li><a href="{{ object.get_absolute_url }}">v{{ object.version }}</a></li>
+  <li class="active">Update scope</li>
+</ol>
+
+<h3>Update artifact version v{{ object.version }}</h3>
+
+<h3>Scope</h3>
+<hr>
+
+<form class="form" method="post">{% csrf_token %}
+  {{ form|bootstrap }}
+  {% if form.tag_shards %}
+  <div class="form-group">
+    <label class="control-label">Tag shards</label>
+    <div>
+      <select id="add-tag-shard-sel">
+        {% for tag, active, shard in form.tag_shards %}
+        <option id="add-tag-shard-opt-{{ tag.pk }}" value="{{ tag.pk }}"{% if active %} disabled{% endif %}>{{ tag.name  }}</option>
+        {% endfor %}
+      </select>
+      <button id="add-tag-shard" data-tag-pk="{{ tag.pk }}" type="button" class="btn btn-primary btn-xs">
+        Add
+      </button>
+    </div>
+    <table>
+      {% for tag, active, shard in form.tag_shards %}
+      <tr id="tag-shard-{{ tag.pk }}"{% if not active %} style="display:none;"{% endif %}>
+        <td>{% inventory_tag tag %}</td>
+        <td style="padding:5px">
+          <input type="number" class="form-control hide-if-not-install" name="tag-shard-{{ tag.pk }}" value="{{ shard }}" min="0", max="1000"{% if not active %} disabled{% endif %}>
+        </td>
+        <td>
+          <button type="button" data-tag-pk="{{ tag.pk }}" class="btn btn-danger del-tag-shard">
+            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+  <p>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <button type="submit" class="btn btn-primary">Save</button>
+  </p>
+</form>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function toggleMinMaxVersionFields() {
+    console.log("toggleMinMaxVersionFields");
+    $("input[type='checkbox']").each(function (){
+      $cb = $(this);
+      var checked = $cb.prop("checked");
+      $sib = $cb.parent().parent().parent().parent().next();
+      $sib.toggle(checked);
+      $sib.next().toggle(checked);
+    });
+  }
+
+  $(document).ready(function () {
+    $("input[type='checkbox']").change(function () {
+      toggleMinMaxVersionFields()
+    });
+
+    $("#add-tag-shard").click(function(event){
+      event.preventDefault();
+      var tagId = parseInt($("#add-tag-shard-sel").val(), 10);
+      $("#tag-shard-" + tagId).show();
+      var inputElm = $('input[name="tag-shard-' + tagId + '"]');
+      inputElm.prop("disabled", false)
+      var shardModulo = parseInt($('input[name="shard_modulo"]').val(), 10);
+      if (!isNaN(shardModulo)) {
+          inputElm.val(shardModulo);
+      }
+      $("#add-tag-shard-opt-" + tagId).prop("disabled", true);
+    });
+    $(".del-tag-shard").click(function(event){
+      event.preventDefault();
+      var btn = $(this);
+      var tagId = parseInt(btn.data("tag-pk"), 10);
+      $("#tag-shard-" + tagId).hide();
+      $('input[name="tag-shard-' + tagId + '"]').prop("disabled", true);
+      $("#add-tag-shard-opt-" + tagId).prop("disabled", false);
+    });
+
+    toggleMinMaxVersionFields();
+  });
+</script>
+{% endblock %}

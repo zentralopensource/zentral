@@ -15,6 +15,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='artifact',
             name='platforms',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('iOS', 'iOS'), ('iPadOS', 'iPadOS'), ('macOS', 'macOS'), ('tvOS', 'tvOS')], max_length=64), default=zentral.contrib.mdm.models.Platform.all_values, size=None),
+            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('iOS', 'iOS'), ('iPadOS', 'iPadOS'), ('macOS', 'macOS'), ('tvOS', 'tvOS')], max_length=64), default=zentral.contrib.mdm.models.Platform.values, size=None),
         ),
     ]

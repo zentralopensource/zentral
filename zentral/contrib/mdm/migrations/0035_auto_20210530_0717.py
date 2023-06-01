@@ -47,7 +47,7 @@ class Migration(migrations.Migration):
                 ('name', models.CharField(max_length=256, unique=True)),
                 ('type', models.CharField(choices=[('EnterpriseApp', 'Enterprise App'), ('Profile', 'Profile')], editable=False, max_length=64)),
                 ('channel', models.CharField(choices=[('Device', 'Device'), ('User', 'User')], editable=False, max_length=64)),
-                ('platforms', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('iOS', 'iOS'), ('iPadOS', 'iPadOS'), ('macOS', 'macOS'), ('tvOS', 'tvOS')], default=zentral.contrib.mdm.models.Platform.all_values, max_length=64), size=None)),
+                ('platforms', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('iOS', 'iOS'), ('iPadOS', 'iPadOS'), ('macOS', 'macOS'), ('tvOS', 'tvOS')], default=zentral.contrib.mdm.models.Platform.values, max_length=64), size=None)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('trashed_at', models.DateTimeField(editable=False, null=True)),

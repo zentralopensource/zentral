@@ -1,9 +1,10 @@
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import DeviceConfigured
 from zentral.contrib.mdm.commands.scheduling import _finish_dep_enrollment_configuration
-from zentral.contrib.mdm.models import Channel, CommandStatus, RequestStatus
+from zentral.contrib.mdm.models import Channel, Command, RequestStatus
 from .utils import force_dep_enrollment_session
 
 
@@ -24,28 +25,28 @@ class DeviceConfiguredCommandTestCase(TestCase):
     def test_verify_channel_and_device_ok(self):
         self.enrolled_device.awaiting_configuration = True
         self.assertTrue(DeviceConfigured.verify_channel_and_device(
-            Channel.Device,
+            Channel.DEVICE,
             self.enrolled_device
         ))
 
     def test_verify_channel_and_device_user_channel_not_ok(self):
         self.enrolled_device.awaiting_configuration = True
         self.assertFalse(DeviceConfigured.verify_channel_and_device(
-            Channel.User,
+            Channel.USER,
             self.enrolled_device
         ))
 
     def test_verify_channel_and_device_awaiting_configuration_none_not_ok(self):
         self.assertIsNone(self.enrolled_device.awaiting_configuration)
         self.assertFalse(DeviceConfigured.verify_channel_and_device(
-            Channel.Device,
+            Channel.DEVICE,
             self.enrolled_device
         ))
 
     def test_verify_channel_and_device_awaiting_configuration_false_not_ok(self):
         self.enrolled_device.awaiting_configuration = False
         self.assertFalse(DeviceConfigured.verify_channel_and_device(
-            Channel.Device,
+            Channel.DEVICE,
             self.enrolled_device
         ))
 
@@ -72,8 +73,8 @@ class DeviceConfiguredCommandTestCase(TestCase):
             self.mbu
         )
         cmd.db_command.refresh_from_db()
-        self.assertEqual(cmd.status, CommandStatus.Acknowledged)
-        self.assertEqual(cmd.db_command.status, CommandStatus.Acknowledged.value)
+        self.assertEqual(cmd.status, Command.Status.ACKNOWLEDGED)
+        self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
         self.enrolled_device.refresh_from_db()
         self.assertFalse(self.enrolled_device.awaiting_configuration)
 
@@ -82,28 +83,25 @@ class DeviceConfiguredCommandTestCase(TestCase):
     def test_device_configured_already_done(self):
         self.enrolled_device.awaiting_configuration = False
         self.assertIsNone(_finish_dep_enrollment_configuration(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None
+            RequestStatus.IDLE,
         ))
 
     def test_device_configured_notnow_noop(self):
         self.enrolled_device.awaiting_configuration = True
         self.assertIsNone(_finish_dep_enrollment_configuration(
-            Channel.Device, RequestStatus.NotNow,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None
+            RequestStatus.NOT_NOW,
         ))
 
     def test_device_configured(self):
         self.enrolled_device.awaiting_configuration = True
         command = _finish_dep_enrollment_configuration(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, DeviceConfigured)
-        self.assertEqual(command.channel, Channel.Device)
+        self.assertEqual(command.channel, Channel.DEVICE)

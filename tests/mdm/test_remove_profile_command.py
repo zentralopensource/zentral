@@ -3,11 +3,11 @@ import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands import RemoveProfile
 from zentral.contrib.mdm.commands.scheduling import _remove_artifacts
 from zentral.contrib.mdm.models import (
     Artifact,
-    ArtifactType,
     ArtifactVersion,
     Channel,
     Blueprint,
@@ -17,7 +17,7 @@ from zentral.contrib.mdm.models import (
     Platform,
     Profile,
     RequestStatus,
-    TargetArtifactStatus,
+    TargetArtifact,
     UserArtifact,
 )
 from .utils import force_dep_enrollment_session
@@ -47,7 +47,7 @@ class RemoveProfileCommandTestCase(TestCase):
 
     def _force_profile(
         self,
-        channel=Channel.Device,
+        channel=Channel.DEVICE,
         artifact=None,
         version=None,
         payload_content=None,
@@ -58,14 +58,15 @@ class RemoveProfileCommandTestCase(TestCase):
             artifact_name = get_random_string(12)
             artifact = Artifact.objects.create(
                 name=artifact_name,
-                type=ArtifactType.Profile.name,
-                channel=channel.name,
-                platforms=[Platform.macOS.name],
+                type=Artifact.Type.PROFILE,
+                channel=channel,
+                platforms=[Platform.MACOS],
+                auto_update=True,
             )
         else:
             artifact_name = artifact.name
         artifact_version = ArtifactVersion.objects.create(
-            artifact=artifact, version=version or 0
+            artifact=artifact, version=version or 0, macos=True,
         )
         try:
             payload_identifier = (
@@ -92,50 +93,49 @@ class RemoveProfileCommandTestCase(TestCase):
             payload_description="",
         )
         if status:
-            if channel == Channel.Device:
+            if channel == Channel.DEVICE:
                 DeviceArtifact.objects.create(
                     enrolled_device=self.enrolled_device,
                     artifact_version=artifact_version,
-                    status=status.name,
+                    status=status,
                 )
             else:
                 UserArtifact.objects.create(
                     enrolled_user=self.enrolled_user,
                     artifact_version=artifact_version,
-                    status=status.name,
+                    status=status,
                 )
         if in_blueprint:
-            BlueprintArtifact.objects.create(
+            BlueprintArtifact.objects.get_or_create(
                 blueprint=self.blueprint,
                 artifact=artifact,
-                install_before_setup_assistant=False,
-                auto_update=True,
-                priority=100,
+                defaults={"macos": True},
             )
+            update_blueprint_serialized_artifacts(self.blueprint)
         return artifact_version, profile
 
     # verify_channel_and_device
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.Device, Platform.iOS, False, True),
-            (Channel.Device, Platform.iPadOS, False, True),
-            (Channel.Device, Platform.macOS, False, True),
-            (Channel.Device, Platform.tvOS, False, True),
-            (Channel.User, Platform.iOS, False, False),
-            (Channel.User, Platform.iPadOS, False, True),
-            (Channel.User, Platform.macOS, False, True),
-            (Channel.User, Platform.tvOS, False, False),
-            (Channel.Device, Platform.iOS, True, True),
-            (Channel.Device, Platform.iPadOS, True, False),
-            (Channel.Device, Platform.macOS, True, True),
-            (Channel.Device, Platform.tvOS, True, False),
-            (Channel.User, Platform.iOS, True, False),
-            (Channel.User, Platform.iPadOS, True, False),
-            (Channel.User, Platform.macOS, True, True),
-            (Channel.User, Platform.tvOS, True, False),
+            (Channel.DEVICE, Platform.IOS, False, True),
+            (Channel.DEVICE, Platform.IPADOS, False, True),
+            (Channel.DEVICE, Platform.MACOS, False, True),
+            (Channel.DEVICE, Platform.TVOS, False, True),
+            (Channel.USER, Platform.IOS, False, False),
+            (Channel.USER, Platform.IPADOS, False, True),
+            (Channel.USER, Platform.MACOS, False, True),
+            (Channel.USER, Platform.TVOS, False, False),
+            (Channel.DEVICE, Platform.IOS, True, True),
+            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.MACOS, True, True),
+            (Channel.DEVICE, Platform.TVOS, True, False),
+            (Channel.USER, Platform.IOS, True, False),
+            (Channel.USER, Platform.IPADOS, True, False),
+            (Channel.USER, Platform.MACOS, True, True),
+            (Channel.USER, Platform.TVOS, True, False),
         ):
-            self.enrolled_device.platform = platform.name
+            self.enrolled_device.platform = platform
             self.enrolled_device.user_enrollment = user_enrollment
             self.assertEqual(
                 result,
@@ -160,7 +160,7 @@ class RemoveProfileCommandTestCase(TestCase):
     # process_response
 
     def test_process_acknowledged_response_device(self):
-        artifact_version, _ = self._force_profile(status=TargetArtifactStatus.Installed)
+        artifact_version, _ = self._force_profile(status=TargetArtifact.Status.INSTALLED)
         qs = DeviceArtifact.objects.filter(
             enrolled_device=self.enrolled_device,
             artifact_version__artifact=artifact_version.artifact,
@@ -171,11 +171,13 @@ class RemoveProfileCommandTestCase(TestCase):
         cmd.process_response(
             {"Status": "Acknowledged"}, self.dep_enrollment_session, self.mbu
         )
-        self.assertEqual(qs.count(), 0)
+        self.assertEqual(qs.count(), 1)
+        ta = qs.first()
+        self.assertEqual(ta.status, TargetArtifact.Status.UNINSTALLED)
 
     def test_process_acknowledged_response_user(self):
         artifact_version, _ = self._force_profile(
-            channel=Channel.User, status=TargetArtifactStatus.Installed
+            channel=Channel.USER, status=TargetArtifact.Status.INSTALLED
         )
         qs = UserArtifact.objects.filter(
             enrolled_user=self.enrolled_user,
@@ -183,73 +185,68 @@ class RemoveProfileCommandTestCase(TestCase):
         )
         self.assertEqual(qs.count(), 1)
         self.assertEqual(qs.first().artifact_version, artifact_version)
-        cmd = RemoveProfile.create_for_user(self.enrolled_user, artifact_version)
+        cmd = RemoveProfile.create_for_target(
+            Target(self.enrolled_device, self.enrolled_user),
+            artifact_version
+        )
         cmd.process_response(
             {"Status": "Acknowledged"}, self.dep_enrollment_session, self.mbu
         )
-        self.assertEqual(qs.count(), 0)
+        self.assertEqual(qs.count(), 1)
+        ta = qs.first()
+        self.assertEqual(ta.status, TargetArtifact.Status.UNINSTALLED)
 
     # _remove_artifacts
 
     def test_remove_device_profile_noop(self):
         artifact_version, _ = self._force_profile(
-            status=TargetArtifactStatus.Installed, in_blueprint=True
+            status=TargetArtifact.Status.INSTALLED, in_blueprint=True
         )
         self.assertIsNone(
             _remove_artifacts(
-                Channel.Device,
-                RequestStatus.Idle,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                None,
+                RequestStatus.IDLE,
             )
         )
 
     def test_remove_device_profile_notnow_noop(self):
-        artifact_version, _ = self._force_profile(status=TargetArtifactStatus.Installed)
+        artifact_version, _ = self._force_profile(status=TargetArtifact.Status.INSTALLED)
         self.assertIsNone(
             _remove_artifacts(
-                Channel.Device,
-                RequestStatus.NotNow,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                None,
+                RequestStatus.NOT_NOW,
             )
         )
 
     def test_remove_device_profile(self):
         self.assertFalse(self.enrolled_device.declarative_management)
-        artifact_version, _ = self._force_profile(status=TargetArtifactStatus.Installed)
+        artifact_version, _ = self._force_profile(status=TargetArtifact.Status.INSTALLED)
         command = _remove_artifacts(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, RemoveProfile)
-        self.assertEqual(command.channel, Channel.Device)
+        self.assertEqual(command.channel, Channel.DEVICE)
         self.assertEqual(command.artifact_version, artifact_version)
 
     def test_remove_device_profile_declarative_management_noop(self):
         self.enrolled_device.declarative_management = True
-        artifact_version, _ = self._force_profile(status=TargetArtifactStatus.Installed)
+        artifact_version, _ = self._force_profile(status=TargetArtifact.Status.INSTALLED)
         self.assertIsNone(_remove_artifacts(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         ))
 
     def test_remove_device_profile_previous_error_noop(self):
-        self._force_profile(status=TargetArtifactStatus.Installed)
+        self._force_profile(status=TargetArtifact.Status.INSTALLED)
         command = _remove_artifacts(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         command.process_response(
             {"Status": "Error", "ErrorChain": [{"un": 1}]},
@@ -258,84 +255,72 @@ class RemoveProfileCommandTestCase(TestCase):
         )
         self.assertIsNone(
             _remove_artifacts(
-                Channel.Device,
-                RequestStatus.Idle,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                None,
+                RequestStatus.IDLE,
             )
         )
 
     def test_remove_user_profile_noop(self):
         artifact_version, _ = self._force_profile(
-            channel=Channel.User,
-            status=TargetArtifactStatus.Installed,
+            channel=Channel.USER,
+            status=TargetArtifact.Status.INSTALLED,
             in_blueprint=True,
         )
         self.assertIsNone(
             _remove_artifacts(
-                Channel.User,
-                RequestStatus.Idle,
+                Target(self.enrolled_device, self.enrolled_user),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user,
+                RequestStatus.IDLE,
             )
         )
 
     def test_remove_user_profile_notnow_noop(self):
         artifact_version, _ = self._force_profile(
-            channel=Channel.User, status=TargetArtifactStatus.Installed
+            channel=Channel.USER, status=TargetArtifact.Status.INSTALLED
         )
         self.assertIsNone(
             _remove_artifacts(
-                Channel.User,
-                RequestStatus.NotNow,
+                Target(self.enrolled_device, self.enrolled_user),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user,
+                RequestStatus.NOT_NOW,
             )
         )
 
     def test_remove_user_profile(self):
         self.assertFalse(self.enrolled_device.declarative_management)
         artifact_version, _ = self._force_profile(
-            channel=Channel.User, status=TargetArtifactStatus.Installed
+            channel=Channel.USER, status=TargetArtifact.Status.INSTALLED
         )
         command = _remove_artifacts(
-            Channel.User,
-            RequestStatus.Idle,
+            Target(self.enrolled_device, self.enrolled_user),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, RemoveProfile)
-        self.assertEqual(command.channel, Channel.User)
+        self.assertEqual(command.channel, Channel.USER)
         self.assertEqual(command.artifact_version, artifact_version)
 
     def test_remove_user_profile_declarative_management(self):
         self.enrolled_device.declarative_management = True
         artifact_version, _ = self._force_profile(
-            channel=Channel.User, status=TargetArtifactStatus.Installed
+            channel=Channel.USER, status=TargetArtifact.Status.INSTALLED
         )
         command = _remove_artifacts(
-            Channel.User,
-            RequestStatus.Idle,
+            Target(self.enrolled_device, self.enrolled_user),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, RemoveProfile)
-        self.assertEqual(command.channel, Channel.User)
+        self.assertEqual(command.channel, Channel.USER)
         self.assertEqual(command.artifact_version, artifact_version)
 
     def test_remove_user_profile_previous_error_noop(self):
-        self._force_profile(channel=Channel.User, status=TargetArtifactStatus.Installed)
+        self._force_profile(channel=Channel.USER, status=TargetArtifact.Status.INSTALLED)
         command = _remove_artifacts(
-            Channel.User,
-            RequestStatus.Idle,
+            Target(self.enrolled_device, self.enrolled_user),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user,
+            RequestStatus.IDLE,
         )
         command.process_response(
             {"Status": "Error", "ErrorChain": [{"un": 1}]},
@@ -344,10 +329,8 @@ class RemoveProfileCommandTestCase(TestCase):
         )
         self.assertIsNone(
             _remove_artifacts(
-                Channel.User,
-                RequestStatus.Idle,
+                Target(self.enrolled_device, self.enrolled_user),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user,
+                RequestStatus.IDLE,
             )
         )

@@ -15,12 +15,10 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.crypto import verify_signed_payload
-from zentral.contrib.mdm.declarations import (get_blueprint_tokens_response,
-                                              update_blueprint_activation,
-                                              update_blueprint_declaration_items)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.models import (Artifact, ArtifactType, ArtifactVersion, Blueprint,
+from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Blueprint, BlueprintArtifact,
                                         Channel, DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
                                         OTAEnrollmentSession, Platform,
                                         Profile, UserEnrollmentSession, ReEnrollmentSession)
@@ -138,8 +136,7 @@ class MDMViewsTestCase(TestCase):
 
     def _add_blueprint(self, session):
         blueprint = Blueprint.objects.create(name=get_random_string(12))
-        update_blueprint_activation(blueprint, commit=False)
-        update_blueprint_declaration_items(blueprint)
+        update_blueprint_serialized_artifacts(blueprint)
         session.enrolled_device.blueprint = blueprint
         session.enrolled_device.save()
         return blueprint
@@ -148,12 +145,12 @@ class MDMViewsTestCase(TestCase):
         artifact_name = get_random_string(12)
         artifact = Artifact.objects.create(
             name=artifact_name,
-            type=ArtifactType.Profile.name,
-            channel=Channel.Device.name,
-            platforms=[Platform.macOS.name],
+            type=Artifact.Type.PROFILE,
+            channel=Channel.DEVICE,
+            platforms=[Platform.MACOS],
         )
         artifact_version = ArtifactVersion.objects.create(
-            artifact=artifact, version=0
+            artifact=artifact, version=0, macos=True
         )
         payload_identifier = str(uuid.uuid4())
         return Profile.objects.create(
@@ -174,6 +171,17 @@ class MDMViewsTestCase(TestCase):
             payload_display_name=artifact_name,
             payload_description="",
         )
+
+    def _force_blueprint_profile(self, session):
+        profile = self._force_profile()
+        blueprint = self._add_blueprint(session)
+        BlueprintArtifact.objects.get_or_create(
+            artifact=profile.artifact_version.artifact,
+            blueprint=blueprint,
+            defaults={"macos": True},
+        )
+        update_blueprint_serialized_artifacts(blueprint)
+        return profile
 
     # checkin - authenticate
 
@@ -530,7 +538,7 @@ class MDMViewsTestCase(TestCase):
 
     def test_declarative_management_tokens(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
-        blueprint = self._add_blueprint(session)
+        self._add_blueprint(session)
         payload = {
             "UDID": udid,
             "MessageType": "DeclarativeManagement",
@@ -540,11 +548,59 @@ class MDMViewsTestCase(TestCase):
         response = self._put(reverse("mdm:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         json_response = json.loads(response.content)
-        tokens_response, declarations_token = get_blueprint_tokens_response(blueprint)
+        tokens_response, declarations_token = Target(session.enrolled_device).sync_tokens
         self.assertEqual(json_response, tokens_response)
         self._assertSuccess(post_event, endpoint="tokens")
         session.enrolled_device.refresh_from_db()
         self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
+
+    def test_declarative_management_declaration_items(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration-items"
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        json_response = json.loads(response.content)
+        self.assertEqual(json_response, Target(session.enrolled_device).declaration_items)
+
+    def test_declarative_management_legacy_profile_declaration(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        profile = self._force_blueprint_profile(session)
+        artifact_version = profile.artifact_version
+        artifact = artifact_version.artifact
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.legacy-profile.{artifact.pk}"
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            json.loads(response.content),
+            {'Identifier': f'zentral.legacy-profile.{artifact.pk}',
+             'Payload': {'ProfileURL': f'https://zentral-mtls/mdm/profiles/{artifact_version.pk}/'},
+             'ServerToken': str(artifact_version.pk),
+             'Type': 'com.apple.configuration.legacy'}
+        )
+
+    def test_declarative_management_unknown_legacy_profile_declaration(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        profile = self._force_profile()  # this profile is not in the blueprint
+        self._force_blueprint_profile(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.legacy-profile.{profile.artifact_version.artifact.pk}"
+        }
+        response = self._put(reverse("mdm:checkin"), payload, session)
+        self.assertEqual(response.status_code, 404)
 
     # checking - checkout
 

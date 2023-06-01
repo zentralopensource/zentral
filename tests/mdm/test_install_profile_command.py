@@ -4,11 +4,11 @@ import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands import InstallProfile
 from zentral.contrib.mdm.commands.scheduling import _install_artifacts
 from zentral.contrib.mdm.models import (
     Artifact,
-    ArtifactType,
     ArtifactVersion,
     Blueprint,
     BlueprintArtifact,
@@ -19,7 +19,7 @@ from zentral.contrib.mdm.models import (
     Profile,
     RequestStatus,
     SCEPConfig,
-    TargetArtifactStatus,
+    TargetArtifact,
     UserArtifact,
 )
 from .utils import force_dep_enrollment_session
@@ -49,7 +49,7 @@ class InstallProfileCommandTestCase(TestCase):
 
     def _force_profile(
         self,
-        channel=Channel.Device,
+        channel=Channel.DEVICE,
         artifact=None,
         version=None,
         payload_content=None,
@@ -59,14 +59,16 @@ class InstallProfileCommandTestCase(TestCase):
             artifact_name = get_random_string(12)
             artifact = Artifact.objects.create(
                 name=artifact_name,
-                type=ArtifactType.Profile.name,
-                channel=channel.name,
-                platforms=[Platform.macOS.name],
+                type=Artifact.Type.PROFILE,
+                channel=channel,
+                platforms=[Platform.MACOS],
             )
         else:
             artifact_name = artifact.name
         artifact_version = ArtifactVersion.objects.create(
-            artifact=artifact, version=version or 0
+            artifact=artifact,
+            version=version or 0,
+            macos=True,
         )
         try:
             payload_identifier = (
@@ -93,49 +95,48 @@ class InstallProfileCommandTestCase(TestCase):
             payload_description="",
         )
         if installed:
-            if channel == Channel.Device:
+            if channel == Channel.DEVICE:
                 DeviceArtifact.objects.create(
                     enrolled_device=self.enrolled_device,
                     artifact_version=artifact_version,
-                    status=TargetArtifactStatus.Installed.name,
+                    status=TargetArtifact.Status.INSTALLED,
                 )
             else:
                 UserArtifact.objects.create(
                     enrolled_user=self.enrolled_user,
                     artifact_version=artifact_version,
-                    status=TargetArtifactStatus.Installed.name,
+                    status=TargetArtifact.Status.INSTALLED,
                 )
-        BlueprintArtifact.objects.create(
+        BlueprintArtifact.objects.get_or_create(
             blueprint=self.blueprint,
             artifact=artifact,
-            install_before_setup_assistant=False,
-            auto_update=True,
-            priority=100,
+            defaults={"macos": True},
         )
+        update_blueprint_serialized_artifacts(self.blueprint)
         return artifact_version, profile
 
     # verify_channel_and_device
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.Device, Platform.iOS, False, True),
-            (Channel.Device, Platform.iPadOS, False, True),
-            (Channel.Device, Platform.macOS, False, True),
-            (Channel.Device, Platform.tvOS, False, True),
-            (Channel.User, Platform.iOS, False, False),
-            (Channel.User, Platform.iPadOS, False, True),
-            (Channel.User, Platform.macOS, False, True),
-            (Channel.User, Platform.tvOS, False, False),
-            (Channel.Device, Platform.iOS, True, True),
-            (Channel.Device, Platform.iPadOS, True, False),
-            (Channel.Device, Platform.macOS, True, True),
-            (Channel.Device, Platform.tvOS, True, False),
-            (Channel.User, Platform.iOS, True, False),
-            (Channel.User, Platform.iPadOS, True, False),
-            (Channel.User, Platform.macOS, True, True),
-            (Channel.User, Platform.tvOS, True, False),
+            (Channel.DEVICE, Platform.IOS, False, True),
+            (Channel.DEVICE, Platform.IPADOS, False, True),
+            (Channel.DEVICE, Platform.MACOS, False, True),
+            (Channel.DEVICE, Platform.TVOS, False, True),
+            (Channel.USER, Platform.IOS, False, False),
+            (Channel.USER, Platform.IPADOS, False, True),
+            (Channel.USER, Platform.MACOS, False, True),
+            (Channel.USER, Platform.TVOS, False, False),
+            (Channel.DEVICE, Platform.IOS, True, True),
+            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.MACOS, True, True),
+            (Channel.DEVICE, Platform.TVOS, True, False),
+            (Channel.USER, Platform.IOS, True, False),
+            (Channel.USER, Platform.IPADOS, True, False),
+            (Channel.USER, Platform.MACOS, True, True),
+            (Channel.USER, Platform.TVOS, True, False),
         ):
-            self.enrolled_device.platform = platform.name
+            self.enrolled_device.platform = platform
             self.enrolled_device.user_enrollment = user_enrollment
             self.assertEqual(
                 result,
@@ -328,12 +329,12 @@ class InstallProfileCommandTestCase(TestCase):
         self.assertEqual(qs.count(), 1)
         da = qs.first()
         self.assertEqual(da.artifact_version, artifact_version1)
-        self.assertEqual(da.status, TargetArtifactStatus.Installed.name)
+        self.assertEqual(da.status, TargetArtifact.Status.ACKNOWLEDGED)
 
     def test_process_acknowledged_response_user(self):
-        artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
+        artifact_version0, _ = self._force_profile(channel=Channel.USER, installed=True)
         artifact_version1, _ = self._force_profile(
-            channel=Channel.User, artifact=artifact_version0.artifact, version=1
+            channel=Channel.USER, artifact=artifact_version0.artifact, version=1
         )
         qs = UserArtifact.objects.filter(
             enrolled_user=self.enrolled_user,
@@ -341,14 +342,14 @@ class InstallProfileCommandTestCase(TestCase):
         ).order_by("created_at")
         self.assertEqual(qs.count(), 1)
         self.assertEqual(qs.first().artifact_version, artifact_version0)
-        cmd = InstallProfile.create_for_user(self.enrolled_user, artifact_version1)
+        cmd = InstallProfile.create_for_target(Target(self.enrolled_device, self.enrolled_user), artifact_version1)
         cmd.process_response(
             {"Status": "Acknowledged"}, self.dep_enrollment_session, self.mbu
         )
         self.assertEqual(qs.count(), 1)
         ua = qs.first()
         self.assertEqual(ua.artifact_version, artifact_version1)
-        self.assertEqual(ua.status, TargetArtifactStatus.Installed.name)
+        self.assertEqual(ua.status, TargetArtifact.Status.ACKNOWLEDGED)
 
     # _install_artifacts
 
@@ -356,11 +357,9 @@ class InstallProfileCommandTestCase(TestCase):
         artifact_version0, _ = self._force_profile(installed=True)
         self.assertIsNone(
             _install_artifacts(
-                Channel.Device,
-                RequestStatus.Idle,
+                Target(self.enrolled_device),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                None,
+                RequestStatus.IDLE,
             )
         )
 
@@ -370,31 +369,25 @@ class InstallProfileCommandTestCase(TestCase):
             artifact=artifact_version0.artifact, version=1
         )
         self.assertIsNone(_install_artifacts(
-            Channel.Device,
-            RequestStatus.NotNow,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.NOT_NOW,
         ))
 
     def test_install_device_profile_previous_error_noop(self):
         artifact_version, _ = self._force_profile()
         command = _install_artifacts(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, InstallProfile)
         command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
                                  self.dep_enrollment_session, self.mbu)
         self.assertIsNone(_install_artifacts(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         ))
 
     def test_install_device_profile(self):
@@ -404,11 +397,9 @@ class InstallProfileCommandTestCase(TestCase):
             artifact=artifact_version0.artifact, version=1
         )
         cmd = _install_artifacts(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, InstallProfile)
         self.assertEqual(cmd.artifact_version, artifact_version1)
@@ -417,86 +408,72 @@ class InstallProfileCommandTestCase(TestCase):
         self.enrolled_device.declarative_management = True
         artifact_version, _ = self._force_profile()
         self.assertIsNone(_install_artifacts(
-            Channel.Device,
-            RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         ))
 
     def test_install_user_profile_already_installed_noop(self):
-        artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
+        artifact_version0, _ = self._force_profile(channel=Channel.USER, installed=True)
         self.assertIsNone(
             _install_artifacts(
-                Channel.User,
-                RequestStatus.Idle,
+                Target(self.enrolled_device, self.enrolled_user),
                 self.dep_enrollment_session,
-                self.enrolled_device,
-                self.enrolled_user,
+                RequestStatus.IDLE,
             )
         )
 
     def test_install_user_profile_notnow_noop(self):
-        artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
+        artifact_version0, _ = self._force_profile(channel=Channel.USER, installed=True)
         artifact_version1, _ = self._force_profile(
-            channel=Channel.User, artifact=artifact_version0.artifact, version=1
+            channel=Channel.USER, artifact=artifact_version0.artifact, version=1
         )
         self.assertIsNone(_install_artifacts(
-            Channel.User,
-            RequestStatus.NotNow,
+            Target(self.enrolled_device, self.enrolled_user),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user,
+            RequestStatus.NOT_NOW,
         ))
 
     def test_install_user_profile_previous_error_noop(self):
-        artifact_version, _ = self._force_profile(channel=Channel.User)
+        artifact_version, _ = self._force_profile(channel=Channel.USER)
         command = _install_artifacts(
-            Channel.User,
-            RequestStatus.Idle,
+            Target(self.enrolled_device, self.enrolled_user),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(command, InstallProfile)
         command.process_response({"Status": "Error", "ErrorChain": [{"un": 1}]},
                                  self.dep_enrollment_session, self.mbu)
         self.assertIsNone(_install_artifacts(
-            Channel.User,
-            RequestStatus.Idle,
+            Target(self.enrolled_device, self.enrolled_user),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user
+            RequestStatus.IDLE,
         ))
 
     def test_install_user_profile(self):
         self.assertFalse(self.enrolled_device.declarative_management)
-        artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
+        artifact_version0, _ = self._force_profile(channel=Channel.USER, installed=True)
         artifact_version1, _ = self._force_profile(
-            channel=Channel.User, artifact=artifact_version0.artifact, version=1
+            channel=Channel.USER, artifact=artifact_version0.artifact, version=1
         )
         cmd = _install_artifacts(
-            Channel.User,
-            RequestStatus.Idle,
+            Target(self.enrolled_device, self.enrolled_user),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, InstallProfile)
         self.assertEqual(cmd.artifact_version, artifact_version1)
 
     def test_install_user_profile_declarative_management(self):
         self.enrolled_device.declarative_management = True
-        artifact_version0, _ = self._force_profile(channel=Channel.User, installed=True)
+        artifact_version0, _ = self._force_profile(channel=Channel.USER, installed=True)
         artifact_version1, _ = self._force_profile(
-            channel=Channel.User, artifact=artifact_version0.artifact, version=1
+            channel=Channel.USER, artifact=artifact_version0.artifact, version=1
         )
         cmd = _install_artifacts(
-            Channel.User,
-            RequestStatus.Idle,
+            Target(self.enrolled_device, self.enrolled_user),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            self.enrolled_user,
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, InstallProfile)
         self.assertEqual(cmd.artifact_version, artifact_version1)

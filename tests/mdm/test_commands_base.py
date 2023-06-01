@@ -6,7 +6,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.models import Channel, CommandStatus, DeviceCommand, EnrolledUser, UserCommand
+from zentral.contrib.mdm.models import Channel, Command, DeviceCommand, EnrolledUser, UserCommand
 from zentral.contrib.mdm.commands.base import get_command, load_command
 from zentral.contrib.mdm.commands.profile_list import ProfileList
 from .utils import force_dep_enrollment_session
@@ -74,7 +74,7 @@ class TestMDMCommandsBase(TestCase):
         self.assertIsInstance(cmd, ProfileList)
         self.assertEqual(cmd.response, result)
         self.assertEqual(cmd.result_time, result_time)
-        self.assertEqual(cmd.status, CommandStatus.Acknowledged)
+        self.assertEqual(cmd.status, Command.Status.ACKNOWLEDGED)
         self.assertEqual(cmd.uuid, uuid.UUID(result["CommandUUID"]))
 
     # test_get_command
@@ -82,7 +82,7 @@ class TestMDMCommandsBase(TestCase):
     @patch("zentral.contrib.mdm.commands.base.logger.error")
     def test_get_device_command_does_not_exist(self, logger_error):
         unknown_uuid = uuid.uuid4()
-        cmd = get_command(Channel.Device, unknown_uuid)
+        cmd = get_command(Channel.DEVICE, unknown_uuid)
         self.assertIsNone(cmd)
         logger_error.assert_called_once_with(
             "Unknown command: %s %s",
@@ -93,7 +93,7 @@ class TestMDMCommandsBase(TestCase):
     @patch("zentral.contrib.mdm.commands.base.logger.error")
     def test_get_user_command_does_not_exist(self, logger_error):
         unknown_uuid = uuid.uuid4()
-        cmd = get_command(Channel.User, unknown_uuid)
+        cmd = get_command(Channel.USER, unknown_uuid)
         self.assertIsNone(cmd)
         logger_error.assert_called_once_with(
             "Unknown command: %s %s",

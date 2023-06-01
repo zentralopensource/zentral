@@ -2,9 +2,10 @@ import plistlib
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import CustomCommand
 from zentral.contrib.mdm.commands.scheduling import _get_next_queued_command
-from zentral.contrib.mdm.models import Channel, CommandStatus, RequestStatus
+from zentral.contrib.mdm.models import Channel, Command, RequestStatus
 from .utils import force_dep_enrollment_session
 
 
@@ -23,7 +24,7 @@ class CustomCommandTestCase(TestCase):
     # verify_channel_and_device
 
     def test_verify_channel_and_device(self):
-        for channel in (Channel.Device, Channel.User):
+        for channel in (Channel.DEVICE, Channel.USER):
             self.assertTrue(CustomCommand.verify_channel_and_device(channel, self.enrolled_device))
 
     # load_kwargs
@@ -75,8 +76,8 @@ class CustomCommandTestCase(TestCase):
             self.mbu
         )
         cmd.db_command.refresh_from_db()
-        self.assertEqual(cmd.status, CommandStatus.Acknowledged)
-        self.assertEqual(cmd.db_command.status, CommandStatus.Acknowledged.value)
+        self.assertEqual(cmd.status, Command.Status.ACKNOWLEDGED)
+        self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
 
     def test_process_notnow_response(self):
         cmd_payload = {
@@ -95,8 +96,8 @@ class CustomCommandTestCase(TestCase):
             self.mbu
         )
         cmd.db_command.refresh_from_db()
-        self.assertEqual(cmd.status, CommandStatus.NotNow)
-        self.assertEqual(cmd.db_command.status, CommandStatus.NotNow.value)
+        self.assertEqual(cmd.status, Command.Status.NOT_NOW)
+        self.assertEqual(cmd.db_command.status, Command.Status.NOT_NOW)
         self.assertIsNone(cmd.db_command.result)
 
     def test_process_rescheduled_acknowledged_response(self):
@@ -126,10 +127,10 @@ class CustomCommandTestCase(TestCase):
             self.mbu
         )
         cmd.db_command.refresh_from_db()
-        self.assertEqual(cmd.status, CommandStatus.Acknowledged)
-        self.assertEqual(cmd.db_command.status, CommandStatus.Acknowledged.value)
+        self.assertEqual(cmd.status, Command.Status.ACKNOWLEDGED)
+        self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
         result = plistlib.loads(cmd.db_command.result)
-        self.assertEqual(result["Status"], CommandStatus.Acknowledged.value)
+        self.assertEqual(result["Status"], Command.Status.ACKNOWLEDGED)
 
     # _get_next_queued_command
 
@@ -138,13 +139,12 @@ class CustomCommandTestCase(TestCase):
             self.enrolled_device,
             kwargs={"command": plistlib.dumps({"RequestType": "InstalledApplicationList"}).decode("utf-8")},
         )
-        cmd.db_command.status = CommandStatus.NotNow.value
+        cmd.db_command.status = Command.Status.NOT_NOW
         cmd.db_command.save()
         self.assertIsNone(_get_next_queued_command(
-            Channel.Device, RequestStatus.NotNow,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.NOT_NOW,
         ))
 
     def test_not_now_custom_command_rescheduled(self):
@@ -152,12 +152,11 @@ class CustomCommandTestCase(TestCase):
             self.enrolled_device,
             kwargs={"command": plistlib.dumps({"RequestType": "InstalledApplicationList"}).decode("utf-8")},
         )
-        cmd.db_command.status = CommandStatus.NotNow.value
+        cmd.db_command.status = Command.Status.NOT_NOW
         cmd.db_command.save()
         fetched_cmd = _get_next_queued_command(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.enrolled_device),
             self.dep_enrollment_session,
-            self.enrolled_device,
-            None,
+            RequestStatus.IDLE,
         )
         self.assertEqual(fetched_cmd, cmd)

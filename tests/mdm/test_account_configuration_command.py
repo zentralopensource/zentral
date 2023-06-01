@@ -4,10 +4,11 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from realms.utils import serialize_password_hash_dict
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import AccountConfiguration
 from zentral.contrib.mdm.commands.scheduling import _configure_dep_enrollment_accounts
-from zentral.contrib.mdm.models import Channel, CommandStatus, Platform, RequestStatus
-from .utils import force_dep_enrollment_session, force_enrolled_user
+from zentral.contrib.mdm.models import Channel, Command, Platform, RequestStatus
+from .utils import force_dep_enrollment_session, force_enrolled_user, force_ota_enrollment_session
 
 
 class AccountConfigurationCommandTestCase(TestCase):
@@ -27,23 +28,23 @@ class AccountConfigurationCommandTestCase(TestCase):
     # verify_channel_and_device
 
     def test_scope_ok(self):
-        self.assertEqual(self.dep_enrollment_session.enrolled_device.platform, Platform.macOS.name)
+        self.assertEqual(self.dep_enrollment_session.enrolled_device.platform, Platform.MACOS)
         self.assertTrue(AccountConfiguration.verify_channel_and_device(
-            Channel.Device,
+            Channel.DEVICE,
             self.dep_enrollment_session.enrolled_device,
         ))
 
     def test_user_channel_scope_not_ok(self):
-        self.assertEqual(self.dep_enrollment_session.enrolled_device.platform, Platform.macOS.name)
+        self.assertEqual(self.dep_enrollment_session.enrolled_device.platform, Platform.MACOS)
         self.assertFalse(AccountConfiguration.verify_channel_and_device(
-            Channel.User,
+            Channel.USER,
             self.dep_enrollment_session.enrolled_device,
         ))
 
     def test_not_macos_scope_not_ok(self):
-        self.dep_enrollment_session.enrolled_device.platform = Platform.iOS.name
+        self.dep_enrollment_session.enrolled_device.platform = Platform.IOS
         self.assertFalse(AccountConfiguration.verify_channel_and_device(
-            Channel.Device,
+            Channel.DEVICE,
             self.dep_enrollment_session.enrolled_device,
         ))
 
@@ -62,6 +63,13 @@ class AccountConfigurationCommandTestCase(TestCase):
         self.assertEqual(payload["PrimaryAccountUserName"], self.dep_enrollment_session.realm_user.device_username)
         self.assertFalse(payload["SetPrimarySetupAccountAsRegularUser"])
         self.assertFalse(payload["SkipPrimarySetupAccountCreation"])
+
+    def test_ota_enrollment_session_error(self):
+        session, _, _ = force_ota_enrollment_session(self.mbu, completed=True)
+        cmd = AccountConfiguration.create_for_device(session.enrolled_device)
+        with self.assertRaises(ValueError) as cm:
+            cmd.build_http_response(session)
+        self.assertEqual(cm.exception.args[0], "Invalid enrollment session")
 
     def test_build_command_realm_user_no_password_hash_not_admin(self):
         dep_enrollment = self.dep_enrollment_session.dep_enrollment
@@ -111,38 +119,34 @@ class AccountConfigurationCommandTestCase(TestCase):
     def test_configure_dep_enrollment_accounts_not_now(self):
         self.dep_enrollment_session.enrolled_device.awaiting_configuration = True
         self.assertIsNone(_configure_dep_enrollment_accounts(
-            Channel.Device, RequestStatus.NotNow,
+            Target(self.dep_enrollment_session.enrolled_device),
             self.dep_enrollment_session,
-            self.dep_enrollment_session.enrolled_device,
-            None
+            RequestStatus.NOT_NOW,
         ))
 
     def test_configure_dep_enrollment_accounts_user_channel(self):
         self.dep_enrollment_session.enrolled_device.awaiting_configuration = True
         enrolled_user = force_enrolled_user(self.dep_enrollment_session.enrolled_device)
         self.assertIsNone(_configure_dep_enrollment_accounts(
-            Channel.User, RequestStatus.Idle,
+            Target(self.dep_enrollment_session.enrolled_device, enrolled_user),
             self.dep_enrollment_session,
-            self.dep_enrollment_session.enrolled_device,
-            enrolled_user
+            RequestStatus.IDLE,
         ))
 
     def test_configure_dep_enrollment_accounts_not_awaiting_configuration(self):
         self.assertIsNone(self.dep_enrollment_session.enrolled_device.awaiting_configuration)
         self.assertIsNone(_configure_dep_enrollment_accounts(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.dep_enrollment_session.enrolled_device),
             self.dep_enrollment_session,
-            self.dep_enrollment_session.enrolled_device,
-            None
+            RequestStatus.IDLE,
         ))
 
     def test_configure_dep_enrollment_accounts_not_dep_enrollment_session(self):
         self.dep_enrollment_session.enrolled_device.awaiting_configuration = True
         self.assertIsNone(_configure_dep_enrollment_accounts(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.dep_enrollment_session.enrolled_device),
             Mock(dep_enrollment=None),
-            self.dep_enrollment_session.enrolled_device,
-            None
+            RequestStatus.IDLE,
         ))
 
     def test_configure_dep_enrollment_accounts_not_requires_account_configuration(self):
@@ -150,10 +154,9 @@ class AccountConfigurationCommandTestCase(TestCase):
         dep_enrollment_session.enrolled_device.awaiting_configuration = True
         self.assertFalse(dep_enrollment_session.dep_enrollment.requires_account_configuration())
         self.assertIsNone(_configure_dep_enrollment_accounts(
-            Channel.Device, RequestStatus.Idle,
+            Target(dep_enrollment_session.enrolled_device),
             dep_enrollment_session,
-            dep_enrollment_session.enrolled_device,
-            None
+            RequestStatus.IDLE,
         ))
 
     def test_configure_dep_enrollment_accounts_already_done(self):
@@ -161,13 +164,12 @@ class AccountConfigurationCommandTestCase(TestCase):
         self.dep_enrollment_session.dep_enrollment.use_realm_user = True
         self.assertTrue(self.dep_enrollment_session.dep_enrollment.requires_account_configuration())
         cmd = AccountConfiguration.create_for_device(self.dep_enrollment_session.enrolled_device)
-        cmd.db_command.status = CommandStatus.Acknowledged.value
+        cmd.db_command.status = Command.Status.ACKNOWLEDGED
         cmd.db_command.save()
         self.assertIsNone(_configure_dep_enrollment_accounts(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.dep_enrollment_session.enrolled_device),
             self.dep_enrollment_session,
-            self.dep_enrollment_session.enrolled_device,
-            None
+            RequestStatus.IDLE,
         ))
 
     def test_configure_dep_enrollment_accounts(self):
@@ -175,9 +177,8 @@ class AccountConfigurationCommandTestCase(TestCase):
         self.dep_enrollment_session.dep_enrollment.use_realm_user = True
         self.assertTrue(self.dep_enrollment_session.dep_enrollment.requires_account_configuration())
         cmd = _configure_dep_enrollment_accounts(
-            Channel.Device, RequestStatus.Idle,
+            Target(self.dep_enrollment_session.enrolled_device),
             self.dep_enrollment_session,
-            self.dep_enrollment_session.enrolled_device,
-            None
+            RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, AccountConfiguration)
