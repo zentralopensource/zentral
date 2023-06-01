@@ -2,6 +2,7 @@ import logging
 from django.db import models
 from django.db.models import F
 from django.urls import reverse
+import hashlib
 
 from zentral.core.secret_engines import decrypt_str, encrypt_str, rewrap
 
@@ -36,13 +37,18 @@ class Tenant(models.Model):
         super().save(*args, **kwargs)
 
     def serialize_for_event(self):
+        data = self.get_client_secret().encode("utf-8")
+        sha256_hash = hashlib.sha256()
+        sha256_hash.update(data)
+        client_secret_hash = sha256_hash.hexdigest()
+
         return {
             'business_unit': self.business_unit.pk,
             'name': self.name,
             'description': self.description,
             'tenant_id': self.tenant_id,
             'client_id': str(self.client_id),
-            'client_secret': self.client_secret,
+            'client_secret_hash': client_secret_hash,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
         }
@@ -52,14 +58,14 @@ class Tenant(models.Model):
     def set_client_secret(self, client_secret):
         if not self.pk:
             raise ValueError("Instance must have a PK")
-        self.client_secret = encrypt_str(client_secret, field="client_secret", model="intune.instance", pk=self.pk)
+        self.client_secret = encrypt_str(client_secret, field="client_secret", model="intune.tenant", pk=self.pk)
 
     def get_client_secret(self):
         if not self.pk:
             raise ValueError("Instance must have a PK")
-        return decrypt_str(self.client_secret, field="client_secret", model="intune.instance", pk=self.pk)
+        return decrypt_str(self.client_secret, field="client_secret", model="intune.tenant", pk=self.pk)
 
     def rewrap_secrets(self):
         if not self.pk:
             raise ValueError("Instance must have a PK")
-        self.client_secret = rewrap(self.client_secret, field="client_secret", model="intune.instance", pk=self.pk)
+        self.client_secret = rewrap(self.client_secret, field="client_secret", model="intune.tenant", pk=self.pk)

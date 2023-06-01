@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from rest_framework import generics, status
+from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from zentral.core.events.base import EventRequest
@@ -13,7 +14,7 @@ from .tasks import sync_inventory
 
 class TenantList(ListCreateAPIViewWithAudit):
     """
-    List all Tenants
+    List or Create Tenants
     """
     queryset = Tenant.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
@@ -22,7 +23,7 @@ class TenantList(ListCreateAPIViewWithAudit):
 
 class TenantDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
-    Retrieve a Tenant
+    Retrieve, update or delete a Tenant instance.
     """
     lookup_field = "tenant_id"
     queryset = Tenant.objects.all()
