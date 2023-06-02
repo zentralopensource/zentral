@@ -6,7 +6,7 @@ import plistlib
 from dateutil import parser
 from django import forms
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from realms.utils import build_password_hash_dict
 from zentral.contrib.inventory.models import Tag
 from .app_manifest import build_enterprise_app_manifest
@@ -16,7 +16,7 @@ from .crypto import load_push_certificate_and_key
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
-                     BlueprintArtifact, BlueprintArtifactTag, Channel,
+                     Blueprint, BlueprintArtifact, BlueprintArtifactTag, Channel,
                      DEPDevice, DEPOrganization, DEPEnrollment, DEPToken, DEPVirtualServer,
                      EnrolledDevice, EnterpriseApp, Platform,
                      SCEPConfig,
@@ -103,6 +103,33 @@ class EnrolledDeviceSearchForm(forms.Form):
         if q:
             qs = qs.filter(Q(serial_number__icontains=q) | Q(udid__icontains=q))
         return qs
+
+
+class ArtifactSearchForm(forms.Form):
+    q = forms.CharField(required=False,
+                        widget=forms.TextInput(attrs={"placeholder": "Name", "autofocus": True}))
+    artifact_type = forms.ChoiceField(
+        choices=[("", "Type"),] + Artifact.Type.choices, required=False)
+    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="Blueprint")
+
+    def get_queryset(self):
+        qs = Artifact.objects.annotate(Count("blueprintartifact")).order_by("name")
+        q = self.cleaned_data.get("q")
+        if q:
+            qs = qs.filter(name__icontains=q)
+        artifact_type = self.cleaned_data.get("artifact_type")
+        if artifact_type:
+            qs = qs.filter(type=artifact_type)
+        blueprint = self.cleaned_data.get("blueprint")
+        if blueprint:
+            qs = qs.filter(blueprintartifact__blueprint=blueprint)
+        return qs
+
+    def get_redirect_to(self):
+        if self.has_changed():
+            qs = self.get_queryset()
+            if qs.count() == 1:
+                return qs.first()
 
 
 class EncryptedDEPTokenForm(forms.ModelForm):

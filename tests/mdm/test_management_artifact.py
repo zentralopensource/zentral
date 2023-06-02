@@ -1,5 +1,6 @@
 from functools import reduce
 import operator
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase, override_settings
@@ -48,13 +49,51 @@ class ArtifactManagementViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:artifacts"))
         self.assertEqual(response.status_code, 403)
 
-    def test_artifacts(self):
-        artifact, _ = force_artifact()
+    @patch("zentral.contrib.mdm.views.management.ArtifactListView.get_paginate_by")
+    def test_artifacts(self, get_paginate_by):
+        get_paginate_by.return_value = 1
+        artifacts = sorted([force_artifact()[0] for _ in range(3)], key=lambda a: a.name.lower())
         self._login("mdm.view_artifact")
-        response = self.client.get(reverse("mdm:artifacts"))
+        response = self.client.get(reverse("mdm:artifacts"), {"page": 2})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_list.html")
+        self.assertNotContains(response, artifacts[0].name)
+        self.assertContains(response, artifacts[1].name)
+        self.assertNotContains(response, artifacts[2].name)
+        self.assertContains(response, "3 Artifacts")
+        self.assertContains(response, "page 2 of 3")
+
+    def test_artifacts_search(self):
+        blueprint_artifact, artifact, _ = force_blueprint_artifact()
+        blueprint = blueprint_artifact.blueprint
+        _, artifact2, _ = force_blueprint_artifact(blueprint=blueprint)
+        artifact3, _ = force_artifact()
+        self._login("mdm.view_artifact")
+        response = self.client.get(
+            reverse("mdm:artifacts"),
+            {"blueprint": blueprint.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_list.html")
+        self.assertContains(response, "2 Artifacts")
         self.assertContains(response, artifact.name)
+        self.assertContains(response, artifact2.name)
+        self.assertNotContains(response, artifact3.name)
+        self.assertContains(response, "page 1 of 1")
+
+    def test_artifacts_search_redirect(self):
+        blueprint_artifact, artifact, _ = force_blueprint_artifact()
+        self._login("mdm.view_artifact")
+        response = self.client.get(
+            reverse("mdm:artifacts"),
+            {"q": artifact.name,
+             "artifact_type": artifact.type,
+             "blueprint": blueprint_artifact.blueprint.pk},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_detail.html")
+        self.assertEqual(response.context["object"], artifact)
 
     # artifact
 

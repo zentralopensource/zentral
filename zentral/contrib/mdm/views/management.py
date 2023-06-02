@@ -15,7 +15,7 @@ from zentral.contrib.mdm.commands.base import load_command, registered_commands
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
-from zentral.contrib.mdm.forms import (ArtifactVersionForm,
+from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
                                        CreateDEPEnrollmentForm, UpdateDEPEnrollmentForm,
                                        CreateAssetArtifactForm,
@@ -570,9 +570,36 @@ class UserEnrollmentEnrollView(FormView):
 class ArtifactListView(PermissionRequiredMixin, ListView):
     permission_required = "mdm.view_artifact"
     model = Artifact
+    paginate_by = 30
+
+    def get(self, request, *args, **kwargs):
+        self.form = ArtifactSearchForm(self.request.GET)
+        self.form.is_valid()
+        redirect_to = self.form.get_redirect_to()
+        if redirect_to:
+            return redirect(redirect_to)
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
-        return super().get_queryset().annotate(Count("blueprintartifact")).order_by("name")
+        return self.form.get_queryset()
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["form"] = self.form
+        page = ctx["page_obj"]
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            ctx['reset_link'] = "?{}".format(qd.urlencode())
+        return ctx
 
 
 class BaseUploadArtifactView(PermissionRequiredMixin, FormView):
