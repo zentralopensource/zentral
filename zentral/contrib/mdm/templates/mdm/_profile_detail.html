@@ -24,7 +24,7 @@
         {% for payload_type, payload_display_name in profile.payloads %}
         <tr>
           <td>{{ payload_type }}</td>
-          <td>{{ payload_display_name }}</td>
+          <td>{{ payload_display_name|default:"-" }}</td>
         </tr>
         {% endfor %}
       </tbody>
