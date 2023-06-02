@@ -35,32 +35,72 @@ class SantaSerializersTestCase(TestCase):
         ed = serializer.errors["identifier"][0]
         self.assertEqual(str(ed), "This field is required")
 
-    def test_rule_team_id_sha256(self):
-        data = {"rule_type": "TEAMID",
-                "sha256": get_random_string(64, "0123456789abcdef"),
-                "policy": "BLOCKLIST"}
-        serializer = RuleUpdateSerializer(data=data)
-        self.assertFalse(serializer.is_valid())
-        ed = serializer.errors["sha256"][0]
-        self.assertEqual(str(ed), "This field cannot be used in a Team ID rule")
+    def test_rule_sha(self):
+        for identifier, valid in (("y", False),
+                                  ("43AQ936H96", False),
+                                  ("43AQ936H96:org.mozilla.firefoxdeveloperedition", False),
+                                  ("a" * 64, True)):
+            data = {
+                "rule_type": "BINARY",
+                "identifier": identifier,
+                "policy": "BLOCKLIST",
+            }
+            s = RuleUpdateSerializer(data=data)
+            self.assertEqual(s.is_valid(), valid)
+            if not s.is_valid():
+                ed = s.errors["identifier"][0]
+                self.assertEqual(str(ed), "Invalid sha256")
 
-    def test_rule_bad_team_id_identifier(self):
-        data = {"rule_type": "TEAMID",
-                "identifier": get_random_string(24),
-                "policy": "BLOCKLIST"}
-        serializer = RuleUpdateSerializer(data=data)
-        self.assertFalse(serializer.is_valid())
-        ed = serializer.errors["identifier"][0]
-        self.assertEqual(str(ed), "Invalid Team ID")
+    def test_rule_signing_id(self):
+        for identifier, valid in (("y", False),
+                                  ("43AQ936H96", False),
+                                  ("43AQ936H96:org.mozilla.firefoxdeveloperedition", True),
+                                  ("platform:com.apple.curl", True)):
+            data = {
+                "rule_type": "SIGNINGID",
+                "identifier": identifier,
+                "policy": "BLOCKLIST",
+            }
+            s = RuleUpdateSerializer(data=data)
+            self.assertEqual(s.is_valid(), valid)
+            if not s.is_valid():
+                ed = s.errors["identifier"][0]
+                self.assertEqual(str(ed), "Invalid Signing ID identifier")
 
-    def test_rule_bad_sha256_identifier(self):
-        data = {"rule_type": "BINARY",
-                "identifier": get_random_string(24),
-                "policy": "BLOCKLIST"}
-        serializer = RuleUpdateSerializer(data=data)
-        self.assertFalse(serializer.is_valid())
-        ed = serializer.errors["identifier"][0]
-        self.assertEqual(str(ed), "Invalid sha256")
+    def test_rule_team_id(self):
+        for identifier, valid in (("y", False), ("43AQ936H96", True), ("4"*64, False)):
+            data = {
+                "rule_type": "TEAMID",
+                "identifier": identifier,
+                "policy": "BLOCKLIST",
+            }
+            s = RuleUpdateSerializer(data=data)
+            self.assertEqual(s.is_valid(), valid)
+            if not s.is_valid():
+                ed = s.errors["identifier"][0]
+                self.assertEqual(str(ed), "Invalid Team ID")
+
+    def test_rule_sha_signing_id_error(self):
+        s = RuleUpdateSerializer(data={
+            "rule_type": "SIGNINGID",
+            "sha256": "a" * 64,
+            "policy": "BLOCKLIST",
+        })
+        s.is_valid()
+        sha256_errors = s.errors.get("sha256", [])
+        self.assertEqual(len(sha256_errors), 1)
+        self.assertEqual(str(sha256_errors[0]), "This field cannot be used in a SIGNINGID rule")
+
+    def test_rule_sha_team_id_error(self):
+        s = RuleUpdateSerializer(data={
+            "rule_type": "TEAMID",
+            "sha256": "a" * 64,
+            "policy": "BLOCKLIST",
+        })
+        s.is_valid()
+        sha256_errors = s.errors.get("sha256", [])
+        self.assertEqual(len(sha256_errors), 1)
+        self.assertEqual(str(sha256_errors[0]), "This field cannot be used in a TEAMID rule")
 
     def test_rule_custom_msg_allowlist(self):
         data = {"rule_type": "BINARY",
