@@ -86,9 +86,11 @@ class ArtifactManagementViewsTestCase(TestCase):
         self._login("mdm.view_artifact")
         response = self.client.get(
             reverse("mdm:artifacts"),
-            {"q": artifact.name,
-             "artifact_type": artifact.type,
-             "blueprint": blueprint_artifact.blueprint.pk},
+            {"artifact_type": artifact.type,
+             "blueprint": blueprint_artifact.blueprint.pk,
+             "channel": artifact.channel,
+             "platform": artifact.platforms[0],
+             "q": artifact.name},
             follow=True
         )
         self.assertEqual(response.status_code, 200)

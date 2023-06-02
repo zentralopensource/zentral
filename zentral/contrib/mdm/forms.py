@@ -107,19 +107,36 @@ class EnrolledDeviceSearchForm(forms.Form):
 
 class ArtifactSearchForm(forms.Form):
     q = forms.CharField(required=False,
-                        widget=forms.TextInput(attrs={"placeholder": "Name", "autofocus": True}))
+                        widget=forms.TextInput(attrs={"placeholder": "Name, Profile ID, Bundle ID",
+                                                      "size": 24,
+                                                      "autofocus": True}))
     artifact_type = forms.ChoiceField(
         choices=[("", "Type"),] + Artifact.Type.choices, required=False)
+    channel = forms.ChoiceField(
+        choices=[("", "Channel"),] + Channel.choices, required=False)
+    platform = forms.ChoiceField(
+        choices=[("", "Platform"),] + [(p.value, p.value) for p in Platform], required=False)
     blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="Blueprint")
 
     def get_queryset(self):
-        qs = Artifact.objects.annotate(Count("blueprintartifact")).order_by("name")
+        qs = Artifact.objects.annotate(Count("blueprintartifact", distinct=True)).order_by("name")
         q = self.cleaned_data.get("q")
         if q:
-            qs = qs.filter(name__icontains=q)
+            qs = qs.filter(
+                Q(name__icontains=q)
+                | Q(artifactversion__enterprise_app__product_id__icontains=q)
+                | Q(artifactversion__profile__payload_identifier__icontains=q)
+                | Q(artifactversion__store_app__location_asset__asset__bundle_id__icontains=q)
+            )
         artifact_type = self.cleaned_data.get("artifact_type")
         if artifact_type:
             qs = qs.filter(type=artifact_type)
+        channel = self.cleaned_data.get("channel")
+        if channel:
+            qs = qs.filter(channel=channel)
+        platform = self.cleaned_data.get("platform")
+        if platform:
+            qs = qs.filter(platforms__contains=[platform])
         blueprint = self.cleaned_data.get("blueprint")
         if blueprint:
             qs = qs.filter(blueprintartifact__blueprint=blueprint)
