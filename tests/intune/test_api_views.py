@@ -1,5 +1,8 @@
 from functools import reduce
+import hashlib
 import operator
+import uuid
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
@@ -8,8 +11,7 @@ from django.test import TestCase
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.intune.models import Tenant
-import uuid
-import json
+from zentral.core.events.base import AuditEvent
 
 
 class APIViewsTestCase(TestCase):
@@ -200,7 +202,8 @@ class APIViewsTestCase(TestCase):
 
     # create tenant
 
-    def test_create_tenant(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_tenant(self, post_event):
         self.set_permissions("intune.add_tenant")
         data = {
             'business_unit': self.bu.pk,
@@ -210,8 +213,10 @@ class APIViewsTestCase(TestCase):
             'client_id': str(uuid.uuid4()),
             'client_secret': get_random_string(12),  # plain secret
         }
-        response = self.post_json_data(reverse('intune_api:tenants'), data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post_json_data(reverse('intune_api:tenants'), data)
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
         self.assertEqual(Tenant.objects.filter(tenant_id=data['tenant_id']).count(), 1)
         tenant = Tenant.objects.get(tenant_id=data['tenant_id'])
         self.assertEqual(
@@ -230,7 +235,32 @@ class APIViewsTestCase(TestCase):
             response.json()
         )
         # In the DB should be stored in a non plain way
+        self.assertNotEqual(tenant.client_secret, data['client_secret'])
         self.assertEqual(tenant.get_client_secret(), data['client_secret'])
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "intune.tenant",
+                 "pk": str(tenant.pk),
+                 "new_value": {
+                     "pk": tenant.pk,
+                     "business_unit": tenant.business_unit.pk,
+                     "name": data['name'],
+                     "description": data['description'],
+                     "tenant_id": data['tenant_id'],
+                     "client_id": data['client_id'],
+                     "client_secret_hash": hashlib.sha256(data['client_secret'].encode("utf-8")).hexdigest(),
+                     "created_at": tenant.created_at,
+                     "updated_at": tenant.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"intune_tenant": [str(tenant.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["intune", "zentral"])
 
     def test_create_tenant_unauthorized(self):
         data = {
@@ -259,8 +289,10 @@ class APIViewsTestCase(TestCase):
 
     # update tenant
 
-    def test_update_tenant(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_tenant(self, post_event):
         tenant = self.force_tenant()
+        prev_value = tenant.serialize_for_event()
         data = {
             'business_unit': tenant.business_unit.pk,
             'name': 'New Name',
@@ -270,24 +302,52 @@ class APIViewsTestCase(TestCase):
             'client_secret': "My secret",  # plain secret
         }
         self.set_permissions('intune.change_tenant')
-        response = self.put_json_data(
-            reverse('intune_api:tenant', args=(tenant.tenant_id,)),
-            data
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put_json_data(
+                reverse('intune_api:tenant', args=(tenant.tenant_id,)),
+                data
+            )
         self.assertEqual(response.status_code, 200)
-        tenant_updated_at = Tenant.objects.first()
+        self.assertEqual(len(callbacks), 1)
+        tenant2 = Tenant.objects.first()
+        self.assertEqual(tenant, tenant2)
         self.assertEqual(response.json(), {
-                'id': tenant.id,
-                'business_unit': tenant.business_unit.pk,
+                'id': tenant2.id,
+                'business_unit': tenant2.business_unit.pk,
                 'name': 'New Name',
                 'description': 'New Description',
-                'tenant_id': tenant.tenant_id,
+                'tenant_id': tenant2.tenant_id,
                 'client_id': data['client_id'],
                 'client_secret': "My secret",
                 'version': 2,
-                'created_at': tenant.created_at.isoformat(),
-                'updated_at': tenant_updated_at.updated_at.isoformat(),
+                'created_at': tenant2.created_at.isoformat(),
+                'updated_at': tenant2.updated_at.isoformat(),
             })
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "intune.tenant",
+                 "pk": str(tenant.pk),
+                 "new_value": {
+                     "pk": tenant2.pk,
+                     "business_unit": tenant2.business_unit.pk,
+                     "name": tenant2.name,
+                     "description": tenant2.description,
+                     "tenant_id": tenant2.tenant_id,
+                     "client_id": str(tenant2.client_id),
+                     "client_secret_hash": hashlib.sha256(tenant2.get_client_secret().encode("utf-8")).hexdigest(),
+                     "created_at": tenant2.created_at,
+                     "updated_at": tenant2.updated_at,
+                 },
+                 "prev_value": prev_value,
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"intune_tenant": [str(tenant.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["intune", "zentral"])
 
     def test_update_tenant_unauthorized(self):
         tenant = self.force_tenant()
@@ -314,13 +374,28 @@ class APIViewsTestCase(TestCase):
 
     # delete tenant
 
-    def test_delete_tenant(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_tenant(self, post_event):
         tenant = self.force_tenant()
+        prev_value = tenant.serialize_for_event()
         self.set_permissions("intune.delete_tenant")
-        response = self.delete(reverse("intune_api:tenant", args=(tenant.tenant_id,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("intune_api:tenant", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 204)
+        self.assertEqual(len(callbacks), 1)
         no_tenant = Tenant.objects.first()
         self.assertIsNone(no_tenant)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "intune.tenant",
+                 "pk": str(tenant.pk),
+                 "prev_value": prev_value
+             }}
+        )
 
     def test_delete_tenant_unauthorized(self):
         tenant = self.force_tenant()

@@ -37,12 +37,10 @@ class Tenant(models.Model):
         super().save(*args, **kwargs)
 
     def serialize_for_event(self):
-        data = self.get_client_secret().encode("utf-8")
-        sha256_hash = hashlib.sha256()
-        sha256_hash.update(data)
+        sha256_hash = hashlib.sha256(self.get_client_secret().encode("utf-8"))
         client_secret_hash = sha256_hash.hexdigest()
-
         return {
+            'pk': self.pk,
             'business_unit': self.business_unit.pk,
             'name': self.name,
             'description': self.description,
