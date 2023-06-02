@@ -16,6 +16,7 @@ from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.santa.events import SantaRuleUpdateEvent
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment, Bundle
+from zentral.contrib.santa.serializers import RuleUpdateSerializer
 from zentral.core.events.base import AuditEvent
 from zentral.utils.payloads import get_payload_identifier
 
@@ -243,6 +244,64 @@ class APIViewsTestCase(TestCase):
         )
         self.assertEqual(file_qs.count(), 1)
         self.assertEqual(cert_qs.count(), 1)
+
+    def test_rule_update_serializer_sha(self):
+        for identifier, valid in (("y", False),
+                                  ("43AQ936H96", False),
+                                  ("43AQ936H96:org.mozilla.firefoxdeveloperedition", False),
+                                  ("a" * 64, True)):
+            data = {
+                "rule_type": "BINARY",
+                "identifier": identifier,
+                "policy": "BLOCKLIST",
+            }
+            s = RuleUpdateSerializer(data=data)
+            self.assertEqual(s.is_valid(), valid)
+
+    def test_rule_update_serializer_signing_id(self):
+        for identifier, valid in (("y", False),
+                                  ("43AQ936H96", False),
+                                  ("43AQ936H96:org.mozilla.firefoxdeveloperedition", True),
+                                  ("platform:com.apple.curl", True)):
+            data = {
+                "rule_type": "SIGNINGID",
+                "identifier": identifier,
+                "policy": "BLOCKLIST",
+            }
+            s = RuleUpdateSerializer(data=data)
+            self.assertEqual(s.is_valid(), valid)
+
+    def test_rule_update_serializer_team_id(self):
+        for identifier, valid in (("y", False), ("43AQ936H96", True), ("4"*64, False)):
+            data = {
+                "rule_type": "TEAMID",
+                "identifier": identifier,
+                "policy": "BLOCKLIST",
+            }
+            s = RuleUpdateSerializer(data=data)
+            self.assertEqual(s.is_valid(), valid)
+
+    def test_rule_update_serializer_sha_signing_id_error(self):
+        s = RuleUpdateSerializer(data={
+            "rule_type": "SIGNINGID",
+            "sha256": "a" * 64,
+            "policy": "BLOCKLIST",
+        })
+        s.is_valid()
+        sha256_errors = s.errors.get("sha256", [])
+        self.assertEqual(len(sha256_errors), 1)
+        self.assertEqual(str(sha256_errors[0]), "This field cannot be used in a SIGNINGID rule")
+
+    def test_rule_update_serializer_sha_team_id_error(self):
+        s = RuleUpdateSerializer(data={
+            "rule_type": "TEAMID",
+            "sha256": "a" * 64,
+            "policy": "BLOCKLIST",
+        })
+        s.is_valid()
+        sha256_errors = s.errors.get("sha256", [])
+        self.assertEqual(len(sha256_errors), 1)
+        self.assertEqual(str(sha256_errors[0]), "This field cannot be used in a TEAMID rule")
 
     def test_ruleset_update_rule(self):
         self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
