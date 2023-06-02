@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -70,9 +71,11 @@
       <th>Name</th>
       <th>Type</th>
       <th>Version</th>
-      <th>Priority</th>
-      <th>Before S.A.?</th>
-      <th>Auto update?</th>
+      <th>During S.A.?</th>
+      <th>Platforms</th>
+      <th>Excl. tags</th>
+      <th>Def. shard</th>
+      <th>Tag shards</th>
     </tr>
   </thead>
   <tbody>
@@ -88,6 +91,39 @@
       </td>
       <td>{{ a.get_type_display }}</td>
       <td>{{ ba.artifact__artifactversion__version__max }}</td>
+      <td>{{ a.install_during_setup_assistant|yesno }}</td>
+      <td>
+        {% if ba.platforms %}
+        <ul class="list-unstyled">
+        {% for platform, versions in ba.platforms.items %}
+          <li>{% if versions.min %}{{ versions.min }} ≤ {% endif %}{{ platform }}{% if versions.max %} < {{ versions.max }}{% endif %}</li>
+        {% endfor %}
+        </ul>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td>
+        {% for tag in ba.excluded_tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+      <td>
+        {{ ba.default_shard }}/{{ ba.shard_modulo }}
+      </td>
+      <td>
+        {% if ba.tag_shards %}
+        <table>
+        {% for tag, shard in ba.tag_shards.items %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% endfor %}
+        </table>
+        {% else %}
+        -
+        {% endif %}
+      </td>
     </tr>
     {% endwith %}
     {% endfor %}
