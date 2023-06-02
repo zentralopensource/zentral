@@ -227,7 +227,7 @@ class RuleUpdateSerializer(serializers.Serializer):
     policy = serializers.ChoiceField(choices=["ALLOWLIST", "ALLOWLIST_COMPILER", "BLOCKLIST", "SILENT_BLOCKLIST"])
     rule_type = serializers.ChoiceField(choices=[k for k, _ in Target.TYPE_CHOICES])
     sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z', required=False)  # Legacy field  TODO remove eventually
-    identifier = serializers.RegexField(r'^[a-zA-Z0-9]{10,64}\Z', required=False)
+    identifier = serializers.RegexField(r'^[a-zA-Z0-9:\.]+\Z', required=False)
     custom_msg = serializers.CharField(required=False)
     description = serializers.CharField(required=False)
     serial_numbers = serializers.ListField(
@@ -274,12 +274,17 @@ class RuleUpdateSerializer(serializers.Serializer):
         elif identifier and sha256:
             raise serializers.ValidationError("sha256 and identifier cannot be both set")
         elif sha256:
-            if rule_type == Target.TEAM_ID:
-                raise serializers.ValidationError({"sha256": "This field cannot be used in a Team ID rule"})
+            if rule_type in (Target.SIGNING_ID, Target.TEAM_ID):
+                raise serializers.ValidationError({"sha256": f"This field cannot be used in a {rule_type} rule"})
             else:
                 data["identifier"] = sha256
         elif identifier:
-            if rule_type == Target.TEAM_ID:
+            if rule_type == Target.SIGNING_ID:
+                if test_signing_id_identifier(identifier):
+                    data["identifier"] = identifier
+                else:
+                    raise serializers.ValidationError({"identifier": "Invalid Signing ID identifier"})
+            elif rule_type == Target.TEAM_ID:
                 identifier = identifier.upper()
                 if test_team_id(identifier):
                     data["identifier"] = identifier
