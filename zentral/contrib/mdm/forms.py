@@ -96,13 +96,28 @@ class EnrolledDeviceSearchForm(forms.Form):
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Serial number, UDID",
                                                       "autofocus": True}))
+    platform = forms.ChoiceField(
+        choices=[("", "Platform"),] + [(p.value, p.value) for p in Platform], required=False)
+    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="Blueprint")
 
     def get_queryset(self):
         qs = EnrolledDevice.objects.all().order_by("-updated_at")
         q = self.cleaned_data.get("q")
         if q:
             qs = qs.filter(Q(serial_number__icontains=q) | Q(udid__icontains=q))
+        platform = self.cleaned_data.get("platform")
+        if platform:
+            qs = qs.filter(platform=platform)
+        blueprint = self.cleaned_data.get("blueprint")
+        if blueprint:
+            qs = qs.filter(blueprint=blueprint)
         return qs
+
+    def get_redirect_to(self):
+        if self.has_changed():
+            qs = self.get_queryset()
+            if qs.count() == 1:
+                return qs.first()
 
 
 class ArtifactSearchForm(forms.Form):

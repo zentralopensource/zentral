@@ -11,7 +11,8 @@ from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import CustomCommand
 from zentral.contrib.mdm.models import Blueprint
-from .utils import force_dep_enrollment_session, force_ota_enrollment_session, force_user_enrollment_session
+from .utils import (force_blueprint,
+                    force_dep_enrollment_session, force_ota_enrollment_session, force_user_enrollment_session)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -54,37 +55,78 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:enrolled_devices"))
         self.assertEqual(response.status_code, 403)
 
-    def test_enrolled_devices(self):
-        session, device_udid, serial_number = force_dep_enrollment_session(self.mbu, completed=True)
+    @patch("zentral.contrib.mdm.views.management.EnrolledDeviceListView.get_paginate_by")
+    def test_enrolled_devices(self, get_paginate_by):
+        get_paginate_by.return_value = 1
+        devices = [(t[1], t[2]) for t in (force_dep_enrollment_session(self.mbu, completed=True) for _ in range(3))]
         self._login("mdm.view_enrolleddevice")
-        response = self.client.get(reverse("mdm:enrolled_devices"))
+        response = self.client.get(reverse("mdm:enrolled_devices"), {"page": 2})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
         self.assertNotContains(response, '<li class="active">Search</li>')
-        self.assertContains(response, device_udid)
-        self.assertContains(response, serial_number)
+        self.assertContains(response, "3 devices")
+        self.assertContains(response, "page 2 of 3")
+        for idx, (udid, serial_number) in enumerate(devices):
+            if idx != 1:
+                self.assertNotContains(response, udid)
+                self.assertNotContains(response, serial_number)
+            else:
+                self.assertContains(response, udid)
+                self.assertContains(response, serial_number)
 
-    def test_enrolled_devices_serial_number_search(self):
-        _, _, serial_number1 = force_dep_enrollment_session(self.mbu, completed=True)
-        _, _, serial_number2 = force_dep_enrollment_session(self.mbu, completed=True)
+    def test_enrolled_devices_serial_number_search_redirect(self):
+        session, _, serial_number = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        blueprint = force_blueprint()
+        enrolled_device.blueprint = blueprint
+        enrolled_device.save()
         self._login("mdm.view_enrolleddevice")
-        response = self.client.get(reverse("mdm:enrolled_devices"), {"q": serial_number1[3:-1]})
+        response = self.client.get(
+            reverse("mdm:enrolled_devices"),
+            {"q": serial_number[1:-1],
+             "platform": "macOS",
+             "blueprint": blueprint.pk},
+            follow=True
+        )
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertEqual(response.context["object"], enrolled_device)
+
+    def test_enrolled_devices_udid_search_redirect(self):
+        session, udid, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        blueprint = force_blueprint()
+        enrolled_device.blueprint = blueprint
+        enrolled_device.save()
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:enrolled_devices"),
+            {"q": udid[1:-1],
+             "platform": "macOS",
+             "blueprint": blueprint.pk},
+            follow=True
+        )
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertEqual(response.context["object"], enrolled_device)
+
+    def test_enrolled_devices_blueprint_search(self):
+        session1, _, serial_number1 = force_dep_enrollment_session(self.mbu, completed=True)
+        session2, _, serial_number2 = force_dep_enrollment_session(self.mbu, completed=True)
+        _, _, serial_number3 = force_dep_enrollment_session(self.mbu, completed=True)
+        blueprint = force_blueprint()
+        session1.enrolled_device.blueprint = blueprint
+        session1.enrolled_device.save()
+        session2.enrolled_device.blueprint = blueprint
+        session2.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_devices"), {"blueprint": blueprint.pk})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '<li class="active">Search</li>')
         self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
+        self.assertContains(response, "2 devices")
+        self.assertContains(response, "page 1 of 1")
         self.assertContains(response, serial_number1)
-        self.assertNotContains(response, serial_number2)
-
-    def test_enrolled_devices_udid_search(self):
-        _, device_udid1, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        _, device_udid2, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self._login("mdm.view_enrolleddevice")
-        response = self.client.get(reverse("mdm:enrolled_devices"), {"q": device_udid2[3:-1].upper()})
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
-        self.assertContains(response, '<li class="active">Search</li>')
-        self.assertNotContains(response, device_udid1)
-        self.assertContains(response, device_udid2)
+        self.assertContains(response, serial_number2)
+        self.assertNotContains(response, serial_number3)
 
     # test enrolled device
 

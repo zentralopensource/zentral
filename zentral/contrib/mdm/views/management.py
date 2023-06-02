@@ -1190,10 +1190,13 @@ class EnrolledDeviceListView(PermissionRequiredMixin, ListView):
     model = EnrolledDevice
     paginate_by = 20
 
-    def dispatch(self, request, *args, **kwargs):
+    def get(self, request, *args, **kwargs):
         self.form = EnrolledDeviceSearchForm(request.GET)
         self.form.is_valid()
-        return super().dispatch(request, *args, **kwargs)
+        redirect_to = self.form.get_redirect_to()
+        if redirect_to:
+            return redirect(redirect_to)
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         return self.form.get_queryset()
