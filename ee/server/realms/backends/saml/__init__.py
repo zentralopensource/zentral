@@ -27,8 +27,10 @@ class SAMLRealmBackend(BaseBackend):
 
     def acs_url(self):
         "Assertion Consumer Service URL"
-        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
-                             reverse("realms_public:saml_acs", args=(self.instance.uuid,)))
+        path = reverse("realms_public:saml_acs", args=(self.instance.uuid,))
+        if self.legacy_public_endpoints_mounted:
+            path = path.removeprefix("/public")
+        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"), path)
 
     def entity_id(self):
         """
@@ -38,8 +40,10 @@ class SAMLRealmBackend(BaseBackend):
         the metadata for the entity can be found.
 
         """
-        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
-                             reverse("realms_public:saml_metadata", args=(self.instance.uuid,)))
+        path = reverse("realms_public:saml_metadata", args=(self.instance.uuid,))
+        if self.legacy_public_endpoints_mounted:
+            path = path.removeprefix("/public")
+        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"), path)
 
     def get_saml2_config(self, missing_idp_metadata_ok=False):
         settings = {

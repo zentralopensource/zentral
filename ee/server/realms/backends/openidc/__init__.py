@@ -15,8 +15,10 @@ class OpenIDConnectRealmBackend(BaseBackend):
 
     def ac_redirect_uri(self):
         "Authorization code flow redirect URI"
-        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
-                             reverse("realms_public:openidc_ac_redirect", args=(self.instance.uuid,)))
+        path = reverse("realms_public:openidc_ac_redirect", args=(self.instance.uuid,))
+        if self.legacy_public_endpoints_mounted:
+            path = path.removeprefix("/public")
+        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"), path)
 
     def idp_initiated_login_uri(self):
         return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
