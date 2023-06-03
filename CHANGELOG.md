@@ -6,6 +6,10 @@ New `zentral.core.stores.backends.snowflake` store backend.
 
 ### Backward incompatibilities
 
+#### 🧨 new URLs for the Realms authentication
+
+The Realms URLs used for authentication are now prefixed with `public/` by default. To mount the legacy endpoints required by existing SSO configurations, set the option key `mount_legacy_public_endpoints` to `true` in the `realms` app section of the `base.json` configuration in your deployments.
+
 #### 🧨 munki/monolith manifest names are unique now
 
 The monolith manifest names can be used as identifiers now. If you have multiple manifests with the same name in Zentral, the database migration cannot be applied. Please make sure the names are unique before upgrading.

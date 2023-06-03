@@ -1,8 +1,5 @@
 from django.urls import path
 from . import views
-from realms.backends.ldap.urls import urlpatterns as ldap_urlpatterns
-from realms.backends.saml.urls import urlpatterns as saml_urlpatterns
-from realms.backends.openidc.urls import urlpatterns as openidc_urlpatterns
 
 
 app_name = "realms"
@@ -23,17 +20,11 @@ urlpatterns = [
          views.DeleteRealmGroupMappingView.as_view(),
          name='delete_group_mapping'),
 
-    # SSO login
-    path('<uuid:pk>/login/', views.LoginView.as_view(), name='login'),
-
     # SSO test views
     path('<uuid:pk>/test/', views.TestRealmView.as_view(), name='test'),
     path('<uuid:pk>/sessions/<uuid:ras_pk>/', views.RealmAuthenticationSessionView.as_view(),
          name='authentication_session'),
 ]
-urlpatterns += ldap_urlpatterns
-urlpatterns += saml_urlpatterns
-urlpatterns += openidc_urlpatterns
 
 
 setup_menu_cfg = {

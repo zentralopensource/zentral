@@ -28,7 +28,7 @@ class SAMLRealmBackend(BaseBackend):
     def acs_url(self):
         "Assertion Consumer Service URL"
         return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
-                             reverse("realms:saml_acs", args=(self.instance.uuid,)))
+                             reverse("realms_public:saml_acs", args=(self.instance.uuid,)))
 
     def entity_id(self):
         """
@@ -39,7 +39,7 @@ class SAMLRealmBackend(BaseBackend):
 
         """
         return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
-                             reverse("realms:saml_metadata", args=(self.instance.uuid,)))
+                             reverse("realms_public:saml_metadata", args=(self.instance.uuid,)))
 
     def get_saml2_config(self, missing_idp_metadata_ok=False):
         settings = {

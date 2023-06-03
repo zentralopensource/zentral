@@ -74,7 +74,6 @@ INSTALLED_APPS = [
     'django_celery_results',
     'accounts',
     'base',
-    'realms',
 ]
 
 REST_FRAMEWORK = {
