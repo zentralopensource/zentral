@@ -129,7 +129,8 @@ class ZentralSettings(ConfigDict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # add default apps
-        for app in ["zentral.core.compliance_checks",
+        for app in ["realms",
+                    "zentral.core.compliance_checks",
                     "zentral.core.incidents",
                     "zentral.core.probes",
                     "zentral.contrib.inventory"]:

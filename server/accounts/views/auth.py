@@ -83,7 +83,7 @@ def login(request):
         login_realms = [realm]
     else:
         login_realms = Realm.objects.filter(enabled_for_login=True)
-    context["login_realms"] = [(r, reverse("realms:login", args=(r.pk,)))
+    context["login_realms"] = [(r, reverse("realms_public:login", args=(r.pk,)))
                                for r in login_realms]
 
     return TemplateResponse(request, "registration/login.html", context)

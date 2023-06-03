@@ -92,7 +92,7 @@ class LDAPRealmBackend(BaseBackend):
         )
         ras.save()
 
-        return reverse("realms:ldap_login", args=(ras.realm.pk, ras.pk))
+        return reverse("realms_public:ldap_login", args=(ras.realm.pk, ras.pk))
 
     def update_or_create_realm_user(self, username, password):
         user_info = self.get_user_info(username)

@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 urlpatterns = [
     path('', include('base.urls')),
     path('api/', include('base.api_urls')),
-    path('realms/', include('realms.urls')),
 
     # user admin views
     path('accounts/', include('accounts.urls')),

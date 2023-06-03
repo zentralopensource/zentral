@@ -1,8 +1,12 @@
+from zentral.conf import settings
+
+
 class BaseBackend:
     can_get_password = False
 
     def __init__(self, instance):
         self.instance = instance
+        self.legacy_public_endpoints_mounted = settings["apps"]["realms"].get("mount_legacy_public_endpoints", False)
 
     @property
     def _ras_session_key(self):

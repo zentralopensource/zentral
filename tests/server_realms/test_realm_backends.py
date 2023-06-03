@@ -99,19 +99,19 @@ class RealmModelsTestCase(TestCase):
         )
 
     def test_ldap_no_login(self):
-        response = self.client.post(reverse("realms:login", args=(self.ldap_realm_no_login.pk,)))
+        response = self.client.post(reverse("realms_public:login", args=(self.ldap_realm_no_login.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_ldap_login(self):
         next_url = "/{}".format(get_random_string(12))
         response = self.client.post(
-            reverse("realms:login", args=(self.ldap_realm.pk,)),
+            reverse("realms_public:login", args=(self.ldap_realm.pk,)),
             {"next": next_url + "\u0000"}
         )
         ras = RealmAuthenticationSession.objects.filter(realm=self.ldap_realm).order_by("-created_at")[0]
         self.assertEqual(ras.callback, "realms.utils.login_callback")
         self.assertEqual(ras.callback_kwargs, {"next_url": next_url})
-        self.assertRedirects(response, reverse("realms:ldap_login", args=(ras.realm.pk, ras.pk)))
+        self.assertRedirects(response, reverse("realms_public:ldap_login", args=(ras.realm.pk, ras.pk)))
 
     @patch("realms.backends.openidc.lib._get_openid_configuration")
     def test_openidc_login(self, _get_openid_configuration):
@@ -121,7 +121,7 @@ class RealmModelsTestCase(TestCase):
         }
         next_url = "/{}".format(get_random_string(12))
         response = self.client.post(
-            reverse("realms:login", args=(self.openidc_realm.pk,)),
+            reverse("realms_public:login", args=(self.openidc_realm.pk,)),
             {"next": next_url + "\u0000"}
         )
         ras = RealmAuthenticationSession.objects.filter(realm=self.openidc_realm).order_by("-created_at")[0]
@@ -137,7 +137,7 @@ class RealmModelsTestCase(TestCase):
         self.assertEqual(
             query["redirect_uri"],
             ["https://{}{}".format(settings["api"]["fqdn"],
-                                   reverse("realms:openidc_ac_redirect", args=(self.openidc_realm.pk,)))]
+                                   reverse("realms_public:openidc_ac_redirect", args=(self.openidc_realm.pk,)))]
         )
         self.assertEqual(query["state"], [str(ras.pk)])
         _get_openid_configuration.assert_called_once_with(self.openidc_realm.config["discovery_url"])
@@ -145,7 +145,7 @@ class RealmModelsTestCase(TestCase):
     def test_saml_login(self):
         next_url = "/{}".format(get_random_string(12))
         response = self.client.post(
-            reverse("realms:login", args=(self.saml_realm.pk,)),
+            reverse("realms_public:login", args=(self.saml_realm.pk,)),
             {"next": next_url + "\u0000"}
         )
         ras = RealmAuthenticationSession.objects.filter(realm=self.saml_realm).order_by("-created_at")[0]

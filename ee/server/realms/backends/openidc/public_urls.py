@@ -1,8 +1,8 @@
 from django.urls import path
-from . import views
+from . import public_views
 
 urlpatterns = [
     path('<uuid:uuid>/openidc/ac_redirect/',
-         views.AuthorizationCodeFlowRedirectView.as_view(),
+         public_views.AuthorizationCodeFlowRedirectView.as_view(),
          name="openidc_ac_redirect"),
 ]

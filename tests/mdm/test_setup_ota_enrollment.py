@@ -255,7 +255,7 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 302)
         # fake the realm auth
         ras = RealmAuthenticationSession.objects.filter(realm=realm).first()
-        self.assertRedirects(response, f"/realms/{realm.pk}/ldap/{ras.pk}/login/")
+        self.assertRedirects(response, f"/public/realms/{realm.pk}/ldap/{ras.pk}/login/")
         ras.user = realm_user
         request = Mock()
         request.session = self.client.session
