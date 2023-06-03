@@ -1,10 +1,14 @@
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.views import APIView
 from rest_framework.response import Response
-from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+from rest_framework.views import APIView
+
+from zentral.utils.drf import (DefaultDjangoModelPermissions,
+                               DjangoPermissionRequired,
+                               ListCreateAPIViewWithAudit,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
+
 from .models import Tenant
 from .serializers import TenantSerializer
 from .tasks import sync_inventory

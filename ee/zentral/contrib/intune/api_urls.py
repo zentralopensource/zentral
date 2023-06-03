@@ -1,6 +1,6 @@
 from django.urls import path
-from .api_views import TenantDetail, TenantList, StartTenantSync
 
+from .api_views import StartTenantSync, TenantDetail, TenantList
 
 app_name = "intune_api"
 urlpatterns = [

@@ -1,4 +1,5 @@
 import logging
+
 from django.core.management.base import BaseCommand, CommandError
 from zentral.contrib.intune.api_client import Client
 from zentral.contrib.intune.models import Tenant

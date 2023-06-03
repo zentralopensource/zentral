@@ -1,12 +1,16 @@
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+
+from django.contrib.auth.mixins import (LoginRequiredMixin,
+                                        PermissionRequiredMixin)
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse_lazy
 from django.views.generic import DetailView, ListView, TemplateView
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
+
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit,
+                                 UpdateViewWithAudit)
+
 from .forms import TenantForm
 from .models import Tenant
-
 
 logger = logging.getLogger('zentral.contrib.intune.views')
 

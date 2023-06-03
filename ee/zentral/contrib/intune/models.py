@@ -1,11 +1,11 @@
+import hashlib
 import logging
+
 from django.db import models
 from django.db.models import F
 from django.urls import reverse
-import hashlib
 
 from zentral.core.secret_engines import decrypt_str, encrypt_str, rewrap
-
 
 logger = logging.getLogger("zentral.contrib.intune.models")
 

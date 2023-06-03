@@ -1,12 +1,15 @@
 import logging
 import time
+
 from celery import shared_task
 from django.db import transaction
+
 from zentral.contrib.inventory.models import CurrentMachineSnapshot
-from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
+from zentral.contrib.inventory.utils import \
+    commit_machine_snapshot_and_trigger_events
+
 from .api_client import Client
 from .models import Tenant
-
 
 logger = logging.getLogger("zentral.contrib.intune.tasks")
 

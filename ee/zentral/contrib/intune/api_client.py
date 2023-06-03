@@ -1,14 +1,16 @@
 import logging
-import requests
-from asgiref.sync import async_to_sync
 
-from kiota_authentication_azure.azure_identity_authentication_provider import AzureIdentityAuthenticationProvider
-from azure.identity.aio import ClientSecretCredential
-from msgraph import GraphRequestAdapter, GraphServiceClient
-from msgraph_core import GraphClientFactory
-from msgraph.generated.me.managed_devices.managed_devices_request_builder import ManagedDevicesRequestBuilder
-from zentral.contrib.inventory.conf import windows_version_from_build
 import httpx
+from asgiref.sync import async_to_sync
+from azure.identity.aio import ClientSecretCredential
+from kiota_authentication_azure.azure_identity_authentication_provider import \
+    AzureIdentityAuthenticationProvider
+from msgraph import GraphRequestAdapter, GraphServiceClient
+from msgraph.generated.me.managed_devices.managed_devices_request_builder import \
+    ManagedDevicesRequestBuilder
+from msgraph_core import GraphClientFactory
+
+from zentral.contrib.inventory.conf import windows_version_from_build
 
 logger = logging.getLogger("zentral.contrib.intune.api_client")
 
