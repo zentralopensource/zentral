@@ -839,7 +839,7 @@ class OTAEnrollment(MDMEnrollment):
     def get_enroll_full_url(self):
         if self.realm:
             return "{}{}".format(settings["api"]["tls_hostname"],
-                                 reverse("mdm:ota_enrollment_enroll", args=(self.pk,)))
+                                 reverse("mdm_public:ota_enrollment_enroll", args=(self.pk,)))
 
     def revoke(self):
         if not self.enrollment_secret.revoked_at:
@@ -1437,14 +1437,14 @@ class UserEnrollment(MDMEnrollment):
     def get_enroll_full_url(self):
         return "https://{}{}".format(
             settings["api"]["fqdn"],
-            reverse("mdm:user_enrollment_enroll", args=(self.pk,))
+            reverse("mdm_public:user_enrollment_enroll", args=(self.pk,))
         )
 
     def get_service_discovery_full_url(self):
         if self.realm:
             return "https://{}{}".format(
                 settings["api"]["fqdn"],
-                reverse("mdm:user_enrollment_service_discovery", args=(self.enrollment_secret.secret,))
+                reverse("mdm_public:user_enrollment_service_discovery", args=(self.enrollment_secret.secret,))
             )
 
     def revoke(self):

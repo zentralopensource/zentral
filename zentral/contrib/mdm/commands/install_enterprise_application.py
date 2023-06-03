@@ -22,7 +22,7 @@ class InstallEnterpriseApplication(Command):
         enterprise_app = self.artifact_version.enterprise_app
         manifest = enterprise_app.manifest
         manifest["items"][0]["assets"][0]["url"] = "https://{}{}".format(settings["api"]["fqdn"],
-                                                                         reverse("mdm:enterprise_app_download",
+                                                                         reverse("mdm_public:enterprise_app_download",
                                                                                  args=(self.db_command.uuid,)))
         cmd = {"Manifest": manifest}
         configuration = enterprise_app.get_configuration()

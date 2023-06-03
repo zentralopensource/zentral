@@ -187,7 +187,7 @@ class MDMViewsTestCase(TestCase):
 
     def test_unknown_message_type(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu)
-        response = self._put(reverse("mdm:checkin"), {"UDID": udid, "MessageType": "yolo"}, session)
+        response = self._put(reverse("mdm_public:checkin"), {"UDID": udid, "MessageType": "yolo"}, session)
         self.assertEqual(response.status_code, 400)
         self._assertAbort(post_event, "unknown message type", udid=udid, serial_number=serial_number)
 
@@ -206,7 +206,7 @@ class MDMViewsTestCase(TestCase):
             "OSVersion": "12.4",
             "BuildVersion": "21F79",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 400)
         self._assertAbort(post_event, "unknown topic", topic=topic)
 
@@ -226,7 +226,7 @@ class MDMViewsTestCase(TestCase):
             "OSVersion": "12.4",
             "BuildVersion": "21F79",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
         session.refresh_from_db()
@@ -256,7 +256,7 @@ class MDMViewsTestCase(TestCase):
             "OSVersion": "12.4",
             "BuildVersion": "21F79",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session, sign_message=True)
+        response = self._put(reverse("mdm_public:checkin"), payload, session, sign_message=True)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
         session.refresh_from_db()
@@ -286,7 +286,7 @@ class MDMViewsTestCase(TestCase):
             "OSVersion": "12.4",
             "BuildVersion": "21F79",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session, sign_message=True, bad_signature=True)
+        response = self._put(reverse("mdm_public:checkin"), payload, session, sign_message=True, bad_signature=True)
         self.assertEqual(response.status_code, 400)
         self._assertAbort(post_event, "Invalid header signature")
 
@@ -306,7 +306,7 @@ class MDMViewsTestCase(TestCase):
             "OSVersion": "16.2",
             "BuildVersion": "20C65",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
         session.refresh_from_db()
@@ -336,7 +336,7 @@ class MDMViewsTestCase(TestCase):
             "OSVersion": "12.4",
             "BuildVersion": "21F79",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session, serial_number=serial_number)
+        response = self._put(reverse("mdm_public:checkin"), payload, session, serial_number=serial_number)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
         session.refresh_from_db()
@@ -368,7 +368,7 @@ class MDMViewsTestCase(TestCase):
             "OSVersion": "12.4",
             "BuildVersion": "21F79",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session, serial_number=serial_number)
+        response = self._put(reverse("mdm_public:checkin"), payload, session, serial_number=serial_number)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
         session.refresh_from_db()
@@ -410,7 +410,7 @@ class MDMViewsTestCase(TestCase):
             "OSVersion": "12.4",
             "BuildVersion": "21F79",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self._assertSuccess(post_event, new_enrolled_device=False, reenrollment=False)
         self.assertEqual(response.status_code, 200)
         session.refresh_from_db()
@@ -439,7 +439,7 @@ class MDMViewsTestCase(TestCase):
             "Topic": session.get_enrollment().push_certificate.topic,
             "UnlockToken": unlock_token,
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event, token_type="device", device_created=False, user_created=False)
         session.refresh_from_db()
@@ -468,7 +468,7 @@ class MDMViewsTestCase(TestCase):
             "UserLongName": user_long_name,
             "UserShortName": user_short_name,
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event, token_type="user", device_created=False, user_created=True)
         enrolled_user = session.enrolled_device.enrolleduser_set.first()
@@ -488,7 +488,7 @@ class MDMViewsTestCase(TestCase):
             "AwaitingConfiguration": False,
             "BootstrapToken": bootstrap_token,
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event)
         session.refresh_from_db()
@@ -502,7 +502,7 @@ class MDMViewsTestCase(TestCase):
             "UDID": udid,
             "MessageType": "GetBootstrapToken",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 400)
         self._assertAbort(post_event, f"Enrolled device {udid} has no bootstrap token")
 
@@ -515,7 +515,7 @@ class MDMViewsTestCase(TestCase):
             "UDID": udid,
             "MessageType": "GetBootstrapToken",
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event)
         data = plistlib.loads(response.content)
@@ -531,7 +531,7 @@ class MDMViewsTestCase(TestCase):
             "Data": json.dumps({"un": 2}),
             "Endpoint": "declaration-items"
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 400)
         self._assertAbort(post_event, "Missing blueprint. No declarative management possible.",
                           data={"un": 2}, endpoint="declaration-items")
@@ -545,7 +545,7 @@ class MDMViewsTestCase(TestCase):
             "Data": json.dumps({"un": 2}),
             "Endpoint": "tokens"
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         json_response = json.loads(response.content)
         tokens_response, declarations_token = Target(session.enrolled_device).sync_tokens
@@ -563,7 +563,7 @@ class MDMViewsTestCase(TestCase):
             "Data": json.dumps({"un": 2}),
             "Endpoint": "declaration-items"
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         json_response = json.loads(response.content)
         self.assertEqual(json_response, Target(session.enrolled_device).declaration_items)
@@ -579,12 +579,12 @@ class MDMViewsTestCase(TestCase):
             "Data": json.dumps({"un": 2}),
             "Endpoint": f"declaration/configuration/zentral.legacy-profile.{artifact.pk}"
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             json.loads(response.content),
             {'Identifier': f'zentral.legacy-profile.{artifact.pk}',
-             'Payload': {'ProfileURL': f'https://zentral-mtls/mdm/profiles/{artifact_version.pk}/'},
+             'Payload': {'ProfileURL': f'https://zentral-mtls/public/mdm/profiles/{artifact_version.pk}/'},
              'ServerToken': str(artifact_version.pk),
              'Type': 'com.apple.configuration.legacy'}
         )
@@ -599,7 +599,7 @@ class MDMViewsTestCase(TestCase):
             "Data": json.dumps({"un": 2}),
             "Endpoint": f"declaration/configuration/zentral.legacy-profile.{profile.artifact_version.artifact.pk}"
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 404)
 
     # checking - checkout
@@ -613,7 +613,7 @@ class MDMViewsTestCase(TestCase):
             "MessageType": "CheckOut",
             "Topic": session.get_enrollment().push_certificate.topic,
         }
-        response = self._put(reverse("mdm:checkin"), payload, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event)
         enrolled_device.refresh_from_db()
@@ -631,7 +631,7 @@ class MDMViewsTestCase(TestCase):
         enrolled_device = EnrolledDevice.objects.get(udid=udid)
         self.assertIsNone(enrolled_device.last_seen_at)
         payload = {"UDID": udid, "Status": "Idle"}
-        response = self._put(reverse("mdm:connect"), payload, session)
+        response = self._put(reverse("mdm_public:connect"), payload, session)
         self.assertEqual(response.content, b"")
         self.assertEqual(response.status_code, 200)
         enrolled_device.refresh_from_db()
@@ -644,7 +644,7 @@ class MDMViewsTestCase(TestCase):
         now = datetime.utcnow()
         payload = {"UDID": udid, "Status": "Idle",
                    "UserID": enrolled_user.user_id}
-        response = self._put(reverse("mdm:connect"), payload, session)
+        response = self._put(reverse("mdm_public:connect"), payload, session)
         self.assertEqual(response.content, b"")
         self.assertEqual(response.status_code, 200)
         enrolled_user.refresh_from_db()
@@ -655,7 +655,7 @@ class MDMViewsTestCase(TestCase):
         session.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=1)
         session.enrolled_device.save()
         payload = {"UDID": udid, "Status": "Idle"}
-        response = self._put(reverse("mdm:connect"), payload, session)
+        response = self._put(reverse("mdm_public:connect"), payload, session)
         self.assertEqual(response.status_code, 200)
         data = plistlib.loads(response.content)
         self.assertEqual(data["Command"]["RequestType"], "InstallProfile")
@@ -682,13 +682,14 @@ class MDMViewsTestCase(TestCase):
     def test_profile_download_view(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         profile = self._force_profile()
-        response = self._get(reverse("mdm:profile_download_view", args=(profile.artifact_version.pk,)), session)
+        response = self._get(reverse("mdm_public:profile_download_view", args=(profile.artifact_version.pk,)), session)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['Content-Type'], "application/x-apple-aspen-config")
 
     def test_profile_download_view_signed_message(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         profile = self._force_profile()
-        response = self._get(reverse("mdm:profile_download_view", args=(profile.artifact_version.pk,)), session, True)
+        response = self._get(reverse("mdm_public:profile_download_view", args=(profile.artifact_version.pk,)),
+                             session, True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['Content-Type'], "application/x-apple-aspen-config")

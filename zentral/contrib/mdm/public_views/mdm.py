@@ -32,7 +32,7 @@ from zentral.utils.storage import file_storage_has_signed_urls
 from .base import PostEventMixin
 
 
-logger = logging.getLogger('zentral.contrib.mdm.views.mdm')
+logger = logging.getLogger('zentral.contrib.mdm.public_views.mdm')
 
 
 class MDMView(PostEventMixin, View):

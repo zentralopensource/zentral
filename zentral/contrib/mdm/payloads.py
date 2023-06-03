@@ -84,9 +84,9 @@ def build_scep_payload(enrollment_session):
 
 def build_profile_service_configuration_profile(ota_obj):
     if isinstance(ota_obj, OTAEnrollmentSession):
-        url_path = reverse("mdm:ota_session_enroll")
+        url_path = reverse("mdm_public:ota_session_enroll")
     elif isinstance(ota_obj, OTAEnrollment):
-        url_path = reverse("mdm:ota_enroll")
+        url_path = reverse("mdm_public:ota_enroll")
     else:
         raise ValueError("ota_obj not an OTAEnrollment nor an OTAEnrollmentSession")
     return build_profile("Zentral - OTA MDM Enrollment",
@@ -123,8 +123,8 @@ def build_mdm_configuration_profile(enrollment_session):
     else:
         mdm_config["SignMessage"] = True
         fqdn_key = "fqdn"
-    mdm_config["ServerURL"] = "https://{}{}".format(settings["api"][fqdn_key], reverse("mdm:connect"))
-    mdm_config["CheckInURL"] = "https://{}{}".format(settings["api"][fqdn_key], reverse("mdm:checkin"))
+    mdm_config["ServerURL"] = "https://{}{}".format(settings["api"][fqdn_key], reverse("mdm_public:connect"))
+    mdm_config["CheckInURL"] = "https://{}{}".format(settings["api"][fqdn_key], reverse("mdm_public:checkin"))
     managed_apple_id = getattr(enrollment_session, "managed_apple_id", None)
     if managed_apple_id:
         if enrollment_session.access_token:

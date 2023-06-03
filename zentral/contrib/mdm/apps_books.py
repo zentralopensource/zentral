@@ -149,7 +149,7 @@ class AppsBooksClient:
                 "notificationTypes": ["ASSET_MANAGEMENT", "ASSET_COUNT"],
                 "notificationUrl": "https://{}{}".format(
                     settings["api"]["webhook_fqdn"],
-                    reverse("mdm:notify_location", args=(self.mdm_info_id,))
+                    reverse("mdm_public:notify_location", args=(self.mdm_info_id,))
                 ),
                 "notificationAuthToken": notification_auth_token,
             }

@@ -49,12 +49,12 @@ class SCEPViewsTestCase(TestCase):
         kwargs = {"data": {"csr": csr_pem},
                   "content_type": "application/json",
                   "HTTP_ZENTRAL_API_SECRET": make_secret("zentral")}
-        return self.client.post(reverse("mdm:verify_scep_csr"), **kwargs)
+        return self.client.post(reverse("mdm_public:verify_scep_csr"), **kwargs)
 
     # tests
 
     def test_permission_denied(self, post_event):
-        response = self.client.post(reverse("mdm:verify_scep_csr"))
+        response = self.client.post(reverse("mdm_public:verify_scep_csr"))
         self.assertEqual(response.status_code, 403)
 
     def test_dep_enrollment_session_ok(self, post_event):

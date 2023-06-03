@@ -15,7 +15,7 @@ from zentral.contrib.mdm.payloads import build_configuration_profile_response, b
 from .base import PostEventMixin
 
 
-logger = logging.getLogger('zentral.contrib.mdm.views.dep')
+logger = logging.getLogger('zentral.contrib.mdm.public_views.dep')
 
 
 class DEPEnrollMixin(PostEventMixin):
@@ -96,7 +96,7 @@ def dep_web_enroll_callback(request, realm_authentication_session, dep_enrollmen
 
     # add user to session
     request.session[realm_user_session_key(dep_enrollment_session)] = str(realm_user.pk)
-    return reverse("mdm:dep_enrollment_session", args=(dep_enrollment_session.enrollment_secret.secret,))
+    return reverse("mdm_public:dep_enrollment_session", args=(dep_enrollment_session.enrollment_secret.secret,))
 
 
 class DEPWebEnrollView(DEPEnrollMixin, View):
@@ -116,7 +116,7 @@ class DEPWebEnrollView(DEPEnrollMixin, View):
             self.abort("this DEP enrollment has no realm")
 
         # start realm auth session, do redirect
-        callback = "zentral.contrib.mdm.views.dep.dep_web_enroll_callback"
+        callback = "zentral.contrib.mdm.public_views.dep.dep_web_enroll_callback"
         callback_kwargs = {"dep_enrollment_pk": dep_enrollment.pk,
                            "serial_number": self.serial_number,
                            "udid": self.udid,

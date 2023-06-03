@@ -1,5 +1,4 @@
 from django.urls import path
-from django.views.decorators.csrf import csrf_exempt
 from . import views
 
 app_name = "mdm"
@@ -60,11 +59,8 @@ urlpatterns = [
          name='update_location'),
     path('locations/<int:pk>/delete/', views.DeleteLocationView.as_view(),
          name='delete_location'),
-    path('locations/<uuid:mdm_info_id>/notify/', csrf_exempt(views.NotifyLocationView.as_view()),
-         name='notify_location'),
 
     # management views
-
     path('enrollments/', views.EnrollmentListView.as_view(), name="enrollments"),
 
     # DEP enrollments
@@ -97,9 +93,6 @@ urlpatterns = [
     path('enrollments/ota/<int:pk>/update/',
          views.UpdateOTAEnrollmentView.as_view(),
          name='update_ota_enrollment'),
-    path('enrollments/ota/<int:pk>/enroll/',
-         views.OTAEnrollmentEnrollView.as_view(),
-         name='ota_enrollment_enroll'),
 
     # user enrollments
     path('enrollments/user/create/',
@@ -114,9 +107,6 @@ urlpatterns = [
     path('enrollments/user/<int:pk>/update/',
          views.UpdateUserEnrollmentView.as_view(),
          name='update_user_enrollment'),
-    path('enrollment/user/<int:pk>/enroll/',
-         views.UserEnrollmentEnrollView.as_view(),
-         name='user_enrollment_enroll'),
 
     # artifacts
     path('artifacts/',
@@ -263,43 +253,6 @@ urlpatterns = [
     path('dep/devices/<int:pk>/refresh/',
          views.RefreshDEPDeviceView.as_view(),
          name="refresh_dep_device"),
-
-    # SCEP verification / scep view
-    path('verify_scep_csr/',
-         csrf_exempt(views.VerifySCEPCSRView.as_view()),
-         name='verify_scep_csr'),
-
-    # OTA protocol / ota view
-    path('ota_enroll/', csrf_exempt(views.OTAEnrollView.as_view()),
-         kwargs={"session": False}, name='ota_enroll'),
-    path('ota_session_enroll/', csrf_exempt(views.OTAEnrollView.as_view()),
-         kwargs={"session": True}, name='ota_session_enroll'),
-
-    # DEP protocol / dep views
-    path('dep_enroll/<str:dep_enrollment_secret>/',
-         csrf_exempt(views.DEPEnrollView.as_view()), name='dep_enroll'),
-    path('dep_web_enroll/<str:dep_enrollment_secret>/',
-         views.DEPWebEnrollView.as_view(), name='dep_web_enroll'),
-    path('dep_enrollment_session/<str:dep_enrollment_session_secret>/',
-         views.DEPEnrollmentSessionView.as_view(), name='dep_enrollment_session'),
-
-    # User Enrollment protocol / user views
-    path('user_enrollment/<str:secret>/com.apple.remotemanagement/',
-         csrf_exempt(views.UserEnrollmentServiceDiscoveryView.as_view()), name='user_enrollment_service_discovery'),
-    path('user_enrollment/<str:secret>/enroll/',
-         csrf_exempt(views.EnrollUserView.as_view()), name='enroll_user'),
-    path('user_enrollment_session/<str:secret>/authenticate/',
-         csrf_exempt(views.AuthenticateUserView.as_view()), name='authenticate_user'),
-
-    # MDM protocol / mdm views
-    path('checkin/', csrf_exempt(views.CheckinView.as_view()), name='checkin'),
-    path('connect/', csrf_exempt(views.ConnectView.as_view()), name='connect'),
-    path('device_commands/<uuid:uuid>/enterprise_app/',
-         views.EnterpriseAppDownloadView.as_view(),
-         name="enterprise_app_download"),
-    path('profiles/<uuid:pk>/',
-         views.ProfileDownloadView.as_view(),
-         name="profile_download_view"),
 ]
 
 setup_menu_cfg = {

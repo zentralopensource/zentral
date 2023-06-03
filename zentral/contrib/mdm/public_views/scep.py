@@ -5,7 +5,7 @@ from zentral.contrib.mdm.models import (DEPEnrollmentSession, OTAEnrollmentSessi
 from zentral.utils.api_views import BaseVerifySCEPCSRView
 
 
-logger = logging.getLogger('zentral.contrib.mdm.views.scep')
+logger = logging.getLogger('zentral.contrib.mdm.public_views.scep')
 
 
 # SCEP verification

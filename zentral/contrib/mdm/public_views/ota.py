@@ -1,7 +1,12 @@
 import logging
 import plistlib
 from cryptography.x509.oid import NameOID
+from django.core.exceptions import SuspiciousOperation
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.views.generic import View
+from realms.models import RealmUser
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.contrib.mdm.crypto import (verify_signed_payload,
@@ -9,13 +14,56 @@ from zentral.contrib.mdm.crypto import (verify_signed_payload,
                                         verify_zentral_scep_ca_issuer)
 from zentral.contrib.mdm.events import OTAEnrollmentRequestEvent
 from zentral.contrib.mdm.exceptions import EnrollmentSessionStatusError
-from zentral.contrib.mdm.models import OTAEnrollmentSession
+from zentral.contrib.mdm.models import OTAEnrollment, OTAEnrollmentSession
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
+                                          build_mdm_configuration_profile,
                                           build_ota_scep_configuration_profile,
-                                          build_mdm_configuration_profile)
+                                          build_profile_service_configuration_profile)
 from .base import PostEventMixin
 
-logger = logging.getLogger('zentral.contrib.mdm.views.ota')
+
+logger = logging.getLogger('zentral.contrib.mdm.public_views.ota')
+
+
+def ota_enroll_callback(request, realm_authentication_session, ota_enrollment_pk):
+    """
+    Realm authorization session callback used to start authenticated OTAEnrollmentSession
+    """
+    ota_enrollment = OTAEnrollment.objects.get(pk=ota_enrollment_pk, realm__isnull=False)
+    realm_user = realm_authentication_session.user
+    request.session["_ota_{}_realm_user_pk".format(ota_enrollment.pk)] = str(realm_user.pk)
+    return reverse("mdm_public:ota_enrollment_enroll", args=(ota_enrollment.pk,))
+
+
+class OTAEnrollmentEnrollView(View):
+    def get(self, request, *args, **kwargs):
+        ota_enrollment = get_object_or_404(
+            OTAEnrollment,
+            pk=kwargs["pk"],
+            realm__isnull=False
+        )
+        if not ota_enrollment.enrollment_secret.is_valid()[0]:
+            # should not happen
+            raise SuspiciousOperation
+        # check the auth
+        try:
+            realm_user_pk = self.request.session.pop("_ota_{}_realm_user_pk".format(ota_enrollment.pk))
+            realm_user = RealmUser.objects.get(realm=ota_enrollment.realm,
+                                               pk=realm_user_pk)
+        except (KeyError, RealmUser.DoesNotExist):
+            # start realm auth session, do redirect
+            callback = "zentral.contrib.mdm.public_views.ota.ota_enroll_callback"
+            callback_kwargs = {"ota_enrollment_pk": ota_enrollment.pk}
+            return HttpResponseRedirect(
+                ota_enrollment.realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
+            )
+        else:
+            ota_enrollment_session = OTAEnrollmentSession.objects.create_from_realm_user(ota_enrollment, realm_user)
+            # start OTAEnrollmentSession, build config profile, return config profile
+            return build_configuration_profile_response(
+                build_profile_service_configuration_profile(ota_enrollment_session),
+                "zentral_profile_service"
+            )
 
 
 class OTAEnrollView(PostEventMixin, View):

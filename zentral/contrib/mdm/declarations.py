@@ -85,7 +85,7 @@ def build_legacy_profile(target, declaration_identifier):
         "Payload": {
             "ProfileURL": "https://{}{}".format(
                 settings["api"]["fqdn_mtls"],  # TODO signed requests on FQDN ?
-                reverse("mdm:profile_download_view", args=(profile_artifact_version["pk"],))
+                reverse("mdm_public:profile_download_view", args=(profile_artifact_version["pk"],))
             )
         },
     }

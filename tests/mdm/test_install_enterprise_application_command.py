@@ -112,7 +112,7 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
              "Manifest": {
                  "items": [
                      {"assets": [
-                         {"url": f"https://zentral/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
+                         {"url": f"https://zentral/public/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
                       ]}
                  ]
              }}
@@ -129,7 +129,7 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
              "Manifest": {
                  "items": [
                      {"assets": [
-                         {"url": f"https://zentral/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
+                         {"url": f"https://zentral/public/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
                       ]}
                  ]
              },
@@ -149,7 +149,7 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
              "Manifest": {
                  "items": [
                      {"assets": [
-                         {"url": f"https://zentral/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
+                         {"url": f"https://zentral/public/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
                       ]}
                  ]
              },
@@ -171,7 +171,7 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
              "Manifest": {
                  "items": [
                      {"assets": [
-                         {"url": f"https://zentral/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
+                         {"url": f"https://zentral/public/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
                       ]}
                  ]
              },
@@ -191,7 +191,7 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
              "Manifest": {
                  "items": [
                      {"assets": [
-                         {"url": f"https://zentral/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
+                         {"url": f"https://zentral/public/mdm/device_commands/{cmd.uuid}/enterprise_app/"}
                       ]}
                  ]
              },

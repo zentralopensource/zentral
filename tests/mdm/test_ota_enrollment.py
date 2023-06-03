@@ -80,8 +80,8 @@ class TestOTAEnrollment(TestCase):
         reenrollment_session2 = ReEnrollmentSession.objects.create_from_enrollment_session(reenrollment_session)
         self.assertEqual(reenrollment_session2.get_enrollment(), enrollment)
 
-    @patch("zentral.contrib.mdm.views.ota.verify_apple_iphone_device_ca_issuer")
-    @patch("zentral.contrib.mdm.views.ota.verify_signed_payload")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_apple_iphone_device_ca_issuer")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_signed_payload")
     def test_ota_enroll_view_phase_2(
         self,
         mocked_verify_signed_payload,
@@ -98,7 +98,7 @@ class TestOTAEnrollment(TestCase):
         certificates = [(Mock(), Mock(), Mock())]
         mocked_verify_signed_payload.return_value = (certificates, plistlib.dumps(payload))
         mocked_verify_apple_iphone_device_ca_issuer.return_value = True
-        response = self.client.post(reverse("mdm:ota_enroll"))
+        response = self.client.post(reverse("mdm_public:ota_enroll"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
         _, profile_data = verify_signed_payload(response.content)
@@ -112,8 +112,8 @@ class TestOTAEnrollment(TestCase):
         session = session_qs.first()
         self.assertEqual(session.status, OTAEnrollmentSession.PHASE_2)
 
-    @patch("zentral.contrib.mdm.views.ota.verify_apple_iphone_device_ca_issuer")
-    @patch("zentral.contrib.mdm.views.ota.verify_signed_payload")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_apple_iphone_device_ca_issuer")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_signed_payload")
     def test_ota_session_enroll_view_phase_2(
         self,
         mocked_verify_signed_payload,
@@ -130,7 +130,7 @@ class TestOTAEnrollment(TestCase):
         certificates = [(Mock(), Mock(), Mock())]
         mocked_verify_signed_payload.return_value = (certificates, plistlib.dumps(payload))
         mocked_verify_apple_iphone_device_ca_issuer.return_value = True
-        response = self.client.post(reverse("mdm:ota_session_enroll"))
+        response = self.client.post(reverse("mdm_public:ota_session_enroll"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
         _, profile_data = verify_signed_payload(response.content)
@@ -146,9 +146,9 @@ class TestOTAEnrollment(TestCase):
         session.refresh_from_db()
         self.assertEqual(session.status, OTAEnrollmentSession.PHASE_2)
 
-    @patch("zentral.contrib.mdm.views.ota.verify_zentral_scep_ca_issuer")
-    @patch("zentral.contrib.mdm.views.ota.verify_apple_iphone_device_ca_issuer")
-    @patch("zentral.contrib.mdm.views.ota.verify_signed_payload")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_zentral_scep_ca_issuer")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_apple_iphone_device_ca_issuer")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_signed_payload")
     def test_ota_enroll_view_phase_3(
         self,
         mocked_verify_signed_payload,
@@ -180,7 +180,7 @@ class TestOTAEnrollment(TestCase):
         mocked_verify_signed_payload.return_value = (certificates, plistlib.dumps(payload))
         mocked_verify_apple_iphone_device_ca_issuer.return_value = False
         mocked_verify_zentral_scep_ca_issuer.return_value = True
-        response = self.client.post(reverse("mdm:ota_enroll"))
+        response = self.client.post(reverse("mdm_public:ota_enroll"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
         _, profile_data = verify_signed_payload(response.content)

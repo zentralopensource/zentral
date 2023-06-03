@@ -11,7 +11,7 @@ from accounts.models import User
 from realms.models import RealmAuthenticationSession
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
-from zentral.contrib.mdm.views.management import ota_enroll_callback
+from zentral.contrib.mdm.public_views.ota import ota_enroll_callback
 from .utils import force_ota_enrollment, force_push_certificate, force_realm, force_realm_user, force_scep_config
 
 
@@ -141,7 +141,7 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
         _, profile_data = verify_signed_payload(response.content)
         profile = plistlib.loads(profile_data)
-        self.assertEqual(profile["PayloadContent"]["URL"], "https://zentral/mdm/ota_enroll/")
+        self.assertEqual(profile["PayloadContent"]["URL"], "https://zentral/public/mdm/ota_enroll/")
 
     def test_download_profile_service_payload_with_realm_404(self):
         enrollment = force_ota_enrollment(self.mbu, realm=force_realm())
@@ -244,14 +244,14 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
     def test_ota_enrollment_enroll_invalid_secret(self):
         enrollment = force_ota_enrollment(self.mbu, realm=force_realm())
         enrollment.revoke()
-        response = self.client.get(reverse("mdm:ota_enrollment_enroll", args=(enrollment.pk,)))
+        response = self.client.get(reverse("mdm_public:ota_enrollment_enroll", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 400)
 
     def test_ota_enrollment_enroll_redirect(self):
         realm, realm_user = force_realm_user()
         # first request redirects to realm auth
         enrollment = force_ota_enrollment(self.mbu, realm=realm)
-        response = self.client.get(reverse("mdm:ota_enrollment_enroll", args=(enrollment.pk,)))
+        response = self.client.get(reverse("mdm_public:ota_enrollment_enroll", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 302)
         # fake the realm auth
         ras = RealmAuthenticationSession.objects.filter(realm=realm).first()
@@ -262,10 +262,10 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         url = ota_enroll_callback(request, ras, enrollment.pk)
         request.session.save()
         # second request returns the profile service payload
-        self.assertEqual(url, reverse("mdm:ota_enrollment_enroll", args=(enrollment.pk,)))
-        response = self.client.get(reverse("mdm:ota_enrollment_enroll", args=(enrollment.pk,)))
+        self.assertEqual(url, reverse("mdm_public:ota_enrollment_enroll", args=(enrollment.pk,)))
+        response = self.client.get(reverse("mdm_public:ota_enrollment_enroll", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
         _, profile_data = verify_signed_payload(response.content)
         profile = plistlib.loads(profile_data)
-        self.assertEqual(profile["PayloadContent"]["URL"], "https://zentral/mdm/ota_session_enroll/")
+        self.assertEqual(profile["PayloadContent"]["URL"], "https://zentral/public/mdm/ota_session_enroll/")

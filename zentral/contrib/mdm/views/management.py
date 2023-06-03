@@ -9,7 +9,6 @@ from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
-from realms.models import RealmUser
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.mdm.commands.base import load_command, registered_commands
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
@@ -23,7 +22,7 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        OTAEnrollmentForm,
                                        SCEPConfigForm,
                                        UpdateArtifactForm,
-                                       UserEnrollmentForm, UserEnrollmentEnrollForm,
+                                       UserEnrollmentForm,
                                        UpgradeEnterpriseAppForm, UpgradeProfileForm, UpgradeStoreAppForm,
                                        UploadEnterpriseAppForm, UploadProfileForm)
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
@@ -32,12 +31,11 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         DEPDevice, DEPEnrollment,
                                         DeviceCommand, UserCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
-                                        OTAEnrollment, OTAEnrollmentSession,
+                                        OTAEnrollment,
                                         SCEPConfig,
-                                        UserEnrollment, UserEnrollmentSession,
+                                        UserEnrollment,
                                         Profile, StoreApp)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
-                                          build_mdm_configuration_profile,
                                           build_profile_service_configuration_profile)
 from zentral.contrib.mdm.scep import SCEPChallengeType
 from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
@@ -352,47 +350,6 @@ class UpdateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
             )
 
 
-def ota_enroll_callback(request, realm_authentication_session, ota_enrollment_pk):
-    """
-    Realm authorization session callback used to start authenticated OTAEnrollmentSession
-    """
-    ota_enrollment = OTAEnrollment.objects.get(pk=ota_enrollment_pk, realm__isnull=False)
-    realm_user = realm_authentication_session.user
-    request.session["_ota_{}_realm_user_pk".format(ota_enrollment.pk)] = str(realm_user.pk)
-    return reverse("mdm:ota_enrollment_enroll", args=(ota_enrollment.pk,))
-
-
-class OTAEnrollmentEnrollView(View):
-    def get(self, request, *args, **kwargs):
-        ota_enrollment = get_object_or_404(
-            OTAEnrollment,
-            pk=kwargs["pk"],
-            realm__isnull=False
-        )
-        if not ota_enrollment.enrollment_secret.is_valid()[0]:
-            # should not happen
-            raise SuspiciousOperation
-        # check the auth
-        try:
-            realm_user_pk = self.request.session.pop("_ota_{}_realm_user_pk".format(ota_enrollment.pk))
-            realm_user = RealmUser.objects.get(realm=ota_enrollment.realm,
-                                               pk=realm_user_pk)
-        except (KeyError, RealmUser.DoesNotExist):
-            # start realm auth session, do redirect
-            callback = "zentral.contrib.mdm.views.management.ota_enroll_callback"
-            callback_kwargs = {"ota_enrollment_pk": ota_enrollment.pk}
-            return HttpResponseRedirect(
-                ota_enrollment.realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
-            )
-        else:
-            ota_enrollment_session = OTAEnrollmentSession.objects.create_from_realm_user(ota_enrollment, realm_user)
-            # start OTAEnrollmentSession, build config profile, return config profile
-            return build_configuration_profile_response(
-                build_profile_service_configuration_profile(ota_enrollment_session),
-                "zentral_profile_service"
-            )
-
-
 # User Enrollments
 
 
@@ -532,36 +489,6 @@ class UpdateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
                 self.get_context_data(user_enrollment_form=user_enrollment_form,
                                       enrollment_secret_form=enrollment_secret_form)
             )
-
-
-class UserEnrollmentEnrollView(FormView):
-    form_class = UserEnrollmentEnrollForm
-    template_name = "mdm/user_enrollment_enroll.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.user_enrollment = get_object_or_404(
-            UserEnrollment,
-            pk=kwargs["pk"]
-        )
-        if not self.user_enrollment.enrollment_secret.is_valid():
-            # should not happen
-            raise SuspiciousOperation
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["user_enrollment"] = self.user_enrollment
-        return ctx
-
-    def form_valid(self, form):
-        managed_apple_id = form.cleaned_data["managed_apple_id"]
-        user_enrollment_session = UserEnrollmentSession.objects.create_from_user_enrollment(
-            self.user_enrollment, managed_apple_id
-        )
-        return build_configuration_profile_response(
-            build_mdm_configuration_profile(user_enrollment_session),
-            "zentral_user_enrollment"
-        )
 
 
 # Artifacts

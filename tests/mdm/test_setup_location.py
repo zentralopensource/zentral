@@ -330,24 +330,24 @@ class SetupLocationViewsTestCase(TestCase):
 
     def test_notify_location_missing_header(self):
         location, _ = self._force_location()
-        response = self.client.post(reverse("mdm:notify_location", args=(location.mdm_info_id,)))
+        response = self.client.post(reverse("mdm_public:notify_location", args=(location.mdm_info_id,)))
         self.assertEqual(response.status_code, 403)
 
     def test_notify_location_bad_header(self):
         location, _ = self._force_location()
-        response = self.client.post(reverse("mdm:notify_location", args=(location.mdm_info_id,)),
+        response = self.client.post(reverse("mdm_public:notify_location", args=(location.mdm_info_id,)),
                                     HTTP_AUTHORIZATION="Malformed")
         self.assertEqual(response.status_code, 403)
 
     def test_notify_location_unknown(self):
         location, _ = self._force_location()
-        response = self.client.post(reverse("mdm:notify_location", args=(location.mdm_info_id,)),
+        response = self.client.post(reverse("mdm_public:notify_location", args=(location.mdm_info_id,)),
                                     HTTP_AUTHORIZATION="Bearer Unknown")
         self.assertEqual(response.status_code, 403)
 
     def test_notify_location_bad_payload(self):
         location, server_token = self._force_location()
-        response = self.client.post(reverse("mdm:notify_location", args=(location.mdm_info_id,)),
+        response = self.client.post(reverse("mdm_public:notify_location", args=(location.mdm_info_id,)),
                                     content_type="text/xml",
                                     data="",
                                     HTTP_AUTHORIZATION=f"Bearer {server_token}")
@@ -357,7 +357,7 @@ class SetupLocationViewsTestCase(TestCase):
     def test_notify_location(self, post_raw_event):
 
         location, server_token = self._force_location()
-        response = self.client.post(reverse("mdm:notify_location", args=(location.mdm_info_id,)),
+        response = self.client.post(reverse("mdm_public:notify_location", args=(location.mdm_info_id,)),
                                     content_type="application/json",
                                     data={"yolo": "un"},
                                     HTTP_AUTHORIZATION=f"Bearer {server_token}")

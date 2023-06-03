@@ -77,7 +77,7 @@ def serialize_dep_profile(dep_enrollment):
     payload = {"profile_name": dep_enrollment.name,
                "url": "{}{}".format(
                    settings["api"]["tls_hostname"],
-                   reverse("mdm:dep_enroll", args=(dep_enrollment.enrollment_secret.secret,))
+                   reverse("mdm_public:dep_enroll", args=(dep_enrollment.enrollment_secret.secret,))
                ),
                "devices": [dep_device.serial_number
                            for dep_device in dep_enrollment.depdevice_set.all()]}
@@ -86,7 +86,7 @@ def serialize_dep_profile(dep_enrollment):
     if dep_enrollment.realm:
         payload["configuration_web_url"] = "{}{}".format(
             settings["api"]["tls_hostname"],
-            reverse("mdm:dep_web_enroll", args=(dep_enrollment.enrollment_secret.secret,))
+            reverse("mdm_public:dep_web_enroll", args=(dep_enrollment.enrollment_secret.secret,))
         )
 
     # standard attibutes
