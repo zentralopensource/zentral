@@ -218,16 +218,14 @@ class QuerySerializer(serializers.ModelSerializer):
                 if not pack_query.snapshot_mode:
                     raise serializers.ValidationError(
                         {'compliance_check_enabled': f'query scheduled in diff mode in {pack_query.pack} pack'})
-        # interval required if pack
-        if data.get("pack") and not data.get("interval"):
-            raise serializers.ValidationError(
-                {'interval': 'this field is required when the query is part of a pack'})
-        pack_data = data.get("pack")
+        pack_data = data.get("packquery")
         if not pack_data:
             return data
-        if data.get("compliance_check") and not pack_data.get("snapshot_mode"):
+        if data.get("compliance_check_enabled") and not pack_data.get("snapshot_mode"):
             raise serializers.ValidationError({
-                "pack.snapshot_mode": ["A compliance check query can only be scheduled in 'snapshot' mode."]
+                "scheduling": {
+                    "snapshot_mode": ["A compliance check query can only be scheduled in 'snapshot' mode."]
+                }
             })
         return data
 

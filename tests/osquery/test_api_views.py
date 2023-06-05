@@ -2626,6 +2626,49 @@ class APIViewsTestCase(TestCase):
         self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
         self.assertEqual(query.sql, "ztl_status;")
 
+    def test_create_query_compliance_check_diff_mode_error(self):
+        pack = self.force_pack()
+        data = {
+            "name": get_random_string(12),
+            "sql": "ztl_status;",
+            "compliance_check_enabled": True,
+            "scheduling": {
+                "pack": pack.pk,
+                "interval": 60,
+                "snapshot_mode": False
+            }
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(),
+                         {'scheduling': {
+                             "snapshot_mode": [
+                                 "A compliance check query can only be scheduled in 'snapshot' mode."]}})
+
+    def test_create_query_snapshot_mode_log_removed_actions_exclusive(self):
+        pack = self.force_pack()
+        data = {
+            "name": get_random_string(12),
+            "sql": "ztl_status;",
+            "compliance_check_enabled": True,
+            "scheduling": {
+                "pack": pack.pk,
+                "interval": 60,
+                "log_removed_actions": True,
+                "snapshot_mode": True,
+            }
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"scheduling": {
+                "snapshot_mode": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"],
+                "log_removed_actions": ["'log_removed_actions' and 'snapshot_mode' are mutually exclusive"]}}
+        )
+
     def test_create_query_unauthorized(self):
         data = {
             "name": "test_query01",
