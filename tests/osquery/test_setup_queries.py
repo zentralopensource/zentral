@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from django.utils.text import slugify
 from django.test import TestCase, override_settings
 from accounts.models import User
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
@@ -40,12 +41,22 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_query(self, force_compliance_check=False):
+    def _force_pack(self):
+        name = get_random_string(12)
+        return Pack.objects.create(name=name.lower(), slug=slugify(name))
+
+    def _force_query(self, force_compliance_check=False, pack_query_mode=None):
         if force_compliance_check:
             sql = "select 'OK' as ztl_status;"
         else:
             sql = "select 1 from processes;"
         query = Query.objects.create(name=get_random_string(12), sql=sql)
+        if pack_query_mode is not None:
+            pack = self._force_pack()
+            PackQuery.objects.create(
+                pack=pack, query=query, interval=60, slug=slugify(query.name), log_removed_actions=False,
+                snapshot_mode=False if pack_query_mode == "diff" else True
+            )
         sync_query_compliance_check(query, force_compliance_check)
         return query
 
@@ -243,6 +254,15 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         self.assertEqual(Query.objects.filter(pk=query.pk).count(), 0)
         self.assertNotContains(response, query.name)
         self.assertEqual(ComplianceCheck.objects.filter(pk=compliance_check_pk).count(), 0)
+
+    def test_delete_scheduled_query(self):
+        query = self._force_query(pack_query_mode="diff")
+        self._login("osquery.delete_query", "osquery.view_query")
+        response = self.client.post(reverse("osquery:delete_query", args=(query.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/query_list.html")
+        self.assertEqual(Query.objects.filter(pk=query.pk).count(), 0)
+        self.assertNotContains(response, query.name)
 
     # query events
 
