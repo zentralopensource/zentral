@@ -219,7 +219,7 @@ class PackQueryManager(models.Manager):
 
 class PackQuery(models.Model):
     pack = models.ForeignKey(Pack, on_delete=models.CASCADE, editable=False)
-    query = models.OneToOneField(Query, on_delete=models.PROTECT)
+    query = models.OneToOneField(Query, on_delete=models.CASCADE)
     slug = models.CharField(max_length=256, editable=False)
 
     interval = models.IntegerField(

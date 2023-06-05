@@ -23,7 +23,7 @@ from .osx_package.builder import OsqueryZentralEnrollPkgBuilder
 from .powershell_script.builder import OsqueryZentralEnrollPowershellScriptBuilder
 from .serializers import (ConfigurationPackSerializer, ConfigurationSerializer, EnrollmentSerializer,
                           OsqueryPackSerializer, QuerySerializer, AutomaticTableConstructionSerializer,
-                          FileCategorySerializer, PackSerializer, PackQuerySerializer)
+                          FileCategorySerializer, PackSerializer)
 from .tasks import export_distributed_query_results
 
 
@@ -411,7 +411,7 @@ class ExportDistributedQueryResults(APIView):
     def post(self, request, *args, **kwargs):
         export_format = request.GET.get("export_format", "csv")
         if export_format not in ("csv", "ndjson", "xlsx"):
-            raise ValidationError("Unknown export format")
+            raise ValidationError({"export_format": "Must be csv, ndjson or xlsx"})
         result = export_distributed_query_results.apply_async((int(kwargs["pk"]), f".{export_format}"))
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
@@ -440,46 +440,26 @@ class PackDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = PackSerializer
 
 
-# Pack Queries
-
-class PackQueryFilter(filters.FilterSet):
-    pack_id = filters.ModelChoiceFilter(field_name="pack_id", queryset=Pack.objects.all())
-
-
-class PackQueryList(generics.ListCreateAPIView):
-    queryset = PackQuery.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
-    serializer_class = PackQuerySerializer
-    filter_backends = (filters.DjangoFilterBackend,)
-    filterset_class = PackQueryFilter
-
-
-class PackQueryDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = PackQuery.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
-    serializer_class = PackQuerySerializer
-
-
 # Queries
+
+class QueryFilter(filters.FilterSet):
+    pack_id = filters.ModelChoiceFilter(field_name="packquery__pack",
+                                        queryset=Pack.objects.all())
+    name = filters.CharFilter()
+
 
 class QueryList(generics.ListCreateAPIView):
     queryset = Query.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = QuerySerializer
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_fields = ('name',)
+    filterset_class = QueryFilter
 
 
 class QueryDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Query.objects.all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = QuerySerializer
-
-    def perform_destroy(self, instance):
-        if hasattr(instance, "packquery"):
-            raise ValidationError(f"This query is included in pack {instance.packquery.pack.id}")
-        else:
-            return super().perform_destroy(instance)
 
 
 # Configuration Packs

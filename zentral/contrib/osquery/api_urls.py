@@ -5,7 +5,7 @@ from .api_views import (ConfigurationDetail, ConfigurationList,
                         ExportDistributedQueryResults,
                         PackView, QueryList, QueryDetail, AutomaticTableConstructionList,
                         AutomaticTableConstructionDetail, FileCategoryList, FileCategoryDetail, ConfigurationPackList,
-                        ConfigurationPackDetail, PackList, PackDetail, PackQueryList, PackQueryDetail)
+                        ConfigurationPackDetail, PackList, PackDetail)
 
 
 app_name = "osquery_api"
@@ -29,8 +29,6 @@ urlpatterns = [
     path('packs/', PackList.as_view(), name="packs"),
     path('packs/<int:pk>/', PackDetail.as_view(), name="pack"),
     path('packs/<slug:slug>/', PackView.as_view(), name="pack"),
-    path('pack_queries/', PackQueryList.as_view(), name="pack_queries"),
-    path('pack_queries/<int:pk>/', PackQueryDetail.as_view(), name="pack_query"),
     path('queries/', QueryList.as_view(), name="queries"),
     path('queries/<int:pk>/', QueryDetail.as_view(), name="query"),
     path('runs/<int:pk>/results/export/',
