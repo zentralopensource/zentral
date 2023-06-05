@@ -94,16 +94,17 @@ class FileCategorySerializer(serializers.ModelSerializer):
 
 class OsqueryPlatformField(serializers.ListField):
     def to_internal_value(self, data):
+        platforms = []
         if data:
-            platforms = set(data.lower().split(","))
-            if platforms:
-                unknown_platforms = platforms - Platform.accepted_platforms()
+            platform_set = set(data.lower().split(","))
+            if platform_set:
+                unknown_platforms = platform_set - Platform.accepted_platforms()
                 if unknown_platforms:
                     raise serializers.ValidationError(
                         'Unknown platforms: {}'.format(", ".join(sorted(unknown_platforms)))
                     )
-            return sorted(platforms)
-        return []
+            platforms = sorted(platform_set)
+        return platforms
 
 
 class OsqueryQuerySerializer(serializers.Serializer):

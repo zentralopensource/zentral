@@ -2,6 +2,7 @@ from datetime import datetime
 from functools import reduce
 import json
 import operator
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
@@ -1571,11 +1572,30 @@ class APIViewsTestCase(TestCase):
 
     # delete enrollment
 
+    def test_delete_enrollment_unauthorized(self):
+        enrollment, _ = self.force_enrollment()
+        response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_enrollment_permission_denied(self):
+        enrollment, _ = self.force_enrollment()
+        response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
     def test_delete_enrollment(self):
         enrollment, _ = self.force_enrollment()
         self.set_permissions("osquery.delete_enrollment")
         response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
+
+    @patch("zentral.contrib.osquery.models.BaseEnrollment.can_be_deleted")
+    def test_delete_enrollment_cannot_be_deleted(self, can_be_deleted):
+        can_be_deleted.return_value = False
+        enrollment, _ = self.force_enrollment()
+        self.set_permissions("osquery.delete_enrollment")
+        response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), ["This enrollment cannot be deleted"])
 
     # list packs
 
@@ -2453,6 +2473,15 @@ class APIViewsTestCase(TestCase):
                              include_token=True)
         self.assertEqual(response.status_code, 201)
 
+    def test_export_distributed_query_results_unknown_format(self):
+        dq = self._force_distributed_query()
+        self.set_permissions("osquery.view_distributedqueryresult")
+        response = self.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,))
+                             + "?export_format=yolo",
+                             include_token=True)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'export_format': 'Must be csv, ndjson or xlsx'})
+
     # list queries
 
     def test_get_queries(self):
@@ -2599,6 +2628,25 @@ class APIViewsTestCase(TestCase):
                           "created_at": query.created_at.isoformat(),
                           "updated_at": query.updated_at.isoformat()
                           })
+
+    def test_create_query_with_scheduling_slug_collision(self):
+        query = self.force_query(pack_query_mode="diff")
+        name = query.name.upper()
+        pack = self.force_pack()
+        data = {
+            "name": name,
+            "sql": "select * from osquery_info;",
+            "compliance_check_enabled": False,
+            "scheduling": {
+                "pack": pack.pk,
+                "interval": 67,
+            }
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 201)
+        pack_query = PackQuery.objects.get(pack=pack, query__name=name)
+        self.assertEqual(pack_query.slug, "{}-{}".format(name.lower(), pack_query.query.pk))
 
     def test_create_query_ztl_status_validate_error(self):
         data = {
@@ -2918,6 +2966,26 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         pack_query_qs = PackQuery.objects.filter(pack=pack, query=query)
         self.assertEqual(pack_query_qs.count(), 0)
+
+    def test_update_query_update_scheduling_slug_collision(self):
+        query1 = self.force_query(pack_query_mode="diff")
+        pack1 = query1.packquery.pack
+        query2 = self.force_query(pack_query_mode="diff", query_name=query1.name.upper())
+        pack2 = query2.packquery.pack
+        data = {
+            "name": query2.name,
+            "sql": query2.sql,
+            "scheduling": {
+                "pack": pack1.pk,  # change pack → collision
+                "interval": 60,
+            },
+        }
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query2.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PackQuery.objects.filter(pack=pack2, query=query2).exists())
+        pack_query = PackQuery.objects.get(pack=pack1, query=query2)
+        self.assertEqual(pack_query.slug, "{}-{}".format(query2.name.lower(), query2.pk))
 
     def test_update_query_unauthorized(self):
         query = self.force_query()
