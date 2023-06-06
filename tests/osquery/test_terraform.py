@@ -38,17 +38,32 @@ class OsqueryTerraformTestCase(TestCase):
             )
         return query, pack, distributed_query
 
+    # pack query
+
+    def test_pack_query(self):
+        query, pack, _ = self._force_query(force_pack=True)
+        resource = QueryResource(query)
+        self.assertIn(
+          "scheduling = { interval = 12983, log_removed_actions = false, "
+          f"pack_id = zentral_osquery_pack.pack{ pack.id}.id }}",
+          resource.to_representation()
+        )
+
     # compliance check
 
     def test_compliance_check_false(self):
         query, _, _ = self._force_query(force_compliance_check=False)
         resource = QueryResource(query)
-        self.assertNotIn("compliance_check_enabled", resource.to_representation())
+        resource_repr = resource.to_representation()
+        self.assertNotIn("compliance_check_enabled", resource_repr)
+        self.assertNotIn("scheduling", resource_repr)
 
     def test_compliance_check_true(self):
         query, _, _ = self._force_query(force_compliance_check=True)
         resource = QueryResource(query)
-        self.assertIn("compliance_check_enabled = true", resource.to_representation())
+        resource_repr = resource.to_representation()
+        self.assertIn("compliance_check_enabled = true", resource_repr)
+        self.assertNotIn("scheduling", resource_repr)
 
     # configuration
 

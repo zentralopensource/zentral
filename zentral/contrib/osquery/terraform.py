@@ -1,6 +1,6 @@
 from zentral.contrib.inventory.terraform import MetaBusinessUnitResource, TagResource
-from zentral.utils.terraform import BoolAttr, IntAttr, Resource, RefAttr, StringAttr, StringMapAttr
-from .models import AutomaticTableConstruction, Configuration, FileCategory, Pack, PackQuery, Query
+from zentral.utils.terraform import BoolAttr, IntAttr, MapAttr, Resource, RefAttr, StringAttr, StringMapAttr
+from .models import AutomaticTableConstruction, Configuration, FileCategory, Pack, Query
 
 
 class FileCategoryResource(Resource):
@@ -67,6 +67,15 @@ class PackResource(Resource):
     event_routing_key = StringAttr()
 
 
+class QuerySchedulingAttr(MapAttr):
+    can_be_denylisted = BoolAttr(default=True)
+    interval = IntAttr(required=True)
+    log_removed_actions = BoolAttr(default=True)
+    pack_id = RefAttr(PackResource, required=True)
+    shard = IntAttr()
+    snapshot_mode = BoolAttr(default=False)
+
+
 class QueryResource(Resource):
     tf_type = "zentral_osquery_query"
     tf_grouping_key = "osquery_queries"
@@ -78,19 +87,7 @@ class QueryResource(Resource):
     description = StringAttr()
     value = StringAttr()
     compliance_check_enabled = BoolAttr(default=False)
-
-
-class PackQueryResource(Resource):
-    tf_type = "zentral_osquery_pack_query"
-    tf_grouping_key = "osquery_packs"
-
-    pack_id = RefAttr(PackResource, required=True)
-    query_id = RefAttr(QueryResource, required=True)
-    interval = IntAttr(required=True)
-    log_removed_actions = BoolAttr(default=True)
-    snapshot_mode = BoolAttr(default=False)
-    shard = IntAttr()
-    can_be_denylisted = BoolAttr(default=True)
+    scheduling = QuerySchedulingAttr(source="pack_query")
 
 
 class ConfigurationPackResource(Resource):
@@ -122,5 +119,3 @@ def iter_resources():
             yield ConfigurationPackResource(configuration_pack)
     for query in Query.objects.all():
         yield QueryResource(query)
-    for pack_query in PackQuery.objects.all():
-        yield PackQueryResource(pack_query)
