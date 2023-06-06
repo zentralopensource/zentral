@@ -130,6 +130,13 @@ class Query(models.Model):
     def compliance_check_enabled(self):
         return True if self.compliance_check else False
 
+    @property
+    def pack_query(self):
+        try:
+            return self.packquery
+        except PackQuery.DoesNotExist:
+            pass
+
 
 class Pack(models.Model):
     DELIMITER = "/"

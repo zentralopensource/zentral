@@ -183,12 +183,12 @@ class ObjectMetaclass(type):
 
 class MapAttr(Attr, metaclass=ObjectMetaclass):
     def value_representation(self, value):
-        return "{{ {} }}".format(
-            ", ".join(
-                "{} = {}".format(attr_name, ", ".join(attr.iter_representation_lines(value, attr_name)))
-                for attr_name, attr in self.declared_attrs.items()
-            )
-        )
+        attrs_vals = []
+        for attr_name, attr in self.declared_attrs.items():
+            attr_repr = ", ".join(attr.iter_representation_lines(value, attr_name))
+            if attr_repr:
+                attrs_vals.append((attr_name, attr_repr))
+        return "{{ {} }}".format(", ".join(f"{n} = {r}" for n, r in attrs_vals))
 
     def iter_resources(self, instance, attr_name):
         value = self.get_value(instance, attr_name)
