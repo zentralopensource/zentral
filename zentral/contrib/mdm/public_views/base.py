@@ -12,7 +12,7 @@ class PostEventMixin:
     def setup_with_request(self, request):
         if not self._setup_done:
             self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
-            self.serial_number = self.udid = None
+            self.serial_number = self.udid = self.user_id = None
             self.realm_user = None
             self._setup_done = True
 
@@ -20,6 +20,8 @@ class PostEventMixin:
         event_payload["status"] = status
         if self.udid:
             event_payload["udid"] = self.udid
+        if self.user_id:
+            event_payload["user_id"] = self.user_id
         if self.realm_user:
             realm = self.realm_user.realm
             event_payload["realm"] = {"pk": str(realm.pk),

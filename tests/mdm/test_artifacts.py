@@ -743,7 +743,7 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(len(configurations), 2)
         self.assertEqual(configurations[0]["Identifier"],
                          f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions")
-        self.assertEqual(configurations[0]["ServerToken"], "2")
+        self.assertEqual(configurations[0]["ServerToken"], "0ed215547af3061ce18ea6cf7a69dac4a3d52f3f")
         self.assertEqual(configurations[1]["Identifier"], f"zentral.legacy-profile.{profile_a.pk}")
         self.assertEqual(configurations[1]["ServerToken"], f"{profile_av.pk}.ov-13.1.0.ri-0")
 
@@ -1153,3 +1153,13 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da_qs.count(), 1)
         target.update_target_artifacts_with_status_report({})
         self.assertEqual(da_qs.count(), 1)
+
+    # test update client capabilities
+
+    def test_update_target_with_status_report(self):
+        target = Target(self.enrolled_device)
+        status_report = self._build_status_report([])
+        self.assertIsNone(target.client_capabilities)
+        target.update_target_with_status_report(status_report)
+        self.assertEqual(target.client_capabilities,
+                         status_report["StatusItems"]["management"]["client-capabilities"])

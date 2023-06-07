@@ -167,6 +167,10 @@ class Target:
         return self.target.declarative_management
 
     @property
+    def client_capabilities(self):
+        return self.target.client_capabilities
+
+    @property
     def current_declarations_token(self):
         return self.target.declarations_token
 
@@ -604,3 +608,17 @@ class Target:
             target_updated = True
         if target_updated:
             self.target.save()
+
+    def update_client_capabilities(self, status_report):
+        try:
+            client_capabilities = status_report["StatusItems"]["management"]["client-capabilities"]
+        except KeyError:
+            logger.warning("Could not find client capabilities in status report")
+            return
+        if client_capabilities != self.client_capabilities:
+            self.target.client_capabilities = client_capabilities
+            self.target.save()
+
+    def update_target_with_status_report(self, status_report):
+        self.update_client_capabilities(status_report)
+        self.update_target_artifacts_with_status_report(status_report)
