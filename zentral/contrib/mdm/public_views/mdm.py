@@ -362,7 +362,7 @@ class CheckinView(MDMView):
         elif endpoint == "declaration-items":
             response = self.target.declaration_items
         elif endpoint == "status":
-            self.target.update_target_artifacts_with_status_report(json_data)
+            self.target.update_target_with_status_report(json_data)
             self.post_event("success", **event_payload)
             return HttpResponse(status=204)
         elif endpoint.startswith("declaration"):

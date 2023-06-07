@@ -506,6 +506,7 @@ class EnrolledDevice(models.Model):
     # declarative management
     declarative_management = models.BooleanField(default=False)
     declarations_token = models.CharField(max_length=40, default="")
+    client_capabilities = models.JSONField(null=True)
 
     # information
     device_information = models.JSONField(null=True)

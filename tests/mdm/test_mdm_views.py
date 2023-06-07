@@ -31,6 +31,8 @@ from .utils import (force_dep_enrollment_session,
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
 class MDMViewsTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
@@ -601,6 +603,58 @@ class MDMViewsTestCase(TestCase):
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 404)
+
+    def test_declarative_management_default_status_subscriptions_declaration(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        blueprint = self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}.management-status-subscriptions"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'Identifier': f'zentral.blueprint.{blueprint.pk}.management-status-subscriptions',
+             'Payload': {'StatusItems': [{'Name': 'device.identifier.serial-number'},
+                                         {'Name': 'device.identifier.udid'},
+                                         {'Name': 'device.model.family'},
+                                         {'Name': 'device.model.identifier'},
+                                         {'Name': 'device.model.marketing-name'},
+                                         {'Name': 'device.operating-system.build-version'},
+                                         {'Name': 'device.operating-system.family'},
+                                         {'Name': 'device.operating-system.marketing-name'},
+                                         {'Name': 'device.operating-system.version'},
+                                         {'Name': 'management.client-capabilities'},
+                                         {'Name': 'management.declarations'}]},
+             'ServerToken': '0ed215547af3061ce18ea6cf7a69dac4a3d52f3f',
+             'Type': 'com.apple.configuration.management.status-subscriptions'}
+        )
+
+    def test_declarative_management_status_subscriptions_declaration(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        session.enrolled_device.client_capabilities = {
+            "supported-payloads": {"status-items": ["yolo", "fomo", "test.yolo"]}
+        }
+        session.enrolled_device.save()
+        blueprint = self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}.management-status-subscriptions"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'Identifier': f'zentral.blueprint.{blueprint.pk}.management-status-subscriptions',
+             'Payload': {'StatusItems': [{'Name': 'fomo'}, {'Name': 'yolo'}]},
+             'ServerToken': '3b6c1269e23df247f53e2da7a7ebb127110ee2cc',
+             'Type': 'com.apple.configuration.management.status-subscriptions'}
+        )
 
     # checking - checkout
 
