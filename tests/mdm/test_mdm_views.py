@@ -633,7 +633,7 @@ class MDMViewsTestCase(TestCase):
              'Type': 'com.apple.configuration.management.status-subscriptions'}
         )
 
-    def test_declarative_management_status_subscriptions_declaration(self, post_event):
+    def test_declarative_management_status_subscriptions_declaration_device_channel(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         session.enrolled_device.client_capabilities = {
             "supported-payloads": {"status-items": ["yolo", "fomo", "test.yolo"]}
@@ -642,6 +642,31 @@ class MDMViewsTestCase(TestCase):
         blueprint = self._add_blueprint(session)
         payload = {
             "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}.management-status-subscriptions"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'Identifier': f'zentral.blueprint.{blueprint.pk}.management-status-subscriptions',
+             'Payload': {'StatusItems': [{'Name': 'fomo'}, {'Name': 'yolo'}]},
+             'ServerToken': '3b6c1269e23df247f53e2da7a7ebb127110ee2cc',
+             'Type': 'com.apple.configuration.management.status-subscriptions'}
+        )
+
+    def test_declarative_management_status_subscriptions_declaration_user_channel(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        enrolled_user.client_capabilities = {
+            "supported-payloads": {"status-items": ["yolo", "fomo", "test.yolo"]}
+        }
+        enrolled_user.save()
+        blueprint = self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "UserID": enrolled_user.user_id,
             "MessageType": "DeclarativeManagement",
             "Data": json.dumps({"un": 2}),
             "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}.management-status-subscriptions"

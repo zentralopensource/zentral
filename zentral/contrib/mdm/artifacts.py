@@ -168,7 +168,7 @@ class Target:
 
     @property
     def client_capabilities(self):
-        return self.enrolled_device.client_capabilities
+        return self.target.client_capabilities
 
     @property
     def current_declarations_token(self):
@@ -615,9 +615,9 @@ class Target:
         except KeyError:
             logger.warning("Could not find client capabilities in status report")
             return
-        if client_capabilities != self.enrolled_device.client_capabilities:
-            self.enrolled_device.client_capabilities = client_capabilities
-            self.enrolled_device.save()
+        if client_capabilities != self.client_capabilities:
+            self.target.client_capabilities = client_capabilities
+            self.target.save()
 
     def update_target_with_status_report(self, status_report):
         self.update_client_capabilities(status_report)
