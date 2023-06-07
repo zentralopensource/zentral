@@ -53,14 +53,20 @@
   </div>
 </div>
 
-{% if perms.mdm.change_blueprint %}
 <div class="btn-group" role="group" style="margin:0 0 10px 0">
+  {% if perms.mdm.change_blueprint %}
   <a class="btn btn-default" href="{% url 'mdm:update_blueprint' object.pk %}">
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
+  {% endif %}
+  {% if perms.mdm.delete_blueprint and object.can_be_deleted %}
+  <a class="btn btn-danger" href="{% url 'mdm:delete_blueprint' object.pk %}">
+    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    Delete
+  </a>
+  {% endif %}
 </div>
-{% endif %}
 
 <h4>{{ artifacts_count }} Artifact{{ artifacts_count|pluralize }}</h4>
 

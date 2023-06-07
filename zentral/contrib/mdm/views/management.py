@@ -42,6 +42,7 @@ from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
 from zentral.contrib.mdm.scep.static import StaticChallengeForm
 from zentral.contrib.mdm.software_updates import iter_available_software_updates
 from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
@@ -907,7 +908,7 @@ class BlueprintListView(PermissionRequiredMixin, ListView):
                                       .order_by("name"))
 
 
-class CreateBlueprintView(PermissionRequiredMixin, CreateView):
+class CreateBlueprintView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "mdm.add_blueprint"
     model = Blueprint
     fields = ("name",
@@ -939,7 +940,7 @@ class BlueprintView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateBlueprintView(PermissionRequiredMixin, UpdateView):
+class UpdateBlueprintView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_blueprint"
     model = Blueprint
     fields = ("name",
@@ -952,6 +953,12 @@ class UpdateBlueprintView(PermissionRequiredMixin, UpdateView):
         response = super().form_valid(form)
         update_blueprint_serialized_artifacts(self.object)
         return response
+
+
+class DeleteBlueprintView(PermissionRequiredMixin, DeleteViewWithAudit):
+    permission_required = "mdm.delete_blueprint"
+    queryset = Blueprint.objects.can_be_deleted()
+    success_url = reverse_lazy("mdm:blueprints")
 
 
 # SCEP Configurations

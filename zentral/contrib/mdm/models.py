@@ -96,6 +96,23 @@ class PushCertificate(models.Model):
 # Blueprint
 
 
+class BlueprintManager(models.Manager):
+    def can_be_deleted(self):
+        return self.annotate(
+            bpa_count=Count("blueprintartifact"),
+            da_count=Count("blueprintartifact__artifact__artifactversion__deviceartifact"),
+            ua_count=Count("blueprintartifact__artifact__artifactversion__userartifact"),
+            dc_count=Count("blueprintartifact__artifact__artifactversion__devicecommand"),
+            uc_count=Count("blueprintartifact__artifact__artifactversion__usercommand"),
+        ).filter(
+            bpa_count=0,
+            da_count=0,
+            ua_count=0,
+            dc_count=0,
+            uc_count=0,
+        )
+
+
 class Blueprint(models.Model):
 
     class InventoryItemCollectionOption(models.IntegerChoices):
@@ -130,6 +147,8 @@ class Blueprint(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = BlueprintManager()
+
     class Meta:
         ordering = ("name", "created_at")
 
@@ -142,6 +161,23 @@ class Blueprint(models.Model):
     def get_inventory_interval_display(self):
         now = datetime.utcnow()
         return timesince(now - timedelta(seconds=self.inventory_interval), now=now)
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "inventory_interval": self.inventory_interval,
+            "collect_apps": int(self.collect_apps),
+            "collect_certificates": int(self.collect_certificates),
+            "collect_profiles": int(self.collect_profiles),
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        })
+        return d
+
+    def can_be_deleted(self):
+        return Blueprint.objects.can_be_deleted().filter(pk=self.pk).count() == 1
 
 
 # SCEP

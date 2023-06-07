@@ -184,6 +184,9 @@ urlpatterns = [
     path('blueprints/<int:pk>/update/',
          views.UpdateBlueprintView.as_view(),
          name="update_blueprint"),
+    path('blueprints/<int:pk>/delete/',
+         views.DeleteBlueprintView.as_view(),
+         name="delete_blueprint"),
 
     # SCEP configurations
     path('scep_configurations/',
