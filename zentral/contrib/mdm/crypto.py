@@ -5,7 +5,7 @@ from asn1crypto import cms
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import ec, padding
 from cryptography.x509.oid import NameOID
 from django.utils.crypto import get_random_string
 from django.utils.functional import SimpleLazyObject
@@ -92,16 +92,7 @@ def get_cryptography_hash_algorithm(signer):
         raise ValueError("Unknown hash {}".format(hash_name))
 
 
-def get_cryptography_asymmetric_padding(signer):
-    padding_name = signer["signature_algorithm"].signature_algo
-    if padding_name == "rsassa_pkcs1v15":
-        return padding.PKCS1v15
-    else:
-        raise ValueError("Unknown padding {}".format(padding_name))
-
-
 def verify_certificate_signature(certificate, signer, payload):
-    public_key = certificate.public_key()
     signature = signer['signature'].native
     if "signed_attrs" in signer and signer["signed_attrs"]:
         # Seen with the iPhone simulator for example
@@ -112,15 +103,24 @@ def verify_certificate_signature(certificate, signer, payload):
             signed_string = b'\x31' + signed_string[1:]
     else:
         signed_string = payload
-    asymmetric_padding = get_cryptography_asymmetric_padding(signer)
+    public_key = certificate.public_key()
+    signature_algo = signer["signature_algorithm"].signature_algo
     hash_algorithm = get_cryptography_hash_algorithm(signer)
-    try:
-        public_key.verify(signature, signed_string,
-                          asymmetric_padding(), hash_algorithm())
-    except InvalidSignature:
-        return False
+    if signature_algo == "rsassa_pkcs1v15":
+        try:
+            public_key.verify(signature, signed_string,
+                              padding.PKCS1v15(), hash_algorithm())
+        except InvalidSignature:
+            return False
+    elif signature_algo == "ecdsa":
+        try:
+            public_key.verify(signature, signed_string,
+                              ec.ECDSA(hash_algorithm()))
+        except InvalidSignature:
+            return False
     else:
-        return True
+        raise ValueError(f"Unknown signature_algo {signature_algo}")
+    return True
 
 
 def verify_signed_payload(payload, detached_signature=None):
