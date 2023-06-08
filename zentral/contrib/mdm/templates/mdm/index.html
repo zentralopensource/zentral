@@ -41,4 +41,14 @@
 <p><a href="{% url 'mdm:locations' %}">Locations</a></p>
 {% endif %}
 <p><a href="{% url 'mdm:root_ca' %}">Trusted Root CA configuration profile</a></p>
+
+{% if show_terraform_export %}
+<p>
+  <a href="{% url 'mdm:terraform_export' %}" class="btn btn-default">
+    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+    Terraform config
+  </a>
+</p>
+{% endif %}
+
 {% endblock %}
