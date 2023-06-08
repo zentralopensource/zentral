@@ -162,15 +162,27 @@ class Blueprint(models.Model):
         now = datetime.utcnow()
         return timesince(now - timedelta(seconds=self.inventory_interval), now=now)
 
+    def _get_inventory_item_collection_option_display(self, attr):
+        return self.InventoryItemCollectionOption(getattr(self, attr)).name
+
+    def get_collect_apps_display(self):
+        return self._get_inventory_item_collection_option_display("collect_apps")
+
+    def get_collect_certificates_display(self):
+        return self._get_inventory_item_collection_option_display("collect_certificates")
+
+    def get_collect_profiles_display(self):
+        return self._get_inventory_item_collection_option_display("collect_profiles")
+
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "name": self.name}
         if keys_only:
             return d
         d.update({
             "inventory_interval": self.inventory_interval,
-            "collect_apps": int(self.collect_apps),
-            "collect_certificates": int(self.collect_certificates),
-            "collect_profiles": int(self.collect_profiles),
+            "collect_apps": self.get_collect_apps_display(),
+            "collect_certificates": self.get_collect_certificates_display(),
+            "collect_profiles": self.get_collect_profiles_display(),
             "created_at": self.created_at,
             "updated_at": self.updated_at
         })

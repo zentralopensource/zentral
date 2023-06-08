@@ -194,9 +194,9 @@ class APIViewsTestCase(TestCase):
                      "pk": blueprint.pk,
                      "name": name,
                      "inventory_interval": 86400,
-                     "collect_apps": 0,
-                     "collect_certificates": 0,
-                     "collect_profiles": 0,
+                     "collect_apps": 'NO',
+                     "collect_certificates": 'NO',
+                     "collect_profiles": 'NO',
                      "created_at": blueprint.created_at,
                      "updated_at": blueprint.updated_at
                  }
@@ -265,9 +265,9 @@ class APIViewsTestCase(TestCase):
                      "pk": blueprint.pk,
                      "name": blueprint.name,
                      "inventory_interval": 86401,
-                     "collect_apps": 1,
-                     "collect_certificates": 2,
-                     "collect_profiles": 2,
+                     "collect_apps": 'MANAGED_ONLY',
+                     "collect_certificates": 'ALL',
+                     "collect_profiles": 'ALL',
                      "created_at": blueprint.created_at,
                      "updated_at": blueprint.updated_at
                  },

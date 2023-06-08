@@ -1,7 +1,7 @@
 import io
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.core.exceptions import SuspiciousOperation
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse, reverse_lazy
@@ -11,6 +11,8 @@ from zentral.contrib.mdm.forms import EncryptedDEPTokenForm, PushCertificateForm
 from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServer, Location
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_root_ca_configuration_profile)
+from zentral.contrib.mdm.terraform import iter_resources
+from zentral.utils.terraform import build_config_response
 
 
 logger = logging.getLogger('zentral.contrib.mdm.views.setup')
@@ -19,10 +21,32 @@ logger = logging.getLogger('zentral.contrib.mdm.views.setup')
 class IndexView(LoginRequiredMixin, TemplateView):
     template_name = "mdm/index.html"
 
+    def get_context_data(self, **kwargs):
+        if not self.request.user.has_module_perms("mdm"):
+            raise PermissionDenied("Not allowed")
+        ctx = super().get_context_data(**kwargs)
+        ctx["show_terraform_export"] = all(
+            self.request.user.has_perm(perm)
+            for perm in TerraformExportView.permission_required
+        )
+        return ctx
+
 
 class RootCAView(View):
     def get(self, request, *args, **kwargs):
         return build_configuration_profile_response(build_root_ca_configuration_profile(), "zentral_root_ca")
+
+
+# terraform export
+
+
+class TerraformExportView(PermissionRequiredMixin, View):
+    permission_required = (
+        "mdm.view_blueprint",
+    )
+
+    def get(self, request, *args, **kwargs):
+        return build_config_response(iter_resources(), "terraform_mdm")
 
 
 # Push certificates

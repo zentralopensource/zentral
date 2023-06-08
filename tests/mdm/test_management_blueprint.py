@@ -141,9 +141,9 @@ class BlueprintManagementViewsTestCase(TestCase):
                      "pk": blueprint.pk,
                      "name": name,
                      "inventory_interval": 86401,
-                     "collect_apps": 2,
-                     "collect_certificates": 1,
-                     "collect_profiles": 0,
+                     "collect_apps": "ALL",
+                     "collect_certificates": "MANAGED_ONLY",
+                     "collect_profiles": "NO",
                      "created_at": blueprint.created_at,
                      "updated_at": blueprint.updated_at
                  }
@@ -256,9 +256,9 @@ class BlueprintManagementViewsTestCase(TestCase):
                      "pk": blueprint2.pk,
                      "name": new_name,
                      "inventory_interval": 14401,
-                     "collect_apps": 1,
-                     "collect_certificates": 1,
-                     "collect_profiles": 2,
+                     "collect_apps": "MANAGED_ONLY",
+                     "collect_certificates": "MANAGED_ONLY",
+                     "collect_profiles": "ALL",
                      "created_at": blueprint2.created_at,
                      "updated_at": blueprint2.updated_at
                  },

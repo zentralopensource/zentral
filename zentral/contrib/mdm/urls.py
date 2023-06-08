@@ -256,6 +256,11 @@ urlpatterns = [
     path('dep/devices/<int:pk>/refresh/',
          views.RefreshDEPDeviceView.as_view(),
          name="refresh_dep_device"),
+
+    # terraform
+    path('terraform_export/',
+         views.TerraformExportView.as_view(),
+         name="terraform_export"),
 ]
 
 setup_menu_cfg = {
