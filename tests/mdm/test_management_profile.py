@@ -14,6 +14,7 @@ from zentral.contrib.inventory.models import Tag
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Blueprint, BlueprintArtifact, Channel, Platform, Profile)
+from zentral.utils.payloads import sign_payload
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -84,7 +85,8 @@ class ProfileManagementViewsTestCase(TestCase):
         payload_uuid=None,
         missing_payload_id=False,
         missing_payload_uuid=False,
-        payload_scope=None
+        payload_scope=None,
+        signed=False
     ):
         payload = self._get_payload(
             channel=channel,
@@ -93,7 +95,10 @@ class ProfileManagementViewsTestCase(TestCase):
             missing_payload_uuid=missing_payload_uuid,
             payload_scope=payload_scope,
         )
-        mobileconfig = BytesIO(plistlib.dumps(payload))
+        data = plistlib.dumps(payload)
+        if signed:
+            data = sign_payload(data)
+        mobileconfig = BytesIO(data)
         mobileconfig.name = "test.mobileconfig"
         return mobileconfig
 
@@ -225,6 +230,17 @@ class ProfileManagementViewsTestCase(TestCase):
             profile.payload_description,
             "Auto-date&time, no in-app purchase, for test purpose blocked: no Siri no siri suggestions, no AirPrint"
         )
+
+    def test_upload_profile_post_signed(self):
+        mobileconfig = self._build_mobileconfig(signed=True)
+        self._login("mdm.add_artifact", "mdm.view_artifact")
+        response = self.client.post(reverse("mdm:upload_profile"),
+                                    {"source_file": mobileconfig},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_detail.html")
+        self.assertContains(response, "Artifact created")
+        self.assertContains(response, "com.example.my-profile")
 
     def test_upload_profile_post_existing_profile(self):
         self._force_profile()

@@ -12,7 +12,7 @@ from zentral.contrib.inventory.models import Tag
 from .app_manifest import build_enterprise_app_manifest
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
-from .crypto import load_push_certificate_and_key
+from .crypto import load_push_certificate_and_key, verify_signed_payload
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
@@ -502,8 +502,14 @@ class BaseProfileForm(forms.ModelForm):
         if not source_file:
             return
         # read payload
+        data = source_file.read()
         try:
-            payload = plistlib.load(source_file)
+            _, data = verify_signed_payload(data)
+        except Exception:
+            # probably not a signed payload
+            pass
+        try:
+            payload = plistlib.loads(data)
         except Exception:
             self.add_error("source_file", "This file is not a plist.")
             return
@@ -534,10 +540,9 @@ class BaseProfileForm(forms.ModelForm):
                                      ("PayloadDescription", "payload_description")):
             setattr(self.instance, obj_key, payload.get(payload_key) or "")
         # source
-        source_file = self.cleaned_data.pop("source_file")
-        source_file.seek(0)
-        self.cleaned_data["source"] = source_file.read()
+        self.cleaned_data["source"] = data
         # filename
+        source_file = self.cleaned_data.pop("source_file")
         self.instance.filename = source_file.name
 
 
