@@ -494,7 +494,8 @@ class MachineSnapshotTestCase(TestCase):
         for hardware_model, machine_type in (("IMac", DESKTOP),
                                              ("Mac14,10", LAPTOP),
                                              ("Mac14,12", DESKTOP),
-                                             ("MacBookPro18,3", LAPTOP),):
+                                             ("MacBookPro18,3", LAPTOP),
+                                             ("Virtual Machine", VM)):
             tree = {"system_info": {"hardware_model": hardware_model}}
             update_ms_tree_type(tree)
             self.assertEqual(tree.get("type"), machine_type)

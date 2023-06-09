@@ -89,6 +89,8 @@ HARDWARE_MODEL_SERIAL_MACHINE_TYPES = [
     ('samsung sm-g', MOBILE),
     ('samsung sm-p', TABLET),
     ('samsung sm-t', TABLET),
+    # OTHERS
+    ('virtual machine', VM),
 ]
 
 
