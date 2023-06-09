@@ -13,7 +13,7 @@ from .utils import force_blueprint, force_blueprint_artifact
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
-class APIViewsTestCase(TestCase):
+class MDMBlueprintsAPIViewsTestCase(TestCase):
     maxDiff = None
 
     @classmethod

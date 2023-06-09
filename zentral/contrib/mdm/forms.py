@@ -610,7 +610,7 @@ class PlatformsWidget(forms.CheckboxSelectMultiple):
 class UpdateArtifactForm(forms.ModelForm):
     class Meta:
         model = Artifact
-        fields = "__all__"
+        exclude = ["type", "channel"]
         widgets = {"platforms": PlatformsWidget}
 
     def __init__(self, *args, **kwargs):
