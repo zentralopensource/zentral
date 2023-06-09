@@ -639,4 +639,16 @@ class Migration(migrations.Migration):
             name='remove_on_unenroll',
             field=models.BooleanField(default=False),
         ),
+        migrations.AlterField(
+            model_name='artifact',
+            name='channel',
+            field=models.CharField(choices=[('Device', 'Device'), ('User', 'User')], max_length=64),
+        ),
+        migrations.AlterField(
+            model_name='artifact',
+            name='type',
+            field=models.CharField(choices=[('Enterprise App', 'Enterprise App'),
+                                            ('Profile', 'Profile'),
+                                            ('Store App', 'Store App')], max_length=64),
+        ),
     ]

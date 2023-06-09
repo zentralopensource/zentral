@@ -1779,9 +1779,9 @@ class Artifact(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=256, unique=True)
-    type = models.CharField(max_length=64, choices=Type.choices, editable=False)
+    type = models.CharField(max_length=64, choices=Type.choices)
     # targets
-    channel = models.CharField(max_length=64, choices=Channel.choices, editable=False)
+    channel = models.CharField(max_length=64, choices=Channel.choices)
     platforms = ArrayField(models.CharField(max_length=64, choices=Platform.choices), default=get_platform_values)
     # when to install or reinstall
     requires = models.ManyToManyField("mdm.Artifact", related_name="requiredby_set", blank=True)
@@ -1837,6 +1837,24 @@ class Artifact(models.Model):
     @property
     def is_store_app(self):
         return self.get_type() == self.Type.STORE_APP
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": str(self.pk), "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "type": self.type,
+            "channel": self.channel,
+            "platforms": self.platforms,
+            "requires": [a.serialize_for_event(keys_only=True) for a in self.requires.all().order_by("pk")],
+            "install_during_setup_assistant": self.install_during_setup_assistant,
+            "auto_update": self.auto_update,
+            "reinstall_interval": self.reinstall_interval,
+            "reinstall_on_os_update": self.reinstall_on_os_update,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
 
 
 class FilteredBlueprintItem(models.Model):
