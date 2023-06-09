@@ -1,12 +1,10 @@
 import logging
-import requests
 from asgiref.sync import async_to_sync
-
-from kiota_authentication_azure.azure_identity_authentication_provider import AzureIdentityAuthenticationProvider
 from azure.identity.aio import ClientSecretCredential
+from kiota_authentication_azure.azure_identity_authentication_provider import AzureIdentityAuthenticationProvider
 from msgraph import GraphRequestAdapter, GraphServiceClient
-from msgraph_core import GraphClientFactory
 from msgraph.generated.me.managed_devices.managed_devices_request_builder import ManagedDevicesRequestBuilder
+from msgraph_core import GraphClientFactory
 from zentral.contrib.inventory.conf import windows_version_from_build
 import httpx
 
@@ -86,7 +84,6 @@ class Client:
             - add to the tree apps (another API call)
             - add groups
         '''
-
         device_id = device.id
         serial_number = device.serial_number
         if not serial_number:
@@ -131,39 +128,24 @@ class Client:
             }
         }
 
-    def add_ms_tree_extra_facts(self, ms_tree, device):
-        extra_facts = {}
-        compliance_status = device.compliance_state
-        if isinstance(compliance_status, str):
-            extra_facts["compliance_status"] = compliance_status
-        extra_facts["partner_reported_threat_state"] = self.translate_partner_reported_threat_state(device)
-        extra_facts["azure_ad_device_id"] = device.azure_a_d_device_id
-        if extra_facts:
-            ms_tree["extra_facts"] = extra_facts
+    @staticmethod
+    def _get_enum_value(value):
+        # because automatically generated MS Enums seem to be tupes,
+        # we need to unpack them…
+        # See for example: https://github.com/microsoftgraph/msgraph-sdk-python/blob/5f98ebefef9c4a30b59c5942f794df2a3cead1e5/msgraph/generated/models/managed_device_owner_type.py#L3  # NOQA
+        value = value.value
+        if isinstance(value, tuple):
+            value = value[0]
+        return value
 
-    def translate_partner_reported_threat_state(self, device):
-        match device.partner_reported_threat_state:
-            case 0:
-                return "Unknown"
-            case 1:
-                return "Activated"
-            case 2:
-                return "Deactivated"
-            case 3:
-                return "Secured"
-            case 4:
-                return "Low Severity"
-            case 5:
-                return "Medium Severity"
-            case 6:
-                return "High Severity"
-            case 7:
-                return "Unresponsive"
-            case 8:
-                return "Compromised"
-            case 9:
-                return "Misconfigured"
-        return None
+    def add_ms_tree_extra_facts(self, ms_tree, device):
+        ms_tree["extra_facts"] = {
+            "compliance_state": self._get_enum_value(device.compliance_state),
+            "managed_device_owner_type": self._get_enum_value(device.managed_device_owner_type),
+            "partner_reported_threat_state": self._get_enum_value(device.partner_reported_threat_state),
+        }
+        if device.azure_a_d_device_id:
+            ms_tree["extra_facts"]["azure_ad_device_id"] = device.azure_a_d_device_id
 
     def add_ms_tree_os_version(self, ms_tree, device):
         operating_system = device.operating_system.lower()
