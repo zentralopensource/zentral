@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta
 import hashlib
+import os.path
 import plistlib
 import uuid
 from cryptography import x509
@@ -21,6 +22,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         Profile, PushCertificate, SCEPConfig,
                                         StoreApp,
                                         UserEnrollment, UserEnrollmentSession)
+from zentral.utils.payloads import sign_payload
 
 
 # realm
@@ -311,6 +313,60 @@ def force_enrolled_user(enrolled_device):
         short_name=get_random_string(12),
         token=get_random_string(12).encode("utf-8")
     )
+
+
+# profiles
+
+
+def build_payload(
+    channel=None,
+    payload_id=None,
+    payload_uuid=None,
+    missing_payload_id=False,
+    missing_payload_uuid=False,
+    payload_scope=None,
+):
+    payload = plistlib.load(
+        open(os.path.join(os.path.dirname(__file__),
+                          "testdata/test.mobileconfig"),
+             "rb")
+    )
+    if channel == Channel.DEVICE:
+        payload["PayloadScope"] = "System"
+    elif channel == Channel.USER:
+        payload["PayloadScope"] = "User"
+    if payload_id:
+        payload["PayloadIdentifier"] = payload_id
+    if payload_uuid:
+        payload["PayloadUUID"] = payload_uuid
+    if missing_payload_id:
+        payload.pop("PayloadIdentifier")
+    if missing_payload_uuid:
+        payload.pop("PayloadUUID")
+    if payload_scope:
+        payload["PayloadScope"] = payload_scope
+    return payload
+
+
+def build_mobileconfig_data(
+    channel=None,
+    payload_uuid=None,
+    missing_payload_id=False,
+    missing_payload_uuid=False,
+    payload_scope=None,
+    signed=False
+):
+    payload = build_payload(
+        channel=channel,
+        payload_uuid=payload_uuid,
+        missing_payload_id=missing_payload_id,
+        missing_payload_uuid=missing_payload_uuid,
+        payload_scope=payload_scope,
+    )
+    data = plistlib.dumps(payload)
+    if signed:
+        data = sign_payload(data)
+    return data
 
 
 # artifacts

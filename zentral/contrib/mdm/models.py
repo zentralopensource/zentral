@@ -1892,7 +1892,7 @@ class FilteredBlueprintItem(models.Model):
             .select_related("tag__meta_business_unit", "tag__taxonomy")
             .all()
         )
-        return {fbpit.tag: fbpit.shard for fbpit in fbpit_qs}
+        return [{"tag": fbpit.tag, "shard": fbpit.shard} for fbpit in fbpit_qs]
 
     @property
     def platforms(self):
@@ -1909,6 +1909,28 @@ class FilteredBlueprintItem(models.Model):
                     platform_d["max"] = max_version
         return platforms
 
+    def serialize_for_event(self):
+        return {
+            "ios": self.ios,
+            "ios_min_version": self.ios_min_version,
+            "ios_max_version": self.ios_max_version,
+            "ipados": self.ipados,
+            "ipados_min_version": self.ipados_min_version,
+            "ipados_max_version": self.ipados_max_version,
+            "macos": self.macos,
+            "macos_min_version": self.macos_min_version,
+            "macos_max_version": self.macos_max_version,
+            "tvos": self.tvos,
+            "tvos_min_version": self.tvos_min_version,
+            "tvos_max_version": self.tvos_max_version,
+            "shard_modulo": self.shard_modulo,
+            "default_shard": self.default_shard,
+            "excluded_tags": [tag.serialize_for_event(keys_only=True)
+                              for tag in self.excluded_tags.all().order_by("pk")],
+            "tag_shards": [item_tag.serialize_for_event()
+                           for item_tag in self.item_tags.all().order_by("pk")]
+        }
+
 
 class FilteredBlueprintItemTag(models.Model):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name="+")
@@ -1916,6 +1938,12 @@ class FilteredBlueprintItemTag(models.Model):
 
     class Meta:
         abstract = True
+
+    def serialize_for_event(self):
+        return {
+            "tag": self.tag.serialize_for_event(keys_only=True),
+            "shard": self.shard,
+        }
 
 
 class BlueprintArtifact(FilteredBlueprintItem):
@@ -1975,6 +2003,17 @@ class ArtifactVersion(FilteredBlueprintItem):
     def can_be_deleted(self):
         return ArtifactVersion.objects.can_be_deleted().filter(pk=self.pk).count() == 1
 
+    def serialize_for_event(self):
+        d = super().serialize_for_event()
+        d.update({
+            "pk": str(self.id),
+            "artifact": self.artifact.serialize_for_event(keys_only=True),
+            "version": self.version,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
+
 
 class ArtifactVersionTag(FilteredBlueprintItemTag):
     artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.CASCADE, related_name="item_tags")
@@ -2010,6 +2049,22 @@ class Profile(models.Model):
 
     def installed_payload_uuid(self):
         return str(self.artifact_version.pk).upper()
+
+    def serialize_for_event(self):
+        d = self.artifact_version.serialize_for_event()
+        d.update({
+            "source": hashlib.sha1(self.source).hexdigest(),
+            "filename": self.filename,
+            "payload_identifier": self.payload_identifier,
+            "payload_uuid": self.payload_uuid,
+            "payload_display_name": self.payload_display_name,
+            "payload_description": self.payload_description,
+        })
+        return d
+
+    def delete(self, *args, **kwargs):
+        self.artifact_version.delete(*args, **kwargs)
+        super().delete(*args, **kwargs)
 
 
 def enterprise_application_package_path(instance, filename):

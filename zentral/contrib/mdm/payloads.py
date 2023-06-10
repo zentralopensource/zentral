@@ -6,11 +6,48 @@ from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
 from zentral.utils.payloads import sign_payload
-from .models import OTAEnrollment, OTAEnrollmentSession
+from .crypto import verify_signed_payload
+from .models import Channel, OTAEnrollment, OTAEnrollmentSession
 from .scep import update_scep_payload
 
 
 logger = logging.getLogger("zentral.contrib.mdm.payloads")
+
+
+def get_configuration_profile_info(data):
+    info = {}
+    try:
+        _, data = verify_signed_payload(data)
+    except Exception:
+        # probably not a signed payload
+        pass
+    try:
+        payload = plistlib.loads(data)
+    except Exception:
+        raise ValueError("Not a plist")
+    # payload identifier
+    try:
+        info["payload_identifier"] = payload["PayloadIdentifier"]
+    except KeyError:
+        raise ValueError("Missing PayloadIdentifier")
+    # payload uuid
+    try:
+        info["payload_uuid"] = payload["PayloadUUID"]
+    except KeyError:
+        raise ValueError("Missing PayloadUUID")
+    # channel
+    payload_scope = payload.get("PayloadScope", "User")
+    if payload_scope == "System":
+        info["channel"] = Channel.DEVICE
+    elif payload_scope == "User":
+        info["channel"] = Channel.USER
+    else:
+        raise ValueError(f"Unknown PayloadScope: {payload_scope}")
+    # other keys
+    for payload_key, info_key in (("PayloadDisplayName", "payload_display_name"),
+                                  ("PayloadDescription", "payload_description")):
+        info[info_key] = payload.get(payload_key) or ""
+    return data, info
 
 
 def build_configuration_profile_response(data, filename):

@@ -156,8 +156,8 @@
       <td>
         {% if av.tag_shards %}
         <table>
-        {% for tag, shard in av.tag_shards.items %}
-        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% for tag_shard in av.tag_shards %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag_shard.tag %}</td><td>{{ tag_shard.shard }}</td></tr>
         {% endfor %}
         </table>
         {% else %}
@@ -238,8 +238,8 @@
       <td>
         {% if ba.tag_shards %}
         <table>
-        {% for tag, shard in ba.tag_shards.items %}
-        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag %}</td><td>{{ shard }}</td></tr>
+        {% for tag_shard in ba.tag_shards %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag_shard.tag %}</td><td>{{ tag_shard.shard }}</td></tr>
         {% endfor %}
         </table>
         {% else %}

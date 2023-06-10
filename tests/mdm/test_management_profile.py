@@ -1,7 +1,6 @@
 from functools import reduce
 from io import BytesIO
 import operator
-import os.path
 import plistlib
 import uuid
 from django.contrib.auth.models import Group, Permission
@@ -14,7 +13,7 @@ from zentral.contrib.inventory.models import Tag
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Blueprint, BlueprintArtifact, Channel, Platform, Profile)
-from zentral.utils.payloads import sign_payload
+from .utils import build_mobileconfig_data, build_payload
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -49,36 +48,6 @@ class ProfileManagementViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _get_payload(
-        self,
-        channel=None,
-        payload_id=None,
-        payload_uuid=None,
-        missing_payload_id=False,
-        missing_payload_uuid=False,
-        payload_scope=None,
-    ):
-        payload = plistlib.load(
-            open(os.path.join(os.path.dirname(__file__),
-                              "testdata/test.mobileconfig"),
-                 "rb")
-        )
-        if channel == Channel.DEVICE:
-            payload["PayloadScope"] = "System"
-        elif channel == Channel.USER:
-            payload["PayloadScope"] = "User"
-        if payload_id:
-            payload["PayloadIdentifier"] = payload_id
-        if payload_uuid:
-            payload["PayloadUUID"] = payload_uuid
-        if missing_payload_id:
-            payload.pop("PayloadIdentifier")
-        if missing_payload_uuid:
-            payload.pop("PayloadUUID")
-        if payload_scope:
-            payload["PayloadScope"] = payload_scope
-        return payload
-
     def _build_mobileconfig(
         self,
         channel=None,
@@ -88,22 +57,20 @@ class ProfileManagementViewsTestCase(TestCase):
         payload_scope=None,
         signed=False
     ):
-        payload = self._get_payload(
+        data = build_mobileconfig_data(
             channel=channel,
             payload_uuid=payload_uuid,
             missing_payload_id=missing_payload_id,
             missing_payload_uuid=missing_payload_uuid,
             payload_scope=payload_scope,
+            signed=signed,
         )
-        data = plistlib.dumps(payload)
-        if signed:
-            data = sign_payload(data)
         mobileconfig = BytesIO(data)
         mobileconfig.name = "test.mobileconfig"
         return mobileconfig
 
     def _force_profile(self, channel=None, payload_id=None):
-        payload = self._get_payload(channel=channel, payload_id=payload_id)
+        payload = build_payload(channel=channel, payload_id=payload_id)
         artifact = Artifact.objects.create(
             name=payload["PayloadDisplayName"],
             type=Artifact.Type.PROFILE,
@@ -173,7 +140,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/profile_form.html")
-        self.assertFormError(response, "form", "source_file", "This file is not a plist.")
+        self.assertFormError(response, "form", "source_file", "Not a plist")
 
     def test_upload_profile_post_missing_payload_identifier(self):
         mobileconfig = self._build_mobileconfig(missing_payload_id=True)
@@ -183,7 +150,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/profile_form.html")
-        self.assertFormError(response, "form", "source_file", "Missing PayloadIdentifier.")
+        self.assertFormError(response, "form", "source_file", "Missing PayloadIdentifier")
 
     def test_upload_profile_post_missing_payload_uuid(self):
         mobileconfig = self._build_mobileconfig(missing_payload_uuid=True)
@@ -193,7 +160,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/profile_form.html")
-        self.assertFormError(response, "form", "source_file", "Missing PayloadUUID.")
+        self.assertFormError(response, "form", "source_file", "Missing PayloadUUID")
 
     def test_upload_profile_post_unknown_payload_scope(self):
         mobileconfig = self._build_mobileconfig(payload_scope="HAHA")
@@ -203,7 +170,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/profile_form.html")
-        self.assertFormError(response, "form", "source_file", "Unknown PayloadScope: HAHA.")
+        self.assertFormError(response, "form", "source_file", "Unknown PayloadScope: HAHA")
 
     def test_upload_profile_post(self):
         mobileconfig = self._build_mobileconfig()

@@ -12,9 +12,10 @@ from zentral.contrib.inventory.models import Tag
 from .app_manifest import build_enterprise_app_manifest
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
-from .crypto import load_push_certificate_and_key, verify_signed_payload
+from .crypto import load_push_certificate_and_key
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
+from .payloads import get_configuration_profile_info
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag, Channel,
                      DEPDevice, DEPOrganization, DEPEnrollment, DEPToken, DEPVirtualServer,
@@ -498,52 +499,23 @@ class BaseProfileForm(forms.ModelForm):
         fields = []
 
     def clean(self):
-        source_file = self.cleaned_data.get("source_file")
+        source_file = self.cleaned_data.pop("source_file")
         if not source_file:
             return
         # read payload
         data = source_file.read()
         try:
-            _, data = verify_signed_payload(data)
-        except Exception:
-            # probably not a signed payload
-            pass
-        try:
-            payload = plistlib.loads(data)
-        except Exception:
-            self.add_error("source_file", "This file is not a plist.")
-            return
-        # payload identifier
-        try:
-            self.instance.payload_identifier = payload["PayloadIdentifier"]
-        except KeyError:
-            self.add_error("source_file", "Missing PayloadIdentifier.")
-            return
-        # payload uuid
-        try:
-            self.instance.payload_uuid = payload["PayloadUUID"]
-        except KeyError:
-            self.add_error("source_file", "Missing PayloadUUID.")
-            return
-        # channel
-        payload_scope = payload.get("PayloadScope", "User")
-        if payload_scope == "System":
-            channel = Channel.DEVICE
-        elif payload_scope == "User":
-            channel = Channel.USER
+            data, info = get_configuration_profile_info(data)
+        except ValueError as e:
+            self.add_error("source_file", str(e))
         else:
-            self.add_error("source_file", f"Unknown PayloadScope: {payload_scope}.")
-            return
-        self.cleaned_data["channel"] = channel
-        # other keys
-        for payload_key, obj_key in (("PayloadDisplayName", "payload_display_name"),
-                                     ("PayloadDescription", "payload_description")):
-            setattr(self.instance, obj_key, payload.get(payload_key) or "")
-        # source
-        self.cleaned_data["source"] = data
-        # filename
-        source_file = self.cleaned_data.pop("source_file")
-        self.instance.filename = source_file.name
+            self.cleaned_data["source"] = data
+            self.instance.filename = source_file.name
+            for attr, val in info.items():
+                if attr != "channel":
+                    setattr(self.instance, attr, val)
+                else:
+                    self.cleaned_data[attr] = val
 
 
 class UploadProfileForm(BaseProfileForm):
@@ -642,7 +614,7 @@ class BlueprintItemFormMixin:
         self.tag_shards = []
         existing_tag_shard_dict = {}
         if self.instance.pk:
-            existing_tag_shard_dict = self.instance.tag_shards
+            existing_tag_shard_dict = {ts["tag"]: ts["shard"] for ts in self.instance.tag_shards}
         for tag in tag_qs:
             self.tag_shards.append(
                 (tag, tag in existing_tag_shard_dict, existing_tag_shard_dict.get(tag, self.instance.shard_modulo))

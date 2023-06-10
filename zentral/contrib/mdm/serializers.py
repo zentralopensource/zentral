@@ -1,5 +1,9 @@
+import base64
 from rest_framework import serializers
-from .models import Artifact, Blueprint
+from zentral.contrib.inventory.models import Tag
+from .artifacts import update_blueprint_serialized_artifacts
+from .models import Artifact, ArtifactVersion, ArtifactVersionTag, Blueprint, Platform, Profile
+from .payloads import get_configuration_profile_info
 
 
 class ArtifactSerializer(serializers.ModelSerializer):
@@ -12,3 +16,159 @@ class BlueprintSerializer(serializers.ModelSerializer):
     class Meta:
         model = Blueprint
         exclude = ["serialized_artifacts"]
+
+
+class FilteredBlueprintItemTagSerializer(serializers.Serializer):
+    tag = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all())
+    shard = serializers.IntegerField(min_value=1, max_value=100)
+
+
+class ArtifactVersionSerializer(serializers.Serializer):
+    id = serializers.UUIDField(read_only=True, source="artifact_version.pk")
+    artifact = serializers.PrimaryKeyRelatedField(queryset=Artifact.objects.all(),
+                                                  source="artifact_version.artifact")
+    ios = serializers.BooleanField(required=False, default=False,
+                                   source="artifact_version.ios")
+    ios_min_version = serializers.CharField(required=False, default="",
+                                            source="artifact_version.ios_min_version")
+    ios_max_version = serializers.CharField(required=False, default="",
+                                            source="artifact_version.ios_max_version")
+    ipados = serializers.BooleanField(required=False, default=False,
+                                      source="artifact_version.ipados")
+    ipados_min_version = serializers.CharField(required=False, default="",
+                                               source="artifact_version.ipados_min_version")
+    ipados_max_version = serializers.CharField(required=False, default="",
+                                               source="artifact_version.ipados_max_version")
+    macos = serializers.BooleanField(required=False, default=False,
+                                     source="artifact_version.macos")
+    macos_min_version = serializers.CharField(required=False, default="",
+                                              source="artifact_version.macos_min_version")
+    macos_max_version = serializers.CharField(required=False, default="",
+                                              source="artifact_version.macos_max_version")
+    tvos = serializers.BooleanField(required=False, default=False,
+                                    source="artifact_version.tvos")
+    tvos_min_version = serializers.CharField(required=False, default="",
+                                             source="artifact_version.tvos_min_version")
+    tvos_max_version = serializers.CharField(required=False, default="",
+                                             source="artifact_version.tvos_max_version")
+    shard_modulo = serializers.IntegerField(min_value=1, max_value=100, default=100,
+                                            source="artifact_version.shard_modulo")
+    default_shard = serializers.IntegerField(min_value=0, max_value=100, default=100,
+                                             source="artifact_version.default_shard")
+    excluded_tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), many=True,
+                                                       default=list, required=False,
+                                                       source="artifact_version.excluded_tags")
+    tag_shards = FilteredBlueprintItemTagSerializer(many=True,
+                                                    default=list, required=False,
+                                                    source="artifact_version.tag_shards")
+    version = serializers.IntegerField(min_value=1, source="artifact_version.version")
+    created_at = serializers.DateTimeField(read_only=True, source="artifact_version.created_at")
+    updated_at = serializers.DateTimeField(read_only=True, source="artifact_version.updated_at")
+
+    def validate(self, data):
+        # platforms & min max versions
+        platform_active = False
+        artifact_version = data.get("artifact_version")
+        if not artifact_version:
+            return data
+        artifact = artifact_version.get("artifact")
+        for platform in Platform.values:
+            field = platform.lower()
+            if artifact_version.get(field, False):
+                platform_active = True
+                if artifact and platform not in artifact.platforms:
+                    raise serializers.ValidationError({field: "Platform not available for this artifact"})
+        if not platform_active:
+            raise serializers.ValidationError("You need to activate at least one platform")
+        # shards
+        shard_modulo = artifact_version.get("shard_modulo")
+        default_shard = artifact_version.get("default_shard")
+        if isinstance(shard_modulo, int) and isinstance(default_shard, int) and default_shard > shard_modulo:
+            raise serializers.ValidationError({"default_shard": "Must be less than or equal to the shard modulo"})
+        # excluded tags
+        excluded_tags = artifact_version.get("excluded_tags", [])
+        # tag shards
+        for tag_shard in artifact_version.get("tag_shards", []):
+            tag = tag_shard.get("tag")
+            if tag and tag in excluded_tags:
+                raise serializers.ValidationError({"excluded_tags": f"Tag {tag} also present in the tag shards"})
+            shard = tag_shard.get("shard")
+            if isinstance(shard, int) and isinstance(shard_modulo, int) and shard > shard_modulo:
+                raise serializers.ValidationError({"tag_shards": f"Shard for tag {tag} > shard modulo"})
+        return data
+
+    def create(self, validated_data):
+        data = validated_data.pop("artifact_version")
+        excluded_tags = data.pop("excluded_tags")
+        tag_shards = data.pop("tag_shards")
+        artifact_version = ArtifactVersion.objects.create(**data)
+        artifact_version.excluded_tags.set(excluded_tags)
+        for tag_shard in tag_shards:
+            ArtifactVersionTag.objects.create(artifact_version=artifact_version, **tag_shard)
+        return artifact_version
+
+    def update(self, instance, validated_data):
+        data = validated_data.pop("artifact_version")
+        excluded_tags = data.pop("excluded_tags")
+        tag_shard_dict = {tag_shard["tag"]: tag_shard["shard"] for tag_shard in data.pop("tag_shards")}
+        artifact_version = instance.artifact_version
+        for attr, value in data.items():
+            setattr(artifact_version, attr, value)
+        artifact_version.save()
+        artifact_version.excluded_tags.set(excluded_tags)
+        artifact_version.item_tags.exclude(tag__in=tag_shard_dict.keys()).delete()
+        for tag, shard in tag_shard_dict.items():
+            ArtifactVersionTag.objects.update_or_create(
+                artifact_version=artifact_version,
+                tag=tag,
+                defaults={"shard": shard}
+            )
+        return artifact_version
+
+
+class B64EncodedBinaryField(serializers.Field):
+    def to_representation(self, value):
+        return base64.b64encode(value).decode("ascii")
+
+    def to_internal_value(self, data):
+        return base64.b64decode(data)
+
+
+class ProfileSerializer(ArtifactVersionSerializer):
+    source = B64EncodedBinaryField()
+
+    def validate(self, data):
+        data = super().validate(data)
+        source = data.pop("source", None)
+        if source is None:
+            return data
+        try:
+            source, info = get_configuration_profile_info(source)
+        except ValueError as e:
+            raise serializers.ValidationError({"source": str(e)})
+        data["profile"] = info
+        data["profile"]["source"] = source
+        return data
+
+    def create(self, validated_data):
+        artifact_version = super().create(validated_data)
+        profile_data = validated_data["profile"]
+        profile_data.pop("channel")
+        instance = Profile.objects.create(
+            artifact_version=artifact_version,
+            **profile_data
+        )
+        for blueprint in artifact_version.artifact.blueprints():
+            update_blueprint_serialized_artifacts(blueprint)
+        return instance
+
+    def update(self, instance, validated_data):
+        super().update(instance, validated_data)
+        profile_data = validated_data["profile"]
+        profile_data.pop("channel")
+        for attr, value in profile_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        for blueprint in instance.artifact_version.artifact.blueprints():
+            update_blueprint_serialized_artifacts(blueprint)
+        return instance
