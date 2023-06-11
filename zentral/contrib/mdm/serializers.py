@@ -35,27 +35,27 @@ class ArtifactVersionSerializer(serializers.Serializer):
                                                   source="artifact_version.artifact")
     ios = serializers.BooleanField(required=False, default=False,
                                    source="artifact_version.ios")
-    ios_min_version = serializers.CharField(required=False, default="",
+    ios_min_version = serializers.CharField(required=False, default="", allow_blank=True,
                                             source="artifact_version.ios_min_version")
-    ios_max_version = serializers.CharField(required=False, default="",
+    ios_max_version = serializers.CharField(required=False, default="", allow_blank=True,
                                             source="artifact_version.ios_max_version")
     ipados = serializers.BooleanField(required=False, default=False,
                                       source="artifact_version.ipados")
-    ipados_min_version = serializers.CharField(required=False, default="",
+    ipados_min_version = serializers.CharField(required=False, default="", allow_blank=True,
                                                source="artifact_version.ipados_min_version")
-    ipados_max_version = serializers.CharField(required=False, default="",
+    ipados_max_version = serializers.CharField(required=False, default="", allow_blank=True,
                                                source="artifact_version.ipados_max_version")
     macos = serializers.BooleanField(required=False, default=False,
                                      source="artifact_version.macos")
-    macos_min_version = serializers.CharField(required=False, default="",
+    macos_min_version = serializers.CharField(required=False, default="", allow_blank=True,
                                               source="artifact_version.macos_min_version")
-    macos_max_version = serializers.CharField(required=False, default="",
+    macos_max_version = serializers.CharField(required=False, default="", allow_blank=True,
                                               source="artifact_version.macos_max_version")
     tvos = serializers.BooleanField(required=False, default=False,
                                     source="artifact_version.tvos")
-    tvos_min_version = serializers.CharField(required=False, default="",
+    tvos_min_version = serializers.CharField(required=False, default="", allow_blank=True,
                                              source="artifact_version.tvos_min_version")
-    tvos_max_version = serializers.CharField(required=False, default="",
+    tvos_max_version = serializers.CharField(required=False, default="", allow_blank=True,
                                              source="artifact_version.tvos_max_version")
     shard_modulo = serializers.IntegerField(min_value=1, max_value=100, default=100,
                                             source="artifact_version.shard_modulo")

@@ -151,6 +151,7 @@ class MDMProfilesAPIViewsTestCase(TestCase):
                                  data={"artifact": str(artifact.pk),
                                        "source": base64.b64encode(build_mobileconfig_data()).decode("ascii"),
                                        "macos": True,
+                                       "macos_max_version": "",  # blank OK
                                        "macos_min_version": "13.3.1",
                                        "excluded_tags": [excluded_tag.pk],
                                        "shard_modulo": 10,
