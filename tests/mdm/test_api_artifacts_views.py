@@ -250,7 +250,9 @@ class MDMArtifactsAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_artifact(self, post_event):
         required_artifact, _ = force_artifact()
-        artifact, _ = force_artifact()
+        blueprint_artifact, artifact, _ = force_blueprint_artifact()
+        blueprint = blueprint_artifact.blueprint
+        self.assertEqual(blueprint.serialized_artifacts[str(artifact.pk)]["requires"], [])
         prev_value = artifact.serialize_for_event()
         self.set_permissions("mdm.change_artifact")
         new_name = get_random_string(12)
@@ -321,6 +323,8 @@ class MDMArtifactsAPIViewsTestCase(TestCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"mdm_artifact": [str(artifact.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
+        blueprint.refresh_from_db()
+        self.assertEqual(blueprint.serialized_artifacts[str(artifact.pk)]["requires"], [str(required_artifact.pk)])
 
     # delete artifact
 

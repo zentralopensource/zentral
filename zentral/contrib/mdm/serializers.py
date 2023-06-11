@@ -11,6 +11,12 @@ class ArtifactSerializer(serializers.ModelSerializer):
         model = Artifact
         fields = "__all__"
 
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        for blueprint in instance.blueprints():
+            update_blueprint_serialized_artifacts(blueprint)
+        return instance
+
 
 class BlueprintSerializer(serializers.ModelSerializer):
     class Meta:
