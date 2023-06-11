@@ -832,6 +832,12 @@ class DeleteArtifactVersionView(PermissionRequiredMixin, DeleteView):
     def get_success_url(self):
         return self.artifact.get_absolute_url()
 
+    def delete(self, request, *args, **kwargs):
+        response = super().delete(request, *args, **kwargs)
+        for blueprint in self.object.artifact.blueprints():
+            update_blueprint_serialized_artifacts(blueprint)
+        return response
+
 
 class DownloadProfileView(PermissionRequiredMixin, View):
     permission_required = "mdm.view_artifact"

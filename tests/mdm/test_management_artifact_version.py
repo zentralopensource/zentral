@@ -194,7 +194,9 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
         self.assertContains(response, f"Delete artifact version v{profile_av.version}")
 
     def test_delete_artifact_version_post(self):
-        artifact, (profile_av1, profile_av2) = force_artifact(version_count=2)
+        blueprint_artifact, artifact, (profile_av1, profile_av2) = force_blueprint_artifact(version_count=2)
+        blueprint = blueprint_artifact.blueprint
+        self.assertEqual(len(blueprint.serialized_artifacts[str(artifact.pk)]["versions"]), 2)
         self._login("mdm.delete_artifactversion", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av1.pk)),
                                     follow=True)
@@ -202,3 +204,5 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/artifact_detail.html")
         self.assertNotContains(response, reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av1.pk)))
         self.assertContains(response, reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av2.pk)))
+        blueprint.refresh_from_db()
+        self.assertEqual(len(blueprint.serialized_artifacts[str(artifact.pk)]["versions"]), 1)
