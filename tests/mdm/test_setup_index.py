@@ -137,3 +137,20 @@ class SetupIndexViewsTestCase(TestCase):
                 self.assertEqual(rpf.read(), rprofile.source)
             with zf.open(f"profiles/{profile_filename}", mode="r") as pf:
                 self.assertEqual(pf.read(), profile.source)
+            with zf.open("terraform_import.zsh", mode="r") as impf:
+                content = impf.read().decode("utf-8")
+                for line in (
+                    "terraform import zentral_mdm_blueprint.blueprint"
+                    f"{blueprint.pk} {blueprint.pk}",
+                    "terraform import zentral_mdm_artifact.artifact"
+                    f"{required_artifact.pk} {required_artifact.pk}",
+                    "terraform import zentral_mdm_artifact.artifact"
+                    f"{artifact.pk} {artifact.pk}",
+                    "terraform import zentral_mdm_blueprint_artifact.blueprintartifact"
+                    f"{blueprint_artifact.pk} {blueprint_artifact.pk}",
+                    "terraform import zentral_mdm_profile.profile"
+                    f"{rprofile.pk} {rprofile.artifact_version.pk}",
+                    "terraform import zentral_mdm_profile.profile"
+                    f"{profile.pk} {profile.artifact_version.pk}",
+                ):
+                    self.assertIn(line, content)
