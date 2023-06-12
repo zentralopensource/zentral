@@ -140,7 +140,20 @@ class ArtifactVersionSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField(read_only=True, source="artifact_version.updated_at")
 
     def validate(self, data):
-        validate_filtered_blueprint_item_data(data.get("artifact_version"))
+        # filters
+        artifact_version = data.get("artifact_version")
+        validate_filtered_blueprint_item_data(artifact_version)
+        # version conflict
+        artifact = artifact_version.get("artifact")
+        version = artifact_version.get("version")
+        if artifact and isinstance(version, int):
+            version_conflict_qs = artifact.artifactversion_set.filter(version=version)
+            if self.instance is not None:
+                version_conflict_qs = version_conflict_qs.exclude(pk=self.instance.artifact_version.pk)
+            if version_conflict_qs.count():
+                raise serializers.ValidationError(
+                    {"version": "A version of this artifact with the same version number already exists"}
+                )
         return data
 
     def create(self, validated_data):

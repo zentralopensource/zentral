@@ -103,44 +103,44 @@ class MDMSerializersTestCase(TestCase):
         self.assertEqual(payload["PayloadType"], "Configuration")
 
     def test_profile_platform_not_available_error(self):
-        artifact, (profile_av,) = force_artifact()
+        artifact, _ = force_artifact()
         serializer = ProfileSerializer(data={
             "artifact": str(artifact.pk),
             "source": base64.b64encode(build_mobileconfig_data()),
             "tvos": True,
-            "version": 1,
+            "version": 2,
         })
         self.assertFalse(serializer.is_valid())
         ed = serializer.errors["tvos"][0]
         self.assertEqual(str(ed), "Platform not available for this artifact")
 
     def test_profile_at_least_one_platform_error(self):
-        artifact, (profile_av,) = force_artifact()
+        artifact, _ = force_artifact()
         serializer = ProfileSerializer(data={
             "artifact": str(artifact.pk),
             "source": base64.b64encode(build_mobileconfig_data()),
-            "version": 1,
+            "version": 2,
         })
         self.assertFalse(serializer.is_valid())
         ed = serializer.errors["non_field_errors"][0]
         self.assertEqual(str(ed), "You need to activate at least one platform")
 
     def test_profile_default_shard_gt_shard_modulo_error(self):
-        artifact, (profile_av,) = force_artifact()
+        artifact, _ = force_artifact()
         serializer = ProfileSerializer(data={
             "artifact": str(artifact.pk),
             "source": base64.b64encode(build_mobileconfig_data()),
             "macos": True,
             "shard_modulo": 10,
             "default_shard": 11,
-            "version": 1,
+            "version": 2,
         })
         self.assertFalse(serializer.is_valid())
         ed = serializer.errors["default_shard"][0]
         self.assertEqual(str(ed), "Must be less than or equal to the shard modulo")
 
     def test_profile_excluded_tags_confict(self):
-        artifact, (profile_av,) = force_artifact()
+        artifact, _ = force_artifact()
         tag = Tag.objects.create(name=get_random_string(12))
         serializer = ProfileSerializer(data={
             "artifact": str(artifact.pk),
@@ -150,14 +150,14 @@ class MDMSerializersTestCase(TestCase):
             "tag_shards": [
                 {"tag": tag.pk, "shard": 10},
             ],
-            "version": 1,
+            "version": 2,
         })
         self.assertFalse(serializer.is_valid())
         ed = serializer.errors["excluded_tags"][0]
         self.assertEqual(str(ed), f"Tag {tag} also present in the tag shards")
 
     def test_profile_tag_shard_gt_shard_modulo_error(self):
-        artifact, (profile_av,) = force_artifact()
+        artifact, _ = force_artifact()
         tag = Tag.objects.create(name=get_random_string(12))
         serializer = ProfileSerializer(data={
             "artifact": str(artifact.pk),
@@ -168,23 +168,49 @@ class MDMSerializersTestCase(TestCase):
             "tag_shards": [
                 {"tag": tag.pk, "shard": 11},
             ],
-            "version": 1,
+            "version": 2,
         })
         self.assertFalse(serializer.is_valid())
         ed = serializer.errors["tag_shards"][0]
         self.assertEqual(str(ed), f"Shard for tag {tag} > shard modulo")
 
     def test_profile_not_a_plist_error(self):
-        artifact, (profile_av,) = force_artifact()
+        artifact, _ = force_artifact()
         serializer = ProfileSerializer(data={
             "artifact": str(artifact.pk),
             "source": base64.b64encode(b""),
             "macos": True,
-            "version": 1,
+            "version": 2,
         })
         self.assertFalse(serializer.is_valid())
         ed = serializer.errors["source"][0]
         self.assertEqual(str(ed), "Not a plist")
+
+    def test_profile_create_version_conflict(self):
+        artifact, (profile_av,) = force_artifact()
+        serializer = ProfileSerializer(data={
+            "artifact": str(artifact.pk),
+            "source": base64.b64encode(build_mobileconfig_data()),
+            "macos": True,
+            "version": profile_av.version,
+        })
+        self.assertFalse(serializer.is_valid())
+        ed = serializer.errors["version"][0]
+        self.assertEqual(str(ed), "A version of this artifact with the same version number already exists")
+
+    def test_profile_update_no_version_conflict(self):
+        artifact, (profile_av,) = force_artifact()
+        serializer = ProfileSerializer(
+            instance=profile_av.profile,
+            data={
+                "artifact": str(artifact.pk),
+                "source": base64.b64encode(profile_av.profile.source),
+                "macos": True,
+                "macos_min_version": "13.3.1",
+                "version": profile_av.version
+            }
+        )
+        self.assertTrue(serializer.is_valid())
 
     def test_profile_ok(self):
         artifact, (profile_av,) = force_artifact()
@@ -192,7 +218,7 @@ class MDMSerializersTestCase(TestCase):
             "artifact": str(artifact.pk),
             "source": base64.b64encode(build_mobileconfig_data()),
             "macos": True,
-            "version": 1,
+            "version": 2,
         })
         self.assertTrue(serializer.is_valid())
         self.assertEqual(serializer.validated_data["artifact_version"]["artifact"], artifact)
