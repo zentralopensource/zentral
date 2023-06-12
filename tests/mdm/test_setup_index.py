@@ -81,7 +81,7 @@ class SetupIndexViewsTestCase(TestCase):
         self._login("mdm.view_blueprint")
         blueprint = force_blueprint()
         required_artifact, _ = force_artifact()
-        _, artifact, _ = force_blueprint_artifact(blueprint=blueprint)
+        blueprint_artifact, artifact, _ = force_blueprint_artifact(blueprint=blueprint)
         artifact.requires.add(required_artifact)
         response = self.client.get(reverse("mdm:terraform_export"))
         self.assertEqual(response.status_code, 200)
@@ -91,6 +91,11 @@ class SetupIndexViewsTestCase(TestCase):
                     btf.read().decode("utf-8"),
                     f'resource "zentral_mdm_blueprint" "blueprint{blueprint.pk}" {{\n'
                     f'  name = "{blueprint.name}"\n'
+                    '}\n\n'
+                    f'resource "zentral_mdm_blueprint_artifact" "blueprintartifact{blueprint_artifact.pk}" {{\n'
+                    f'  blueprint_id = zentral_mdm_blueprint.blueprint{blueprint.pk}.id\n'
+                    f'  artifact_id  = zentral_mdm_artifact.artifact{artifact.pk}.id\n'
+                    '  macos        = true\n'
                     '}\n\n'
                 )
             with zf.open("mdm_artifacts.tf") as atf:
