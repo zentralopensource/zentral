@@ -2,7 +2,9 @@ import base64
 from rest_framework import serializers
 from zentral.contrib.inventory.models import Tag
 from .artifacts import update_blueprint_serialized_artifacts
-from .models import Artifact, ArtifactVersion, ArtifactVersionTag, Blueprint, Platform, Profile
+from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
+                     Blueprint, BlueprintArtifact, BlueprintArtifactTag,
+                     Platform, Profile)
 from .payloads import get_configuration_profile_info
 
 
@@ -27,6 +29,72 @@ class BlueprintSerializer(serializers.ModelSerializer):
 class FilteredBlueprintItemTagSerializer(serializers.Serializer):
     tag = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all())
     shard = serializers.IntegerField(min_value=1, max_value=100)
+
+
+def validate_filtered_blueprint_item_data(data):
+    # platforms & min max versions
+    platform_active = False
+    if not data:
+        return
+    artifact = data.get("artifact")
+    for platform in Platform.values:
+        field = platform.lower()
+        if data.get(field, False):
+            platform_active = True
+            if artifact and platform not in artifact.platforms:
+                raise serializers.ValidationError({field: "Platform not available for this artifact"})
+    if not platform_active:
+        raise serializers.ValidationError("You need to activate at least one platform")
+    # shards
+    shard_modulo = data.get("shard_modulo")
+    default_shard = data.get("default_shard")
+    if isinstance(shard_modulo, int) and isinstance(default_shard, int) and default_shard > shard_modulo:
+        raise serializers.ValidationError({"default_shard": "Must be less than or equal to the shard modulo"})
+    # excluded tags
+    excluded_tags = data.get("excluded_tags", [])
+    # tag shards
+    for tag_shard in data.get("tag_shards", []):
+        tag = tag_shard.get("tag")
+        if tag and tag in excluded_tags:
+            raise serializers.ValidationError({"excluded_tags": f"Tag {tag} also present in the tag shards"})
+        shard = tag_shard.get("shard")
+        if isinstance(shard, int) and isinstance(shard_modulo, int) and shard > shard_modulo:
+            raise serializers.ValidationError({"tag_shards": f"Shard for tag {tag} > shard modulo"})
+
+
+class BlueprintArtifactSerializer(serializers.ModelSerializer):
+    excluded_tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), many=True,
+                                                       default=list, required=False)
+    tag_shards = FilteredBlueprintItemTagSerializer(many=True, default=list, required=False)
+
+    class Meta:
+        model = BlueprintArtifact
+        fields = "__all__"
+
+    def validate(self, data):
+        validate_filtered_blueprint_item_data(data)
+        return data
+
+    def create(self, validated_data):
+        tag_shards = validated_data.pop("tag_shards")
+        instance = super().create(validated_data)
+        for tag_shard in tag_shards:
+            BlueprintArtifactTag.objects.create(blueprint_artifact=instance, **tag_shard)
+        update_blueprint_serialized_artifacts(instance.blueprint)
+        return instance
+
+    def update(self, instance, validated_data):
+        tag_shard_dict = {tag_shard["tag"]: tag_shard["shard"] for tag_shard in validated_data.pop("tag_shards")}
+        instance = super().update(instance, validated_data)
+        instance.item_tags.exclude(tag__in=tag_shard_dict.keys()).delete()
+        for tag, shard in tag_shard_dict.items():
+            BlueprintArtifactTag.objects.update_or_create(
+                blueprint_artifact=instance,
+                tag=tag,
+                defaults={"shard": shard}
+            )
+        update_blueprint_serialized_artifacts(instance.blueprint)
+        return instance
 
 
 class ArtifactVersionSerializer(serializers.Serializer):
@@ -72,35 +140,7 @@ class ArtifactVersionSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField(read_only=True, source="artifact_version.updated_at")
 
     def validate(self, data):
-        # platforms & min max versions
-        platform_active = False
-        artifact_version = data.get("artifact_version")
-        if not artifact_version:
-            return data
-        artifact = artifact_version.get("artifact")
-        for platform in Platform.values:
-            field = platform.lower()
-            if artifact_version.get(field, False):
-                platform_active = True
-                if artifact and platform not in artifact.platforms:
-                    raise serializers.ValidationError({field: "Platform not available for this artifact"})
-        if not platform_active:
-            raise serializers.ValidationError("You need to activate at least one platform")
-        # shards
-        shard_modulo = artifact_version.get("shard_modulo")
-        default_shard = artifact_version.get("default_shard")
-        if isinstance(shard_modulo, int) and isinstance(default_shard, int) and default_shard > shard_modulo:
-            raise serializers.ValidationError({"default_shard": "Must be less than or equal to the shard modulo"})
-        # excluded tags
-        excluded_tags = artifact_version.get("excluded_tags", [])
-        # tag shards
-        for tag_shard in artifact_version.get("tag_shards", []):
-            tag = tag_shard.get("tag")
-            if tag and tag in excluded_tags:
-                raise serializers.ValidationError({"excluded_tags": f"Tag {tag} also present in the tag shards"})
-            shard = tag_shard.get("shard")
-            if isinstance(shard, int) and isinstance(shard_modulo, int) and shard > shard_modulo:
-                raise serializers.ValidationError({"tag_shards": f"Shard for tag {tag} > shard modulo"})
+        validate_filtered_blueprint_item_data(data.get("artifact_version"))
         return data
 
     def create(self, validated_data):

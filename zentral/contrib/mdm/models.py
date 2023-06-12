@@ -1958,6 +1958,17 @@ class BlueprintArtifact(FilteredBlueprintItem):
     def get_absolute_url(self):
         return "{}#ba-{}".format(self.artifact.get_absolute_url(), self.pk)
 
+    def serialize_for_event(self):
+        d = super().serialize_for_event()
+        d.update({
+            "pk": self.pk,
+            "blueprint": self.blueprint.serialize_for_event(keys_only=True),
+            "artifact": self.artifact.serialize_for_event(keys_only=True),
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
+
 
 class BlueprintArtifactTag(FilteredBlueprintItemTag):
     blueprint_artifact = models.ForeignKey(BlueprintArtifact, on_delete=models.CASCADE, related_name="item_tags")

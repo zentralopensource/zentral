@@ -4,11 +4,87 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.mdm.models import ArtifactVersionTag
-from zentral.contrib.mdm.serializers import ProfileSerializer
-from .utils import build_mobileconfig_data, force_artifact
+from zentral.contrib.mdm.serializers import BlueprintArtifactSerializer, ProfileSerializer
+from .utils import build_mobileconfig_data, force_artifact, force_blueprint
 
 
 class MDMSerializersTestCase(TestCase):
+    # blueprint artifact
+
+    def test_blueprint_artifact_platform_not_available_error(self):
+        blueprint = force_blueprint()
+        artifact, _ = force_artifact()
+        serializer = BlueprintArtifactSerializer(data={
+            "blueprint": blueprint.pk,
+            "artifact": str(artifact.pk),
+            "tvos": True,
+        })
+        self.assertFalse(serializer.is_valid())
+        ed = serializer.errors["tvos"][0]
+        self.assertEqual(str(ed), "Platform not available for this artifact")
+
+    def test_blueprint_artifact_at_least_one_platform_error(self):
+        blueprint = force_blueprint()
+        artifact, _ = force_artifact()
+        serializer = BlueprintArtifactSerializer(data={
+            "blueprint": blueprint.pk,
+            "artifact": str(artifact.pk),
+        })
+        self.assertFalse(serializer.is_valid())
+        ed = serializer.errors["non_field_errors"][0]
+        self.assertEqual(str(ed), "You need to activate at least one platform")
+
+    def test_blueprint_artifact_default_shard_gt_shard_modulo_error(self):
+        blueprint = force_blueprint()
+        artifact, _ = force_artifact()
+        serializer = BlueprintArtifactSerializer(data={
+            "blueprint": blueprint.pk,
+            "artifact": str(artifact.pk),
+            "macos": True,
+            "shard_modulo": 10,
+            "default_shard": 11,
+        })
+        self.assertFalse(serializer.is_valid())
+        ed = serializer.errors["default_shard"][0]
+        self.assertEqual(str(ed), "Must be less than or equal to the shard modulo")
+
+    def test_blueprint_artifact_excluded_tags_confict(self):
+        blueprint = force_blueprint()
+        artifact, _ = force_artifact()
+        tag = Tag.objects.create(name=get_random_string(12))
+        serializer = BlueprintArtifactSerializer(data={
+            "blueprint": blueprint.pk,
+            "artifact": str(artifact.pk),
+            "macos": True,
+            "excluded_tags": [tag.pk],
+            "tag_shards": [
+                {"tag": tag.pk, "shard": 10},
+            ],
+        })
+        self.assertFalse(serializer.is_valid())
+        ed = serializer.errors["excluded_tags"][0]
+        self.assertEqual(str(ed), f"Tag {tag} also present in the tag shards")
+
+    def test_blueprint_artifact_tag_shard_gt_shard_modulo_error(self):
+        blueprint = force_blueprint()
+        artifact, _ = force_artifact()
+        tag = Tag.objects.create(name=get_random_string(12))
+        serializer = BlueprintArtifactSerializer(data={
+            "blueprint": blueprint.pk,
+            "artifact": str(artifact.pk),
+            "macos": True,
+            "shard_modulo": 10,
+            "default_shard": 0,
+            "tag_shards": [
+                {"tag": tag.pk, "shard": 11},
+            ],
+        })
+        self.assertFalse(serializer.is_valid())
+        ed = serializer.errors["tag_shards"][0]
+        self.assertEqual(str(ed), f"Shard for tag {tag} > shard modulo")
+
+    # profile
+
     def test_serialize_profile(self):
         artifact, (profile_av,) = force_artifact()
         profile_av.macos_min_version = "13.3.1"
