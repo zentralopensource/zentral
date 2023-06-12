@@ -1,3 +1,4 @@
+from importlib import import_module
 import os
 import tempfile
 import zipfile
@@ -149,6 +150,13 @@ class RefAttr(Attr):
         self.resource_cls = resource_cls
         super().__init__(many=many, required=required, source=source, default=default, call_value=False)
 
+    def get_resource_cls(self):
+        if isinstance(self.resource_cls, str):
+            module_name, cls_name = self.resource_cls.rsplit(".", 1)
+            module = import_module(module_name)
+            self.resource_cls = getattr(module, cls_name)
+        return self.resource_cls
+
     def get_value(self, instance, attr_name):
         if self.many and attr_name.endswith("_ids"):
             attr_name = attr_name[:-4] + "s"
@@ -160,7 +168,8 @@ class RefAttr(Attr):
         return raw_value
 
     def value_representation(self, value):
-        return "{}.{}.id".format(self.resource_cls.tf_type, self.resource_cls.build_local_name(value))
+        resource_cls = self.get_resource_cls()
+        return "{}.{}.id".format(resource_cls.tf_type, resource_cls.build_local_name(value))
 
     def iter_resources(self, instance, attr_name):
         value = self.get_value(instance, attr_name)
@@ -169,7 +178,7 @@ class RefAttr(Attr):
         if not self.many:
             value = (value,)
         for i in value:
-            yield self.resource_cls(i)
+            yield self.get_resource_cls()(i)
 
 
 class ObjectMetaclass(type):

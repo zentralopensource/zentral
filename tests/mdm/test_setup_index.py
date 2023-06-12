@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from .utils import force_blueprint
+from .utils import force_artifact, force_blueprint, force_blueprint_artifact
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -80,6 +80,9 @@ class SetupIndexViewsTestCase(TestCase):
     def test_terraform_export(self):
         self._login("mdm.view_blueprint")
         blueprint = force_blueprint()
+        required_artifact, _ = force_artifact()
+        _, artifact, _ = force_blueprint_artifact(blueprint=blueprint)
+        artifact.requires.add(required_artifact)
         response = self.client.get(reverse("mdm:terraform_export"))
         self.assertEqual(response.status_code, 200)
         with zipfile.ZipFile(io.BytesIO(response.content), mode="r") as zf:
@@ -88,5 +91,22 @@ class SetupIndexViewsTestCase(TestCase):
                     btf.read().decode("utf-8"),
                     f'resource "zentral_mdm_blueprint" "blueprint{blueprint.pk}" {{\n'
                     f'  name = "{blueprint.name}"\n'
+                    '}\n\n'
+                )
+            with zf.open("mdm_artifacts.tf") as atf:
+                self.assertEqual(
+                    atf.read().decode("utf-8"),
+                    f'resource "zentral_mdm_artifact" "artifact{required_artifact.pk}" {{\n'
+                    f'  name      = "{required_artifact.name}"\n'
+                    '  type      = "Profile"\n'
+                    '  channel   = "Device"\n'
+                    '  platforms = ["macOS"]\n'
+                    '}\n\n'
+                    f'resource "zentral_mdm_artifact" "artifact{artifact.pk}" {{\n'
+                    f'  name      = "{artifact.name}"\n'
+                    '  type      = "Profile"\n'
+                    '  channel   = "Device"\n'
+                    '  platforms = ["macOS"]\n'
+                    f'  requires  = [zentral_mdm_artifact.artifact{required_artifact.pk}.id]\n'
                     '}\n\n'
                 )
