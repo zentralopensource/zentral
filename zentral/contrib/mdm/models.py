@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
+from django.utils.text import slugify
 from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmUser
@@ -2076,6 +2077,10 @@ class Profile(models.Model):
     def delete(self, *args, **kwargs):
         self.artifact_version.delete(*args, **kwargs)
         super().delete(*args, **kwargs)
+
+    def get_export_filename(self):
+        slug = slugify(self.artifact_version.artifact.name)
+        return f"{slug}_{self.pk}_v{self.artifact_version.version}.mobileconfig"
 
 
 def enterprise_application_package_path(instance, filename):

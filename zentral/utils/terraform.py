@@ -181,6 +181,26 @@ class RefAttr(Attr):
             yield self.get_resource_cls()(i)
 
 
+class FileBase64Attr(Attr):
+    def __init__(self, rel_path, filename_source):
+        self.rel_path = rel_path
+        self.filename_source = filename_source
+        super().__init__(many=False, required=True, source=None, default=None, call_value=True)
+
+    def _get_file_rel_path(self, instance):
+        return os.path.join(self.rel_path, self.get_value(instance, self.filename_source))
+
+    def iter_representation_lines(self, instance, attr_name):
+        file_path = os.path.join("${path.module}", self._get_file_rel_path(instance))
+        yield f'filebase64("{file_path}")'
+
+    def get_file_info(self, instance, attr_name):
+        return (
+            self._get_file_rel_path(instance),
+            self.get_value(instance, attr_name)
+        )
+
+
 class ObjectMetaclass(type):
     def __new__(mcs, name, bases, attrs):
         attrs["declared_attrs"] = {
@@ -252,6 +272,11 @@ class Resource(metaclass=ObjectMetaclass):
             if isinstance(attr, (MapAttr, RefAttr)):
                 yield from attr.iter_resources(self.instance, attr_name)
 
+    def iter_files(self):
+        for attr_name, attr in self.declared_attrs.items():
+            if isinstance(attr, FileBase64Attr):
+                yield attr.get_file_info(self.instance, attr_name)
+
 
 def iter_all_resources(parent_resource, seen_resources):
     # we use the terraform import arguments as key
@@ -298,6 +323,14 @@ def build_zip_file(resource_iterator):
                 tf_files[tf_filename] = (tf_file_p, tf_file)
             tf_file.write(resource.to_representation())
             tf_file.write("\n\n")
+            for tf_filename, content in resource.iter_files():
+                if tf_filename in tf_files:
+                    raise ValueError(f"Resource file confict: {tf_filename}")
+                tf_file_fh, tf_file_p = tempfile.mkstemp()
+                tf_file = os.fdopen(tf_file_fh, "wb")
+                tf_file.write(content)
+                tf_file.close()
+                tf_files[tf_filename] = (tf_file_p, None)
     zip_fh, zip_p = tempfile.mkstemp()
     zip_f = os.fdopen(zip_fh, mode="wb")
     with zipfile.ZipFile(zip_f, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_a:
@@ -308,7 +341,8 @@ def build_zip_file(resource_iterator):
         zip_a.write(ic_p, "terraform_import.zsh")
         os.unlink(ic_p)
         for tf_filename, (tf_file_p, tf_file) in tf_files.items():
-            tf_file.close()
+            if tf_file:
+                tf_file.close()
             zip_a.write(tf_file_p, arcname=tf_filename)
             os.unlink(tf_file_p)
     return zip_p
