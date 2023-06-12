@@ -1,6 +1,6 @@
 from .models import Artifact, Blueprint
 from zentral.contrib.inventory.terraform import TagResource
-from zentral.utils.terraform import BoolAttr, IntAttr, MapAttr, RefAttr, Resource, StringAttr
+from zentral.utils.terraform import BoolAttr, FileBase64Attr, IntAttr, MapAttr, RefAttr, Resource, StringAttr
 
 
 class ArtifactResource(Resource):
@@ -62,6 +62,32 @@ class BlueprintArtifactResource(Resource):
     tag_shards = TagShardAttr(many=True)
 
 
+class ProfileResource(Resource):
+    tf_type = "zentral_mdm_profile"
+    tf_grouping_key = "mdm_artifacts"
+
+    artifact_id = RefAttr(ArtifactResource, required=True)
+    source = FileBase64Attr(rel_path="profiles", filename_source="get_export_filename")
+    artifact_id = RefAttr(ArtifactResource, required=True, source="artifact_version.artifact")
+    ios = BoolAttr(default=False, source="artifact_version.ios")
+    ios_max_version = StringAttr(default="", source="artifact_version.ios_max_version")
+    ios_min_version = StringAttr(default="", source="artifact_version.ios_min_version")
+    ipados = BoolAttr(default=False, source="artifact_version.ipados")
+    ipados_max_version = StringAttr(default="", source="artifact_version.ipados_max_version")
+    ipados_min_version = StringAttr(default="", source="artifact_version.ipados_min_version")
+    macos = BoolAttr(default=False, source="artifact_version.macos")
+    macos_max_version = StringAttr(default="", source="artifact_version.macos_max_version")
+    macos_min_version = StringAttr(default="", source="artifact_version.macos_min_version")
+    tvos = BoolAttr(default=False, source="artifact_version.tvos")
+    tvos_max_version = StringAttr(default="", source="artifact_version.tvos_max_version")
+    tvos_min_version = StringAttr(default="", source="artifact_version.tvos_min_version")
+    shard_modulo = IntAttr(default=100, source="artifact_version.shard_modulo")
+    default_shard = IntAttr(default=100, source="artifact_version.default_shard")
+    excluded_tag_ids = RefAttr(TagResource, many=True, source="artifact_version.excluded_tags")
+    tag_shards = TagShardAttr(many=True, source="artifact_version.tag_shards")
+    version = IntAttr(required=True, source="artifact_version.version")
+
+
 def iter_resources():
     for blueprint in Blueprint.objects.prefetch_related("blueprintartifact_set__artifact",
                                                         "blueprintartifact_set__blueprint",
@@ -70,7 +96,7 @@ def iter_resources():
         yield BlueprintResource(blueprint)
         for blueprint_artifact in blueprint.blueprintartifact_set.all():
             yield BlueprintArtifactResource(blueprint_artifact)
-    for artifact in Artifact.objects.filter(type=Artifact.Type.PROFILE):
-        for required_artifact in artifact.requires.all():
-            yield ArtifactResource(required_artifact)
+    for artifact in Artifact.objects.prefetch_related("requires").filter(type=Artifact.Type.PROFILE):
         yield ArtifactResource(artifact)
+        for artifact_version in artifact.artifactversion_set.select_related("profile").order_by("-version"):
+            yield ProfileResource(artifact_version.profile)

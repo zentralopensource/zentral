@@ -13,6 +13,8 @@ from .utils import force_artifact, force_blueprint, force_blueprint_artifact
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class SetupIndexViewsTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
@@ -80,8 +82,12 @@ class SetupIndexViewsTestCase(TestCase):
     def test_terraform_export(self):
         self._login("mdm.view_blueprint")
         blueprint = force_blueprint()
-        required_artifact, _ = force_artifact()
-        blueprint_artifact, artifact, _ = force_blueprint_artifact(blueprint=blueprint)
+        required_artifact, (required_profile_av,) = force_artifact()
+        rprofile = required_profile_av.profile
+        rprofile_filename = f"{required_artifact.name.lower()}_{rprofile.pk}_v1.mobileconfig"
+        blueprint_artifact, artifact, (profile_av,) = force_blueprint_artifact(blueprint=blueprint)
+        profile = profile_av.profile
+        profile_filename = f"{artifact.name.lower()}_{profile.pk}_v1.mobileconfig"
         artifact.requires.add(required_artifact)
         response = self.client.get(reverse("mdm:terraform_export"))
         self.assertEqual(response.status_code, 200)
@@ -114,4 +120,20 @@ class SetupIndexViewsTestCase(TestCase):
                     '  platforms = ["macOS"]\n'
                     f'  requires  = [zentral_mdm_artifact.artifact{required_artifact.pk}.id]\n'
                     '}\n\n'
+                    f'resource "zentral_mdm_profile" "profile{rprofile.pk}" {{\n'
+                    f'  artifact_id = zentral_mdm_artifact.artifact{required_artifact.pk}.id\n'
+                    f'  source      = filebase64("${{path.module}}/profiles/{rprofile_filename}")\n'
+                    '  macos       = true\n'
+                    '  version     = 1\n'
+                    '}\n\n'
+                    f'resource "zentral_mdm_profile" "profile{profile.pk}" {{\n'
+                    f'  artifact_id = zentral_mdm_artifact.artifact{artifact.pk}.id\n'
+                    f'  source      = filebase64("${{path.module}}/profiles/{profile_filename}")\n'
+                    '  macos       = true\n'
+                    '  version     = 1\n'
+                    '}\n\n'
                 )
+            with zf.open(f"profiles/{rprofile_filename}", mode="r") as rpf:
+                self.assertEqual(rpf.read(), rprofile.source)
+            with zf.open(f"profiles/{profile_filename}", mode="r") as pf:
+                self.assertEqual(pf.read(), profile.source)

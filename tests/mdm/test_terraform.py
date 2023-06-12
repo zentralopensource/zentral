@@ -2,7 +2,9 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.mdm.models import Artifact, Blueprint
-from zentral.contrib.mdm.terraform import ArtifactResource, BlueprintResource, BlueprintArtifactResource
+from zentral.contrib.mdm.terraform import (ArtifactResource,
+                                           BlueprintResource, BlueprintArtifactResource,
+                                           ProfileResource)
 from .utils import force_artifact, force_blueprint, force_blueprint_artifact
 
 
@@ -46,6 +48,53 @@ class MDMTerraformTestCase(TestCase):
             '  reinstall_interval             = 1\n'
             '  reinstall_on_os_update         = "Minor"\n'
             f'  requires                       = [zentral_mdm_artifact.artifact{required_artifact.pk}.id]\n'
+            '}'
+        )
+
+    # profile
+
+    def test_profile_resource_defaults(self):
+        artifact, (profile_av,) = force_artifact()
+        profile = profile_av.profile
+        profile_filename = f"{artifact.name.lower()}_{profile.pk}_v1.mobileconfig"
+        resource = ProfileResource(profile)
+        self.assertEqual(
+            resource.to_representation(),
+            f'resource "zentral_mdm_profile" "profile{ profile.pk }" {{\n'
+            f'  artifact_id = zentral_mdm_artifact.artifact{ artifact.pk}.id\n'
+            f'  source      = filebase64("${{path.module}}/profiles/{profile_filename}")\n'
+            '  macos       = true\n'
+            '  version     = 1\n'
+            '}'
+        )
+
+    def test_profile_resource_full(self):
+        artifact, (profile_av,) = force_artifact()
+        profile = profile_av.profile
+        profile.filename = "{}.mobileconfig".format(get_random_string(12))
+        profile.save()
+        profile_filename = f"{artifact.name.lower()}_{profile.pk}_v1.mobileconfig"
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+        shard_tag = Tag.objects.create(name=get_random_string(12))
+        profile_av.macos_min_version = "13.3.1"
+        profile_av.default_shard = 0
+        profile_av.shard_modulo = 10
+        profile_av.save()
+        profile_av.excluded_tags.add(excluded_tag)
+        profile_av.item_tags.create(tag=shard_tag, shard=10)
+        resource = ProfileResource(profile)
+        self.assertEqual(
+            resource.to_representation(),
+            f'resource "zentral_mdm_profile" "profile{ profile.pk }" {{\n'
+            f'  artifact_id       = zentral_mdm_artifact.artifact{ artifact.pk}.id\n'
+            f'  source            = filebase64("${{path.module}}/profiles/{profile_filename}")\n'
+            '  macos             = true\n'
+            '  macos_min_version = "13.3.1"\n'
+            '  shard_modulo      = 10\n'
+            '  default_shard     = 0\n'
+            f'  excluded_tag_ids  = [zentral_tag.tag{excluded_tag.pk}.id]\n'
+            f'  tag_shards        = [{{ tag_id = zentral_tag.tag{shard_tag.pk}.id, shard = 10 }}]\n'
+            '  version           = 1\n'
             '}'
         )
 
