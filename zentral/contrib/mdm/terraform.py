@@ -87,6 +87,9 @@ class ProfileResource(Resource):
     tag_shards = TagShardAttr(many=True, source="artifact_version.tag_shards")
     version = IntAttr(required=True, source="artifact_version.version")
 
+    def get_pk(self):
+        return self.instance.artifact_version.pk
+
 
 def iter_resources():
     for blueprint in Blueprint.objects.prefetch_related("blueprintartifact_set__artifact",

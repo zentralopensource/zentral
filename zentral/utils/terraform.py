@@ -243,6 +243,9 @@ class Resource(metaclass=ObjectMetaclass):
             return False
         return self.instance == other.instance
 
+    def get_pk(self):
+        return self.instance.pk
+
     @classmethod
     def build_local_name(cls, instance):
         return f"{instance._meta.model_name}{instance.pk}"
@@ -283,7 +286,7 @@ def iter_all_resources(parent_resource, seen_resources):
     # because we will need them later
     parent_resource_import_args = (
         f"{parent_resource.tf_type}.{parent_resource.local_name}",
-        parent_resource.instance.pk
+        parent_resource.get_pk()
     )
     if parent_resource_import_args in seen_resources:
         return
