@@ -498,15 +498,20 @@ class MDMViewsTestCase(TestCase):
 
     # checkin - get bootstrap token
 
-    def test_get_bootstrap_token_error(self, post_event):
+    def test_get_no_bootstrap_token_warning(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         payload = {
             "UDID": udid,
             "MessageType": "GetBootstrapToken",
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
-        self.assertEqual(response.status_code, 400)
-        self._assertAbort(post_event, f"Enrolled device {udid} has no bootstrap token")
+        self.assertEqual(response.status_code, 200)
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, MDMRequestEvent)
+        self.assertEqual(last_event.payload["status"], "warning")
+        self.assertEqual(last_event.payload["reason"], f"Enrolled device {udid} has no bootstrap token")
+        data = plistlib.loads(response.content)
+        self.assertEqual(data["BootstrapToken"], b"")
 
     def test_get_bootstrap_token(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)

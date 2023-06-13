@@ -337,12 +337,18 @@ class CheckinView(MDMView):
     def do_get_bootstrap_token(self):
         # https://developer.apple.com/documentation/devicemanagement/get_bootstrap_token
         bootstrap_token = self.enrolled_device.get_bootstrap_token()
+        event_payload = {}
         if not bootstrap_token:
-            self.abort(f"Enrolled device {self.enrolled_device.udid} has no bootstrap token")
+            status = "warning"
+            event_payload["reason"] = f"Enrolled device {self.enrolled_device.udid} has no bootstrap token"
+            # see https://developer.apple.com/documentation/devicemanagement/get_bootstrap_token
+            # """If no bootstrap token is available, the server should return empty or no data and no error."""
+            bootstrap_token = b""
         else:
-            self.post_event("success")
-            return HttpResponse(plistlib.dumps({"BootstrapToken": bootstrap_token}),
-                                content_type="application/xml")
+            status = "success"
+        self.post_event(status, **event_payload)
+        return HttpResponse(plistlib.dumps({"BootstrapToken": bootstrap_token}),
+                            content_type="application/xml")
 
     def do_declarative_management(self):
         # https://developer.apple.com/documentation/devicemanagement/declarativemanagementrequest
