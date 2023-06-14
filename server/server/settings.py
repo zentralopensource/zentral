@@ -29,7 +29,7 @@ SECRET_KEY = django_zentral_settings.get('SECRET_KEY', utils.get_random_secret_k
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = django_zentral_settings.get('DEBUG', False)
 
-ALLOWED_HOSTS = django_zentral_settings.get('ALLOWED_HOSTS', [])
+ALLOWED_HOSTS = list(django_zentral_settings.get('ALLOWED_HOSTS', []))
 if not ALLOWED_HOSTS:
     fqdn = zentral_settings.get("api", {}).get("fqdn")
     if fqdn:
