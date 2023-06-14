@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.crypto import constant_time_compare
@@ -96,13 +96,11 @@ class DeleteInstanceView(PermissionRequiredMixin, DeleteView):
     model = Instance
     success_url = reverse_lazy("wsone:instances")
 
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
+    def form_valid(self, form):
         serialized_instance = self.object.serialize_for_event()
-        success_url = self.get_success_url()
-        self.object.delete()
+        response = super().form_valid(form)
         transaction.on_commit(lambda: post_instance_deleted_event(serialized_instance, self.request))
-        return HttpResponseRedirect(success_url)
+        return response
 
 
 class EventsMixin:
