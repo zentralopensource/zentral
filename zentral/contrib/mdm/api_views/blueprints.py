@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
@@ -40,6 +41,10 @@ class BlueprintArtifactList(ListCreateAPIViewWithAudit):
                                  .all())
     serializer_class = BlueprintArtifactSerializer
 
+    @transaction.non_atomic_requests
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
 
 class BlueprintArtifactDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
@@ -53,7 +58,13 @@ class BlueprintArtifactDetail(RetrieveUpdateDestroyAPIViewWithAudit):
                                  .all())
     serializer_class = BlueprintArtifactSerializer
 
+    @transaction.non_atomic_requests
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
     def perform_destroy(self, instance):
-        response = super().perform_destroy(instance)
-        update_blueprint_serialized_artifacts(instance.blueprint)
+        with transaction.atomic(durable=True):
+            response = super().perform_destroy(instance)
+        with transaction.atomic(durable=True):
+            update_blueprint_serialized_artifacts(instance.blueprint)
         return response

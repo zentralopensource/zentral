@@ -13,7 +13,7 @@ from .declarations import (build_target_management_status_subscriptions,
                            get_legacy_profile_identifier,
                            get_legacy_profile_server_token)
 from .models import (Artifact, ArtifactVersion,
-                     BlueprintArtifact,
+                     Blueprint, BlueprintArtifact,
                      Channel,
                      DeviceArtifact, DeviceCommand,
                      TargetArtifact,
@@ -91,6 +91,9 @@ def _serialize_artifact_version(artifact_version):
 
 def update_blueprint_serialized_artifacts(blueprint, commit=True):
     artifacts = {}
+    # lock the blueprint
+    Blueprint.objects.select_for_update().get(pk=blueprint.pk)
+    # update the blueprint
     for bpa in (BlueprintArtifact.objects.prefetch_related("item_tags__tag",
                                                            "excluded_tags",
                                                            "artifact__requires")

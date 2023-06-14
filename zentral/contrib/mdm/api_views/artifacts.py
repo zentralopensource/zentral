@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
@@ -13,6 +14,10 @@ class ArtifactList(ListCreateAPIViewWithAudit):
     serializer_class = ArtifactSerializer
     filterset_fields = ('name',)
 
+    @transaction.non_atomic_requests
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
 
 class ArtifactDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
@@ -21,6 +26,11 @@ class ArtifactDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = Artifact.objects.all()
     serializer_class = ArtifactSerializer
 
+    @transaction.non_atomic_requests
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    @transaction.atomic(durable=True)
     def perform_destroy(self, instance):
         if not instance.can_be_deleted():
             raise ValidationError('This artifact cannot be deleted')
@@ -39,6 +49,10 @@ class ProfileList(ListCreateAPIViewWithAudit):
                                          "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = ProfileSerializer
 
+    @transaction.non_atomic_requests
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
 
 class ProfileDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
@@ -53,12 +67,16 @@ class ProfileDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     lookup_field = "artifact_version__pk"
     lookup_url_kwarg = "artifact_version_pk"
 
+    @transaction.non_atomic_requests
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
     def perform_destroy(self, instance):
-        artifact_version = instance.artifact_version
-        if not artifact_version.can_be_deleted():
-            raise ValidationError('This profile cannot be deleted')
-        else:
+        with transaction.atomic(durable=True):
+            if not instance.artifact_version.can_be_deleted():
+                raise ValidationError('This profile cannot be deleted')
             response = super().perform_destroy(instance)
-            for blueprint in artifact_version.artifact.blueprints():
+        with transaction.atomic(durable=True):
+            for blueprint in instance.artifact_version.artifact.blueprints():
                 update_blueprint_serialized_artifacts(blueprint)
-            return response
+        return response

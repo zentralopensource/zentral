@@ -1,4 +1,5 @@
 import base64
+from django.db import transaction
 from rest_framework import serializers
 from zentral.contrib.inventory.models import Tag
 from .artifacts import update_blueprint_serialized_artifacts
@@ -14,9 +15,11 @@ class ArtifactSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def update(self, instance, validated_data):
-        instance = super().update(instance, validated_data)
-        for blueprint in instance.blueprints():
-            update_blueprint_serialized_artifacts(blueprint)
+        with transaction.atomic(durable=True):
+            instance = super().update(instance, validated_data)
+        with transaction.atomic(durable=True):
+            for blueprint in instance.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
         return instance
 
 
@@ -77,23 +80,27 @@ class BlueprintArtifactSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         tag_shards = validated_data.pop("tag_shards")
-        instance = super().create(validated_data)
-        for tag_shard in tag_shards:
-            BlueprintArtifactTag.objects.create(blueprint_artifact=instance, **tag_shard)
-        update_blueprint_serialized_artifacts(instance.blueprint)
+        with transaction.atomic(durable=True):
+            instance = super().create(validated_data)
+            for tag_shard in tag_shards:
+                BlueprintArtifactTag.objects.create(blueprint_artifact=instance, **tag_shard)
+        with transaction.atomic(durable=True):
+            update_blueprint_serialized_artifacts(instance.blueprint)
         return instance
 
     def update(self, instance, validated_data):
         tag_shard_dict = {tag_shard["tag"]: tag_shard["shard"] for tag_shard in validated_data.pop("tag_shards")}
-        instance = super().update(instance, validated_data)
-        instance.item_tags.exclude(tag__in=tag_shard_dict.keys()).delete()
-        for tag, shard in tag_shard_dict.items():
-            BlueprintArtifactTag.objects.update_or_create(
-                blueprint_artifact=instance,
-                tag=tag,
-                defaults={"shard": shard}
-            )
-        update_blueprint_serialized_artifacts(instance.blueprint)
+        with transaction.atomic(durable=True):
+            instance = super().update(instance, validated_data)
+            instance.item_tags.exclude(tag__in=tag_shard_dict.keys()).delete()
+            for tag, shard in tag_shard_dict.items():
+                BlueprintArtifactTag.objects.update_or_create(
+                    blueprint_artifact=instance,
+                    tag=tag,
+                    defaults={"shard": shard}
+                )
+        with transaction.atomic(durable=True):
+            update_blueprint_serialized_artifacts(instance.blueprint)
         return instance
 
 
@@ -207,27 +214,28 @@ class ProfileSerializer(ArtifactVersionSerializer):
             raise serializers.ValidationError({"source": str(e)})
         data["profile"] = info
         data["profile"]["source"] = source
+        data["profile"].pop("channel")
         return data
 
     def create(self, validated_data):
-        artifact_version = super().create(validated_data)
-        profile_data = validated_data["profile"]
-        profile_data.pop("channel")
-        instance = Profile.objects.create(
-            artifact_version=artifact_version,
-            **profile_data
-        )
-        for blueprint in artifact_version.artifact.blueprints():
-            update_blueprint_serialized_artifacts(blueprint)
+        with transaction.atomic(durable=True):
+            artifact_version = super().create(validated_data)
+            instance = Profile.objects.create(
+                artifact_version=artifact_version,
+                **validated_data["profile"]
+            )
+        with transaction.atomic(durable=True):
+            for blueprint in artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
         return instance
 
     def update(self, instance, validated_data):
-        super().update(instance, validated_data)
-        profile_data = validated_data["profile"]
-        profile_data.pop("channel")
-        for attr, value in profile_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        for blueprint in instance.artifact_version.artifact.blueprints():
-            update_blueprint_serialized_artifacts(blueprint)
+        with transaction.atomic(durable=True):
+            super().update(instance, validated_data)
+            for attr, value in validated_data["profile"].items():
+                setattr(instance, attr, value)
+            instance.save()
+        with transaction.atomic(durable=True):
+            for blueprint in instance.artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
         return instance
