@@ -1,5 +1,5 @@
 Deprecated==1.2.13
-Django==4.0.10
+Django==4.1.9
 Jinja2==3.1.2
 MarkupSafe==2.1.1
 PyYAML==6.0
@@ -39,7 +39,7 @@ django-filter==22.1
 django-redis==5.2.0
 django-storages==1.12.3
 djangorestframework-yaml==2.0.0
-djangorestframework==3.13.1
+djangorestframework==3.14.0
 elasticsearch==8.3.1
 elementpath==3.0.0
 executing==0.8.3
