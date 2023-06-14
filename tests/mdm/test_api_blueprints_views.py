@@ -152,13 +152,13 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
 
     def test_create_blueprint_unauthorized(self):
         response = self.post(reverse("mdm_api:blueprints"),
-                             {"name": get_random_string()},
+                             {"name": get_random_string(12)},
                              include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_blueprint_permission_denied(self):
         response = self.post(reverse("mdm_api:blueprints"),
-                             {"name": get_random_string()})
+                             {"name": get_random_string(12)})
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -211,14 +211,14 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
     def test_update_blueprint_unauthorized(self):
         blueprint = force_blueprint()
         response = self.put(reverse("mdm_api:blueprint", args=(blueprint.pk,)),
-                            {"name": get_random_string()},
+                            {"name": get_random_string(12)},
                             include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_blueprint_permission_denied(self):
         blueprint = force_blueprint()
         response = self.put(reverse("mdm_api:blueprint", args=(blueprint.pk,)),
-                            {"name": get_random_string()})
+                            {"name": get_random_string(12)})
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")

@@ -517,7 +517,7 @@ class InventoryAPITests(APITestCase):
     def test_update_meta_business_unit_name_error(self):
         name = get_random_string(12)
         MetaBusinessUnit.objects.create(name=name)
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         self._set_permissions("inventory.change_metabusinessunit")
         url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
         data = {'name': name, 'api_enrollment_enabled': False}
@@ -528,7 +528,7 @@ class InventoryAPITests(APITestCase):
     # delete meta business unit
 
     def test_delete_meta_business_unit_unauthorized(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
         response = self.client.delete(url)
         self.assertEqual(response.status_code, 403)
@@ -687,8 +687,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_tag(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
-        tag = Tag.objects.create(meta_business_unit=meta_business_unit, name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        tag = Tag.objects.create(meta_business_unit=meta_business_unit, name=get_random_string(12))
         self._set_permissions("inventory.view_tag")
         response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -713,7 +713,7 @@ class InventoryAPITests(APITestCase):
     def test_update_tag(self, post_event):
         name = get_random_string(12)
         tag = Tag.objects.create(name=name)
-        taxonomy = Taxonomy.objects.create(name=get_random_string())
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
         self._set_permissions("inventory.change_tag")
         url = reverse('inventory_api:tag', args=(tag.pk,))
         updated_name = get_random_string(12)
@@ -775,7 +775,7 @@ class InventoryAPITests(APITestCase):
     def test_update_tag_name_error(self):
         name = get_random_string(12)
         Tag.objects.create(name=name)
-        tag = Tag.objects.create(name=get_random_string())
+        tag = Tag.objects.create(name=get_random_string(12))
         self._set_permissions("inventory.change_tag")
         url = reverse('inventory_api:tag', args=(tag.pk,))
         data = {'name': name}
@@ -848,8 +848,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_list_tag(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
-        taxonomy = Taxonomy.objects.create(name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
         tag = Tag.objects.create(
             taxonomy=taxonomy,
             meta_business_unit=meta_business_unit,
@@ -947,8 +947,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_taxonomy(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
-        taxonomy = Taxonomy.objects.create(meta_business_unit=meta_business_unit, name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        taxonomy = Taxonomy.objects.create(meta_business_unit=meta_business_unit, name=get_random_string(12))
         self._set_permissions("inventory.view_taxonomy")
         response = self.client.get(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1033,7 +1033,7 @@ class InventoryAPITests(APITestCase):
     def test_update_taxonomy_name_error(self):
         name = get_random_string(12)
         Taxonomy.objects.create(name=name)
-        taxonomy = Taxonomy.objects.create(name=get_random_string())
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
         self._set_permissions("inventory.change_taxonomy")
         url = reverse('inventory_api:taxonomy', args=(taxonomy.pk,))
         data = {'name': name}
@@ -1106,7 +1106,7 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_list_taxonomy(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string())
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         taxonomy = Taxonomy.objects.create(
             meta_business_unit=meta_business_unit,
             name=get_random_string(12)

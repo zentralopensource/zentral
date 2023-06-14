@@ -86,7 +86,7 @@ class InventoryModelsTestCase(TestCase):
         name = get_random_string(12)
         business_unit1, _ = BusinessUnit.objects.commit({
             "name": name,
-            "reference": get_random_string(),
+            "reference": get_random_string(12),
             "source": {
                 "module": "io.zentral.tests",
                 "name": "test"
@@ -94,7 +94,7 @@ class InventoryModelsTestCase(TestCase):
         })
         business_unit2, _ = BusinessUnit.objects.commit({
             "name": name,
-            "reference": get_random_string(),
+            "reference": get_random_string(12),
             "source": {
                 "module": "io.zentral.tests2",
                 "name": "test2"

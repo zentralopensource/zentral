@@ -34,7 +34,7 @@ class MDMAPNSTestCase(TestCase):
         self.assertEqual(client.client.base_url, "https://api.push.apple.com")
 
     def test_apns_client_cache_no_client(self):
-        client = apns_client_cache.get_or_create(get_random_string(), datetime(2929, 1, 1))
+        client = apns_client_cache.get_or_create(get_random_string(12), datetime(2929, 1, 1))
         self.assertIsNone(client)
 
     def test_apns_client_cache_same_topic_cached(self):

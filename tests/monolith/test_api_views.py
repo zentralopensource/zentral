@@ -110,8 +110,8 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def force_condition(self):
         return Condition.objects.create(
-            name=get_random_string(),
-            predicate=get_random_string()
+            name=get_random_string(12),
+            predicate=get_random_string(12)
         )
 
     def force_enrollment(self, tag_count=0):

@@ -195,14 +195,14 @@ class MDMViewsTestCase(TestCase):
 
     def test_unknown_topic(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu)
-        topic = get_random_string()
+        topic = get_random_string(12)
         payload = {
             "UDID": udid,
             "SerialNumber": serial_number,
             # No UserID or EnrollmentUserID → Device Channel
             "MessageType": "Authenticate",
             "Topic": topic,
-            "DeviceName": get_random_string(),
+            "DeviceName": get_random_string(12),
             "Model": "Macmini9,1",
             "ModelName": "Mac mini",
             "OSVersion": "12.4",
@@ -222,7 +222,7 @@ class MDMViewsTestCase(TestCase):
             # No UserID or EnrollmentUserID → Device Channel
             "MessageType": "Authenticate",
             "Topic": session.get_enrollment().push_certificate.topic,
-            "DeviceName": get_random_string(),
+            "DeviceName": get_random_string(12),
             "Model": "Macmini9,1",
             "ModelName": "Mac mini",
             "OSVersion": "12.4",
@@ -252,7 +252,7 @@ class MDMViewsTestCase(TestCase):
             # No UserID or EnrollmentUserID → Device Channel
             "MessageType": "Authenticate",
             "Topic": session.get_enrollment().push_certificate.topic,
-            "DeviceName": get_random_string(),
+            "DeviceName": get_random_string(12),
             "Model": "Macmini9,1",
             "ModelName": "Mac mini",
             "OSVersion": "12.4",
@@ -282,7 +282,7 @@ class MDMViewsTestCase(TestCase):
             # No UserID or EnrollmentUserID → Device Channel
             "MessageType": "Authenticate",
             "Topic": session.get_enrollment().push_certificate.topic,
-            "DeviceName": get_random_string(),
+            "DeviceName": get_random_string(12),
             "Model": "Macmini9,1",
             "ModelName": "Mac mini",
             "OSVersion": "12.4",
@@ -302,7 +302,7 @@ class MDMViewsTestCase(TestCase):
             # No UserID or EnrollmentUserID → Device Channel
             "MessageType": "Authenticate",
             "Topic": session.get_enrollment().push_certificate.topic,
-            "DeviceName": get_random_string(),
+            "DeviceName": get_random_string(12),
             "Model": "iPhone13",
             "ModelName": "iPhone",
             "OSVersion": "16.2",
@@ -332,7 +332,7 @@ class MDMViewsTestCase(TestCase):
             # No UserID or EnrollmentUserID → Device Channel
             "MessageType": "Authenticate",
             "Topic": session.get_enrollment().push_certificate.topic,
-            "DeviceName": get_random_string(),
+            "DeviceName": get_random_string(12),
             "Model": "Macmini9,1",
             "ModelName": "Mac mini",
             "OSVersion": "12.4",
@@ -364,7 +364,7 @@ class MDMViewsTestCase(TestCase):
             # No UserID or EnrollmentUserID → Device Channel
             "MessageType": "Authenticate",
             "Topic": session.get_enrollment().push_certificate.topic,
-            "DeviceName": get_random_string(),
+            "DeviceName": get_random_string(12),
             "Model": "Macmini9,1",
             "ModelName": "Mac mini",
             "OSVersion": "12.4",
@@ -406,7 +406,7 @@ class MDMViewsTestCase(TestCase):
             # No UserID or EnrollmentUserID → Device Channel
             "MessageType": "Authenticate",
             "Topic": session.get_enrollment().push_certificate.topic,
-            "DeviceName": get_random_string(),
+            "DeviceName": get_random_string(12),
             "Model": "Macmini9,1",
             "ModelName": "Mac mini",
             "OSVersion": "12.4",

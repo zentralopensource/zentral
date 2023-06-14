@@ -66,7 +66,7 @@ class KinesisStoreTestCase(SimpleTestCase):
             uuid=m_uuid,
             index=m_index,
             objects={"osquery_enrollment": [(19,)]},
-            probes=[{"pk": 18, "name": get_random_string()}],
+            probes=[{"pk": 18, "name": get_random_string(12)}],
             request=EventRequest(user_agent="user_agent", ip="203.0.113.10"),
             tags=["yolo", "fomo"]
         )

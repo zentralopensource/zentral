@@ -164,13 +164,13 @@ class MDMArtifactsAPIViewsTestCase(TestCase):
 
     def test_create_artifact_unauthorized(self):
         response = self.post(reverse("mdm_api:artifacts"),
-                             {"name": get_random_string()},
+                             {"name": get_random_string(12)},
                              include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_artifact_permission_denied(self):
         response = self.post(reverse("mdm_api:artifacts"),
-                             {"name": get_random_string()})
+                             {"name": get_random_string(12)})
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -233,7 +233,7 @@ class MDMArtifactsAPIViewsTestCase(TestCase):
     def test_update_artifact_unauthorized(self):
         artifact, _ = force_artifact()
         response = self.put(reverse("mdm_api:artifact", args=(artifact.pk,)),
-                            {"name": get_random_string(),
+                            {"name": get_random_string(12),
                              "type": "Profile",
                              "channel": "Device"},
                             include_token=False)
@@ -242,7 +242,7 @@ class MDMArtifactsAPIViewsTestCase(TestCase):
     def test_update_artifact_permission_denied(self):
         artifact, _ = force_artifact()
         response = self.put(reverse("mdm_api:artifact", args=(artifact.pk,)),
-                            {"name": get_random_string(),
+                            {"name": get_random_string(12),
                              "type": "Profile",
                              "channel": "Device"})
         self.assertEqual(response.status_code, 403)

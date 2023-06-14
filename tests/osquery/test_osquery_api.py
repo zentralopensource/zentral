@@ -405,17 +405,17 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertContains(response, '{"node_invalid": true}', status_code=200)
 
     def test_config_ok(self):
-        tag = Tag.objects.create(name=get_random_string())
+        tag = Tag.objects.create(name=get_random_string(12))
         query1, pack1, _ = self.force_query(force_pack=True)
         pack_query1 = pack1.packquery_set.get(query=query1)
         cp1 = ConfigurationPack.objects.create(configuration=self.configuration, pack=pack1)
         cp1.tags.add(tag)
-        event_routing_key = get_random_string()
+        event_routing_key = get_random_string(12)
         query2, pack2, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
         pack_query2 = pack2.packquery_set.get(query=query2)
         ConfigurationPack.objects.create(configuration=self.configuration, pack=pack2)
         _, pack3, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
-        tag2 = Tag.objects.create(name=get_random_string())
+        tag2 = Tag.objects.create(name=get_random_string(12))
         cp3 = ConfigurationPack.objects.create(configuration=self.configuration, pack=pack3)
         cp3.tags.add(tag2)
         em = self.force_enrolled_machine()
@@ -953,7 +953,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_log_added_result_with_carve(self, post_event):
         em = self.force_enrolled_machine()
-        event_routing_key = get_random_string()
+        event_routing_key = get_random_string(12)
         query, pack, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
         carve_guid = uuid.uuid4()
         request_id = uuid.uuid4()
@@ -1006,7 +1006,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_log_snapshot_result(self, post_event):
         em = self.force_enrolled_machine()
-        event_routing_key = get_random_string()
+        event_routing_key = get_random_string(12)
         query, pack, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
         post_data = {
             "node_key": em.node_key,
@@ -1048,7 +1048,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_log_snapshot_result_with_carve(self, post_event):
         em = self.force_enrolled_machine()
-        event_routing_key = get_random_string()
+        event_routing_key = get_random_string(12)
         query, pack, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
         carve_guid = uuid.uuid4()
         request_id = uuid.uuid4()
@@ -1104,7 +1104,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         query1, pack1, _ = self.force_query(force_pack=True, force_compliance_check=True)
         status_time0 = datetime(2021, 12, 23)
         status_time1 = datetime(2021, 12, 24)
-        event_routing_key = get_random_string()
+        event_routing_key = get_random_string(12)
         query2, pack2, _ = self.force_query(
             force_pack=True,
             force_compliance_check=True,

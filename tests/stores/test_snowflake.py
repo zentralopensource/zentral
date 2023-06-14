@@ -14,7 +14,7 @@ class SnowflakeStoreTestCase(SimpleTestCase):
     maxDiff = None
 
     def get_store(self, **kwargs):
-        kwargs["store_name"] = get_random_string()
+        kwargs["store_name"] = get_random_string(12)
         return EventStore(kwargs)
 
     def get_default_store(self):

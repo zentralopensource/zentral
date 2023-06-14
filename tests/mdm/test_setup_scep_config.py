@@ -174,7 +174,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         scep_config = self._force_scep_config()
         self._login("mdm.change_scepconfig", "mdm.view_scepconfig")
         new_name = get_random_string(12)
-        mc_url = "https://example.com/{}".format(get_random_string())
+        mc_url = "https://example.com/{}".format(get_random_string(12))
         mc_username = get_random_string(12)
         mc_password = get_random_string(12)
         response = self.client.post(reverse("mdm:update_scep_config", args=(scep_config.pk,)),
