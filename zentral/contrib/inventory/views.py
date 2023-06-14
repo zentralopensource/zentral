@@ -1044,12 +1044,11 @@ class DeleteComplianceCheckView(PermissionRequiredMixin, DeleteView):
         ctx["compliance_check"] = self.object.compliance_check
         return ctx
 
-    def delete(self, request, *args, **kwargs):
-        jmespath_check = self.get_object()
-        name = jmespath_check.compliance_check.name
-        event = JMESPathCheckDeleted.build_from_request_and_object(self.request, jmespath_check)
-        jmespath_check.compliance_check.delete()
-        messages.info(request, f'Compliance check "{name}" deleted')
+    def form_valid(self, form):
+        name = self.object.compliance_check.name
+        event = JMESPathCheckDeleted.build_from_request_and_object(self.request, self.object)
+        self.object.compliance_check.delete()
+        messages.info(self.request, f'Compliance check "{name}" deleted')
         transaction.on_commit(lambda: event.post())
         return redirect("inventory:compliance_checks")
 
