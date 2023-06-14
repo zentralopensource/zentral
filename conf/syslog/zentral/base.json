@@ -62,7 +62,6 @@
       ]
     },
     "zentral.contrib.jamf": {},
-    "zentral.contrib.simplemdm": {},
     "zentral.contrib.munki": {
       "metrics": true
     },

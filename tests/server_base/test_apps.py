@@ -22,7 +22,6 @@ class TestZentralApps(SimpleTestCase):
         "osquery",
         "realms",
         "santa",
-        "simplemdm",
         "wsone",
         "zendesk",
     ]

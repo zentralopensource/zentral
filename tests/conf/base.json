@@ -147,7 +147,6 @@
     },
     "zentral.contrib.jamf": {},
     "zentral.contrib.jamf_protect": {},
-    "zentral.contrib.simplemdm": {},
     "zentral.contrib.mdm": {
       "scep_ca_fullchain": "NOT_A_VALID_CERT"
     },
