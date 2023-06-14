@@ -140,7 +140,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/profile_form.html")
-        self.assertFormError(response, "form", "source_file", "Not a plist")
+        self.assertFormError(response.context["form"], "source_file", "Not a plist")
 
     def test_upload_profile_post_missing_payload_identifier(self):
         mobileconfig = self._build_mobileconfig(missing_payload_id=True)
@@ -150,7 +150,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/profile_form.html")
-        self.assertFormError(response, "form", "source_file", "Missing PayloadIdentifier")
+        self.assertFormError(response.context["form"], "source_file", "Missing PayloadIdentifier")
 
     def test_upload_profile_post_missing_payload_uuid(self):
         mobileconfig = self._build_mobileconfig(missing_payload_uuid=True)
@@ -160,7 +160,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/profile_form.html")
-        self.assertFormError(response, "form", "source_file", "Missing PayloadUUID")
+        self.assertFormError(response.context["form"], "source_file", "Missing PayloadUUID")
 
     def test_upload_profile_post_unknown_payload_scope(self):
         mobileconfig = self._build_mobileconfig(payload_scope="HAHA")
@@ -170,7 +170,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/profile_form.html")
-        self.assertFormError(response, "form", "source_file", "Unknown PayloadScope: HAHA")
+        self.assertFormError(response.context["form"], "source_file", "Unknown PayloadScope: HAHA")
 
     def test_upload_profile_post(self):
         mobileconfig = self._build_mobileconfig()
@@ -252,7 +252,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
-        self.assertFormError(response, "object_form", "source_file",
+        self.assertFormError(response.context["object_form"], "source_file",
                              "The channel of the profile must match the channel of the artifact.")
 
     def test_upgrade_profile_post_same_payload(self):
@@ -264,7 +264,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
-        self.assertFormError(response, "object_form", "source_file",
+        self.assertFormError(response.context["object_form"], "source_file",
                              "This profile is not different from the latest one.")
 
     def test_upgrade_profile_post_platform_not_available(self):
@@ -280,7 +280,7 @@ class ProfileManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
-        self.assertFormError(response, "version_form", "ios", "Platform not available for this artifact")
+        self.assertFormError(response.context["version_form"], "ios", "Platform not available for this artifact")
 
     def test_upgrade_profile_post_user_profile(self):
         blueprint, artifact, profile = self._force_profile()

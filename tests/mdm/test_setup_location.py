@@ -172,7 +172,7 @@ class SetupLocationViewsTestCase(TestCase):
                                     {"server_token_file": vppserver_token})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/location_form.html")
-        self.assertFormError(response, "form", "server_token_file", "Not a valid server token")
+        self.assertFormError(response.context["form"], "server_token_file", "Not a valid server token")
 
     def test_create_location_post_hash_collision(self):
         vppserver_token, server_token_hash = self._build_vppserver_token(skip_org_name=True)
@@ -181,7 +181,7 @@ class SetupLocationViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(response, "form",
+        self.assertFormError(response.context["form"],
                              "server_token_file",
                              "A location with the same server token already exists.")
 
@@ -191,7 +191,7 @@ class SetupLocationViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(response, "form", "server_token_file", "Could not get organization name.")
+        self.assertFormError(response.context["form"], "server_token_file", "Could not get organization name.")
 
     @patch("zentral.contrib.mdm.forms.AppsBooksClient")
     def test_create_location_post_invalid_server_token(self, AppsBooksClient):
@@ -203,7 +203,7 @@ class SetupLocationViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(response, "form", "server_token_file", "Could not get client information")
+        self.assertFormError(response.context["form"], "server_token_file", "Could not get client information")
 
     @patch("zentral.contrib.mdm.forms.AppsBooksClient")
     def test_create_location_post_invalid_config(self, AppsBooksClient):
@@ -216,7 +216,7 @@ class SetupLocationViewsTestCase(TestCase):
                                     {"server_token_file": vppserver_token})
         self.assertEqual(response.status_code, 200)
         self.assertFormError(
-            response, "form", "server_token_file",
+            response.context["form"], "server_token_file",
             ['Missing or bad countryISO2ACode.',
              'Missing or bad uId.',
              'Missing or bad locationName.',
@@ -241,7 +241,7 @@ class SetupLocationViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(response, "form", "server_token_file", "Missing tokenExpirationDate.")
+        self.assertFormError(response.context["form"], "server_token_file", "Missing tokenExpirationDate.")
 
     @patch("zentral.contrib.mdm.forms.AppsBooksClient")
     def test_create_location_post_invalid_server_token_expiration_date(self, AppsBooksClient):
@@ -260,7 +260,8 @@ class SetupLocationViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(response, "form", "server_token_file", "Could not parse server token expiration date.")
+        self.assertFormError(response.context["form"],
+                             "server_token_file", "Could not parse server token expiration date.")
 
     @patch("zentral.contrib.mdm.forms.AppsBooksClient")
     def test_create_location_post(self, AppsBooksClient):

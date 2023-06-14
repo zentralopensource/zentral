@@ -95,7 +95,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enterpriseapp_form.html")
-        self.assertFormError(response, "form", None, "Invalid app: Could not read Distribution file")
+        self.assertFormError(response.context["form"], None, "Invalid app: Could not read Distribution file")
 
     def test_upload_enterprise_app_post(self):
         package = self._build_package()
@@ -178,7 +178,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
-        self.assertFormError(response, "object_form", None,
+        self.assertFormError(response.context["object_form"], None,
                              "This version of the enterprise app is identical to the latest version")
 
     def test_upgrade_enterprise_app_post_platform_not_available(self):
@@ -193,7 +193,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
-        self.assertFormError(response, "version_form", "ios", "Platform not available for this artifact")
+        self.assertFormError(response.context["version_form"], "ios", "Platform not available for this artifact")
 
     def test_upgrade_enterprise_app_post_different_product_id(self):
         artifact, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
@@ -209,7 +209,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
-        self.assertFormError(response, "object_form", "package",
+        self.assertFormError(response.context["object_form"], "package",
                              "The product ID of the new app is not identical to the product ID of the latest version")
 
     def test_upgrade_enterprise_app_post(self):

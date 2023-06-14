@@ -202,7 +202,7 @@ class InventoryViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/incident_form.html")
         self.assertFormError(
-            response, "form", "status",
+            response.context["form"], "status",
             "Select a valid choice. YOLO is not one of the available choices."
         )
 
@@ -306,7 +306,7 @@ class InventoryViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/machineincident_form.html")
         self.assertFormError(
-            response, "form", "status",
+            response.context["form"], "status",
             "Select a valid choice. YOLO is not one of the available choices."
         )
 

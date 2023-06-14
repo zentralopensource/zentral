@@ -71,7 +71,7 @@ class ProbeViewsTestCase(TestCase):
     def test_create_probe_error(self):
         self._login("probes.add_probesource")
         response = self.client.post(reverse("probes:create"), {})
-        self.assertFormError(response, "form", "name", "This field is required.")
+        self.assertFormError(response.context["form"], "name", "This field is required.")
 
     def test_create_probe(self, **kwargs):
         name = get_random_string(12)

@@ -112,7 +112,7 @@ class BlueprintArtifactManagementViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprintartifact_form.html")
-        self.assertFormError(response, "form", None, ["You need to activate at least one platform"])
+        self.assertFormError(response.context["form"], None, ["You need to activate at least one platform"])
 
     def test_update_blueprint_artifact_platform_not_available(self):
         blueprint_artifact, artifact, _ = force_blueprint_artifact()
@@ -126,7 +126,7 @@ class BlueprintArtifactManagementViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprintartifact_form.html")
-        self.assertFormError(response, "form", "ipados", ["Platform not available for this artifact"])
+        self.assertFormError(response.context["form"], "ipados", ["Platform not available for this artifact"])
 
     def test_update_blueprint_artifact_default_shard_gt_shard_modulo(self):
         blueprint_artifact, artifact, _ = force_blueprint_artifact()
@@ -140,7 +140,8 @@ class BlueprintArtifactManagementViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprintartifact_form.html")
-        self.assertFormError(response, "form", "default_shard", ["Must be less than or equal to the shard modulo"])
+        self.assertFormError(response.context["form"],
+                             "default_shard", ["Must be less than or equal to the shard modulo"])
 
     def test_update_blueprint_artifact_excluded_tags_tag_shard_conflict(self):
         blueprint_artifact, artifact, _ = force_blueprint_artifact()
@@ -157,7 +158,7 @@ class BlueprintArtifactManagementViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprintartifact_form.html")
-        self.assertFormError(response, "form", "excluded_tags", [f"Conflict with {tag} shard"])
+        self.assertFormError(response.context["form"], "excluded_tags", [f"Conflict with {tag} shard"])
 
     def test_update_blueprint_artifact(self):
         blueprint_artifact, artifact, _ = force_blueprint_artifact()

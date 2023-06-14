@@ -231,9 +231,9 @@ class OsquerySetupPacksViewsTestCase(TestCase):
                                      "log_removed_actions": "on", "snapshot_mode": "on"}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/packquery_form.html")
-        self.assertFormError(response, "form", "log_removed_actions",
+        self.assertFormError(response.context["form"], "log_removed_actions",
                              "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
-        self.assertFormError(response, "form", "snapshot_mode",
+        self.assertFormError(response.context["form"], "snapshot_mode",
                              "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
 
     def test_add_pack_query_post(self):
@@ -274,7 +274,7 @@ class OsquerySetupPacksViewsTestCase(TestCase):
                                      "log_removed_actions": "on"}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/packquery_form.html")
-        self.assertFormError(response, "form", "snapshot_mode",
+        self.assertFormError(response.context["form"], "snapshot_mode",
                              "A compliance check query can only be scheduled in 'snapshot' mode.")
 
     def test_add_pack_query_with_compliance_check(self):
@@ -324,9 +324,9 @@ class OsquerySetupPacksViewsTestCase(TestCase):
                                      "log_removed_actions": "on", "snapshot_mode": "on"}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/packquery_form.html")
-        self.assertFormError(response, "form", "log_removed_actions",
+        self.assertFormError(response.context["form"], "log_removed_actions",
                              "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
-        self.assertFormError(response, "form", "snapshot_mode",
+        self.assertFormError(response.context["form"], "snapshot_mode",
                              "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
 
     def test_update_pack_query_post(self):

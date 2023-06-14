@@ -533,7 +533,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/package_form.html")
         self.assertFormError(
-            response, "form", "file",
+            response.context["form"], "file",
             "A PkgInfo with the same name and version already exists."
         )
 
@@ -1298,7 +1298,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
         self.assertFormError(
-            response, "form", "pkg_info_name",
+            response.context["form"], "pkg_info_name",
             "Select a valid choice. That choice is not one of the available choices."
         )
 
@@ -1318,7 +1318,7 @@ class MonolithSetupViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
-        self.assertFormError(response, "form", "featured_item", "Only optional install items can be featured")
+        self.assertFormError(response.context["form"], "featured_item", "Only optional install items can be featured")
 
     def test_add_sub_manifest_pkg_info_post(self):
         submanifest, _ = self._force_sub_manifest()

@@ -359,7 +359,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
                     args=(session.enrolled_device.pk,)),
             {"command": "YOLO"}
         )
-        self.assertFormError(response, "form", "command", "Invalid property list")
+        self.assertFormError(response.context["form"], "command", "Invalid property list")
 
     def test_create_enrolled_device_custom_command_not_a_dictionary(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -369,7 +369,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
                     args=(session.enrolled_device.pk,)),
             {"command": '<plist version="1.0"><array></array></plist>'}
         )
-        self.assertFormError(response, "form", "command", "Not a dictionary")
+        self.assertFormError(response.context["form"], "command", "Not a dictionary")
 
     def test_create_enrolled_device_custom_command_missing_or_empty_request_type(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -379,7 +379,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
                     args=(session.enrolled_device.pk,)),
             {"command": "<dict></dict>"}
         )
-        self.assertFormError(response, "form", "command", "Missing or empty RequestType")
+        self.assertFormError(response.context["form"], "command", "Missing or empty RequestType")
 
     def test_create_enrolled_device_custom_command_ok(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)

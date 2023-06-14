@@ -104,7 +104,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_form.html")
-        self.assertFormError(response, "form", "compliance_check",
+        self.assertFormError(response.context["form"], "compliance_check",
                              "The query doesn't contain the 'ztl_status' keyword")
 
     def test_create_query_with_compliance_check(self):
@@ -175,7 +175,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_form.html")
-        self.assertFormError(response, "form", "compliance_check",
+        self.assertFormError(response.context["form"], "compliance_check",
                              "The query doesn't contain the 'ztl_status' keyword")
 
     def test_update_query_set_compliance_check_pack_error(self):
@@ -192,7 +192,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_form.html")
-        self.assertFormError(response, "form", "compliance_check",
+        self.assertFormError(response.context["form"], "compliance_check",
                              f"This query is scheduled in 'diff' mode in the {pack} pack")
 
     def test_update_query_set_compliance_check(self):

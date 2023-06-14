@@ -409,7 +409,8 @@ class SantaSetupViewsTestCase(TestCase):
                                      "remount_usb_mode": "rdonly, noexec"
                                      }, follow=True)
         self.assertTemplateUsed(response, "santa/configuration_form.html")
-        self.assertFormError(response, "form", "remount_usb_mode", "'Block USB mount' must be set to use this option")
+        self.assertFormError(response.context["form"],
+                             "remount_usb_mode", "'Block USB mount' must be set to use this option")
 
     def test_get_create_enrollment_view(self):
         self._login("santa.add_configuration", "santa.view_configuration")
@@ -561,7 +562,7 @@ class SantaSetupViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/rule_form.html")
-        self.assertFormError(response, "form", "target_identifier", "Invalid Signing ID target identifier")
+        self.assertFormError(response.context["form"], "target_identifier", "Invalid Signing ID target identifier")
 
     def test_create_configuration_team_id_rule_error(self):
         self._login("santa.add_configuration", "santa.view_configuration")
@@ -575,7 +576,7 @@ class SantaSetupViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/rule_form.html")
-        self.assertFormError(response, "form", "target_identifier", "Invalid Team ID")
+        self.assertFormError(response.context["form"], "target_identifier", "Invalid Team ID")
 
     def test_create_conflict_configuration_rule(self):
         self._login("santa.add_configuration", "santa.view_configuration",

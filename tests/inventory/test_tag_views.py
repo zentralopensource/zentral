@@ -82,7 +82,7 @@ class MacOSAppsViewsTestCase(TestCase):
                                     {"name": tag.name})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/tag_form.html")
-        self.assertFormError(response, "form", "name", "A tag with this name already exists.")
+        self.assertFormError(response.context["form"], "name", "A tag with this name already exists.")
 
     def test_create_tag_post_conflicting_slug(self):
         tag = self._force_tag(get_random_string(12) + " " + get_random_string(12))
@@ -91,7 +91,7 @@ class MacOSAppsViewsTestCase(TestCase):
                                     {"name": tag.name.replace(" ", "-")})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/tag_form.html")
-        self.assertFormError(response, "form", "name", "A tag with a conflicting slug already exists.")
+        self.assertFormError(response.context["form"], "name", "A tag with a conflicting slug already exists.")
 
     def test_create_tag_post(self):
         self._login("inventory.add_tag", "inventory.view_tag")
@@ -133,7 +133,7 @@ class MacOSAppsViewsTestCase(TestCase):
                                     {"name": tag0.name})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/tag_form.html")
-        self.assertFormError(response, "form", "name", "A tag with this name already exists.")
+        self.assertFormError(response.context["form"], "name", "A tag with this name already exists.")
 
     def test_update_tag_post_conflicting_slug(self):
         tag0 = self._force_tag(get_random_string(12) + " " + get_random_string(12))
@@ -143,7 +143,7 @@ class MacOSAppsViewsTestCase(TestCase):
                                     {"name": tag0.name.replace(" ", "-")})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/tag_form.html")
-        self.assertFormError(response, "form", "name", "A tag with a conflicting slug already exists.")
+        self.assertFormError(response.context["form"], "name", "A tag with a conflicting slug already exists.")
 
     def test_update_tag_post(self):
         tag = self._force_tag()

@@ -91,7 +91,7 @@ class BlueprintManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_form.html")
-        self.assertFormError(response, "form", "inventory_interval",
+        self.assertFormError(response.context["form"], "inventory_interval",
                              'Ensure this value is greater than or equal to 14400.')
 
     def test_create_blueprint_post_inventory_interval_too_high(self):
@@ -105,7 +105,7 @@ class BlueprintManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_form.html")
-        self.assertFormError(response, "form", "inventory_interval",
+        self.assertFormError(response.context["form"], "inventory_interval",
                              'Ensure this value is less than or equal to 604800.')
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")

@@ -167,7 +167,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/depvirtualserver_connect.html")
         dep_token2 = DEPToken.objects.get(pk=self.client.session["current_dep_token_id"])
         self.assertEqual(dep_token, dep_token2)
-        self.assertFormError(response, "form", "encrypted_token", "This field is mandatory")
+        self.assertFormError(response.context["form"], "encrypted_token", "This field is mandatory")
 
     def test_connect_dep_virtual_server_post_bad_encrypted_token_error(self):
         self._login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
@@ -184,7 +184,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/depvirtualserver_connect.html")
         dep_token2 = DEPToken.objects.get(pk=self.client.session["current_dep_token_id"])
         self.assertEqual(dep_token, dep_token2)
-        self.assertFormError(response, "form", "encrypted_token", "Could not read or use encrypted token")
+        self.assertFormError(response.context["form"], "encrypted_token", "Could not read or use encrypted token")
 
     @patch("zentral.contrib.mdm.forms.DEPClient")
     def test_connect_dep_virtual_server_post(self, DEPClient):

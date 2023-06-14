@@ -108,7 +108,7 @@ class AccountUsersViewsTestCase(TestCase):
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/verify_totp.html")
         self.assertFalse(response.context["request"].user.is_authenticated)
-        self.assertFormError(response, "form", "verification_code", "Invalid code")
+        self.assertFormError(response.context["form"], "verification_code", "Invalid code")
 
     def test_login_totp_ok(self):
         user_totp = UserTOTP.objects.create(
@@ -144,7 +144,7 @@ class AccountUsersViewsTestCase(TestCase):
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/verify_totp.html")
         self.assertFalse(response.context["request"].user.is_authenticated)
-        self.assertFormError(response, "form", "verification_code", 'This field is required.')
+        self.assertFormError(response.context["form"], "verification_code", 'This field is required.')
 
     # login + webauthn
 
@@ -239,7 +239,7 @@ class AccountUsersViewsTestCase(TestCase):
                                     {"username": self.user.username,
                                      "email": "test@example.com"},
                                     follow=True)
-        self.assertFormError(response, "form", "username", "A user with that username already exists.")
+        self.assertFormError(response.context["form"], "username", "A user with that username already exists.")
 
     def test_user_invite_email_error(self):
         self.login("accounts.add_user")
@@ -247,7 +247,7 @@ class AccountUsersViewsTestCase(TestCase):
                                     {"username": "test",
                                      "email": self.user.email},
                                     follow=True)
-        self.assertFormError(response, "form", "email", "User with this Email already exists.")
+        self.assertFormError(response.context["form"], "email", "User with this Email already exists.")
 
     def test_user_invite_email_not_allowed(self):
         self.login("accounts.add_user", "accounts.view_user")
@@ -257,7 +257,7 @@ class AccountUsersViewsTestCase(TestCase):
                                      "email": "test@example.com"},
                                     follow=True)
         del settings._collection["users"]
-        self.assertFormError(response, "form", "email", "Email domain not allowed.")
+        self.assertFormError(response.context["form"], "email", "Email domain not allowed.")
 
     def test_user_invite_any_ok(self):
         self.login("accounts.add_user", "accounts.view_user")
@@ -381,7 +381,7 @@ class AccountUsersViewsTestCase(TestCase):
                                     {"username": self.superuser.username,
                                      "email": self.user.email,
                                      "is_superuser": self.user.is_superuser})
-        self.assertFormError(response, "form", "username", "A user with that username already exists.")
+        self.assertFormError(response.context["form"], "username", "A user with that username already exists.")
 
     def test_user_update_email_error(self):
         self.login("accounts.change_user")
@@ -389,7 +389,7 @@ class AccountUsersViewsTestCase(TestCase):
                                     {"username": self.user.username,
                                      "email": self.superuser.email,
                                      "is_superuser": self.user.is_superuser})
-        self.assertFormError(response, "form", "email", "User with this Email already exists.")
+        self.assertFormError(response.context["form"], "email", "User with this Email already exists.")
 
     def test_user_update_ok(self):
         self.login("accounts.change_user", "accounts.view_user")
@@ -560,7 +560,7 @@ class AccountUsersViewsTestCase(TestCase):
                                      "secret": form.initial_secret,
                                      "verification_code": "AAAAAA"})
         self.assertTemplateUsed(response, "accounts/add_totp.html")
-        self.assertFormError(response, "form", "verification_code", "Wrong verification code")
+        self.assertFormError(response.context["form"], "verification_code", "Wrong verification code")
         new_form = response.context["form"]
         self.assertEqual(form.initial_secret, new_form.initial_secret)
 

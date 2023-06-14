@@ -142,9 +142,9 @@ class JamfSetupViewsTestCase(TestCase):
                                      "inventory_completed_heartbeat_timeout": 5432},
                                     follow=True)
         self.assertEqual(response.template_name, ["jamf/jamfinstance_form.html"])
-        self.assertFormError(response, "form", "principal_user_uid_extension_attribute",
+        self.assertFormError(response.context["form"], "principal_user_uid_extension_attribute",
                              "This field is required to collect the principal user information")
-        self.assertFormError(response, "form", "principal_user_pn_extension_attribute",
+        self.assertFormError(response.context["form"], "principal_user_pn_extension_attribute",
                              "This field is required to collect the principal user information")
 
     # delete jamf instance

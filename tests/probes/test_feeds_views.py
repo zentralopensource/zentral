@@ -104,7 +104,7 @@ class FeedViewsTestCase(TestCase):
         response = self.client.post(reverse("probes:create_feed"), {}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "probes/feed_form.html")
-        self.assertFormError(response, "form", "name", "This field is required.")
+        self.assertFormError(response.context["form"], "name", "This field is required.")
 
     def test_create_feed_post(self):
         self._login("probes.add_feed", "probes.view_feed")

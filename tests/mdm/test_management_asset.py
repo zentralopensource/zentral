@@ -244,7 +244,7 @@ class AssetManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/assetartifact_form.html")
-        self.assertFormError(response, "form", "name", "An artifact with this name already exists")
+        self.assertFormError(response.context["form"], "name", "An artifact with this name already exists")
 
     def test_create_asset_artifact_post_invalid_plist(self):
         self._login("mdm.view_asset", "mdm.add_artifact")
@@ -265,7 +265,7 @@ class AssetManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/assetartifact_form.html")
-        self.assertFormError(response, "form", "configuration", "Invalid property list")
+        self.assertFormError(response.context["form"], "configuration", "Invalid property list")
 
     def test_create_asset_artifact_post_plist_not_a_dict(self):
         self._login("mdm.view_asset", "mdm.add_artifact")
@@ -286,7 +286,7 @@ class AssetManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/assetartifact_form.html")
-        self.assertFormError(response, "form", "configuration", "Not a dictionary")
+        self.assertFormError(response.context["form"], "configuration", "Not a dictionary")
 
     def test_create_asset_artifact_post(self):
         self._login("mdm.view_asset", "mdm.add_artifact", "mdm.view_artifact")
@@ -435,5 +435,5 @@ class AssetManagementViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
-        self.assertFormError(response, "object_form", None,
+        self.assertFormError(response.context["object_form"], None,
                              "This version of the store app is identical to the latest version")

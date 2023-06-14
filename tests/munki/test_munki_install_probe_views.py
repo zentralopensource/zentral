@@ -68,7 +68,7 @@ class MunkiInstallProbeViewsTestCase(TestCase):
         self._login("probes.add_probesource")
         response = self.client.post(reverse("munki:create_install_probe"), {})
         self.assertTemplateUsed(response, "probes/form.html")
-        self.assertFormError(response, "form", "install_types", "This field is required.")
+        self.assertFormError(response.context["form"], "install_types", "This field is required.")
 
     def test_create_probe_post_redirect(self):
         url = reverse("munki:create_install_probe")

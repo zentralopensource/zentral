@@ -138,4 +138,4 @@ class InventorySearchViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_list.html")
-        self.assertFormError(response, "bundle_filter_form", None, "Choose a bundle id or a bundle name.")
+        self.assertFormError(response.context["bundle_filter_form"], None, "Choose a bundle id or a bundle name.")

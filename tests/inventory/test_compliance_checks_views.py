@@ -422,7 +422,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
         self.assertFormError(
-            response, "form",
+            response.context["form"],
             "jmespath_expression", "Invalid JMESPath expression"
         )
         self.assertEqual(response.context["tree"]["serial_number"], self.serial_number)
@@ -439,7 +439,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
         self.assertFormError(
-            response, "form",
+            response.context["form"],
             "serial_number", "Current machine with this serial number for this source not found"
         )
         self.assertIsNone(response.context.get("tree"))
@@ -456,7 +456,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
         self.assertFormError(
-            response, "form",
+            response.context["form"],
             "jmespath_expression", "Result is not a boolean"
         )
         self.assertEqual(response.context["tree"]["serial_number"], self.serial_number)
