@@ -83,7 +83,7 @@ class Migration(migrations.Migration):
                 ('key', models.CharField(db_index=True, max_length=40)),
                 ('name', models.TextField()),
                 ('links', models.ManyToManyField(to='inventory.Link')),
-                ('machine_links', models.ManyToManyField(related_name='_machinegroup_machine_links_+', to='inventory.Link')),
+                ('machine_links', models.ManyToManyField(related_name='+', to='inventory.link')),
             ],
             options={
                 'abstract': False,

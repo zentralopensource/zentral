@@ -49,7 +49,9 @@ class Migration(migrations.Migration):
                 ('osquery_release', models.CharField(blank=True, max_length=64)),
                 ('configuration', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='osquery.Configuration')),
                 ('distributor_content_type', models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='+', to='contenttypes.ContentType')),
-                ('secret', models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE, related_name='osquery_enrollment', to='inventory.EnrollmentSecret')),
+                ('secret', models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE,
+                                                related_name='%(app_label)s_%(class)s',
+                                                to='inventory.enrollmentsecret')),
             ],
             options={
                 'abstract': False,

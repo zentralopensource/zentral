@@ -50,7 +50,9 @@ class Migration(migrations.Migration):
                 ('configuration', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='monolith.Configuration')),
                 ('distributor_content_type', models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='+', to='contenttypes.ContentType')),
                 ('manifest', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='monolith.Manifest')),
-                ('secret', models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE, related_name='monolith_enrollment', to='inventory.EnrollmentSecret')),
+                ('secret', models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE,
+                                                related_name='%(app_label)s_%(class)s',
+                                                to='inventory.enrollmentsecret')),
             ],
             options={
                 'abstract': False,

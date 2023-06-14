@@ -86,8 +86,8 @@ class Migration(migrations.Migration):
             name="excluded_tags",
             field=models.ManyToManyField(
                 blank=True,
-                related_name="_mdm_artifactversion_excluded_tags_+",
-                to="inventory.Tag",
+                related_name="+",
+                to="inventory.tag",
             ),
         ),
         migrations.AddField(
@@ -182,8 +182,8 @@ class Migration(migrations.Migration):
             name="excluded_tags",
             field=models.ManyToManyField(
                 blank=True,
-                related_name="_mdm_blueprintartifact_excluded_tags_+",
-                to="inventory.Tag",
+                related_name="+",
+                to="inventory.tag",
             ),
         ),
         migrations.AddField(

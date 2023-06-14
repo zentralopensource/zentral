@@ -25,11 +25,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='rule',
             name='excluded_tags',
-            field=models.ManyToManyField(blank=True, related_name='_rule_excluded_tags_+', to='inventory.Tag'),
+            field=models.ManyToManyField(blank=True, related_name='+', to='inventory.tag'),
         ),
         migrations.AlterField(
             model_name='rule',
             name='tags',
-            field=models.ManyToManyField(blank=True, related_name='_rule_tags_+', to='inventory.Tag'),
+            field=models.ManyToManyField(blank=True, related_name='+', to='inventory.tag'),
         ),
     ]
