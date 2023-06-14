@@ -536,18 +536,15 @@ class DeleteSubManifestPkgInfoView(PermissionRequiredMixin, DeleteView):
     model = SubManifestPkgInfo
     template_name = "monolith/delete_sub_manifest_pkg_info.html"
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['monolith'] = True
-        return context
+    def get_success_url(self):
+        return self.object.sub_manifest.get_absolute_url()
 
-    def delete(self, *args, **kwargs):
-        smpi = self.get_object()
-        sub_manifest = smpi.sub_manifest
-        smpi.delete()
+    def form_valid(self, form):
+        sub_manifest = self.object.sub_manifest
+        response = super().form_valid(form)
         for _, manifest in sub_manifest.manifests_with_tags():
             manifest.bump_version()
-        return redirect(sub_manifest)
+        return response
 
 
 # manifests

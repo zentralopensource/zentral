@@ -1360,6 +1360,43 @@ class MonolithSetupViewsTestCase(TestCase):
         smpi = submanifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
         self.assertEqual(smpi.options, {"shards": {"default": 90, "modulo": 100}})
 
+    # delete submanifest pkginfo
+
+    def test_delete_sub_manifest_pkg_info_redirect(self):
+        submanifest, pkginfo = self._force_sub_manifest()
+        self._login_redirect(reverse("monolith:delete_sub_manifest_pkg_info", args=(submanifest.pk, pkginfo.pk)))
+
+    def test_delete_sub_manifest_pkg_info_permission_denied(self):
+        submanifest, pkginfo = self._force_sub_manifest()
+        self._login()
+        response = self.client.get(reverse("monolith:delete_sub_manifest_pkg_info",
+                                           args=(submanifest.pk, pkginfo.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_sub_manifest_pkg_info_get(self):
+        submanifest, pkginfo = self._force_sub_manifest()
+        self._login("monolith.delete_submanifestpkginfo", "monolith.view_submanifest")
+        response = self.client.get(reverse("monolith:delete_sub_manifest_pkg_info",
+                                           args=(submanifest.pk, pkginfo.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/delete_sub_manifest_pkg_info.html")
+
+    def test_delete_sub_manifest_pkg_info_post(self):
+        submanifest, pkginfo = self._force_sub_manifest()
+        manifest = self._force_manifest()
+        self.assertEqual(manifest.version, 1)
+        ManifestSubManifest.objects.create(manifest=manifest, sub_manifest=submanifest)
+        self._login("monolith.delete_submanifestpkginfo", "monolith.view_submanifest")
+        response = self.client.post(reverse("monolith:delete_sub_manifest_pkg_info",
+                                            args=(submanifest.pk, pkginfo.pk)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        self.assertEqual(response.context["object"], submanifest)
+        self.assertEqual(submanifest.submanifestpkginfo_set.count(), 0)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
+
     # manifests
 
     def test_manifests_login_redirect(self):
