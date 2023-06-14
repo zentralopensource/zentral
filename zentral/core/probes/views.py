@@ -199,7 +199,7 @@ class ProbeDashboardDataView(PermissionRequiredMixin, View):
 
 
 class EventsMixin:
-    permission_required = "probes.view_probesource"
+    permission_required = ("probes.view_probesource",)
     store_method_scope = "probe"
 
     def get_object(self, **kwargs):

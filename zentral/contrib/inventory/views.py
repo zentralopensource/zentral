@@ -614,7 +614,7 @@ class ArchiveMachineView(PermissionRequiredMixin, TemplateView):
 
 
 class MachineEventsMixin:
-    permission_required = "inventory.view_machinesnapshot"
+    permission_required = ("inventory.view_machinesnapshot",)
     store_method_scope = "machine"
 
     def get_object(self, **kwargs):

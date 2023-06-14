@@ -191,7 +191,7 @@ class TeamIDView(TargetView):
 
 
 class EventsMixin:
-    permission_required = "santa.view_target"
+    permission_required = ("santa.view_target",)
     store_method_scope = "object"
     target_type = None
     object_key = None

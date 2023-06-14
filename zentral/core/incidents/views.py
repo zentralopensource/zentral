@@ -163,7 +163,7 @@ class UpdateMachineIncidentView(PermissionRequiredMixin, UpdateView):
 
 
 class EventsMixin:
-    permission_required = "incidents.view_incident"
+    permission_required = ("incidents.view_incident",)
     store_method_scope = "object"
 
     def get_object(self, **kwargs):
