@@ -1,10 +1,14 @@
-## 2022.3 (TBD)
+## 2023.1 (TBD)
 
 ### Features (some, not all…)
 
 New `zentral.core.stores.backends.snowflake` store backend.
 
 ### Backward incompatibilities
+
+#### 🧨 `jamf_protect`, `nagios` and `simplemdm` legacy apps removed
+
+Please contact us if you are using one of those apps!
 
 #### 🧨 new URLs for the Realms authentication
 
