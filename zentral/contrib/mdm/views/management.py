@@ -670,12 +670,13 @@ class DeleteBlueprintArtifactView(PermissionRequiredMixin, DeleteView):
         ctx["artifact"] = self.artifact
         return ctx
 
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        blueprint = self.object.blueprint
-        self.object.delete()
-        update_blueprint_serialized_artifacts(blueprint)
-        return redirect(self.artifact)
+    def get_success_url(self):
+        return self.object.artifact.get_absolute_url()
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        update_blueprint_serialized_artifacts(self.object.blueprint)
+        return response
 
 
 # Artifact versions
@@ -832,8 +833,8 @@ class DeleteArtifactVersionView(PermissionRequiredMixin, DeleteView):
     def get_success_url(self):
         return self.artifact.get_absolute_url()
 
-    def delete(self, request, *args, **kwargs):
-        response = super().delete(request, *args, **kwargs)
+    def form_valid(self, form):
+        response = super().form_valid(form)
         for blueprint in self.object.artifact.blueprints():
             update_blueprint_serialized_artifacts(blueprint)
         return response
