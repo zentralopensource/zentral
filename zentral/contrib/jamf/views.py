@@ -102,8 +102,7 @@ class DeleteJamfInstanceView(PermissionRequiredMixin, DeleteView):
         ctx["title"] = "Delete jamf instance"
         return ctx
 
-    def delete(self, request, *args, **kwargs):
-        self.object = self.get_object()
+    def form_valid(self, form):
         success_url = self.get_success_url()
         api_client = APIClient(**self.object.serialize(decrypt_password=True))
         jamf_instance_base_url = self.object.base_url()
@@ -111,11 +110,11 @@ class DeleteJamfInstanceView(PermissionRequiredMixin, DeleteView):
             api_client.cleanup()
         except APIClientError:
             msg = "Could not remove webhooks configuration on {}.".format(jamf_instance_base_url)
-            messages.warning(request, msg)
+            messages.warning(self.request, msg)
             logger.exception(msg)
         else:
             msg = "Removed webhooks configuration on {}.".format(jamf_instance_base_url)
-            messages.info(request, msg)
+            messages.info(self.request, msg)
             logger.info(msg)
         self.object.delete()
         return redirect(success_url)
