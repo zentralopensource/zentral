@@ -37,7 +37,7 @@ class UpdateViewWithAudit(UpdateView):
 
 
 class DeleteViewWithAudit(DeleteView):
-    def delete(self, request, *args, **kwargs):
+    def form_valid(self, form):
         self.object = self.get_object()
         # build the event before the object is deleted
         event = AuditEvent.build_from_request_and_instance(
@@ -46,4 +46,4 @@ class DeleteViewWithAudit(DeleteView):
             prev_value=self.object.serialize_for_event()
         )
         transaction.on_commit(lambda: event.post())
-        return super().delete(request, *args, **kwargs)
+        return super().form_valid(form)
