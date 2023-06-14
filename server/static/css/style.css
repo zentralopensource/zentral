@@ -15,3 +15,16 @@ select#id_permissions {height:50vh}
 
 #inventory-form {display:flex;flex-wrap:wrap;align-items:center;gap:5px;row-gap:10px}
 #inventory-form .form-group {margin:0}
+
+#logout-form button {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 20px;
+  text-align: left;
+}
+#logout-form button:hover {
+  background-color: rgb(245, 245, 245);
+}

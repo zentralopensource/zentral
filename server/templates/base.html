@@ -67,7 +67,7 @@
                 <li style="padding:3px 20px"><span class="glyphicon glyphicon-cloud" aria-hidden="true"></span> {{ request.realm_authentication_session.realm }}</li>
                 <li role="separator" class="divider"></li>
                 {% endif %}
-                <li><a href="{% url 'logout' %}">Sign Out</a></li>
+                <li><form id="logout-form" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign Out</button></form></li>
               </ul>
             </li>
           </ul>
