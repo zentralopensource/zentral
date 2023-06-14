@@ -55,7 +55,6 @@
     "zentral.contrib.munki": {
       "metrics": true
     },
-    "zentral.contrib.nagios": {},
     "zentral.contrib.inventory": {
       "metrics": true,
       "clients": []

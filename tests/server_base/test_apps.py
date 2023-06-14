@@ -15,7 +15,6 @@ class TestZentralApps(SimpleTestCase):
         "mdm",
         "monolith",
         "munki",
-        "nagios",
         "probes",
         "puppet",
         "okta",

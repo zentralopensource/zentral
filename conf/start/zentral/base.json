@@ -84,7 +84,6 @@
         "domains": ["zentral.pro"]
       }
     },
-    "zentral.contrib.nagios": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {
       "metrics": true

@@ -185,7 +185,6 @@
         "root": "/tmp"
       }
     },
-    "zentral.contrib.nagios": {},
     "zentral.contrib.okta": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.puppet": {

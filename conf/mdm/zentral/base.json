@@ -67,7 +67,6 @@
     },
     "zentral.contrib.osquery": {},
     "zentral.contrib.jamf": {},
-    "zentral.contrib.nagios": {},
     "zentral.contrib.santa": {}
   }
 }
