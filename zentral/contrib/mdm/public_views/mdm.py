@@ -6,8 +6,10 @@ from urllib.parse import unquote
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
+from django.core import signing
+from django.core.exceptions import SuspiciousOperation
 from django.core.files.storage import default_storage
-from django.http import FileResponse, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.views.generic import View
@@ -18,10 +20,11 @@ from zentral.contrib.mdm.commands.base import get_command
 from zentral.contrib.mdm.commands.scheduling import get_next_command_response
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.declarations import (build_legacy_profile,
-                                              build_target_management_status_subscriptions)
+                                              build_target_management_status_subscriptions,
+                                              load_legacy_profile_token)
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.inventory import ms_tree_from_payload
-from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
+from zentral.contrib.mdm.models import (ArtifactVersion,
                                         Channel, RequestStatus, DeviceCommand, EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
                                         Platform,
@@ -380,7 +383,7 @@ class CheckinView(MDMView):
             elif declaration_identifier.endswith("activation"):
                 response = self.target.activation
             elif "legacy-profile" in declaration_identifier:
-                response = build_legacy_profile(self.target, declaration_identifier)
+                response = build_legacy_profile(self.enrollment_session, self.target, declaration_identifier)
             else:
                 self.abort("Unknown declaration", **event_payload)
         self.post_event("success", **event_payload)
@@ -464,14 +467,14 @@ class EnterpriseAppDownloadView(View):
             return FileResponse(default_storage.open(package_file.name), as_attachment=True)
 
 
-class ProfileDownloadView(MDMView):
+class ProfileDownloadView(View):
     def get(self, response, *args, **kwargs):
-        # TODO limit access
         # TODO DownloadProfileEvent with mdm namespace
-        artifact_version = get_object_or_404(
-            ArtifactVersion.objects.select_related("profile"),
-            pk=kwargs["pk"],
-            artifact__type=Artifact.Type.PROFILE
-        )
-        return HttpResponse(build_payload(artifact_version.profile, self.enrollment_session),
+        try:
+            profile, enrollment_session, enrolled_user = load_legacy_profile_token(kwargs["token"])
+        except signing.BadSignature:
+            raise SuspiciousOperation("Bad legacy profile token signature")
+        except ArtifactVersion.DoesNotExist:
+            raise Http404
+        return HttpResponse(build_payload(profile, enrollment_session, enrolled_user),
                             content_type="application/x-apple-aspen-config")

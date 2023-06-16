@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta
 import hashlib
 import logging
+from django.contrib.contenttypes.models import ContentType
+from django.core import signing
 from django.http import Http404
 from django.urls import reverse
 from zentral.conf import settings
 from zentral.utils.payloads import get_payload_identifier
-from zentral.contrib.mdm.models import Artifact
+from zentral.contrib.mdm.models import Artifact, ArtifactVersion, EnrolledUser
 
 
 logger = logging.getLogger("zentral.contrib.mdm.declarations")
@@ -79,8 +81,41 @@ def get_legacy_profile_server_token(target, artifact, artifact_version):
     return ".".join(elements)
 
 
+def dump_legacy_profile_token(enrollment_session, target, artifact_version_pk):
+    if not isinstance(artifact_version_pk, str):
+        artifact_version_pk = str(artifact_version_pk)
+    payload = {"avpk": artifact_version_pk,
+               "esm": enrollment_session._meta.model_name,
+               "espk": enrollment_session.pk}
+    if target.enrolled_user:
+        payload["eupk"] = target.enrolled_user.pk
+    return signing.dumps(payload, salt="zentral_mdm_legacy_profile")
+
+
+def load_legacy_profile_token(token):
+    payload = signing.loads(token, salt="zentral_mdm_legacy_profile")
+    # profile
+    artifact_version = ArtifactVersion.objects.select_related("profile").get(
+        pk=payload["avpk"],
+        artifact__type=Artifact.Type.PROFILE
+    )
+    # enrollment session
+    es_ct = ContentType.objects.get_by_natural_key("mdm", payload["esm"])
+    enrollment_session = (es_ct.model_class()
+                               .objects
+                               .select_related("enrolled_device", "realm_user")
+                               .get(pk=payload["espk"]))
+    # enrolled user
+    try:
+        enrolled_user = EnrolledUser.objects.get(pk=payload["eupk"])
+    except KeyError:
+        enrolled_user = None
+    return artifact_version.profile, enrollment_session, enrolled_user
+
+
 # https://developer.apple.com/documentation/devicemanagement/legacyprofile
-def build_legacy_profile(target, declaration_identifier):
+def build_legacy_profile(enrollment_session, target, declaration_identifier):
+    # artifact version
     artifact_pk = declaration_identifier.split(".")[-1]
     profile_artifact_version = profile_artifact = None
     for artifact, artifact_version in target.all_in_scope_serialized(included_types=(Artifact.Type.PROFILE,)):
@@ -90,14 +125,16 @@ def build_legacy_profile(target, declaration_identifier):
             break
     if not profile_artifact_version:
         raise Http404
+    # signed URL
     return {
         "Type": "com.apple.configuration.legacy",
         "Identifier": get_legacy_profile_identifier(profile_artifact),
         "ServerToken": get_legacy_profile_server_token(target, profile_artifact, profile_artifact_version),
         "Payload": {
             "ProfileURL": "https://{}{}".format(
-                settings["api"]["fqdn_mtls"],  # TODO signed requests on FQDN ?
-                reverse("mdm_public:profile_download_view", args=(profile_artifact_version["pk"],))
+                settings["api"]["fqdn"],
+                reverse("mdm_public:profile_download_view",
+                        args=(dump_legacy_profile_token(enrollment_session, target, artifact_version["pk"]),))
             )
         },
     }

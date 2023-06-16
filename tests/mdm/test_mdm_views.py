@@ -17,6 +17,7 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.crypto import verify_signed_payload
+from zentral.contrib.mdm.declarations import dump_legacy_profile_token, load_legacy_profile_token
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Blueprint, BlueprintArtifact,
                                         Channel, DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
@@ -143,12 +144,13 @@ class MDMViewsTestCase(TestCase):
         session.enrolled_device.save()
         return blueprint
 
-    def _force_profile(self):
-        artifact_name = get_random_string(12)
+    def _force_profile(self, channel=Channel.DEVICE, name=None):
+        if not name:
+            name = get_random_string(12)
         artifact = Artifact.objects.create(
-            name=artifact_name,
+            name=name,
             type=Artifact.Type.PROFILE,
-            channel=Channel.DEVICE,
+            channel=channel,
             platforms=[Platform.MACOS],
         )
         artifact_version = ArtifactVersion.objects.create(
@@ -157,11 +159,11 @@ class MDMViewsTestCase(TestCase):
         payload_identifier = str(uuid.uuid4())
         return Profile.objects.create(
             artifact_version=artifact_version,
-            filename=f"{artifact_name}.mobileconfig",
+            filename=f"{name}.mobileconfig",
             source=plistlib.dumps(
                 {
                     "PayloadContent": [],
-                    "PayloadDisplayName": artifact_name,
+                    "PayloadDisplayName": name,
                     "PayloadIdentifier": payload_identifier,
                     "PayloadRemovalDisallowed": False,
                     "PayloadType": "Configuration",
@@ -170,12 +172,12 @@ class MDMViewsTestCase(TestCase):
                 }
             ),
             payload_identifier=payload_identifier,
-            payload_display_name=artifact_name,
+            payload_display_name=name,
             payload_description="",
         )
 
-    def _force_blueprint_profile(self, session):
-        profile = self._force_profile()
+    def _force_blueprint_profile(self, session, channel=Channel.DEVICE):
+        profile = self._force_profile(channel=channel)
         blueprint = self._add_blueprint(session)
         BlueprintArtifact.objects.get_or_create(
             artifact=profile.artifact_version.artifact,
@@ -575,7 +577,7 @@ class MDMViewsTestCase(TestCase):
         json_response = json.loads(response.content)
         self.assertEqual(json_response, Target(session.enrolled_device).declaration_items)
 
-    def test_declarative_management_legacy_profile_declaration(self, post_event):
+    def test_declarative_management_legacy_profile_declaration_device(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         profile = self._force_blueprint_profile(session)
         artifact_version = profile.artifact_version
@@ -588,13 +590,52 @@ class MDMViewsTestCase(TestCase):
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
+        declaration = json.loads(response.content)
+        url = declaration["Payload"].pop("ProfileURL")
         self.assertEqual(
-            json.loads(response.content),
+            declaration,
             {'Identifier': f'zentral.legacy-profile.{artifact.pk}',
-             'Payload': {'ProfileURL': f'https://zentral-mtls/public/mdm/profiles/{artifact_version.pk}/'},
+             'Payload': {},
              'ServerToken': str(artifact_version.pk),
              'Type': 'com.apple.configuration.legacy'}
         )
+        token = url.removeprefix("https://zentral/public/mdm/profiles/")
+        token = token.removesuffix("/")
+        t_profile, t_session, t_user = load_legacy_profile_token(token)
+        self.assertEqual(t_profile, profile)
+        self.assertEqual(t_session, session)
+        self.assertIsNone(t_user)
+
+    def test_declarative_management_legacy_profile_declaration_user(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        profile = self._force_blueprint_profile(session, channel=Channel.USER)
+        artifact_version = profile.artifact_version
+        artifact = artifact_version.artifact
+        payload = {
+            "UDID": udid,
+            "UserID": enrolled_user.user_id,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.legacy-profile.{artifact.pk}"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        declaration = json.loads(response.content)
+        url = declaration["Payload"].pop("ProfileURL")
+        self.assertEqual(
+            declaration,
+            {'Identifier': f'zentral.legacy-profile.{artifact.pk}',
+             'Payload': {},
+             'ServerToken': str(artifact_version.pk),
+             'Type': 'com.apple.configuration.legacy'}
+        )
+        token = url.removeprefix("https://zentral/public/mdm/profiles/")
+        token = token.removesuffix("/")
+        t_profile, t_session, t_user = load_legacy_profile_token(token)
+        self.assertEqual(t_profile, profile)
+        self.assertEqual(t_session, session)
+        self.assertEqual(t_user, enrolled_user)
 
     def test_declarative_management_unknown_legacy_profile_declaration(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
@@ -763,17 +804,37 @@ class MDMViewsTestCase(TestCase):
 
     # profile download view
 
-    def test_profile_download_view(self, post_event):
-        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
-        profile = self._force_profile()
-        response = self._get(reverse("mdm_public:profile_download_view", args=(profile.artifact_version.pk,)), session)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.headers['Content-Type'], "application/x-apple-aspen-config")
+    def test_profile_download_bad_token(self, post_event):
+        response = self.client.get(reverse("mdm_public:profile_download_view", args=("bad_token",)))
+        self.assertEqual(response.status_code, 400)
 
-    def test_profile_download_view_signed_message(self, post_event):
-        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
-        profile = self._force_profile()
-        response = self._get(reverse("mdm_public:profile_download_view", args=(profile.artifact_version.pk,)),
-                             session, True)
+    def test_profile_download_404(self, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        token = dump_legacy_profile_token(session, Target(session.enrolled_device), uuid.uuid4())
+        response = self.client.get(reverse("mdm_public:profile_download_view", args=(token,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_profile_download_view_device(self, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        profile = self._force_profile(name="Test $ENROLLED_DEVICE.SERIAL_NUMBER")
+        token = dump_legacy_profile_token(session, Target(session.enrolled_device),
+                                          profile.artifact_version.pk)
+        response = self.client.get(reverse("mdm_public:profile_download_view", args=(token,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['Content-Type'], "application/x-apple-aspen-config")
+        _, data = verify_signed_payload(response.content)
+        payload = plistlib.loads(data)
+        self.assertEqual(payload["PayloadDisplayName"], f"Test {session.enrolled_device.serial_number}")
+
+    def test_profile_download_view_user(self, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        profile = self._force_profile(name="Test $ENROLLED_USER.SHORT_NAME")
+        token = dump_legacy_profile_token(session, Target(session.enrolled_device, enrolled_user),
+                                          profile.artifact_version.pk)
+        response = self.client.get(reverse("mdm_public:profile_download_view", args=(token,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['Content-Type'], "application/x-apple-aspen-config")
+        _, data = verify_signed_payload(response.content)
+        payload = plistlib.loads(data)
+        self.assertEqual(payload["PayloadDisplayName"], f"Test {enrolled_user.short_name}")

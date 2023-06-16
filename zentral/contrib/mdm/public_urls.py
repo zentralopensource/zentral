@@ -30,7 +30,7 @@ urlpatterns = [
     path('device_commands/<uuid:uuid>/enterprise_app/',
          public_views.EnterpriseAppDownloadView.as_view(),
          name="enterprise_app_download"),
-    path('profiles/<uuid:pk>/',
+    path('profiles/<str:token>/',
          public_views.ProfileDownloadView.as_view(),
          name="profile_download_view"),
 
