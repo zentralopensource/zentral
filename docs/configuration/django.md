@@ -14,6 +14,12 @@ In this [section](../#sections), we can configure the underlying Django applicat
 This is the key used by Django for cryptographic signing – to verify the user sessions for example. Must be trully random and must stay secret. Unique for every Zentral deployment.
 If not set here, it will be regenerated everytime the app is restarted, and this will invalidate the sessions.
 
+### `django.SECRET_KEY_FALLBACKS`
+
+**OPTIONAL**
+
+`SECRET_KEY_FALLBACKS` can be used to rotate secret keys. The values will not be used to sign data, but if specified, they will be used to validate signed data and must be kept secure.
+
 ### `django.ALLOWED_HOSTS`
 
 A list of strings representing the host/domain names that are accepted. List of the `api.fqdn` and `api.fqdn_mtls` by default. Read more about it in the [Django documentation](https://docs.djangoproject.com/en/2.2/ref/settings/#std:setting-ALLOWED_HOSTS).
