@@ -1,4 +1,4 @@
-FROM golang:latest as build_container
+FROM golang:bullseye as build_container
 
 WORKDIR /go/src/
 RUN mkdir -p github.com/micromdm && \
@@ -12,7 +12,7 @@ RUN GOOS=linux \
     ./cmd/scepserver
 
 
-FROM debian:10-slim
+FROM debian:bullseye-slim
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -yq python3 vim openssl python3-pip
