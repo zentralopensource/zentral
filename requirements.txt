@@ -12,6 +12,7 @@ django>=4.1.9,<4.2
 djangorestframework
 djangorestframework-yaml
 django-filter                   # API
+whitenoise                      # To serve the static files
 elasticsearch<9                 # For OpenSearch, see requirements_aws.txt
 geoip2
 gunicorn

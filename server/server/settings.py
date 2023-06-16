@@ -131,6 +131,11 @@ MIDDLEWARE = [
     'base.middlewares.deployment_info_middleware',
 ]
 
+STATIC_WHITENOISE = django_zentral_settings.get("STATIC_WHITENOISE", False)
+if STATIC_WHITENOISE:
+    MIDDLEWARE.insert(MIDDLEWARE.index("django.middleware.security.SecurityMiddleware") + 1,
+                      "whitenoise.middleware.WhiteNoiseMiddleware")
+
 if MAX_PASSWORD_AGE_DAYS:
     MIDDLEWARE.insert(MIDDLEWARE.index("django.contrib.messages.middleware.MessageMiddleware") + 1,
                       "accounts.middleware.force_password_change_middleware")
@@ -208,9 +213,15 @@ STATICFILES_DIRS = (
 if DEBUG:
     STATIC_URL = '/static_debug/'
 else:
-    STATIC_URL = '/static/'
+    if STATIC_WHITENOISE:
+        STATIC_URL = '/static_whitenoise/'
+    else:
+        STATIC_URL = '/static/'
 STATIC_ROOT = django_zentral_settings.get("STATIC_ROOT", "/zentral_static")
-STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
+if STATIC_WHITENOISE:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+else:
+    STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
 
 
 # File storage override

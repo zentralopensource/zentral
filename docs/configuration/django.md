@@ -168,7 +168,13 @@ Keys used to configure the [S3 file storage backend](https://django-storages.rea
 
 See [Static Files](https://docs.djangoproject.com/en/2.2/howto/static-files/)
 
-Zentral uses the [`django.contrib.staticfiles.storage.ManifestStaticFilesStorage`](https://docs.djangoproject.com/en/2.2/ref/contrib/staticfiles/#manifeststaticfilesstorage). The [`collectstatic`](https://docs.djangoproject.com/en/2.2/ref/contrib/staticfiles/#collectstatic) command needs to be run to collect and prepare all the files, when [`django.DEBUG`](#djangodebug) is false.
+By default, Zentral uses the [`ManifestStaticFilesStorage`](https://docs.djangoproject.com/en/2.2/ref/contrib/staticfiles/#manifeststaticfilesstorage). The [`collectstatic`](https://docs.djangoproject.com/en/2.2/ref/contrib/staticfiles/#collectstatic) command needs to be run to collect and prepare all the files, when [`django.DEBUG`](#djangodebug) is false.
+
+### `django.STATIC_WHITENOISE`
+
+Default: `False`
+
+Alternatively, [whitenoise](https://whitenoise.readthedocs.io/en/latest/) can be used to serve the static files directly from the web application. This is useful when Zentral is deployed behind a load balancer without `nginx` as reverse proxy.
 
 ### `django.STATIC_ROOT`
 
