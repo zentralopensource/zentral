@@ -14,7 +14,7 @@ from zentral.contrib.mdm.crypto import (verify_signed_payload,
                                         verify_zentral_scep_ca_issuer)
 from zentral.contrib.mdm.events import OTAEnrollmentRequestEvent
 from zentral.contrib.mdm.exceptions import EnrollmentSessionStatusError
-from zentral.contrib.mdm.models import OTAEnrollment, OTAEnrollmentSession
+from zentral.contrib.mdm.models import EnrolledDevice, OTAEnrollment, OTAEnrollmentSession
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_mdm_configuration_profile,
                                           build_ota_scep_configuration_profile,
@@ -92,6 +92,9 @@ class OTAEnrollView(PostEventMixin, View):
         payload = plistlib.loads(payload)
         self.serial_number = payload["SERIAL"]
         self.udid = payload["UDID"]
+
+        if EnrolledDevice.objects.blocked().filter(serial_number=self.serial_number).exists():
+            self.abort("Device blocked", phase=phase)
 
         if phase == 2:
             # Verify the challenge

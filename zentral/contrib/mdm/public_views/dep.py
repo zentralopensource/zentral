@@ -10,7 +10,7 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.contrib.mdm.crypto import verify_iphone_ca_signed_payload
 from zentral.contrib.mdm.events import DEPEnrollmentRequestEvent
-from zentral.contrib.mdm.models import DEPEnrollmentSession, DEPEnrollment
+from zentral.contrib.mdm.models import DEPEnrollmentSession, DEPEnrollment, EnrolledDevice
 from zentral.contrib.mdm.payloads import build_configuration_profile_response, build_mdm_configuration_profile
 from .base import PostEventMixin
 
@@ -35,7 +35,9 @@ class DEPEnrollMixin(PostEventMixin):
 
         return payload
 
-    def verify_dep_enrollment_secret(self):
+    def verify(self):
+        if EnrolledDevice.objects.blocked().filter(serial_number=self.serial_number).exists():
+            self.abort("Device blocked")
         try:
             es_request = verify_enrollment_secret(
                 "dep_enrollment",
@@ -63,7 +65,7 @@ class DEPEnrollView(DEPEnrollMixin, MDMProfileResponseMixin, View):
 
     def post(self, request, *args, **kwargs):
         self.get_payload()
-        es_request, dep_enrollment = self.verify_dep_enrollment_secret()
+        es_request, dep_enrollment = self.verify()
         if dep_enrollment.realm:
             # should never happen
             self.abort("this DEP enrollment requires an authenticated realm user")
@@ -110,7 +112,7 @@ class DEPWebEnrollView(DEPEnrollMixin, View):
 
     def get(self, request, *args, **kwargs):
         payload = self.get_payload()
-        es_request, dep_enrollment = self.verify_dep_enrollment_secret()
+        es_request, dep_enrollment = self.verify()
         if not dep_enrollment.realm:
             # should never happen
             self.abort("this DEP enrollment has no realm")

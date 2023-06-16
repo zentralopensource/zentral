@@ -1,18 +1,15 @@
 from functools import reduce
 import operator
 import plistlib
-from unittest.mock import Mock
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from realms.models import RealmAuthenticationSession
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
-from zentral.contrib.mdm.public_views.ota import ota_enroll_callback
-from .utils import force_ota_enrollment, force_push_certificate, force_realm, force_realm_user, force_scep_config
+from .utils import force_ota_enrollment, force_push_certificate, force_realm, force_scep_config
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -238,34 +235,3 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "1 OTA enrollment")
         self.assertContains(response, enrollment.name)
-
-    # enroll
-
-    def test_ota_enrollment_enroll_invalid_secret(self):
-        enrollment = force_ota_enrollment(self.mbu, realm=force_realm())
-        enrollment.revoke()
-        response = self.client.get(reverse("mdm_public:ota_enrollment_enroll", args=(enrollment.pk,)))
-        self.assertEqual(response.status_code, 400)
-
-    def test_ota_enrollment_enroll_redirect(self):
-        realm, realm_user = force_realm_user()
-        # first request redirects to realm auth
-        enrollment = force_ota_enrollment(self.mbu, realm=realm)
-        response = self.client.get(reverse("mdm_public:ota_enrollment_enroll", args=(enrollment.pk,)))
-        self.assertEqual(response.status_code, 302)
-        # fake the realm auth
-        ras = RealmAuthenticationSession.objects.filter(realm=realm).first()
-        self.assertRedirects(response, f"/public/realms/{realm.pk}/ldap/{ras.pk}/login/")
-        ras.user = realm_user
-        request = Mock()
-        request.session = self.client.session
-        url = ota_enroll_callback(request, ras, enrollment.pk)
-        request.session.save()
-        # second request returns the profile service payload
-        self.assertEqual(url, reverse("mdm_public:ota_enrollment_enroll", args=(enrollment.pk,)))
-        response = self.client.get(reverse("mdm_public:ota_enrollment_enroll", args=(enrollment.pk,)))
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
-        _, profile_data = verify_signed_payload(response.content)
-        profile = plistlib.loads(profile_data)
-        self.assertEqual(profile["PayloadContent"]["URL"], "https://zentral/public/mdm/ota_session_enroll/")

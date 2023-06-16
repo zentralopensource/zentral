@@ -267,7 +267,7 @@ class CheckinView(MDMView):
         is_reenrollment = isinstance(self.enrollment_session, ReEnrollmentSession)
         # purge the installed artifacts and sent commands, if it is not a re-enrollment
         if not created and not is_reenrollment:
-            enrolled_device.purge_state()
+            enrolled_device.purge_state(full=True)
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)
@@ -439,6 +439,9 @@ class ConnectView(MDMView):
 
         # update last seen at
         self.target.update_last_seen()
+
+        if self.target.blocked:
+            return HttpResponse("Blocked", status=401)
 
         # return next command if possible
         return get_next_command_response(self.target, self.enrollment_session, request_status)

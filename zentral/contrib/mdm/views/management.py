@@ -1262,6 +1262,35 @@ class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
+class BlockEnrolledDeviceView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.change_enrolleddevice"
+    model = EnrolledDevice
+    template_name = "mdm/enrolleddevice_confirm_block.html"
+
+    def get_queryset(self):
+        return EnrolledDevice.objects.allowed()
+
+    def post(self, request, *args, **kwargs):
+        enrolled_device = self.get_object()
+        enrolled_device.block()
+        transaction.on_commit(lambda: send_enrolled_device_notification(enrolled_device))
+        return redirect(enrolled_device)
+
+
+class UnblockEnrolledDeviceView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.change_enrolleddevice"
+    model = EnrolledDevice
+    template_name = "mdm/enrolleddevice_confirm_unblock.html"
+
+    def get_queryset(self):
+        return EnrolledDevice.objects.blocked()
+
+    def post(self, request, *args, **kwargs):
+        enrolled_device = self.get_object()
+        enrolled_device.unblock()
+        return redirect(enrolled_device)
+
+
 class EnrolledUserView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_enrolleduser"
     model = EnrolledUser

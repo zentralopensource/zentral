@@ -221,6 +221,12 @@ urlpatterns = [
     path('devices/<int:pk>/change_blueprint/',
          views.ChangeEnrolledDeviceBlueprintView.as_view(),
          name="change_enrolled_device_blueprint"),
+    path('devices/<int:pk>/block/',
+         views.BlockEnrolledDeviceView.as_view(),
+         name="block_enrolled_device"),
+    path('devices/<int:pk>/clear_release/',
+         views.UnblockEnrolledDeviceView.as_view(),
+         name="unblock_enrolled_device"),
 
     # enrolled device commands
     path('devices/<int:pk>/commands/custom/create/',

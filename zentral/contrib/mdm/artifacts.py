@@ -174,6 +174,10 @@ class Target:
         return self.target.client_capabilities
 
     @property
+    def blocked(self):
+        return self.enrolled_device.blocked_at is not None
+
+    @property
     def current_declarations_token(self):
         return self.target.declarations_token
 

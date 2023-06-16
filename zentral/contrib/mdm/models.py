@@ -520,6 +520,14 @@ class DeviceAssignment(models.Model):
 # Enrollment
 
 
+class EnrolledDeviceManager(models.Manager):
+    def blocked(self):
+        return self.filter(blocked_at__isnull=False)
+
+    def allowed(self):
+        return self.filter(blocked_at__isnull=True)
+
+
 class EnrolledDevice(models.Model):
     # device info
     udid = models.CharField(max_length=255, unique=True)
@@ -580,8 +588,11 @@ class EnrolledDevice(models.Model):
 
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
+    blocked_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = EnrolledDeviceManager()
 
     def __str__(self):
         return self.udid
@@ -630,7 +641,17 @@ class EnrolledDevice(models.Model):
         if self.serial_number:
             return MetaMachine(self.serial_number).get_urlsafe_serial_number()
 
-    def purge_state(self):
+    def block(self):
+        if not self.blocked_at:
+            self.blocked_at = datetime.utcnow()
+            self.save()
+
+    def unblock(self):
+        if self.blocked_at:
+            self.blocked_at = None
+            self.save()
+
+    def purge_state(self, full=False):
         self.declarative_management = False
         self.last_seen_at = None
         self.last_notified_at = None
@@ -644,6 +665,9 @@ class EnrolledDevice(models.Model):
         self.user_enrollment = None
         self.user_approved_enrollment = None
         self.supervised = None
+        if full:
+            self.checkout_at = None
+            self.blocked_at = None
         self.save()
         self.commands.all().delete()
         self.target_artifacts.all().delete()

@@ -37,8 +37,9 @@ def force_realm():
     )
 
 
-def force_realm_user():
-    realm = force_realm()
+def force_realm_user(realm=None):
+    if not realm:
+        realm = force_realm()
     username = get_random_string(12)
     email = f"{username}@example.com"
     realm_user = RealmUser.objects.create(

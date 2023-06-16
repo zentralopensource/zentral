@@ -154,6 +154,23 @@
       <th>Checkout</th>
       <td>{{ object.checkout_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
     </tr>
+    <tr>
+      <th>Blocked?</th>
+      <td>
+        {{ object.blocked_at|date:"SHORT_DATETIME_FORMAT"|default:"No" }}
+        {% if perms.mdm.change_enrolleddevice %}
+        {% if object.blocked_at %}
+        <a href="{% url 'mdm:unblock_enrolled_device' object.pk %}" class="btn btn-success btn-xs" style="margin-left:10px">
+          Unblock
+        </a>
+        {% else %}
+        <a href="{% url 'mdm:block_enrolled_device' object.pk %}" class="btn btn-danger btn-xs" style="margin-left:10px">
+          Block
+        </a>
+        {% endif %}
+        {% endif %}
+      </td>
+    </tr>
     {% if object.platform == "macOS" %}
     <tr>
       <td colspan="2"><h4>Bootstrap token</h4></td>
