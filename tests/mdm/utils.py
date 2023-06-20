@@ -22,6 +22,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         Profile, PushCertificate, SCEPConfig,
                                         StoreApp,
                                         UserEnrollment, UserEnrollmentSession)
+from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.utils.payloads import sign_payload
 
 
@@ -169,7 +170,7 @@ def force_dep_enrollment(mbu, push_certificate=None):
         scep_config=force_scep_config(),
         virtual_server=force_dep_virtual_server(),
         enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu),
-        skip_setup_items=[p for p, _ in DEPEnrollment.SKIPPABLE_SETUP_PANE_CHOICES],
+        skip_setup_items=[k for k, _ in skippable_setup_panes],
     )
 
 

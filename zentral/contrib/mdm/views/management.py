@@ -10,8 +10,9 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.mdm.commands.base import load_command, registered_commands
+from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
+from zentral.contrib.mdm.commands.base import load_command, registered_commands
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
@@ -40,8 +41,8 @@ from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
 from zentral.contrib.mdm.scep import SCEPChallengeType
 from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
 from zentral.contrib.mdm.scep.static import StaticChallengeForm
+from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.contrib.mdm.software_updates import iter_available_software_updates
-from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 
 
@@ -128,6 +129,11 @@ class DEPEnrollmentView(PermissionRequiredMixin, DetailView):
                                                                        "realm_user")
                                                        .order_by("-created_at"))
         ctx["dep_enrollment_sessions_count"] = ctx["dep_enrollment_sessions"].count()
+        ctx["skip_keys"] = []
+        for skey, content in skippable_setup_panes:
+            for okey in self.object.skip_setup_items:
+                if okey == skey:
+                    ctx["skip_keys"].append(content)
         return ctx
 
 

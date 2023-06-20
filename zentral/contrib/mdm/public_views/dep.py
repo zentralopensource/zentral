@@ -1,7 +1,7 @@
 import base64
 import logging
 import plistlib
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import View
@@ -12,6 +12,7 @@ from zentral.contrib.mdm.crypto import verify_iphone_ca_signed_payload
 from zentral.contrib.mdm.events import DEPEnrollmentRequestEvent
 from zentral.contrib.mdm.models import DEPEnrollmentSession, DEPEnrollment, EnrolledDevice
 from zentral.contrib.mdm.payloads import build_configuration_profile_response, build_mdm_configuration_profile
+from zentral.utils.os_version import make_comparable_os_version
 from .base import PostEventMixin
 
 
@@ -30,16 +31,26 @@ class DEPEnrollMixin(PostEventMixin):
 
         payload = plistlib.loads(payload_data)
 
+        self.mdm_can_request_software_update = payload.get("MDM_CAN_REQUEST_SOFTWARE_UPDATE", False)
+        self.os_version = " ".join(
+            s for s in (
+                payload.get(k) for k in ("OS_VERSION", "SUPPLEMENTAL_OS_VERSION_EXTRA")
+            )
+            if s
+        )
+        self.product = payload["PRODUCT"]
         self.serial_number = payload["SERIAL"]
         self.udid = payload["UDID"]
 
         return payload
 
-    def verify(self):
+    def verify_blocked_device(self):
         if EnrolledDevice.objects.blocked().filter(serial_number=self.serial_number).exists():
             self.abort("Device blocked")
+
+    def verify_enrollment_secret(self):
         try:
-            es_request = verify_enrollment_secret(
+            self.es_request = verify_enrollment_secret(
                 "dep_enrollment",
                 self.kwargs["dep_enrollment_secret"],
                 self.user_agent, self.ip,
@@ -48,7 +59,35 @@ class DEPEnrollMixin(PostEventMixin):
         except EnrollmentSecretVerificationFailed as e:
             self.abort("secret verification failed: '{}'".format(e.err_msg))
         else:
-            return es_request, es_request.enrollment_secret.dep_enrollment
+            self.dep_enrollment = self.es_request.enrollment_secret.dep_enrollment
+
+    def verify_os_version(self):
+        # see https://github.com/apple/device-management/blob/b838baacf2e790db729b6ca3f52724adc8bfb96d/mdm/errors/softwareupdate.required.yaml  # NOQA
+        if not self.mdm_can_request_software_update:
+            # NOOP
+            return
+        if "iPhone" in self.product or "iPad" in self.product:
+            platform = "ios"
+        elif "Mac" in self.product:
+            platform = "macos"
+        else:
+            logger.error("Unknown product for required software update: %s", self.product)
+            return
+        required_os_version = getattr(self.dep_enrollment, f"{platform}_min_version")
+        comparable_required_os_version = make_comparable_os_version(required_os_version)
+        comparable_os_version = make_comparable_os_version(self.os_version)
+        if comparable_required_os_version > comparable_os_version:
+            self.post_event("warning", reason=f"OS update to version {required_os_version} required")
+            return JsonResponse({
+                "code": "com.apple.softwareupdate.required",
+                "details": {"OSVersion": required_os_version}
+            }, status=403)
+
+    def verify(self):
+        self.verify_blocked_device()
+        self.verify_enrollment_secret()
+        err_response = self.verify_os_version()
+        return err_response
 
 
 class MDMProfileResponseMixin:
@@ -65,14 +104,16 @@ class DEPEnrollView(DEPEnrollMixin, MDMProfileResponseMixin, View):
 
     def post(self, request, *args, **kwargs):
         self.get_payload()
-        es_request, dep_enrollment = self.verify()
-        if dep_enrollment.realm:
+        err_response = self.verify()
+        if err_response:
+            return err_response
+        if self.dep_enrollment.realm:
             # should never happen
             self.abort("this DEP enrollment requires an authenticated realm user")
 
         # Start a DEP enrollment session
         dep_enrollment_session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
-            dep_enrollment,
+            self.dep_enrollment,
             self.serial_number, self.udid,
         )
         return self.build_mdm_configuration_profile_response(dep_enrollment_session)
@@ -112,24 +153,26 @@ class DEPWebEnrollView(DEPEnrollMixin, View):
 
     def get(self, request, *args, **kwargs):
         payload = self.get_payload()
-        es_request, dep_enrollment = self.verify()
-        if not dep_enrollment.realm:
+        err_response = self.verify()
+        if err_response:
+            return err_response
+        if not self.dep_enrollment.realm:
             # should never happen
             self.abort("this DEP enrollment has no realm")
 
         # start realm auth session, do redirect
         callback = "zentral.contrib.mdm.public_views.dep.dep_web_enroll_callback"
-        callback_kwargs = {"dep_enrollment_pk": dep_enrollment.pk,
+        callback_kwargs = {"dep_enrollment_pk": self.dep_enrollment.pk,
                            "serial_number": self.serial_number,
                            "udid": self.udid,
                            "payload": payload}
-        if dep_enrollment.use_realm_user and \
-           dep_enrollment.realm_user_is_admin and \
-           dep_enrollment.realm.backend_instance.can_get_password:
+        if self.dep_enrollment.use_realm_user and \
+           self.dep_enrollment.realm_user_is_admin and \
+           self.dep_enrollment.realm.backend_instance.can_get_password:
             callback_kwargs["save_password_hash"] = True
 
         return HttpResponseRedirect(
-            dep_enrollment.realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
+            self.dep_enrollment.realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
         )
 
 

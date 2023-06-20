@@ -9,6 +9,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from realms.utils import build_password_hash_dict
 from zentral.contrib.inventory.models import Tag
+from zentral.utils.os_version import make_comparable_os_version
 from .app_manifest import build_enterprise_app_manifest
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
@@ -23,6 +24,7 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
                      Profile, Location, LocationAsset, StoreApp)
+from .skip_keys import skippable_setup_panes
 
 
 logger = logging.getLogger("zentral.contrib.mdm.forms")
@@ -252,13 +254,20 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
             "support_phone_number", "support_email_address",
             "org_magic", "department", "language", "region"
         ]
-        for pane, initial in self.Meta.model.SKIPPABLE_SETUP_PANES:
+        for key, content in skippable_setup_panes:
             if self.instance.pk:
-                initial = pane in self.instance.skip_setup_items
-            self.fields[pane] = forms.BooleanField(label="Skip {} pane".format(pane), initial=initial, required=False)
-            field_order.append(pane)
+                initial = key in self.instance.skip_setup_items
+            else:
+                initial = False
+            self.fields[key] = forms.BooleanField(
+                label=content,
+                initial=initial,
+                required=False
+            )
+            field_order.append(key)
         field_order.extend(["realm", "use_realm_user", "realm_user_is_admin",
-                            "admin_full_name", "admin_short_name", "admin_password"])
+                            "admin_full_name", "admin_short_name", "admin_password",
+                            "ios_min_version", "macos_min_version"])
         self.order_fields(field_order)
         self.fields["language"].choices = sorted(self.fields["language"].choices, key=lambda t: (t[1], t[0]))
         self.fields["region"].choices = sorted(self.fields["region"].choices, key=lambda t: (t[1], t[0]))
@@ -293,6 +302,19 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
         if password:
             self.cleaned_data["admin_password_hash"] = build_password_hash_dict(password)
 
+    def _clean_min_version(self, platform):
+        fieldname = f"{platform}_min_version"
+        min_version = self.cleaned_data.get(fieldname)
+        if min_version and make_comparable_os_version(min_version) == (0, 0, 0):
+            raise forms.ValidationError("Not a valid OS version")
+        return min_version
+
+    def clean_ios_min_version(self):
+        return self._clean_min_version("ios")
+
+    def clean_macos_min_version(self):
+        return self._clean_min_version("macos")
+
     def admin_info_incomplete(self):
         return len([attr for attr in (
                         self.cleaned_data.get(i)
@@ -302,9 +324,9 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
     def clean(self):
         super().clean()
         skip_setup_items = []
-        for pane, initial in self.Meta.model.SKIPPABLE_SETUP_PANES:
-            if self.cleaned_data.get(pane, False):
-                skip_setup_items.append(pane)
+        for key, _ in skippable_setup_panes:
+            if self.cleaned_data.get(key, False):
+                skip_setup_items.append(key)
         if self.admin_info_incomplete():
             raise forms.ValidationError("Admin information incomplete")
         self.cleaned_data['skip_setup_items'] = skip_setup_items

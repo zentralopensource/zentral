@@ -78,9 +78,11 @@ def serialize_dep_profile(dep_enrollment):
                "url": "{}{}".format(
                    settings["api"]["tls_hostname"],
                    reverse("mdm_public:dep_enroll", args=(dep_enrollment.enrollment_secret.secret,))
-               ),
-               "devices": [dep_device.serial_number
-                           for dep_device in dep_enrollment.depdevice_set.all()]}
+               )}
+    if dep_enrollment.pk:
+        payload["devices"] = list(dep_enrollment.depdevice_set.values_list("serial_number", flat=True))
+    else:
+        payload["devices"] = []
 
     # do authentication in webview if a realm is present
     if dep_enrollment.realm:

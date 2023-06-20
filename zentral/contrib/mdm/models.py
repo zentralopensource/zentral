@@ -1207,46 +1207,6 @@ class DEPVirtualServer(models.Model):
 
 
 class DEPEnrollment(MDMEnrollment):
-    # https://developer.apple.com/documentation/devicemanagement/skipkeys
-    SKIPPABLE_SETUP_PANES = (
-        ("Accessibility", True),
-        ("Android", True),
-        ("Appearance", False),
-        ("AppleID", True),
-        ("Biometric", False),
-        ("DeviceToDeviceMigration", True),
-        ("Diagnostics", True),
-        ("DisplayTone", True),
-        ("FileVault", True),
-        ("HomeButtonSensitivity", True),
-        ("iCloudDiagnostics", True),
-        ("iCloudStorage", True),
-        ("iMessageAndFaceTime", True),
-        ("Location", False),  # messes with NTP and other things?
-        ("MessagingActivationUsingPhoneNumber", True),
-        ("OnBoarding", True),
-        ("Passcode", True),
-        ("Payment", True),
-        ("Privacy", True),
-        ("Restore", True),
-        ("RestoreCompleted", True),
-        ("ScreenSaver", True),
-        ("ScreenTime", True),
-        ("SIMSetup", True),
-        ("Siri", True),
-        ("SoftwareUpdate", True),
-        ("TapToSetup", True),
-        ("TOS", True),
-        ("TVHomeScreenSync", True),
-        ("TVProviderSignIn", True),
-        ("TVRoom", True),
-        ("UpdateCompleted", True),
-        ("WatchMigration", True),
-        ("Welcome", True),
-        ("Zoom", True),
-    )
-    SKIPPABLE_SETUP_PANE_CHOICES = [(name, name) for name, __ in SKIPPABLE_SETUP_PANES]
-
     # link with the Apple DEP web services
     uuid = models.UUIDField(unique=True, editable=False)
     virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE)
@@ -1286,15 +1246,17 @@ class DEPEnrollment(MDMEnrollment):
     language = models.CharField(max_length=3, choices=ISO_639_1_CHOICES, blank=True)
     org_magic = models.CharField(max_length=256, blank=True)  # see MAGIC_INVALID error
     region = models.CharField(max_length=2, choices=ISO_3166_1_ALPHA_2_CHOICES, blank=True)
-    skip_setup_items = ArrayField(models.CharField(max_length=64,
-                                                   choices=SKIPPABLE_SETUP_PANE_CHOICES),
-                                  editable=False)
+    skip_setup_items = ArrayField(models.CharField(max_length=64), editable=False)
     # TODO: supervising_host_certs
     support_email_address = models.EmailField(max_length=250, blank=True)  # see SUPPORT_EMAIL_INVALID error
     support_phone_number = models.CharField(max_length=50, blank=True)  # see SUPPORT_PHONE_INVALID error
     # url is automatically set using the enrollment secret
     # Auto populate anchor_certs using the fullchain when building the profile payload?
     include_tls_certificates = models.BooleanField(default=False)
+
+    # To require a software update before the enrollment
+    ios_min_version = models.CharField(verbose_name="Required iOS version", max_length=32, blank=True)
+    macos_min_version = models.CharField(verbose_name="Required macOS version", max_length=32, blank=True)
 
     class Meta:
         ordering = ("name",)

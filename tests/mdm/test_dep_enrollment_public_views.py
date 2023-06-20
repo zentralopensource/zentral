@@ -45,7 +45,8 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         vicsp.side_effect = lambda d: d
         enrollment = force_dep_enrollment(self.mbu)
         response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret[:-1],)),
-                                    data=plistlib.dumps({"SERIAL": get_random_string(10),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": get_random_string(10),
                                                          "UDID": str(uuid.uuid4()).upper()}),
                                     content_type="application/octet-stream")
         self.assertEqual(response.status_code, 400)
@@ -56,7 +57,8 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True)
         enrollment = session.dep_enrollment
         response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
-                                    data=plistlib.dumps({"SERIAL": get_random_string(10),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": get_random_string(10),
                                                          "UDID": str(uuid.uuid4()).upper()}),
                                     content_type="application/octet-stream")
         self.assertEqual(response.status_code, 400)
@@ -68,18 +70,102 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         session.enrolled_device.block()
         enrollment = session.dep_enrollment
         response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
-                                    data=plistlib.dumps({"SERIAL": session.enrolled_device.serial_number,
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": session.enrolled_device.serial_number,
                                                          "UDID": session.enrolled_device.udid}),
                                     content_type="application/octet-stream")
         self.assertEqual(response.status_code, 400)
         self.assertAbort(post_event, "Device blocked")
 
-    def test_dep_enroll(self, vicsp, post_event):
+    def test_dep_enroll_ios_update_required(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrollment = session.dep_enrollment
+        enrollment.ios_min_version = "17.1 (b)"
+        enrollment.save()
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "iPhone14,5",
+                                                         "SERIAL": session.enrolled_device.serial_number,
+                                                         "UDID": session.enrolled_device.udid,
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "17.0 (a)"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json(),
+            {'code': 'com.apple.softwareupdate.required', 'details': {'OSVersion': '17.1 (b)'}}
+        )
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, DEPEnrollmentRequestEvent)
+        self.assertEqual(last_event.payload["status"], "warning")
+        self.assertEqual(last_event.payload["reason"], "OS update to version 17.1 (b) required")
+
+    def test_dep_enroll_macos_update_required(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrollment = session.dep_enrollment
+        enrollment.macos_min_version = "14.1"
+        enrollment.save()
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": session.enrolled_device.serial_number,
+                                                         "UDID": session.enrolled_device.udid,
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "14.0 (a)"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json(),
+            {'code': 'com.apple.softwareupdate.required', 'details': {'OSVersion': '14.1'}}
+        )
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, DEPEnrollmentRequestEvent)
+        self.assertEqual(last_event.payload["status"], "warning")
+        self.assertEqual(last_event.payload["reason"], "OS update to version 14.1 required")
+
+    def test_dep_enroll_no_macos_min_version(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
         enrollment = force_dep_enrollment(self.mbu)
         response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
-                                    data=plistlib.dumps({"SERIAL": get_random_string(10),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": get_random_string(10),
                                                          "UDID": str(uuid.uuid4()).upper()}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertSuccess(post_event)
+        _, data = verify_signed_payload(response.content)
+        payload = plistlib.loads(data)
+        self.assertEqual(payload["PayloadIdentifier"], "zentral.mdm")
+
+    def test_dep_enroll_macos_min_version_ok(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        enrollment = force_dep_enrollment(self.mbu)
+        enrollment.macos_min_version = "14.0"
+        enrollment.save()
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": get_random_string(10),
+                                                         "UDID": str(uuid.uuid4()).upper(),
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "14.1"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertSuccess(post_event)
+        _, data = verify_signed_payload(response.content)
+        payload = plistlib.loads(data)
+        self.assertEqual(payload["PayloadIdentifier"], "zentral.mdm")
+
+    def test_dep_enroll_min_os_version_unknown_product(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        enrollment = force_dep_enrollment(self.mbu)
+        enrollment.macos_min_version = "14.2"
+        enrollment.save()
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Yolo9,1",
+                                                         "SERIAL": get_random_string(10),
+                                                         "UDID": str(uuid.uuid4()).upper(),
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "14.1"}),
                                     content_type="application/octet-stream")
         self.assertEqual(response.status_code, 200)
         self.assertSuccess(post_event)
@@ -103,6 +189,7 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm_public:dep_web_enroll", args=(enrollment.enrollment_secret.secret,)),
                                    HTTP_X_APPLE_ASPEN_DEVICEINFO=base64.b64encode(
                                        plistlib.dumps({
+                                           "PRODUCT": "Macmini9,1",
                                            "SERIAL": get_random_string(10),
                                            "UDID": str(uuid.uuid4()).upper()
                                        })
@@ -119,6 +206,7 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm_public:dep_web_enroll", args=(enrollment.enrollment_secret.secret,)),
                                    HTTP_X_APPLE_ASPEN_DEVICEINFO=base64.b64encode(
                                        plistlib.dumps({
+                                           "PRODUCT": "Macmini9,1",
                                            "SERIAL": enrolled_device.serial_number,
                                            "UDID": enrolled_device.udid,
                                        })
@@ -132,7 +220,7 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         enrollment = session.dep_enrollment
         serial_number = get_random_string(10)
         udid = str(uuid.uuid4()).upper()
-        payload = {"SERIAL": serial_number, "UDID": udid}
+        payload = {"PRODUCT": "Macmini9,1", "SERIAL": serial_number, "UDID": udid}
         # first  request redirects to realm auth
         response = self.client.get(reverse("mdm_public:dep_web_enroll", args=(enrollment.enrollment_secret.secret,)),
                                    HTTP_X_APPLE_ASPEN_DEVICEINFO=base64.b64encode(

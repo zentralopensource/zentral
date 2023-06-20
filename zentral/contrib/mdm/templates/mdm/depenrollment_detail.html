@@ -15,7 +15,7 @@
 <table class="table table-condensed">
   <tbody>
     <tr>
-      <th width="160px">Push certificate</th>
+      <th width="200px">Push certificate</th>
       <td>
         {% if perms.mdm.view_pushcertificate %}
         <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
@@ -61,6 +61,14 @@
       <th>Enrollment tag{{ secret.tags.count|pluralize }}</th>
       <td>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</td>
     </tr>
+    <tr>
+      <th>Required iOS version</th>
+      <td>{{ object.ios_min_version|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th>Required macOS version</th>
+      <td>{{ object.macos_min_version|default:"-" }}</td>
+    </tr>
   </tbody>
 </table>
 
@@ -68,7 +76,7 @@
 <table class="table table-condensed">
   <tbody>
     <tr>
-      <th width="160px">Realm</th>
+      <th width="200px">Realm</th>
       <td>
         {% if object.realm %}
         {% if perms.realms.view_realm %}
@@ -110,7 +118,7 @@
   <tbody>
     {% with object.virtual_server as virtual_server %}
     <tr>
-      <th style="width:160px">Virtual server</th>
+      <th style="width:200px">Virtual server</th>
       <td>
         {% if perms.mdm.view_depvirtualserver %}
         <a href="{{ virtual_server.get_absolute_url }}">{{ virtual_server }}</a>
@@ -188,9 +196,9 @@
     <tr>
       <th>Skip setup items</th>
       <td>
-        <ul class="list-inline">
-          {% for pane in object.skip_setup_items %}
-          <li>{{ pane }}</li>
+        <ul class="list">
+          {% for key in skip_keys %}
+          <li>{{ key }}</li>
           {% endfor %}
         <ul>
       </td>

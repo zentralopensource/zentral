@@ -59,6 +59,42 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
         self.assertContains(response, "Create DEP enrollment")
 
+    def test_create_dep_enrollment_ios_min_version_error(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "de-ios_min_version": "abc",
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"], "ios_min_version", "Not a valid OS version")
+
+    def test_create_dep_enrollment_macos_min_version_error(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "de-macos_min_version": "abc",
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"], "macos_min_version", "Not a valid OS version")
+
     @patch("zentral.contrib.mdm.views.management.add_dep_profile")
     def test_create_dep_enrollment_post(self, add_dep_profile):
         def add_dep_profile_side_effect(dep_profile):
@@ -78,6 +114,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-virtual_server": dep_virtual_server.pk,
                                      "de-is_mdm_removable": "on",
                                      "de-is_supervised": "",
+                                     "de-ios_min_version": "12.3.1",
+                                     "de-Accessibility": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -90,6 +128,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(enrollment.name, name)
         self.assertEqual(enrollment.push_certificate, push_certificate)
         self.assertEqual(enrollment.scep_config, scep_config)
+        self.assertEqual(enrollment.ios_min_version, "12.3.1")
+        self.assertEqual(enrollment.skip_setup_items, ["Accessibility"])
         add_dep_profile.assert_called_once_with(enrollment)
 
     # view DEP enrollment
@@ -164,6 +204,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-virtual_server": enrollment.virtual_server.pk,
                                      "de-is_mdm_removable": "on",
                                      "de-is_supervised": "",
+                                     "de-AppleID": "on",
+                                     "de-macos_min_version": "13.3.1",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -174,6 +216,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, "with CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, new_name)
+        self.assertEqual(enrollment.macos_min_version, "13.3.1")
+        self.assertEqual(enrollment.skip_setup_items, ["AppleID"])
         add_dep_profile.assert_called_once_with(enrollment)
 
     # list DEP enrollments
