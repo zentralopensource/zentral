@@ -47,6 +47,8 @@
     <tr>
       <th>serial number</th>
       <th>UDID</th>
+      <th>model</th>
+      <th>name</th>
       <th>created at</th>
       <th>updated at</th>
     </tr>
@@ -70,6 +72,8 @@
       <td>
         <a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device.udid }}</a>
       </td>
+      <td>{{ enrolled_device.model|default:"-" }}</td>
+      <td>{{ enrolled_device.name|default:"-" }}</td>
       <td>{{ enrolled_device.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ enrolled_device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
     </tr>

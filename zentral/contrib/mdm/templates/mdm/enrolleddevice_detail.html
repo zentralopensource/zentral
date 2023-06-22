@@ -35,6 +35,14 @@
       </td>
     </tr>
     <tr>
+      <th>Model</th>
+      <td>{{ object.model|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th>Name</th>
+      <td>{{ object.name|default:"-" }}</td>
+    </tr>
+    <tr>
       <th>Platform</th>
       <td>
         {% with object.get_architecture_for_display as architecture %}

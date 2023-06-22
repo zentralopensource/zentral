@@ -138,6 +138,16 @@ class DeviceInformation(Command):
                 self.enrolled_device.platform = platform
         # Awaiting configuration
         self.enrolled_device.awaiting_configuration = query_responses.get("AwaitingConfiguration")
+        # name
+        try:
+            self.enrolled_device.name = ms_tree["system_info"]["computer_name"]
+        except KeyError:
+            logger.debug("Enrolled device %s: could not get device name.", self.enrolled_device.serial_number)
+        # model
+        try:
+            self.enrolled_device.model = ms_tree["system_info"]["hardware_model"]
+        except KeyError:
+            logger.debug("Enrolled device %s: could not get model.", self.enrolled_device.serial_number)
         # OS version
         os_version = query_responses.get("OSVersion")
         if os_version:

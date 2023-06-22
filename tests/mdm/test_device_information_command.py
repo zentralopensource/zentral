@@ -117,6 +117,43 @@ class DeviceInformationCommandTestCase(TestCase):
         self.assertEqual(enrolled_device.full_os_version, "13.0 (22A5321d)")
         self.assertTrue(enrolled_device.apple_silicon)
         self.assertTrue(enrolled_device.supervised)
+        self.assertEqual(enrolled_device.name, "Yolo")
+        self.assertEqual(enrolled_device.model, "VirtualMac2,1")
+
+    def test_process_acknowledged_response_missing_info(self):
+        start = datetime.utcnow()
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        self.assertIsNone(enrolled_device.device_information_updated_at)
+        m0 = MetaMachine(self.dep_enrollment_session.enrolled_device.serial_number)
+        self.assertEqual(len(m0.snapshots), 0)
+        cmd = DeviceInformation.create_for_device(
+            self.dep_enrollment_session.enrolled_device
+        )
+        device_information = copy.deepcopy(self.device_information)
+        for key in ("DeviceName", "ProductName", "Model", "SerialNumber", "OSVersion"):
+            device_information["QueryResponses"].pop(key)
+        cmd.process_response(device_information, self.dep_enrollment_session, self.mbu)
+        cmd.db_command.refresh_from_db()
+        self.assertIsNotNone(cmd.db_command.result)
+        self.assertIn("QueryResponses", cmd.response)
+        m = MetaMachine(enrolled_device.serial_number)
+        self.assertEqual(len(m.snapshots), 1)
+        ms = m.snapshots[0]
+        self.assertEqual(ms.source.module, "zentral.contrib.mdm")
+        enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.device_information["ActiveManagedUsers"],
+                         ["5DF1182E-C70B-4A3A-BADC-DD3E775040FB"])
+        self.assertTrue(enrolled_device.device_information_updated_at > start)
+        self.assertEqual(enrolled_device.platform, "macOS")
+        self.assertIsNone(enrolled_device.os_version)
+        self.assertIsNone(enrolled_device.os_version_extra)
+        self.assertEqual(enrolled_device.build_version, "22A5321d")
+        self.assertIsNone(enrolled_device.build_version_extra)
+        self.assertEqual(enrolled_device.full_os_version, "(22A5321d)")
+        self.assertTrue(enrolled_device.apple_silicon)
+        self.assertTrue(enrolled_device.supervised)
+        self.assertIsNone(enrolled_device.name)
+        self.assertIsNone(enrolled_device.model)
 
     def test_process_acknowledged_response_rsr(self):
         response = copy.deepcopy(self.device_information)

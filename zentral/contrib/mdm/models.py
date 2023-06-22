@@ -533,6 +533,8 @@ class EnrolledDevice(models.Model):
     udid = models.CharField(max_length=255, unique=True)
     enrollment_id = models.TextField(null=True)
     serial_number = models.TextField(db_index=True)
+    name = models.TextField(null=True)
+    model = models.TextField(null=True)
     platform = models.CharField(max_length=64, choices=Platform.choices)
     os_version = models.CharField(max_length=64, null=True)
     os_version_extra = models.CharField(max_length=32, null=True)
@@ -1309,6 +1311,13 @@ class DEPDevice(models.Model):
     serial_number = models.TextField(unique=True)
 
     # ABM info
+    # device
+    asset_tag = models.TextField(default="")
+    color = models.CharField(max_length=32, default="")
+    description = models.CharField(max_length=256, default="")
+    device_family = models.CharField(max_length=32, default="")
+    model = models.CharField(max_length=32, default="")
+    os = models.CharField(max_length=32, default="")
     # assignment
     device_assigned_by = models.EmailField(editable=False)
     device_assigned_date = models.DateTimeField(editable=False)

@@ -132,6 +132,15 @@ def serialize_dep_profile(dep_enrollment):
 def dep_device_update_dict(device):
     update_d = {}
 
+    # device attributes
+    for attr in ("asset_tag",
+                 "color",
+                 "description",
+                 "device_family",
+                 "model",
+                 "os"):
+        update_d[attr] = device.get(attr) or ""
+
     # standard nullable attibutes
     for attr in ("device_assigned_by",
                  "profile_status",
@@ -163,6 +172,7 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         fetch = False
         devices = client.sync_devices(dep_token.sync_cursor)
     found_serial_numbers = []
+
     for device in devices:
         serial_number = device["serial_number"]
         found_serial_numbers.append(serial_number)
