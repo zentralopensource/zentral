@@ -95,6 +95,29 @@ class PushCertificateForm(forms.ModelForm):
         return self.instance
 
 
+class DEPDeviceSearchForm(forms.Form):
+    q = forms.CharField(required=False,
+                        widget=forms.TextInput(attrs={"placeholder": "Serial number",
+                                                      "autofocus": True}))
+    server = forms.ModelChoiceField(queryset=DEPVirtualServer.objects.all(), required=False, empty_label="Server")
+
+    def get_queryset(self):
+        qs = DEPDevice.objects.all().order_by("-updated_at")
+        q = self.cleaned_data.get("q")
+        if q:
+            qs = qs.filter(Q(serial_number__icontains=q))
+        server = self.cleaned_data.get("server")
+        if server:
+            qs = qs.filter(virtual_server=server)
+        return qs
+
+    def get_redirect_to(self):
+        if self.has_changed():
+            qs = self.get_queryset()
+            if qs.count() == 1:
+                return qs.first()
+
+
 class EnrolledDeviceSearchForm(forms.Form):
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Serial number, UDID",

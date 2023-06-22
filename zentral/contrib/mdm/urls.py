@@ -256,6 +256,12 @@ urlpatterns = [
          name="download_enrolled_user_command_result"),
 
     # DEP devices
+    path('dep/devices/',
+         views.DEPDeviceListView.as_view(),
+         name="dep_devices"),
+    path('dep/devices/<int:pk>/',
+         views.DEPDeviceDetailView.as_view(),
+         name="dep_device"),
     path('dep/devices/<int:pk>/assign_profile/',
          views.AssignDEPDeviceProfileView.as_view(),
          name="assign_dep_device_profile"),

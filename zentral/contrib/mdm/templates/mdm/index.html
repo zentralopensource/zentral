@@ -15,7 +15,10 @@
 <p><a href="{% url 'mdm:enrollments' %}">Enrollments</a></p>
 {% endif %}
 {% if perms.mdm.view_enrolleddevice %}
-<p><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></p>
+<p><a href="{% url 'mdm:enrolled_devices' %}">Enrolled devices</a></p>
+{% endif %}
+{% if perms.mdm.view_depdevice %}
+<p><a href="{% url 'mdm:dep_devices' %}">DEP devices</a></p>
 {% endif %}
 {% if perms.mdm.view_artifact %}
 <p><a href="{% url 'mdm:artifacts' %}">Artifacts</a></p>
