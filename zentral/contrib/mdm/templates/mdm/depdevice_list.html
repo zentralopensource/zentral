@@ -21,7 +21,13 @@
     {{ form.q|bootstrap_inline }}
   </div>
   <div class="form-group">
+    {{ form.enrollment|bootstrap_inline }}
+  </div>
+  <div class="form-group">
     {{ form.server|bootstrap_inline }}
+  </div>
+  <div class="form-group">
+    {{ form.include_deleted|bootstrap_inline }}
   </div>
   <button type="submit" class="btn btn-default">Search</button>
 </form>
@@ -54,6 +60,9 @@
     <tr>
       <td>
         <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.serial_number }}</a>
+        {% if dep_device.is_deleted %}
+        <span class="label label-danger">DELETED</span>
+        {% endif %}
       </td>
       <td>{{ dep_device.description|default:"-" }}</td>
       <td>

@@ -15,7 +15,7 @@ from zentral.contrib.mdm.crypto import load_push_certificate_and_key
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         Blueprint, BlueprintArtifact,
                                         Channel, Platform,
-                                        DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
+                                        DEPDevice, DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
                                         EnterpriseApp, Location, LocationAsset,
                                         OTAEnrollment, OTAEnrollmentSession,
@@ -155,6 +155,51 @@ def force_dep_virtual_server(server_uuid=None):
         organization=dep_organization,
         token=dep_token
     )
+
+
+# DEP device
+
+
+def force_dep_device(
+    server=None,
+    device_family="iPhone",
+    op_type=DEPDevice.OP_TYPE_ADDED,
+    profile_status=DEPDevice.PROFILE_STATUS_EMPTY,
+    enrollment=None,
+    mbu=None,
+):
+    if server is None:
+        server = force_dep_virtual_server()
+    dep_device = DEPDevice(
+        virtual_server=server,
+        serial_number=get_random_string(10).upper(),
+        asset_tag=get_random_string(12),
+        device_assigned_by="support@zentral.com",
+        device_assigned_date=datetime.utcnow(),
+        last_op_type=op_type,
+        last_op_date=datetime.utcnow(),
+        profile_status=profile_status,
+    )
+    if device_family == "iPhone":
+        dep_device.color = "SPACE GRAY"
+        dep_device.description = "IPHONE X SPACE GRAY 64GB-ZDD"
+        dep_device.device_family = device_family
+        dep_device.model = "iPhone X"
+        dep_device.os = "iOS"
+    else:
+        dep_device.color = "MIDNIGHT"
+        dep_device.description = "MBA 13.6 MDN"
+        dep_device.device_family = "Mac"
+        dep_device.model = "MacBook Air"
+        dep_device.os = "OSX"
+    if profile_status != DEPDevice.PROFILE_STATUS_EMPTY:
+        if enrollment is None:
+            enrollment = force_dep_enrollment(mbu)
+        dep_device.enrollment = enrollment
+        dep_device.profile_uuid = dep_device.enrollment.uuid
+        dep_device.profile_assign_time = datetime.utcnow()
+    dep_device.save()
+    return dep_device
 
 
 # enrollments

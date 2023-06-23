@@ -224,7 +224,7 @@ def assign_dep_device_profile(dep_device, dep_profile):
             setattr(dep_device, attr, val)
         dep_device.save()
     else:
-        err_msg = "Could not assigne profile {} to device {}: {}".format(profile_uuid, serial_number, result)
+        err_msg = "Could not assign profile {} to device {}: {}".format(profile_uuid, serial_number, result)
         logger.error(err_msg)
         raise DEPClientError(err_msg)
 
