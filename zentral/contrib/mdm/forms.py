@@ -95,6 +95,38 @@ class PushCertificateForm(forms.ModelForm):
         return self.instance
 
 
+class DEPDeviceSearchForm(forms.Form):
+    q = forms.CharField(required=False,
+                        widget=forms.TextInput(attrs={"placeholder": "Serial number",
+                                                      "autofocus": True}))
+    include_deleted = forms.BooleanField(label="incl. deleted?", required=False)
+    enrollment = forms.ModelChoiceField(queryset=DEPEnrollment.objects.all(), required=False, empty_label="Enrollment")
+    server = forms.ModelChoiceField(queryset=DEPVirtualServer.objects.all(), required=False, empty_label="Server")
+
+    def get_queryset(self):
+        qs = DEPDevice.objects.all().order_by("-updated_at")
+        q = self.cleaned_data.get("q")
+        if q:
+            qs = qs.filter(Q(serial_number__icontains=q))
+        include_deleted = self.cleaned_data.get("include_deleted")
+        if not include_deleted:
+            qs = qs.exclude(last_op_type=DEPDevice.OP_TYPE_DELETED)
+        enrollment = self.cleaned_data.get("enrollment")
+        if enrollment:
+            qs = qs.filter(enrollment=enrollment)
+        server = self.cleaned_data.get("server")
+        if server:
+            qs = qs.filter(virtual_server=server)
+        qs = qs.order_by("-updated_at")
+        return qs
+
+    def get_redirect_to(self):
+        if self.has_changed():
+            qs = self.get_queryset()
+            if qs.count() == 1:
+                return qs.first()
+
+
 class EnrolledDeviceSearchForm(forms.Form):
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Serial number, UDID",

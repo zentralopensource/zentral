@@ -105,14 +105,12 @@
 
 <div class="row">
   <div class="col-md-12">
-    {% with object.depdevice_set.count as device_count %}
-
-    <h3>{{ device_count }} Device{{ device_count|pluralize }}</h3>
+    <h3>{{ devices_count }} Device{{ devices_count|pluralize }}</h3>
     {% if perms.mdm.change_depvirtualserver %}
     <a id="devices-sync-btn" href="{% url 'mdm_api:dep_virtual_server_sync_devices' object.id %}" class="btn btn-default task">Sync</a>
     {% endif %}
 
-    {% if device_count %}
+    {% if devices_count %}
     <table class="table">
       <thead>
         <th>Serial number</th>
@@ -124,9 +122,15 @@
         {% endif %}
       </thead>
       <tbody>
-        {% for device in object.depdevice_set.all %}
+        {% for device in latest_devices %}
         <tr id="{{ device.serial_number }}">
-          <td>{{ device }}{% if device.is_deleted %} <span class="label label-danger">DELETED</span>{% endif %}</td>
+          <td>
+            {% if perms.mdm.view_depdevice %}
+            <a href="{{ device.get_absolute_url }}">{{ device }}</a>
+            {% else %}
+            {{ device }}
+            {% endif %}
+            {% if device.is_deleted %} <span class="label label-danger">DELETED</span>{% endif %}</td>
           <td>
             {% if device.enrollment %}
             {% if perms.mdm.view_depenrollment %}
@@ -166,7 +170,9 @@
     </table>
     {% endif %}
 
-    {% endwith %}
+    {% if show_more_devices %}
+    <a href="{% url 'mdm:dep_devices' %}?server={{ object.pk }}">View all devices</a>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

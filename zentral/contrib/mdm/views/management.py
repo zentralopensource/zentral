@@ -19,7 +19,7 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
                                        CreateDEPEnrollmentForm, UpdateDEPEnrollmentForm,
                                        CreateAssetArtifactForm,
-                                       EnrolledDeviceSearchForm,
+                                       DEPDeviceSearchForm, EnrolledDeviceSearchForm,
                                        OTAEnrollmentForm,
                                        SCEPConfigForm,
                                        UpdateArtifactForm,
@@ -1129,7 +1129,7 @@ class DeleteSCEPConfigView(PermissionRequiredMixin, DeleteView):
         return obj
 
 
-# Devices
+# Enrolled devices
 
 
 class EnrolledDeviceListView(PermissionRequiredMixin, ListView):
@@ -1452,6 +1452,54 @@ class DownloadEnrolledUserCommandResultView(PermissionRequiredMixin, View):
 
 
 # DEP device
+
+
+class DEPDeviceListView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_depdevice"
+    model = DEPDevice
+    paginate_by = 20
+
+    def get(self, request, *args, **kwargs):
+        self.form = DEPDeviceSearchForm(request.GET)
+        self.form.is_valid()
+        redirect_to = self.form.get_redirect_to()
+        if redirect_to:
+            return redirect(redirect_to)
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return self.form.get_queryset()
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["form"] = self.form
+        bc = [(reverse("mdm:index"), "MDM")]
+        page = ctx["page_obj"]
+        reset_link = None
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            reset_link = "?{}".format(qd.urlencode())
+        if self.form.has_changed():
+            bc.extend([(reverse("mdm:dep_devices"), "DEP devices"),
+                       (reset_link, "Search")])
+        else:
+            bc.extend([(reset_link, "DEP devices")])
+        ctx["breadcrumbs"] = bc
+        return ctx
+
+
+class DEPDeviceDetailView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_depdevice"
+    model = DEPDevice
 
 
 class AssignDEPDeviceProfileView(PermissionRequiredMixin, UpdateView):

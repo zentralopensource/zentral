@@ -206,10 +206,14 @@ class ConnectDEPVirtualServerView(PermissionRequiredMixin, View):
 class DEPVirtualServerView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_depvirtualserver"
     model = DEPVirtualServer
+    latest_devices_count = 5
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["setup"] = True
+        devices_qs = self.object.depdevice_set.all().order_by("-updated_at")
+        context["devices_count"] = devices_qs.count()
+        context["show_more_devices"] = context["devices_count"] > self.latest_devices_count
+        context["latest_devices"] = devices_qs[:self.latest_devices_count]
         return context
 
 

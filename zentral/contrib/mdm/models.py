@@ -1345,11 +1345,14 @@ class DEPDevice(models.Model):
     def __str__(self):
         return self.serial_number
 
-    def get_absolute_url(self):
-        return "{}#{}".format(self.virtual_server.get_absolute_url(), self.serial_number)
-
     def is_deleted(self):
         return self.last_op_type == self.OP_TYPE_DELETED
+
+    def get_absolute_url(self):
+        return reverse("mdm:dep_device", args=(self.pk,))
+
+    def get_urlsafe_serial_number(self):
+        return MetaMachine(self.serial_number).get_urlsafe_serial_number()
 
 
 class DEPEnrollmentSessionManager(models.Manager):

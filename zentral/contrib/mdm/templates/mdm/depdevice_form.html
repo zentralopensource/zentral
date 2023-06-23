@@ -5,9 +5,9 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
-  <li><a href="{{ object.virtual_server.get_absolute_url }}">{{ object.virtual_server }}</a></li>
-  <li class="active">{{ object }} DEP profile</li>
+  <li><a href="{% url 'mdm:dep_devices' %}">DEP devices</a></li>
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="active">Assign DEP profile</li>
 </ol>
 
 <h3>DEP device {{ object }}</h3>
