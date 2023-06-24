@@ -9,7 +9,7 @@
   <li class="active">{{ object }}</li>
 </ol>
 
-<h2>DEP virtual server <i>{{ object }}</i></h2>
+<h3>DEP virtual server <i>{{ object }}</i></h3>
 
 <div class="row">
   <div class="col-md-12">
@@ -18,6 +18,21 @@
       <dd>{{ object.name }}</dd>
       <dt>uuid</dt>
       <dd>{{ object.uuid }}</dd>
+      <dt>default enrollment</dt>
+      <dd>
+        {% if object.default_enrollment %}
+        {% if perms.mdm.view_depenrollment %}
+        <a href="{{ object.default_enrollment.get_absolute_url }}">{{ object.default_enrollment }}</a>
+        {% else %}
+        {{ object.default_enrollment }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+        {% if perms.mdm.change_depvirtualserver %}
+        <a href="{% url 'mdm:update_dep_virtual_server' object.pk %}" class="btn btn-primary btn-xs">Change</a>
+        {% endif %}
+      </dd>
     </dl>
     <dl class="dl-horizontal">
       <dt class="small" style="opacity:0.5">Created at</dt>
@@ -50,8 +65,9 @@
   {% with object.token as token %}
   <div class="col-md-6">
     <h4>DEP Token</h3>
-    {% if perms.mdm.change_change_depvirtualserver and token %}
+    {% if perms.mdm.change_depvirtualserver and token %}
     <a href="{% url 'mdm:renew_dep_token' token.id %}" class="btn btn-default">Renew</a>
+    {% endif %}
     <dl class="dl-horizontal">
       <dt>expiry</dt>
       <dd>
@@ -62,7 +78,6 @@
         {% endif %}
       </dd>
     </dl>
-    {% endif %}
   </div>
   {% endwith %}
 </div>
@@ -86,7 +101,11 @@
         {% for enrollment in object.depenrollment_set.all %}
         <tr>
           <td>
+            {% if perms.mdm.view_depenrollment %}
             <a href="{{ enrollment.get_absolute_url }}">{{ enrollment }}</a>
+            {% else %}
+            {{ enrollment }}
+            {% endif %}
             <br>{{ enrollment.uuid }}
           </td>
           <td>{{ enrollment.enrollment_secret.meta_business_unit }}</td>

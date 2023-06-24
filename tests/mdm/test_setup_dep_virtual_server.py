@@ -14,7 +14,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
 from zentral.contrib.mdm.dep import add_dep_token_certificate
 from zentral.contrib.mdm.models import DEPToken, DEPVirtualServer
-from .utils import force_dep_virtual_server
+from .utils import force_dep_enrollment, force_dep_virtual_server
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -92,6 +92,83 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:dep_virtual_servers"))
         self.assertTemplateUsed(response, "mdm/depvirtualserver_list.html")
         self.assertContains(response, virtual_server.name)
+
+    # DEP virtual server
+
+    def test_dep_virtual_server_redirect(self):
+        virtual_server = force_dep_virtual_server()
+        self._login_redirect(virtual_server.get_absolute_url())
+
+    def test_dep_virtual_server_permission_denied(self):
+        virtual_server = force_dep_virtual_server()
+        self._login()
+        response = self.client.get(virtual_server.get_absolute_url())
+        self.assertEqual(response.status_code, 403)
+
+    def test_dep_virtual_server_no_links(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        virtual_server = enrollment.virtual_server
+        virtual_server.default_enrollment = enrollment
+        virtual_server.save()
+        self._login("mdm.view_depvirtualserver")
+        response = self.client.get(virtual_server.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depvirtualserver_detail.html")
+        self.assertContains(response, enrollment.name)
+        self.assertNotContains(response, enrollment.get_absolute_url())
+        self.assertNotContains(response, reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)))
+        self.assertNotContains(response, reverse("mdm:renew_dep_token", args=(virtual_server.token.pk,)))
+
+    def test_dep_virtual_server_links(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        virtual_server = enrollment.virtual_server
+        virtual_server.default_enrollment = enrollment
+        virtual_server.save()
+        self._login("mdm.view_depvirtualserver", "mdm.change_depvirtualserver", "mdm.view_depenrollment")
+        response = self.client.get(virtual_server.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depvirtualserver_detail.html")
+        self.assertContains(response, enrollment.name)
+        self.assertContains(response, enrollment.get_absolute_url())
+        self.assertContains(response, reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)))
+        self.assertContains(response, reverse("mdm:renew_dep_token", args=(virtual_server.token.pk,)))
+
+    # update DEP virtual server
+
+    def test_update_dep_virtual_server_redirect(self):
+        virtual_server = force_dep_virtual_server()
+        self._login_redirect(reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)))
+
+    def test_update_dep_virtual_server_permission_denied(self):
+        virtual_server = force_dep_virtual_server()
+        self._login()
+        response = self.client.get(reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_dep_virtual_server_get(self):
+        enrollment1 = force_dep_enrollment(self.mbu)
+        virtual_server = enrollment1.virtual_server
+        enrollment2 = force_dep_enrollment(self.mbu)
+        self._login("mdm.change_depvirtualserver")
+        response = self.client.get(reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depvirtualserver_form.html")
+        self.assertContains(response, enrollment1.name)
+        self.assertNotContains(response, enrollment2.name)
+
+    def test_update_dep_virtual_server_post(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        virtual_server = enrollment.virtual_server
+        self.assertIsNone(virtual_server.default_enrollment)
+        self._login("mdm.change_depvirtualserver", "mdm.view_depvirtualserver")
+        response = self.client.post(reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)),
+                                    {"default_enrollment": enrollment.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depvirtualserver_detail.html")
+        self.assertContains(response, enrollment.name)
+        virtual_server.refresh_from_db()
+        self.assertEqual(virtual_server.default_enrollment, enrollment)
 
     # connect DEP virtual server
 

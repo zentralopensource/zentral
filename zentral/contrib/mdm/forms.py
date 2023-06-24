@@ -272,6 +272,18 @@ class EncryptedDEPTokenForm(forms.ModelForm):
         return dep_token
 
 
+class UpdateDEPVirtualServerForm(forms.ModelForm):
+    class Meta:
+        model = DEPVirtualServer
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["default_enrollment"].queryset = self.fields["default_enrollment"].queryset.filter(
+            virtual_server=self.instance
+        )
+
+
 class CreateDEPEnrollmentForm(forms.ModelForm):
     admin_password = forms.CharField(required=False, widget=forms.PasswordInput)
 

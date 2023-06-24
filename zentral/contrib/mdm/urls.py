@@ -47,6 +47,9 @@ urlpatterns = [
     path('dep/virtual-servers/<int:pk>/',
          views.DEPVirtualServerView.as_view(),
          name="dep_virtual_server"),
+    path('dep/virtual-servers/<int:pk>/update/',
+         views.UpdateDEPVirtualServerView.as_view(),
+         name="update_dep_virtual_server"),
 
     # Locations
     path('locations/', views.LocationsView.as_view(),
