@@ -1198,6 +1198,8 @@ class DEPVirtualServer(models.Model):
     token = models.OneToOneField(DEPToken, on_delete=models.SET_NULL,
                                  editable=False, null=True, related_name="virtual_server")
 
+    default_enrollment = models.ForeignKey("mdm.DEPEnrollment", on_delete=models.SET_NULL, null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True, editable=False)
 

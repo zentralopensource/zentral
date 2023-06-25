@@ -125,6 +125,9 @@
         {% else %}
         {{ virtual_server }}
         {% endif %}
+        {% if virtual_server.default_enrollment == object %}
+        <span class="label label-success">Default</span>
+        {% endif %}
       </td>
     </tr>
     <tr>

@@ -7,7 +7,8 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.mdm.dep import add_dep_token_certificate
-from zentral.contrib.mdm.forms import EncryptedDEPTokenForm, PushCertificateForm, LocationForm
+from zentral.contrib.mdm.forms import (EncryptedDEPTokenForm, PushCertificateForm, LocationForm,
+                                       UpdateDEPVirtualServerForm)
 from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServer, Location
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_root_ca_configuration_profile)
@@ -215,6 +216,12 @@ class DEPVirtualServerView(PermissionRequiredMixin, DetailView):
         context["show_more_devices"] = context["devices_count"] > self.latest_devices_count
         context["latest_devices"] = devices_qs[:self.latest_devices_count]
         return context
+
+
+class UpdateDEPVirtualServerView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_depvirtualserver"
+    model = DEPVirtualServer
+    form_class = UpdateDEPVirtualServerForm
 
 
 # Locations

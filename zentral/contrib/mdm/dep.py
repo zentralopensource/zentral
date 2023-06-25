@@ -2,6 +2,7 @@ import base64
 import datetime
 import json
 import logging
+import uuid
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -13,7 +14,7 @@ from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
 from .crypto import decrypt_cms_payload
 from .dep_client import DEPClient, DEPClientError
-from .models import DEPDevice
+from .models import DEPDevice, DEPEnrollment
 
 
 logger = logging.getLogger("zentral.contrib.mdm.dep")
@@ -74,7 +75,7 @@ def decrypt_dep_token(dep_token, payload):
 
 
 def serialize_dep_profile(dep_enrollment):
-    payload = {"profile_name": dep_enrollment.name,
+    payload = {"profile_name": dep_enrollment.name[:125],
                "url": "{}{}".format(
                    settings["api"]["tls_hostname"],
                    reverse("mdm_public:dep_enroll", args=(dep_enrollment.enrollment_secret.secret,))
@@ -129,7 +130,9 @@ def serialize_dep_profile(dep_enrollment):
     return payload
 
 
-def dep_device_update_dict(device):
+def dep_device_update_dict(device, known_enrollments=None):
+    if known_enrollments is None:
+        known_enrollments = {}
     update_d = {}
 
     # device attributes
@@ -146,9 +149,22 @@ def dep_device_update_dict(device):
                  "profile_status",
                  "profile_uuid"):
         try:
-            update_d[attr] = device[attr]
+            val = device[attr]
         except KeyError:
             pass
+        else:
+            if attr == "profile_uuid":
+                val = uuid.UUID(val)
+                enrollment = None
+                try:
+                    enrollment = known_enrollments[val]
+                except KeyError:
+                    try:
+                        enrollment = DEPEnrollment.objects.get(uuid=val)
+                    except DEPEnrollment.DoesNotExist:
+                        logger.error("Unknown DEP profile %s", val)
+                update_d["enrollment"] = enrollment
+            update_d[attr] = val
 
     # datetime nullable attributes
     for attr in ("device_assigned_date",
@@ -162,7 +178,7 @@ def dep_device_update_dict(device):
     return update_d
 
 
-def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
+def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, assign_default_profile=True):
     dep_token = dep_virtual_server.token
     client = DEPClient.from_dep_token(dep_token)
     if force_fetch or not dep_token.sync_cursor:
@@ -171,12 +187,20 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
     else:
         fetch = False
         devices = client.sync_devices(dep_token.sync_cursor)
+
+    known_enrollments = {e.uuid: e for e in dep_virtual_server.depenrollment_set.all()}
+
     found_serial_numbers = []
+    unassigned_serial_numbers = []
 
     for device in devices:
         serial_number = device["serial_number"]
         found_serial_numbers.append(serial_number)
         defaults = {"virtual_server": dep_virtual_server}
+
+        # default assignment
+        if assign_default_profile and not device.get("profile_uuid") and dep_virtual_server.default_enrollment:
+            unassigned_serial_numbers.append(serial_number)
 
         # sync
         if not fetch:
@@ -195,7 +219,7 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
                 defaults["last_op_type"] = op_type
                 defaults["last_op_date"] = op_date
 
-        defaults.update(dep_device_update_dict(device))
+        defaults.update(dep_device_update_dict(device, known_enrollments))
 
         yield DEPDevice.objects.update_or_create(serial_number=serial_number, defaults=defaults)
     dep_token.sync_cursor = devices.cursor
@@ -206,13 +230,21 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         (DEPDevice.objects.filter(virtual_server=dep_virtual_server)
                           .exclude(serial_number__in=found_serial_numbers)
                           .update(last_op_type=DEPDevice.OP_TYPE_DELETED))
+    if unassigned_serial_numbers:
+        # assign the default profile
+        response = client.assign_profile(dep_virtual_server.default_enrollment.uuid, unassigned_serial_numbers)
+        for serial_number, result in response.get("devices").items():
+            if result != "SUCCESS":
+                logger.error("Could not assign profile %s to device %s: %s",
+                             dep_virtual_server.default_enrollment.uuid, serial_number, result)
+        # fetch the updated records, avoid an infinite recursion!
+        yield from sync_dep_virtual_server_devices(dep_virtual_server, assign_default_profile=False)
 
 
 def assign_dep_device_profile(dep_device, dep_profile):
     dep_client = DEPClient.from_dep_virtual_server(dep_device.virtual_server)
     serial_number = dep_device.serial_number
-    profile_uuid = str(dep_profile.uuid)
-    response = dep_client.assign_profile(profile_uuid, [serial_number])
+    response = dep_client.assign_profile(dep_profile.uuid, [serial_number])
     try:
         result = response["devices"][serial_number]
     except KeyError:
@@ -224,7 +256,7 @@ def assign_dep_device_profile(dep_device, dep_profile):
             setattr(dep_device, attr, val)
         dep_device.save()
     else:
-        err_msg = "Could not assign profile {} to device {}: {}".format(profile_uuid, serial_number, result)
+        err_msg = f"Could not assign profile {dep_profile.uuid} to device {serial_number}: {result}"
         logger.error(err_msg)
         raise DEPClientError(err_msg)
 
@@ -247,23 +279,22 @@ def add_dep_profile(dep_profile):
         elif result == "FAILED":
             failed_devices.append(serial_number)
         else:
-            raise DEPClientError("Unknown result {} {}".format(serial_number, result))
+            raise DEPClientError(f"Unknown result {serial_number}: {result}")
 
     if failed_devices:
         # TODO: implement retry
         raise DEPClientError("Failed devices!")
 
     # update dep devices
-    # TODO: Performance: this could concern a LOT of devices
     if success_devices:
-        for serial_number, updated_device in dep_client.get_devices(success_devices).items():
-            dep_device = DEPDevice.objects.get(serial_number=serial_number)
-            for attr, val in dep_device_update_dict(updated_device).items():
-                setattr(dep_device, attr, val)
-            dep_device.save()
+        # To avoid some performance issues, only update the devices in the database.
+        # The next sync will fix the differences.
+        (DEPDevice.objects.filter(serial_number__in=success_devices)
+                          .update(profile_uuid=dep_profile.uuid,
+                                  profile_assign_time=datetime.datetime.utcnow(),
+                                  enrollment=dep_profile))
 
     # mark unaccessible devices as deleted
-    # TODO: better?
     if not_accessible_devices:
         (DEPDevice.objects.filter(serial_number__in=not_accessible_devices)
                           .update(last_op_type=DEPDevice.OP_TYPE_DELETED))
@@ -275,7 +306,7 @@ def refresh_dep_device(dep_device):
     if dep_device.serial_number not in devices:
         dep_device.last_op_type = DEPDevice.OP_TYPE_DELETED
         dep_device.save()
-        raise DEPClientError("Could not find device.")
+        raise DEPClientError("Could not find the device.")
     else:
         for attr, val in dep_device_update_dict(devices[dep_device.serial_number]).items():
             setattr(dep_device, attr, val)
