@@ -1,6 +1,6 @@
 from functools import reduce
 import operator
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import uuid
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -9,7 +9,9 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from .utils import force_dep_enrollment, force_dep_virtual_server, force_push_certificate, force_scep_config
+from zentral.contrib.mdm.models import DEPDevice
+from .utils import (force_dep_enrollment, force_dep_device, force_dep_virtual_server,
+                    force_push_certificate, force_realm, force_scep_config)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -95,12 +97,15 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
         self.assertFormError(response.context["dep_enrollment_form"], "macos_min_version", "Not a valid OS version")
 
-    @patch("zentral.contrib.mdm.views.management.add_dep_profile")
-    def test_create_dep_enrollment_post(self, add_dep_profile):
-        def add_dep_profile_side_effect(dep_profile):
-            dep_profile.uuid = uuid.uuid4()
-            dep_profile.save()
-        add_dep_profile.side_effect = add_dep_profile_side_effect
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_create_dep_enrollment_post(self, from_dep_virtual_server):
+        profile_uuid = uuid.uuid4()
+        client = Mock()
+        client.add_profile.return_value = {
+            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
+            "devices": {}
+        }
+        from_dep_virtual_server.return_value = client
         self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         push_certificate = force_push_certificate()
@@ -130,7 +135,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(enrollment.scep_config, scep_config)
         self.assertEqual(enrollment.ios_min_version, "12.3.1")
         self.assertEqual(enrollment.skip_setup_items, ["Accessibility"])
-        add_dep_profile.assert_called_once_with(enrollment)
+        client.add_profile.assert_called_once()
+        self.assertEqual(enrollment.uuid, profile_uuid)
 
     # view DEP enrollment
 
@@ -188,16 +194,29 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
         self.assertContains(response, f"[DEP] {enrollment.name}")
 
-    @patch("zentral.contrib.mdm.views.management.add_dep_profile")
-    def test_update_dep_enrollment_post(self, add_dep_profile):
-        def add_dep_profile_side_effect(dep_profile):
-            dep_profile.save()
-        add_dep_profile.side_effect = add_dep_profile_side_effect
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_update_dep_enrollment_post(self, from_dep_virtual_server):
+        realm = force_realm()
         enrollment = force_dep_enrollment(self.mbu)
+        device1 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=enrollment)
+        self.assertFalse(device1.is_deleted())
+        device2 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=enrollment)
+        self.assertFalse(device2.is_deleted())
+        profile_uuid = uuid.uuid4()
+        client = Mock()
+        client.add_profile.return_value = {
+            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
+            "devices": {
+                device1.serial_number: "SUCCESS",
+                device2.serial_number: "NOT_ACCESSIBLE",
+            }
+        }
+        from_dep_virtual_server.return_value = client
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
         new_name = get_random_string(12)
         response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                     {"de-name": new_name,
+                                     "de-realm": realm.pk,
                                      "de-scep_config": enrollment.scep_config.pk,
                                      "de-scep_verification": "on",
                                      "de-push_certificate": enrollment.push_certificate.pk,
@@ -205,20 +224,29 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-is_mdm_removable": "on",
                                      "de-is_supervised": "",
                                      "de-AppleID": "on",
+                                     "de-language": "de",
+                                     "de-include_tls_certificates": "on",
                                      "de-macos_min_version": "13.3.1",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
         self.assertContains(response, new_name)
+        self.assertContains(response, realm.name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertContains(response, enrollment.scep_config.name)
         self.assertContains(response, "with CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, new_name)
+        self.assertEqual(enrollment.realm, realm)
         self.assertEqual(enrollment.macos_min_version, "13.3.1")
         self.assertEqual(enrollment.skip_setup_items, ["AppleID"])
-        add_dep_profile.assert_called_once_with(enrollment)
+        client.add_profile.assert_called_once()
+        self.assertEqual(enrollment.uuid, profile_uuid)
+        device1.refresh_from_db()
+        self.assertFalse(device1.is_deleted())
+        device2.refresh_from_db()
+        self.assertTrue(device2.is_deleted())
 
     # list DEP enrollments
 

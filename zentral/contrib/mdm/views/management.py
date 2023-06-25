@@ -1531,5 +1531,5 @@ class RefreshDEPDeviceView(PermissionRequiredMixin, View):
         except DEPClientError as error:
             messages.error(request, str(error))
         else:
-            messages.info(request, "DEP device refreshed")
+            messages.info(request, "DEP device refreshed.")
         return redirect(dep_device)

@@ -154,7 +154,7 @@ class DEPDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, device2.serial_number)
         self.assertContains(response, device3.serial_number)
 
-    # test enrolled device
+    # test DEP device
 
     def test_dep_device_redirect(self):
         device = force_dep_device()
@@ -255,7 +255,7 @@ class DEPDeviceManagementViewsTestCase(TestCase):
         self.assertEqual(device.profile_uuid, enrollment.uuid)
         self.assertEqual(device.profile_assign_time, datetime(2023, 6, 17, 15, 41, 6))
         from_dep_virtual_server.assert_called_once_with(device.virtual_server)
-        client.assign_profile.assert_called_once_with(str(enrollment.uuid), [device.serial_number])
+        client.assign_profile.assert_called_once_with(enrollment.uuid, [device.serial_number])
         client.get_devices.assert_called_once_with([device.serial_number])
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
@@ -280,4 +280,59 @@ class DEPDeviceManagementViewsTestCase(TestCase):
             f"Could not assign profile {enrollment.uuid} to device {device.serial_number}: YOLO"
         )
         from_dep_virtual_server.assert_called_once_with(device.virtual_server)
-        client.assign_profile.assert_called_once_with(str(enrollment.uuid), [device.serial_number])
+        client.assign_profile.assert_called_once_with(enrollment.uuid, [device.serial_number])
+
+    # test refresh
+
+    def test_refresh_login_redirect(self):
+        device = force_dep_device()
+        self._login_redirect(reverse("mdm:refresh_dep_device", args=(device.pk,)))
+
+    def test_refresh_permission_denied(self):
+        device = force_dep_device()
+        self._login()
+        response = self.client.post(reverse("mdm:refresh_dep_device", args=(device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_refresh_deleted(self, from_dep_virtual_server):
+        client = Mock()
+        client.get_devices.return_value = {"devices": {}}
+        from_dep_virtual_server.return_value = client
+        device = force_dep_device()
+        self.assertFalse(device.is_deleted())
+        self._login("mdm.change_depdevice", "mdm.view_depdevice")
+        response = self.client.post(reverse("mdm:refresh_dep_device", args=(device.pk,)), follow=True)
+        self.assertContains(response, "Could not find the device.")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depdevice_detail.html")
+        device.refresh_from_db()
+        self.assertTrue(device.is_deleted())
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_refresh(self, from_dep_virtual_server):
+        device = force_dep_device()
+        client = Mock()
+        client.get_devices.return_value = {
+            device.serial_number: {
+                'color': 'SPACE GRAY',
+                'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+                'device_assigned_by': 'support@zentral.com',
+                'device_assigned_date': '2023-01-10T19:09:22Z',
+                'device_family': 'iPhone',
+                'model': 'iPhone 14333',
+                'os': 'iOS',
+                'profile_status': 'empty',
+                'serial_number': device.serial_number
+            }
+        }
+        from_dep_virtual_server.return_value = client
+        self.assertFalse(device.is_deleted())
+        self._login("mdm.change_depdevice", "mdm.view_depdevice")
+        response = self.client.post(reverse("mdm:refresh_dep_device", args=(device.pk,)), follow=True)
+        self.assertContains(response, "DEP device refreshed.")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depdevice_detail.html")
+        device.refresh_from_db()
+        self.assertFalse(device.is_deleted())
+        self.assertEqual(device.model, "iPhone 14333")
