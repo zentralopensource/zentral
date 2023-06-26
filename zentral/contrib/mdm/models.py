@@ -1370,15 +1370,11 @@ class DEPEnrollmentSessionManager(models.Manager):
         # verified only once with the SCEP payload
         quota = 1
 
-        # expires 60 minutes from now, plenty enough for the device to contact the SCEP server
-        expired_at = timezone.now() + timedelta(hours=1)
-
         new_es = EnrollmentSecret(
             meta_business_unit=meta_business_unit,
             serial_numbers=[serial_number],
             udids=[udid],
             quota=quota,
-            expired_at=expired_at,
         )
         new_es.save(secret_length=56)  # CN max 64 - $ separator - prefix MDM$DEP
         new_es.tags.set(tags)
