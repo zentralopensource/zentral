@@ -161,10 +161,6 @@ class DEPClient(object):
     def add_profile(self, profile):
         return self.send_request('profile', 'POST', json=profile)
 
-    def remove_profile(self, serial_numbers):
-        body = {"devices": serial_numbers}
-        return self.send_request('profile/devices', 'DELETE', json=body)
-
     def assign_profile(self, profile_uuid, serial_numbers):
         body = {"devices": serial_numbers,
                 "profile_uuid": self.prepare_uuid_for_request(profile_uuid)}

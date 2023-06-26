@@ -133,7 +133,10 @@ def serialize_dep_profile(dep_enrollment):
 def dep_device_update_dict(device, known_enrollments=None):
     if known_enrollments is None:
         known_enrollments = {}
-    update_d = {}
+    update_d = {"enrollment": None,
+                "profile_uuid": None,
+                "profile_assign_time": None,
+                "profile_push_time": None}
 
     # device attributes
     for attr in ("asset_tag",
@@ -170,10 +173,13 @@ def dep_device_update_dict(device, known_enrollments=None):
     for attr in ("device_assigned_date",
                  "profile_assign_time",
                  "profile_push_time"):
-        val = device.get(attr, None)
-        if val:
+        try:
+            val = device[attr]
+        except KeyError:
+            pass
+        else:
             val = parser.parse(val)
-        update_d[attr] = val
+            update_d[attr] = val
 
     return update_d
 
@@ -199,7 +205,11 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, assig
         defaults = {"virtual_server": dep_virtual_server}
 
         # default assignment
-        if assign_default_profile and not device.get("profile_uuid") and dep_virtual_server.default_enrollment:
+        if (
+            assign_default_profile
+            and (not device.get("profile_uuid") or device.get("profile_status") == "removed")
+            and dep_virtual_server.default_enrollment
+        ):
             unassigned_serial_numbers.append(serial_number)
 
         # sync
