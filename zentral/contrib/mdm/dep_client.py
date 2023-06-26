@@ -165,8 +165,3 @@ class DEPClient(object):
         body = {"devices": serial_numbers,
                 "profile_uuid": self.prepare_uuid_for_request(profile_uuid)}
         return self.send_request('profile/devices', 'POST', json=body)
-
-    def remove_profile(self, profile_uuid, serial_numbers):
-        body = {"devices": serial_numbers,
-                "profile_uuid": self.prepare_uuid_for_request(profile_uuid)}
-        return self.send_request('profile/devices', 'DELETE', json=body)

@@ -271,26 +271,6 @@ def assign_dep_device_profile(dep_device, dep_profile):
         raise DEPClientError(err_msg)
 
 
-def remove_dep_device_profile(dep_device, dep_profile):
-    dep_client = DEPClient.from_dep_virtual_server(dep_device.virtual_server)
-    serial_number = dep_device.serial_number
-    response = dep_client.remove_profile(dep_profile.uuid, [serial_number])
-    try:
-        result = response["devices"][serial_number]
-    except KeyError:
-        raise DEPClientError("Unknown client response structure")
-    if result == "SUCCESS":
-        # fetch a fresh device record and apply the updates
-        updated_device = dep_client.get_devices([serial_number])[serial_number]
-        for attr, val in dep_device_update_dict(updated_device).items():
-            setattr(dep_device, attr, val)
-        dep_device.save()
-    else:
-        err_msg = f"Could not remove profile {dep_profile.uuid} from device {serial_number}: {result}"
-        logger.error(err_msg)
-        raise DEPClientError(err_msg)
-
-
 def add_dep_profile(dep_profile):
     dep_client = DEPClient.from_dep_virtual_server(dep_profile.virtual_server)
     profile_payload = serialize_dep_profile(dep_profile)
