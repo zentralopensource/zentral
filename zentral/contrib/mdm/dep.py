@@ -184,7 +184,7 @@ def dep_device_update_dict(device, known_enrollments=None):
     return update_d
 
 
-def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, assign_default_profile=True):
+def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
     dep_token = dep_virtual_server.token
     client = DEPClient.from_dep_token(dep_token)
     if force_fetch or not dep_token.sync_cursor:
@@ -206,8 +206,7 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, assig
 
         # default assignment
         if (
-            assign_default_profile
-            and (not device.get("profile_uuid") or device.get("profile_status") == "removed")
+            (not device.get("profile_uuid") or device.get("profile_status") == "removed")
             and dep_virtual_server.default_enrollment
         ):
             unassigned_serial_numbers.append(serial_number)
@@ -241,14 +240,23 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, assig
                           .exclude(serial_number__in=found_serial_numbers)
                           .update(last_op_type=DEPDevice.OP_TYPE_DELETED))
     if unassigned_serial_numbers:
+        default_enrollment = dep_virtual_server.default_enrollment
         # assign the default profile
-        response = client.assign_profile(dep_virtual_server.default_enrollment.uuid, unassigned_serial_numbers)
+        response = client.assign_profile(default_enrollment.uuid, unassigned_serial_numbers)
+        success_devices = []
         for serial_number, result in response.get("devices").items():
-            if result != "SUCCESS":
+            if result == "SUCCESS":
+                success_devices.append(serial_number)
+            else:
                 logger.error("Could not assign profile %s to device %s: %s",
-                             dep_virtual_server.default_enrollment.uuid, serial_number, result)
-        # fetch the updated records, avoid an infinite recursion!
-        yield from sync_dep_virtual_server_devices(dep_virtual_server, assign_default_profile=False)
+                             default_enrollment.uuid, serial_number, result)
+        if success_devices:
+            # To avoid some performance issues, only update the devices in the database.
+            # The next sync will fix the differences.
+            (DEPDevice.objects.filter(serial_number__in=success_devices)
+                              .update(profile_uuid=default_enrollment.uuid,
+                                      profile_assign_time=datetime.datetime.utcnow(),
+                                      enrollment=default_enrollment))
 
 
 def assign_dep_device_profile(dep_device, dep_profile):

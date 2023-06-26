@@ -118,15 +118,13 @@ class TestDEPEnrollment(TestCase):
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
     def test_sync_dep_virtual_server_devices_assign_default_profile(self, from_dep_token):
         serial_number = get_random_string(10).upper()
-        sync_cursor = get_random_string(12)
-        new_sync_cursor = get_random_string(12)
 
         enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
         server = enrollment.virtual_server
         server.default_enrollment = enrollment
         server.save()
 
-        def device_iterator1():
+        def device_iterator():
             yield from [
                 {'color': 'SPACE GRAY',
                  'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
@@ -140,42 +138,19 @@ class TestDEPEnrollment(TestCase):
                  'profile_status': 'empty',
                  'serial_number': serial_number}
             ]
-            return sync_cursor
-
-        def device_iterator2():
-            yield from [
-                {'color': 'SPACE GRAY',
-                 'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
-                 'device_assigned_by': 'support@zentral.com',
-                 'device_assigned_date': '2023-01-10T19:09:22Z',
-                 'device_family': 'iPhone',
-                 'model': 'iPhone X',
-                 'op_date': '2023-06-17T15:41:06Z',
-                 'op_type': 'modified',
-                 'os': 'iOS',
-                 'profile_assign_time': '2023-01-10T19:07:41Z',
-                 'profile_push_time': '2023-06-17T15:41:06Z',
-                 'profile_status': 'pushed',
-                 'profile_uuid': str(server.default_enrollment.uuid).upper().replace("-", ""),
-                 'serial_number': serial_number}
-            ]
-            return new_sync_cursor
+            return get_random_string(12)
 
         client = Mock()
-        client.fetch_devices.return_value = CursorIterator(device_iterator1())
+        client.fetch_devices.return_value = CursorIterator(device_iterator())
         client.assign_profile.return_value = {"devices": {serial_number: "SUCCESS"}}
-        client.sync_devices.return_value = CursorIterator(device_iterator2())
         from_dep_token.return_value = client
         dep_devices = list(sync_dep_virtual_server_devices(server))
         client.fetch_devices.assert_called_once_with()
         client.assign_profile.assert_called_once_with(server.default_enrollment.uuid, [serial_number])
-        client.sync_devices.assert_called_once_with(sync_cursor)
-        (d1, r1), (d2, r2) = dep_devices
-        self.assertEqual(d1, d2)
-        self.assertTrue(r1)  # created
-        self.assertFalse(r2)  # not created
-        self.assertIsNone(d1.profile_uuid)
-        self.assertIsNone(d1.enrollment)
-        d2.refresh_from_db()
-        self.assertEqual(d2.profile_uuid, server.default_enrollment.uuid)
-        self.assertEqual(d2.enrollment, server.default_enrollment)
+        self.assertEqual(len(dep_devices), 1)
+        device, created = dep_devices[0]
+        self.assertIsNone(device.profile_uuid)
+        self.assertIsNone(device.enrollment)
+        device.refresh_from_db()
+        self.assertEqual(device.profile_uuid, server.default_enrollment.uuid)
+        self.assertEqual(device.enrollment, server.default_enrollment)
