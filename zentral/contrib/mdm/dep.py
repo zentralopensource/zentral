@@ -133,7 +133,10 @@ def serialize_dep_profile(dep_enrollment):
 def dep_device_update_dict(device, known_enrollments=None):
     if known_enrollments is None:
         known_enrollments = {}
-    update_d = {}
+    update_d = {"enrollment": None,
+                "profile_uuid": None,
+                "profile_assign_time": None,
+                "profile_push_time": None}
 
     # device attributes
     for attr in ("asset_tag",
@@ -170,10 +173,13 @@ def dep_device_update_dict(device, known_enrollments=None):
     for attr in ("device_assigned_date",
                  "profile_assign_time",
                  "profile_push_time"):
-        val = device.get(attr, None)
-        if val:
+        try:
+            val = device[attr]
+        except KeyError:
+            pass
+        else:
             val = parser.parse(val)
-        update_d[attr] = val
+            update_d[attr] = val
 
     return update_d
 
@@ -199,7 +205,11 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, assig
         defaults = {"virtual_server": dep_virtual_server}
 
         # default assignment
-        if assign_default_profile and not device.get("profile_uuid") and dep_virtual_server.default_enrollment:
+        if (
+            assign_default_profile
+            and (not device.get("profile_uuid") or device.get("profile_status") == "removed")
+            and dep_virtual_server.default_enrollment
+        ):
             unassigned_serial_numbers.append(serial_number)
 
         # sync
@@ -257,6 +267,26 @@ def assign_dep_device_profile(dep_device, dep_profile):
         dep_device.save()
     else:
         err_msg = f"Could not assign profile {dep_profile.uuid} to device {serial_number}: {result}"
+        logger.error(err_msg)
+        raise DEPClientError(err_msg)
+
+
+def remove_dep_device_profile(dep_device, dep_profile):
+    dep_client = DEPClient.from_dep_virtual_server(dep_device.virtual_server)
+    serial_number = dep_device.serial_number
+    response = dep_client.remove_profile(dep_profile.uuid, [serial_number])
+    try:
+        result = response["devices"][serial_number]
+    except KeyError:
+        raise DEPClientError("Unknown client response structure")
+    if result == "SUCCESS":
+        # fetch a fresh device record and apply the updates
+        updated_device = dep_client.get_devices([serial_number])[serial_number]
+        for attr, val in dep_device_update_dict(updated_device).items():
+            setattr(dep_device, attr, val)
+        dep_device.save()
+    else:
+        err_msg = f"Could not remove profile {dep_profile.uuid} from device {serial_number}: {result}"
         logger.error(err_msg)
         raise DEPClientError(err_msg)
 
