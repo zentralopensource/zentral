@@ -17,35 +17,25 @@ You will need to pick a **project**, and think about a **region** where you want
 
 *Note: We will be working with the default VPC. This is not recommended for production.*
 
-At the minimum, for this tutorial, we will need access to the 22, 80, and 443 ports.
+At the minimum, for this tutorial, we will need access to the 22, 80, and 443 ports. By default the SSH port (22) is open from anywhere. The HTTP (80) and HTTPS (443) ports are open for the machines tagged with `http-server` and `https-server` respectively.
 
 ## Create the instance
 
-Open the [Create an instance](https://console.cloud.google.com/compute/instancesAdd) form.
+The custom ZAIO images are public, but due to a limitation of the GCP console, they cannot be launched using the GUI. You need to use the `gcloud` command line tool instead.
 
-In the **Name** field, specify a unique name for your instance. We will use `zentral-all-in-one`.
+For example, to launch an instance called `zaio` of type `e2-standard-2` in the `europe-west1-b` with a `20GB` disk and the HTTP and HTTPS ports allowed from anywhere:
 
-Select a **Region** and a **Zone**.
+```
+gcloud compute instances create zaio \
+        --machine-type=e2-standard-2 \
+        --zone=europe-west1-b \
+        --boot-disk-size=20GB \
+        --tags=http-server,https-server \
+        --image=zaio-amd64-20230627-181217 \
+        --image-project=sublime-delight-encoder
+```
 
-The default _General-purpose_ **Machine family**, and _e2-standard-2_ **Machine type** are OK to test Zentral.
-
-![Create instance form first sections](../../images/deployment/zaio-gcp/create_instance_top_form.png)
-
-In the **Boot disk** section, click on the [Change] button, go to the [Custom images] tab. Set `sublime-delight-encoder` or `Zentral Pro Services` as the project, and in the dropdown, select the latest `zaio-ARCH-YYYYMMDD-HHMMSS`.
-
-![Select zentral-all-in-one custom image](../../images/deployment/zaio-gcp/select_image.png)
-
-You can start with one 10GB SSD persistent disk. But that would be only enough to store a limited amount of events. As a rule of thumb, you will need about 9GB + 1GB for every million of events stored, but that can vary a lot depending on your inventory sources, and the kind of events you are collecting.
-
-This is what you should see in the *Boot disk* section:
-
-![zentral-all-in-one-image-selected](../../images/deployment/zaio-gcp/boot_disk_selected.png)
-
-We will use the **Compute engine default service account** and the **default access scopes**. Again, not recemmended for production.
-
-In the **Firewall** section, tick the _Allow HTTP traffic_ and _Allow HTTPS traffic_ boxes.
-
-Click on the **Create** button to launch the instance.
+You can start with one 20GB SSD persistent disk. But that would be only enough to store a limited amount of events. As a rule of thumb, you will need about 20GB + 1GB for every million of events stored, but that can vary a lot depending on your inventory sources, and the kind of events you are collecting.
 
 ## Setup the domain name(s) for your instance
 
