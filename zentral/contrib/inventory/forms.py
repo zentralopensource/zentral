@@ -640,9 +640,9 @@ class IOSAppSearchForm(BaseAppSearchForm):
 
 
 class MacOSAppSearchForm(BaseAppSearchForm):
-    bundle_name = forms.CharField(label='Bundle name', max_length=64,
-                                  widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Bundle name"}),
-                                  required=False)
+    bundle = forms.CharField(label='Bundle', max_length=64,
+                             widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Bundle"}),
+                             required=False)
     order_mapping = {"bn": "bundle_name",
                      "mc": "ms_count"}
     default_order = ("bundle_name", "ASC")
@@ -677,10 +677,11 @@ class MacOSAppSearchForm(BaseAppSearchForm):
 
         # filtering
         wheres = []
-        bundle_name = self.cleaned_data.get("bundle_name")
-        if bundle_name:
-            args.append(bundle_name)
-            wheres.append("a.bundle_name ~* %s")
+        bundle = self.cleaned_data.get("bundle")
+        if bundle:
+            args.append(bundle)
+            args.append(bundle)
+            wheres.append("(a.bundle_id ~* %s OR a.bundle_name ~* %s)")
         source = self.get_source()
         if source:
             args.append(source.id)

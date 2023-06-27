@@ -196,7 +196,7 @@ class AppsViewsTestCase(TestCase):
         ))
         self.assertContains(response, "2 results")
 
-    def test_deb_packages_bundle_name(self):
+    def test_deb_packages_name(self):
         self._login("inventory.view_debpackage")
         response = self.client.get("{}?{}".format(
             reverse("inventory:deb_packages"),
@@ -211,7 +211,7 @@ class AppsViewsTestCase(TestCase):
         ))
         self.assertContains(response, "0 results")
 
-    def test_deb_packages_bundle_name_and_source_search(self):
+    def test_deb_packages_name_and_source_search(self):
         self._login("inventory.view_debpackage")
         response = self.client.get("{}?{}".format(
             reverse("inventory:deb_packages"),
@@ -244,7 +244,7 @@ class AppsViewsTestCase(TestCase):
         ))
         self.assertContains(response, "2 results")
 
-    def test_ios_apps_bundle_name(self):
+    def test_ios_apps_name(self):
         self._login("inventory.view_iosapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:ios_apps"),
@@ -259,7 +259,7 @@ class AppsViewsTestCase(TestCase):
         ))
         self.assertContains(response, "0 results")
 
-    def test_ios_apps_bundle_name_and_source_search(self):
+    def test_ios_apps_name_and_source_search(self):
         self._login("inventory.view_iosapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:ios_apps"),
@@ -296,22 +296,22 @@ class AppsViewsTestCase(TestCase):
         self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
-            urlencode({"bundle_name": "baller",
+            urlencode({"bundle": "baller",
                        "action": "search"})
         ))
         self.assertContains(response, "1 result")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
-            urlencode({"bundle_name": "yolo",
+            urlencode({"bundle": "yolo",
                        "action": "search"})
         ))
         self.assertContains(response, "0 results")
 
-    def test_macos_apps_bundle_name_and_source_search(self):
+    def test_macos_apps_bundle_id_and_source_search(self):
         self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
-            urlencode({"bundle_name": "baller",
+            urlencode({"bundle": "io.zentral.baller",
                        "source": self.ms.source.id,
                        "action": "search"})
         ))
@@ -340,7 +340,7 @@ class AppsViewsTestCase(TestCase):
         ))
         self.assertContains(response, "2 results")
 
-    def test_programs_bundle_name(self):
+    def test_programs_name(self):
         self._login("inventory.view_program", "inventory.view_programinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:programs"),
@@ -355,7 +355,7 @@ class AppsViewsTestCase(TestCase):
         ))
         self.assertContains(response, "0 results")
 
-    def test_programs_bundle_name_and_source_search(self):
+    def test_programs_name_and_source_search(self):
         self._login("inventory.view_program", "inventory.view_programinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:programs"),
