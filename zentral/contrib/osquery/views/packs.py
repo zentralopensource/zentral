@@ -1,11 +1,13 @@
 from datetime import datetime
 import logging
+from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Count
+from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
-from zentral.contrib.osquery.forms import PackForm, PackQueryForm
+from zentral.contrib.osquery.forms import PackForm, PackQueryForm, UploadPackForm
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
 
 
@@ -62,6 +64,32 @@ class UpdatePackView(PermissionRequiredMixin, UpdateView):
     permission_required = "osquery.change_pack"
     model = Pack
     form_class = PackForm
+
+
+class UploadPackView(PermissionRequiredMixin, UpdateView):
+    permission_required = "osquery.change_pack"
+    model = Pack
+    form_class = UploadPackForm
+    template_name = "osquery/pack_upload.html"
+
+    def form_valid(self, form):
+        try:
+            result = form.save(self.request)
+        except Exception as e:
+            form.add_error("file", str(e))
+            return self.form_invalid(form)
+        else:
+            message = ""
+            for key, val in result.get("query_results", {}).items():
+                if key != "present" and val:
+                    prefix = "query"
+                    if val != 1:
+                        prefix = "queries"
+                    message += f"{prefix} {key}: {val}, "
+            message = message.strip(", ")
+            if message:
+                messages.info(self.request, message)
+            return HttpResponseRedirect(self.get_success_url())
 
 
 class DeletePackView(PermissionRequiredMixin, DeleteView):

@@ -62,6 +62,10 @@
     <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
     Update
   </a>
+  <a class="btn btn-default" href="{% url 'osquery:upload_pack' object.id %}">
+    <span class="glyphicon glyphicon-upload" aria-hidden="true"></span>
+    Upload
+  </a>
   {% endif %}
   {% if perms.osquery.delete_pack %}
   <a class="btn btn-danger" href="{% url 'osquery:delete_pack' object.id %}">

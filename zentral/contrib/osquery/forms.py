@@ -2,11 +2,15 @@ from datetime import datetime, timedelta
 from django import forms
 from django.db.models import Count, F, Q
 from django.utils.text import slugify
+from rest_framework.parsers import JSONParser
+from rest_framework_yaml.parsers import YAMLParser
 from .compliance_checks import sync_query_compliance_check
 from .models import (AutomaticTableConstruction, Configuration, ConfigurationPack,
                      DistributedQuery, DistributedQueryMachine, Enrollment, FileCategory,
                      Pack, PackQuery, Platform, Query)
+from .packs import OsqueryConfigParser, update_or_create_pack
 from .releases import get_osquery_versions
+from .serializers import OsqueryPackSerializer
 
 
 # common
@@ -212,9 +216,6 @@ class PackForm(forms.ModelForm):
         model = Pack
         fields = "__all__"
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def clean(self):
         super().clean()
         name = self.cleaned_data.get("name")
@@ -227,6 +228,51 @@ class PackForm(forms.ModelForm):
                 self.add_error("name", f"A pack with the slug '{slug}' already exists")
             else:
                 self.instance.slug = slug
+
+
+class UploadPackForm(forms.ModelForm):
+    file = forms.FileField()
+    update_and_create_only = forms.BooleanField(label="Only update and create queries",
+                                                help_text="If true, the existing queries not present in the uploaded "
+                                                          "file will not be removed from the pack.",
+                                                required=False, initial=True)
+
+    class Meta:
+        model = Pack
+        fields = []
+
+    def clean(self):
+        update_and_create_only = self.cleaned_data.get("update_and_create_only")
+        if update_and_create_only:
+            self.cleaned_data["delete_extra_queries"] = False
+        else:
+            self.cleaned_data["delete_extra_queries"] = True
+        file = self.cleaned_data.get("file")
+        if file:
+            for parser in (OsqueryConfigParser, JSONParser, YAMLParser):
+                try:
+                    data = parser().parse(file)
+                except Exception:
+                    file.seek(0)
+                else:
+                    self.cleaned_data["data"] = data
+                    break
+            else:
+                self.add_error("file", "Could not parse pack file.")
+            serializer = OsqueryPackSerializer(data=data)
+            if not serializer.is_valid():
+                self.add_error(
+                    "file",
+                    ", ".join("{}: {}".format(k, ", ".join(v)) for k, v in serializer.errors.items())
+                )
+
+    def save(self, request):
+        return update_or_create_pack(
+            request,
+            self.cleaned_data["data"],
+            pack=self.instance,
+            delete_extra_queries=self.cleaned_data["delete_extra_queries"],
+        )
 
 
 # Pack query
@@ -259,13 +305,13 @@ class PackQueryForm(forms.ModelForm):
         self.instance.pack = self.pack
         query = self.cleaned_data.get("query")
         if query:
-            slug = slugify(query.name)
-            if PackQuery.objects.filter(slug=slug).exists():
-                slug = f"{slug}-{query.id}"
-            self.instance.slug = slug
+            if not self.instance.pk:
+                slug = slugify(query.name)
+                if PackQuery.objects.filter(pack=self.pack, slug=slug).exists():
+                    slug = f"{slug}-{query.id}"
+                self.instance.slug = slug
             if query.compliance_check and not self.cleaned_data.get("snapshot_mode"):
                 self.add_error("snapshot_mode", "A compliance check query can only be scheduled in 'snapshot' mode.")
-
 
 
 # Query
