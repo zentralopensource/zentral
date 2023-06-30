@@ -75,20 +75,29 @@ class SantaMetricsViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_rules(self):
-        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
-        Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        for target_type in (Target.BINARY, Target.BUNDLE, Target.CERTIFICATE, Target.TEAM_ID, Target.SIGNING_ID):
+            if target_type == Target.TEAM_ID:
+                identifier = get_random_string(10).upper()
+            elif target_type == Target.SIGNING_ID:
+                identifier = "platform:com.apple.curl"
+            else:
+                identifier = get_random_string(64, "0123456789abcdef")
+            target = Target.objects.create(type=target_type, identifier=identifier)
+            Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         response = self._make_authenticated_request()
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
             if family.name != "zentral_santa_rules":
                 continue
             else:
-                self.assertEqual(len(family.samples), 1)
-                sample = family.samples[0]
-                self.assertEqual(sample.value, 1)
-                self.assertEqual(sample.labels["configuration"], self.configuration.name)
-                self.assertEqual(sample.labels["ruleset"], "_")
-                self.assertEqual(sample.labels["target_type"], "binary")
-                self.assertEqual(sample.labels["policy"], "blocklist")
+                self.assertEqual(len(family.samples), 5)
+                target_type_set = set()
+                for sample in family.samples:
+                    self.assertEqual(sample.value, 1)
+                    self.assertEqual(sample.labels["configuration"], self.configuration.name)
+                    self.assertEqual(sample.labels["ruleset"], "_")
+                    self.assertEqual(sample.labels["policy"], "blocklist")
+                    target_type_set.add(sample.labels["target_type"])
+                self.assertEqual(target_type_set, {"binary", "bundle", "certificate", "teamid", "signingid"})
                 break
         else:
             raise AssertionError("could not find expected metric family")
