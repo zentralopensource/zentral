@@ -344,7 +344,8 @@ class SystemProfilerReport(object):
 
         serial_number = item_d['serial_number']
         system_info = {'hardware_model': item_d['machine_model'],
-                       'cpu_type': item_d.get('cpu_type', None)}
+                       'cpu_type': item_d.get('cpu_type', None),
+                       'cpu_brand': item_d.get('chip_type', None)}
         # RAM
         ram_multiplicator = None
         ram_amount, ram_amount_unit = item_d['physical_memory'].split()
