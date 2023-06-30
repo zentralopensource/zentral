@@ -37,6 +37,7 @@ class SantaSetupViewsTestCase(TestCase):
         cls.file_bundle_name = get_random_string(12)
         cls.file_cert_sha256 = get_random_sha256()
         cls.file_team_id = get_random_string(10, allowed_chars="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        cls.file_signing_id = f"{cls.file_team_id}:transcoderx"
         cls.file_cert_cn = f"Developer ID Application: YOLO ({cls.file_team_id})"
         cls.file, _ = File.objects.commit({
             'source': {'module': 'zentral.contrib.santa', 'name': 'Santa events'},
@@ -50,6 +51,7 @@ class SantaSetupViewsTestCase(TestCase):
             'path': ('/Library/Frameworks/Compressor.framework/'
                      'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
             'sha_256': cls.file_sha256,
+            'signing_id': cls.file_signing_id,
             'signed_by': {
                 'common_name': cls.file_cert_cn,
                 'organization': 'Apple Inc.',
@@ -139,7 +141,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, "1 Configuration")
         self.assertContains(response, configuration.name)
         # no perms, no targets
-        self.assertNotContains(response, "3 Collected targets")
+        self.assertNotContains(response, "4 Collected targets")
 
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:index"))
@@ -148,8 +150,8 @@ class SantaSetupViewsTestCase(TestCase):
         # no perms, no configuration
         self.assertNotContains(response, "1 Configuration")
         self.assertNotContains(response, configuration.name)
-        # 1 binary, 1 certificate
-        self.assertContains(response, "3 Collected targets")
+        # 1 binary, 1 certificate, 1 team ID, 1 signing ID
+        self.assertContains(response, "4 Collected targets")
 
     # configurations
 
@@ -807,6 +809,24 @@ class SantaSetupViewsTestCase(TestCase):
         team_ids = response.context["team_ids"]
         self.assertEqual(len(team_ids), 1)
         self.assertEqual(team_ids[0][0].organizational_unit, self.file_team_id)
+
+    def test_pick_rule_signing_id_access_denied(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_configuration", "santa.view_configuration")
+        response = self.client.get(reverse("santa:pick_rule_signing_id", args=(configuration.pk,)),
+                                   {"query": self.file_signing_id})
+        self.assertEqual(response.status_code, 403)
+
+    def test_pick_rule_signing_id(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        response = self.client.get(reverse("santa:pick_rule_signing_id", args=(configuration.pk,)),
+                                   {"query": self.file_signing_id})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/pick_rule_signing_id.html")
+        signing_ids = response.context["signing_ids"]
+        self.assertEqual(len(signing_ids), 1)
+        self.assertEqual(signing_ids[0][0].signing_id, self.file_signing_id)
 
     # terraform export
 

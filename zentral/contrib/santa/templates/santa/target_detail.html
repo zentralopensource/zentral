@@ -6,7 +6,7 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'santa:index' %}">Santa</a></li>
   <li><a href="{% url 'santa:targets' %}">Targets</a></li>
-  <li class="active">{{ target_type|title }}</li>
+  <li class="active">{{ target_type_display }}</li>
 </ol>
 
 <h3>{{ title }}</h3>
@@ -123,6 +123,18 @@
         <ul class="list-unstyled">
           {% for obj in objects %}
           <li>{{ obj.organization|default:"-" }}</li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+    {% endif %}
+    {% if target_type == "SIGNINGID" %}
+    <tr>
+      <td>Signing ID{{objects|length|pluralize }}</td>
+      <td>
+        <ul class="list-unstyled">
+          {% for obj in objects %}
+          <li>{{ obj.signing_id }}</li>
           {% endfor %}
         </ul>
       </td>

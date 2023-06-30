@@ -392,7 +392,11 @@ class TargetsExport(APIView):
             query = None
         target_type = request.GET.get("target_type")
         if target_type:
-            if target_type not in (Target.BINARY, Target.BUNDLE, Target.CERTIFICATE, Target.TEAM_ID):
+            if target_type not in (Target.BINARY,
+                                   Target.BUNDLE,
+                                   Target.CERTIFICATE,
+                                   Target.TEAM_ID,
+                                   Target.SIGNING_ID):
                 raise ValidationError("Unknown target type")
         else:
             target_type = None

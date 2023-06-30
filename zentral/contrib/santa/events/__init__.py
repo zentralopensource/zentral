@@ -89,6 +89,7 @@ class SantaEventEvent(BaseEvent):
             keys['file'] = [("sha256", file_sha256)]
         signing_chain = list(self.iter_signing_chain())
         team_id = self.payload.get("team_id")
+        signing_id = self.payload.get("signing_id")
         cert_sha256_list = []
         for cert_idx, cert in enumerate(signing_chain):
             # cert sha256
@@ -109,6 +110,8 @@ class SantaEventEvent(BaseEvent):
                     pass
         if team_id:
             keys["apple_team_id"] = [(team_id,)]
+        if signing_id:
+            keys["signing_id"] = [(signing_id,)]
         if cert_sha256_list:
             keys['certificate'] = cert_sha256_list
         return keys
@@ -232,7 +235,8 @@ def _build_file_tree_from_santa_event(event_d):
     for from_a, to_a in (("file_name", "name"),
                          ("file_path", "path"),
                          ("file_bundle_path", "bundle_path"),
-                         ("file_sha256", "sha_256")):
+                         ("file_sha256", "sha_256"),
+                         ("signing_id", "signing_id")):
         app_d[to_a] = event_d.get(from_a)
     for a, val in (("bundle", _build_bundle_tree_from_santa_event(event_d)),
                    ("signed_by", _build_siging_chain_tree_from_santa_event(event_d))):

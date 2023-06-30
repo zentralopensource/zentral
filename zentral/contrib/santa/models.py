@@ -333,11 +333,11 @@ class TargetManager(models.Manager):
     def summary(self):
         query = (
             "with collected_files as ("
-            "  select f.sha_256, f.signed_by_id, f.name"
+            "  select f.sha_256, f.signed_by_id, f.signing_id, f.name"
             "  from inventory_file as f"
             "  join inventory_source as s on (f.source_id = s.id)"
             "  where s.module = 'zentral.contrib.santa' and s.name = 'Santa events'"
-            "  group by f.sha_256, f.signed_by_id, f.name"
+            "  group by f.sha_256, f.signed_by_id, f.signing_id, f.name"
             "), collected_certificates as ("
             "  select c.sha_256, c.common_name"
             "  from inventory_certificate as c"
@@ -374,6 +374,15 @@ class TargetManager(models.Manager):
             " join santa_rule as r on (t.id = r.target_id)) as rule_count "
             "from collected_team_ids "
             "union "
+            "select 'signingid' as target_type,"
+            "count(distinct signing_id) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_files as f on (t.type = 'SIGNINGID' and t.identifier=f.signing_id)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_files "
+            "where signing_id is not null "
+            "union "
             "select 'bundle' as target_type,"
             "count(*) as target_count,"
             "(select count(distinct b.id)"
@@ -402,10 +411,12 @@ class TargetManager(models.Manager):
             ti_where = ("where c.organizational_unit ~ '[A-Z0-9]{10}' and ("
                         "upper(c.organization) like upper(%(q)s) "
                         "or upper(c.organizational_unit) like upper(%(q)s))")
+            si_where = "where upper(f.signing_id) like upper(%(q)s)"
             bu_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
         else:
             bi_where = ce_where = bu_where = ""
             ti_where = "where c.organizational_unit ~ '[A-Z0-9]{10}'"
+            si_where = "where f.signing_id IS NOT NULL"
         targets_subqueries = {
             "BINARY":
                 "select 'BINARY' as target_type,  f.identifier, f.name as sort_str,"
@@ -441,6 +452,16 @@ class TargetManager(models.Manager):
                 "join collected_files as f on (c.id = f.signed_by_id) "
                 f"{ti_where} "
                 "group by target_type, c.organizational_unit, c.organization",
+            "SIGNINGID":
+                "select 'SIGNINGID' as target_type, f.signing_id as identifier, f.signing_id as sort_str,"
+                "jsonb_build_object("
+                " 'file_name', f.name,"
+                " 'cert_cn', c.common_name"
+                ") as object "
+                "from collected_files as f "
+                "left join inventory_certificate as c on (f.signed_by_id = c.id) "
+                f"{si_where} "
+                "group by target_type, f.signing_id, f.name, c.common_name",
             "BUNDLE":
                 "select 'BUNDLE' as target_type, t.identifier, b.name as sort_str,"
                 "jsonb_build_object("
@@ -456,11 +477,11 @@ class TargetManager(models.Manager):
                                        if target_type is None or k == target_type)
         query = (
             "with collected_files as ("
-            "  select f.sha_256 as identifier, f.signed_by_id, f.name"
+            "  select f.sha_256 as identifier, f.signed_by_id, f.signing_id, f.name"
             "  from inventory_file as f"
             "  join inventory_source as s on (f.source_id = s.id)"
             "  where s.module='zentral.contrib.santa' and s.name = 'Santa events'"
-            "  group by f.sha_256, f.signed_by_id, f.name"
+            "  group by f.sha_256, f.signed_by_id, f.signing_id, f.name"
             f"), targets as ({targets_query}) "
             "select target_type, identifier, object, count(*) over() as full_count,"
             "(select count(*) from santa_rule as r"
@@ -524,6 +545,39 @@ class TargetManager(models.Manager):
         cursor.execute(query, [q, q])
         nt_teamid = namedtuple('TeamID', [col[0] for col in cursor.description])
         return [nt_teamid(*row) for row in cursor.fetchall()]
+
+    def get_signingid_objects(self, identifier):
+        query = (
+            "select f.signing_id "
+            "from inventory_file as f "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and f.signing_id = %s "
+            "group by f.signing_id "
+            "order by f.signing_id"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [identifier])
+        nt_signingid = namedtuple('TeamID', [col[0] for col in cursor.description])
+        return [nt_signingid(*row) for row in cursor.fetchall()]
+
+    def search_signingid_objects(self, **kwargs):
+        q = kwargs.get("query")
+        if not q:
+            return []
+        query = (
+            "select f.signing_id "
+            "from inventory_file as f "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and f.signing_id ~* %s "
+            "group by f.signing_id "
+            "order by f.signing_id"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [q])
+        nt_signingid = namedtuple('SigningID', [col[0] for col in cursor.description])
+        return [nt_signingid(*row) for row in cursor.fetchall()]
 
 
 class Target(models.Model):

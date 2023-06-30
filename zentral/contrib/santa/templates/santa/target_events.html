@@ -7,13 +7,13 @@
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'santa:index' %}">Santa</a></li>
   <li><a href="{% url 'santa:targets' %}">Targets</a></li>
-  <li><a href="{{ target_url }}">{{ target_type|title }}</a></li>
+  <li><a href="{{ target_url }}">{{ target_type_display }}</a></li>
   <li class="active">Events</a></li>
 </ol>
 
 <div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
   <h3 style="margin:-10px 0 10px 0">
-    {{ target_type|title }} - Events
+    {{ target_type_display }} - Events
   </h3>
   <table class="table table-condensed">
     <tbody>

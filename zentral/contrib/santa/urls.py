@@ -57,6 +57,9 @@ urlpatterns = [
     path('configurations/<int:configuration_pk>/rules/pick_team_id/',
          views.PickRuleTeamIDView.as_view(),
          name='pick_rule_team_id'),
+    path('configurations/<int:configuration_pk>/rules/pick_signing_id/',
+         views.PickRuleSigningIDView.as_view(),
+         name='pick_rule_signing_id'),
 
     # targets
     path('targets/', views.TargetsView.as_view(), name="targets"),
@@ -88,6 +91,13 @@ urlpatterns = [
          views.FetchTeamIDEventsView.as_view(), name="fetch_teamid_events"),
     path('targets/teamids/<str:identifier>/events/store_redirect/',
          views.TeamIDEventsStoreRedirectView.as_view(), name="teamid_events_store_redirect"),
+    path('targets/signingids/<str:identifier>/', views.SigningIDView.as_view(), name="signingid"),
+    path('targets/signingids/<str:identifier>/events/',
+         views.SigningIDEventsView.as_view(), name="signingid_events"),
+    path('targets/signingids/<str:identifier>/events/fetch/',
+         views.FetchSigningIDEventsView.as_view(), name="fetch_signingid_events"),
+    path('targets/signingids/<str:identifier>/events/store_redirect/',
+         views.SigningIDEventsStoreRedirectView.as_view(), name="signingid_events_store_redirect"),
 
     # terraform
     path('terraform_export/',

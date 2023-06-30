@@ -68,10 +68,14 @@
     <tr>
       <td>
         <a href="{{ target.url }}">
-          {% if target.target_type == "TEAMID" %}
+          {% if target.target_type == "TEAMID"%}
           Team ID
           {% else %}
+          {% if target.target_type == "SIGNINGID" %}
+          Signing ID
+          {% else %}
           {{ target.target_type|title }}
+          {% endif %}
           {% endif %}
         </a>
       </td>
@@ -94,6 +98,11 @@
         {% endif %}
         {% if target.target_type == "TEAMID" %}
         <br>{{ obj.organization }}
+        {% endif %}
+        {% if target.target_type == "SIGNINGID" %}
+        {% if obj.cert_cn %}
+        <br>{{ obj.cert_cn }}
+        {% endif %}
         {% endif %}
       </td>
       <td>{{ target.rule_count }}</td>

@@ -115,7 +115,13 @@ class TargetView(PermissionRequiredMixin, TemplateView):
         ctx = super().get_context_data()
         self.identifier = kwargs["identifier"]
         ctx["target_type"] = self.target_type
-        ctx["title"] = self.title or self.target_type.title()
+        if self.target_type == Target.TEAM_ID:
+            ctx["target_type_display"] = "Team ID"
+        elif self.target_type == Target.SIGNING_ID:
+            ctx["target_type_display"] = "Signing ID"
+        else:
+            ctx["target_type_display"] = self.target_type.title()
+        ctx["title"] = self.title or ctx["target_type_display"]
         ctx["identifier"] = self.identifier
 
         # objects
@@ -190,6 +196,16 @@ class TeamIDView(TargetView):
         return Target.objects.get_teamid_objects(self.identifier)
 
 
+class SigningIDView(TargetView):
+    target_type = Target.SIGNING_ID
+    title = "Signing ID"
+    add_rule_link_key = "sig"
+    add_rule_link_attr = "signing_id"
+
+    def get_objects(self):
+        return Target.objects.get_signingid_objects(self.identifier)
+
+
 class EventsMixin:
     permission_required = ("santa.view_target",)
     store_method_scope = "object"
@@ -220,6 +236,7 @@ class EventsMixin:
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
         ctx["target_type"] = self.target_type
+        ctx["target_type_display"] = getattr(self, "target_type_display", None)
         ctx["identifier"] = self.identifier
         ctx["target_url"] = reverse(f"santa:{self.target_type.lower()}", args=(self.identifier,))
         return ctx
@@ -228,6 +245,7 @@ class EventsMixin:
 class BinaryEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.BINARY
+    target_type_display = "Binary"
     object_key = "file"
     identifier_key = "sha256"
 
@@ -247,6 +265,7 @@ class BinaryEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
 class BundleEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.BUNDLE
+    target_type_display = "Bundle"
     object_key = "bundle"
     identifier_key = "sha256"
 
@@ -266,6 +285,7 @@ class BundleEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
 class CertificateEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.CERTIFICATE
+    target_type_display = "Certificate"
     object_key = "certificate"
     identifier_key = "sha256"
 
@@ -285,6 +305,7 @@ class CertificateEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
 class TeamIDEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.TEAM_ID
+    target_type_display = "Team ID"
     object_key = "apple_team_id"
 
 
@@ -296,3 +317,20 @@ class FetchTeamIDEventsView(EventsMixin, FetchEventsView):
 class TeamIDEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     target_type = Target.TEAM_ID
     object_key = "apple_team_id"
+
+
+class SigningIDEventsView(EventsMixin, EventsView):
+    template_name = "santa/target_events.html"
+    target_type = Target.SIGNING_ID
+    target_type_display = "Signing ID"
+    object_key = "signing_id"
+
+
+class FetchSigningIDEventsView(EventsMixin, FetchEventsView):
+    target_type = Target.SIGNING_ID
+    object_key = "signing_id"
+
+
+class SigningIDEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    target_type = Target.SIGNING_ID
+    object_key = "signing_id"

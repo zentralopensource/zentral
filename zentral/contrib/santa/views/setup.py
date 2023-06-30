@@ -10,7 +10,8 @@ from django.views.generic.edit import DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import Certificate, File
 from zentral.contrib.santa.events import post_santa_rule_update_event
-from zentral.contrib.santa.forms import (BinarySearchForm, BundleSearchForm, CertificateSearchForm, TeamIDSearchForm,
+from zentral.contrib.santa.forms import (BinarySearchForm, BundleSearchForm, CertificateSearchForm,
+                                         TeamIDSearchForm, SigningIDSearchForm,
                                          ConfigurationForm, EnrollmentForm, RuleForm, RuleSearchForm, UpdateRuleForm)
 from zentral.contrib.santa.models import Bundle, Configuration, Rule, Target
 from zentral.contrib.santa.terraform import iter_resources
@@ -237,7 +238,7 @@ class CreateConfigurationRuleView(PermissionRequiredMixin, FormView):
 
     def dispatch(self, request, *args, **kwargs):
         self.configuration = get_object_or_404(Configuration, pk=kwargs["configuration_pk"])
-        self.binary = self.bundle = self.certificate = self.team_id = None
+        self.binary = self.bundle = self.certificate = self.team_id = self.signing_id = None
         try:
             self.binary = File.objects.get(pk=self.request.GET["bin"])
         except (KeyError, File.DoesNotExist):
@@ -254,6 +255,10 @@ class CreateConfigurationRuleView(PermissionRequiredMixin, FormView):
             self.team_id = self.request.GET["tea"]
         except KeyError:
             pass
+        try:
+            self.signing_id = self.request.GET["sig"]
+        except KeyError:
+            pass
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -263,6 +268,7 @@ class CreateConfigurationRuleView(PermissionRequiredMixin, FormView):
         kwargs["bundle"] = self.bundle
         kwargs["certificate"] = self.certificate
         kwargs["team_id"] = self.team_id
+        kwargs["signing_id"] = self.signing_id
         return kwargs
 
     def get_context_data(self, **kwargs):
@@ -273,33 +279,34 @@ class CreateConfigurationRuleView(PermissionRequiredMixin, FormView):
             ctx['files'] = [self.binary]
             ctx['target_type_display'] = "Binary"
             ctx['target_identifier'] = self.binary.sha_256
+            ctx["title"] = "Add Santa binary rule"
         else:
             ctx["files"] = []
         if self.bundle:
             ctx['bundle'] = self.bundle
             ctx['target_type_display'] = "Bundle"
             ctx['target_identifier'] = self.bundle.target.identifier
+            ctx["title"] = "Add Santa bundle rule"
         if self.certificate:
             ctx['certificates'] = [self.certificate]
             ctx['target_type_display'] = "Certificate"
             ctx['target_identifier'] = self.certificate.sha_256
+            ctx["title"] = "Add Santa certificate rule"
         else:
             ctx["certificates"] = []
         if self.team_id:
             ctx['team_ids'] = Target.objects.get_teamid_objects(self.team_id)
             ctx['target_type_display'] = "Team ID"
             ctx['target_identifier'] = self.team_id
-        else:
-            ctx['team_ids'] = []
-        if self.binary:
-            ctx["title"] = "Add Santa binary rule"
-        elif self.bundle:
-            ctx["title"] = "Add Santa bundle rule"
-        elif self.certificate:
-            ctx["title"] = "Add Santa certificate rule"
-        elif self.team_id:
             ctx["title"] = "Add Santa team ID rule"
         else:
+            ctx['team_ids'] = []
+        if self.signing_id:
+            ctx['signing_ids'] = Target.objects.get_signingid_objects(self.signing_id)
+            ctx['target_type_display'] = "Signing ID"
+            ctx['target_identifier'] = self.signing_id
+            ctx["title"] = "Add Santa signing ID rule"
+        if "title" not in ctx:
             ctx["title"] = "Add Santa rule"
         return ctx
 
@@ -472,5 +479,32 @@ class PickRuleTeamIDView(PermissionRequiredMixin, TemplateView):
                                                                     for team_id in team_ids])
         }
         ctx['team_ids'] = [(team_id, existing_rules.get(team_id.organizational_unit)) for team_id in team_ids]
+        ctx['form'] = form
+        return ctx
+
+
+class PickRuleSigningIDView(PermissionRequiredMixin, TemplateView):
+    permission_required = "santa.add_rule"
+    template_name = "santa/pick_rule_signing_id.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.configuration = get_object_or_404(Configuration, pk=kwargs["configuration_pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["configuration"] = self.configuration
+        form = SigningIDSearchForm(self.request.GET)
+        form.is_valid()
+        signing_ids = Target.objects.search_signingid_objects(**form.cleaned_data)
+        existing_rules = {
+            rule.target.identifier: rule
+            for rule in Rule.objects.select_related("target")
+                                    .filter(configuration=self.configuration,
+                                            target__type=Target.SIGNING_ID,
+                                            target__identifier__in=[signing_id.signing_id
+                                                                    for signing_id in signing_ids])
+        }
+        ctx['signing_ids'] = [(signing_id, existing_rules.get(signing_id.signing_id)) for signing_id in signing_ids]
         ctx['form'] = form
         return ctx

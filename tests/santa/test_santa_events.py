@@ -6,6 +6,8 @@ from zentral.contrib.santa.events import (_build_file_tree_from_santa_event, Eve
 
 
 class SantaEventTestCase(SimpleTestCase):
+    maxDiff = None
+
     def test_event_with_signed_bundle(self):
         event_d = {
             'current_sessions': [],
@@ -27,6 +29,7 @@ class SantaEventTestCase(SimpleTestCase):
             'pid': 95,
             'ppid': 1,
             'quarantine_timestamp': 0,
+            'signing_id': 'platform:compressor',
             'signing_chain': [{'cn': 'Software Signing',
                                'org': 'Apple Inc.',
                                'sha256': '47e9216d9e90fa2be9c352d40826c9573055f61188942fff25d58da96f8899d4',
@@ -57,6 +60,7 @@ class SantaEventTestCase(SimpleTestCase):
             'path': ('/Library/Frameworks/Compressor.framework/'
                      'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
             'sha_256': '700362aec8dee7df2f17de03df0d0844979b0eca7e878f75248c91ae56b1a7c1',
+            'signing_id': 'platform:compressor',
             'signed_by': {
                 'common_name': 'Software Signing',
                 'organization': 'Apple Inc.',
@@ -121,7 +125,8 @@ class SantaEventTestCase(SimpleTestCase):
             'name': 'Managed Software Center',
             'path': '/Applications/Managed Software Center.app/Contents/MacOS',
             'sha_256': '3bccb77072bbc3eac675e2d95f6ef0f23362f015941dd3175bbc7f2d630040f2',
-            'signed_by': None
+            'signed_by': None,
+            'signing_id': None,
         }
         self.assertEqual(_build_file_tree_from_santa_event(event_d), file_d)
 
@@ -151,7 +156,8 @@ class SantaEventTestCase(SimpleTestCase):
             'name': 'act',
             'path': '/var/tmp/act',
             'sha_256': '13735e5fba4e11988645f0fa02f8dfa0c6caaf13a1e6c1cf06a47f80a7aab236',
-            'signed_by': None
+            'signed_by': None,
+            'signing_id': None,
         }
         self.assertEqual(_build_file_tree_from_santa_event(event_d), file_d)
 

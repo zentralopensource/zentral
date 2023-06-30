@@ -75,7 +75,7 @@ class BinarySearchForm(forms.Form):
 
 class BundleSearchForm(forms.Form):
     name = forms.CharField(label="Name", required=False,
-                           widget=forms.TextInput(attrs={"placeholder": "bundle name, id",
+                           widget=forms.TextInput(attrs={"placeholder": "bundle name, ID",
                                                          "size": 50}))
 
 
@@ -88,6 +88,12 @@ class CertificateSearchForm(forms.Form):
 class TeamIDSearchForm(forms.Form):
     query = forms.CharField(required=False,
                             widget=forms.TextInput(attrs={"placeholder": "team ID, organization",
+                                                          "size": 50}))
+
+
+class SigningIDSearchForm(forms.Form):
+    query = forms.CharField(required=False,
+                            widget=forms.TextInput(attrs={"placeholder": "signing ID",
                                                           "size": 50}))
 
 
@@ -197,8 +203,9 @@ class RuleForm(RuleFormMixin, forms.Form):
         self.bundle = kwargs.pop("bundle", None)
         self.certificate = kwargs.pop("certificate", None)
         self.team_id = kwargs.pop("team_id", None)
+        self.signing_id = kwargs.pop("signing_id", None)
         super().__init__(*args, **kwargs)
-        if self.binary or self.bundle or self.certificate or self.team_id:
+        if self.binary or self.bundle or self.certificate or self.team_id or self.signing_id:
             del self.fields["target_type"]
             del self.fields["target_identifier"]
         if self.bundle:
@@ -224,6 +231,9 @@ class RuleForm(RuleFormMixin, forms.Form):
         elif self.team_id:
             target_type = Target.TEAM_ID
             target_identifier = self.team_id
+        elif self.signing_id:
+            target_type = Target.SIGNING_ID
+            target_identifier = self.signing_id
         else:
             target_type = cleaned_data.get("target_type")
             target_identifier = cleaned_data.get("target_identifier")
