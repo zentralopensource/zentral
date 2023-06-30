@@ -13,7 +13,7 @@ To follow this tutorial, you will need an admin access to the AWS web console �
 
 In the AWS EC2 console, in one of the supported region (`us-east-1`, `us-west-2`, `eu-central-1`), click on the _Launch instances_ button. Pick a Name.
 
-## Select the _Zentral all in one_ AMI
+## Select a _Zentral all in one_ AMI
 
 Click on the _Browse more AMIs_ link. Select _Community AMIs_. Use _zaio_ as search term.
 
@@ -21,15 +21,17 @@ Owner account ID: `221790496544`
 
 AMIs name pattern: `zaio-ARCH-YYYYMMDD-HHMMSS`
 
+The ZAIO AMIs are available for ARM64 and AMD64 architectures.
+
 ## Pick an instance type
 
-You can start with a `t4g.medium` instance type. We strongly advice against using any kind of "smaller" instances. A lot of software will be running on the instance (elasticsearch, postgres, rabbitmq, prometheus, grafana, django app, …)
+You can start with a `t4g.medium` instance type – if you have picked the ARM64 AMI. We strongly advice against using any kind of "smaller" (< 4GB RAM) instances. A lot of software will be running on the instance (elasticsearch, postgres, rabbitmq, prometheus, grafana, django app, …)
 
 Then click on the _Next: Configure Instance Details_ button.
 
 ## Key pair
 
-It will be required for the first login. You can use an existing key pair, or create a new one. The username for the login is `admin`.
+It will be required for the first login. You can use an existing key pair, or create a new one. The username for the login is `ubuntu`.
 
 ## Network settings
 
@@ -41,7 +43,7 @@ Select _Create security group_ and tick the three boxes for `SSH`, `HTTP` and `H
 
 ## Add storage
 
-You can start with one 10GB general purpose SSD (`gp2`) volume. But that would be only enough to store a limited amount of events. As a rule of thumb, you will need about 9GB + 1GB for every million of events stored, but that can vary a lot depending on your inventory sources, and the kind of events you are collecting.
+You can start with one 20GB general purpose SSD (`gp2`) volume. But that would be only enough to store a limited amount of events. As a rule of thumb, you will need about 20GB + 1GB for every million of events stored, but that can vary a lot depending on your inventory sources, and the kind of events you are collecting.
 
 ## Launch the instance
 
@@ -61,6 +63,12 @@ You need the path to the key pair you have just setup. The default username is `
 
 ```cmd
 ssh -i ~/.ssh/TheNameOfTheKeyPairFile admin@zentral.example.com
+```
+
+**IMPORTANT** Make sure the key is only readable for your user:
+
+```cmd
+chmod 400 ~/.ssh/TheNameOfTheKeyPairFile
 ```
 
 Once logged in, you can use a [command line tool to setup your instance](../zaio-setup). Because this last step is the same for a Google Cloud deployment, we have kept it on a separate wiki page.
