@@ -11,7 +11,7 @@
 
 <h3>Register new security key</h3>
 
-<form id="form" class="form" method="POST">{% csrf_token %}
+<form id="key_form" class="form" method="POST">{% csrf_token %}
   {{ form.name|bootstrap }}
   {{ form.token_response }}
 </form>
@@ -77,7 +77,7 @@
         data.transports = r.getTransports();
       }
       document.getElementById('id_token_response').value = JSON.stringify(data);
-      document.forms[0].submit();
+      document.getElementById('key_form').submit();
       show_message("OK", false);
     }, (reason) => {
       show_message("Authentication error: " + reason, true);
