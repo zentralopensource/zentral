@@ -484,11 +484,30 @@ class TestMDMArtifacts(TestCase):
         av2.macos_min_version = "13.1.0"  # included
         av2.save()
         update_blueprint_serialized_artifacts(self.blueprint1)
+        self.assertTrue(
+            isinstance(self.blueprint1.serialized_artifacts[str(artifact.pk)]["versions"][0]["macos_min_version"],
+                       tuple)
+        )
+        self.assertTrue(
+            isinstance(self.blueprint1.serialized_artifacts[str(artifact.pk)]["versions"][1]["macos_max_version"],
+                       tuple)
+        )
         self.assertEqual(target.next_to_install(), av1)
         # higher version available
         # new target to avoid cache
         self.enrolled_device.os_version = "13.1.0"
         target = Target(self.enrolled_device)
+        self.blueprint1.refresh_from_db()
+        # the min & max versions read from the DB are lists, not tuples
+        # the os version comparisons must work in both cases
+        self.assertTrue(
+            isinstance(self.blueprint1.serialized_artifacts[str(artifact.pk)]["versions"][0]["macos_min_version"],
+                       list)
+        )
+        self.assertTrue(
+            isinstance(self.blueprint1.serialized_artifacts[str(artifact.pk)]["versions"][1]["macos_max_version"],
+                       list)
+        )
         self.assertEqual(target.comparable_os_version, (13, 1, 0))
         self.assertEqual(target.next_to_install(), av2)
 

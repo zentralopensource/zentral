@@ -197,9 +197,9 @@ class Target:
         min_os_version = item.get(f"{platform_key}_min_version")
         max_os_version = item.get(f"{platform_key}_max_version")
         if min_os_version or max_os_version:
-            if min_os_version and self.comparable_os_version < min_os_version:
+            if min_os_version and self.comparable_os_version < tuple(min_os_version):
                 return False
-            if max_os_version and self.comparable_os_version >= max_os_version:
+            if max_os_version and self.comparable_os_version >= tuple(max_os_version):
                 return False
 
         # excluded tags
