@@ -2,7 +2,7 @@
 
 This is a quick guide to help integrate [Okta](https://www.okta.com/) with Zentral.
 
-In Zentral, identity providers (IdP) are configured using realms. There are 3 different kind of realms: SAML, OIDC, and LDAP. In this case, we will use a SAML realm.
+In Zentral, identity providers (IdP) are configured using realms. There are three kinds of realm: SAML, OIDC, and LDAP. In this case, we will use a SAML realm.
 
 We will start by setting up an Okta application. We will then configure a Zentral realm for this application. Finally, we will update the Okta application configuration.
 

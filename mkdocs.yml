@@ -19,6 +19,7 @@ nav:
   - Event stores: configuration/stores.md
   - Secret engines: configuration/secret_engines.md
   - Users: configuration/users.md
+  - "Azure AD - SAML": configuration/azure_ad_saml.md
   - "Okta - SAML": configuration/okta_saml.md
   - "OneLogin - SAML": configuration/onelogin_saml.md
 - Apps:

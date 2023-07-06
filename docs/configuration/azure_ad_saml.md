@@ -2,7 +2,7 @@
 
 This is a quick guide to help integrate Zentral with [Azure AD](https://learn.microsoft.com/en-us/azure/active-directory/manage-apps/add-application-portal-setup-sso) using SAML for single sign-on.  
   
-In Zentral, identity providers (IdP) are configured using realms. There are 3 different kind of realms: SAML, OIDC, and LDAP. In this case, we will use a SAML realm.
+In Zentral, identity providers (IdP) are configured using realms. There are three kinds of realm: SAML, OIDC, and LDAP. In this case, we will use a SAML realm.
 
 We will start by setting up an Azure AD Enterprise Application with the Basic SAML Configuration. We will then configure a Zentral realm for this application. Finally, we will update the Azure AD application configuration.
 
