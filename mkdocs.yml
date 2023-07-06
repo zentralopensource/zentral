@@ -20,6 +20,7 @@ nav:
   - Secret engines: configuration/secret_engines.md
   - Users: configuration/users.md
   - "Okta - SAML": configuration/okta_saml.md
+  - "OneLogin - SAML": configuration/onelogin_saml.md
 - Apps:
   - Inventory: apps/inventory.md
   - MDM: apps/mdm.md
