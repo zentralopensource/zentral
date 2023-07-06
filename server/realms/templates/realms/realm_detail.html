@@ -117,6 +117,7 @@
 <table class="table">
   <thead>
     <th>Claim</th>
+    <th>Separator</th>
     <th>Value</th>
     <th>Group</th>
     <th></th>
@@ -127,6 +128,7 @@
     {% with group_mapping.group as group %}
     <tr id="{{ group_mapping.pk }}">
       <td>{{ group_mapping.claim }}</td>
+      <td>{{ group_mapping.separator|default:"∅" }}</td>
       <td>{{ group_mapping.value }}</td>
       <td>
         {% if perms.auth.view_group %}

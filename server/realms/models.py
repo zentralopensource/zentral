@@ -178,6 +178,7 @@ class RealmGroupMapping(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     realm = models.ForeignKey(Realm, on_delete=models.CASCADE)
     claim = models.CharField(max_length=255)
+    separator = models.CharField(max_length=64, blank=True)
     value = models.CharField(max_length=255)
     group = models.ForeignKey(Group, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)

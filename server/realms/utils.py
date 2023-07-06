@@ -30,10 +30,14 @@ def get_realm_user_mapped_groups(realm_user):
         claim_values = claims.get(realm_group_mapping.claim)
         if not isinstance(claim_values, list):
             claim_values = [claim_values]
-        for v in claim_values:
-            if not isinstance(v, str):
-                v = str(v)
-            if v == realm_group_mapping.value:
+        for claim_value in claim_values:
+            if not isinstance(claim_value, str):
+                claim_value = str(claim_value)
+            if realm_group_mapping.separator:
+                values = claim_value.split(realm_group_mapping.separator)
+            else:
+                values = [claim_value]
+            if realm_group_mapping.value in values:
                 mapped_groups.add(realm_group_mapping.group)
                 break
     return mapped_groups

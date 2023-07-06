@@ -53,6 +53,7 @@ Set the following values in the `Configuration` tab of the OneLogin app:
 |Audience (EntityID)|Entity ID|
 |Recipient|Assertion Consumer Service URL|
 |ACS (Consumer) URL|Assertion Consumer Service URL|
+|SAML initiator|OneLogin|
 |SAML nameID format|Email|
 |SAML issuer type|Generic|
 |SAML signature element|Assertion|
@@ -88,6 +89,7 @@ Go back to the realm detail view. For each role in OneLogin, we need to create a
 |Zentral group mapping attribute|Value|
 |---|---|
 |Claim|roles|
+|Separator|`;`|
 |Value|name of the application role in OneLogin|
 |Group|Zentral group|
 

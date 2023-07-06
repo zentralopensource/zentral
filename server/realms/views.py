@@ -119,7 +119,7 @@ class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixi
 
 
 class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
-    permission_required = "realm.change_realmgroupmapping"
+    permission_required = "realms.change_realmgroupmapping"
     model = RealmGroupMapping
     pk_url_kwarg = "gm_pk"
     form_class = RealmGroupMappingForm
@@ -143,7 +143,7 @@ class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixi
 
 
 class DeleteRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteView):
-    permission_required = "realm.delete_realmgroupmapping"
+    permission_required = "realms.delete_realmgroupmapping"
     model = RealmGroupMapping
     pk_url_kwarg = "gm_pk"
 
