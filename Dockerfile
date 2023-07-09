@@ -197,9 +197,10 @@ COPY --from=gcp-builder /opt/venv /opt/venv
 
 FROM ${APP_ENV}-runner as final
 ARG APP_VERSION
-LABEL maintainer="Éric Falconnier <eric@zentral.pro>"
+LABEL maintainer="Éric Falconnier <eric@zentral.com>"
 
 COPY docker-entrypoint.py /zentral/
+COPY ./ee /zentral/ee
 COPY ./server /zentral/server
 COPY ./zentral /zentral/zentral
 RUN printf "version = \"\"\"$APP_VERSION\"\"\"\n" > /zentral/server/base/deployment.py
