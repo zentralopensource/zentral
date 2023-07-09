@@ -1,4 +1,5 @@
 import logging
+import os
 import requests
 
 
@@ -15,20 +16,22 @@ class AWSSecretClient:
         # fail early if no authentication
         sts.get_caller_identity()
         # get region
-        r = requests.put(
-            self.metadata_service_url + "api/token",
-            headers={"X-aws-ec2-metadata-token-ttl-seconds": "10"},
-            timeout=.5
-        )
-        r.raise_for_status()
-        token = r.text.strip()
-        r = requests.get(
-            self.metadata_service_url + "dynamic/instance-identity/document",
-            headers={"X-aws-ec2-metadata-token": token}
-        )
-        r.raise_for_status()
-        data = r.json()
-        region = data["region"]
+        region = os.environ.get("AWS_REGION")
+        if not region:
+            r = requests.put(
+                self.metadata_service_url + "api/token",
+                headers={"X-aws-ec2-metadata-token-ttl-seconds": "10"},
+                timeout=.5
+            )
+            r.raise_for_status()
+            token = r.text.strip()
+            r = requests.get(
+                self.metadata_service_url + "dynamic/instance-identity/document",
+                headers={"X-aws-ec2-metadata-token": token}
+            )
+            r.raise_for_status()
+            data = r.json()
+            region = data["region"]
         # setup secrets manager client
         self._client = boto3.client('secretsmanager', region_name=region)
 
