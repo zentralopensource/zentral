@@ -111,6 +111,9 @@ if "SESSION_COOKIE_AGE" in django_zentral_settings:
 if "SESSION_EXPIRE_AT_BROWSER_CLOSE" in django_zentral_settings:
     SESSION_EXPIRE_AT_BROWSER_CLOSE = django_zentral_settings["SESSION_EXPIRE_AT_BROWSER_CLOSE"]
 
+if "CSRF_TRUSTED_ORIGINS" in django_zentral_settings:
+    CSRF_TRUSTED_ORIGINS = django_zentral_settings["CSRF_TRUSTED_ORIGINS"]
+
 MAX_PASSWORD_AGE_DAYS = django_zentral_settings.get("MAX_PASSWORD_AGE_DAYS", None)
 
 LOGIN_REDIRECT_URL = '/'
