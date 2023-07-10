@@ -57,6 +57,8 @@ class AccountConfiguration(Command):
                 "hidden": True,  # TODO => DEP Profile
                 "passwordHash": serialize_password_hash_dict(dep_enrollment.admin_password_hash)
             })
+            if not dep_enrollment.use_realm_user and dep_enrollment.auto_advance_setup:
+                command["SkipPrimarySetupAccountCreation"] = True
 
         return command
 

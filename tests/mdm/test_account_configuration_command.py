@@ -114,6 +114,35 @@ class AccountConfigurationCommandTestCase(TestCase):
               "passwordHash": serialize_password_hash_dict(password_hash)}]
         )
 
+    def test_build_command_no_realm_user_hard_coded_admin_auto_advance_setup(self):
+        self.dep_enrollment_session.realm_user = None
+        self.dep_enrollment_session.save()
+        dep_enrollment = self.dep_enrollment_session.dep_enrollment
+        dep_enrollment.use_realm_user = False
+        dep_enrollment.auto_advance_setup = True
+        dep_enrollment.admin_full_name = "Admin Full Name"
+        dep_enrollment.admin_short_name = "admin_short_name"
+        dep_enrollment.admin_password_hash = {"SALTED-SHA512-PBKDF2": {"fake": True}}
+        dep_enrollment.save()
+        cmd = AccountConfiguration.create_for_device(
+            self.dep_enrollment_session.enrolled_device
+        )
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload["AutoSetupAdminAccounts"],
+            [{"fullName": "Admin Full Name",
+              "shortName": "admin_short_name",
+              "hidden": True,
+              "passwordHash": serialize_password_hash_dict(dep_enrollment.admin_password_hash)}]
+        )
+        self.assertTrue(payload["DontAutoPopulatePrimaryAccountInfo"])
+        self.assertTrue(payload["SkipPrimarySetupAccountCreation"])
+        self.assertNotIn("LockPrimaryAccountInfo", payload)
+        self.assertNotIn("PrimaryAccountFullName", payload)
+        self.assertNotIn("PrimaryAccountUserName", payload)
+        self.assertNotIn("SetPrimarySetupAccountAsRegularUser", payload)
+
     # _configure_dep_enrollment_accounts
 
     def test_configure_dep_enrollment_accounts_not_now(self):
