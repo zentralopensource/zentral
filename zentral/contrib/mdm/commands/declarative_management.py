@@ -36,6 +36,10 @@ class DeclarativeManagement(Command):
             )
         )
 
+    @classmethod
+    def verify_target(cls, target):
+        return not target.awaiting_configuration and super().verify_target(target)
+
     def load_kwargs(self):
         self.blueprint_pk = self.db_command.kwargs.get("blueprint_pk")
         self.declarations_token = self.db_command.kwargs.get("declarations_token")
