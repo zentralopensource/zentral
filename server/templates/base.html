@@ -1,103 +1,177 @@
 {% load static base_extras %}
-<!DOCTYPE html>
-<html lang="en">
-  <head>
+<!doctype html>
+<html lang="en" class="d-flex flex-column h-100">
+<head>
     <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="shortcut icon" href="{% static 'favicon.ico' %}">
-    <meta name="robots" content="noindex, nofollow">
     <title>Zentral</title>
-    <link href="{% static 'bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link rel="shortcut icon" href="{% static 'favicon.ico' %}">
     <link href="{% static 'pygments/highlight_style.css' %}" rel="stylesheet">
     <link href="{% static 'fontawesome-free-5.8.1-web/css/all.min.css' %}" rel="stylesheet">
-    <link href="{% static 'css/style.css' %}" rel="stylesheet">
-  </head>
-  <body>
-    <header class="navbar navbar-default" role="banner">
-      <div class="container">
-        <!-- Brand and toggle get grouped for better mobile display -->
-        <div class="navbar-header">
-          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
-            <span class="sr-only">Toggle navigation</span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-          </button>
-          <a class="navbar-brand" href="{% url 'base:index' %}" style="padding:10px 15px;">
-            <img src="{% static 'logo.svg' %}" height="30" alt="Zentral">
-	  </a>
+    <link href="{% static 'dist/main.css' %}" rel="stylesheet">
+</head>
+<body class="d-flex flex-column h-100">
+    <nav class="navbar navbar-expand-lg bg-light sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <img src="{% static 'logo.svg' %}" width="150" height="48" alt="Zentral">
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <ul class="nav ms-auto">
+                <li class="nav-item dropdown">
+                    <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-display"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#">Action</a></li>
+                        <li><a class="dropdown-item" href="#">Another action</a></li>
+                        <li><a class="dropdown-item" href="#">Something else here</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#">Action</a></li>
+                        <li><a class="dropdown-item" href="#">Another action</a></li>
+                        <li><a class="dropdown-item" href="#">Something else here</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-three-dots-vertical"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#">Action</a></li>
+                        <li><a class="dropdown-item" href="#">Another action</a></li>
+                        <li><a class="dropdown-item" href="#">Something else here</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-person-circle"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#">Action</a></li>
+                        <li><a class="dropdown-item" href="#">Another action</a></li>
+                        <li><a class="dropdown-item" href="#">Something else here</a></li>
+                    </ul>
+                </li>
+            </ul>
         </div>
-        <!-- Collect the nav links, forms, and other content for toggling -->
-        <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
-          {% if user.is_authenticated %}
-          <ul class="nav navbar-nav">
-            {% main_menu_app_dropdowns %}
-          </ul>
-          <ul class="nav navbar-nav navbar-right">
-            {% setup_dropdown %}
-            {% if zentral_extra_links %}
-	    <li class="dropdown">
-              <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button">
-                <span class="glyphicon glyphicon-bookmark" aria-hidden="true"></span>
-                Extra links <span class="caret"></span>
-              </a>
-              <ul class="dropdown-menu">
-                {% for link in zentral_extra_links %}
-                <li><a href="{{ link.url }}" target="blank">{{ link.anchor_text }}</a></li>
-                {% endfor %}
-              </ul>
-            </li>
-            {% endif %}
-            <li class="dropdown">
-              <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button">
-                {% if user.is_superuser %}
-                <span class="glyphicon glyphicon-fire" aria-hidden="true"></span>
-                {% else %}
-                <span class="glyphicon glyphicon-user" aria-hidden="true"></span>
-                {% endif %}
-                {{ user }} <span class="caret"></span>
-              </a>
-              <ul class="dropdown-menu">
-                <li><a href="{% url 'accounts:profile' %}">Profile</a></li>
-                {% if not request.realm_authentication_session.is_remote %}
-                <li><a href="{% url 'password_change' %}">Change Password</a></li>
-                <li><a href="{% url 'accounts:verification_devices' %}">Verification Devices</a></li>
-                {% else %}
-                <li style="padding:3px 20px"><span class="glyphicon glyphicon-cloud" aria-hidden="true"></span> {{ request.realm_authentication_session.realm }}</li>
-                <li role="separator" class="divider"></li>
-                {% endif %}
-                <li><form id="logout-form" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign Out</button></form></li>
-              </ul>
-            </li>
-          </ul>
-          {% else %}
-          {% if not hide_default_sign_in %}
-          <ul class="nav navbar-nav navbar-right">
-            {% if request.path == '/accounts/login/' %}
-            <li class="active"><a href="#">Sign in</a></li>
-            {% else %}
-            <li><a href="{% url 'login' %}">Sign in</a></li>
-            {% endif %}
-          </ul>
-          {% endif %}
-          {% endif %}
-        </div><!-- /.navbar-collapse -->
-      </div><!-- /.container -->
-    </header>
-    <div class="container">
-      {% for message in messages %}
-      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible" role="alert">
-        <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-        {{ message }}
-      </div>
-      {% endfor %}
-      {% block content %}
-      {% endblock %}
+    </nav>
+    <div class="d-flex h-100 overflow-auto">
+        <div class="offcanvas offcanvas-start bg-light sidebar sticky-lg-top flex-lg-shrink-0" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
+            <div class="offcanvas-header d-lg-none">
+                <h5 class="offcanvas-title" id="offcanvasNavbarLabel">
+                    <a class="navbar-brand" href="/">
+                        <img src="{% static 'logo.svg' %}" width="150" height="48" alt="Zentral">
+                    </a>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="list-group rounded-0 border-0 border-bottom px-2 pb-3 mb-3">
+                <div class="d-flex justify-content-start">
+                    <a href="/" class="list-group-item list-group-item-action border-0 w-auto px-2 active" aria-current="true">
+                        <i class="bi bi-house-door-fill me-2"></i>
+                        Home
+                    </a>
+                </div>
+                <div class="d-flex justify-content-start">
+                    <a href="#" class="list-group-item list-group-item-action border-0 w-auto px-2">
+                        <i class="bi bi-kanban-fill me-2"></i>
+                        Dashboard
+                    </a>
+                </div>
+                <div class="d-flex justify-content-start">
+                    <a href="#" class="list-group-item list-group-item-action border-0 w-auto px-2">
+                        <i class="bi bi-table me-2"></i>
+                        Orders
+                    </a>
+                </div>
+                <div class="d-flex justify-content-start">
+                    <a href="#" class="list-group-item list-group-item-action border-0 w-auto px-2">
+                        <i class="bi bi-grid me-2"></i>
+                        Products
+                    </a>
+                </div>
+                <div class="d-flex justify-content-start">
+                    <a href="#" class="list-group-item list-group-item-action border-0 w-auto px-2">
+                        <i class="bi bi-people-fill me-2"></i>
+                        Customers
+                    </a>
+                </div>
+            </div>
+            <div class="list-group rounded-0 border-0 overflow-auto px-2">
+                <div class="d-flex justify-content-start">
+                    <a class="list-group-item list-group-item-action border-0 w-auto px-2 collapse-toggler collapsed" data-bs-toggle="collapse" href="#offcanvasPagesSubmenu" role="button" aria-expanded="false" aria-controls="offcanvasPagesSubmenu">
+                        Sample pages
+                    </a>
+                </div>
+                <div class="collapse" id="offcanvasPagesSubmenu">
+                    <div class="list-group rounded-0 border-0">
+                        <div class="d-flex justify-content-start px-4">
+                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="/details/">Details</a>
+                        </div>
+                        <div class="d-flex justify-content-start px-4">
+                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="/list/">List</a>
+                        </div>
+                        <div class="d-flex justify-content-start px-4">
+                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="/update/">Update</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-start">
+                    <a class="list-group-item list-group-item-action border-0 w-auto px-2 collapse-toggler collapsed" data-bs-toggle="collapse" href="#offcanvasDashboardSubmenu" role="button" aria-expanded="false" aria-controls="offcanvasDashboardSubmenu">
+                        Dashboard
+                    </a>
+                </div>
+                <div class="collapse" id="offcanvasDashboardSubmenu">
+                    <div class="list-group rounded-0 border-0">
+                        <div class="d-flex justify-content-start px-4">
+                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Enrollment</a>
+                        </div>
+                        <div class="d-flex justify-content-start px-4">
+                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Artifacts</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-start">
+                    <a class="list-group-item list-group-item-action border-0 w-auto px-2 collapse-toggler collapsed" data-bs-toggle="collapse" href="#offcanvasOrdersSubmenu" role="button" aria-expanded="false" aria-controls="offcanvasOrdersSubmenu">
+                        Orders
+                    </a>
+                </div>
+                <div class="collapse" id="offcanvasOrdersSubmenu">
+                    <div class="list-group rounded-0 border-0">
+                        <div class="d-flex justify-content-start px-4">
+                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Devices</a>
+                        </div>
+                        <div class="d-flex justify-content-start px-4">
+                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Blueprints</a>
+                        </div>
+                        <div class="d-flex justify-content-start px-4">
+                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Enrollment</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <main class="container-fluid overflow-auto">
+        {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% block content %}
+        {% endblock %}
+        </main>
     </div>
-    <footer id="main-footer"></footer>
+    <script src="{% static 'dist/main.js' %}"></script>
     <script src="{% static 'jquery/jquery.min.js' %}"></script>
-    <script src="{% static 'bootstrap/js/bootstrap.min.js' %}"></script>
     <script src="{% static 'Chart.js/Chart.min.js' %}"></script>
     <script nonce="{{ request.csp_nonce }}">
       function getCookie(name) {

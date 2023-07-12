@@ -1,0 +1,63 @@
+$list-group-bg: #f8f9fa;
+$list-group-hover-bg: #fff;
+$offcanvas-border-color: transparent;
+$offcanvas-horizontal-width: 300px;
+$box-max-width: 1304px;
+$collapse-toggler-color: #212529;
+$custom-table-padding: 0.375rem;
+$bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
+
+@import "~bootstrap/scss/bootstrap";
+@import "~bootstrap-icons/font/bootstrap-icons";
+
+.sidebar {
+  @media (min-width: 992px) {
+    transform: none !important;
+    visibility: visible !important;
+  }
+}
+
+.object-details,
+.update-form {
+  max-width: $box-max-width;
+}
+
+.collapse-toggler {
+  &:before {
+    display: inline-block;
+    border-bottom: 2px solid $collapse-toggler-color;
+    border-right: 2px solid $collapse-toggler-color;
+    content: "";
+    height: 9px;
+    transform: rotate(-45deg);
+    width: 9px;
+    transition: transform .35s ease;
+    position: relative;
+    top: -3px;
+    margin-right: 5px;
+  }
+
+  &:not(.collapsed) {
+    &:before {
+      transform: rotate(45deg);
+    }
+  }
+}
+
+.data-row {
+  &:not(&:hover) {
+    .btn {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+  }
+}
+
+.table-object-properties > :not(caption) > * > * {
+  padding: $custom-table-padding;
+}
+
+.btn-link.text-dark:hover {
+  background: #f8f9fa;
+}

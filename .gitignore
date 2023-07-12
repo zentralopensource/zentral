@@ -31,3 +31,6 @@ __pycache__
 
 tests/osquery/fixtures/*
 tests/santa/fixtures/*
+
+/server/static/dist/
+/node_modules/
