@@ -2,21 +2,13 @@
 {% load bootstrap %}
 
 {% block content %}
-<div class="row">
-  <div class="col-md-4 col-md-offset-4">
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        <h3 class="panel-title">Signed out</h3>
-      </div>
-      <div class="panel-body">
-        You have been signed out.
-      </div>
-      <div class="panel-footer btn-group btn-group-justified" role="group" aria-label="sign in">
-        <div class="btn-group" role="group">
-          <a href="{% url 'login' %}" class="btn btn-primary">Sign in</a>
+<div class="px-4 py-5 my-5 text-center w-50 m-auto">
+        <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+            <h3 class="mt-5">Signed out</h3>
         </div>
-      </div>
+        <div class="col-lg-6 mx-auto">
+            <p class="lead mb-4">You have been signed out.</p>
+            <a href="{% url 'login' %}" class="btn btn-primary w-50 py-2" role="button">Sign in</a>
+        </div>
     </div>
-  </div>
-</div>
 {% endblock %}

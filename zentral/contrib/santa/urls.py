@@ -106,7 +106,7 @@ urlpatterns = [
 ]
 
 
-setup_menu_cfg = {
+modules_menu_cfg = {
     'items': (
         ('index', 'Overview', False, ('santa',)),
         ('configuration_list', 'Configurations', False, ('santa.view_configuration',)),

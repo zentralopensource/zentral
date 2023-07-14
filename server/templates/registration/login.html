@@ -2,41 +2,41 @@
 {% load bootstrap %}
 
 {% block content %}
-<div class="row">
-  <div class="col-md-4 col-md-offset-4">
+<div class="form-signin d-flex justify-content-center w-100 m-auto px-4 py-5 my-5">
     {% for realm, login_link in login_realms %}
-    <form action="{{ login_link }}" method="post">{% csrf_token %}
-      <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_to }}">
-      <button href="{{ login_link }}" class="btn btn-large btn-primary">Sign in with {{ realm }}</button>
-    </form>
-    {% if not forloop.last or form %}
-    <h3 class="text-center">or</h3>
-    {% endif %}
+        <form action="{{ login_link }}" method="POST">{% csrf_token %}
+            <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_to }}" required>
+            <button href="{{ login_link }}" class="btn btn-large btn-primary">Sign in with {{ realm }}</button>
+        </form>
+        {% if not forloop.last or form %}
+            <h3 class="text-center">or</h3>
+        {% endif %}
     {% endfor %}
     {% if form %}
-    <form class="panel panel-default" method="POST">{% csrf_token %}
-      <div class="panel-heading">
-        <h3 class="panel-title">
-          {% if login_realms %}
-          Use local credentials
-          {% else %}
-          Sign in
-          {% endif %}
-        </h3>
-      </div>
-      <div class="panel-body">
-        {{ form|bootstrap }}
-        <p><a href="{% url 'password_reset' %}">Password forgotten?</a></p>
-      </div>
-      <div class="panel-footer btn-group btn-group-justified" role="group" aria-label="sign in">
-        <div class="btn-group" role="group">
-          <button type="submit" class="btn btn-primary">
-            Sign in{% if login_realms %} with local credentials{% endif %}
-          </button>
-        </div>
-      </div>
-    </form>
+        <form action="{{ login_link }}" method="POST">{% csrf_token %}
+            <h1 class="h3 mb-3 fw-normal">
+                {% if login_realms %}
+                    Use local credentials
+                {% else %}
+                    Sign in
+                {% endif %}
+            </h1>
+            <div class="form-floating">
+                <input type="text" class="form-control" id="id_username" name="username" placeholder="Username" required>
+                <label for="floatingInput">Username</label>
+            </div>
+            <div class="form-floating">
+                <input type="password" class="form-control" id="id_password" name="password" placeholder="Password" required>
+                <label for="floatingPassword">Password</label>
+            </div>
+        
+            <div class="text-start my-3">
+                <p><a href="{% url 'password_reset' %}">Password forgotten?</a></p>
+            </div>
+            <button class="btn btn-primary w-100 py-2" type="submit">
+                Sign in{% if login_realms %} with local credentials{% endif %}
+            </button>
+        </form>
     {% endif %}
-  </div>
 </div>
 {% endblock %}

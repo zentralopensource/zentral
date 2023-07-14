@@ -25,7 +25,7 @@ urlpatterns = [
 ]
 
 
-setup_menu_cfg = {
+modules_menu_cfg = {
     'items': (
         ('jamf_instances', 'jamf instances', False, ('jamf.view_jamfinstance',)),
     )

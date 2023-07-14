@@ -1,6 +1,6 @@
 {% load static base_extras %}
 <!doctype html>
-<html lang="en" class="d-flex flex-column h-100">
+<html lang="en" class="d-flex flex-column h-100" data-bs-theme="light">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,25 +19,43 @@
             <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
                 <span class="navbar-toggler-icon"></span>
             </button>
+            {% if user.is_authenticated %}
             <ul class="nav ms-auto">
+                {% if zentral_extra_links %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-moon-stars"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item bi bi-moon" href="#"> Dark Mode</a></li>
+                        <li><a class="dropdown-item bi bi-sun" href="#"> Light Mode</a></li>
+                        <li><a class="dropdown-item bi bi-circle-half" href="#"> Auto</a></li>
+                    </ul>
+                </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-display"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#">Action</a></li>
-                        <li><a class="dropdown-item" href="#">Another action</a></li>
-                        <li><a class="dropdown-item" href="#">Something else here</a></li>
+                        {% for link in zentral_extra_links %}
+                            <li>
+                                <a class="dropdown-item" href="{{ link.url }}" target="_blank">
+                                    {{ link.anchor_text }}
+                                    <span class="bi bi-box-arrow-up-right"></span>
+                                </a>
+                            </li>
+                        {% endfor %}
                     </ul>
                 </li>
+                {% endif %}
                 <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-exclamation-triangle"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#">Action</a></li>
-                        <li><a class="dropdown-item" href="#">Another action</a></li>
-                        <li><a class="dropdown-item" href="#">Something else here</a></li>
+                        <li><a class="dropdown-item" href="#">Incident 1</a></li>
+                        <li><a class="dropdown-item" href="#">Incident 2</a></li>
+                        <li><a class="dropdown-item" href="#">Incident 3</a></li>
                     </ul>
                 </li>
                 <li class="nav-item dropdown">
@@ -45,9 +63,9 @@
                         <i class="bi bi-three-dots-vertical"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#">Action</a></li>
-                        <li><a class="dropdown-item" href="#">Another action</a></li>
-                        <li><a class="dropdown-item" href="#">Something else here</a></li>
+                        <li><a class="dropdown-item" href="{% url 'accounts:users' %}">Users</a></li>
+                        <li><a class="dropdown-item" href="{% url 'accounts:groups' %}">Groups</a></li>
+                        <li><a class="dropdown-item" href="{% url 'realms:list' %}">Realms</a></li>
                     </ul>
                 </li>
                 <li class="nav-item dropdown">
@@ -55,15 +73,23 @@
                         <i class="bi bi-person-circle"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#">Action</a></li>
-                        <li><a class="dropdown-item" href="#">Another action</a></li>
-                        <li><a class="dropdown-item" href="#">Something else here</a></li>
+                        <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">Profile</a></li>
+                        {% if not request.realm_authentication_session.is_remote %}
+                        <li><a class="dropdown-item" href="{% url 'password_change' %}">Change Password</a></li>
+                        <li><a class="dropdown-item" href="{% url 'accounts:verification_devices' %}">Verification Devices</a></li>
+                        {% else %}
+                        <li style="padding:3px 20px"><span class="glyphicon glyphicon-cloud" aria-hidden="true"></span> {{ request.realm_authentication_session.realm }}</li>
+                        <li role="separator" class="divider"></li>
+                        {% endif %}
+                        <li><form id="logout-form" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="dropdown-item">Sign Out</button></form></li>
                     </ul>
                 </li>
             </ul>
+            {% endif %}
         </div>
     </nav>
     <div class="d-flex h-100 overflow-auto">
+        {% if user.is_authenticated %}
         <div class="offcanvas offcanvas-start bg-light sidebar sticky-lg-top flex-lg-shrink-0" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
             <div class="offcanvas-header d-lg-none">
                 <h5 class="offcanvas-title" id="offcanvasNavbarLabel">
@@ -73,92 +99,24 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
             </div>
-            <div class="list-group rounded-0 border-0 border-bottom px-2 pb-3 mb-3">
-                <div class="d-flex justify-content-start">
-                    <a href="/" class="list-group-item list-group-item-action border-0 w-auto px-2 active" aria-current="true">
-                        <i class="bi bi-house-door-fill me-2"></i>
-                        Home
-                    </a>
-                </div>
-                <div class="d-flex justify-content-start">
-                    <a href="#" class="list-group-item list-group-item-action border-0 w-auto px-2">
-                        <i class="bi bi-kanban-fill me-2"></i>
-                        Dashboard
-                    </a>
-                </div>
-                <div class="d-flex justify-content-start">
-                    <a href="#" class="list-group-item list-group-item-action border-0 w-auto px-2">
-                        <i class="bi bi-table me-2"></i>
-                        Orders
-                    </a>
-                </div>
-                <div class="d-flex justify-content-start">
-                    <a href="#" class="list-group-item list-group-item-action border-0 w-auto px-2">
-                        <i class="bi bi-grid me-2"></i>
-                        Products
-                    </a>
-                </div>
-                <div class="d-flex justify-content-start">
-                    <a href="#" class="list-group-item list-group-item-action border-0 w-auto px-2">
-                        <i class="bi bi-people-fill me-2"></i>
-                        Customers
-                    </a>
-                </div>
-            </div>
+
+            {% comment %} <div class="list-group rounded-0 border-0 border-bottom px-2 pb-3 mb-3">
+
+                {% pinned_menu %}
+                
+            </div> {% endcomment %}
+
             <div class="list-group rounded-0 border-0 overflow-auto px-2">
-                <div class="d-flex justify-content-start">
-                    <a class="list-group-item list-group-item-action border-0 w-auto px-2 collapse-toggler collapsed" data-bs-toggle="collapse" href="#offcanvasPagesSubmenu" role="button" aria-expanded="false" aria-controls="offcanvasPagesSubmenu">
-                        Sample pages
-                    </a>
-                </div>
-                <div class="collapse" id="offcanvasPagesSubmenu">
-                    <div class="list-group rounded-0 border-0">
-                        <div class="d-flex justify-content-start px-4">
-                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="/details/">Details</a>
-                        </div>
-                        <div class="d-flex justify-content-start px-4">
-                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="/list/">List</a>
-                        </div>
-                        <div class="d-flex justify-content-start px-4">
-                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="/update/">Update</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="d-flex justify-content-start">
-                    <a class="list-group-item list-group-item-action border-0 w-auto px-2 collapse-toggler collapsed" data-bs-toggle="collapse" href="#offcanvasDashboardSubmenu" role="button" aria-expanded="false" aria-controls="offcanvasDashboardSubmenu">
-                        Dashboard
-                    </a>
-                </div>
-                <div class="collapse" id="offcanvasDashboardSubmenu">
-                    <div class="list-group rounded-0 border-0">
-                        <div class="d-flex justify-content-start px-4">
-                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Enrollment</a>
-                        </div>
-                        <div class="d-flex justify-content-start px-4">
-                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Artifacts</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="d-flex justify-content-start">
-                    <a class="list-group-item list-group-item-action border-0 w-auto px-2 collapse-toggler collapsed" data-bs-toggle="collapse" href="#offcanvasOrdersSubmenu" role="button" aria-expanded="false" aria-controls="offcanvasOrdersSubmenu">
-                        Orders
-                    </a>
-                </div>
-                <div class="collapse" id="offcanvasOrdersSubmenu">
-                    <div class="list-group rounded-0 border-0">
-                        <div class="d-flex justify-content-start px-4">
-                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Devices</a>
-                        </div>
-                        <div class="d-flex justify-content-start px-4">
-                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Blueprints</a>
-                        </div>
-                        <div class="d-flex justify-content-start px-4">
-                            <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2" href="#">Enrollment</a>
-                        </div>
-                    </div>
-                </div>
+
+                {% pinned_menu %}
+
+                <hr>
+
+                {% modules_menu %}
+
             </div>
         </div>
+        {% endif %}
         <main class="container-fluid overflow-auto">
         {% for message in messages %}
         <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">

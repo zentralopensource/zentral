@@ -2,10 +2,12 @@
 {% load bootstrap %}
 
 {% block content %}
-<ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">{{ configurations_count }} Realm{{ realms_count|pluralize }}</li>
-</ol>
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item active">{{ configurations_count }} Realm{{ realms_count|pluralize }}</li>
+    </ol>
+</nav>
 
 <h2>{{ realms_count }} Realm{{ realms_count|pluralize }}</h2>
 

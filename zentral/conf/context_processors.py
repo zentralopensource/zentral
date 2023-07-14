@@ -1,5 +1,4 @@
 from zentral.conf import settings
-from zentral.core.probes import probe_classes
 
 
 def extra_links(request):
@@ -18,12 +17,3 @@ def extra_links(request):
                 continue
         extra_links.append(link)
     return {'zentral_extra_links': extra_links}
-
-
-def probe_creation_links(request):
-    creation_links = sorted(({"anchor_text": "{} probe".format(pc.model_display),
-                              "url": pc.create_url,
-                              "permissions": ("probes.add_probesource",)}
-                             for pc in probe_classes.values()),
-                            key=lambda l: l["anchor_text"])
-    return {'probe_extra_links': {'create': creation_links}}

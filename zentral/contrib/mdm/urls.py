@@ -309,7 +309,7 @@ urlpatterns = [
          name="terraform_export"),
 ]
 
-setup_menu_cfg = {
+modules_menu_cfg = {
     'items': (
         ('index', 'Overview', False, ('mdm',)),
         ('enrollments', 'Enrollments', False, ('mdm',)),

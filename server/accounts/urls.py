@@ -49,11 +49,3 @@ urlpatterns = [
     path(r'verify_webauthn/', views.VerifyWebAuthnView.as_view(),
          name='verify_webauthn'),
 ]
-
-setup_menu_cfg = {
-    'weight': 1,
-    'items': (
-        ('users', 'Users', False, ('accounts.view_user',)),
-        ('groups', 'Groups', False, ('auth.view_group',)),
-    )
-}

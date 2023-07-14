@@ -2,11 +2,13 @@
 {% load bootstrap %}
 
 {% block content %}
-<ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
-  <li class="active">Verification devices</li>
-</ol>
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Settings</a></li>
+        <li class="breadcrumb-item active">Verification devices</li>
+    </ol>
+</nav>
 
 <h3>{{ verification_devices|length }} Verification device{{ verification_devices|length|pluralize }}</h3>
 

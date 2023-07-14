@@ -49,7 +49,7 @@ urlpatterns = [
 ]
 
 
-setup_menu_cfg = {
+modules_menu_cfg = {
     'items': (
         ('configurations', 'Configurations', False, ('munki.view_configuration',)),
     )

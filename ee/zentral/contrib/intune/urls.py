@@ -15,7 +15,7 @@ urlpatterns = [
 ]
 
 
-setup_menu_cfg = {
+modules_menu_cfg = {
     'items': (
         ('index', 'Overview', False, ('intune.index',)),
         ('tenants', 'Tenants', False, ('intune.view_tenant',)),

@@ -8,7 +8,11 @@
   },
   "extra_links": [
     {"anchor_text": "Prometheus",
-     "url": "https://zentral/prometheus/"}
+     "url": "https://zentral/prometheus/"},
+     {"anchor_text": "Kibana",
+     "url": "https://zentral/kibana/"},
+     {"anchor_text": "Grafana",
+     "url": "https://zentral/grafana/"}
   ],
   "django": {
     "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",

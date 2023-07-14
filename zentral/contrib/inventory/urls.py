@@ -111,7 +111,7 @@ urlpatterns = [
     path('programs/', views.ProgramsView.as_view(), name='programs'),
 ]
 
-main_menu_cfg = {
+pinned_menu_cfg = {
     'weight': 0,
     'items': (
         ('index', 'Machines', False, ("inventory.view_machinesnapshot",)),

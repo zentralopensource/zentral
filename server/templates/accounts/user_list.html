@@ -1,10 +1,12 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Users</li>
-</ol>
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item active">Users</li>
+    </ol>
+</nav>
 
 <h3>{{ user_count }} User{{ user_count|pluralize }}</h3>
 
