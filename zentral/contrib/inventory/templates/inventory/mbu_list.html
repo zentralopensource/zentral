@@ -3,113 +3,117 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a>
   {% else %}
-  <li class="active">{{ anchor_text }}</li>
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
   {% endfor %}
 </ol>
 
-<h2>{{ page_obj.paginator.count }} Business unit{{ page_obj.paginator.count|pluralize }}</h2>
+<div class="py-3">
 
-{% if perms.inventory.add_metabusinessunit %}
-<a href="{% url 'inventory:create_mbu' %}" class="btn btn-default">Create</a>
-{% endif %}
+    <div class="d-flex justify-content-between mb-3">
+        <h2 class="m-0">Business unit{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+       
+    </div>
 
-<form method="GET" class="form form-inline" style="margin:1em 0 2em 0">
-  <div class="form-group">
-    <label for="id_name">{{ search_form.name.label|title }}</label>
-    <input type="text" id="id_name"{% if search_form.name.value %} value="{{ search_form.name.value }}"{% endif %} name="name" class="form-control" placeholder="{{ search_form.name.label }}">
-  </div>
-  <div class="form-group">
-    <label for="id_source">{{ search_form.source.label|title }}</label>
-    {{ search_form.source }}
-  </div>
-  <div class="form-group">
-    <label for="id_source">{{ search_form.tag.label|title }}</label>
-    {{ search_form.tag }}
-  </div>
-  <button type="submit" class="btn btn-default">Search</button>
-</form>
+    <div class="d-flex justify-content-between">
+        <div class="d-flex w-75 me-auto flex-shrink-0">
+            <form method="GET" class="d-flex w-75 me-auto flex-shrink-0">
+                {{ search_form }}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
-
-<form method="GET" action="{% url 'inventory:review_mbu_merge' %}">
-  {% if perms.inventory.change_metabusinessunit %}
-  <p id="merge-btn-container" style="display:none"><button type="submit" class="btn btn-warning">Merge business units</button></p>
-  {% endif %}
-  <table class="table">
-    {% for mbu in object_list %}
-    <tr>
-      <td colspan="3">
+                <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
+                    <i class="bi bi-search"></i>
+                </button>
+            </form>
+        </div>
+        <div class="d-flex ms-auto">
+        {% if perms.inventory.add_metabusinessunit %}
+            <a type="button" href="{% url 'inventory:create_mbu' %}" class="btn btn-link text-dark text-decoration-none mb-2"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Business Unit">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+        {% endif %}
         {% if perms.inventory.change_metabusinessunit %}
-        <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
+            <button form="merge_form" type="submit" disabled id="merge-btn-container" class="btn btn-link text-dark text-decoration-none mb-2"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Merge Business Units">
+                <i class="bi text-dark bi-sign-merge-left"></i>
+            </button>
+        </div>
         {% endif %}
-        {% if perms.inventory.view_machinesnapshot %}
-        <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu.name }}</a>
-        {% else %}
-        {{ mbu.name }}
-        {% endif %}
-        {% for tag in mbu.tags %}
-        {% inventory_tag tag %}
-        {% endfor %}
-        {% if mbu.api_enrollment_enabled %}
-        <span class="label label-success">Available for API enrollment</span>
-        {% endif %}
-      </td>
-    </tr>
-    {% for bu in mbu.get_current_business_units %}
-    <tr>
-      <td>{{ bu.source.name }}</td>
-      <td>{{ bu.name }}</td>
-      <td>
-        {% for link in bu.links.all %}
-        <a href="{{ link.url }}" class="btn btn-default">
-          {{ bu.source.name }} - {{ link.anchor_text }}
-        </a>
-        {% endfor %}
-      </td>
-    </tr>
-    {% endfor %}
-    {% endfor %}
-  </table>
-</form>
+    </div>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
-{% endblock %}
+    {% include "../templatetags/pagination.html" %}
 
-{% block extrajs %}
-<script nonce="{{ request.csp_nonce }}">
-  function test_checkbox() {
-    return $('input[type=checkbox]:checked').length > 1;
-  }
-  $('input[type=checkbox]').change(function() {
-    $('#merge-btn-container').toggle(test_checkbox());
-  });
-</script>
+    <div class="table-responsive mb-3">
+        <form id="merge_form" method="GET" action="{% url 'inventory:review_mbu_merge' %}">
+            <table class="table table-striped align-middle table-hover">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Name</th>
+                        <th>Tags</th>
+                        <th>API enrollment</th>
+                    <tr>
+                </thead>
+                {% for mbu in object_list %}
+                <tr>
+                    {% if perms.inventory.change_metabusinessunit %}
+                        <td>
+                            <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
+                        </td>
+                    {% endif %}
+                    {% if perms.inventory.view_machinesnapshot %}
+                        <td>
+                            <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu.name }}</a>
+                        </td>
+                    {% else %}
+                        <td>
+                            {{ mbu.name }}
+                        </td>
+                    {% endif %}
+                    <td>
+                    {% for tag in mbu.tags %}
+                        {% inventory_tag tag %}
+                    {% endfor %}
+                    </td>
+                    {% if mbu.api_enrollment_enabled %}
+                        <td>
+                            <span class="badge text-bg-success">Available for API enrollment</span>
+                        </td>
+                    {% endif %}
+                </tr>
+                {% for bu in mbu.get_current_business_units %}
+                <tr>
+                <td>{{ bu.source.name }}</td>
+                <td>{{ bu.name }}</td>
+                <td>
+                    {% for link in bu.links.all %}
+                    <a href="{{ link.url }}" class="btn btn-default">
+                    {{ bu.source.name }} - {{ link.anchor_text }}
+                    </a>
+                    {% endfor %}
+                </td>
+                </tr>
+                {% endfor %}
+                {% endfor %}
+            </table>
+        </form>
+    </div>
+    {% include "../templatetags/pagination.html" %}
+
+    {% endblock %}
+
+    {% block extrajs %}
+    <script nonce="{{ request.csp_nonce }}">
+    function test_checkbox() {
+        return $('input[type=checkbox]:checked').length > 1;
+    }
+    $('input[type=checkbox]').change(function() {
+        $('#merge-btn-container').prop( "disabled", !test_checkbox());
+    });
+    </script>
 {% endblock %}

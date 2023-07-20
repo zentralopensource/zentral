@@ -13,7 +13,7 @@ from .models import (CurrentMachineSnapshot,
                      EnrollmentSecret,
                      MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
-                     Source, Tag,
+                     Source, Tag, Taxonomy,
                      JMESPathCheck)
 from .utils import (AndroidAppFilter,
                     BundleFilter,
@@ -33,13 +33,37 @@ class MachineGroupSearchForm(forms.Form):
 
 
 class MetaBusinessUnitSearchForm(forms.Form):
-    name = forms.CharField(max_length=64, required=False)
-    source = forms.ModelChoiceField(queryset=Source.objects.current_business_unit_sources(),
-                                    required=False,
-                                    widget=forms.Select(attrs={'class': 'form-control'}))
-    tag = forms.ModelChoiceField(queryset=Tag.objects.distinct().filter(metabusinessunittag__isnull=False),
-                                 required=False,
-                                 widget=forms.Select(attrs={'class': 'form-control'}))
+    name = forms.CharField(
+        max_length=64,
+        required=False,
+        label='',
+        widget=forms.TextInput(
+            attrs={
+                "autofocus": "true",
+                "size": 32,
+                "placeholder": "- Name -",
+                "class": "form-select me-2 mb-2"
+            }
+        ),
+        )
+    source = forms.ModelChoiceField(
+        queryset=Source.objects.current_business_unit_sources(),
+        required=False,
+        widget=forms.Select(
+            attrs={'class': 'form-select me-2 mb-2'}
+            ),
+        label='',
+        empty_label="- Source -"
+        )
+    tag = forms.ModelChoiceField(
+        queryset=Tag.objects.distinct().filter(metabusinessunittag__isnull=False),
+        required=False,
+        widget=forms.Select(
+            attrs={'class': 'form-select me-2 mb-2'}
+            ),
+        label='',
+        empty_label="- Tag -"
+        )
 
 
 class MetaBusinessUnitForm(forms.ModelForm):

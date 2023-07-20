@@ -1,28 +1,34 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'santa:index' %}">Santa</a></li>
-  <li class="active">Configurations</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item active">Configurations</li>
 </ol>
 
-<h3>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h3>
 
-<p>
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+    <div class="ms-auto">
   {% if perms.santa.add_configuration %}
-  <a href="{% url 'santa:create_configuration' %}" class="btn btn-default">Create</a>
-  {% endif %}
+        <a href="{% url 'santa:create_configuration' %}" type="button" 
+            class="btn btn-link text-dark text-decoration-none"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new configuration">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+        {% endif %}
   {% if perms.santa.view_enrollment and perms.santa.view_rule %}
-  <a href="{% url 'santa:terraform_export' %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-    Terraform config
-  </a>
+        <a href="{% url 'santa:terraform_export' %}" type="button" 
+            class="btn btn-link text-dark text-decoration-none"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download Terraform file">
+            <i class="bi bi-download"></i>
+        </a>
+    </div>
   {% endif %}
-</p>
+</div>
 
-<table class="table">
+<table class="table table-striped align-middle">
   <thead>
     <tr>
       <th>Name</th>

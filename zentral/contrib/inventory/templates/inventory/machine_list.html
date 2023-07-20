@@ -2,27 +2,27 @@
 {% load incidents_extras inventory_extras %}
 
 {% block content %}
-<div class="row">
-  <div class="col-md-12">
-    <ol class="breadcrumb">
-      <li><a href="/">Home</a></li>
-      {% for url, anchor_text in breadcrumbs %}
-      {% if url %}
-      <li><a href="{{ url }}">{{ anchor_text }}</a>
-      {% else %}
-      <li class="active">{{ anchor_text }}</li>
-      {% endif %}
-      {% endfor %}
+<ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Home</a></li>
+    {% for url, anchor_text in breadcrumbs %}
+    {% if url %}
+    <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a>
+        {% else %}
+        <li class="breadcrumb-item active">{{ anchor_text }}</li>
+        {% endif %}
+        {% endfor %}
     </ol>
-
+    
+<div class="row">
+    <div class="col-md-12">
     {% if object_list_title %}
-    <h2>{{ object_list_title }}</h2>
+        <h2>{{ object_list_title }}</h2>
     {% endif %}
 
     {% block objectextras %}
     {% endblock %}
 
-    <h3>{{ msquery.count }} Machine{{ msquery.count|pluralize }}</h3>
+    <h3>Machine{{ msquery.count|pluralize }} ({{ msquery.count }})</h3>
   </div>
 </div>
 

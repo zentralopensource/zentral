@@ -98,13 +98,45 @@ class SigningIDSearchForm(forms.Form):
 
 
 class RuleSearchForm(forms.Form):
-    ruleset = forms.ModelChoiceField(queryset=RuleSet.objects.none(), required=False)
-    target_type = forms.ChoiceField(choices=(("", "----"),) + Target.TYPE_CHOICES, required=False)
-    policy = forms.ChoiceField(choices=(("", "----"),) + Rule.POLICY_CHOICES, required=False)
-    identifier = forms.CharField(required=False,
-                                 widget=forms.TextInput(attrs={"autofocus": "true",
-                                                               "size": 32,
-                                                               "placeholder": "identifier"}))
+    ruleset = forms.ModelChoiceField(
+        queryset=RuleSet.objects.all(),
+        required=False,
+        widget=forms.Select(
+            attrs={'class': 'form-select me-2 mb-2'}
+        ),
+        label='',
+        empty_label="- Ruleset -",
+    )
+    target_type = forms.ChoiceField(
+        choices=(("", "- Target type -"),) + Target.TYPE_CHOICES,
+        required=False,
+        widget=forms.Select(
+            attrs={'class': 'form-select me-2 mb-2'}
+        ),
+        label='',
+    )
+    policy = forms.ChoiceField(
+        choices=(("", "- Policy -"),) + Rule.POLICY_CHOICES,
+        required=False,
+        widget=forms.Select(
+            attrs={'class': 'form-select me-2 mb-2'}
+        ),
+        label='',
+    )
+    identifier = forms.CharField(
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "autofocus": "true",
+                "size": 32,
+                "placeholder": "- Identifier -",
+                "class": "form-select me-2 mb-2"
+            }
+        ),
+        label='',
+    )
+
+    field_order = ['identifier', 'policy', 'ruleset', 'target_type']
 
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration")
@@ -451,8 +483,22 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
 
 
 class TargetSearchForm(forms.Form):
-    q = forms.CharField(required=False,
-                        widget=forms.TextInput(attrs={"autofocus": "true",
-                                                      "size": 32,
-                                                      "placeholder": "sha256, name, …"}))
-    target_type = forms.ChoiceField(choices=(("", "----"),) + Target.TYPE_CHOICES, required=False)
+    q = forms.CharField(
+        required=False,
+        label='',
+        widget=forms.TextInput(
+            attrs={"autofocus": "true",
+                   "size": 32,
+                   "placeholder": "sha256, name, …",
+                   'class': 'form-select me-2 mb-2'
+                   }
+        )
+    )
+    target_type = forms.ChoiceField(
+        choices=(("", "- Target Type -"),) + Target.TYPE_CHOICES,
+        required=False,
+        label='',
+        widget=forms.Select(
+            attrs={'class': 'form-select me-2 mb-2 w-50'}
+        ),
+    )

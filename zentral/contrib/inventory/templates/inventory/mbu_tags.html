@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:mbu' %}">Inventory business units</a></li>
-  <li><a href="{% url 'inventory:mbu_machines' meta_business_unit.id %}">{{ meta_business_unit }}</a>
-  <li class="active">Tags</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:mbu' %}">Inventory business units</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:mbu_machines' meta_business_unit.id %}">{{ meta_business_unit }}</a>
+  <li class="breadcrumb-item active">Tags</li>
 </ol>
 
 <h2>{{ tags|length }} Tag{{ tags|length|pluralize }}</h2>

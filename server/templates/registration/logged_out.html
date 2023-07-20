@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <div class="px-4 py-5 my-5 text-center w-50 m-auto">
@@ -7,7 +6,7 @@
             <h3 class="mt-5">Signed out</h3>
         </div>
         <div class="col-lg-6 mx-auto">
-            <p class="lead mb-4">You have been signed out.</p>
+            <p class="mb-4">You have been signed out.</p>
             <a href="{% url 'login' %}" class="btn btn-primary w-50 py-2" role="button">Sign in</a>
         </div>
     </div>

@@ -3,43 +3,140 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Inventory tags</li>
+  <li  class="breadcrumb-item"><a href="/">Home</a></li>
+  <li  class="breadcrumb-item active">Inventory tags</li>
 </ol>
 
 {% if perms.inventory.view_tag %}
-<h2>{{ tag_list|length }} Tag{{ tag_list|length|pluralize }}</h2>
 
-{% if perms.inventory.add_tag %}
-<p><a href="{% url 'inventory:create_tag' %}" class="btn btn-default">Create</a></p>
+<div class="py-3">
+
+    <div class="d-flex justify-content-between">
+        <div class="d-flex w-100 me-auto flex-shrink-0">
+            <h2 class="mb-3">Tag{{ tag_list|length|pluralize }} ({{ tag_list|length }})</h2>
+
+            {% if perms.inventory.add_tag %}
+            <div class="ms-auto">
+                <a type="button" href="{% url 'inventory:create_tag' %}"
+                    class="btn btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="bottom"
+                    data-bs-title="Add new Tag">
+                    <i class="bi bi-plus-circle"></i>
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-responsive mb-3">
+        <table class="table table-striped align-middle table-hover">
+            <thead>
+                <tr>
+                    <th class="col-md-3">Taxonomy</th>
+                    <th>Meta Business Unit</th>
+                    <th>Tag</th>
+                    {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
+                    <th>Actions</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+            {% for tag in tag_list %}
+            <tr class="data-row">
+                <td class="col-md-3">{{ tag.taxonomy|default:"-" }}</td>
+                <td>{{ tag.meta_business_unit|default:"-" }}</td>
+                <td>{% inventory_tag tag %}</td>
+                {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
+                <td>
+                {% if perms.inventory.change_tag %}
+                    <a type="button"
+                        href="{% url 'inventory:update_tag' tag.id %}"
+                        class="btn btn-link text-dark text-decoration-none"
+                        data-bs-toggle="tooltip"
+                        data-bs-placement="bottom"
+                        data-bs-title="Edit">
+                        <i class="bi bi-pencil-square"></i>
+                    </a>
+                {% endif %}
+                {% if perms.inventory.delete_tag %}
+                <a type="button"
+                    href="{% url 'inventory:delete_tag' tag.id %}"
+                    class="btn btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="bottom"
+                    data-bs-title="Delete">
+                    <i class="bi bi-trash"></i>
+                </a>
+                {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endif %}
 
-<div class="table-responsive">
-  <table class="table">
+{% if perms.inventory.view_taxonomy %}
+<div class="py-3">
+    <div class="d-flex justify-content-between">
+        <div class="d-flex w-100 me-auto flex-shrink-0">
+            <h2 class="mb-3">Taxonom{{ taxonomy_list|length|pluralize:"y,ies" }} ({{ taxonomy_list|length }})</h2>
+
+            {% if perms.inventory.add_taxonomy %}
+            <div class="ms-auto">
+                <a type="button" href="{% url 'inventory:create_taxonomy' %}" 
+                    class="btn btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="bottom"
+                    data-bs-title="Add new Taxonomy">
+                    <i class="bi bi-plus-circle"></i>
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
     <thead>
-      <th class="col-md-3">Taxonomy</th>
-      <th class="col-md-3">Meta Business Unit</th>
-      <th class="col-md-4">Tag</th>
-      {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
-      <th class="col-md-2"></th>
-      {% endif %}
+        <tr>
+            <th class="col-md-3"></th>
+            <th>Meta Business Unit</th>
+            <th>Name</th>
+            {% if perms.inventory.change_taxonomy or perms.inventory.delete_taxonomy %}
+            <th>Actions</th>
+            {% endif %}
+        </tr>
     </thead>
     <tbody>
-      {% for tag in tag_list %}
-      <tr>
-        <td>{{ tag.taxonomy|default:"-" }}</td>
-        <td>{{ tag.meta_business_unit|default:"-" }}</td>
-        <td>{% inventory_tag tag %}</td>
-        {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
+      {% for taxonomy in taxonomy_list %}
+      <tr class="data-row">
+        <td class="col-md-3"></td>
+        <td>{{ taxonomy.meta_business_unit|default:"-" }}</td>
+        <td>{{ taxonomy.name }}</td>
+        {% if perms.inventory.change_taxonomy or perms.inventory.delete_taxonomy %}
         <td>
-          {% if perms.inventory.change_tag %}
-          <a class="btn btn-default" href="{% url 'inventory:update_tag' tag.id %}">
-            <span class="glyphicon glyphicon-pencil" aria-hidden="true"></span>
+          {% if perms.inventory.change_taxonomy %}
+          <a type="button"
+                        href="{% url 'inventory:update_taxonomy' taxonomy.id %}"
+                        class="btn btn-link text-dark text-decoration-none"
+                        data-bs-toggle="tooltip"
+                        data-bs-placement="bottom"
+                        data-bs-title="Edit">
+                        <i class="bi bi-pencil-square"></i>
           </a>
           {% endif %}
-          {% if perms.inventory.delete_tag %}
-          <a class="btn btn-danger" href="{% url 'inventory:delete_tag' tag.id %}">
-            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+          {% if perms.inventory.delete_taxonomy %}
+          <a type="button"
+                    href="{% url 'inventory:delete_taxonomy' taxonomy.id %}"
+                    class="btn btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="bottom"
+                    data-bs-title="Delete">
+                    <i class="bi bi-trash"></i>
           </a>
           {% endif %}
         </td>
@@ -49,49 +146,6 @@
     </tbody>
   </table>
 </div>
-{% endif %}
-
-{% if perms.inventory.view_taxonomy %}
-<h2>{{ taxonomy_list|length }} Taxonom{{ taxonomy_list|length|pluralize:"y,ies" }}</h2>
-
-{% if perms.inventory.add_taxonomy %}
-<p><a href="{% url 'inventory:create_taxonomy' %}" class="btn btn-default">Create</a></p>
-{% endif %}
-
-<div class="table-responsive">
-  <table class="table">
-    <thead>
-      <th class="col-md-3"></th>
-      <th class="col-md-3">Meta Business Unit</th>
-      <th class="col-md-4">Name</th>
-      {% if perms.inventory.change_taxonomy or perms.inventory.delete_taxonomy %}
-      <th class="col-md-2"></th>
-      {% endif %}
-    </thead>
-    <tbody>
-      {% for taxonomy in taxonomy_list %}
-      <tr>
-        <td></td>
-        <td>{{ taxonomy.meta_business_unit|default:"-" }}</td>
-        <td>{{ taxonomy.name }}</td>
-        {% if perms.inventory.change_taxonomy or perms.inventory.delete_taxonomy %}
-        <td>
-          {% if perms.inventory.change_taxonomy %}
-          <a class="btn btn-default" href="{% url 'inventory:update_taxonomy' taxonomy.id %}">
-            <span class="glyphicon glyphicon-pencil" aria-hidden="true"></span>
-          </a>
-          {% endif %}
-          {% if perms.inventory.delete_taxonomy %}
-          <a class="btn btn-danger" href="{% url 'inventory:delete_taxonomy' taxonomy.id %}">
-            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-          </a>
-          {% endif %}
-        </td>
-        {% endif %}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
 </div>
 {% endif %}
 {% endblock %}
