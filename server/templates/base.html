@@ -24,7 +24,7 @@
                 {% if zentral_extra_links %}
                 <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-moon-stars"></i>
+                        <i class="bi bi-moon-stars" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Platform modes"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item bi bi-moon" href="#"> Dark Mode</a></li>
@@ -32,9 +32,9 @@
                         <li><a class="dropdown-item bi bi-circle-half" href="#"> Auto</a></li>
                     </ul>
                 </li>
-                <li class="nav-item dropdown">
+                <li class="nav-item dropdown"s>
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-display"></i>
+                        <i class="bi bi-display" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Extra links"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         {% for link in zentral_extra_links %}
@@ -50,7 +50,7 @@
                 {% endif %}
                 <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-exclamation-triangle"></i>
+                        <i class="bi bi-exclamation-triangle" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Incidents"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="#">Incident 1</a></li>
@@ -60,7 +60,7 @@
                 </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-three-dots-vertical"></i>
+                        <i class="bi bi-three-dots-vertical" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Platform settings"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{% url 'accounts:users' %}">Users</a></li>
@@ -70,7 +70,7 @@
                 </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-person-circle"></i>
+                        <i class="bi bi-person-circle" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="User settings"></i>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">Profile</a></li>
