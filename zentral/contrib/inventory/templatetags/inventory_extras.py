@@ -21,7 +21,7 @@ def base_inventory_tag(display_name, color):
     if color.upper() in ["FFFFFF", "FFF"]:
         style['border'] = '1px solid grey'
     style_str = ";".join(["%s:%s" % (key, val) for key, val in style.items()])
-    return mark_safe('<span class="label" style="%s">%s</span>' % (style_str, escape(display_name)))
+    return mark_safe('<span class="badge" style="%s">%s</span>' % (style_str, escape(display_name)))
 
 
 @register.simple_tag
