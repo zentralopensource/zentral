@@ -1,3 +1,4 @@
+import base64
 from functools import reduce
 import operator
 from unittest.mock import Mock, patch
@@ -8,6 +9,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
+from realms.utils import build_password_hash_dict
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import DEPDevice
 from .utils import (force_dep_enrollment, force_dep_device, force_dep_virtual_server,
@@ -97,6 +99,25 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
         self.assertFormError(response.context["dep_enrollment_form"], "macos_min_version", "Not a valid OS version")
 
+    def test_create_dep_enrollment_macos_admin_info_incomplete(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "de-admin_full_name": "yolo",
+                                     "de-admin_short_name": "fomo",
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"], None, "Admin information incomplete")
+
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_create_dep_enrollment_post(self, from_dep_virtual_server):
         profile_uuid = uuid.uuid4()
@@ -120,6 +141,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-is_mdm_removable": "on",
                                      "de-is_supervised": "",
                                      "de-ios_min_version": "12.3.1",
+                                     "de-admin_full_name": "yolo",
+                                     "de-admin_short_name": "fomo",
+                                     "de-admin_password": "1234",
                                      "de-Accessibility": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -135,6 +159,15 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(enrollment.scep_config, scep_config)
         self.assertEqual(enrollment.ios_min_version, "12.3.1")
         self.assertEqual(enrollment.skip_setup_items, ["Accessibility"])
+        self.assertEqual(enrollment.admin_full_name, "yolo")
+        self.assertEqual(enrollment.admin_short_name, "fomo")
+        pwd_hash_data = enrollment.admin_password_hash["SALTED-SHA512-PBKDF2"]
+        salt = base64.b64decode(pwd_hash_data["salt"])
+        iterations = pwd_hash_data["iterations"]
+        self.assertEqual(
+            build_password_hash_dict("1234", iterations=iterations, salt=salt),
+            enrollment.admin_password_hash
+        )
         client.add_profile.assert_called_once()
         self.assertEqual(enrollment.uuid, profile_uuid)
 
@@ -194,6 +227,57 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
         self.assertContains(response, f"[DEP] {enrollment.name}")
 
+    def test_update_dep_enrollment_post_not_removable_only_if_supervised(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        self._login("mdm.change_depenrollment")
+        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                    {"de-name": enrollment.name,
+                                     "de-scep_config": enrollment.scep_config.pk,
+                                     "de-push_certificate": enrollment.push_certificate.pk,
+                                     "de-virtual_server": enrollment.virtual_server.pk,
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"],
+                             "is_mdm_removable",
+                             "Can only be set to False if 'Is supervised' is set to True")
+
+    def test_update_dep_enrollment_post_add_admin_only_full_name(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        self._login("mdm.change_depenrollment")
+        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                    {"de-name": enrollment.name,
+                                     "de-scep_config": enrollment.scep_config.pk,
+                                     "de-push_certificate": enrollment.push_certificate.pk,
+                                     "de-virtual_server": enrollment.virtual_server.pk,
+                                     "de-is_mdm_removable": False,
+                                     "de-is_supervised": True,
+                                     "de-admin_full_name": "Yolo",
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"], None, "Admin information incomplete")
+
+    def test_update_dep_enrollment_post_add_admin_without_prev_pwd_missing_info(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        self._login("mdm.change_depenrollment")
+        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                    {"de-name": enrollment.name,
+                                     "de-scep_config": enrollment.scep_config.pk,
+                                     "de-push_certificate": enrollment.push_certificate.pk,
+                                     "de-virtual_server": enrollment.virtual_server.pk,
+                                     "de-is_mdm_removable": False,
+                                     "de-is_supervised": True,
+                                     "de-admin_full_name": "Yolo",
+                                     "de-admin_short_name": "Fomo",
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"], None, "Admin information incomplete")
+
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_update_dep_enrollment_post(self, from_dep_virtual_server):
         realm = force_realm()
@@ -227,6 +311,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-language": "de",
                                      "de-include_tls_certificates": "on",
                                      "de-macos_min_version": "13.3.1",
+                                     "de-admin_full_name": "Yolo",
+                                     "de-admin_short_name": "Fomo",
+                                     "de-admin_password": "123456",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -241,12 +328,126 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(enrollment.realm, realm)
         self.assertEqual(enrollment.macos_min_version, "13.3.1")
         self.assertEqual(enrollment.skip_setup_items, ["AppleID"])
+        pwd_hash_data = enrollment.admin_password_hash["SALTED-SHA512-PBKDF2"]
+        salt = base64.b64decode(pwd_hash_data["salt"])
+        iterations = pwd_hash_data["iterations"]
+        self.assertEqual(
+            build_password_hash_dict("123456", iterations=iterations, salt=salt),
+            enrollment.admin_password_hash
+        )
         client.add_profile.assert_called_once()
         self.assertEqual(enrollment.uuid, profile_uuid)
         device1.refresh_from_db()
         self.assertFalse(device1.is_deleted())
         device2.refresh_from_db()
         self.assertTrue(device2.is_deleted())
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_update_dep_enrollment_post_remove_admin(self, from_dep_virtual_server):
+        realm = force_realm()
+        enrollment = force_dep_enrollment(self.mbu)
+        enrollment.admin_full_name = "yolo"
+        enrollment.admin_short_name = "fomo"
+        enrollment.admin_password_hash = build_password_hash_dict("1234")
+        enrollment.save()
+        profile_uuid = uuid.uuid4()
+        client = Mock()
+        client.add_profile.return_value = {
+            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
+            "devices": {},
+        }
+        from_dep_virtual_server.return_value = client
+        self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
+        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                    {"de-name": enrollment.name,
+                                     "de-realm": realm.pk,
+                                     "de-scep_config": enrollment.scep_config.pk,
+                                     "de-push_certificate": enrollment.push_certificate.pk,
+                                     "de-virtual_server": enrollment.virtual_server.pk,
+                                     "de-is_mdm_removable": "on",
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
+        enrollment.refresh_from_db()
+        self.assertIsNone(enrollment.admin_full_name)
+        self.assertIsNone(enrollment.admin_short_name)
+        self.assertIsNone(enrollment.admin_password_hash)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_update_dep_enrollment_post_update_admin_keep_pwd(self, from_dep_virtual_server):
+        realm = force_realm()
+        enrollment = force_dep_enrollment(self.mbu)
+        enrollment.admin_full_name = "yolo"
+        enrollment.admin_short_name = "fomo"
+        enrollment.admin_password_hash = existing_password_hash = build_password_hash_dict("1234")
+        enrollment.save()
+        profile_uuid = uuid.uuid4()
+        client = Mock()
+        client.add_profile.return_value = {
+            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
+            "devices": {}
+        }
+        from_dep_virtual_server.return_value = client
+        self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
+        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                    {"de-name": enrollment.name,
+                                     "de-realm": realm.pk,
+                                     "de-scep_config": enrollment.scep_config.pk,
+                                     "de-push_certificate": enrollment.push_certificate.pk,
+                                     "de-virtual_server": enrollment.virtual_server.pk,
+                                     "de-is_mdm_removable": "on",
+                                     "de-admin_full_name": "yolo2",
+                                     "de-admin_short_name": "fomo2",
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.admin_full_name, "yolo2")
+        self.assertEqual(enrollment.admin_short_name, "fomo2")
+        self.assertEqual(enrollment.admin_password_hash, existing_password_hash)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_update_dep_enrollment_post_update_admin_update_pwd(self, from_dep_virtual_server):
+        realm = force_realm()
+        enrollment = force_dep_enrollment(self.mbu)
+        enrollment.admin_full_name = "yolo"
+        enrollment.admin_short_name = "fomo"
+        enrollment.admin_password_hash = build_password_hash_dict("1234")
+        enrollment.save()
+        profile_uuid = uuid.uuid4()
+        client = Mock()
+        client.add_profile.return_value = {
+            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
+            "devices": {}
+        }
+        from_dep_virtual_server.return_value = client
+        self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
+        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                    {"de-name": enrollment.name,
+                                     "de-realm": realm.pk,
+                                     "de-scep_config": enrollment.scep_config.pk,
+                                     "de-push_certificate": enrollment.push_certificate.pk,
+                                     "de-virtual_server": enrollment.virtual_server.pk,
+                                     "de-is_mdm_removable": "on",
+                                     "de-admin_full_name": "yolo2",
+                                     "de-admin_short_name": "fomo2",
+                                     "de-admin_password": "654321",
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.admin_full_name, "yolo2")
+        self.assertEqual(enrollment.admin_short_name, "fomo2")
+        pwd_hash_data = enrollment.admin_password_hash["SALTED-SHA512-PBKDF2"]
+        salt = base64.b64decode(pwd_hash_data["salt"])
+        iterations = pwd_hash_data["iterations"]
+        self.assertEqual(
+            build_password_hash_dict("654321", iterations=iterations, salt=salt),
+            enrollment.admin_password_hash
+        )
 
     # list DEP enrollments
 

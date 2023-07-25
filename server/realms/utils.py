@@ -86,12 +86,12 @@ def test_callback(request, realm_authentication_session):
                          realm_authentication_session.pk))
 
 
-def build_password_hash_dict(password):
+def build_password_hash_dict(password, iterations=39999, salt=None):
     # see https://developer.apple.com/documentation/devicemanagement/setautoadminpasswordcommand/command
     # for the compatibility
     password = password.encode("utf-8")
-    salt = bytearray(random.getrandbits(8) for i in range(32))
-    iterations = 39999
+    if salt is None:
+        salt = bytearray(random.getrandbits(8) for i in range(32))
     # see https://github.com/micromdm/micromdm/blob/master/pkg/crypto/password/password.go macKeyLen !!!
     # Danke github.com/groob !!!
     dklen = 128

@@ -341,11 +341,6 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
             raise forms.ValidationError("This option is only valid if the 'use realm user' option is ticked too")
         return realm_user_is_admin
 
-    def clean_admin_password(self):
-        password = self.cleaned_data.get("admin_password")
-        if password:
-            self.cleaned_data["admin_password_hash"] = build_password_hash_dict(password)
-
     def _clean_min_version(self, platform):
         fieldname = f"{platform}_min_version"
         min_version = self.cleaned_data.get(fieldname)
@@ -359,11 +354,22 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
     def clean_macos_min_version(self):
         return self._clean_min_version("macos")
 
+    def clean_admin_password(self):
+        password = self.cleaned_data.get("admin_password")
+        if password:
+            self.cleaned_data["admin_password_hash"] = build_password_hash_dict(password)
+
     def admin_info_incomplete(self):
         return len([attr for attr in (
                         self.cleaned_data.get(i)
                         for i in ("admin_full_name", "admin_short_name", "admin_password_hash")
                     ) if attr]) in (1, 2)
+
+    def update_password(self):
+        return not self.admin_info_incomplete()
+
+    def reset_password(self):
+        return False
 
     def clean(self):
         super().clean()
@@ -380,7 +386,10 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
         kwargs["commit"] = False
         dep_profile = super().save(**kwargs)
         dep_profile.skip_setup_items = self.cleaned_data["skip_setup_items"]
-        dep_profile.admin_password_hash = self.cleaned_data.get("admin_password_hash")
+        if self.update_password():
+            dep_profile.admin_password_hash = self.cleaned_data.get("admin_password_hash")
+        elif self.reset_password():
+            dep_profile.admin_password_hash = None
         if commit:
             dep_profile.save()
         return dep_profile
@@ -396,12 +405,34 @@ class UpdateDEPEnrollmentForm(CreateDEPEnrollmentForm):
         model = DEPEnrollment
         exclude = ("virtual_server",)
 
-    def clean_admin_password(self):
-        password = self.cleaned_data.get("admin_password")
-        if password:
-            self.cleaned_data["admin_password_hash"] = build_password_hash_dict(password)
-        else:
-            self.cleaned_data["admin_password_hash"] = self.instance.admin_password_hash
+    def admin_info_incomplete(self):
+        attr_count = len(
+            [attr for attr in (
+                 self.cleaned_data.get(i)
+                 for i in ("admin_full_name", "admin_short_name", "admin_password_hash")
+             ) if attr]
+        )
+        return (attr_count == 1 or
+                (attr_count == 2 and (
+                    # full or short name missing
+                    self.cleaned_data.get("admin_password_hash")
+                    # password missing and not already present in the object
+                    or not self.instance.admin_password_hash
+                )))
+
+    def update_password(self):
+        return (
+            self.cleaned_data.get("admin_full_name")
+            and self.cleaned_data.get("admin_short_name")
+            and self.cleaned_data.get("admin_password_hash")
+        )
+
+    def reset_password(self):
+        return (
+            not self.cleaned_data.get("admin_full_name")
+            and not self.cleaned_data.get("admin_short_name")
+            and not self.cleaned_data.get("admin_password_hash")
+        )
 
 
 class AssignDEPDeviceEnrollmentForm(forms.ModelForm):
