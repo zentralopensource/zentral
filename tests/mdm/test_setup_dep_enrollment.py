@@ -112,11 +112,34 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-virtual_server": dep_virtual_server.pk,
                                      "de-admin_full_name": "yolo",
                                      "de-admin_short_name": "fomo",
+                                     "de-await_device_configured": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
         self.assertFormError(response.context["dep_enrollment_form"], None, "Admin information incomplete")
+
+    def test_create_dep_enrollment_macos_admin_info_await_device_configured_error(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "de-admin_full_name": "yolo",
+                                     "de-admin_short_name": "fomo",
+                                     "de-admin_password": "1234",
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"],
+                             "await_device_configured",
+                             "Required for the admin account setup")
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_create_dep_enrollment_post(self, from_dep_virtual_server):
@@ -143,6 +166,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-ios_min_version": "12.3.1",
                                      "de-admin_full_name": "yolo",
                                      "de-admin_short_name": "fomo",
+                                     "de-await_device_configured": "on",
                                      "de-admin_password": "1234",
                                      "de-Accessibility": "on",
                                      "es-meta_business_unit": self.mbu.pk},
@@ -314,6 +338,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-admin_full_name": "Yolo",
                                      "de-admin_short_name": "Fomo",
                                      "de-admin_password": "123456",
+                                     "de-await_device_configured": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -399,6 +424,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-is_mdm_removable": "on",
                                      "de-admin_full_name": "yolo2",
                                      "de-admin_short_name": "fomo2",
+                                     "de-await_device_configured": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -434,6 +460,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-admin_full_name": "yolo2",
                                      "de-admin_short_name": "fomo2",
                                      "de-admin_password": "654321",
+                                     "de-await_device_configured": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)

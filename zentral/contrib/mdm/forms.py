@@ -365,6 +365,9 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
                         for i in ("admin_full_name", "admin_short_name", "admin_password_hash")
                     ) if attr]) in (1, 2)
 
+    def has_admin_info(self):
+        return self.cleaned_data.get("admin_full_name") and not self.admin_info_incomplete()
+
     def update_password(self):
         return not self.admin_info_incomplete()
 
@@ -379,6 +382,8 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
                 skip_setup_items.append(key)
         if self.admin_info_incomplete():
             raise forms.ValidationError("Admin information incomplete")
+        if self.has_admin_info() and not self.cleaned_data.get("await_device_configured"):
+            self.add_error("await_device_configured", "Required for the admin account setup")
         self.cleaned_data['skip_setup_items'] = skip_setup_items
 
     def save(self, *args, **kwargs):
