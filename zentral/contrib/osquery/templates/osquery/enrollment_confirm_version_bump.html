@@ -15,7 +15,7 @@
 <form method="POST">{% csrf_token %}
   <p>Do you really want to bump this enrollment version?</p>
   <p>
-    <a class="btn btn-default" href="{{ enrollment.get_absolute_url }}">No</a>
+    <a class="btn btn-primary" href="{{ enrollment.get_absolute_url }}">No</a>
     <button class="btn btn-primary" type="submit">Yes</button>
   </p>
 </form>

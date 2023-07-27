@@ -1,19 +1,37 @@
 {% extends 'base.html' %}
 {% load bootstrap inventory_extras %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h2>Run <i>{{ object }}</i></h2>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">Run</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Run #{{ object }}</h3>
+        <div class="ms-auto">
+            {% if perms.osquery.change_distributedquery %}
+                <a href="{% url 'osquery:update_distributed_query' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
+                    <i class="bi bi-pencil-square"></i>
+                </a>
+            {% endif %}
+            {% if perms.osquery.delete_distributedquery %}
+                <a href="{% url 'osquery:delete_distributed_query' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
+                    <i class="bi bi-trash"></i>
+                </a>
+            {% endif %}
+        </div>
+    </div>
 
-<div class="row">
-  <div class="col-md-12">
-    <table class="table">
+  <div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-object-properties">
       <thead>
       <tr>
         <th>Attribute</th>
@@ -64,49 +82,29 @@
       </tbody>
     </table>
 
-    <dl class="dl-horizontal">
-      <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-      <dt class="small" style="opacity:0.5">Updated at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-    </dl>
+    {% created_updated_at object %}
 
   </div>
-</div>
 
-<p>
-  {% if perms.osquery.change_distributedquery %}
-  <a class="btn btn-default" href="{% url 'osquery:update_distributed_query' object.id %}">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    Update
-  </a>
-  {% endif %}
-  {% if perms.osquery.delete_distributedquery %}
-  <a class="btn btn-danger" href="{% url 'osquery:delete_distributed_query' object.id %}">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-    Delete
-  </a>
-  {% endif %}
-</p>
 
-<h3 id="machines">{{ dqm_count }} Machine{{ dqm_count|pluralize }}</h3>
+<h3 id="machines">Machine{{ dqm_count|pluralize }} ({{ dqm_count }})</h3>
 
 {% if dqm_count %}
-<a class="btn btn-default" href="{% url 'osquery:distributed_query_machines' object.pk %}">See the machine{{ dqm_count|pluralize }}</a>
+    <a class="btn btn-primary" href="{% url 'osquery:distributed_query_machines' object.pk %}">See the machine{{ dqm_count|pluralize }}</a>
 {% endif %}
 
-<h3 id="results">{{ result_count }} Result{{ result_count|pluralize }}</h3>
+<h3 id="results">Result{{ result_count|pluralize }} ({{ result_count }})</h3>
 
 {% if perms.osquery.view_distributedqueryresult and result_count %}
-<a class="btn btn-default" href="{% url 'osquery:distributed_query_results' object.pk %}">See the result{{ result_count|pluralize }}</a>
+    <a class="btn btn-primary" href="{% url 'osquery:distributed_query_results' object.pk %}">See the result{{ result_count|pluralize }}</a>
 {% endif %}
 
 {% if perms.osquery.view_filecarvingsession %}
-<h3 id="results">{{ file_carving_session_count }} File carving session{{ file_carving_session_count|pluralize }}</h3>
+    <h3 id="results">File carving session{{ file_carving_session_count|pluralize }} ({{ file_carving_session_count }})</h3>
 
 {% if file_carving_session_count %}
-<a class="btn btn-default" href="{% url 'osquery:distributed_query_file_carving_sessions' object.pk %}">See file carving session{{ file_carving_session_count|pluralize }}</a>
+<a class="btn btn-primary" href="{% url 'osquery:distributed_query_file_carving_sessions' object.pk %}">See file carving session{{ file_carving_session_count|pluralize }}</a>
 {% endif %}
 {% endif %}
-
+</div>
 {% endblock %}

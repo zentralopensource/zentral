@@ -3,14 +3,14 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:queries' %}">Queries</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:queries' %}">Queries</a></li>
   {% if object %}
-  <li><a href="{% url 'osquery:query' object.pk %}">{{ object }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:query' object.pk %}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+  <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 
@@ -19,7 +19,7 @@
 <form method="post" class="form">{% csrf_token %}
   {{ form|bootstrap }}
   <p>
-    <a class="btn btn-default" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'osquery:queries' %}{% endif %}">
+    <a class="btn btn-primary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'osquery:queries' %}{% endif %}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

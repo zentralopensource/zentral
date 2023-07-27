@@ -3,45 +3,52 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li class="active">Configurations</li>
-  <li class="active">{{ configuration_count }} record{{ configuration_count|pluralize }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item active">Configurations</li>
+  <li class="breadcrumb-item active">{{ configuration_count }} record{{ configuration_count|pluralize }}</li>
 </ol>
 
-<h2>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h2>
+<div class="py-3">
+    <div class="d-flex justify-content-between mb-3">
+        <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+        <div class="ms-auto">
+        {% if perms.osquery.add_configuration %}
+            <a href="{% url 'osquery:create_configuration' %}" type="button" 
+                    class="btn btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new configuration">
+                    <i class="bi bi-plus-circle"></i>
+                </a>
+        {% endif %}
+        </div>
+    </div>
 
-{% if perms.osquery.add_configuration %}
-<p>
-  <a href="{% url 'osquery:create_configuration' %}" class="btn btn-default">Create</a>
-</p>
-{% endif %}
-
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      {% if perms.osquery.change_configuration %}
-      <th></th>
-      {% endif %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for configuration in object_list %}
-    <tr>
-      <td>
-        <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
-      </td>
-      {% if perms.osquery.change_configuration %}
-      <td>
-        <a class="btn btn-default" href="{% url 'osquery:update_configuration' configuration.id %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-          Update
-        </a>
-      </td>
-      {% endif %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <tr>
+        <th>Name</th>
+        {% if perms.osquery.change_configuration %}
+        <th></th>
+        {% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for configuration in object_list %}
+        <tr class="data-row">
+            <td>
+            <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
+            </td>
+            {% if perms.osquery.change_configuration %}
+            <td class="text-end py-0">
+            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_configuration' configuration.id %}">
+                <span class="bi bi-pencil-square" aria-hidden="true"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Configuration"></span>
+            </a>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
 {% endblock %}

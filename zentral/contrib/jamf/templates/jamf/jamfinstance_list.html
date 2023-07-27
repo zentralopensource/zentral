@@ -3,50 +3,55 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">{{ title }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">{{ title }}</li>
 </ol>
 
-<h2>{{ title }}</h2>
+<div class="py-3">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ title }}</h2>
+        <div class="ms-auto">
+            {% if perms.jamf.add_jamfinstance %}
+            <a href="{% url 'jamf:create_jamf_instance' %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
 
-{% if perms.jamf.add_jamfinstance %}
-<p>
-  <a href="{% url 'jamf:create_jamf_instance' %}" class="btn btn-default">Create</a>
-</p>
-{% endif %}
-
-<table class="table">
-  <thead>
-    <tr>
-      <th>Host</th>
-      <th>API User</th>
-      <th>Business unit</th>
-      {% if perms.jamf.change_jamfinstance %}
-      <th></th>
-      {% endif %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for jamf_instance in object_list %}
-    <tr>
-      <td><a href="{{ jamf_instance.get_absolute_url }}">{{ jamf_instance.host }}</a></td>
-      <td>{{ jamf_instance.user }}</td>
-      <td>
-        {% if jamf_instance.business_unit %}
-        {{ jamf_instance.business_unit }}
-        {% else %}
-        -
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <tr>
+        <th>Host</th>
+        <th>API User</th>
+        <th>Business unit</th>
+        {% if perms.jamf.change_jamfinstance %}
+        <th></th>
         {% endif %}
-      </td>
-      {% if perms.jamf.change_jamfinstance %}
-      <td>
-        <a href="{% url 'jamf:update_jamf_instance' jamf_instance.pk %}" class="btn btn-default">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>Update
-        </a>
-      </td>
-      {% endif %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+        </tr>
+    </thead>
+    <tbody>
+        {% for jamf_instance in object_list %}
+        <tr class="data-row">
+        <td><a href="{{ jamf_instance.get_absolute_url }}">{{ jamf_instance.host }}</a></td>
+        <td>{{ jamf_instance.user }}</td>
+        <td>
+            {% if jamf_instance.business_unit %}
+            {{ jamf_instance.business_unit }}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        {% if perms.jamf.change_jamfinstance %}
+        <td class="text-end py-0">
+            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'jamf:update_jamf_instance' jamf_instance.pk %}">
+                <span class="bi bi-pencil-square" aria-hidden="true"></span>
+            </a>
+        </td>
+        {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
 {% endblock %}

@@ -1,23 +1,31 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:index' %}">Munki</a></li>
-  <li class="active">Configurations</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li class="breadcrumb-item active">Configurations</li>
 </ol>
 
-<h2>{{ configuration_count }} Munki configuration{{ configuration_count|pluralize }}</h2>
-
-<p>
-  {% if perms.munki.add_configuration %}
-  <a class="btn btn-default" href="{% url 'munki:create_configuration' %}">Create</a>
-  {% endif %}
-</p>
+<div class="py-3">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">Munki configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h2>
+        <div class="ms-auto">
+            {% if perms.munki.add_configuration %}
+            <a href="{% url 'munki:create_configuration' %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+            {% endif %}
+            {% if perms.munki.view_enrollment %}
+            <a href="{% url 'munki:terraform_export' %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Terraform config">
+                <i class="bi bi-download"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
 
 {% if configuration_count %}
-<table class="table">
+<table class="table table-striped align-middle table-hover">
   <thead>
     <th>Name</th>
     {% if perms.munki.change_configuration %}
@@ -26,15 +34,14 @@
   </thead>
   <tbody>
     {% for configuration in object_list %}
-    <tr>
+    <tr class="data-row">
       <td>
         <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
       </td>
       {% if perms.munki.change_configuration %}
-      <td>
-        <a class="btn btn-default" href="{% url 'munki:update_configuration' configuration.pk %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-          Update
+      <td class="text-end py-0">
+        <a class="btn btn-link text-dark text-decoration-none" href="{% url 'munki:update_configuration' configuration.pk %}">
+          <span class="bi bi-pencil-square" aria-hidden="true"></span>
         </a>
       </td>
       {% endif %}
@@ -43,5 +50,5 @@
   </tbody>
 </table>
 {% endif %}
-
+</div>
 {% endblock %}

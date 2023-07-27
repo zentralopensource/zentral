@@ -119,6 +119,7 @@ def modules_menu(context):
 
 pinned_menu_config = SimpleLazyObject(lambda: MenuConfig("pinned_menu_cfg"))
 
+
 # _modules_menu.html should be replaced for _pinned_menu.html
 @register.inclusion_tag('_modules_menu.html', takes_context=True)
 def pinned_menu(context):

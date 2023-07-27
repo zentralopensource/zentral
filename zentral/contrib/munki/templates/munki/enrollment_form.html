@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:configurations' %}">Munki configurations</a></li>
-  <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
-  <li class="active">Create enrollment</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:configurations' %}">Munki configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item active">Create enrollment</li>
 </ol>
 
 <h2>Create Munki enrollment</h2>

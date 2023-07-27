@@ -3,21 +3,26 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li class="active">File categories</li>
-  <li class="active">{{ file_category_count }} record{{ file_category_count|pluralize }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item active">File categories</li>
+  <li class="breadcrumb-item active">{{ file_category_count }} record{{ file_category_count|pluralize }}</li>
 </ol>
 
-<h2>{{ file_category_count }} File categor{{ file_category_count|pluralize:"y,ies" }}</h2>
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">File categor{{ file_category_count|pluralize:"y,ies" }} ({{ file_category_count }})</h3>
+    <div class="ms-auto">
+    {% if perms.osquery.add_filecategory %}
+        <a href="{% url 'osquery:create_file_category' %}" type="button" 
+                class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new File Category">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+    {% endif %}
+    </div>
+</div>
 
-{% if perms.osquery.add_filecategory %}
-<p>
-  <a href="{% url 'osquery:create_file_category' %}" class="btn btn-default">Create</a>
-</p>
-{% endif %}
-
-<table class="table">
+<table class="table table-striped align-middle">
   <thead>
     <tr>
       <th>Name</th>
@@ -28,19 +33,19 @@
   </thead>
   <tbody>
     {% for file_category in object_list %}
-    <tr>
-      <td>
-        <a href="{{ file_category.get_absolute_url }}">{{ file_category }}</a>
-      </td>
-      {% if perms.osquery.change_filecategory %}
-      <td>
-        <a class="btn btn-default" href="{% url 'osquery:update_file_category' file_category.id %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-          Update
-        </a>
-      </td>
-      {% endif %}
-    </tr>
+    <tr class="data-row">
+        <td>
+          <a href="{{ file_category.get_absolute_url }}">{{ file_category }}</a>
+        </td>
+        {% if perms.osquery.change_filecategory %}
+        <td class="text-end py-0">
+          <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_file_category' file_category.id %}">
+              <span class="bi bi-pencil-square" aria-hidden="true"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit File Category"></span>
+          </a>
+        </td>
+        {% endif %}
+      </tr>
     {% endfor %}
   </tbody>
 </table>

@@ -15,7 +15,7 @@
 <form method="post" class="form" enctype="multipart/form-data">{% csrf_token %}
   {{ form|bootstrap }}
   <p>
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">
+    <a class="btn btn-primary" href="{{ object.get_absolute_url }}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

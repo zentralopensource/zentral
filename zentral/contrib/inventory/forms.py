@@ -13,7 +13,7 @@ from .models import (CurrentMachineSnapshot,
                      EnrollmentSecret,
                      MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
-                     Source, Tag, Taxonomy,
+                     Source, Tag,
                      JMESPathCheck)
 from .utils import (AndroidAppFilter,
                     BundleFilter,

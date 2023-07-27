@@ -3,21 +3,26 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li class="active">Packs</li>
-  <li class="active">{{ pack_count }} record{{ pack_count|pluralize }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item active">Packs</li>
+  <li class="breadcrumb-item active">{{ pack_count }} record{{ pack_count|pluralize }}</li>
 </ol>
 
-<h2>{{ pack_count }} Pack{{ pack_count|pluralize }}</h2>
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Pack{{ pack_count|pluralize }} ({{ pack_count }})</h3>
+    <div class="ms-auto">
+    {% if perms.osquery.add_pack %}
+        <a href="{% url 'osquery:create_pack' %}" type="button" 
+                class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Pack">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+    {% endif %}
+    </div>
+</div>
 
-{% if perms.osquery.add_pack %}
-<p>
-  <a href="{% url 'osquery:create_pack' %}" class="btn btn-default">Create</a>
-</p>
-{% endif %}
-
-<table class="table">
+<table class="table table-striped align-middle table-hover">
   <thead>
     <tr>
       <th>Name</th>
@@ -28,15 +33,15 @@
   </thead>
   <tbody>
     {% for pack in object_list %}
-    <tr>
+    <tr class="data-row">
       <td>
         <a href="{{ pack.get_absolute_url }}">{{ pack }}</a>
       </td>
       {% if perms.osquery.change_pack %}
-      <td>
-        <a class="btn btn-default" href="{% url 'osquery:update_pack' pack.id %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-          Update
+      <td class="text-end py-0">
+        <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_pack' pack.id %}">
+          <span class="bi bi-pencil-square" aria-hidden="true"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Pack"></span>
         </a>
       </td>
       {% endif %}

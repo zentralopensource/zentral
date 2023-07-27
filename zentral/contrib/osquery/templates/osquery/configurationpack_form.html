@@ -19,7 +19,7 @@
 <form method="post" class="form">{% csrf_token %}
   {{ form|bootstrap }}
   <p>
-    <a class="btn btn-default" href="{{ configuration.get_absolute_url }}">
+    <a class="btn btn-primary" href="{{ configuration.get_absolute_url }}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

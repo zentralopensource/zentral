@@ -1,156 +1,165 @@
 {% extends 'base.html' %}
 {% load base_extras %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'jamf:jamf_instances' %}">Jamf instances</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'jamf:jamf_instances' %}">Jamf instances</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h2>{{ title }}</h2>
-
-<table class="table">
-  <thead>
-    <tr>
-      <th style="width:30vw">Attribute</th>
-      <th>Value</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Business unit</td>
-      <td>
-        {% if object.business_unit %}
-        <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.id %}">
-          {{ object.business_unit }}
-        </a>
-        {% else %}
-        -
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <td>API URL</td>
-      <td>{{ object.api_base_url }}</td>
-    </tr>
-    <tr>
-      <td>API user</td>
-      <td>{{ object.user }}</td>
-    </tr>
-    <tr>
-      <td>Use Bearer token authentication</td>
-      <td>{{ object.bearer_token_authentication|yesno }}</td>
-    </tr>
-    <tr>
-      <td>Inventory apps shard</td>
-      <td>{{ object.inventory_apps_shard }}%</td>
-    </tr>
-    <tr>
-      <td>Inventory extension attribute{{ object.inventory_extension_attributes|length|pluralize }}</td>
-      <td>{{ object.inventory_extension_attributes|join:", "|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Principal user UID extension attribute</td>
-      <td>{{ object.principal_user_uid_extension_attribute|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Principal user principal name extension attribute</td>
-      <td>{{ object.principal_user_pn_extension_attribute|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Principal user display name extension attribute</td>
-      <td>{{ object.principal_user_dn_extension_attribute|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Check-in heartbeat timeout</td>
-      <td>{{ object.checkin_heartbeat_timeout|duration_repr }}</td>
-    </tr>
-    <tr>
-      <td>Inventory completed heartbeat timeout</td>
-      <td>{{ object.inventory_completed_heartbeat_timeout|duration_repr }}</td>
-    </tr>
-  </tbody>
-</table>
-
-<dl>
-  <dt class="small" style="opacity:0.5">Version</dt>
-  <dd class="small" style="opacity:0.5">{{ object.version }}</dd>
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.created_at }}</dd>
-  <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.updated_at }}</dd>
-</dl>
-
-<div class="btn-group" role="group">
-  <a href="{{ object.api_doc_url }}" target="_blank" class="btn btn-default" data-toggle="tooltip" data-placement="bottom" title="API resource documentation">
-    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> API docs
-  </a>
-  {% if perms.jamf.change_jamfinstance %}
-  <a href="{% url 'jamf:setup_jamf_instance' object.pk %}" class="btn btn-default" data-toggle="tooltip" data-placement="bottom" title="Setup jamf instance">
-    <span class="glyphicon glyphicon-transfer" aria-hidden="true"></span> Setup webhooks
-  </a>
-  <a href="{% url 'jamf:update_jamf_instance' object.pk %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Update
-  </a>
-  {% endif %}
-  {% if perms.jamf.delete_jamfinstance %}
-  <a href="{% url 'jamf:delete_jamf_instance' object.pk %}" class="btn btn-danger">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span> Delete
-  </a>
-  {% endif %}
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ title }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Jamf Instance</h3>
+        <div class="ms-auto">
+            <a href="{{ object.api_doc_url }}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="API resource documentation">
+                <i class="bi bi-link"></i>
+            </a>
+            {% if perms.jamf.change_jamfinstance %}
+            <a href="{% url 'jamf:setup_jamf_instance' object.pk %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Setup webhooks">
+                <i class="bi bi-arrow-left-right"></i>
+            </a>
+            <a href="{% url 'jamf:update_jamf_instance' object.pk %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
+                <i class="bi bi-pencil-square"></i>
+            </a>
+            {% endif %}
+            {% if perms.jamf.delete_jamfinstance %}
+            <a href="{% url 'jamf:delete_jamf_instance' object.pk %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
+                <i class="bi bi-trash"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <table class="table table-striped align-middle table-object-properties">
+    <thead>
+        <tr>
+        <th style="width:30vw">Attribute</th>
+        <th>Value</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+        <td>Business unit</td>
+        <td>
+            {% if object.business_unit %}
+            <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.id %}">
+            {{ object.business_unit }}
+            </a>
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <td>API URL</td>
+        <td>{{ object.api_base_url }}</td>
+        </tr>
+        <tr>
+        <td>API user</td>
+        <td>{{ object.user }}</td>
+        </tr>
+        <tr>
+        <td>Use Bearer token authentication</td>
+        <td>{{ object.bearer_token_authentication|yesno }}</td>
+        </tr>
+        <tr>
+        <td>Inventory apps shard</td>
+        <td>{{ object.inventory_apps_shard }}%</td>
+        </tr>
+        <tr>
+        <td>Inventory extension attribute{{ object.inventory_extension_attributes|length|pluralize }}</td>
+        <td>{{ object.inventory_extension_attributes|join:", "|default:"-" }}</td>
+        </tr>
+        <tr>
+        <td>Principal user UID extension attribute</td>
+        <td>{{ object.principal_user_uid_extension_attribute|default:"-" }}</td>
+        </tr>
+        <tr>
+        <td>Principal user principal name extension attribute</td>
+        <td>{{ object.principal_user_pn_extension_attribute|default:"-" }}</td>
+        </tr>
+        <tr>
+        <td>Principal user display name extension attribute</td>
+        <td>{{ object.principal_user_dn_extension_attribute|default:"-" }}</td>
+        </tr>
+        <tr>
+        <td>Check-in heartbeat timeout</td>
+        <td>{{ object.checkin_heartbeat_timeout|duration_repr }}</td>
+        </tr>
+        <tr>
+        <td>Inventory completed heartbeat timeout</td>
+        <td>{{ object.inventory_completed_heartbeat_timeout|duration_repr }}</td>
+        </tr>
+    </tbody>
+    </table>
 </div>
 
-{% if perms.jamf.view_tagconfig %}
-<h3>{{ tag_config_count }} Tag config{{ tag_config_count|pluralize }}</h3>
+{% created_updated_at object %}
 
-{% if perms.jamf.add_tagconfig %}
-<p>
-  <a href="{% url 'jamf:create_tag_config' object.pk %}" class="btn btn-default">
-    Create
-  </a>
-</p>
-{% endif %}
+{% if perms.jamf.view_tagconfig %}
+<div class="d-flex justify-content-between mb-3">
+    <h3>Tag config{{  tag_config_count|pluralize }} ({{ tag_config_count }})</h3>
+    <div class="ms-auto">            
+        {% if perms.jamf.add_tagconfig %}
+        <a href="{% url 'jamf:create_tag_config' object.pk %}" type="button" class="btn btn-link text-dark text-decoration-none"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Tag Config">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+        {% endif %}
+    </div>
+</div>
 
 {% if tag_configs %}
-<table class="table">
-  <thead>
-    <tr>
-      <th>Source</th>
-      <th>Taxonomy</th>
-      <th>Regex</th>
-      <th>Replacement</th>
-      {% if perms.jamf.change_tagconfig or perms.jamf.delete_tagconfig %}
-      <th></th>
-      {% endif %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for tag_config in tag_configs %}
-    <tr id="tag-config-{{ tag_config.pk }}">
-      <td>{{ tag_config.get_source_display }}</td>
-      <td>{{ tag_config.taxonomy }}</td>
-      <td>{{ tag_config.regex }}</td>
-      <td>{{ tag_config.replacement }}</td>
-      {% if perms.jamf.change_tagconfig or perms.jamf.delete_tagconfig %}
-      <td>
-        {% if perms.jamf.change_tagconfig %}
-        <a href="{% url 'jamf:update_tag_config' object.pk tag_config.pk %}" class="btn btn-default">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-        </a>
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <tr>
+        <th>Source</th>
+        <th>Taxonomy</th>
+        <th>Regex</th>
+        <th>Replacement</th>
+        {% if perms.jamf.change_tagconfig or perms.jamf.delete_tagconfig %}
+        <th></th>
         {% endif %}
-        {% if perms.jamf.delete_tagconfig %}
-        <a href="{% url 'jamf:delete_tag_config' object.pk tag_config.pk %}" class="btn btn-danger">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
+        </tr>
+    </thead>
+    <tbody>
+        {% for tag_config in tag_configs %}
+        <tr id="tag-config-{{ tag_config.pk }}" class="data-row">
+        <td>{{ tag_config.get_source_display }}</td>
+        <td>{{ tag_config.taxonomy }}</td>
+        <td>{{ tag_config.regex }}</td>
+        <td>{{ tag_config.replacement }}</td>
+        {% if perms.jamf.change_tagconfig or perms.jamf.delete_tagconfig %}
+        <td>
+            {% if perms.jamf.change_tagconfig %}
+            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'jamf:update_tag_config' object.pk tag_config.pk %}">
+                <span class="bi bi-pencil-square" aria-hidden="true"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit"></span>
+            </a>
+            {% endif %}
+            {% if perms.jamf.delete_tagconfig %}
+            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'jamf:delete_tag_config' object.pk tag_config.pk %}">
+                <span class="bi bi-trash" aria-hidden="true"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete"></span>
+            </a>
+            {% endif %}
+        </td>
         {% endif %}
-      </td>
-      {% endif %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+    {% endif %}
+</div>
 {% endif %}
-{% endif %}
-
 {% endblock %}

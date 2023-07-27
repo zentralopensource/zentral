@@ -3,13 +3,13 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'jamf:jamf_instances' %}">Jamf instances</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'jamf:jamf_instances' %}">Jamf instances</a></li>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+  <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 

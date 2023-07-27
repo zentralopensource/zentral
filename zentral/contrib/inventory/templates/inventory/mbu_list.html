@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load inventory_extras %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -46,7 +47,7 @@
         {% endif %}
     </div>
 
-    {% include "../templatetags/pagination.html" %}
+    {% pagination next_url previous_url %}
 
     <div class="table-responsive mb-3">
         <form id="merge_form" method="GET" action="{% url 'inventory:review_mbu_merge' %}">
@@ -103,8 +104,9 @@
             </table>
         </form>
     </div>
-    {% include "../templatetags/pagination.html" %}
-
+    
+    {% pagination next_url previous_url %}
+    
     {% endblock %}
 
     {% block extrajs %}

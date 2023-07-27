@@ -3,8 +3,8 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Osquery</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Osquery</li>
 </ol>
 
 <div class="row">
@@ -46,8 +46,8 @@
     {% endif %}
     {% if show_terraform_export %}
     <p>
-      <a href="{% url 'osquery:terraform_export' %}" class="btn btn-default">
-        <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+      <a href="{% url 'osquery:terraform_export' %}" class="btn btn-primary">
+        <span class="bi bi-download" aria-hidden="true"></span>
         Terraform config
       </a>
     </p>

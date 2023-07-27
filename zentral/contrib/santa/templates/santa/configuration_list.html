@@ -17,7 +17,7 @@
             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new configuration">
             <i class="bi bi-plus-circle"></i>
         </a>
-        {% endif %}
+  {% endif %}
   {% if perms.santa.view_enrollment and perms.santa.view_rule %}
         <a href="{% url 'santa:terraform_export' %}" type="button" 
             class="btn btn-link text-dark text-decoration-none"

@@ -3,16 +3,16 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
-  <li><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
+  <li class="breadcrumb-item"><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Results</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Results</a></li>
   {% else %}
-  <li class="active">Results</li>
+  <li class="breadcrumb-item active">Results</li>
   {% endif %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
 <div class="row">

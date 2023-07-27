@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -45,7 +46,7 @@
         </div>
     </div>
 
-    {% include "../templatetags/pagination.html" %}
+    {% pagination next_url previous_url %}
 
     <table class="table table-striped align-middle table-hover">
     <thead>
@@ -105,7 +106,7 @@
     </tbody>
     </table>
 
-    {% include "../templatetags/pagination.html" %}
+    {% pagination next_url previous_url %}
 
     {% endblock %}
 

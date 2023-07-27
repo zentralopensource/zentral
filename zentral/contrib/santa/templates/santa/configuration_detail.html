@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load bootstrap inventory_extras %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -133,7 +134,7 @@
             </div>
         </div>
 
-        {% include "../templatetags/created_updated_at.html" %}
+        {% created_updated_at object %}
 
         {% if perms.santa.view_enrollment %}
         <div class="d-flex justify-content-between mb-3">

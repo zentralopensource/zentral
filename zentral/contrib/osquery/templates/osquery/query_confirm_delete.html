@@ -3,11 +3,11 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:queries' %}">Queries</a></li>
-  <li><a href="{% url 'osquery:query' object.pk %}">{{ object }}</a></li>
-  <li class="active">Delete</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:queries' %}">Queries</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:query' object.pk %}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Delete</li>
 </ol>
 
 <h3>Delete query <i>{{ object }}</i></h3>
@@ -15,7 +15,7 @@
 <form method="POST">{% csrf_token %}
   <p>Do you really want to delete this query?</p>
   <p>
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-primary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Delete</button>
   </p>
 </form>

@@ -372,14 +372,33 @@ class QueryForm(forms.ModelForm):
 
 class QuerySearchForm(forms.Form):
     q = forms.CharField(
-        label="Query", required=False,
-        widget=forms.TextInput(attrs={"autofocus": True,
-                                      "size": 36,
-                                      "placeholder": "Query name, pack name, SQL, …"})
+            label="",
+            required=False,
+            widget=forms.TextInput(
+                attrs={
+                    "autofocus": "true",
+                    "size": 36,
+                    "placeholder": "Query name, pack name, SQL, …",
+                    "class": "form-select me-2 mb-2 col-sm",
+                }
+            )
     )
-    pack = forms.ModelChoiceField(queryset=Pack.objects.all(), required=False)
-    compliance_check = forms.BooleanField(label="Only compliance checks", required=False)
-    tag_update = forms.BooleanField(label="Only tag updates", required=False)
+    pack = forms.ModelChoiceField(
+            queryset=Pack.objects.all(),
+            required=False,
+            widget=forms.Select(
+                attrs={'class': 'form-select me-2 mb-2 col-sm'}
+            ),
+            label='',
+            empty_label="- Pack -",
+    )
+    compliance_check = forms.BooleanField(
+        label="Only compliance checks",
+        required=False,
+        widget=forms.CheckboxInput(
+            attrs={'class': 'form-check-input me-2 mb-2'}
+        )
+    )
 
     def get_queryset(self):
         qs = (

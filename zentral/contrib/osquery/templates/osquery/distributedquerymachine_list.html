@@ -3,25 +3,25 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
-  <li><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
+  <li class="breadcrumb-item"><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></li>
   {% if form.has_changed %} 
-  <li><a href="{% url 'osquery:distributed_query_machines' distributed_query.pk %}">Machines</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:distributed_query_machines' distributed_query.pk %}">Machines</a></li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Search</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Search</a></li>
   {% else %}
-  <li class="active">Search</li>
+  <li class="breadcrumb-item active">Search</li>
   {% endif %}
   {% else %} 
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Machines</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Machines</a></li>
   {% else %}
-  <li class="active">Machines</li>
+  <li class="breadcrumb-item active">Machines</li>
   {% endif %}
   {% endif %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
 <h2>Run <i>{{ distributed_query }}</i></h2>
@@ -34,7 +34,7 @@
     {{ form.status.label_tag }}
     {{ form.status }}
   </div>
-  <button type="submit" class="btn btn-default">Search</button>
+  <button type="submit" class="btn btn-primary">Search</button>
 </form>
 
 <h3 id="machines">{{ page_obj.paginator.count }} Machine{{ page_obj.paginator.count|pluralize }}</h3>
