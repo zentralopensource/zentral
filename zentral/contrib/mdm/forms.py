@@ -21,7 +21,7 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag, Channel,
                      DEPDevice, DEPOrganization, DEPEnrollment, DEPToken, DEPVirtualServer,
                      EnrolledDevice, EnterpriseApp, Platform,
-                     SCEPConfig,
+                     FileVaultConfig, SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
                      Profile, Location, LocationAsset, StoreApp)
 from .skip_keys import skippable_setup_panes
@@ -857,6 +857,22 @@ class ArtifactVersionForm(BlueprintItemFormMixin, forms.ModelForm):
         for blueprint in self.artifact.blueprints():
             update_blueprint_serialized_artifacts(blueprint)
         return instance
+
+
+class FileVaultConfigForm(forms.ModelForm):
+    class Meta:
+        model = FileVaultConfig
+        fields = "__all__"
+
+    def clean(self):
+        super().clean()
+        at_login_only = self.cleaned_data.get("at_login_only")
+        if not at_login_only:
+            self.cleaned_data["bypass_attempts"] = -1
+        else:
+            bypass_attempts = self.cleaned_data.get("bypass_attempts")
+            if isinstance(bypass_attempts, int) and bypass_attempts < 0:
+                self.add_error("bypass_attempts", "Must be at least 0 when enablement deferred at login")
 
 
 class SCEPConfigForm(forms.ModelForm):

@@ -2,12 +2,18 @@ import copy
 from datetime import datetime
 import os.path
 import plistlib
+from unittest.mock import patch
+from cryptography.x509 import load_der_x509_certificate
+from cryptography.hazmat.primitives.serialization import Encoding
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import SecurityInfo
 from zentral.contrib.mdm.commands.scheduling import _update_inventory
+from zentral.contrib.mdm.commands.setup_filevault import get_escrow_key_certificate_der_bytes
+from zentral.contrib.mdm.crypto import encrypt_cms_payload
+from zentral.contrib.mdm.events import FileVaultPRKUpdateEvent
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session
 
@@ -129,6 +135,73 @@ class SecurityInfoCommandTestCase(TestCase):
         self.enrolled_device.refresh_from_db()
         self.assertTrue(self.enrolled_device.security_info_updated_at > start)
         self.assertIsNone(self.enrolled_device.bootstrap_token_allowed_for_authentication)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_update_filevault_prk(self, post_event):
+        self.assertIsNone(self.enrolled_device.filevault_prk)
+        cert = load_der_x509_certificate(get_escrow_key_certificate_der_bytes(self.enrolled_device))
+        cert_bytes = cert.public_bytes(encoding=Encoding.PEM)
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FDE_PersonalRecoveryKeyCMS"] = encrypt_cms_payload(
+            b"BBBB-BBBB-BBBB-BBBB-BBBB-BBBB",
+            cert_bytes,
+            raw_output=True
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.get_filevault_prk(), "BBBB-BBBB-BBBB-BBBB-BBBB-BBBB")
+        # event
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, FileVaultPRKUpdateEvent)
+        self.assertEqual(
+            event.payload,
+            {'command': {'request_type': 'SecurityInfo',
+             'uuid': str(cmd.uuid)}}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["tags"], ["mdm"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_update_filevault_prk_bad_cms_payload_noop(self, post_event):
+        self.enrolled_device.set_filevault_prk("BBBB-BBBB-BBBB-BBBB-BBBB-BBBB")
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FDE_PersonalRecoveryKeyCMS"] = b"not-a-cms-payload"
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.get_filevault_prk(), "BBBB-BBBB-BBBB-BBBB-BBBB-BBBB")
+        # no events
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_same_filevault_prk(self, post_event):
+        self.enrolled_device.set_filevault_prk("BBBB-BBBB-BBBB-BBBB-BBBB-BBBB")
+        self.enrolled_device.save()
+        cert = load_der_x509_certificate(get_escrow_key_certificate_der_bytes(self.enrolled_device))
+        cert_bytes = cert.public_bytes(encoding=Encoding.PEM)
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FDE_PersonalRecoveryKeyCMS"] = encrypt_cms_payload(
+            b"BBBB-BBBB-BBBB-BBBB-BBBB-BBBB",
+            cert_bytes,
+            raw_output=True
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.get_filevault_prk(), "BBBB-BBBB-BBBB-BBBB-BBBB-BBBB")
+        # no events
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 0)
 
     def test_process_acknowledged_ios_response(self):
         start = datetime.utcnow()

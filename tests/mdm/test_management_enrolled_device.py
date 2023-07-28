@@ -344,7 +344,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
         self.assertNotContains(
             response,
-            reverse("mdm:create_enrolled_device_custom_command", args=(session.enrolled_device.pk,))
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "CustomCommand"))
         )
 
     def test_enrolled_device_custom_command_link(self):
@@ -355,19 +355,20 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
         self.assertContains(
             response,
-            reverse("mdm:create_enrolled_device_custom_command", args=(session.enrolled_device.pk,))
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "CustomCommand"))
         )
 
     def test_create_enrolled_device_custom_command_redirect(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self._login_redirect(reverse("mdm:create_enrolled_device_custom_command", args=(session.enrolled_device.pk,)))
+        self._login_redirect(reverse("mdm:create_enrolled_device_command",
+                                     args=(session.enrolled_device.pk, "CustomCommand")))
 
     def test_create_enrolled_device_custom_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.view_enrolleddevice")
         response = self.client.get(
-            reverse("mdm:create_enrolled_device_custom_command",
-                    args=(session.enrolled_device.pk,))
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "CustomCommand"))
         )
         self.assertEqual(response.status_code, 403)
 
@@ -375,8 +376,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.add_devicecommand")
         response = self.client.get(
-            reverse("mdm:create_enrolled_device_custom_command",
-                    args=(session.enrolled_device.pk,))
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "CustomCommand"))
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
@@ -385,8 +386,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.add_devicecommand")
         response = self.client.post(
-            reverse("mdm:create_enrolled_device_custom_command",
-                    args=(session.enrolled_device.pk,)),
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "CustomCommand")),
             {"command": "YOLO"}
         )
         self.assertFormError(response.context["form"], "command", "Invalid property list")
@@ -395,8 +396,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.add_devicecommand")
         response = self.client.post(
-            reverse("mdm:create_enrolled_device_custom_command",
-                    args=(session.enrolled_device.pk,)),
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "CustomCommand")),
             {"command": '<plist version="1.0"><array></array></plist>'}
         )
         self.assertFormError(response.context["form"], "command", "Not a dictionary")
@@ -405,8 +406,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.add_devicecommand")
         response = self.client.post(
-            reverse("mdm:create_enrolled_device_custom_command",
-                    args=(session.enrolled_device.pk,)),
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "CustomCommand")),
             {"command": "<dict></dict>"}
         )
         self.assertFormError(response.context["form"], "command", "Missing or empty RequestType")
@@ -415,8 +416,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
         response = self.client.post(
-            reverse("mdm:create_enrolled_device_custom_command",
-                    args=(session.enrolled_device.pk,)),
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "CustomCommand")),
             {"command": "<dict>"
                         "<key>RequestType</key>"
                         "<string>InstalledApplicationList</string>"
@@ -436,7 +437,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
              "ManagedAppsOnly": False}
         )
 
-    # create device information
+    # create device information command
 
     def test_enrolled_device_no_device_information_command_link(self):
         session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
@@ -446,7 +447,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
         self.assertNotContains(
             response,
-            reverse("mdm:create_enrolled_device_device_information_command", args=(session.enrolled_device.pk,))
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "DeviceInformation"))
         )
 
     def test_enrolled_device_device_information_command_link(self):
@@ -457,20 +458,20 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
         self.assertContains(
             response,
-            reverse("mdm:create_enrolled_device_device_information_command", args=(session.enrolled_device.pk,))
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "DeviceInformation"))
         )
 
     def test_create_enrolled_device_device_information_command_redirect(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self._login_redirect(reverse("mdm:create_enrolled_device_device_information_command",
-                                     args=(session.enrolled_device.pk,)))
+        self._login_redirect(reverse("mdm:create_enrolled_device_command",
+                                     args=(session.enrolled_device.pk, "DeviceInformation")))
 
     def test_create_enrolled_device_device_information_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.view_enrolleddevice")
         response = self.client.get(
-            reverse("mdm:create_enrolled_device_device_information_command",
-                    args=(session.enrolled_device.pk,))
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "DeviceInformation"))
         )
         self.assertEqual(response.status_code, 403)
 
@@ -478,8 +479,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.add_devicecommand")
         response = self.client.get(
-            reverse("mdm:create_enrolled_device_device_information_command",
-                    args=(session.enrolled_device.pk,))
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "DeviceInformation"))
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
@@ -488,8 +489,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
         response = self.client.post(
-            reverse("mdm:create_enrolled_device_device_information_command",
-                    args=(session.enrolled_device.pk,)),
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "DeviceInformation")),
             follow=True
         )
         self.assertEqual(response.status_code, 200)
@@ -497,6 +498,156 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, "Device information command successfully created")
         command = session.enrolled_device.commands.first()
         self.assertEqual(command.name, "DeviceInformation")
+
+    # create security info command
+
+    def test_enrolled_device_no_security_info_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SecurityInfo"))
+        )
+
+    def test_enrolled_device_security_info_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SecurityInfo"))
+        )
+
+    def test_create_enrolled_device_security_info_command_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login_redirect(reverse("mdm:create_enrolled_device_command",
+                                     args=(session.enrolled_device.pk, "SecurityInfo")))
+
+    def test_create_enrolled_device_security_info_command_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SecurityInfo"))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrolled_device_security_info_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SecurityInfo"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+
+    def test_create_enrolled_device_security_info_command_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SecurityInfo")),
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Security info command successfully created")
+        command = session.enrolled_device.commands.first()
+        self.assertEqual(command.name, "SecurityInfo")
+
+    # create rotate filevault key command
+
+    def test_enrolled_device_no_rotate_filevault_key_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "RotateFileVaultKey"))
+        )
+
+    def test_enrolled_device_no_prk_no_rotate_filevault_key_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "RotateFileVaultKey"))
+        )
+
+    def test_enrolled_device_rotate_filevault_key_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.set_filevault_prk("AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
+        enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "RotateFileVaultKey"))
+        )
+
+    def test_create_enrolled_device_rotate_filevault_key_command_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.set_filevault_prk("AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
+        enrolled_device.save()
+        self._login_redirect(reverse("mdm:create_enrolled_device_command",
+                                     args=(session.enrolled_device.pk, "RotateFileVaultKey")))
+
+    def test_create_enrolled_device_rotate_filevault_key_command_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.set_filevault_prk("AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
+        enrolled_device.save()
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RotateFileVaultKey"))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrolled_device_rotate_filevault_key_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.set_filevault_prk("AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
+        enrolled_device.save()
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RotateFileVaultKey"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+
+    def test_create_enrolled_device_rotate_filevault_key_command_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.set_filevault_prk("AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
+        enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RotateFileVaultKey")),
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Rotate FileVault key command successfully created")
+        command = session.enrolled_device.commands.first()
+        self.assertEqual(command.name, "RotateFileVaultKey")
 
     # download custom command result
 

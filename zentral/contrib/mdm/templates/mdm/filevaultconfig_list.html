@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% load bootstrap %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="active">FileVault configuration{{ page_obj.paginator.count|pluralize }}</li>
+  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<h3>{{ page_obj.paginator.count }} FileVault configuration{{ page_obj.paginator.count|pluralize }}</h3>
+
+{% if perms.mdm.add_filevaultconfig %}
+<p>
+  <a class="btn btn-default" href="{% url 'mdm:create_filevault_config' %}">
+  Create
+  </a>
+</p>
+{% endif %}
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+
+{% if object_list %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>created at</th>
+      <th>updated at</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for filevault_config in object_list %}
+    <tr>
+      <td>
+        <a href="{{ filevault_config.get_absolute_url }}">{{ filevault_config }}</a>
+      </td>
+      <td>{{ filevault_config.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>{{ filevault_config.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      <td>
+        {% if perms.mdm.change_filevaultconfig %}
+        <a href="{% url 'mdm:update_filevault_config' filevault_config.pk %}" class="btn btn-xs btn-default">
+          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+        {% if perms.mdm.delete_filevaultconfig %}
+        <a href="{% url 'mdm:delete_filevault_config' filevault_config.pk %}" class="btn btn-xs btn-danger">
+          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if next_url or previous_url %}
+<nav>
+  <ul class="pager">
+    {% if next_url %}
+    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
+    {% endif %}
+    {% if previous_url %}
+    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -94,6 +94,79 @@ class PushCertificate(models.Model):
         self.private_key = rewrap(self.private_key, **self._get_secret_engine_kwargs("private_key"))
 
 
+# FileVault
+
+
+class FileVaultConfig(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    escrow_location_display_name = models.CharField(
+        verbose_name="PRK escrow location display name",
+        max_length=256,
+    )
+    at_login_only = models.BooleanField(
+        verbose_name="Defer enablement at login only",
+        default=False,
+        help_text="Do not ask for FileVault to be enabled at logout."
+    )
+    bypass_attempts = models.IntegerField(
+        verbose_name="Max bypass attempts at login",
+        validators=[MinValueValidator(-1), MaxValueValidator(9999)],
+        default=-1,
+        help_text="After this number, FileVault will have to be enabled at login."
+    )
+    show_recovery_key = models.BooleanField(
+        verbose_name="Show recovery key",
+        default=False,
+        help_text="Display the PRK to the user after FileVault is enabled.",
+    )
+    destroy_key_on_standby = models.BooleanField(
+        verbose_name="Destroy key on standby",
+        default=False,
+        help_text="Force FileVault unlock after hibernation.",
+    )
+    prk_rotation_interval_days = models.IntegerField(
+        verbose_name="PRK rotation interval (days)",
+        validators=[MinValueValidator(0), MaxValueValidator(366)],
+        default=0,
+        help_text="Interval in days after which the PRK will be automatically rotated and escrowed to Zentral."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "filevault config"
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("mdm:filevault_config", args=(self.pk,))
+
+    @property
+    def uuid(self):
+        h = hashlib.md5(f"{self.pk}|{self.name}|{self.escrow_location_display_name}|"
+                        f"{self.at_login_only}|{self.bypass_attempts}|{self.show_recovery_key}|"
+                        f"{self.destroy_key_on_standby}|{self.prk_rotation_interval_days}".encode("utf-8"))
+        return uuid.UUID(hex=h.hexdigest())
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "escrow_location_display_name": self.escrow_location_display_name,
+            "at_login_only": self.at_login_only,
+            "bypass_attempts": self.bypass_attempts,
+            "show_recovery_key": self.show_recovery_key,
+            "destroy_key_on_standby": self.destroy_key_on_standby,
+            "prk_rotation_interval_days": self.prk_rotation_interval_days,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
+
+
 # Blueprint
 
 
@@ -144,6 +217,8 @@ class Blueprint(models.Model):
         choices=InventoryItemCollectionOption.choices,
         default=InventoryItemCollectionOption.NO
     )
+    # FileVault
+    filevault_config = models.ForeignKey(FileVaultConfig, null=True, blank=True, on_delete=models.SET_NULL)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -151,7 +226,7 @@ class Blueprint(models.Model):
     objects = BlueprintManager()
 
     class Meta:
-        ordering = ("name", "created_at")
+        ordering = ("name",)
 
     def __str__(self):
         return self.name
@@ -187,6 +262,8 @@ class Blueprint(models.Model):
             "created_at": self.created_at,
             "updated_at": self.updated_at
         })
+        if self.filevault_config:
+            d["filevault_config"] = self.filevault_config.serialize_for_event(keys_only=True)
         return d
 
     def can_be_deleted(self):
@@ -588,6 +665,12 @@ class EnrolledDevice(models.Model):
     # activation lock
     activation_lock_manageable = models.BooleanField(null=True)
 
+    # FileVault
+    filevault_config_uuid = models.UUIDField(null=True)
+    filevault_escrow_key = models.TextField(null=True)
+    filevault_prk = models.TextField(null=True)
+    filevault_prk_updated_at = models.DateTimeField(null=True)
+
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
     blocked_at = models.DateTimeField(blank=True, null=True)
@@ -602,6 +685,11 @@ class EnrolledDevice(models.Model):
     def get_absolute_url(self):
         return reverse("mdm:enrolled_device", args=(self.pk,))
 
+    class Meta:
+        permissions = [
+            ("view_filevault_prk", "Can view FileVault PRK"),
+        ]
+
     # secrets
 
     def _get_secret_engine_kwargs(self, field):
@@ -611,7 +699,7 @@ class EnrolledDevice(models.Model):
 
     def get_bootstrap_token(self):
         if not self.bootstrap_token:
-            return None
+            return
         return decrypt(self.bootstrap_token, **self._get_secret_engine_kwargs("bootstrap_token"))
 
     def set_bootstrap_token(self, token):
@@ -622,7 +710,7 @@ class EnrolledDevice(models.Model):
 
     def get_unlock_token(self):
         if not self.unlock_token:
-            return None
+            return
         return decrypt(self.unlock_token, **self._get_secret_engine_kwargs("unlock_token"))
 
     def set_unlock_token(self, token):
@@ -631,13 +719,40 @@ class EnrolledDevice(models.Model):
             return
         self.unlock_token = encrypt(token, **self._get_secret_engine_kwargs("unlock_token"))
 
-    def rewrap_secrets(self):
-        if not self.bootstrap_token and not self.unlock_token:
+    def get_filevault_escrow_key(self):
+        if not self.filevault_escrow_key:
             return
+        return decrypt(self.filevault_escrow_key, **self._get_secret_engine_kwargs("filevault_escrow_key"))
+
+    def set_filevault_escrow_key(self, filevault_escrow_key):
+        if filevault_escrow_key is None:
+            self.filevault_escrow_key = None
+            return
+        self.filevault_escrow_key = encrypt(filevault_escrow_key,
+                                            **self._get_secret_engine_kwargs("filevault_escrow_key"))
+
+    def get_filevault_prk(self):
+        if not self.filevault_prk:
+            return
+        return decrypt_str(self.filevault_prk, **self._get_secret_engine_kwargs("filevault_prk"))
+
+    def set_filevault_prk(self, filevault_prk):
+        if filevault_prk is None:
+            self.filevault_prk = None
+            return
+        self.filevault_prk = encrypt_str(filevault_prk, **self._get_secret_engine_kwargs("filevault_prk"))
+        self.filevault_prk_updated_at = datetime.utcnow()
+
+    def rewrap_secrets(self):
         if self.bootstrap_token:
             self.bootstrap_token = rewrap(self.bootstrap_token, **self._get_secret_engine_kwargs("bootstrap_token"))
         if self.unlock_token:
             self.unlock_token = rewrap(self.unlock_token, **self._get_secret_engine_kwargs("unlock_token"))
+        if self.filevault_escrow_key:
+            self.filevault_escrow_key = rewrap(self.filevault_escrow_key,
+                                               **self._get_secret_engine_kwargs("filevault_escrow_key"))
+        if self.filevault_prk:
+            self.filevault_prk = rewrap(self.filevault_prk, **self._get_secret_engine_kwargs("filevault_prk"))
 
     def get_urlsafe_serial_number(self):
         if self.serial_number:
@@ -667,6 +782,8 @@ class EnrolledDevice(models.Model):
         self.user_enrollment = None
         self.user_approved_enrollment = None
         self.supervised = None
+        self.filevault_escrow_key = None
+        self.filevault_config_uuid = None
         if full:
             self.checkout_at = None
             self.blocked_at = None

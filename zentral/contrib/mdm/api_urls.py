@@ -4,7 +4,8 @@ from .api_views import (ArtifactDetail, ArtifactList,
                         BlueprintDetail, BlueprintList,
                         BlueprintArtifactDetail, BlueprintArtifactList,
                         ProfileDetail, ProfileList,
-                        DEPVirtualServerSyncDevicesView)
+                        DEPVirtualServerSyncDevicesView,
+                        EnrolledDeviceFileVaultPRK)
 
 
 app_name = "mdm_api"
@@ -19,7 +20,9 @@ urlpatterns = [
     path('profiles/<uuid:artifact_version_pk>/', ProfileDetail.as_view(), name="profile"),
 
     path('dep/virtual_servers/<int:pk>/sync_devices/',
-         DEPVirtualServerSyncDevicesView.as_view(), name="dep_virtual_server_sync_devices")
+         DEPVirtualServerSyncDevicesView.as_view(), name="dep_virtual_server_sync_devices"),
+    path('enrolled_devices/<int:pk>/filevault_prk/', EnrolledDeviceFileVaultPRK.as_view(),
+         name="enrolled_device_filevault_prk"),
 ]
 
 

@@ -22,7 +22,9 @@ from .profile_list import ProfileList
 from .reenroll import Reenroll
 from .remove_application import RemoveApplication
 from .remove_profile import RemoveProfile
+from .rotate_filevault_key import RotateFileVaultKey
 from .security_info import SecurityInfo
+from .setup_filevault import SetupFileVault
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.scheduling")
@@ -121,30 +123,6 @@ def _get_next_queued_command(target, enrollment_session, status):
         return command
 
 
-def _configure_dep_enrollment_accounts(target, enrollment_session, status):
-    if status == RequestStatus.NOT_NOW:
-        return
-    if not target.is_device:
-        return
-    if target.platform != Platform.MACOS:
-        return
-    if not target.awaiting_configuration:
-        return
-    dep_enrollment = getattr(enrollment_session, "dep_enrollment", None)
-    if not dep_enrollment:
-        # should never happen
-        logger.error("Enrolled device %s AwaintingConfiguration but no DEP enrollment", target.udid)
-        return
-    if not dep_enrollment.requires_account_configuration():
-        return
-    if DeviceCommand.objects.filter(name=AccountConfiguration.get_db_name(),
-                                    enrolled_device=target.enrolled_device,
-                                    status=Command.Status.ACKNOWLEDGED).count():
-        # account configuration already done
-        return
-    return AccountConfiguration.create_for_target(target)
-
-
 def _reenroll(target, enrollment_session, status):
     if status == RequestStatus.NOT_NOW:
         return
@@ -164,6 +142,19 @@ def _reenroll(target, enrollment_session, status):
         else:
             logger.warning("Enrolled device %s needs to re-enroll, but there was at least one re-enrollment session "
                            "in the last 4 hours", enrolled_device.udid)
+
+
+def _trigger_declarative_management_sync(target, enrollment_session, status):
+    if status == RequestStatus.NOT_NOW:
+        return
+    if not DeclarativeManagement.verify_target(target):
+        return
+    _, declarations_token = target.sync_tokens
+    if (
+        not target.declarative_management
+        or target.current_declarations_token != declarations_token
+    ):
+        return DeclarativeManagement.create_for_target(target)
 
 
 def _install_artifacts(target, enrollment_session, status):
@@ -214,17 +205,80 @@ def _remove_artifacts(target, enrollment_session, status):
         return command_class.create_for_target(target, artifact_version)
 
 
-def _trigger_declarative_management_sync(target, enrollment_session, status):
+def _setup_filevault(target, enrollment_session, status):
     if status == RequestStatus.NOT_NOW:
         return
-    if not DeclarativeManagement.verify_target(target):
+    if not SetupFileVault.verify_target(target):
+        # TODO: remove current FileVault config?
         return
-    _, declarations_token = target.sync_tokens
+    enrolled_device = target.enrolled_device
+    if enrolled_device.filevault_config_uuid != target.blueprint.filevault_config.uuid:
+        latest_cmd = (
+            DeviceCommand.objects.filter(name=SetupFileVault.get_db_name(),
+                                         enrolled_device=enrolled_device,
+                                         time__gte=datetime.utcnow() - timedelta(hours=4))
+                                 .order_by("-time")
+                                 .first()
+        )
+        if latest_cmd and latest_cmd.status != Command.Status.ACKNOWLEDGED:
+            # Backoff: the lastest SetupFileVault command sent in the last 4 hours has a bad status
+            # TODO: 4 hours hard-coded
+            return
+        return SetupFileVault.create_for_target(target)
+
+
+def _rotate_filevault_key(target, enrollment_session, status):
+    if status == RequestStatus.NOT_NOW:
+        return
+    if not RotateFileVaultKey.verify_target(target):
+        return
+    try:
+        prk_rotation_interval_days = target.blueprint.filevault_config.prk_rotation_interval_days
+    except AttributeError:
+        return
+    enrolled_device = target.enrolled_device
+    now = datetime.utcnow()
     if (
-        not target.declarative_management
-        or target.current_declarations_token != declarations_token
+        prk_rotation_interval_days > 0
+        and enrolled_device.filevault_prk_updated_at
+        and now - enrolled_device.filevault_prk_updated_at > timedelta(days=prk_rotation_interval_days)
     ):
-        return DeclarativeManagement.create_for_target(target)
+        latest_cmd = (
+            DeviceCommand.objects.filter(name=RotateFileVaultKey.get_db_name(),
+                                         enrolled_device=enrolled_device,
+                                         time__gte=now - timedelta(hours=4))
+                                 .order_by("-time")
+                                 .first()
+        )
+        if latest_cmd and latest_cmd.status != Command.Status.ACKNOWLEDGED:
+            # Backoff: the latest RotateFileVaultKey command sent in the last 4 hours has a bad status
+            # TODO: 4 hours hard-coded
+            return
+        return RotateFileVaultKey.create_for_target(target)
+
+
+def _configure_dep_enrollment_accounts(target, enrollment_session, status):
+    if status == RequestStatus.NOT_NOW:
+        return
+    if not target.is_device:
+        return
+    if target.platform != Platform.MACOS:
+        return
+    if not target.awaiting_configuration:
+        return
+    dep_enrollment = getattr(enrollment_session, "dep_enrollment", None)
+    if not dep_enrollment:
+        # should never happen
+        logger.error("Enrolled device %s AwaintingConfiguration but no DEP enrollment", target.udid)
+        return
+    if not dep_enrollment.requires_account_configuration():
+        return
+    if DeviceCommand.objects.filter(name=AccountConfiguration.get_db_name(),
+                                    enrolled_device=target.enrolled_device,
+                                    status=Command.Status.ACKNOWLEDGED).exists():
+        # account configuration already done
+        return
+    return AccountConfiguration.create_for_target(target)
 
 
 def _finish_dep_enrollment_configuration(target, enrollment_session, status):
@@ -247,6 +301,8 @@ def get_next_command_response(target, enrollment_session, status):
         _trigger_declarative_management_sync,
         _install_artifacts,
         _remove_artifacts,
+        _setup_filevault,
+        _rotate_filevault_key,
         _configure_dep_enrollment_accounts,
         _finish_dep_enrollment_configuration
     ):

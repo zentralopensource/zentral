@@ -1,3 +1,4 @@
+import base64
 import os
 import subprocess
 from tempfile import NamedTemporaryFile
@@ -150,9 +151,7 @@ def verify_iphone_ca_signed_payload(data):
     raise ValueError("Untrusted CA")
 
 
-def decrypt_cms_payload(payload, privkey_bytes, privkey_password=None):
-    # load the private key
-    private_key = serialization.load_pem_private_key(privkey_bytes, privkey_password)
+def decrypt_cms_payload(payload, private_key, der=False):
     # encrypt the private key, using a temporary password
     tmp_inkey_pwd = get_random_string(length=42).encode("utf-8")
     tmp_inkey_data = private_key.private_bytes(
@@ -169,16 +168,30 @@ def decrypt_cms_payload(payload, privkey_bytes, privkey_password=None):
         tmp_inkey_file.write(tmp_inkey_data)
         tmp_inkey_file.flush()
         # decrypt the payload
-        p = subprocess.Popen(["/usr/bin/openssl", "smime", "-decrypt",
-                              "-inkey", tmp_inkey_file.name, "-passin", f"env:{env_var}"],
-                             stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE,
-                             env=env)
-        stdout, _ = p.communicate(payload)
-        return stdout
+        openssl_args = [
+            "/usr/bin/openssl",
+            "smime", "-decrypt",
+            "-inkey", tmp_inkey_file.name, "-passin", f"env:{env_var}"
+        ]
+        if der:
+            openssl_args.extend(["-inform", "der"])
+        cp = subprocess.run(
+            openssl_args,
+            input=payload,
+            capture_output=True,
+            check=True,
+            env=env,
+        )
+        return cp.stdout
 
 
-def encrypt_cms_payload(payload, public_key_bytes):
+def decrypt_cms_payload_with_pem_privkey(payload, privkey_bytes):
+    # load the private key
+    private_key = serialization.load_pem_private_key(privkey_bytes, None)
+    return decrypt_cms_payload(payload, private_key)
+
+
+def encrypt_cms_payload(payload, public_key_bytes, raw_output=False):
     # write the public key in a temporary file
     with NamedTemporaryFile() as tmp_pubkey_file:
         tmp_pubkey_file.write(public_key_bytes)
@@ -188,7 +201,10 @@ def encrypt_cms_payload(payload, public_key_bytes):
                              stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE)
         stdout, _ = p.communicate(payload)
-        return stdout
+        if raw_output:
+            return base64.b64decode(stdout.split(b"\n\n")[1].replace(b"\n", b""))
+        else:
+            return stdout
 
 
 # push certificate

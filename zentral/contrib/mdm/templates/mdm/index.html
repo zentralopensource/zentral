@@ -29,6 +29,9 @@
 {% if perms.mdm.view_blueprint %}
 <p><a href="{% url 'mdm:blueprints' %}">Blueprints</a></p>
 {% endif %}
+{% if perms.mdm.view_filevaultconfig %}
+<p><a href="{% url 'mdm:filevault_configs' %}">FileVault configurations</a></p>
+{% endif %}
 {% if perms.mdm.view_scepconfig %}
 <p><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></p>
 {% endif %}

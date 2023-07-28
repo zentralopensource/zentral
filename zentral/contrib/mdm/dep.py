@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
-from .crypto import decrypt_cms_payload
+from .crypto import decrypt_cms_payload_with_pem_privkey
 from .dep_client import DEPClient, DEPClientError
 from .models import DEPDevice, DEPEnrollment
 
@@ -62,7 +62,7 @@ def add_dep_token_certificate(dep_token):
 
 
 def decrypt_dep_token(dep_token, payload):
-    decrypted_payload = decrypt_cms_payload(payload, dep_token.get_private_key())
+    decrypted_payload = decrypt_cms_payload_with_pem_privkey(payload, dep_token.get_private_key())
     message_lines = []
     found_tag = False
     for line in decrypted_payload.splitlines():

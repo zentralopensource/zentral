@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from accounts.models import APIToken, User
 from zentral.contrib.mdm.models import Blueprint
 from zentral.core.events.base import AuditEvent
-from .utils import force_blueprint, force_blueprint_artifact
+from .utils import force_blueprint, force_blueprint_artifact, force_filevault_config
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -96,13 +96,15 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
               'collect_apps': 0,
               'collect_certificates': 0,
               'collect_profiles': 0,
+              'filevault_config': None,
               'created_at': blueprint.created_at.isoformat(),
               'updated_at': blueprint.updated_at.isoformat()}]
         )
 
     def test_list_blueprints_name_filter(self):
         force_blueprint()
-        blueprint = force_blueprint()
+        filevault_config = force_filevault_config()
+        blueprint = force_blueprint(filevault_config=filevault_config)
         self.set_permissions("mdm.view_blueprint")
         response = self.get(reverse("mdm_api:blueprints"), data={"name": blueprint.name})
         self.assertEqual(response.status_code, 200)
@@ -114,6 +116,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
               'collect_apps': 0,
               'collect_certificates': 0,
               'collect_profiles': 0,
+              'filevault_config': filevault_config.pk,
               'created_at': blueprint.created_at.isoformat(),
               'updated_at': blueprint.updated_at.isoformat()}]
         )
@@ -144,6 +147,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
              'collect_apps': 0,
              'collect_certificates': 0,
              'collect_profiles': 0,
+             'filevault_config': None,
              'created_at': blueprint.created_at.isoformat(),
              'updated_at': blueprint.updated_at.isoformat()}
         )
@@ -179,6 +183,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
              'collect_apps': 0,
              'collect_certificates': 0,
              'collect_profiles': 0,
+             'filevault_config': None,
              'created_at': blueprint.created_at.isoformat(),
              'updated_at': blueprint.updated_at.isoformat()}
         )
@@ -224,6 +229,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_blueprint(self, post_event):
         blueprint = force_blueprint()
+        filevault_config = force_filevault_config()
         prev_value = blueprint.serialize_for_event()
         self.set_permissions("mdm.change_blueprint")
         new_name = get_random_string(12)
@@ -233,7 +239,8 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
                                  "inventory_interval": 86401,
                                  "collect_apps": 1,
                                  "collect_certificates": 2,
-                                 "collect_profiles": 2})
+                                 "collect_profiles": 2,
+                                 "filevault_config": filevault_config.pk})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         blueprint.refresh_from_db()
@@ -250,6 +257,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
              'collect_apps': 1,
              'collect_certificates': 2,
              'collect_profiles': 2,
+             'filevault_config': filevault_config.pk,
              'created_at': blueprint.created_at.isoformat(),
              'updated_at': blueprint.updated_at.isoformat()}
         )
@@ -268,6 +276,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
                      "collect_apps": 'MANAGED_ONLY',
                      "collect_certificates": 'ALL',
                      "collect_profiles": 'ALL',
+                     "filevault_config": {"name": filevault_config.name, "pk": filevault_config.pk},
                      "created_at": blueprint.created_at,
                      "updated_at": blueprint.updated_at
                  },

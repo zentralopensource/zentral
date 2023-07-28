@@ -11,8 +11,8 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
-from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
-from zentral.contrib.mdm.commands.base import load_command, registered_commands
+from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
+from zentral.contrib.mdm.commands.base import load_command, registered_manual_commands
 from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
@@ -20,6 +20,7 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        CreateDEPEnrollmentForm, UpdateDEPEnrollmentForm,
                                        CreateAssetArtifactForm,
                                        DEPDeviceSearchForm, EnrolledDeviceSearchForm,
+                                       FileVaultConfigForm,
                                        OTAEnrollmentForm,
                                        SCEPConfigForm,
                                        UpdateArtifactForm,
@@ -32,6 +33,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         DEPDevice, DEPEnrollment,
                                         DeviceCommand, UserCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
+                                        FileVaultConfig,
                                         OTAEnrollment,
                                         SCEPConfig,
                                         UserEnrollment,
@@ -928,7 +930,8 @@ class CreateBlueprintView(PermissionRequiredMixin, CreateViewWithAudit):
               "inventory_interval",
               "collect_apps",
               "collect_certificates",
-              "collect_profiles")
+              "collect_profiles",
+              "filevault_config",)
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -960,7 +963,8 @@ class UpdateBlueprintView(PermissionRequiredMixin, UpdateViewWithAudit):
               "inventory_interval",
               "collect_apps",
               "collect_certificates",
-              "collect_profiles")
+              "collect_profiles",
+              "filevault_config",)
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -972,6 +976,44 @@ class DeleteBlueprintView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "mdm.delete_blueprint"
     queryset = Blueprint.objects.can_be_deleted()
     success_url = reverse_lazy("mdm:blueprints")
+
+
+# FileVault Configurations
+
+
+class FileVaultConfigListView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_filevaultconfig"
+    model = FileVaultConfig
+    paginate_by = 20
+
+
+class CreateFileVaultConfigView(PermissionRequiredMixin, CreateViewWithAudit):
+    permission_required = "mdm.add_filevaultconfig"
+    model = FileVaultConfig
+    form_class = FileVaultConfigForm
+
+
+class FileVaultConfigView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_filevaultconfig"
+    model = FileVaultConfig
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["blueprints"] = self.object.blueprint_set.order_by("name")
+        ctx["blueprint_count"] = ctx["blueprints"].count()
+        return ctx
+
+
+class UpdateFileVaultConfigView(PermissionRequiredMixin, UpdateViewWithAudit):
+    permission_required = "mdm.change_filevaultconfig"
+    model = FileVaultConfig
+    form_class = FileVaultConfigForm
+
+
+class DeleteFileVaultConfigView(PermissionRequiredMixin, DeleteViewWithAudit):
+    permission_required = "mdm.delete_filevaultconfig"
+    model = FileVaultConfig
+    success_url = reverse_lazy("mdm:filevault_configs")
 
 
 # SCEP Configurations
@@ -1206,6 +1248,15 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
         ctx["commands_count"] = commands_qs.count()
         ctx["enrollment_session_info_list"] = list(self.object.iter_enrollment_session_info())
         ctx["enrollment_session_info_count"] = len(ctx["enrollment_session_info_list"])
+        ctx["create_command_links"] = []
+        target = Target(self.object)
+        for db_name, command_class in registered_manual_commands.items():
+            if command_class.verify_target(target):
+                ctx["create_command_links"].append((
+                    reverse("mdm:create_enrolled_device_command", args=(self.object.pk, db_name)),
+                    command_class.get_display_name()
+                ))
+        ctx["create_command_links"].sort(key=lambda t: t[1])
         return ctx
 
 
@@ -1385,7 +1436,6 @@ class PokeEnrolledUserView(PermissionRequiredMixin, View):
 
 class CreateEnrolledDeviceCommandView(PermissionRequiredMixin, FormView):
     permission_required = "mdm.add_devicecommand"
-    command_name = None
     template_name = "mdm/enrolleddevice_create_command.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -1393,11 +1443,12 @@ class CreateEnrolledDeviceCommandView(PermissionRequiredMixin, FormView):
             EnrolledDevice,
             pk=kwargs["pk"]
         )
+        cmd_db_name = kwargs["db_name"]
         try:
-            self.command_class = registered_commands[self.command_name]
+            self.command_class = registered_manual_commands[cmd_db_name]
         except KeyError:
             # should not happen
-            raise SuspiciousOperation("Unknown command model class: %s", self.command_name)
+            raise SuspiciousOperation("Unknown command model class: %s", cmd_db_name)
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_class(self):

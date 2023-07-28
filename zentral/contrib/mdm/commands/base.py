@@ -1,7 +1,7 @@
 from datetime import timedelta
 import logging
 import plistlib
-import uuid
+from uuid import uuid4
 from django import forms
 from django.http import HttpResponse
 from django.utils import timezone
@@ -43,7 +43,8 @@ class Command:
         target,
         artifact_version=None,
         kwargs=None,
-        queue=False, delay=0
+        queue=False, delay=0,
+        uuid=None,
     ):
         if not cls.verify_target(target):
             raise ValueError("Incompatible channel or device")
@@ -67,7 +68,7 @@ class Command:
             else:
                 db_command.not_before = timezone.now() + timedelta(seconds=delay)
 
-        return cls(target.channel, db_command)
+        return cls(target.channel, db_command, uuid)
 
     @classmethod
     def create_for_device(cls, enrolled_device, artifact_version=None, kwargs=None, queue=False, delay=0):
@@ -76,7 +77,7 @@ class Command:
     def load_kwargs(self):
         pass
 
-    def __init__(self, channel, db_command):
+    def __init__(self, channel, db_command, uuid=None):
         self.channel = channel
         self.response = None
         self.result_time = None
@@ -84,17 +85,21 @@ class Command:
         self.db_command = db_command
         if not self.db_command.pk:
             # new command
-            self.db_command.uuid = self.uuid = uuid.uuid4()
+            self.uuid = uuid
+            if not self.uuid:
+                self.uuid = uuid4()
+            self.db_command.uuid = self.uuid
             self.db_command.name = self.get_db_name()
             if self.artifact_operation:
                 self.db_command.artifact_operation = self.artifact_operation.name
             self.db_command.save()
-        elif self.db_command.status:
+        else:
             self.uuid = self.db_command.uuid
-            if self.db_command.result:
-                self.response = plistlib.loads(self.db_command.result)
-            self.result_time = self.db_command.result_time
-            self.status = DBCommand.Status(self.db_command.status)
+            if self.db_command.status:
+                if self.db_command.result:
+                    self.response = plistlib.loads(self.db_command.result)
+                self.result_time = self.db_command.result_time
+                self.status = DBCommand.Status(self.db_command.status)
         # enrolled objects
         self.enrolled_device = getattr(db_command, "enrolled_device", None)
         self.enrolled_user = getattr(db_command, "enrolled_user", None)
@@ -161,10 +166,14 @@ class Command:
 
 
 registered_commands = {}
+registered_manual_commands = {}
 
 
 def register_command(command_cls):
-    registered_commands[command_cls.get_db_name()] = command_cls
+    key = command_cls.get_db_name()
+    registered_commands[key] = command_cls
+    if command_cls.form_class:
+        registered_manual_commands[key] = command_cls
 
 
 def load_command(db_command):

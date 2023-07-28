@@ -17,6 +17,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "enrolleddevice",
         "enrolleduser",
         "enterpriseapp",
+        "filevaultconfig",
         "location",
         "profile",
         "pushcertificate",

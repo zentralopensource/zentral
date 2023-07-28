@@ -17,7 +17,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         Channel, Platform,
                                         DEPDevice, DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
-                                        EnterpriseApp, Location, LocationAsset,
+                                        EnterpriseApp, FileVaultConfig, Location, LocationAsset,
                                         OTAEnrollment, OTAEnrollmentSession,
                                         Profile, PushCertificate, SCEPConfig,
                                         StoreApp,
@@ -419,8 +419,19 @@ def build_mobileconfig_data(
 # artifacts
 
 
-def force_blueprint():
-    return Blueprint.objects.create(name=get_random_string(12))
+def force_filevault_config(prk_rotation_interval_days=0):
+    return FileVaultConfig.objects.create(
+        name=get_random_string(12),
+        escrow_location_display_name=get_random_string(12),
+        prk_rotation_interval_days=prk_rotation_interval_days
+    )
+
+
+def force_blueprint(filevault_config=None):
+    return Blueprint.objects.create(
+        name=get_random_string(12),
+        filevault_config=filevault_config,
+    )
 
 
 def force_artifact(

@@ -191,6 +191,23 @@ urlpatterns = [
          views.DeleteBlueprintView.as_view(),
          name="delete_blueprint"),
 
+    # FileVault configurations
+    path('filevault_configurations/',
+         views.FileVaultConfigListView.as_view(),
+         name="filevault_configs"),
+    path('filevault_configurations/create/',
+         views.CreateFileVaultConfigView.as_view(),
+         name="create_filevault_config"),
+    path('filevault_configurations/<int:pk>/',
+         views.FileVaultConfigView.as_view(),
+         name="filevault_config"),
+    path('filevault_configurations/<int:pk>/update/',
+         views.UpdateFileVaultConfigView.as_view(),
+         name="update_filevault_config"),
+    path('filevault_configurations/<int:pk>/delete/',
+         views.DeleteFileVaultConfigView.as_view(),
+         name="delete_filevault_config"),
+
     # SCEP configurations
     path('scep_configurations/',
          views.SCEPConfigListView.as_view(),
@@ -232,12 +249,9 @@ urlpatterns = [
          name="unblock_enrolled_device"),
 
     # enrolled device commands
-    path('devices/<int:pk>/commands/custom/create/',
-         views.CreateEnrolledDeviceCommandView.as_view(command_name="CustomCommand"),
-         name="create_enrolled_device_custom_command"),
-    path('devices/<int:pk>/commands/device_information/create/',
-         views.CreateEnrolledDeviceCommandView.as_view(command_name="DeviceInformation"),
-         name="create_enrolled_device_device_information_command"),
+    path('devices/<int:pk>/commands/<str:db_name>/create/',
+         views.CreateEnrolledDeviceCommandView.as_view(),
+         name="create_enrolled_device_command"),
     path('devices/commands/<uuid:uuid>/result/',
          views.DownloadEnrolledDeviceCommandResultView.as_view(),
          name="download_enrolled_device_command_result"),

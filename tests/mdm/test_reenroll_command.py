@@ -68,7 +68,7 @@ class ReenrollCommandTestCase(TestCase):
 
     # load_kwargs
 
-    @patch("zentral.contrib.mdm.commands.base.uuid.uuid4")
+    @patch("zentral.contrib.mdm.commands.base.uuid4")
     def test_load_kwargs_missing_session_id(self, uuid4):
         uuid4.return_value = uuid.UUID("820e2bda-0e94-4557-a0ff-9bf000f22f51")
         with self.assertRaises(ValueError) as cm:
@@ -78,7 +78,7 @@ class ReenrollCommandTestCase(TestCase):
             "Command 820e2bda-0e94-4557-a0ff-9bf000f22f51: could not find session id",
         )
 
-    @patch("zentral.contrib.mdm.commands.base.uuid.uuid4")
+    @patch("zentral.contrib.mdm.commands.base.uuid4")
     def test_load_kwargs_unknown_session_(self, uuid4):
         uuid4.return_value = uuid.UUID("820e2bda-0e94-4557-a0ff-9bf000f22f52")
         with self.assertRaises(ValueError) as cm:
