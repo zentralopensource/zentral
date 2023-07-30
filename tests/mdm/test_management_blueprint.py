@@ -7,9 +7,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from zentral.contrib.mdm.models import Blueprint
 from zentral.core.events.base import AuditEvent
-from .utils import force_blueprint_artifact
+from .utils import force_blueprint, force_blueprint_artifact
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -42,9 +41,6 @@ class BlueprintManagementViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_blueprint(self):
-        return Blueprint.objects.create(name=get_random_string(12))
-
     # blueprints
 
     def test_blueprints_redirect(self):
@@ -56,7 +52,7 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_blueprints(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self._login("mdm.view_blueprint")
         response = self.client.get(reverse("mdm:blueprints"))
         self.assertEqual(response.status_code, 200)
@@ -156,17 +152,17 @@ class BlueprintManagementViewsTestCase(TestCase):
     # blueprint
 
     def test_blueprint_redirect(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self._login_redirect(reverse("mdm:blueprint", args=(blueprint.pk,)))
 
     def test_blueprint_permission_denied(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self._login()
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_blueprint_get(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self.assertTrue(blueprint.can_be_deleted())
         self._login("mdm.view_blueprint", "mdm.delete_blueprint")
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
@@ -176,7 +172,7 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertContains(response, reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
 
     def test_blueprint_get_no_perm_no_delete_link(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self.assertTrue(blueprint.can_be_deleted())
         self._login("mdm.view_blueprint")
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
@@ -186,7 +182,7 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
 
     def test_blueprint_get_cannot_be_deleted_no_delete_link(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         force_blueprint_artifact(blueprint=blueprint)
         self.assertFalse(blueprint.can_be_deleted())
         self._login("mdm.view_blueprint", "mdm.delete_blueprint")
@@ -198,17 +194,17 @@ class BlueprintManagementViewsTestCase(TestCase):
     # update blueprint
 
     def test_update_blueprint_redirect(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self._login_redirect(reverse("mdm:update_blueprint", args=(blueprint.pk,)))
 
     def test_update_blueprint_permission_denied(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self._login()
         response = self.client.get(reverse("mdm:update_blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_blueprint_get(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self._login("mdm.change_blueprint")
         response = self.client.get(reverse("mdm:update_blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -218,7 +214,7 @@ class BlueprintManagementViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_blueprint_post(self, post_event):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         prev_value = blueprint.serialize_for_event()
         self.assertEqual(blueprint.inventory_interval, 86400)
         self.assertEqual(blueprint.collect_apps, 0)
@@ -272,17 +268,17 @@ class BlueprintManagementViewsTestCase(TestCase):
     # delete blueprint
 
     def test_delete_blueprint_redirect(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self._login_redirect(reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
 
     def test_delete_blueprint_permission_denied(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self._login()
         response = self.client.get(reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_blueprint_get(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         self._login("mdm.delete_blueprint")
         response = self.client.get(reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -291,7 +287,7 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertContains(response, blueprint.name)
 
     def test_delete_blueprint_404(self):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         force_blueprint_artifact(blueprint=blueprint)
         self.assertFalse(blueprint.can_be_deleted())
         self._login("mdm.delete_blueprint")
@@ -300,7 +296,7 @@ class BlueprintManagementViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_blueprint_post(self, post_event):
-        blueprint = self._force_blueprint()
+        blueprint = force_blueprint()
         prev_value = blueprint.serialize_for_event()
         self._login("mdm.delete_blueprint", "mdm.view_blueprint")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
