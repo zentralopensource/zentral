@@ -1,4 +1,4 @@
-from .models import Artifact, Blueprint
+from .models import Artifact, Blueprint, FileVaultConfig
 from zentral.contrib.inventory.terraform import TagResource
 from zentral.utils.terraform import BoolAttr, FileBase64Attr, IntAttr, MapAttr, RefAttr, Resource, StringAttr
 
@@ -18,6 +18,19 @@ class ArtifactResource(Resource):
     requires = RefAttr("zentral.contrib.mdm.terraform.ArtifactResource", many=True, default=list)
 
 
+class FileVaultConfigResource(Resource):
+    tf_type = "zentral_mdm_filevault_config"
+    tf_grouping_key = "mdm_filevault_configs"
+
+    name = StringAttr(required=True)
+    escrow_location_display_name = StringAttr(required=True)
+    at_login_only = BoolAttr(default=False)
+    bypass_attempts = IntAttr(default=-1)
+    show_recovery_key = BoolAttr(default=False)
+    destroy_key_on_standby = BoolAttr(default=False)
+    prk_rotation_interval_days = IntAttr(default=0)
+
+
 class BlueprintResource(Resource):
     tf_type = "zentral_mdm_blueprint"
     tf_grouping_key = "mdm_blueprints"
@@ -30,6 +43,7 @@ class BlueprintResource(Resource):
                                       source="get_collect_certificates_display")
     collect_profiles = StringAttr(default=Blueprint.InventoryItemCollectionOption.NO.name,
                                   source="get_collect_profiles_display")
+    filevault_config_id = RefAttr(FileVaultConfigResource)
 
 
 # TODO: deduplicate Resource
@@ -92,13 +106,19 @@ class ProfileResource(Resource):
 
 
 def iter_resources():
-    for blueprint in Blueprint.objects.prefetch_related("blueprintartifact_set__artifact",
-                                                        "blueprintartifact_set__blueprint",
-                                                        "blueprintartifact_set__excluded_tags",
-                                                        "blueprintartifact_set__item_tags__tag").all():
+    for blueprint in (Blueprint.objects
+                               .select_related("filevault_config")
+                               .prefetch_related("blueprintartifact_set__artifact",
+                                                 "blueprintartifact_set__blueprint",
+                                                 "blueprintartifact_set__excluded_tags",
+                                                 "blueprintartifact_set__item_tags__tag").all()):
         yield BlueprintResource(blueprint)
+        if blueprint.filevault_config:
+            yield FileVaultConfigResource(blueprint.filevault_config)
         for blueprint_artifact in blueprint.blueprintartifact_set.all():
             yield BlueprintArtifactResource(blueprint_artifact)
+    for filevault_config in FileVaultConfig.objects.all():
+        yield FileVaultConfigResource(filevault_config)
     for artifact in Artifact.objects.prefetch_related("requires").filter(type=Artifact.Type.PROFILE):
         yield ArtifactResource(artifact)
         for artifact_version in artifact.artifactversion_set.select_related("profile").order_by("-version"):

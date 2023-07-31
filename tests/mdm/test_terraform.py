@@ -4,8 +4,9 @@ from zentral.contrib.inventory.models import Tag
 from zentral.contrib.mdm.models import Artifact, Blueprint
 from zentral.contrib.mdm.terraform import (ArtifactResource,
                                            BlueprintResource, BlueprintArtifactResource,
+                                           FileVaultConfigResource,
                                            ProfileResource)
-from .utils import force_artifact, force_blueprint, force_blueprint_artifact
+from .utils import force_artifact, force_blueprint, force_blueprint_artifact, force_filevault_config
 
 
 class MDMTerraformTestCase(TestCase):
@@ -98,6 +99,42 @@ class MDMTerraformTestCase(TestCase):
             '}'
         )
 
+    # FileVault config
+
+    def test_filevault_config_resource_defaults(self):
+        filevault_config = force_filevault_config()
+        resource = FileVaultConfigResource(filevault_config)
+        self.assertEqual(
+            resource.to_representation(),
+            f'resource "zentral_mdm_filevault_config" "filevaultconfig{filevault_config.pk}" {{\n'
+            f'  name                         = "{filevault_config.name}"\n'
+            f'  escrow_location_display_name = "{filevault_config.escrow_location_display_name}"\n'
+            '}'
+        )
+
+    def test_filevault_config_resource_full(self):
+        filevault_config = force_filevault_config()
+        filevault_config.at_login_only = True
+        filevault_config.bypass_attempts = 1
+        filevault_config.show_recovery_key = True
+        filevault_config.destroy_key_on_standby = True
+        filevault_config.prk_rotation_interval_days = 90
+        filevault_config.save()
+
+        resource = FileVaultConfigResource(filevault_config)
+        self.assertEqual(
+            resource.to_representation(),
+            f'resource "zentral_mdm_filevault_config" "filevaultconfig{filevault_config.pk}" {{\n'
+            f'  name                         = "{filevault_config.name}"\n'
+            f'  escrow_location_display_name = "{filevault_config.escrow_location_display_name}"\n'
+            '  at_login_only                = true\n'
+            '  bypass_attempts              = 1\n'
+            '  show_recovery_key            = true\n'
+            '  destroy_key_on_standby       = true\n'
+            '  prk_rotation_interval_days   = 90\n'
+            '}'
+        )
+
     # blueprint
 
     def test_blueprint_resource_defaults(self):
@@ -111,7 +148,8 @@ class MDMTerraformTestCase(TestCase):
         )
 
     def test_blueprint_resource_full(self):
-        blueprint = force_blueprint()
+        filevault_config = force_filevault_config()
+        blueprint = force_blueprint(filevault_config=filevault_config)
         blueprint.inventory_interval = 77777
         blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.MANAGED_ONLY
         blueprint.collect_certificates = Blueprint.InventoryItemCollectionOption.ALL
@@ -126,6 +164,7 @@ class MDMTerraformTestCase(TestCase):
             '  collect_apps         = "MANAGED_ONLY"\n'
             '  collect_certificates = "ALL"\n'
             '  collect_profiles     = "ALL"\n'
+            f'  filevault_config_id  = zentral_mdm_filevault_config.filevaultconfig{filevault_config.pk}.id\n'
             '}'
         )
 
