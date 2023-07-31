@@ -1,0 +1,29 @@
+{% for field in form %}
+    <div class={% if field.widget_type == 'checkbox' %}"form-checkbox mx-2"{% else %}"form-floating mx-2"{% endif %}>
+
+        {% if field.widget_type == 'select' %}
+            <select class="form-select"
+        {% elif field.widget_type == 'checkbox' %}
+            <input class="form-check-input"
+        {% else %}
+            <input class="form-control"
+        {% endif %}
+
+        {% if field.widget_type == 'text' %}
+            size="{{ size }}"
+        {% endif %}
+            type="{{ field.widget_type }}"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}">
+            
+        {% if field.widget_type == 'select' %}
+            <option selected>...</option>
+            {% for option in field.field.choices.queryset %}
+                <option value="{{ option }}" {% if option.is_selected %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+            </select>
+        {% endif %}
+    
+        {{ field.label_tag }}
+    </div>
+{% endfor %}
