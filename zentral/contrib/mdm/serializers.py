@@ -5,6 +5,7 @@ from zentral.contrib.inventory.models import Tag
 from .artifacts import update_blueprint_serialized_artifacts
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
+                     FileVaultConfig,
                      Platform, Profile)
 from .payloads import get_configuration_profile_info
 
@@ -21,6 +22,21 @@ class ArtifactSerializer(serializers.ModelSerializer):
             for blueprint in instance.blueprints():
                 update_blueprint_serialized_artifacts(blueprint)
         return instance
+
+
+class FileVaultConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FileVaultConfig
+        fields = "__all__"
+
+    def validate(self, data):
+        bypass_attempts = data.get("bypass_attempts", -1)
+        if data.get("at_login_only", False):
+            if bypass_attempts < 0:
+                raise serializers.ValidationError({"bypass_attempts": "Must be >= 0 when at_login_only is True"})
+        elif bypass_attempts > -1:
+            raise serializers.ValidationError({"bypass_attempts": "Must be -1 when at_login_only is False"})
+        return data
 
 
 class BlueprintSerializer(serializers.ModelSerializer):
