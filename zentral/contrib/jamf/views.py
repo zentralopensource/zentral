@@ -25,12 +25,7 @@ class JamfInstancesView(PermissionRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["setup"] = True
-        jamf_instances_count = len(ctx["object_list"])
-        if jamf_instances_count == 0 or jamf_instances_count > 1:
-            suffix = "s"
-        else:
-            suffix = ""
-        ctx["title"] = "{} jamf instance{}".format(jamf_instances_count, suffix)
+        ctx["jamf_instances_count"] = ctx["object_list"].count()
         return ctx
 
 

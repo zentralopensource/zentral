@@ -3,22 +3,21 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item active">{{ title }}</li>
+  <li class="breadcrumb-item active">Jamf instances</li>
 </ol>
 
-<div class="py-3">
-    <div class="d-flex align-items-center mb-1">
-        <h2 class="m-0">{{ title }}</h2>
-        <div class="ms-auto">
-            {% if perms.jamf.add_jamfinstance %}
-            <a href="{% url 'jamf:create_jamf_instance' %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
-                <i class="bi bi-plus-circle"></i>
-            </a>
-            {% endif %}
-        </div>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Jamf instance{{ jamf_instances_count|pluralize }} ({{ jamf_instances_count }})</h2>
+    <div class="ms-auto">
+        {% if perms.jamf.add_jamfinstance %}
+        <a href="{% url 'jamf:create_jamf_instance' %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+        {% endif %}
     </div>
+</div>
 
-    <table class="table table-striped align-middle table-hover">
+<table class="table table-striped align-middle table-hover">
     <thead>
         <tr>
         <th>Host</th>
@@ -51,6 +50,6 @@
         </tr>
         {% endfor %}
     </tbody>
-    </table>
-</div>
+</table>
+
 {% endblock %}
