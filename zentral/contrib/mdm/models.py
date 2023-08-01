@@ -97,6 +97,11 @@ class PushCertificate(models.Model):
 # FileVault
 
 
+class FileVaultConfigManager(models.Manager):
+    def can_be_deleted(self):
+        return self.annotate(bp_count=Count("blueprint")).filter(bp_count=0)
+
+
 class FileVaultConfig(models.Model):
     name = models.CharField(max_length=256, unique=True)
     escrow_location_display_name = models.CharField(
@@ -133,6 +138,8 @@ class FileVaultConfig(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = FileVaultConfigManager()
+
     class Meta:
         ordering = ("name",)
         verbose_name = "filevault config"
@@ -149,6 +156,9 @@ class FileVaultConfig(models.Model):
                         f"{self.at_login_only}|{self.bypass_attempts}|{self.show_recovery_key}|"
                         f"{self.destroy_key_on_standby}|{self.prk_rotation_interval_days}".encode("utf-8"))
         return uuid.UUID(hex=h.hexdigest())
+
+    def can_be_deleted(self):
+        return FileVaultConfig.objects.can_be_deleted().filter(pk=self.pk).exists()
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "name": self.name}

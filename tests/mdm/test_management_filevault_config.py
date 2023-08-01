@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.core.events.base import AuditEvent
-from .utils import force_filevault_config
+from .utils import force_blueprint, force_filevault_config
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -51,13 +51,30 @@ class FileVaultConfigManagementViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:filevault_configs"))
         self.assertEqual(response.status_code, 403)
 
-    def test_filevault_configurations(self):
+    def test_filevault_configurations_no_links(self):
         fv_config = force_filevault_config()
         self._login("mdm.view_filevaultconfig")
         response = self.client.get(reverse("mdm:filevault_configs"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/filevaultconfig_list.html")
         self.assertContains(response, fv_config.name)
+        self.assertNotContains(response, reverse("mdm:update_filevault_config", args=(fv_config.pk,)))
+        self.assertNotContains(response, reverse("mdm:delete_filevault_config", args=(fv_config.pk,)))
+
+    def test_filevault_configurations_all_links(self):
+        fv_config1 = force_filevault_config()
+        force_blueprint(filevault_config=fv_config1)
+        fv_config2 = force_filevault_config()
+        self._login("mdm.view_filevaultconfig", "mdm.change_filevaultconfig", "mdm.delete_filevaultconfig")
+        response = self.client.get(reverse("mdm:filevault_configs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/filevaultconfig_list.html")
+        self.assertContains(response, fv_config1.name)
+        self.assertContains(response, fv_config2.name)
+        self.assertContains(response, reverse("mdm:update_filevault_config", args=(fv_config1.pk,)))
+        self.assertNotContains(response, reverse("mdm:delete_filevault_config", args=(fv_config1.pk,)))
+        self.assertContains(response, reverse("mdm:update_filevault_config", args=(fv_config2.pk,)))
+        self.assertContains(response, reverse("mdm:delete_filevault_config", args=(fv_config2.pk,)))
 
     # create FileVault configuration
 
@@ -190,6 +207,16 @@ class FileVaultConfigManagementViewsTestCase(TestCase):
         self.assertContains(response, fv_config.name)
         self.assertNotContains(response, reverse("mdm:delete_filevault_config", args=(fv_config.pk,)))
 
+    def test_filevault_configuration_get_cannot_be_deleted_no_delete_link(self):
+        fv_config = force_filevault_config()
+        force_blueprint(filevault_config=fv_config)
+        self._login("mdm.view_filevaultconfig", "mdm.delete_filevaultconfig")
+        response = self.client.get(reverse("mdm:filevault_config", args=(fv_config.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/filevaultconfig_detail.html")
+        self.assertContains(response, fv_config.name)
+        self.assertNotContains(response, reverse("mdm:delete_filevault_config", args=(fv_config.pk,)))
+
     # update FileVault configuration
 
     def test_update_filevault_configuration_redirect(self):
@@ -283,6 +310,13 @@ class FileVaultConfigManagementViewsTestCase(TestCase):
         self._login()
         response = self.client.get(reverse("mdm:delete_filevault_config", args=(fv_config.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    def test_delete_filevault_configuration_404(self):
+        fv_config = force_filevault_config()
+        force_blueprint(filevault_config=fv_config)
+        self._login("mdm.delete_filevaultconfig")
+        response = self.client.get(reverse("mdm:delete_filevault_config", args=(fv_config.pk,)))
+        self.assertEqual(response.status_code, 404)
 
     def test_delete_filevault_configuration_get(self):
         fv_config = force_filevault_config()

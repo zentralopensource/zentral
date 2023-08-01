@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from accounts.models import APIToken, User
 from zentral.contrib.mdm.models import FileVaultConfig
 from zentral.core.events.base import AuditEvent
-from .utils import force_filevault_config
+from .utils import force_blueprint, force_filevault_config
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -334,6 +334,14 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase):
         fv_config = force_filevault_config()
         response = self.delete(reverse("mdm_api:filevault_config", args=(fv_config.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    def test_delete_filevault_config_cannot_be_deleted(self):
+        fv_config = force_filevault_config()
+        force_blueprint(filevault_config=fv_config)
+        self.set_permissions("mdm.delete_filevaultconfig")
+        response = self.delete(reverse("mdm_api:filevault_config", args=(fv_config.pk,)))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), ["This FileVault configuration cannot be deleted"])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_filevault_config(self, post_event):

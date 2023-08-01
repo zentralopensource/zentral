@@ -974,8 +974,10 @@ class UpdateBlueprintView(PermissionRequiredMixin, UpdateViewWithAudit):
 
 class DeleteBlueprintView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "mdm.delete_blueprint"
-    queryset = Blueprint.objects.can_be_deleted()
     success_url = reverse_lazy("mdm:blueprints")
+
+    def get_queryset(self):
+        return Blueprint.objects.can_be_deleted()
 
 
 # FileVault Configurations
@@ -1012,8 +1014,10 @@ class UpdateFileVaultConfigView(PermissionRequiredMixin, UpdateViewWithAudit):
 
 class DeleteFileVaultConfigView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "mdm.delete_filevaultconfig"
-    model = FileVaultConfig
     success_url = reverse_lazy("mdm:filevault_configs")
+
+    def get_queryset(self):
+        return FileVaultConfig.objects.can_be_deleted()
 
 
 # SCEP Configurations

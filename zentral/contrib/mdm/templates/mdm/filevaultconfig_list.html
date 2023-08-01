@@ -56,7 +56,7 @@
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
         </a>
         {% endif %}
-        {% if perms.mdm.delete_filevaultconfig %}
+        {% if perms.mdm.delete_filevaultconfig and filevault_config.can_be_deleted %}
         <a href="{% url 'mdm:delete_filevault_config' filevault_config.pk %}" class="btn btn-xs btn-danger">
           <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
         </a>
