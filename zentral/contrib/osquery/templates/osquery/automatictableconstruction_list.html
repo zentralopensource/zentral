@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -24,30 +23,30 @@
 </div>
 
 <table class="table table-striped align-middle table-hover">
-  <thead>
+    <thead>
     <tr>
-      <th>Name</th>
-      {% if perms.osquery.change_automatictableconstrucion %}
-      <th></th>
-      {% endif %}
+        <th>Name</th>
+        {% if perms.osquery.change_automatictableconstrucion %}
+        <th></th>
+        {% endif %}
     </tr>
-  </thead>
-  <tbody>
+    </thead>
+    <tbody>
     {% for atc in object_list %}
     <tr class="data-row">
-      <td>
+        <td>
         <a href="{{ atc.get_absolute_url }}">{{ atc }}</a>
-      </td>
-      {% if perms.osquery.change_automatictableconstrucion %}
-      <td class="text-end py-0">
+        </td>
+        {% if perms.osquery.change_automatictableconstrucion %}
+        <td class="text-end py-0">
         <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_atc' atc.id %}">
             <span class="bi bi-pencil-square" aria-hidden="true"
-              data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit ATC"></span>
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit ATC"></span>
         </a>
-      </td>
-      {% endif %}
+        </td>
+        {% endif %}
     </tr>
     {% endfor %}
-  </tbody>
+    </tbody>
 </table>
 {% endblock %}

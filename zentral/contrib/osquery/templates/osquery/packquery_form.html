@@ -1,16 +1,15 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
-  <li><a href="{{ pack.get_absolute_url }}">{{ pack }}</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:packs' %}">Packs</a></li>
+  <li class="breadcrumb-item"><a href="{{ pack.get_absolute_url }}">{{ pack }}</a></li>
   {% if object %}
-  <li class="active">Update query scheduling</li>
+  <li class="breadcrumb-item active">Update query scheduling</li>
   {% else %}
-  <li class="active">Schedule query</li>
+  <li class="breadcrumb-item active">Schedule query</li>
   {% endif %}
 </ol>
 
@@ -54,7 +53,7 @@
   </table>
   {% endwith %}
   {% endif %}
-  {{ form|bootstrap }}
+  {{ form }}
   <p>
     <a class="btn btn-primary" href="{{ pack.get_absolute_url }}#queries">
       Cancel

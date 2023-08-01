@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -15,8 +14,10 @@
 
 <h2>{{ title }}</h2>
 
-<form method="POST">{% csrf_token %}
-  {{ form|bootstrap }}
+<form method="POST" class="form">{% csrf_token %}
+
+  {{ form }}
+
   <p>
     {% if object %}
     <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>

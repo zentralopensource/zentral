@@ -371,33 +371,26 @@ class QueryForm(forms.ModelForm):
 
 
 class QuerySearchForm(forms.Form):
+    template_name = "_form_search.html"
+
     q = forms.CharField(
-            label="",
+            label="Query name, pack name, SQL, …",
             required=False,
             widget=forms.TextInput(
                 attrs={
                     "autofocus": "true",
                     "size": 36,
-                    "placeholder": "Query name, pack name, SQL, …",
-                    "class": "form-select me-2 mb-2 col-sm",
                 }
             )
     )
     pack = forms.ModelChoiceField(
+            label="Pack",
             queryset=Pack.objects.all(),
             required=False,
-            widget=forms.Select(
-                attrs={'class': 'form-select me-2 mb-2 col-sm'}
-            ),
-            label='',
-            empty_label="- Pack -",
     )
     compliance_check = forms.BooleanField(
         label="Only compliance checks",
         required=False,
-        widget=forms.CheckboxInput(
-            attrs={'class': 'form-check-input me-2 mb-2'}
-        )
     )
 
     def get_queryset(self):

@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -13,13 +12,13 @@
 
 <form method="post" class="form">{% csrf_token %}
   {% if secret_form %}
-  {{ secret_form|bootstrap }}
+  {{ secret_form }}
   {% endif %}
   {% if enrollment_form %}
-  {{ enrollment_form|bootstrap }}
+  {{ enrollment_form }}
   {% endif %}
   <p>
-    <a class="btn btn-default" href="{{ configuration.get_absolute_url }}">
+    <a class="btn btn-secondary" href="{{ configuration.get_absolute_url }}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

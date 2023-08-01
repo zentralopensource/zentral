@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -58,7 +57,7 @@
     <div>{{ query.minimum_osquery_version|default:"-" }}</div>
   </div>
   {% endif %}
-  {{ form|bootstrap }}
+  {{ form }}
   <p>
     <a class="btn btn-primary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{{ query.get_absolute_url }}#runs{% endif %}">
       Cancel
@@ -99,8 +98,8 @@
   function addTimeShortcuts() {
     $input = $("#id_valid_until");
     $.each([{label: "now", offset:0}, {label: "now + 1h", offset:1}, {label: "now + 4h", offset:4}, {label: "now + 1d", offset:24}], function( index, labelDef ) {
-      var style = labelDef.offset ? "default" : "danger";
-      $('<a style="display:inline-block;margin:0 5px 5px 0;cursor:pointer;text-decoration:none"><span class="label label-' + style + '">' + labelDef.label + '</span></a>')
+      var style = labelDef.offset ? "secondary" : "danger";
+      $('<a style="display:inline-block;margin:0 5px 5px 0;cursor:pointer;text-decoration:none"><span class="badge text-bg-' + style + '">' + labelDef.label + '</span></a>')
         .click(function(event) {event.preventDefault(); setTime($input, getNowHoursOffset(labelDef.offset))})
         .insertBefore($input);
     });

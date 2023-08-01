@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -17,7 +16,9 @@
 <h2>{% if object %}Update{% else %}Create{% endif %} Munki configuration</h2>
 
 <form method="post" class="form">{% csrf_token %}
-  {{ form|bootstrap }}
+
+  {{ form }}
+
   <p>
     {% if object %}
     <a class="btn btn-default" href="{{ object.get_absolute_url }}">

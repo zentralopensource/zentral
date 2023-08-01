@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -9,21 +8,21 @@
   <li class="breadcrumb-item active">{{ configuration_count }} record{{ configuration_count|pluralize }}</li>
 </ol>
 
-<div class="py-3">
-    <div class="d-flex justify-content-between mb-3">
-        <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
-        <div class="ms-auto">
-        {% if perms.osquery.add_configuration %}
-            <a href="{% url 'osquery:create_configuration' %}" type="button" 
-                    class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new configuration">
-                    <i class="bi bi-plus-circle"></i>
-                </a>
-        {% endif %}
-        </div>
-    </div>
 
-    <table class="table table-striped align-middle table-hover">
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+    <div class="ms-auto">
+    {% if perms.osquery.add_configuration %}
+        <a href="{% url 'osquery:create_configuration' %}" type="button" 
+                class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new configuration">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+    {% endif %}
+    </div>
+</div>
+
+<table class="table table-striped align-middle table-hover">
     <thead>
         <tr>
         <th>Name</th>
@@ -49,6 +48,6 @@
         </tr>
         {% endfor %}
     </tbody>
-    </table>
-</div>
+</table>
+
 {% endblock %}

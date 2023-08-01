@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:configurations' %}">Configurations</a></li>
-  <li><a href="{% url 'osquery:configuration' configuration.pk %}">{{ configuration }}</a></li>
-  <li class="active">Delete enrollment</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:configuration' configuration.pk %}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item active">Delete enrollment</li>
 </ol>
 
 <h2>Delete enrollment</h2>

@@ -1,13 +1,12 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
-  <li><a href="{{ object.pack.get_absolute_url }}">{{ object.pack }}</a></li>
-  <li class="active">Remove query</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:packs' %}">Packs</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.pack.get_absolute_url }}">{{ object.pack }}</a></li>
+  <li class="breadcrumb-item active">Remove query</li>
 </ol>
 
 <h3>Remove query <i>{{ object.query.name }}</i></h3>

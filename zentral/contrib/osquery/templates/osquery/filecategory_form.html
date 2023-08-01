@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -17,7 +16,7 @@
 <h2>{% if object %}Update{% else %}Create{% endif %} File category</h2>
 
 <form method="post" class="form">{% csrf_token %}
-  {{ form|bootstrap }}
+  {{ form }}
   <p>
     <a class="btn btn-primary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'osquery:file_categories' %}{% endif %}">
       Cancel

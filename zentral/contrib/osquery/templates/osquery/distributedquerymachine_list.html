@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -28,7 +28,7 @@
 
 <form method="GET" class="form-inline" style="margin:1em 0 2em 0">
   <div class="form-group">
-    {{ form.serial_number|bootstrap_inline }}
+    {{ form.serial_number }}
   </div>
   <div class="form-group">
     {{ form.status.label_tag }}

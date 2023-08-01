@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -14,7 +13,7 @@
 <form method="POST">{% csrf_token %}
   <p>Do you really want to delete this tag config ?</p>
   <p>
-    <a href="{{ jamf_instance.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <a href="{{ jamf_instance.get_absolute_url }}" class="btn btn-secondary">Cancel</a>
     <button class="btn btn-danger">Delete</button>
   </p>
 </form>
