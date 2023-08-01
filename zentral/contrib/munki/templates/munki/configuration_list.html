@@ -7,17 +7,18 @@
   <li class="breadcrumb-item active">Configurations</li>
 </ol>
 
-<div class="py-3">
     <div class="d-flex align-items-center mb-1">
         <h2 class="m-0">Munki configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h2>
         <div class="ms-auto">
             {% if perms.munki.add_configuration %}
-            <a href="{% url 'munki:create_configuration' %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
+            <a href="{% url 'munki:create_configuration' %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
                 <i class="bi bi-plus-circle"></i>
             </a>
             {% endif %}
             {% if perms.munki.view_enrollment %}
-            <a href="{% url 'munki:terraform_export' %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Terraform config">
+            <a href="{% url 'munki:terraform_export' %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download Terraform config">
                 <i class="bi bi-download"></i>
             </a>
             {% endif %}
@@ -50,5 +51,4 @@
   </tbody>
 </table>
 {% endif %}
-</div>
 {% endblock %}
