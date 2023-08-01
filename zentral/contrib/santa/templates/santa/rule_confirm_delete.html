@@ -161,7 +161,7 @@
 <form method="POST">{% csrf_token %}
   <p>Do you really want to delete this rule?</p>
   <p>
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Delete</button>
   </p>
 </form>

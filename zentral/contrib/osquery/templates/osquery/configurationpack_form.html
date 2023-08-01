@@ -15,10 +15,10 @@
 
 <h2>{% if object %}Update{% else %}Add{% endif %} pack</h2>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   {{ form }}
   <p>
-    <a class="btn btn-primary" href="{{ configuration.get_absolute_url }}">
+    <a class="btn btn-outline-secondary" href="{{ configuration.get_absolute_url }}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

@@ -23,13 +23,10 @@
   <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-
-<div class="d-flex justify-content-between mb-3">
-    <h3 class="m-0">Quer{{ page_obj.paginator.count|pluralize:"y,ies" }} ({{ page_obj.paginator.count }})</h3>
-</div>
+<h3 class="mb-3">Quer{{ page_obj.paginator.count|pluralize:"y,ies" }} ({{ page_obj.paginator.count }})</h3>
 
 <div class="d-flex justify-content-between">
-    <form method="GET" class="d-flex w-75 me-auto flex-shrink-0">            
+    <form method="GET" class="d-flex w-75 me-auto flex-shrink-0 align-items-center">            
         
         {{ form }}
         

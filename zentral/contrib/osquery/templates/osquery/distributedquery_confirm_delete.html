@@ -11,10 +11,10 @@
 
 <h2>Delete run</h2>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   <p>Do you really want to delete this run with {{ result_count }} result{{ result_count|pluralize }} from {{ machine_count }} machine{{ machine_count|pluralize }}{% if file_carving_session_count %}, and {{ file_carving_session_count }} file carving session{{ file_carving_session_count|pluralize }}{% endif %}?</p>
   <p>
-    <a class="btn btn-primary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Delete</button>
   </p>
 </form>

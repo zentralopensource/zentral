@@ -31,12 +31,14 @@
     <div class="d-flex justify-content-between">
         <div class="d-flex w-100 me-auto flex-shrink-0">
             <form class="d-flex w-75 me-auto flex-shrink-0" method="GET">
+                
                 {{ form }}
+
                 <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
                     <i class="bi bi-search"></i>
                 </button>
                 {% if perms.santa.add_rule %}
-                    <div class="dropdown mb-2">
+                    <div class="dropdown mb-2 btn">
                     <button class="btn btn-primary dropdown-toggle" type="button" id="createRule"
                             data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
                         Add

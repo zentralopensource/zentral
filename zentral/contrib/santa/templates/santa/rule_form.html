@@ -12,12 +12,12 @@
 
 <h2>{{ title }}</h2>
 
-<form method="POST">{% csrf_token %}
+<form method="POST" class="update-form">{% csrf_token %}
   {% if target_type_display or target_identifier %}
   <dl class="dl-horizontal">
-    <dt>type</dt>
+    <dt>Type</dt>
     <dd>{{ target_type_display }}</dd>
-    <dt>identifier</dt>
+    <dt>Identifier</dt>
     <dd>{{ target_identifier }}</dt>
   </dl>
   {% endif %}
@@ -73,7 +73,7 @@
   </dl>
   {% endfor %}
   {{ form }}
-  <a class="btn btn-default" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'santa:configuration_rules' configuration.pk %}{% endif %}">Cancel</a>
+  <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'santa:configuration_rules' configuration.pk %}{% endif %}">Cancel</a>
   <button class="btn btn-primary" type="submit">Save</button>
 </form>
 {% endblock %}

@@ -11,10 +11,10 @@
 
 <h3>Remove query <i>{{ object.query.name }}</i></h3>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   <p>Do you really want to remove the <i>{{ object.query }}</i> query from the <i>{{ object.pack }}</i> pack?</p>
   <p>
-    <a class="btn btn-primary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Remove</button>
   </p>
 </form>

@@ -12,14 +12,14 @@
 
 <h2>Delete enrollment</h2>
 
-<form method="POST" class="form">{% csrf_token %}
+<form method="POST" class="update-form">{% csrf_token %}
   <p>Do you really want to delete this Osquery enrollment?</p>
   {% if enrolled_machine_count %}
   <p>{{ enrolled_machine_count }} enrolled machine{{ enrolled_machine_count|pluralize }} will no longer be able to connect.</p>
   <p>Please ensure you do not re-use any packages or scripts previously associated with this specific enrollment.</p>
   {% endif %}
   <p>
-    <a class="btn btn-primary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Delete</button>
   </p>
 </form>

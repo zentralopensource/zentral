@@ -15,7 +15,7 @@
 
 <h2>{% if object %}Update run{% else %}🚀 Launch query <i>{{ query.name }}</i>{% endif %}</h2>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   {% if object %}
   <table class="table">
     <tr>
@@ -59,7 +59,7 @@
   {% endif %}
   {{ form }}
   <p>
-    <a class="btn btn-primary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{{ query.get_absolute_url }}#runs{% endif %}">
+    <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{{ query.get_absolute_url }}#runs{% endif %}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

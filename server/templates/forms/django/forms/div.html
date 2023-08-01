@@ -3,7 +3,7 @@
   <div>{% for field in hidden_fields %}{{ field }}{% endfor %}</div>
 {% endif %}
 {% for field, errors in fields %}
-  <div{% with classes=field.css_classes %}{% if classes %} class="{{ classes }}"{% endif %}{% endwith %}>
+  <div class="mb-3{% with classes=field.css_classes %}{% if classes %} {{ classes }}"{% endif %}{% endwith %}">
     {% if field.use_fieldset %}
       <fieldset>
       {% if field.label %}{{ field.legend_tag }}{% endif %}

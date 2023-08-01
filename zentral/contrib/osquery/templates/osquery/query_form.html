@@ -15,10 +15,10 @@
 
 <h3>{% if object %}Update{% else %}Create{% endif %} query</h3>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   {{ form }}
   <p>
-    <a class="btn btn-primary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'osquery:queries' %}{% endif %}">
+    <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'osquery:queries' %}{% endif %}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

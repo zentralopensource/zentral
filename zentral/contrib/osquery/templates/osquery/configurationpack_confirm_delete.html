@@ -11,10 +11,10 @@
 
 <h2>Remove pack</h2>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   <p>Do you really want to remove pack <i>{{ object.pack }}</i> from the configuration <i>{{ object.configuration }}</i>?</p>
   <p>
-    <a class="btn btn-primary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Remove</button>
   </p>
 </form>

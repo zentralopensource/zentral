@@ -15,7 +15,7 @@
 
 <h3>{% if object %}Update <i>{{ object.query.name }}</i> scheduling{% else %}Schedule query{% endif %}</h3>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   {% if object %}
   {% with object.query as query %}
   <table class="table table-condensed probe-panel">
@@ -55,7 +55,7 @@
   {% endif %}
   {{ form }}
   <p>
-    <a class="btn btn-primary" href="{{ pack.get_absolute_url }}#queries">
+    <a class="btn btn-outline-secondary" href="{{ pack.get_absolute_url }}#queries">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

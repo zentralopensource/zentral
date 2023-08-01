@@ -98,30 +98,19 @@ class SigningIDSearchForm(forms.Form):
 
 
 class RuleSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     ruleset = forms.ModelChoiceField(
         queryset=RuleSet.objects.all(),
         required=False,
-        widget=forms.Select(
-            attrs={'class': 'form-select me-2 mb-2'}
-        ),
-        label='',
-        empty_label="- Ruleset -",
     )
     target_type = forms.ChoiceField(
-        choices=(("", "- Target type -"),) + Target.TYPE_CHOICES,
+        choices=Target.TYPE_CHOICES,
         required=False,
-        widget=forms.Select(
-            attrs={'class': 'form-select me-2 mb-2'}
-        ),
-        label='',
     )
     policy = forms.ChoiceField(
-        choices=(("", "- Policy -"),) + Rule.POLICY_CHOICES,
+        choices=Rule.POLICY_CHOICES,
         required=False,
-        widget=forms.Select(
-            attrs={'class': 'form-select me-2 mb-2'}
-        ),
-        label='',
     )
     identifier = forms.CharField(
         required=False,
@@ -129,11 +118,8 @@ class RuleSearchForm(forms.Form):
             attrs={
                 "autofocus": "true",
                 "size": 32,
-                "placeholder": "- Identifier -",
-                "class": "form-select me-2 mb-2"
             }
         ),
-        label='',
     )
 
     field_order = ['identifier', 'policy', 'ruleset', 'target_type']
@@ -483,22 +469,18 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
 
 
 class TargetSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(
+        label='SHA256, Name, …',
         required=False,
-        label='',
         widget=forms.TextInput(
             attrs={"autofocus": "true",
                    "size": 32,
-                   "placeholder": "sha256, name, …",
-                   'class': 'form-select me-2 mb-2'
                    }
         )
     )
     target_type = forms.ChoiceField(
-        choices=(("", "- Target Type -"),) + Target.TYPE_CHOICES,
+        choices=Target.TYPE_CHOICES,
         required=False,
-        label='',
-        widget=forms.Select(
-            attrs={'class': 'form-select me-2 mb-2 w-50'}
-        ),
     )

@@ -11,7 +11,7 @@
 
 <h2>Create enrollment for Osquery configuration <i>{{ configuration }}</i></h2>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   {% if secret_form %}
   {{ secret_form }}
   {% endif %}
@@ -19,7 +19,7 @@
   {{ enrollment_form }}
   {% endif %}
   <p>
-    <a class="btn btn-primary" href="{{ configuration.get_absolute_url }}">
+    <a class="btn btn-outline-secondary" href="{{ configuration.get_absolute_url }}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

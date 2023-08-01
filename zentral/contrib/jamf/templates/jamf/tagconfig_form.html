@@ -10,10 +10,10 @@
 
 <h2>{{ title }}</h2>
 
-<form method="POST">{% csrf_token %}
+<form method="POST" class="update-form">{% csrf_token %}
   {{ form }}
   <p>
-    <a href="{{ jamf_instance.get_absolute_url }}" class="btn btn-secondary">Cancel</a>
+    <a href="{{ jamf_instance.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
     <button class="btn btn-primary">Save</button>
   </p>
 </form>

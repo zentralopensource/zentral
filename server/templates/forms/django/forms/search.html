@@ -1,5 +1,5 @@
 {% for field in form %}
-    <div class={% if field.widget_type == 'checkbox' %}"form-checkbox mx-2"{% else %}"form-floating mx-2"{% endif %}>
+    <div class={% if field.widget_type == 'checkbox' %}"form-checkbox col-sm mx-2"{% elif field.widget_type == 'text' %}"form-floating col-sm{{ form.fields|length|add:"-9" }} mx-2"{% else %}"form-floating col-sm mx-2"{% endif %}>
 
         {% if field.widget_type == 'select' %}
             <select class="form-select"
@@ -18,8 +18,8 @@
             
         {% if field.widget_type == 'select' %}
             <option selected>...</option>
-            {% for option in field.field.choices.queryset %}
-                <option value="{{ option }}" {% if option.is_selected %}selected{% endif %}>{{ option }}</option>
+            {% for option, value in field.field.choices %}
+                <option value="{{ option }}"{% if value.is_selected %}selected="selected"{% endif %}>{{ value }}</option>
             {% endfor %}
             </select>
         {% endif %}

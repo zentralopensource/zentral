@@ -15,15 +15,15 @@
 
 <h2>{% if object %}Update{% else %}Create{% endif %} Munki configuration</h2>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
 
   {{ form }}
 
   <p>
     {% if object %}
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">
     {% else %}
-    <a class="btn btn-default" href="{% url 'munki:configurations' %}">
+    <a class="btn btn-outline-secondary" href="{% url 'munki:configurations' %}">
     {% endif %}
       Cancel
     </a>

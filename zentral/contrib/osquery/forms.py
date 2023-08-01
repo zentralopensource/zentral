@@ -371,7 +371,7 @@ class QueryForm(forms.ModelForm):
 
 
 class QuerySearchForm(forms.Form):
-    template_name = "_form_search.html"
+    template_name = "django/forms/search.html"
 
     q = forms.CharField(
             label="Query name, pack name, SQL, …",

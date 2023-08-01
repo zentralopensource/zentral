@@ -16,7 +16,7 @@
   <p>Do you really want to delete this pack{% if configuration_count %} <b>used in {{ configuration_count }} configuration{{ configuration_count|pluralize }}</b>{% endif %}?</p>
   {% endwith %}
   <p>
-    <a class="btn btn-primary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Delete</button>
   </p>
 </form>
