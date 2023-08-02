@@ -2,17 +2,17 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:groups' %}">Groups</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:groups' %}">Groups</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h3>{{ object }}</h3>
+<h3 class="mb-3">{{ object }}</h3>
 
-<h4>{{ permission_count }} Permission{{ permission_count|pluralize }}</h4>
+<h4>Permission{{ permission_count|pluralize }} ({{ permission_count }})</h4>
 
 {% if permission_count %}
-<table class="table">
+<table class="table table-striped align-middle table-hover">
   <thead>
     <th>App</th>
     <th>Model</th>
@@ -32,7 +32,7 @@
 
 <p>
   {% if perms.auth.change_group and perms.accounts.change_user %}
-  <a href="{% url 'accounts:update_group' object.pk %}" class="btn btn-default">Update</a>
+  <a href="{% url 'accounts:update_group' object.pk %}" class="btn btn-secondary">Update</a>
   {% endif %}
   {% if perms.auth.delete_group and perms.accounts.change_user %}
   <a href="{% url 'accounts:delete_group' object.pk %}" class="btn btn-danger">Delete</a>
@@ -40,9 +40,9 @@
 </p>
 
 {% if perms.accounts.view_user %}
-<h4>{{ user_count }} User{{ user_count|pluralize }}</h4>
+<h4>User{{ user_count|pluralize }} ({{ user_count }})</h4>
 {% if user_count %}
-<table class="table">
+<table class="table table-striped align-middle table-hover">
   <thead>
     <th>Username</th>
     <th>Email</th>
@@ -62,9 +62,9 @@
 {% endif %}
 
 {% if perms.accounts.view_user %}
-<h4>{{ service_account_count }} Service account{{ service_account_count|pluralize }}</h4>
+<h4>Service account{{ service_account_count|pluralize }} ({{ service_account_count }})</h4>
 {% if service_account_count %}
-<table class="table">
+<table class="table table-striped align-middle table-hover">
   <thead>
     <th>Name</th>
   </thead>
@@ -80,7 +80,7 @@
 {% endif %}
 
 {% if perms.realms.view_realmgroupmapping %}
-<h4>{{ realm_group_mapping_count }} Realm mapping{{ realm_group_mapping_count|pluralize }}</h4>
+<h4>Realm mapping{{ realm_group_mapping_count|pluralize }} ({{ realm_group_mapping_count }})</h4>
 {% if realm_group_mapping_count %}
 <table class="table">
   <thead>

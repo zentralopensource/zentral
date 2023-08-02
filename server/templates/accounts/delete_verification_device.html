@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
-  <li><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
-  <li class="active">Delete {{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
+  <li class="breadcrumb-item active">Delete {{ object }}</li>
 </ol>
 
 <h3>Delete {{ object }}</h3>

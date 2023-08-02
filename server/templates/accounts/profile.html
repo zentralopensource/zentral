@@ -11,60 +11,62 @@
 
 <h3>Profile</h3>
 
-<table class="table">
-  <tbody>
-    <tr>
-      <th style="width:15%">username</th>
-      <td>{{ user.username }}</td>
-    </tr>
-    <tr>
-      <th>email</th>
-      <td>{{ user.email }}</td>
-    </tr>
-    <tr>
-      <th>superuser?</th>
-      <td>{{ user.is_superuser|yesno }}</td>
-    </tr>
-    <tr>
-      <th>remote?</th>
-      <td>{{ user.is_remote|yesno }}</td>
-    </tr>
-    <tr>
-      <th>API Token?</th>
-      <td>
-        {% if user.api_token %}
-        yes
-        <a href="{% url 'accounts:delete_user_api_token' user.pk %}" class="btn btn-sm btn-danger">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
-        {% else %}
-        <form method="post" action="{% url 'accounts:create_user_api_token' user.pk %}">{% csrf_token %}
-          no
-          <button class="btn btn-sm btn-default" type="submit">
-            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-          </button>
-        </form>
+<div class="object-details">
+    <table class="table table-striped align-middle table-object-properties">
+    <tbody>
+        <tr>
+        <th style="width:15%">username</th>
+        <td>{{ user.username }}</td>
+        </tr>
+        <tr>
+        <th>email</th>
+        <td>{{ user.email }}</td>
+        </tr>
+        <tr>
+        <th>superuser?</th>
+        <td>{{ user.is_superuser|yesno }}</td>
+        </tr>
+        <tr>
+        <th>remote?</th>
+        <td>{{ user.is_remote|yesno }}</td>
+        </tr>
+        <tr>
+        <th>API Token?</th>
+        <td>
+            {% if user.api_token %}
+            yes
+            <a href="{% url 'accounts:delete_user_api_token' user.pk %}" class="btn btn-link text-dark text-decoration-noner">
+            <span class="bi bi-trash" aria-hidden="true"></span>
+            </a>
+            {% else %}
+            <form method="post" action="{% url 'accounts:create_user_api_token' user.pk %}">{% csrf_token %}
+            no
+            <button class="btn btn-link text-dark text-decoration-none" type="submit">
+                <span class="bi bi-plus-circle" aria-hidden="true"></span>
+            </button>
+            </form>
+            {% endif %}
+        </td>
+        </tr>
+        {% if not user.is_remote %}
+        <tr>
+        <th>
+            Password
+        </th>
+        <td>
+            <a href="{% url 'password_change' %}">Change password</a>
+        </td>
+        </tr>
+        <tr>
+        <th>
+            Verification devices
+        </th>
+        <td>
+            <a href="{% url 'accounts:verification_devices' %}">Manage your verification devices</a>
+        </td>
+        </tr>
         {% endif %}
-      </td>
-    </tr>
-    {% if not user.is_remote %}
-    <tr>
-      <th>
-        Password
-      </th>
-      <td>
-        <a href="{% url 'password_change' %}">Change password</a>
-      </td>
-    </tr>
-    <tr>
-      <th>
-        Verification devices
-      </th>
-      <td>
-        <a href="{% url 'accounts:verification_devices' %}">Manage your verification devices</a>
-      </td>
-    </tr>
-    {% endif %}
-  </tbody>
-</table>
+    </tbody>
+    </table>
+</div>
 {% endblock %}

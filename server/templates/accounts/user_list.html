@@ -8,100 +8,117 @@
     </ol>
 </nav>
 
-<h3>{{ user_count }} User{{ user_count|pluralize }}</h3>
+<div class="d-flex align-items-center mb-1">
+    <h3 class="mb-3">User{{ user_count|pluralize }} ({{ user_count }})</h3>
 
-{% if perms.accounts.add_user %}
-<a href="{% url 'accounts:invite_user' %}" class="btn btn-default">
-  <span class="glyphicon glyphicon-envelope" aria-hidden="true"></span>
-  Send an email invitation
-</a>
-{% endif %}
-
-<table class="table">
-  <thead>
-    <th>Username</th>
-    <th>Email</th>
-    <th style="width:10%">Remote?</th>
-    {% if perms.accounts.view_apitoken %}
-    <th style="width:10%">API token</th>
-    {% endif %}
-    <th style="width:15%"></th>
-  </thead>
-  <tbody>
-    {% for managed_user in users %}
-    <tr>
-      <td>
-        {% if managed_user.is_superuser %}
-        <span class="glyphicon glyphicon-fire" aria-hidden="true"></span>
-        {% else %}
-        <span class="glyphicon glyphicon-user" aria-hidden="true"></span>
-        {% endif %}
-        <a href="{% url 'accounts:user' managed_user.pk %}">{{ managed_user.username }}</a>
-      </td>
-      <td>{{ managed_user.email }}</td>
-      <td>{% if managed_user.is_remote %}yes{% endif %}</td>
-      {% if perms.accounts.view_apitoken %}
-      <td>{% if managed_user.api_token %}yes{% endif %}</td>
-      {% endif %}
-      <td>
-        {% if perms.accounts.change_user and managed_user.editable %}
-        <a class="btn btn-default" href="{% url 'accounts:update_user' managed_user.id %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+    <div class="ms-auto">
+        {% if perms.accounts.add_user %}
+        <a href="{% url 'accounts:invite_user' %}" class="btn btn-link text-dark text-decoration-none" type="button"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Send an email invitation">
+            <span class="bi bi-envelope-plus" aria-hidden="true"></span>
         </a>
         {% endif %}
-        {% if perms.accounts.delete_user and managed_user.deletable %}
-        <a class="btn btn-danger" href="{% url 'accounts:delete_user' managed_user.id %}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    </div>
+</div>
+
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>Username</th>
+        <th>Email</th>
+        <th style="width:10%">Remote?</th>
+        {% if perms.accounts.view_apitoken %}
+        <th style="width:10%">API token</th>
+        {% endif %}
+        <th style="width:15%"></th>
+    </thead>
+    <tbody>
+        {% for managed_user in users %}
+        <tr class="data-row">
+        <td>
+            {% if managed_user.is_superuser %}
+            <span class="glyphicon glyphicon-fire" aria-hidden="true"></span>
+            {% else %}
+            <span class="glyphicon glyphicon-user" aria-hidden="true"></span>
+            {% endif %}
+            <a href="{% url 'accounts:user' managed_user.pk %}">{{ managed_user.username }}</a>
+        </td>
+        <td>{{ managed_user.email }}</td>
+        <td>{% if managed_user.is_remote %}yes{% endif %}</td>
+        {% if perms.accounts.view_apitoken %}
+        <td>{% if managed_user.api_token %}yes{% endif %}</td>
+        {% endif %}
+        <td class="text-end py-0">
+            {% if perms.accounts.change_user and managed_user.editable %}
+            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:update_user' managed_user.id %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit User">
+            <span class="bi bi-pencil-square" aria-hidden="true"></span>
+            </a>
+            {% endif %}
+            {% if perms.accounts.delete_user and managed_user.deletable %}
+            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:delete_user' managed_user.id %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete User">
+            <span class="bi bi-trash" aria-hidden="true"></span>
+            </a>
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
+
+<div class="d-flex align-items-center mb-1">
+    <h3 class="mb-3">Service account{{ service_account_count|pluralize }} ({{ service_account_count }})</h3>
+
+    <div class="ms-auto">
+        {% if perms.accounts.add_user and perms.accounts.add_apitoken %}
+        <a href="{% url 'accounts:create_service_account' %}" class="btn btn-link text-dark text-decoration-none" type="button"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create service account">
+            <span class="bi bi-plus-circle" aria-hidden="true"></span>
         </a>
         {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-<h3>{{ service_account_count }} Service account{{ service_account_count|pluralize }}</h3>
-
-{% if perms.accounts.add_user and perms.accounts.add_apitoken %}
-<a href="{% url 'accounts:create_service_account' %}" class="btn btn-default">
-  Create
-</a>
-{% endif %}
+    </div>
+</div>
 
 {% if service_account_count %}
-<table class="table">
-  <thead>
-    <th>Name</th>
-    {% if perms.accounts.view_apitoken %}
-    <th style="width:10%">API token</th>
-    {% endif %}
-    <th style="width:15%"></th>
-  </thead>
-  <tbody>
-    {% for service_account in service_accounts %}
-    <tr>
-      <td>
-        <a href="{% url 'accounts:user' service_account.pk %}">{{ service_account.username }}</a>
-      </td>
-      {% if perms.accounts.view_apitoken %}
-      <td>{% if service_account.api_token %}yes{% endif %}</td>
-      {% endif %}
-      <td>
-        {% if perms.accounts.change_user and service_account.editable %}
-        <a class="btn btn-default" href="{% url 'accounts:update_user' service_account.id %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-        </a>
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>Name</th>
+        {% if perms.accounts.view_apitoken %}
+        <th style="width:10%">API token</th>
         {% endif %}
-        {% if perms.accounts.delete_user and service_account.deletable %}
-        <a class="btn btn-danger" href="{% url 'accounts:delete_user' service_account.id %}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
+        <th style="width:15%"></th>
+    </thead>
+    <tbody>
+        {% for service_account in service_accounts %}
+        <tr class="data-row">
+        <td>
+            <a href="{% url 'accounts:user' service_account.pk %}">{{ service_account.username }}</a>
+        </td>
+        {% if perms.accounts.view_apitoken %}
+        <td>{% if service_account.api_token %}yes{% endif %}</td>
         {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+        <td class="text-end py-0">
+            {% if perms.accounts.change_user and service_account.editable %}
+            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:update_user' service_account.id %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Service Account">
+                <span class="bi bi-pencil-square" aria-hidden="true"></span>
+            </a>
+            {% endif %}
+            {% if perms.accounts.delete_user and service_account.deletable %}
+            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:delete_user' service_account.id %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Service Account">
+                <span class="bi bi-trash" aria-hidden="true"></span>
+            </a>
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
 {% endif %}
 
 {% endblock %}

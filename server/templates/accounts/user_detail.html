@@ -2,107 +2,117 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:users' %}">Users</a></li>
-  <li class="active">{{ object.get_type_display|title }} {{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li class="breadcrumb-item active">{{ object.get_type_display|title }} {{ object }}</li>
 </ol>
 
-<h3>{{ object.get_type_display|title }} {{ object }}</h3>
-
-<table class="table">
-  <tbody>
-    {% if object.is_service_account %}
-    <tr>
-      <th style="width:15%">name</th>
-      <td>{{ object.username }}</td>
-    </tr>
-    <tr>
-      <th>description</th>
-      <td>{{ object.description|default:"-"|linebreaks }}</td>
-    </tr>
-    {% else %}
-    <tr>
-      <th style="width:15%">username</th>
-      <td>{{ object.username }}</td>
-    </tr>
-    <tr>
-      <th>email</th>
-      <td>{{ object.email }}</td>
-    </tr>
-    <tr>
-      <th>superuser?</th>
-      <td>{{ object.is_superuser|yesno }}</td>
-    </tr>
-    <tr>
-      <th>remote?</th>
-      <td>{{ object.is_remote|yesno }}</td>
-    </tr>
-    {% if not object.is_remote %}
-    <tr>
-      <th>verification device{{ verification_devices|length|pluralize }}</th>
-      <td>
-        {% if verification_devices %}
-        <dl>
-          {% for verification_device in verification_devices %}
-          <dt>{{ verification_device.get_type_for_display }}</dt>
-          <dd>{{ verification_device.name }}</dd>
-          {% endfor %}
-        </dl>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h3 class="m-0">{{ object.get_type_display|title }} {{ object }}</h3>
+        <div class="ms-auto">
+            {% if perms.accounts.change_user and object.editable %}
+            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:update_user' object.pk %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit User">
+            <span class="bi bi-pencil-square" aria-hidden="true"></span>
+            </a>
+            {% endif %}
+            {% if perms.accounts.delete_user and object.deletable %}
+            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:delete_user' object.pk %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete User">
+            <span class="bi bi-trash" aria-hidden="true"></span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    <table class="table table-striped align-middle table-object-properties">
+    <tbody>
+        {% if object.is_service_account %}
+        <tr>
+        <th style="width:15%">name</th>
+        <td>{{ object.username }}</td>
+        </tr>
+        <tr>
+        <th>description</th>
+        <td>{{ object.description|default:"-"|linebreaks }}</td>
+        </tr>
         {% else %}
-        -
+        <tr>
+        <th style="width:15%">username</th>
+        <td>{{ object.username }}</td>
+        </tr>
+        <tr>
+        <th>email</th>
+        <td>{{ object.email }}</td>
+        </tr>
+        <tr>
+        <th>superuser?</th>
+        <td>{{ object.is_superuser|yesno }}</td>
+        </tr>
+        <tr>
+        <th>remote?</th>
+        <td>{{ object.is_remote|yesno }}</td>
+        </tr>
+        {% if not object.is_remote %}
+        <tr>
+        <th>verification device{{ verification_devices|length|pluralize }}</th>
+        <td>
+            {% if verification_devices %}
+            <dl>
+            {% for verification_device in verification_devices %}
+            <dt>{{ verification_device.get_type_for_display }}</dt>
+            <dd>{{ verification_device.name }}</dd>
+            {% endfor %}
+            </dl>
+            {% else %}
+            -
+            {% endif %}
+        </td>
         {% endif %}
-      </td>
-    {% endif %}
-    {% endif %}
-    {% if object == request.user or perms.accounts.view_apitoken %}
-    <tr>
-      <th>API Token?</th>
-      <td>
-        {% if object.api_token %}
-        yes
-        {% if can_delete_token %}
-        <a href="{% url 'accounts:delete_user_api_token' object.pk %}" class="btn btn-sm btn-danger">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
         {% endif %}
-        {% else %}
-        <form method="post" action="{% url 'accounts:create_user_api_token' object.pk %}">{% csrf_token %}
-          no
-          {% if can_add_token %}
-          <button class="btn btn-sm btn-default" type="submit">
-            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-          </button>
-          {% endif %}
-        </form>
+        {% if object == request.user or perms.accounts.view_apitoken %}
+        <tr>
+        <th>API Token?</th>
+        <td>
+            {% if object.api_token %}
+            yes
+            {% if can_delete_token %}
+                <a href="{% url 'accounts:delete_user_api_token' object.pk %}" class="btn btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Token">
+                    <span class="bi bi-trash" aria-hidden="true"></span>
+                </a>
+            {% endif %}
+            {% else %}
+            <form method="post" action="{% url 'accounts:create_user_api_token' object.pk %}">{% csrf_token %}
+            no
+            {% if can_add_token %}
+                <a class="btn btn-link text-dark text-decoration-none" type="submit"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Token">
+                    <span class="bi bi-plus-circle" aria-hidden="true"></span>
+                </a>
+            {% endif %}
+            </form>
+            {% endif %}
+        </td>
+        </tr>
         {% endif %}
-      </td>
-    </tr>
-    {% endif %}
-    {% if perms.auth.view_group %}
-    <tr>
-      <th>group{{ group_count|pluralize }}</th>
-      <td>
-        {% if group_count %}
-        <ul class="list-inline">
-          {% for group in groups %}
-          <li><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        -
+        {% if perms.auth.view_group %}
+        <tr>
+        <th>group{{ group_count|pluralize }}</th>
+        <td>
+            {% if group_count %}
+            <ul class="list-inline">
+            {% for group in groups %}
+            <li><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></li>
+            {% endfor %}
+            </ul>
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        </tr>
         {% endif %}
-      </td>
-    </tr>
-    {% endif %}
-  </tbody>
-</table>
-
-<p>
-  {% if perms.accounts.change_user and object.editable %}
-  <a href="{% url 'accounts:update_user' object.pk %}" class="btn btn-default">Update</a>
-  {% endif %}
-  {% if perms.accounts.delete_user and object.deletable %}
-  <a href="{% url 'accounts:delete_user' object.pk %}" class="btn btn-danger">Delete</a>
-  {% endif %}
-</p>
+    </tbody>
+    </table>
+</div>
 {% endblock %}

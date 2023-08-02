@@ -2,30 +2,32 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% if object == request.user %}
-  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Settings</a></li>
   {% else %}
-  <li><a href="{% url 'accounts:users' %}">Users</a></li>
-  <li><a href="{% url 'accounts:user' object.pk %}">{{ object.get_type_display|title }} {{ object }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:user' object.pk %}">{{ object.get_type_display|title }} {{ object }}</a></li>
   {% endif %}
-  <li class="active">API token</li>
+  <li class="breadcrumb-item active">API token</li>
 </ol>
 
 <h3>{% if object == request.user %}My{% else %}{{ object.get_type_display|title }} {{ object }}{% endif %} API token</h3>
 
 <p>
-  <a href="#" class="secret-toggle btn btn-default btn-sm" data-secret-id="auth-token">
-    <span class="glyphicon glyphicon-eye-open" aria-hidden="true"></span>
+  <a href="#" class="secret-toggle btn btn-link text-dark text-decoration-none" data-secret-id="auth-token"
+    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="View Token">
+    <span class="bi bi-eye" aria-hidden="true"></span>
   </a>
   <input style="font-family:monospace" hidden id="auth-token" value="{{ api_key }}" size="{{ api_key|length }}">
-  <button class="copy-secret btn btn-primary btn-sm" data-secret-id="auth-token">
-    <span class="glyphicon glyphicon-copy" aria-hidden="true"></span>
+  <button class="copy-secret btn btn-link text-dark text-decoration-none" data-secret-id="auth-token"
+    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard">
+    <span class="bi bi-clipboard-plus" aria-hidden="true"></span>
   </button>
   {% if object == request.user %}
-  <a href="{% url 'accounts:profile' %}" class="btn btn-default btn-sm">Close</a>
+    <a href="{% url 'accounts:profile' %}" class="btn btn-outline-secondary">Close</a>
   {% else %}
-  <a href="{% url 'accounts:user' object.pk %}" class="btn btn-default btn-sm">Close</a>
+    <a href="{% url 'accounts:user' object.pk %}" class="btn btn-outline-secondary">Close</a>
   {% endif %}
 </p>
 
@@ -43,12 +45,12 @@
       var eyeSpan = secretToggle.firstElementChild;
       if (secretElm.hidden) {
         secretElm.hidden = false;
-        eyeSpan.classList.remove("glyphicon-eye-open");
-        eyeSpan.classList.add("glyphicon-eye-close");
+        eyeSpan.classList.remove("bi-eye");
+        eyeSpan.classList.add("bi-eye-slash");
       } else {
         secretElm.hidden = true;
-        eyeSpan.classList.remove("glyphicon-eye-close");
-        eyeSpan.classList.add("glyphicon-eye-open");
+        eyeSpan.classList.remove("bi-eye-slash");
+        eyeSpan.classList.add("bi-eye");
       }
     });
   });

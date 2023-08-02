@@ -2,10 +2,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:users' %}">Users</a></li>
-  <li><a href="{% url 'accounts:user' user_to_delete.pk %}">{{ user_to_delete.get_type_display|title }} {{ user_to_delete }}</a></li>
-  <li class="active">Delete</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:user' user_to_delete.pk %}">{{ user_to_delete.get_type_display|title }} {{ user_to_delete }}</a></li>
+  <li class="breadcrumb-item active">Delete</li>
 </ol>
 
 <h3>Delete {{ user_to_delete.get_type_display }} {{ user_to_delete }}</h3>
