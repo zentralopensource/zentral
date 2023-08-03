@@ -17,14 +17,14 @@
             {% if perms.auth.change_group and perms.accounts.change_user %}
                 <a href="{% url 'accounts:update_group' object.pk %}" type="button" 
                         class="btn btn-link text-dark text-decoration-none"
-                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Realm">
+                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Group">
                         <i class="bi bi-pencil-square"></i>
                     </a>
             {% endif %}
             {% if perms.auth.delete_group and perms.accounts.change_user %}
                 <a href="{% url 'accounts:delete_group' object.pk %}" type="button" 
                         class="btn btn-link text-dark text-decoration-none"
-                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Realm">
+                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Group">
                         <i class="bi bi-trash"></i>
                     </a>
             {% endif %}        

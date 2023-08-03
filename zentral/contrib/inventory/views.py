@@ -312,7 +312,7 @@ class MBUView(PermissionRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super(MBUView, self).get_context_data(**kwargs)
         context['inventory'] = True
-        context['search_form'] = self.search_form
+        context['form'] = self.search_form
         # pagination
         page = context['page_obj']
         if page.has_next():

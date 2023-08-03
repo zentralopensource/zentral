@@ -18,3 +18,15 @@ def pagination(next_url, previous_url):
         'next_url': next_url,
         'previous_url': previous_url,
     }
+
+
+@register.inclusion_tag('_empty_results.html')
+def empty_results(link):
+    return {
+        'reset_search_link': link,
+    }
+
+
+@register.filter
+def to_str(value):
+    return str(value)

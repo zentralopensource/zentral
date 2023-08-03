@@ -47,65 +47,70 @@
 
 {% pagination next_url previous_url %}
 
-<table class="table table-striped align-middle table-hover">
-<thead>
-    <tr>
-        <th>Type</th>
-        <th>Object</th>
-        <th>Rules</th>
-    <tr>
-</thead>
-<tbody>
-    {% for target in targets %}
-    {% with target.object as obj %}
-    <tr>
-    <td>
-        <a href="{{ target.url }}">
-        {% if target.target_type == "TEAMID"%}
-        Team ID
-        {% else %}
-        {% if target.target_type == "SIGNINGID" %}
-        Signing ID
-        {% else %}
-        {{ target.target_type|title }}
-        {% endif %}
-        {% endif %}
-        </a>
-    </td>
-    <td>
-        <a href="{{ target.url }}"><code>{{ target.identifier }}</code></a>
-        {% if target.target_type == "BINARY" %}
-        <br>{{ obj.name }}
-        {% if obj.cert_sha256 %}
-        <br><strong>signed by:</strong> {{ obj.cert_cn }} / {{ obj.cert_ou }}
-        {% endif %}
-        {% endif %}
-        {% if target.target_type == "BUNDLE" %}
-        <br>{{ obj.name }}
-        <br>{{ obj.version|default:"-" }} / {{ obj.version_str|default:"-" }}
-        {% endif %}
-        {% if target.target_type == "CERTIFICATE" %}
-        <br>{{ obj.cn }}
-        <br>{{ obj.ou }}
-        <br>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}
-        {% endif %}
-        {% if target.target_type == "TEAMID" %}
-        <br>{{ obj.organization }}
-        {% endif %}
-        {% if target.target_type == "SIGNINGID" %}
-        {% if obj.cert_cn %}
-        <br>{{ obj.cert_cn }}
-        {% endif %}
-        {% endif %}
-    </td>
-    <td>{{ target.rule_count }}</td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-</tbody>
-</table>
+{% if not targets %}
+    {% url 'santa:targets' as empty_results_url %}
+    {% empty_results empty_results_url %}
+{% else %}
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>Object</th>
+            <th>Rules</th>
+        <tr>
+    </thead>
+    <tbody>
+        {% for target in targets %}
+        {% with target.object as obj %}
+        <tr>
+        <td>
+            <a href="{{ target.url }}">
+            {% if target.target_type == "TEAMID"%}
+            Team ID
+            {% else %}
+            {% if target.target_type == "SIGNINGID" %}
+            Signing ID
+            {% else %}
+            {{ target.target_type|title }}
+            {% endif %}
+            {% endif %}
+            </a>
+        </td>
+        <td>
+            <a href="{{ target.url }}"><code>{{ target.identifier }}</code></a>
+            {% if target.target_type == "BINARY" %}
+            <br>{{ obj.name }}
+            {% if obj.cert_sha256 %}
+            <br><strong>signed by:</strong> {{ obj.cert_cn }} / {{ obj.cert_ou }}
+            {% endif %}
+            {% endif %}
+            {% if target.target_type == "BUNDLE" %}
+            <br>{{ obj.name }}
+            <br>{{ obj.version|default:"-" }} / {{ obj.version_str|default:"-" }}
+            {% endif %}
+            {% if target.target_type == "CERTIFICATE" %}
+            <br>{{ obj.cn }}
+            <br>{{ obj.ou }}
+            <br>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}
+            {% endif %}
+            {% if target.target_type == "TEAMID" %}
+            <br>{{ obj.organization }}
+            {% endif %}
+            {% if target.target_type == "SIGNINGID" %}
+            {% if obj.cert_cn %}
+            <br>{{ obj.cert_cn }}
+            {% endif %}
+            {% endif %}
+        </td>
+        <td>{{ target.rule_count }}</td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+    </tbody>
+    </table>
 
-{% pagination next_url previous_url %}
+    {% pagination next_url previous_url %}
+{% endif %}
 
 {% endblock %}
 

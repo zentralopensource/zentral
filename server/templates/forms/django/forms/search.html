@@ -1,10 +1,11 @@
+{% load inclusion_tags %}
 {% for field in form %}
-    <div class={% if field.widget_type == 'checkbox' %}"form-checkbox col-sm mx-2"{% elif field.widget_type == 'text' %}"form-floating col-sm{{ form.fields|length|add:"-9" }} mx-2"{% else %}"form-floating col-sm mx-2"{% endif %}>
+    <div class={% if field.widget_type == 'checkbox' %}"form-checkbox col-sm me-2 mb-2"{% elif field.widget_type == 'text' %}"form-floating col-sm{{ form.fields|length|add:"-9" }} me-2 mb-2"{% else %}"form-floating col-sm me-2 mb-2"{% endif %}>
 
         {% if field.widget_type == 'select' %}
             <select class="form-select"
         {% elif field.widget_type == 'checkbox' %}
-            <input class="form-check-input"
+            <input class="form-check-input" {% if field.value %} checked {% endif %}
         {% else %}
             <input class="form-control"
         {% endif %}
@@ -19,7 +20,7 @@
         {% if field.widget_type == 'select' %}
             <option selected>...</option>
             {% for option, value in field.field.choices %}
-                <option value="{{ option }}"{% if value.is_selected %}selected="selected"{% endif %}>{{ value }}</option>
+                <option value="{{ option }}"{% if option|to_str == field.value %}selected="selected"{% endif %}>{{ value }}</option>
             {% endfor %}
             </select>
         {% endif %}

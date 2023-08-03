@@ -33,36 +33,28 @@ class MachineGroupSearchForm(forms.Form):
 
 
 class MetaBusinessUnitSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(
         max_length=64,
         required=False,
-        label='',
+        label='Name',
         widget=forms.TextInput(
             attrs={
                 "autofocus": "true",
                 "size": 32,
-                "placeholder": "- Name -",
-                "class": "form-select me-2 mb-2"
             }
         ),
         )
     source = forms.ModelChoiceField(
         queryset=Source.objects.current_business_unit_sources(),
         required=False,
-        widget=forms.Select(
-            attrs={'class': 'form-select me-2 mb-2'}
-            ),
-        label='',
-        empty_label="- Source -"
+        label='Source',
         )
     tag = forms.ModelChoiceField(
         queryset=Tag.objects.distinct().filter(metabusinessunittag__isnull=False),
         required=False,
-        widget=forms.Select(
-            attrs={'class': 'form-select me-2 mb-2'}
-            ),
-        label='',
-        empty_label="- Tag -"
+        label='Tag',
         )
 
 

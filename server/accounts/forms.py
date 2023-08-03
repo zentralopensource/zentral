@@ -192,8 +192,8 @@ class UpdateUserForm(forms.ModelForm):
 
 class AddTOTPForm(forms.Form):
     secret = forms.CharField(widget=forms.HiddenInput)
-    verification_code = forms.CharField(widget=forms.TextInput(attrs={"size": 6, "maxlength": 6}))
     name = forms.CharField(widget=forms.TextInput(attrs={'autofocus': ''}))
+    verification_code = forms.CharField(widget=forms.TextInput(attrs={"size": 6, "maxlength": 6}))
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user")

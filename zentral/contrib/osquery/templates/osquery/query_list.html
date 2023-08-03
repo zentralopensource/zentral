@@ -45,6 +45,11 @@
         </div>
 </div>
 
+{% if not page_obj %}
+    {% url 'osquery:queries' as empty_results_url %}
+    {% empty_results empty_results_url %}
+{% else %}
+
 {% pagination next_url previous_url %}
 
 <table class="table table-striped align-middle table-hover">
@@ -89,6 +94,7 @@
 
 {% pagination next_url previous_url %}
 
+{% endif %}
 {% endblock %}
 
 {% block extrajs %}
