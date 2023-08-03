@@ -15,23 +15,26 @@
 <h3>{% if object == request.user %}My{% else %}{{ object.get_type_display|title }} {{ object }}{% endif %} API token</h3>
 
 <p>
+  <button class="copy-secret btn btn-link text-dark text-decoration-none" data-secret-id="auth-token"
+    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard">
+    <span class="bi bi-clipboard-plus" aria-hidden="true"></span>
+  </button>
   <a href="#" class="secret-toggle btn btn-link text-dark text-decoration-none" data-secret-id="auth-token"
     data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="View Token">
     <span class="bi bi-eye" aria-hidden="true"></span>
   </a>
   <input style="font-family:monospace" hidden id="auth-token" value="{{ api_key }}" size="{{ api_key|length }}">
-  <button class="copy-secret btn btn-link text-dark text-decoration-none" data-secret-id="auth-token"
-    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard">
-    <span class="bi bi-clipboard-plus" aria-hidden="true"></span>
-  </button>
-  {% if object == request.user %}
-    <a href="{% url 'accounts:profile' %}" class="btn btn-outline-secondary">Close</a>
-  {% else %}
-    <a href="{% url 'accounts:user' object.pk %}" class="btn btn-outline-secondary">Close</a>
-  {% endif %}
 </p>
 
 <p><span class="text-danger">This token cannot be retrieved later on.</span> However, you can create a new one at any time.</p>
+
+<p>
+    {% if object == request.user %}
+        <a href="{% url 'accounts:profile' %}" class="btn btn-outline-secondary">Close</a>
+    {% else %}
+        <a href="{% url 'accounts:user' object.pk %}" class="btn btn-outline-secondary">Close</a>
+    {% endif %}
+</p>
 {% endblock %}
 
 {% block extrajs %}
