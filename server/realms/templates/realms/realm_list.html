@@ -48,11 +48,11 @@
         <td>
             {{ realm.backend }}
         </td>
-        <td>
+        <td class="text-end py-0">
             {% if not request.realm_authentication_session.is_remote and perms.realms.change_realm %}
-            <a class="btn btn-default" href="{% url 'realms:update' realm.uuid %}">
-            <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-            Update
+            <a class="btn btn-default" href="{% url 'realms:update' realm.uuid %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Realm">
+                <span class="bi bi-pencil-square" aria-hidden="true"></span>
             </a>
             {% endif %}
         </td>

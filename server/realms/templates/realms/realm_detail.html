@@ -27,7 +27,8 @@
             <h3 class="m-0 fs-5 text-secondary">Realm</i></h3>
             <div class="ms-auto">
                 {% if perms.realms.change_realm and not request.realm_authentication_session.is_remote %}
-                <a class="btn btn-link text-dark text-decoration-none" href="{% url 'realms:update' object.uuid %}">
+                <a class="btn btn-link text-dark text-decoration-none" href="{% url 'realms:update' object.uuid %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Realm">
                     <span class="bi bi-pencil-square" aria-hidden="true"></span>
                 </a>
                 {% endif %}
