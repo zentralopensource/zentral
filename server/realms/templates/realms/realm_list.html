@@ -9,54 +9,56 @@
     </ol>
 </nav>
 
-<h2>{{ realms_count }} Realm{{ realms_count|pluralize }}</h2>
+<div class="d-flex align-items-center mb-1">
+    <h3 class="mb-3">Realm{{ realms_count|pluralize }} ({{ realms_count }})</h3>
 
-{% if create_links %}
-<div class="dropdown">
-  <button class="btn btn-default dropdown-toggle" type="button" id="createRealm"
-          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-    Create realm
-    <span class="caret"></span>
-  </button>
-  <ul class="dropdown-menu" aria-labelledby="createRealm">
-    {% for link in create_links %}
-    <li><a href="{{ link.url }}">{{ link.anchor_text }} realm</a></li>
-    {% endfor %}
-  </ul>
+    {% if create_links %}
+    <div class="dropdown mb-2 btn btn-link">
+        <button class="btn btn-primary dropdown-toggle" type="button" id="createRealm"
+                data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            Add
+        </button>
+        <ul class="dropdown-menu" aria-labelledby="createRealm">
+            {% for link in create_links %}
+            <li><a href="{{ link.url }}" class="dropdown-item">{{ link.anchor_text }} realm</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 </div>
-{% endif %}
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Backend</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for realm in object_list %}
-    <tr>
-      <td>
-        {% if perms.realms.view_realm %}
-        <a href="{{ realm.get_absolute_url }}">{{ realm }}</a>
-        {% else %}
-        {{ realm }}
-        {% endif %}
-      </td>
-      <td>
-        {{ realm.backend }}
-      </td>
-      <td>
-        {% if not request.realm_authentication_session.is_remote and perms.realms.change_realm %}
-        <a class="btn btn-default" href="{% url 'realms:update' realm.uuid %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-          Update
-        </a>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<table class="table table-striped align-middle">
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>Backend</th>
+        <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for realm in object_list %}
+        <tr class="data-row">
+        <td>
+            {% if perms.realms.view_realm %}
+            <a href="{{ realm.get_absolute_url }}">{{ realm }}</a>
+            {% else %}
+            {{ realm }}
+            {% endif %}
+        </td>
+        <td>
+            {{ realm.backend }}
+        </td>
+        <td>
+            {% if not request.realm_authentication_session.is_remote and perms.realms.change_realm %}
+            <a class="btn btn-default" href="{% url 'realms:update' realm.uuid %}">
+            <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+            Update
+            </a>
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
 {% endblock %}

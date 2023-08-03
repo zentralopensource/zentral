@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'realms:list' %}">Realms</a></li>
-  <li><a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a></li>
-  <li class="active">{{ realm_user }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a></li>
+  <li class="breadcrumb-item active">{{ realm_user }}</li>
 </ol>
 
 <h2>Realm user <i>{{ realm_user }}</i></h2>
