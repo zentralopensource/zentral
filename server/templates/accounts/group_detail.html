@@ -7,7 +7,30 @@
   <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h3 class="mb-3">{{ object }}</h3>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Group</h3>
+        <div class="ms-auto">
+            {% if perms.auth.change_group and perms.accounts.change_user %}
+                <a href="{% url 'accounts:update_group' object.pk %}" type="button" 
+                        class="btn btn-link text-dark text-decoration-none"
+                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Realm">
+                        <i class="bi bi-pencil-square"></i>
+                    </a>
+            {% endif %}
+            {% if perms.auth.delete_group and perms.accounts.change_user %}
+                <a href="{% url 'accounts:delete_group' object.pk %}" type="button" 
+                        class="btn btn-link text-dark text-decoration-none"
+                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Realm">
+                        <i class="bi bi-trash"></i>
+                    </a>
+            {% endif %}        
+        </div>
+    </div>
+</div>
 
 <h4>Permission{{ permission_count|pluralize }} ({{ permission_count }})</h4>
 
@@ -29,15 +52,6 @@
   </tbody>
 </table>
 {% endif %}
-
-<p>
-  {% if perms.auth.change_group and perms.accounts.change_user %}
-  <a href="{% url 'accounts:update_group' object.pk %}" class="btn btn-secondary">Update</a>
-  {% endif %}
-  {% if perms.auth.delete_group and perms.accounts.change_user %}
-  <a href="{% url 'accounts:delete_group' object.pk %}" class="btn btn-danger">Delete</a>
-  {% endif %}
-</p>
 
 {% if perms.accounts.view_user %}
 <h4>User{{ user_count|pluralize }} ({{ user_count }})</h4>
@@ -82,7 +96,7 @@
 {% if perms.realms.view_realmgroupmapping %}
 <h4>Realm mapping{{ realm_group_mapping_count|pluralize }} ({{ realm_group_mapping_count }})</h4>
 {% if realm_group_mapping_count %}
-<table class="table">
+<table class="table table-striped align-middle table-hover">
   <thead>
     {% if perms.realms.view_realm %}
     <th>Realm</th>
