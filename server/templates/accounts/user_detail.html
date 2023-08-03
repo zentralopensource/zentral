@@ -86,10 +86,10 @@
             <form method="post" action="{% url 'accounts:create_user_api_token' object.pk %}">{% csrf_token %}
             no
             {% if can_add_token %}
-                <a class="btn btn-link text-dark text-decoration-none" type="submit"
+                <button class="btn btn-link text-dark text-decoration-none" type="submit"
                     data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Token">
                     <span class="bi bi-plus-circle" aria-hidden="true"></span>
-                </a>
+                </button>
             {% endif %}
             </form>
             {% endif %}
