@@ -1,5 +1,6 @@
 import io
 import logging
+from uuid import uuid4
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
@@ -1471,10 +1472,12 @@ class CreateEnrolledDeviceCommandView(PermissionRequiredMixin, FormView):
         return ctx
 
     def form_valid(self, form):
+        uuid = uuid4()
         self.command_class.create_for_device(
             self.enrolled_device,
-            kwargs=form.get_command_kwargs(),
+            kwargs=form.get_command_kwargs(uuid),
             queue=True,
+            uuid=uuid,
         )
         messages.info(self.request, f"{self.command_class.get_display_name()} command successfully created")
         return redirect(self.enrolled_device)

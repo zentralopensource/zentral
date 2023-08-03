@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import logging
-import uuid
+from uuid import uuid4
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -65,17 +65,19 @@ class RotateFileVaultKey(Command):
         target,
         artifact_version=None,
         kwargs=None,
-        queue=False, delay=0
+        queue=False, delay=0,
+        uuid=None
     ):
-        command_uuid = uuid.uuid4()
+        if uuid is None:
+            uuid = uuid4()
         return super().create_for_target(
             target,
             kwargs={"encryption_key": encrypt(get_encryption_key_der_bytes(),
                                               model="mdm.devicecommand",
                                               field="encryption_key",
-                                              uuid=str(command_uuid))},
+                                              uuid=str(uuid))},
             queue=queue, delay=delay,
-            uuid=command_uuid,
+            uuid=uuid,
         )
 
     def load_encryption_key(self):

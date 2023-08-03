@@ -71,8 +71,8 @@ class Command:
         return cls(target.channel, db_command, uuid)
 
     @classmethod
-    def create_for_device(cls, enrolled_device, artifact_version=None, kwargs=None, queue=False, delay=0):
-        return cls.create_for_target(Target(enrolled_device), artifact_version, kwargs, queue, delay)
+    def create_for_device(cls, enrolled_device, artifact_version=None, kwargs=None, queue=False, delay=0, uuid=None):
+        return cls.create_for_target(Target(enrolled_device), artifact_version, kwargs, queue, delay, uuid)
 
     def load_kwargs(self):
         pass
@@ -212,5 +212,5 @@ class CommandBaseForm(forms.Form):
         self.enrolled_user = kwargs.pop("enrolled_user", None)
         super().__init__(*args, **kwargs)
 
-    def get_command_kwargs(self):
+    def get_command_kwargs(self, uuid):
         return {}

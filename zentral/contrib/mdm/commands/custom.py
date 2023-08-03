@@ -32,7 +32,7 @@ class CustomCommandForm(CommandBaseForm):
             cmd = plistlib.dumps(loaded_cmd).decode("utf-8")
         return cmd
 
-    def get_command_kwargs(self):
+    def get_command_kwargs(self, uuid):
         return {"command": self.cleaned_data["command"]}
 
 

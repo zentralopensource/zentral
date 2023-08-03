@@ -10,7 +10,8 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import CustomCommand
-from zentral.contrib.mdm.models import Blueprint
+from zentral.contrib.mdm.commands.base import load_command
+from zentral.contrib.mdm.models import Blueprint, Platform
 from .utils import (force_blueprint,
                     force_dep_enrollment_session, force_ota_enrollment_session, force_user_enrollment_session)
 
@@ -498,6 +499,120 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, "Device information command successfully created")
         command = session.enrolled_device.commands.first()
         self.assertEqual(command.name, "DeviceInformation")
+
+    # create device lock command
+
+    def test_enrolled_device_no_device_lock_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "DeviceLock"))
+        )
+
+    def test_enrolled_device_device_lock_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "DeviceLock"))
+        )
+
+    def test_create_enrolled_device_device_lock_command_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login_redirect(reverse("mdm:create_enrolled_device_command",
+                                     args=(session.enrolled_device.pk, "DeviceLock")))
+
+    def test_create_enrolled_device_device_lock_command_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "DeviceLock"))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrolled_device_device_lock_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "DeviceLock"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertContains(response, 'id="id_message"')
+        self.assertContains(response, 'id="id_phone_number"')
+        self.assertContains(response, 'id="id_pin"')
+
+    def test_create_enrolled_device_device_lock_command_ios_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.platform = Platform.IOS
+        session.enrolled_device.save()
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "DeviceLock"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertContains(response, 'id="id_message"')
+        self.assertContains(response, 'id="id_phone_number"')
+        self.assertNotContains(response, 'id="id_pin"')
+
+    def test_create_enrolled_device_device_lock_command_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "DeviceLock")),
+            {"message": "Yolo Fomo",
+             "phone_number": "+123456789",
+             "pin": "123456"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Device lock command successfully created")
+        db_cmd = session.enrolled_device.commands.first()
+        self.assertEqual(db_cmd.name, "DeviceLock")
+        cmd = load_command(db_cmd)
+        self.assertEqual(
+            cmd.build_command(),
+            {"Message": "Yolo Fomo",
+             "PhoneNumber": "+123456789",
+             "PIN": "123456"}
+        )
+
+    def test_create_enrolled_device_device_lock_command_ios_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.platform = Platform.IOS
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "DeviceLock")),
+            {"message": "Yolo Fomo",
+             "phone_number": "+123456789"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Device lock command successfully created")
+        db_cmd = session.enrolled_device.commands.first()
+        self.assertEqual(db_cmd.name, "DeviceLock")
+        cmd = load_command(db_cmd)
+        self.assertEqual(
+            cmd.build_command(),
+            {"Message": "Yolo Fomo",
+             "PhoneNumber": "+123456789"},
+        )
 
     # create security info command
 
