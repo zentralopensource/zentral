@@ -6,7 +6,8 @@ from .artifacts import update_blueprint_serialized_artifacts
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
                      FileVaultConfig,
-                     Platform, Profile)
+                     Platform, Profile,
+                     RecoveryPasswordConfig)
 from .payloads import get_configuration_profile_info
 
 
@@ -37,6 +38,43 @@ class FileVaultConfigSerializer(serializers.ModelSerializer):
         elif bypass_attempts > -1:
             raise serializers.ValidationError({"bypass_attempts": "Must be -1 when at_login_only is False"})
         return data
+
+
+class RecoveryPasswordConfigSerializer(serializers.ModelSerializer):
+    static_password = serializers.CharField(required=False, source="get_static_password")
+
+    class Meta:
+        model = RecoveryPasswordConfig
+        fields = ("id", "name",
+                  "dynamic_password", "static_password",
+                  "rotation_interval_days", "rotate_firmware_password",
+                  "created_at", "updated_at")
+
+    def validate(self, data):
+        dynamic_password = data.get("dynamic_password", True)
+        static_password = data.get("get_static_password")
+        if dynamic_password:
+            if static_password:
+                raise serializers.ValidationError({"static_password": "Cannot be set when dynamic_password is true"})
+        elif not static_password:
+            raise serializers.ValidationError({"static_password": "Required when dynamic_password is false"})
+        return data
+
+    def create(self, validated_data):
+        static_password = validated_data.pop("get_static_password", None)
+        instance = RecoveryPasswordConfig.objects.create(**validated_data)
+        if static_password:
+            instance.set_static_password(static_password)
+            instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        static_password = validated_data.pop("get_static_password", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.set_static_password(static_password)
+        instance.save()
+        return instance
 
 
 class BlueprintSerializer(serializers.ModelSerializer):

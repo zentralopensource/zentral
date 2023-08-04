@@ -16,4 +16,5 @@ from .remove_application import RemoveApplication  # NOQA
 from .remove_profile import RemoveProfile  # NOQA
 from .rotate_filevault_key import RotateFileVaultKey  # NOQA
 from .security_info import SecurityInfo  # NOQA
+from .set_recovery_lock import SetRecoveryLock  # NOQA
 from .setup_filevault import SetupFileVault  # NOQA

@@ -23,6 +23,7 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        DEPDeviceSearchForm, EnrolledDeviceSearchForm,
                                        FileVaultConfigForm,
                                        OTAEnrollmentForm,
+                                       RecoveryPasswordConfigForm,
                                        SCEPConfigForm,
                                        UpdateArtifactForm,
                                        UserEnrollmentForm,
@@ -36,6 +37,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         FileVaultConfig,
                                         OTAEnrollment,
+                                        RecoveryPasswordConfig,
                                         SCEPConfig,
                                         UserEnrollment,
                                         Profile, StoreApp)
@@ -932,7 +934,8 @@ class CreateBlueprintView(PermissionRequiredMixin, CreateViewWithAudit):
               "collect_apps",
               "collect_certificates",
               "collect_profiles",
-              "filevault_config",)
+              "filevault_config",
+              "recovery_password_config",)
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -965,7 +968,8 @@ class UpdateBlueprintView(PermissionRequiredMixin, UpdateViewWithAudit):
               "collect_apps",
               "collect_certificates",
               "collect_profiles",
-              "filevault_config",)
+              "filevault_config",
+              "recovery_password_config",)
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -1019,6 +1023,46 @@ class DeleteFileVaultConfigView(PermissionRequiredMixin, DeleteViewWithAudit):
 
     def get_queryset(self):
         return FileVaultConfig.objects.can_be_deleted()
+
+
+# Recovery password configurations
+
+
+class RecoveryPasswordConfigListView(PermissionRequiredMixin, ListView):
+    permission_required = "mdm.view_recoverypasswordconfig"
+    model = RecoveryPasswordConfig
+    paginate_by = 20
+
+
+class CreateRecoveryPasswordConfigView(PermissionRequiredMixin, CreateViewWithAudit):
+    permission_required = "mdm.add_recoverypasswordconfig"
+    model = RecoveryPasswordConfig
+    form_class = RecoveryPasswordConfigForm
+
+
+class RecoveryPasswordConfigView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_recoverypasswordconfig"
+    model = RecoveryPasswordConfig
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["blueprints"] = self.object.blueprint_set.order_by("name")
+        ctx["blueprint_count"] = ctx["blueprints"].count()
+        return ctx
+
+
+class UpdateRecoveryPasswordConfigView(PermissionRequiredMixin, UpdateViewWithAudit):
+    permission_required = "mdm.change_recoverypasswordconfig"
+    model = RecoveryPasswordConfig
+    form_class = RecoveryPasswordConfigForm
+
+
+class DeleteRecoveryPasswordConfigView(PermissionRequiredMixin, DeleteViewWithAudit):
+    permission_required = "mdm.delete_recoverypasswordconfig"
+    success_url = reverse_lazy("mdm:recovery_password_configs")
+
+    def get_queryset(self):
+        return RecoveryPasswordConfig.objects.can_be_deleted()
 
 
 # SCEP Configurations

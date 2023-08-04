@@ -44,7 +44,7 @@
         <td>FileVault configuration</td>
         <td>
           {% if object.filevault_config %}
-          {% if perms.mdm.view_filevault_config %}
+          {% if perms.mdm.view_filevaultconfig %}
           <a href="{{ object.filevault_config.get_absolute_url }}">
             {{ object.filevault_config }}
           </a>
@@ -54,6 +54,22 @@
           {% else %}
           -
           {% endif %}
+      </tr>
+      <tr>
+        <td>Recovery password configuration</td>
+        <td>
+          {% if object.recovery_password_config %}
+          {% if perms.mdm.view_recoverypasswordconfig %}
+          <a href="{{ object.recovery_password_config.get_absolute_url }}">
+            {{ object.recovery_password_config }}
+          </a>
+          {% else %}
+          {{ object.recovery_password_config }}
+          {% endif %}
+          {% else %}
+          -
+          {% endif %}
+      </tr>
       </tbody>
     </table>
 

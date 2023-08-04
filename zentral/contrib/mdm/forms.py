@@ -13,6 +13,7 @@ from zentral.utils.os_version import make_comparable_os_version
 from .app_manifest import build_enterprise_app_manifest
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
+from .commands.set_recovery_lock import validate_recovery_password
 from .crypto import load_push_certificate_and_key
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
@@ -21,7 +22,7 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag, Channel,
                      DEPDevice, DEPOrganization, DEPEnrollment, DEPToken, DEPVirtualServer,
                      EnrolledDevice, EnterpriseApp, Platform,
-                     FileVaultConfig, SCEPConfig,
+                     FileVaultConfig, RecoveryPasswordConfig, SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
                      Profile, Location, LocationAsset, StoreApp)
 from .skip_keys import skippable_setup_panes
@@ -873,6 +874,47 @@ class FileVaultConfigForm(forms.ModelForm):
             bypass_attempts = self.cleaned_data.get("bypass_attempts")
             if isinstance(bypass_attempts, int) and bypass_attempts < 0:
                 self.add_error("bypass_attempts", "Must be at least 0 when enablement deferred at login")
+
+
+class RecoveryPasswordConfigForm(forms.ModelForm):
+    static_password = forms.CharField(
+        widget=forms.PasswordInput(render_value=True),
+        validators=[validate_recovery_password],
+        required=False, strip=True
+    )
+    field_order = [
+        "name",
+        "dynamic_password",
+        "static_password",
+        "rotation_interval_days",
+        "rotate_firmware_password",
+    ]
+
+    class Meta:
+        model = RecoveryPasswordConfig
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["static_password"].initial = self.instance.get_static_password() or ""
+
+    def clean(self):
+        super().clean()
+        dynamic_password = self.cleaned_data.get("dynamic_password")
+        if not dynamic_password:
+            static_password = self.cleaned_data.get("static_password")
+            if not static_password and "static_password" not in self.errors:
+                self.add_error("static_password", "This field is required when not using dynamic passwords.")
+
+    def save(self):
+        if self.instance.pk and not self.cleaned_data.get("dynamic_password"):
+            self.instance.set_static_password(None)
+        obj = super().save()
+        if not obj.dynamic_password:
+            obj.set_static_password(self.cleaned_data["static_password"])
+            obj.save()
+        return obj
 
 
 class SCEPConfigForm(forms.ModelForm):

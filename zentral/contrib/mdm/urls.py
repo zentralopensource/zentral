@@ -208,6 +208,23 @@ urlpatterns = [
          views.DeleteFileVaultConfigView.as_view(),
          name="delete_filevault_config"),
 
+    # Recovery password configurations
+    path('recovery_password_configurations/',
+         views.RecoveryPasswordConfigListView.as_view(),
+         name="recovery_password_configs"),
+    path('recovery_password_configurations/create/',
+         views.CreateRecoveryPasswordConfigView.as_view(),
+         name="create_recovery_password_config"),
+    path('recovery_password_configurations/<int:pk>/',
+         views.RecoveryPasswordConfigView.as_view(),
+         name="recovery_password_config"),
+    path('recovery_password_configurations/<int:pk>/update/',
+         views.UpdateRecoveryPasswordConfigView.as_view(),
+         name="update_recovery_password_config"),
+    path('recovery_password_configurations/<int:pk>/delete/',
+         views.DeleteRecoveryPasswordConfigView.as_view(),
+         name="delete_recovery_password_config"),
+
     # SCEP configurations
     path('scep_configurations/',
          views.SCEPConfigListView.as_view(),

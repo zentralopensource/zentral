@@ -676,6 +676,201 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         command = session.enrolled_device.commands.first()
         self.assertEqual(command.name, "SecurityInfo")
 
+    # create set recovery lock command
+
+    def test_enrolled_device_no_perms_no_set_recovery_lock_command_link(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SetRecoveryLock"))
+        )
+
+    def test_enrolled_device_not_apple_silicon_no_set_recovery_lock_command_link(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.assertFalse(session.enrolled_device.apple_silicon)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SetRecoveryLock"))
+        )
+
+    def test_enrolled_device_set_recovery_lock_command_link(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SetRecoveryLock"))
+        )
+
+    def test_create_enrolled_device_set_recovery_lock_command_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login_redirect(reverse("mdm:create_enrolled_device_command",
+                                     args=(session.enrolled_device.pk, "SetRecoveryLock")))
+
+    def test_create_enrolled_device_set_recovery_lock_command_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetRecoveryLock"))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrolled_device_set_recovery_lock_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetRecoveryLock"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+
+    def test_create_enrolled_device_set_recovery_lock_command_pwd_too_short(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetRecoveryLock")),
+            {"new_password": "1234567"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertFormError(
+            response.context["form"],
+            "new_password",
+            "The password must be at least 8 characters long."
+        )
+
+    def test_create_enrolled_device_set_recovery_lock_command_pwd_too_long(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetRecoveryLock")),
+            {"new_password": 33 * "1"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertFormError(
+            response.context["form"],
+            "new_password",
+            "The password must be at most 32 characters long."
+        )
+
+    def test_create_enrolled_device_set_recovery_lock_command_pwd_non_ascii(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetRecoveryLock")),
+            {"new_password": 8 * "é"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertFormError(
+            response.context["form"],
+            "new_password",
+            "The characters in this value must consist of low-ASCII, printable characters (0x20 through 0x7E) "
+            "to ensure that all characters are enterable on the EFI login screen."
+        )
+
+    def test_create_enrolled_device_set_recovery_lock_command_pwd_clear_non_existing(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetRecoveryLock")),
+            {"new_password": ""},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertFormError(
+            response.context["form"],
+            "new_password",
+            "No current recovery lock set: this field is required."
+        )
+
+    def test_create_enrolled_device_set_recovery_lock_command_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.set_recovery_password("87654321")
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetRecoveryLock")),
+            {"new_password": "12345678"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Set recovery lock command successfully created")
+        db_cmd = session.enrolled_device.commands.first()
+        self.assertEqual(db_cmd.name, "SetRecoveryLock")
+        cmd = load_command(db_cmd)
+        self.assertEqual(
+            cmd.build_command(),
+            {"CurrentPassword": "87654321",
+             "NewPassword": "12345678"},
+        )
+
+    def test_create_enrolled_device_set_recovery_lock_command_clear_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.set_recovery_password("87654321")
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetRecoveryLock")),
+            {"new_password": ""},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Set recovery lock command successfully created")
+        db_cmd = session.enrolled_device.commands.first()
+        self.assertEqual(db_cmd.name, "SetRecoveryLock")
+        cmd = load_command(db_cmd)
+        self.assertEqual(
+            cmd.build_command(),
+            {"CurrentPassword": "87654321",
+             "NewPassword": ""},
+        )
+
     # create rotate filevault key command
 
     def test_enrolled_device_no_rotate_filevault_key_command_link(self):

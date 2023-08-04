@@ -24,6 +24,7 @@ from .remove_application import RemoveApplication
 from .remove_profile import RemoveProfile
 from .rotate_filevault_key import RotateFileVaultKey
 from .security_info import SecurityInfo
+from .set_recovery_lock import SetRecoveryLock
 from .setup_filevault import SetupFileVault
 
 
@@ -257,6 +258,51 @@ def _rotate_filevault_key(target, enrollment_session, status):
         return RotateFileVaultKey.create_for_target(target)
 
 
+def _manage_recovery_password(target, enrollment_session, status):
+    if status == RequestStatus.NOT_NOW:
+        return
+    if not target.platform == Platform.MACOS:
+        return
+    if not target.is_device:
+        return
+    try:
+        recovery_password_config = target.blueprint.recovery_password_config
+    except AttributeError:
+        return
+    if not recovery_password_config:
+        return
+    for cmd_class in (SetRecoveryLock,):
+        if cmd_class.verify_target(target):
+            break
+    else:
+        return
+    enrolled_device = target.enrolled_device
+    if (
+        enrolled_device.recovery_password
+        and (
+            not recovery_password_config.rotation_interval_days
+            or (enrolled_device.recovery_password_updated_at
+                and (datetime.utcnow() - enrolled_device.recovery_password_updated_at
+                     < timedelta(days=recovery_password_config.rotation_interval_days))
+                )
+        )
+    ):
+        # recovery password set and recent enough
+        return
+    latest_cmd = (
+        DeviceCommand.objects.filter(name=cmd_class.get_db_name(),
+                                     enrolled_device=enrolled_device,
+                                     time__gte=datetime.utcnow() - timedelta(hours=4))
+                             .order_by("-time")
+                             .first()
+    )
+    if latest_cmd and latest_cmd.status != Command.Status.ACKNOWLEDGED:
+        # Backoff: the latest command sent in the last 4 hours has a bad status
+        # TODO: 4 hours hard-coded
+        return
+    return cmd_class.create_for_automatic_scheduling(target, password=recovery_password_config.get_static_password())
+
+
 def _configure_dep_enrollment_accounts(target, enrollment_session, status):
     if status == RequestStatus.NOT_NOW:
         return
@@ -303,6 +349,7 @@ def get_next_command_response(target, enrollment_session, status):
         _remove_artifacts,
         _setup_filevault,
         _rotate_filevault_key,
+        _manage_recovery_password,
         _configure_dep_enrollment_accounts,
         _finish_dep_enrollment_configuration
     ):

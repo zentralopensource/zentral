@@ -32,6 +32,9 @@
 {% if perms.mdm.view_filevaultconfig %}
 <p><a href="{% url 'mdm:filevault_configs' %}">FileVault configurations</a></p>
 {% endif %}
+{% if perms.mdm.view_recoverypasswordconfig %}
+<p><a href="{% url 'mdm:recovery_password_configs' %}">Recovery password configurations</a></p>
+{% endif %}
 {% if perms.mdm.view_scepconfig %}
 <p><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></p>
 {% endif %}

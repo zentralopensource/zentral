@@ -5,8 +5,9 @@ from .api_views import (ArtifactDetail, ArtifactList,
                         BlueprintArtifactDetail, BlueprintArtifactList,
                         FileVaultConfigDetail, FileVaultConfigList,
                         ProfileDetail, ProfileList,
+                        RecoveryPasswordConfigList, RecoveryPasswordConfigDetail,
                         DEPVirtualServerSyncDevicesView,
-                        EnrolledDeviceFileVaultPRK,)
+                        EnrolledDeviceFileVaultPRK, EnrolledDeviceRecoveryPassword)
 
 
 app_name = "mdm_api"
@@ -21,11 +22,16 @@ urlpatterns = [
     path('filevault_configs/<int:pk>/', FileVaultConfigDetail.as_view(), name="filevault_config"),
     path('profiles/', ProfileList.as_view(), name="profiles"),
     path('profiles/<uuid:artifact_version_pk>/', ProfileDetail.as_view(), name="profile"),
+    path('recovery_password_configs/', RecoveryPasswordConfigList.as_view(), name="recovery_password_configs"),
+    path('recovery_password_configs/<int:pk>/', RecoveryPasswordConfigDetail.as_view(),
+         name="recovery_password_config"),
 
     path('dep/virtual_servers/<int:pk>/sync_devices/',
          DEPVirtualServerSyncDevicesView.as_view(), name="dep_virtual_server_sync_devices"),
     path('enrolled_devices/<int:pk>/filevault_prk/', EnrolledDeviceFileVaultPRK.as_view(),
          name="enrolled_device_filevault_prk"),
+    path('enrolled_devices/<int:pk>/recovery_password/', EnrolledDeviceRecoveryPassword.as_view(),
+         name="enrolled_device_recovery_password"),
 ]
 
 

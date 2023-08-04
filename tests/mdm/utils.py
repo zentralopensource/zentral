@@ -19,7 +19,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
                                         EnterpriseApp, FileVaultConfig, Location, LocationAsset,
                                         OTAEnrollment, OTAEnrollmentSession,
-                                        Profile, PushCertificate, SCEPConfig,
+                                        Profile, PushCertificate, RecoveryPasswordConfig, SCEPConfig,
                                         StoreApp,
                                         UserEnrollment, UserEnrollmentSession)
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
@@ -427,10 +427,23 @@ def force_filevault_config(prk_rotation_interval_days=0):
     )
 
 
-def force_blueprint(filevault_config=None):
+def force_recovery_password_config(rotation_interval_days=0, static_password=None):
+    cfg = RecoveryPasswordConfig.objects.create(
+        name=get_random_string(12),
+        dynamic_password=static_password is None,
+        rotation_interval_days=rotation_interval_days,
+    )
+    if static_password:
+        cfg.set_static_password(static_password)
+        cfg.save()
+    return cfg
+
+
+def force_blueprint(filevault_config=None, recovery_password_config=None):
     return Blueprint.objects.create(
         name=get_random_string(12),
         filevault_config=filevault_config,
+        recovery_password_config=recovery_password_config,
     )
 
 

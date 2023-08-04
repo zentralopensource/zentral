@@ -22,6 +22,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "profile",
         "pushcertificate",
         "otaenrollment",
+        "recoverypasswordconfig",
         "scepconfig",
         "userartifact",
         "userenrollment",

@@ -6,8 +6,8 @@ from zentral.core.events.base import BaseEvent, EventMetadata
 logger = logging.getLogger('zentral.contrib.mdm.events.filevault')
 
 
-class FileVaultPRKUpdateEvent(BaseEvent):
-    event_type = "filevault_prk_update"
+class FileVaultPRKUpdatedEvent(BaseEvent):
+    event_type = "filevault_prk_updated"
     tags = ["mdm"]
 
     def get_linked_objects_keys(self):
@@ -18,14 +18,14 @@ class FileVaultPRKUpdateEvent(BaseEvent):
         return keys
 
 
-register_event_type(FileVaultPRKUpdateEvent)
+register_event_type(FileVaultPRKUpdatedEvent)
 
 
-def post_filevault_prk_update_event(mdm_command):
+def post_filevault_prk_updated_event(mdm_command):
     event_metadata = EventMetadata(
         machine_serial_number=mdm_command.enrolled_device.serial_number,
     )
-    event = FileVaultPRKUpdateEvent(
+    event = FileVaultPRKUpdatedEvent(
         event_metadata,
         {"command": {"request_type": mdm_command.request_type,
                      "uuid": str(mdm_command.uuid)}},

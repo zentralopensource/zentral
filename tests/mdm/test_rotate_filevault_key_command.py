@@ -11,7 +11,7 @@ from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import RotateFileVaultKey
 from zentral.contrib.mdm.commands.scheduling import _rotate_filevault_key
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
-from zentral.contrib.mdm.events import FileVaultPRKUpdateEvent
+from zentral.contrib.mdm.events import FileVaultPRKUpdatedEvent
 from zentral.contrib.mdm.models import Channel, Command, Platform, RequestStatus
 from .utils import force_blueprint, force_dep_enrollment_session, force_filevault_config
 
@@ -126,7 +126,7 @@ class RotateFileVaultKeyCommandTestCase(TestCase):
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 1)
         event = events[0]
-        self.assertIsInstance(event, FileVaultPRKUpdateEvent)
+        self.assertIsInstance(event, FileVaultPRKUpdatedEvent)
         self.assertEqual(
             event.payload,
             {'command': {'request_type': 'RotateFileVaultKey',

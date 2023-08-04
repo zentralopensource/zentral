@@ -177,6 +177,77 @@ class FileVaultConfig(models.Model):
         return d
 
 
+# Recovery password
+
+
+class RecoveryPasswordConfigManager(models.Manager):
+    def can_be_deleted(self):
+        return self.annotate(bp_count=Count("blueprint")).filter(bp_count=0)
+
+
+class RecoveryPasswordConfig(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    dynamic_password = models.BooleanField(default=True)
+    static_password = models.TextField(null=True, editable=False)
+    rotation_interval_days = models.IntegerField(
+        verbose_name="Rotation interval (days)",
+        validators=[MinValueValidator(0), MaxValueValidator(366)],
+        default=0,
+        help_text="Interval in days after which the recovery password will be automatically rotated."
+    )
+    rotate_firmware_password = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = FileVaultConfigManager()
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("mdm:recovery_password_config", args=(self.pk,))
+
+    def can_be_deleted(self):
+        return RecoveryPasswordConfig.objects.can_be_deleted().filter(pk=self.pk).exists()
+
+    def _get_secret_engine_kwargs(self, field):
+        return {
+            "model": "mdm.recoverypasswordconfig",
+            "pk": self.pk,
+            "field": field
+        }
+
+    def get_static_password(self):
+        if not self.static_password:
+            return
+        return decrypt_str(self.static_password, **self._get_secret_engine_kwargs("static_password"))
+
+    def set_static_password(self, static_password):
+        if static_password is None:
+            self.static_password = None
+            return
+        self.static_password = encrypt_str(static_password, **self._get_secret_engine_kwargs("static_password"))
+
+    def rewrap_secrets(self):
+        self.server_token = rewrap(self.static_password, **self._get_secret_engine_kwargs("static_password"))
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "dynamic_password": self.dynamic_password,
+            "rotation_interval_days": self.rotation_interval_days,
+            "rotate_firmware_password": self.rotate_firmware_password,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
+
+
 # Blueprint
 
 
@@ -228,7 +299,11 @@ class Blueprint(models.Model):
         default=InventoryItemCollectionOption.NO
     )
     # FileVault
-    filevault_config = models.ForeignKey(FileVaultConfig, null=True, blank=True, on_delete=models.SET_NULL)
+    filevault_config = models.ForeignKey(FileVaultConfig, null=True, blank=True,
+                                         on_delete=models.SET_NULL)
+    # Recovery password
+    recovery_password_config = models.ForeignKey(RecoveryPasswordConfig, null=True, blank=True,
+                                                 on_delete=models.SET_NULL)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -274,6 +349,8 @@ class Blueprint(models.Model):
         })
         if self.filevault_config:
             d["filevault_config"] = self.filevault_config.serialize_for_event(keys_only=True)
+        if self.recovery_password_config:
+            d["recovery_password_config"] = self.recovery_password_config.serialize_for_event(keys_only=True)
         return d
 
     def can_be_deleted(self):
@@ -681,6 +758,10 @@ class EnrolledDevice(models.Model):
     filevault_prk = models.TextField(null=True)
     filevault_prk_updated_at = models.DateTimeField(null=True)
 
+    # Recovery password
+    recovery_password = models.TextField(null=True)
+    recovery_password_updated_at = models.DateTimeField(null=True)
+
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
     blocked_at = models.DateTimeField(blank=True, null=True)
@@ -698,6 +779,7 @@ class EnrolledDevice(models.Model):
     class Meta:
         permissions = [
             ("view_filevault_prk", "Can view FileVault PRK"),
+            ("view_recovery_password", "Can view recovery password"),
         ]
 
     # secrets
@@ -753,6 +835,18 @@ class EnrolledDevice(models.Model):
         self.filevault_prk = encrypt_str(filevault_prk, **self._get_secret_engine_kwargs("filevault_prk"))
         self.filevault_prk_updated_at = datetime.utcnow()
 
+    def get_recovery_password(self):
+        if not self.recovery_password:
+            return
+        return decrypt_str(self.recovery_password, **self._get_secret_engine_kwargs("recovery_password"))
+
+    def set_recovery_password(self, recovery_password):
+        if not recovery_password:
+            self.recovery_password = None
+            return
+        self.recovery_password = encrypt_str(recovery_password, **self._get_secret_engine_kwargs("recovery_password"))
+        self.recovery_password_updated_at = datetime.utcnow()
+
     def rewrap_secrets(self):
         if self.bootstrap_token:
             self.bootstrap_token = rewrap(self.bootstrap_token, **self._get_secret_engine_kwargs("bootstrap_token"))
@@ -763,6 +857,9 @@ class EnrolledDevice(models.Model):
                                                **self._get_secret_engine_kwargs("filevault_escrow_key"))
         if self.filevault_prk:
             self.filevault_prk = rewrap(self.filevault_prk, **self._get_secret_engine_kwargs("filevault_prk"))
+        if self.recovery_password:
+            self.recovery_password = rewrap(self.recovery_password,
+                                            **self._get_secret_engine_kwargs("recovery_password"))
 
     def get_urlsafe_serial_number(self):
         if self.serial_number:

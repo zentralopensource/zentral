@@ -13,7 +13,7 @@ from zentral.contrib.mdm.commands import SecurityInfo
 from zentral.contrib.mdm.commands.scheduling import _update_inventory
 from zentral.contrib.mdm.commands.setup_filevault import get_escrow_key_certificate_der_bytes
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
-from zentral.contrib.mdm.events import FileVaultPRKUpdateEvent
+from zentral.contrib.mdm.events import FileVaultPRKUpdatedEvent
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session
 
@@ -156,7 +156,7 @@ class SecurityInfoCommandTestCase(TestCase):
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 1)
         event = events[0]
-        self.assertIsInstance(event, FileVaultPRKUpdateEvent)
+        self.assertIsInstance(event, FileVaultPRKUpdatedEvent)
         self.assertEqual(
             event.payload,
             {'command': {'request_type': 'SecurityInfo',

@@ -237,8 +237,8 @@
       <th>Personal recovery key</th>
       <td>
         {% if object.filevault_prk and perms.mdm.view_filevault_prk %}
-        <span id="show-prk" class="glyphicon glyphicon-eye-open" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" style="cursor:pointer"></span>
-        <span id="prk" hidden></span>
+        <span class="show-ed-secret glyphicon glyphicon-eye-open" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" data-key="filevault_prk" style="cursor:pointer"></span>
+        <span class="ed-secret" hidden></span>
         {% else %}
         {{ security_info.FDE_HasPersonalRecoveryKey|yesno }}
         {% endif %}
@@ -250,6 +250,26 @@
     </tr>
     {% endif %}
     {% endwith %}
+    {% if object.platform == "macOS" %}
+    <tr>
+      <td colspan="2"><h4>Recovery OS</h4></td>
+    </tr>
+    <tr>
+      <th>{% if object.apple_silicon %}Recovery lock{% else %}Firmware password{% endif %}</th>
+      <td>
+        {% if object.recovery_password %}
+        {% if perms.mdm.view_recovery_password %}
+        <span class="show-ed-secret glyphicon glyphicon-eye-open" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}" data-key="recovery_password" style="cursor:pointer"></span>
+        <span class="ed-secret" hidden></span>
+        {% else %}
+        Yes
+        {% endif %}
+        {% else %}
+        No
+        {% endif %}
+      </td>
+    </tr>
+    {% endif %}
     {% with object.security_info.SecureBoot as secure_boot %}
     {% if secure_boot %}
     <tr>
@@ -411,35 +431,36 @@
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  function showPRK($btn) {
+  function showEDSecret($btn) {
     var url = $btn.data("url");
+    var key = $btn.data("key");
     $.ajax({
       dataType: "json",
       url: $btn.data("url"),
       success: function ( data ) {
-        $("#prk").text(data.filevault_prk).show();
+        $btn.next().text(data[key]).show();
         $btn.removeClass("glyphicon-eye-open").addClass("glyphicon-eye-close");
       }
     });
   }
 
-  function hidePRK($btn) {
-    $("#prk").text("").hide();
+  function hideEDSecret($btn) {
+    $btn.next().text("").hide();
     $btn.removeClass("glyphicon-eye-close").addClass("glyphicon-eye-open");
   }
 
-  function togglePRK($btn) {
+  function toggleEDSecret($btn) {
       console.log($btn.data("url"));
       if ($btn.hasClass("glyphicon-eye-open")) {
-        showPRK($btn);
+        showEDSecret($btn);
       } else {
-        hidePRK($btn);
+        hideEDSecret($btn);
       }
   }
 
   $(document).ready(function () {
-    $("#show-prk").click(function() {
-      togglePRK($(this));
+    $(".show-ed-secret").click(function() {
+      toggleEDSecret($(this));
     });
   });
 </script>

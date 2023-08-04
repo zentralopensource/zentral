@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat
 from cryptography.x509.oid import NameOID
 from django.db import transaction
 from zentral.contrib.mdm.crypto import decrypt_cms_payload
-from zentral.contrib.mdm.events import post_filevault_prk_update_event
+from zentral.contrib.mdm.events import post_filevault_prk_updated_event
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt, encrypt
 from .base import register_command, Command, CommandBaseForm
@@ -108,7 +108,7 @@ class RotateFileVaultKey(Command):
                 if prk and prk != self.enrolled_device.get_filevault_prk():
                     self.enrolled_device.set_filevault_prk(prk)
                     self.enrolled_device.save()
-                    transaction.on_commit(lambda: post_filevault_prk_update_event(self))
+                    transaction.on_commit(lambda: post_filevault_prk_updated_event(self))
 
 
 register_command(RotateFileVaultKey)
