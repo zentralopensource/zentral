@@ -1,4 +1,4 @@
-from .models import Artifact, Blueprint, FileVaultConfig
+from .models import Artifact, Blueprint, FileVaultConfig, RecoveryPasswordConfig
 from zentral.contrib.inventory.terraform import TagResource
 from zentral.utils.terraform import BoolAttr, FileBase64Attr, IntAttr, MapAttr, RefAttr, Resource, StringAttr
 
@@ -31,6 +31,17 @@ class FileVaultConfigResource(Resource):
     prk_rotation_interval_days = IntAttr(default=0)
 
 
+class RecoveryPasswordConfigResource(Resource):
+    tf_type = "zentral_mdm_recovery_password_config"
+    tf_grouping_key = "mdm_recovery_password_configs"
+
+    name = StringAttr(required=True)
+    dynamic_password = BoolAttr(default=True)
+    static_password = StringAttr(secret=True)
+    rotation_interval_days = IntAttr(default=0)
+    rotate_firmware_password = BoolAttr(default=False)
+
+
 class BlueprintResource(Resource):
     tf_type = "zentral_mdm_blueprint"
     tf_grouping_key = "mdm_blueprints"
@@ -44,6 +55,7 @@ class BlueprintResource(Resource):
     collect_profiles = StringAttr(default=Blueprint.InventoryItemCollectionOption.NO.name,
                                   source="get_collect_profiles_display")
     filevault_config_id = RefAttr(FileVaultConfigResource)
+    recovery_password_config_id = RefAttr(RecoveryPasswordConfigResource)
 
 
 # TODO: deduplicate Resource
@@ -119,6 +131,8 @@ def iter_resources():
             yield BlueprintArtifactResource(blueprint_artifact)
     for filevault_config in FileVaultConfig.objects.all():
         yield FileVaultConfigResource(filevault_config)
+    for recovery_password_config in RecoveryPasswordConfig.objects.all():
+        yield RecoveryPasswordConfigResource(recovery_password_config)
     for artifact in Artifact.objects.prefetch_related("requires").filter(type=Artifact.Type.PROFILE):
         yield ArtifactResource(artifact)
         for artifact_version in artifact.artifactversion_set.select_related("profile").order_by("-version"):

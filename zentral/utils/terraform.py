@@ -63,7 +63,7 @@ def quote(i):
 
 
 class Attr:
-    def __init__(self, many=False, required=False, source=None, default=None, call_value=True):
+    def __init__(self, many=False, required=False, source=None, default=None, call_value=True, secret=False):
         self.many = many
         self.required = required
         self.source = source
@@ -73,6 +73,7 @@ class Attr:
             default = default()
         self.default = default
         self.call_value = call_value
+        self.secret = secret
 
     def value_representation(self, value):
         raise NotImplementedError
@@ -89,11 +90,17 @@ class Attr:
             raw_value = raw_value()
         return raw_value
 
+    def get_secret_var(self, instance, attr_name):
+        return f"{instance._meta.model_name}{instance.pk}_{attr_name}"
+
     def iter_representation_lines(self, instance, attr_name):
         value = self.get_value(instance, attr_name)
         if not self.required and (value is None or value == self.default):
             return
-        if self.many:
+        if self.secret:
+            secret_var = self.get_secret_var(instance, attr_name)
+            line = f"var.{secret_var}"
+        elif self.many:
             line = "["
             line += ", ".join(self.value_representation(i) for i in value)
             line += "]"
@@ -103,10 +110,10 @@ class Attr:
 
 
 class StringAttr(Attr):
-    def __init__(self, many=False, required=False, source=None, default=None):
+    def __init__(self, many=False, required=False, source=None, default=None, secret=False):
         if not many and not required and default is None:
             default = ""
-        super().__init__(many=many, required=required, source=source, default=default)
+        super().__init__(many=many, required=required, source=source, default=default, secret=secret)
 
     def value_representation(self, value):
         if not isinstance(value, str):
