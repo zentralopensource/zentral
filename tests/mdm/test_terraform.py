@@ -5,8 +5,10 @@ from zentral.contrib.mdm.models import Artifact, Blueprint
 from zentral.contrib.mdm.terraform import (ArtifactResource,
                                            BlueprintResource, BlueprintArtifactResource,
                                            FileVaultConfigResource,
-                                           ProfileResource)
-from .utils import force_artifact, force_blueprint, force_blueprint_artifact, force_filevault_config
+                                           ProfileResource,
+                                           RecoveryPasswordConfigResource)
+from .utils import (force_artifact, force_blueprint, force_blueprint_artifact,
+                    force_filevault_config, force_recovery_password_config)
 
 
 class MDMTerraformTestCase(TestCase):
@@ -132,6 +134,37 @@ class MDMTerraformTestCase(TestCase):
             '  show_recovery_key            = true\n'
             '  destroy_key_on_standby       = true\n'
             '  prk_rotation_interval_days   = 90\n'
+            '}'
+        )
+
+    # recovery password config
+
+    def test_recovery_password_resource_defaults(self):
+        rp_config = force_recovery_password_config()
+        resource = RecoveryPasswordConfigResource(rp_config)
+        self.assertEqual(
+            resource.to_representation(),
+            f'resource "zentral_mdm_recovery_password_config" "recoverypasswordconfig{rp_config.pk}" {{\n'
+            f'  name = "{rp_config.name}"\n'
+            '}'
+        )
+
+    def test_recovery_password_resource_full(self):
+        rp_config = force_recovery_password_config(
+            rotation_interval_days=90,
+            static_password="12345678",
+        )
+        rp_config.rotate_firmware_password = True
+        rp_config.save()
+        resource = RecoveryPasswordConfigResource(rp_config)
+        self.assertEqual(
+            resource.to_representation(),
+            f'resource "zentral_mdm_recovery_password_config" "recoverypasswordconfig{rp_config.pk}" {{\n'
+            f'  name                     = "{rp_config.name}"\n'
+            '  dynamic_password         = false\n'
+            f'  static_password          = var.recoverypasswordconfig{rp_config.pk}_static_password\n'
+            '  rotation_interval_days   = 90\n'
+            '  rotate_firmware_password = true\n'
             '}'
         )
 
