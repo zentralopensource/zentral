@@ -41,7 +41,7 @@ class FileVaultConfigSerializer(serializers.ModelSerializer):
 
 
 class RecoveryPasswordConfigSerializer(serializers.ModelSerializer):
-    static_password = serializers.CharField(required=False, source="get_static_password")
+    static_password = serializers.CharField(required=False, source="get_static_password", allow_null=True)
 
     class Meta:
         model = RecoveryPasswordConfig

@@ -169,7 +169,8 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase):
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:recovery_password_configs"),
-                                 {"name": name})
+                                 {"name": name,
+                                  "static_password": None})
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(callbacks), 1)
         rp_config = RecoveryPasswordConfig.objects.get(name=name)
