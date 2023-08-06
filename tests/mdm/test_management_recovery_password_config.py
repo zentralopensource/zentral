@@ -154,6 +154,20 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
             "to ensure that all characters are enterable on the EFI login screen."
         )
 
+    def test_create_recovery_password_configuration_static_firmware_rotation_error(self):
+        self._login("mdm.add_recoverypasswordconfig")
+        response = self.client.post(reverse("mdm:create_recovery_password_config"),
+                                    {"name": get_random_string(12),
+                                     "dynamic_password": True,
+                                     "rotation_interval_days": 0,
+                                     "rotate_firmware_password": True},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_form.html")
+        self.assertFormError(
+            response.context["form"], "rotate_firmware_password", "Cannot be set without a rotation interval."
+        )
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_recovery_password_configuration_post(self, post_event):
         self._login("mdm.add_recoverypasswordconfig", "mdm.view_recoverypasswordconfig")
@@ -161,8 +175,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:create_recovery_password_config"),
                                         {"name": name,
-                                         "dynamic_password": False,
-                                         "static_password": "12345678",
+                                         "dynamic_password": True,
                                          "rotation_interval_days": 90,
                                          "rotate_firmware_password": True},
                                         follow=True)
@@ -171,8 +184,8 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_detail.html")
         rp_config = response.context["object"]
         self.assertEqual(rp_config.name, name)
-        self.assertFalse(rp_config.dynamic_password)
-        self.assertEqual(rp_config.get_static_password(), "12345678")
+        self.assertTrue(rp_config.dynamic_password)
+        self.assertIsNone(rp_config.static_password)
         self.assertEqual(rp_config.rotation_interval_days, 90)
         self.assertTrue(rp_config.rotate_firmware_password)
         event = post_event.call_args_list[0].args[0]
@@ -186,7 +199,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
                  "new_value": {
                      "pk": rp_config.pk,
                      "name": name,
-                     "dynamic_password": False,
+                     "dynamic_password": True,
                      "rotation_interval_days": 90,
                      "rotate_firmware_password": True,
                      "created_at": rp_config.created_at,
@@ -274,8 +287,8 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
                                         {"name": new_name,
                                          "dynamic_password": False,
                                          "static_password": "12345678",
-                                         "rotation_interval_days": 90,
-                                         "rotate_firmware_password": True},
+                                         "rotation_interval_days": 0,
+                                         "rotate_firmware_password": False},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
@@ -285,8 +298,8 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
         self.assertEqual(rp_config2.name, new_name)
         self.assertFalse(rp_config2.dynamic_password)
         self.assertEqual(rp_config2.get_static_password(), "12345678")
-        self.assertEqual(rp_config2.rotation_interval_days, 90)
-        self.assertTrue(rp_config2.rotate_firmware_password)
+        self.assertEqual(rp_config2.rotation_interval_days, 0)
+        self.assertFalse(rp_config2.rotate_firmware_password)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
@@ -299,8 +312,8 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
                      "pk": rp_config2.pk,
                      "name": new_name,
                      "dynamic_password": False,
-                     "rotation_interval_days": 90,
-                     "rotate_firmware_password": True,
+                     "rotation_interval_days": 0,
+                     "rotate_firmware_password": False,
                      "created_at": rp_config2.created_at,
                      "updated_at": rp_config2.updated_at
                  },

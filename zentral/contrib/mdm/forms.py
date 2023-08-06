@@ -906,6 +906,15 @@ class RecoveryPasswordConfigForm(forms.ModelForm):
             static_password = self.cleaned_data.get("static_password")
             if not static_password and "static_password" not in self.errors:
                 self.add_error("static_password", "This field is required when not using dynamic passwords.")
+            self.cleaned_data["rotation_interval_days"] = 0
+            self.cleaned_data["rotate_firmware_password"] = False
+        else:
+            if (
+                self.cleaned_data.get("rotate_firmware_password")
+                and not self.cleaned_data.get("rotation_interval_days")
+            ):
+                self.add_error("rotate_firmware_password",
+                               "Cannot be set without a rotation interval.")
 
     def save(self):
         if self.instance.pk and not self.cleaned_data.get("dynamic_password"):

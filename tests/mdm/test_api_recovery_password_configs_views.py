@@ -170,16 +170,18 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:recovery_password_configs"),
                                  {"name": name,
-                                  "static_password": None})
+                                  "dynamic_password": False,
+                                  "static_password": "12345678"})
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(callbacks), 1)
         rp_config = RecoveryPasswordConfig.objects.get(name=name)
+        self.assertEqual(rp_config.get_static_password(), "12345678")
         self.assertEqual(
             response.json(),
             {'id': rp_config.pk,
              'name': rp_config.name,
-             'dynamic_password': True,
-             'static_password': None,
+             'dynamic_password': False,
+             'static_password': "12345678",
              'rotation_interval_days': 0,
              'rotate_firmware_password': False,
              'created_at': rp_config.created_at.isoformat(),
@@ -196,7 +198,7 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase):
                  "new_value": {
                      "pk": rp_config.pk,
                      "name": name,
-                     "dynamic_password": True,
+                     "dynamic_password": False,
                      "rotation_interval_days": 0,
                      "rotate_firmware_password": False,
                      "created_at": rp_config.created_at,
@@ -226,15 +228,18 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase):
     def test_update_recovery_password_dynamic_and_static_password_error(self):
         rp_config = force_recovery_password_config()
         self.set_permissions("mdm.change_recoverypasswordconfig")
-        static_password = get_random_string(12)
         response = self.put(reverse("mdm_api:recovery_password_config", args=(rp_config.pk,)),
                             {"name": get_random_string(12),
                              "dynamic_password": True,
-                             "static_password": static_password,
-                             "rotation_interval_days": 17,
+                             "static_password": get_random_string(12),
+                             "rotation_interval_days": 0,
                              "rotate_firmware_password": True})
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'static_password': ['Cannot be set when dynamic_password is true']})
+        self.assertEqual(
+            response.json(),
+            {'static_password': ['Cannot be set when dynamic_password is true'],
+             'rotate_firmware_password': ['Cannot be set without a rotation interval']}
+        )
 
     def test_update_recovery_password_required_static_password_error(self):
         rp_config = force_recovery_password_config()
@@ -245,7 +250,27 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase):
                              "rotation_interval_days": 17,
                              "rotate_firmware_password": True})
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'static_password': ['Required when dynamic_password is false']})
+        self.assertEqual(
+            response.json(),
+            {'static_password': ['Required when dynamic_password is false'],
+             'rotation_interval_days': ['Cannot be set with a static password'],
+             'rotate_firmware_password': ['Cannot be set with a static password']}
+        )
+
+    def test_update_recovery_password_required_static_rotation_error(self):
+        rp_config = force_recovery_password_config()
+        self.set_permissions("mdm.change_recoverypasswordconfig")
+        response = self.put(reverse("mdm_api:recovery_password_config", args=(rp_config.pk,)),
+                            {"name": get_random_string(12),
+                             "dynamic_password": False,
+                             "static_password": "1234568",
+                             "rotation_interval_days": 17,
+                             "rotate_firmware_password": True})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'rotation_interval_days': ['Cannot be set with a static password'],
+            'rotate_firmware_password': ['Cannot be set with a static password']}
+        )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_recovery_password_config(self, post_event):
@@ -253,28 +278,25 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase):
         prev_value = rp_config.serialize_for_event()
         self.set_permissions("mdm.change_recoverypasswordconfig")
         new_name = get_random_string(12)
-        static_password = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(reverse("mdm_api:recovery_password_config", args=(rp_config.pk,)),
                                 {"name": new_name,
-                                 "dynamic_password": False,
-                                 "static_password": static_password,
+                                 "dynamic_password": True,
                                  "rotation_interval_days": 17,
                                  "rotate_firmware_password": True})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         rp_config.refresh_from_db()
         self.assertEqual(rp_config.name, new_name)
-        self.assertFalse(rp_config.dynamic_password)
-        self.assertEqual(rp_config.get_static_password(), static_password)
+        self.assertTrue(rp_config.dynamic_password)
         self.assertEqual(rp_config.rotation_interval_days, 17)
         self.assertTrue(rp_config.rotate_firmware_password)
         self.assertEqual(
             response.json(),
             {'id': rp_config.pk,
              'name': new_name,
-             'dynamic_password': False,
-             'static_password': static_password,
+             'dynamic_password': True,
+             'static_password': None,
              'rotation_interval_days': 17,
              'rotate_firmware_password': True,
              'created_at': rp_config.created_at.isoformat(),
@@ -291,7 +313,7 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase):
                  "new_value": {
                      "pk": rp_config.pk,
                      "name": new_name,
-                     "dynamic_password": False,
+                     "dynamic_password": True,
                      "rotation_interval_days": 17,
                      "rotate_firmware_password": True,
                      "created_at": rp_config.created_at,
