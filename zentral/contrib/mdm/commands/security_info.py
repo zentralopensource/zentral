@@ -41,7 +41,7 @@ class SecurityInfo(Command):
 
         # FileVault PRK
         if self.enrolled_device.filevault_escrow_key:
-            prk_cms = security_info.pop("FDE_PersonalRecoveryKeyCMS")
+            prk_cms = security_info.pop("FDE_PersonalRecoveryKeyCMS", None)
             if prk_cms:
                 escrow_key = load_der_private_key(self.enrolled_device.get_filevault_escrow_key(), password=None)
                 try:
