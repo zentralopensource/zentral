@@ -56,6 +56,8 @@ class TestOTAEnrollment(TestCase):
         self.assertEqual(reenrollment_session.ota_enrollment, enrollment)
         self.assertIsNone(reenrollment_session.user_enrollment)
         self.assertEqual(reenrollment_session.status, ReEnrollmentSession.STARTED)
+        self.assertEqual(reenrollment_session.first_enrolled_at, session.created_at)
+        self.assertEqual(reenrollment_session.device_enrolled_at, session.device_enrolled_at)
         re_s, ota_s = list(session.enrolled_device.iter_enrollment_session_info())
         self.assertEqual(re_s["session_type"], "RE")
         self.assertEqual(re_s["id"], reenrollment_session.pk)

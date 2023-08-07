@@ -1084,6 +1084,10 @@ class EnrollmentSession(models.Model):
         else:
             raise EnrollmentSessionStatusError(self, next_status)
 
+    @property
+    def device_enrolled_at(self):
+        return self.created_at
+
 
 # Abstract MDM enrollment model
 
@@ -1871,10 +1875,13 @@ class ReEnrollmentSessionManager(models.Manager):
         )
         new_es.save(secret_length=57)  # CN max 64 - $ separator - prefix MDM$RE
         new_es.tags.set(tags)
-        enrollment_session = self.model(status=self.model.STARTED,
-                                        enrollment_secret=new_es,
-                                        enrolled_device=enrolled_device,  # important, see _reenroll !!
-                                        realm_user=enrollment_session.realm_user)
+        enrollment_session = self.model(
+            status=self.model.STARTED,
+            enrollment_secret=new_es,
+            enrolled_device=enrolled_device,  # important, see _reenroll !!
+            realm_user=enrollment_session.realm_user,
+            first_enrolled_at=enrollment_session.device_enrolled_at,
+        )
         if isinstance(enrollment, DEPEnrollment):
             enrollment_session.dep_enrollment = enrollment
         elif isinstance(enrollment, OTAEnrollment):
@@ -1905,6 +1912,7 @@ class ReEnrollmentSession(EnrollmentSession):
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="reenrollment_session")
     scep_request = models.ForeignKey(EnrollmentSecretRequest, on_delete=models.PROTECT, null=True, related_name="+")
+    first_enrolled_at = models.DateTimeField()
 
     objects = ReEnrollmentSessionManager()
 
@@ -1921,6 +1929,10 @@ class ReEnrollmentSession(EnrollmentSession):
             return "MDM$RE"
         else:
             raise ValueError("Wrong enrollment sessions status")
+
+    @property
+    def device_enrolled_at(self):
+        return self.first_enrolled_at
 
     def serialize_for_event(self):
         return super().serialize_for_event("re", self.get_enrollment().serialize_for_event())
