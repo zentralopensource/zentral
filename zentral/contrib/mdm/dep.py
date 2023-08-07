@@ -136,7 +136,8 @@ def dep_device_update_dict(device, known_enrollments=None):
     update_d = {"enrollment": None,
                 "profile_uuid": None,
                 "profile_assign_time": None,
-                "profile_push_time": None}
+                "profile_push_time": None,
+                "profile_status": DEPDevice.PROFILE_STATUS_EMPTY}
 
     # device attributes
     for attr in ("asset_tag",
@@ -206,7 +207,8 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
 
         # default assignment
         if (
-            (not device.get("profile_uuid") or device.get("profile_status") == "removed")
+            device.get("op_type") != "deleted"
+            and (not device.get("profile_uuid") or device.get("profile_status") == "removed")
             and dep_virtual_server.default_enrollment
         ):
             unassigned_serial_numbers.append(serial_number)
@@ -255,6 +257,7 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
             # The next sync will fix the differences.
             (DEPDevice.objects.filter(serial_number__in=success_devices)
                               .update(profile_uuid=default_enrollment.uuid,
+                                      profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
                                       profile_assign_time=datetime.datetime.utcnow(),
                                       enrollment=default_enrollment))
 

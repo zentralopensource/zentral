@@ -154,3 +154,43 @@ class TestDEPEnrollment(TestCase):
         device.refresh_from_db()
         self.assertEqual(device.profile_uuid, server.default_enrollment.uuid)
         self.assertEqual(device.enrollment, server.default_enrollment)
+        self.assertEqual(device.profile_status, "assigned")
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_deleted_device_no_assign_default_profile(self, from_dep_token):
+        serial_number = get_random_string(10).upper()
+
+        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        server = enrollment.virtual_server
+        server.default_enrollment = enrollment
+        server.save()
+
+        def device_iterator():
+            yield from [
+                {'color': 'SPACE GRAY',
+                 'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+                 'device_assigned_by': 'support@zentral.com',
+                 'device_assigned_date': '2023-01-10T19:09:22Z',
+                 'device_family': 'iPhone',
+                 'model': 'iPhone X',
+                 'op_date': '2023-01-10T19:07:41Z',
+                 'op_type': 'deleted',
+                 'os': 'iOS',
+                 'serial_number': serial_number}
+            ]
+            return get_random_string(12)
+
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator(device_iterator())
+        from_dep_token.return_value = client
+        dep_devices = list(sync_dep_virtual_server_devices(server))
+        client.fetch_devices.assert_called_once_with()
+        client.assign_profile.assert_not_called()
+        self.assertEqual(len(dep_devices), 1)
+        device, created = dep_devices[0]
+        self.assertIsNone(device.profile_uuid)
+        self.assertIsNone(device.enrollment)
+        device.refresh_from_db()
+        self.assertIsNone(device.profile_uuid)
+        self.assertIsNone(device.enrollment)
+        self.assertEqual(device.profile_status, "empty")
