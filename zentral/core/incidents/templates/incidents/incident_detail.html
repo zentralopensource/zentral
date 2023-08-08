@@ -1,17 +1,17 @@
 {% extends 'base.html' %}
-{% load bootstrap incidents_extras inventory_extras %}
+{% load inclusion_tags incidents_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'incidents:index' %}">Incidents</a>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'incidents:index' %}">Incidents</a>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">{{ object.name }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">{{ object.name }}</a></li>
   {% else %}
-  <li class="active">{{ object.name }}</li>
+  <li class="breadcrumb-item active">{{ object.name }}</li>
   {% endif %}
   {% if perms.incidents.view_machineincident and paginator.count and paginator.num_pages > 1 %}
-  <li class="active">page {{ page.number }} of {{ paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page.number }} of {{ paginator.num_pages }}</li>
   {% endif %}
 </ol>
 
@@ -76,20 +76,9 @@
 {% if perms.incidents.view_machineincident and paginator.count %}
 <h3>{{ paginator.count }} machine incident{{ paginator.count|pluralize }}</h3>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
-<table class="table table-condensed">
+<table class="table table-striped align-middle table-hover">
   <thead>
     <th>Serial number</th>
     <th>Status</th>
@@ -124,18 +113,7 @@
   </tbody>
 </table>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% endif %}
 

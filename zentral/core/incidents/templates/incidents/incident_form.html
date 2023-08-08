@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% load bootstrap incidents_extras inventory_extras %}
+{% load incidents_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'incidents:index' %}">Incidents</a>
-  <li><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
-  <li class="active">update</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'incidents:index' %}">Incidents</a>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
+  <li class="breadcrumb-item active">update</li>
 </ol>
 
 <h2>Incident <em>{{ incident.name }}</em></h2>
@@ -21,14 +21,16 @@
 </dl>
 
 <form method="post">{% csrf_token %}
-  {{ form|bootstrap }}
-  <p>
-    <a href="{{ object.get_absolute_url }}" class="btn btn-default">
-      Cancel
-    </a>
-    <button class="btn btn-primary" type="submit">
-      Update
-    </button>
-  </p>
+
+    {{ form }}
+
+    <p>
+        <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">
+        Cancel
+        </a>
+        <button class="btn btn-primary" type="submit">
+        Update
+        </button>
+    </p>
 </form>
 {% endblock %}

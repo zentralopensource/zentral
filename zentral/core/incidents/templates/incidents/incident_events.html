@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'incidents:index' %}">Incidents</a></li>
-  <li><a href="{% url 'incidents:incident' incident.pk %}">{{ incident.name }}</a></li>
-  <li class="active">Events</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'incidents:index' %}">Incidents</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'incidents:incident' incident.pk %}">{{ incident.name }}</a></li>
+  <li class="breadcrumb-item active">Events</li>
 </ol>
 
 <div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
