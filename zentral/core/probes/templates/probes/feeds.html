@@ -13,36 +13,38 @@
   {% endfor %}
 </ol>
 
-<div class="d-flex align-items-center mb-1">
-    <h2 class="mb-3">Feed{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
+<div class="py-3">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="mb-3">Feed{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
 
-    <div class="ms-auto">
-        <a href="{% url 'probes:create_feed' %}" class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create Feed">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+        <div class="ms-auto">
+            <a href="{% url 'probes:create_feed' %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create Feed">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+        </div>
     </div>
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-striped align-middle table-hover">
+        <thead>
+        <th>Name</th>
+        <th>Created at</th>
+        <th>Updated at</th>
+        </thead>
+        <tbody>
+        {% for feed in object_list %}
+        <tr class="data-row">
+        <td><a href="{% url 'probes:feed' feed.id %}">{{ feed.name }}</a></td>
+        <td>{{ feed.created_at }}</td>
+        <td>{{ feed.updated_at }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
 </div>
-
-{% pagination next_url previous_url %}
-
-  <table class="table table-striped align-middle table-hover">
-    <thead>
-      <th>Name</th>
-      <th>Created at</th>
-      <th>Updated at</th>
-    </thead>
-    <tbody>
-    {% for feed in object_list %}
-    <tr class="data-row">
-      <td><a href="{% url 'probes:feed' feed.id %}">{{ feed.name }}</a></td>
-      <td>{{ feed.created_at }}</td>
-      <td>{{ feed.updated_at }}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-
-{% pagination next_url previous_url %}
 
 {% endblock %}

@@ -13,8 +13,9 @@
   {% endfor %}
 </ol>
 
+<div class="py-3">
     <div class="d-flex align-items-center mb-1">
-        <h3 class="mb-3">Probe{{ paginator.count|pluralize }} ({{ paginator.count }})</h3>
+        <h2 class="mb-3">Probe{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
 
     {% if perms.probes.add_probesource %}
         <div class="dropdown mb-2 btn btn-link">
@@ -80,5 +81,5 @@
     </div>
 
     {% pagination next_url previous_url %}
-
+</div>
 {% endblock %}
