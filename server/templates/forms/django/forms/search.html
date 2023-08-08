@@ -1,5 +1,6 @@
 {% load inclusion_tags %}
 {% for field in form %}
+    {% if field in form.visible_fields %}
     <div class={% if field.widget_type == 'checkbox' %}"form-checkbox col-sm me-2 mb-2"{% elif field.widget_type == 'text' %}"form-floating col-sm{{ form.fields|length|add:"-9" }} me-2 mb-2"{% else %}"form-floating col-sm me-2 mb-2"{% endif %}>
 
         {% if field.widget_type == 'select' %}
@@ -25,6 +26,8 @@
             </select>
         {% endif %}
     
+        
         {{ field.label_tag }}
     </div>
+    {% endif %}
 {% endfor %}

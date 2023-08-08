@@ -9,7 +9,8 @@ from django.utils.text import slugify
 import jmespath
 from zentral.utils.text import get_version_sort_key
 from .conf import PLATFORM_CHOICES
-from .models import (CurrentMachineSnapshot,
+from .models import (AndroidApp,
+                     CurrentMachineSnapshot,
                      EnrollmentSecret,
                      MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
@@ -26,10 +27,11 @@ from .utils import (AndroidAppFilter,
 
 
 class MachineGroupSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label="name", max_length=64, required=False)
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_group_sources(),
-                                    required=False,
-                                    widget=forms.Select(attrs={'class': 'form-control'}))
+                                    required=False)
 
 
 class MetaBusinessUnitSearchForm(forms.Form):
@@ -38,13 +40,7 @@ class MetaBusinessUnitSearchForm(forms.Form):
     name = forms.CharField(
         max_length=64,
         required=False,
-        label='Name',
-        widget=forms.TextInput(
-            attrs={
-                "autofocus": "true",
-                "size": 32,
-            }
-        ),
+        label='Name'
         )
     source = forms.ModelChoiceField(
         queryset=Source.objects.current_business_unit_sources(),
@@ -236,8 +232,8 @@ class BaseAppSearchForm(forms.Form):
         initial="1d",
         required=False
     )
-    order = forms.ChoiceField(choices=[], required=False)
-    action = forms.CharField(required=False)
+    order = forms.ChoiceField(choices=[], required=False, widget=forms.HiddenInput())
+    action = forms.CharField(required=False, widget=forms.HiddenInput())
     order_mapping = {}
     default_order = None
     title = None
@@ -409,6 +405,8 @@ class BaseAppSearchForm(forms.Form):
 
 
 class AndroidAppSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     display_name = forms.CharField(label="Name", max_length=64,
                                    widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
                                    required=False)
@@ -425,6 +423,8 @@ class AndroidAppSearchForm(BaseAppSearchForm):
         ("source_name", True, "Source"),
     )
     version_sort_keys = ("version_name", "version_code")
+
+    field_order = ("display_name", "source", "last_seen",)
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
@@ -492,6 +492,8 @@ class AndroidAppSearchForm(BaseAppSearchForm):
 
 
 class DebPackageSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label="Package name", max_length=64,
                            widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Package name"}),
                            required=False)
@@ -506,6 +508,8 @@ class DebPackageSearchForm(BaseAppSearchForm):
         ("version", False, "Version"),
         ("source_name", True, "Source"),
     )
+
+    field_order = ("name", "source", "last_seen",)
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
@@ -572,6 +576,8 @@ class DebPackageSearchForm(BaseAppSearchForm):
 
 
 class IOSAppSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label="Name", max_length=64,
                            widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
                            required=False)
@@ -589,6 +595,9 @@ class IOSAppSearchForm(BaseAppSearchForm):
         ("source_name", True, "Source"),
     )
     version_sort_keys = ("version", "short_version")
+
+    field_order = ("name", "source", "last_seen",)
+
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
@@ -656,6 +665,8 @@ class IOSAppSearchForm(BaseAppSearchForm):
 
 
 class MacOSAppSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     bundle = forms.CharField(label='Bundle', max_length=64,
                              widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Bundle"}),
                              required=False)
@@ -673,6 +684,9 @@ class MacOSAppSearchForm(BaseAppSearchForm):
         ("source_name", True, "Source"),
     )
     version_sort_keys = ("bundle_version", "bundle_version_str")
+
+    field_order = ("bundle", "source", "last_seen",)
+
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
@@ -749,6 +763,8 @@ class MacOSAppSearchForm(BaseAppSearchForm):
 
 
 class ProgramsSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label='Name', max_length=64,
                            widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
                            required=False)
@@ -764,6 +780,9 @@ class ProgramsSearchForm(BaseAppSearchForm):
         ("version", False, "Version"),
         ("source_name", True, "Source"),
     )
+
+    field_order = ("name", "source", "last_seen",)
+
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
