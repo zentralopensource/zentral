@@ -1,37 +1,32 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a>
   {% else %}
-  <li class="active">{{ anchor_text }}</li>
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
   {% endfor %}
 </ol>
 
-<h2>{{ paginator.count }} Feed{{ paginator.count|pluralize }}</h2>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="mb-3">Feed{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
 
-<a href="{% url 'probes:create_feed' %}" class="btn btn-default">Create feed</a>
+    <div class="ms-auto">
+        <a href="{% url 'probes:create_feed' %}" class="btn btn-link text-dark text-decoration-none"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create Feed">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+    </div>
+</div>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
-<div class="table-reponsive">
-  <table class="table">
+  <table class="table table-striped align-middle table-hover">
     <thead>
       <th>Name</th>
       <th>Created at</th>
@@ -39,7 +34,7 @@
     </thead>
     <tbody>
     {% for feed in object_list %}
-    <tr>
+    <tr class="data-row">
       <td><a href="{% url 'probes:feed' feed.id %}">{{ feed.name }}</a></td>
       <td>{{ feed.created_at }}</td>
       <td>{{ feed.updated_at }}</td>
@@ -47,19 +42,7 @@
     {% endfor %}
     </tbody>
   </table>
-</div>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% endblock %}

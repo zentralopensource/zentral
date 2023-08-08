@@ -2,63 +2,82 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'probes:index' %}">Probes</a>
-  <li><a href="{% url 'probes:feeds' %}">Feeds</a>
-  <li class="active">{{ feed.name }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'probes:index' %}">Probes</a>
+  <li class="breadcrumb-item"><a href="{% url 'probes:feeds' %}">Feeds</a>
+  <li class="breadcrumb-item active">{{ feed.name }}</li>
 </ol>
 
-<h2>
-  Feed <i>{{ feed.name }}</i>
-</h2>
-<div class="panel panel-default">
-  <table class="table table-condensed probe-panel">
-    {% if feed.description %}
-    <tr><td>description</td><td>{{ feed.description|linebreaks }}</td></tr>
-    {% endif %}
-    <tr><td>created at</td><td>{{ feed.created_at }}</td></tr>
-    <tr><td>updated at</td><td>{{ feed.updated_at }}</td></tr>
-    <tr><td>last synced at</td><td>{{ feed.last_synced_at|default:"-" }}</td></tr>
-  </table>
-  {% if perms.probes.update_feed or perms.probes.delete_feed %}
-  <div class="panel-footer">
-    {% if perms.probes.change_feed %}
-    <a href="{% url 'probes:update_feed' feed.id %}" class="btn btn-default">
-      <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    </a>
-    {% endif %}
-    {% if perms.probes.delete_feed %}
-    <a href="{% url 'probes:delete_feed' feed.id %}" class="btn btn-danger">
-      <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-    </a>
-    {% endif %}
-  </div>
-  {% endif %}
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ feed.name }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Feed</h3>
+
+        {% if perms.probes.update_feed or perms.probes.delete_feed %}
+        <div class="ms-auto">
+            {% if perms.probes.change_feed %}
+            <a href="{% url 'probes:update_feed' feed.id %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
+                <i class="bi bi-pencil-square"></i>
+            </a>
+            {% endif %}
+            {% if perms.probes.delete_feed %}
+            <a href="{% url 'probes:delete_feed' feed.id %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
+                <i class="bi bi-trash"></i>
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <table class="table table-striped align-middle table-object-properties">
+        <thead>
+            <tr>
+            <th>Attribute</th>
+            <th>Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if feed.description %}
+            <tr><td>description</td><td>{{ feed.description|linebreaks }}</td></tr>
+            {% endif %}
+            <tr><td>created at</td><td>{{ feed.created_at }}</td></tr>
+            <tr><td>updated at</td><td>{{ feed.updated_at }}</td></tr>
+            <tr><td>last synced at</td><td>{{ feed.last_synced_at|default:"-" }}</td></tr>
+        </tbody>
+    </table>
 </div>
 
-<h3>{{ active_probes|length }} Probe{{ active_probes|length|pluralize }}</h3>
+<div class="d-flex justify-content-between mb-3">
+    <h3>Probe{{ active_probes|length|pluralize }} ({{ active_probes|length }})</h3>
+</div>
 
-<table class="table">
-  <thead>
-    <th>Model</th>
-    <th>Name</th>
-    <th>Description</th>
-  </thead>
-  <tbody>
-    {% for feed_probe in active_probes %}
-    <tr>
-      <td>{{ feed_probe.get_model_display }}</td>
-      <td>
-        {% if perms.probes.view_probesource %}
-        <a href="{% url 'probes:feed_probe' feed.id feed_probe.id %}">{{ feed_probe }}</a>
-        {% else %}
-        {{ feed_probe }}
-        {% endif %}
-      </td>
-      <td>{{ feed_probe.description|linebreaks }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>Model</th>
+        <th>Name</th>
+        <th>Description</th>
+    </thead>
+    <tbody>
+        {% for feed_probe in active_probes %}
+        <tr>
+        <td>{{ feed_probe.get_model_display }}</td>
+        <td>
+            {% if perms.probes.view_probesource %}
+            <a href="{% url 'probes:feed_probe' feed.id feed_probe.id %}">{{ feed_probe }}</a>
+            {% else %}
+            {{ feed_probe }}
+            {% endif %}
+        </td>
+        <td>{{ feed_probe.description|linebreaks }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
 
 {% endblock %}

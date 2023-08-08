@@ -13,20 +13,22 @@ from . import probe_classes
 
 
 class ProbeSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(label="Query", required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Keywords…"}))
-    model = forms.ChoiceField(label="Model", choices=[], required=False)
-    event_type = forms.ChoiceField(label="Event type", choices=[], required=False)
+    model = forms.ChoiceField(label="Model",
+                              choices=ProbeSource.objects.current_models(),
+                              required=False)
+    event_type = forms.ChoiceField(label="Event type",
+                                   choices=ProbeSource.objects.current_event_types(),
+                                   required=False)
     status = forms.ChoiceField(label="Status",
-                               choices=(("", "----"),
-                                        ("INACTIVE", "Inactive"),
-                                        ("ACTIVE", "Active")),
+                               choices=[
+                                    ("INACTIVE", "Inactive"),
+                                    ("ACTIVE", "Active")
+                                    ],
                                required=False)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["model"].choices = [("", "----")] + ProbeSource.objects.current_models()
-        self.fields["event_type"].choices = [("", "----")] + ProbeSource.objects.current_event_types()
 
     def get_queryset(self):
         cleaned_data = self.cleaned_data
