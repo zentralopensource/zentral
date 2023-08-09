@@ -13,6 +13,9 @@
 
         {% if field.widget_type == 'text' %}
             size="{{ size }}"
+            {% if field.value %}
+                value="{{ field.value }}"
+            {% endif %}
         {% endif %}
             type="{{ field.widget_type }}"
             name="{{ field.html_name }}"

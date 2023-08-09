@@ -41,56 +41,52 @@
     </div>
 </div>
 
-{% if total_objects|length == 0 %}
-    {% url 'inventory_api:index' as empty_results_url %}
-    {% empty_results empty_results_url %}
-{% else %}
-
-    {% if search_form.is_bound %}
-    <h3>{{ total_objects }} result{{ total_objects|pluralize }}</h3>
-    {% endif %}
-
-    {% pagination next_url previous_url %}
-
+    
     {% if object_list %}
-    <table class="table table-striped align-middle table-hover">
-        <thead>
-        {% for header, link in table_headers %}
-        <th>
-            {% if link %}
-            <a href="{{ link }}" style="white-space:nowrap;">{{ header }}</a>
-            {% else %}
-            {{ header }}
-            {% endif %}
-        </th>
-        {% endfor %}
-        </thead>
-        <tbody>
-        {% for android_app in object_list %}
-        <tr>
-        <td colspan="2">
-            <a href="{{ android_app.link }}">{{ android_app.display_name|default:"-" }}</a>
-        </td>
-        <td>
-            {{ android_app.ms_count }}
-        </td>
-        </tr>
-        {% for version in android_app.versions %}
-        <tr>
-        <td style="border-top:1px dotted #ddd"><a href="{{ version.link }}">{{ version.version_name|default:"-" }} / {{ version.version_code|default:"-" }}</a></td>
-        <td style="border-top:1px dotted #ddd">{{ version.source_name }}</td>
-        <td style="border-top:1px dotted #ddd">{{ version.ms_count }}</td>
-        </tr>
-        {% endfor %}
-        {% endfor %}
-        </tbody>
-    </table>
+        <h3>Result{{ total_objects|pluralize }} ({{ total_objects }})</h3>
+
+        {% pagination next_url previous_url %}
+
+        <table class="table table-striped align-middle table-hover">
+            <thead>
+            {% for header, link in table_headers %}
+            <th>
+                {% if link %}
+                <a href="{{ link }}" style="white-space:nowrap;">{{ header }}</a>
+                {% else %}
+                {{ header }}
+                {% endif %}
+            </th>
+            {% endfor %}
+            </thead>
+            <tbody>
+            {% for android_app in object_list %}
+            <tr>
+            <td colspan="2">
+                <a href="{{ android_app.link }}">{{ android_app.display_name|default:"-" }}</a>
+            </td>
+            <td>
+                {{ android_app.ms_count }}
+            </td>
+            </tr>
+            {% for version in android_app.versions %}
+            <tr>
+            <td style="border-top:1px dotted #ddd"><a href="{{ version.link }}">{{ version.version_name|default:"-" }} / {{ version.version_code|default:"-" }}</a></td>
+            <td style="border-top:1px dotted #ddd">{{ version.source_name }}</td>
+            <td style="border-top:1px dotted #ddd">{{ version.ms_count }}</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+
+        {% pagination next_url previous_url %}
+    {% elif search_form.is_bound %}
+        {% url 'inventory:android_apps' as empty_results_url %}
+        {% empty_results empty_results_url %}
     {% endif %}
 
-    {% pagination next_url previous_url %}
-    {% endif %}
-    {% endblock %}
-
+{% endblock %}
 
     {% block extrajs %}
     <script nonce="{{ request.csp_nonce }}">

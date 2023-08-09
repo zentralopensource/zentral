@@ -42,55 +42,50 @@
 </div>
 
 
-{% if total_objects|length == 0 %}
-    {% url 'inventory_api:index' as empty_results_url %}
-    {% empty_results empty_results_url %}
-{% else %}
-
-    {% if search_form.is_bound %}
-        <h3>{{ total_objects }} result{{ total_objects|pluralize }}</h3>
-    {% endif %}
-
-    {% pagination next_url previous_url %}
-
     {% if object_list %}
-    <table class="table">
-        <thead>
-        {% for header, link in table_headers %}
-        <th>
-            {% if link %}
-            <a href="{{ link }}" style="white-space:nowrap;">{{ header }}</a>
-            {% else %}
-            {{ header }}
-            {% endif %}
-        </th>
-        {% endfor %}
-        </thead>
-        <tbody>
-        {% for ios_app in object_list %}
-        <tr>
-        <td colspan="2">
-            <a href="{{ ios_app.link }}">{{ ios_app.name|default:"-" }}</a>
-            {% if ios_app.identifier %}<br><code>{{ ios_app.identifier }}</code>{% endif %}
-        </td>
-        <td>
-            {{ ios_app.ms_count }}
-        </td>
-        </tr>
-        {% for version in ios_app.versions %}
-        <tr>
-        <td style="border-top:1px dotted #ddd"><a href="{{ version.link }}">{{ version.short_version|default:"-" }} / {{ version.version|default:"-" }}</a></td>
-        <td style="border-top:1px dotted #ddd">{{ version.source_name }}</td>
-        <td style="border-top:1px dotted #ddd">{{ version.ms_count }}</td>
-        </tr>
-        {% endfor %}
-        {% endfor %}
-        </tbody>
-    </table>
-    {% endif %}
+        <h3>Result{{ total_objects|pluralize }} ({{ total_objects }})</h3>
+    
+        {% pagination next_url previous_url %}
 
-    {% pagination next_url previous_url %}
-{% endif %}
+        <table class="table table-striped align-top table-hover">
+            <thead>
+            {% for header, link in table_headers %}
+            <th>
+                {% if link %}
+                <a href="{{ link }}" style="white-space:nowrap;">{{ header }}</a>
+                {% else %}
+                {{ header }}
+                {% endif %}
+            </th>
+            {% endfor %}
+            </thead>
+            <tbody>
+            {% for ios_app in object_list %}
+            <tr>
+            <td colspan="2">
+                <a href="{{ ios_app.link }}">{{ ios_app.name|default:"-" }}</a>
+                {% if ios_app.identifier %}<br><code>{{ ios_app.identifier }}</code>{% endif %}
+            </td>
+            <td>
+                {{ ios_app.ms_count }}
+            </td>
+            </tr>
+            {% for version in ios_app.versions %}
+            <tr>
+            <td style="border-top:1px dotted #ddd"><a href="{{ version.link }}">{{ version.short_version|default:"-" }} / {{ version.version|default:"-" }}</a></td>
+            <td style="border-top:1px dotted #ddd">{{ version.source_name }}</td>
+            <td style="border-top:1px dotted #ddd">{{ version.ms_count }}</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
+
+        {% pagination next_url previous_url %}
+    {% elif search_form.is_bound %}
+        {% url 'inventory:ios_apps' as empty_results_url %}
+        {% empty_results empty_results_url %}
+    {% endif %}
 
 {% endblock %}
 

@@ -218,11 +218,9 @@ class AddMachineTagForm(AddTagForm):
 
 class BaseAppSearchForm(forms.Form):
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_snapshot_sources(),
-                                    empty_label="- source -",
                                     required=False)
     last_seen = forms.ChoiceField(
-        choices=(("", "- last seen -"),
-                 ("1d", "24 hours"),
+        choices=(("1d", "24 hours"),
                  ("7d", "7 days"),
                  ("14d", "14 days"),
                  ("30d", "30 days"),
