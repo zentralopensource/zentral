@@ -24,11 +24,16 @@ class ProbeSearchForm(forms.Form):
                                    choices=ProbeSource.objects.current_event_types(),
                                    required=False)
     status = forms.ChoiceField(label="Status",
-                               choices=[
+                               choices=[("", "..."),
                                     ("INACTIVE", "Inactive"),
                                     ("ACTIVE", "Active")
                                     ],
                                required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["model"].choices = [("", "...")] + ProbeSource.objects.current_models()
+        self.fields["event_type"].choices = [("", "...")] + ProbeSource.objects.current_event_types()
 
     def get_queryset(self):
         cleaned_data = self.cleaned_data
