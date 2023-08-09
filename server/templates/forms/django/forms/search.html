@@ -22,7 +22,6 @@
             id="{{ field.id_for_label }}">
             
         {% if field.widget_type == 'select' %}
-            <option selected>...</option>
             {% for option, value in field.field.choices %}
                 <option value="{{ option }}"{% if option|to_str == field.value %}selected="selected"{% endif %}>{{ value }}</option>
             {% endfor %}

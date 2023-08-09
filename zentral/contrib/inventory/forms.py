@@ -30,7 +30,8 @@ class MachineGroupSearchForm(forms.Form):
 
     name = forms.CharField(label="name", max_length=64, required=False)
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_group_sources(),
-                                    required=False)
+                                    required=False,
+                                    empty_label='...',)
 
 
 class MetaBusinessUnitSearchForm(forms.Form):
@@ -45,11 +46,13 @@ class MetaBusinessUnitSearchForm(forms.Form):
         queryset=Source.objects.current_business_unit_sources(),
         required=False,
         label='Source',
+        empty_label='...',
         )
     tag = forms.ModelChoiceField(
         queryset=Tag.objects.distinct().filter(metabusinessunittag__isnull=False),
         required=False,
         label='Tag',
+        empty_label='...',
         )
 
 
@@ -218,7 +221,8 @@ class AddMachineTagForm(AddTagForm):
 
 class BaseAppSearchForm(forms.Form):
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_snapshot_sources(),
-                                    required=False)
+                                    required=False,
+                                    empty_label='...',)
     last_seen = forms.ChoiceField(
         choices=(("1d", "24 hours"),
                  ("7d", "7 days"),
@@ -227,7 +231,7 @@ class BaseAppSearchForm(forms.Form):
                  ("45d", "45 days"),
                  ("90d", "90 days")),
         initial="1d",
-        required=False
+        required=False,
     )
     order = forms.ChoiceField(choices=[], required=False, widget=forms.HiddenInput())
     action = forms.CharField(required=False, widget=forms.HiddenInput())

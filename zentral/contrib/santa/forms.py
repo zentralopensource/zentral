@@ -103,13 +103,14 @@ class RuleSearchForm(forms.Form):
     ruleset = forms.ModelChoiceField(
         queryset=RuleSet.objects.all(),
         required=False,
+        empty_label='...',
     )
     target_type = forms.ChoiceField(
-        choices=Target.TYPE_CHOICES,
+        choices=(('', '...'),) + Target.TYPE_CHOICES,
         required=False,
     )
     policy = forms.ChoiceField(
-        choices=Rule.POLICY_CHOICES,
+        choices=(('', '...'),) + Rule.POLICY_CHOICES,
         required=False,
     )
     identifier = forms.CharField(
@@ -481,6 +482,6 @@ class TargetSearchForm(forms.Form):
         )
     )
     target_type = forms.ChoiceField(
-        choices=Target.TYPE_CHOICES,
+        choices=(('', '...'),) + Target.TYPE_CHOICES,
         required=False,
     )

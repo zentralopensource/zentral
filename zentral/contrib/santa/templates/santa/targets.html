@@ -47,10 +47,8 @@
 
 {% pagination next_url previous_url %}
 
-{% if not targets %}
-    {% url 'santa:targets' as empty_results_url %}
-    {% empty_results empty_results_url %}
-{% else %}
+{% if targets %}
+
     <table class="table table-striped align-middle table-hover">
     <thead>
         <tr>
@@ -110,6 +108,9 @@
     </table>
 
     {% pagination next_url previous_url %}
+{% elif form.is_bound %}
+    {% url 'santa:targets' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
 
 {% endblock %}
