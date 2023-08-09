@@ -9,8 +9,7 @@ from django.utils.text import slugify
 import jmespath
 from zentral.utils.text import get_version_sort_key
 from .conf import PLATFORM_CHOICES
-from .models import (AndroidApp,
-                     CurrentMachineSnapshot,
+from .models import (CurrentMachineSnapshot,
                      EnrollmentSecret,
                      MachineTag, MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
