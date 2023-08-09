@@ -20,6 +20,7 @@ urlpatterns = [
 
 pinned_menu_cfg = {
     'weight': 2,
+    'icon': 'bi-exclamation-triangle',
     'items': (
         ('index', 'all incidents', False, ("incidents.view_incident",)),
     ),

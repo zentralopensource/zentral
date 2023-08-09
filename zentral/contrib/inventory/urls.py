@@ -113,6 +113,7 @@ urlpatterns = [
 
 pinned_menu_cfg = {
     'weight': 0,
+    'icon': 'bi-display',
     'items': (
         ('index', 'Machines', False, ("inventory.view_machinesnapshot",)),
         ('groups', 'Groups', False, ("inventory.view_machinegroup",)),

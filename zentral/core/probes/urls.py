@@ -39,6 +39,7 @@ urlpatterns = [
 
 pinned_menu_cfg = {
     'weight': 1,
+    'icon': 'bi-eyedropper',
     'items': (
         ('index', 'all probes', False, ('probes.view_probesource',)),
         ('feeds', 'feeds', False, ('probes.view_feed',)),

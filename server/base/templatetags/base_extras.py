@@ -33,9 +33,11 @@ class MenuConfig:
                 logger.debug('App %s w/o %s', app_name, config_attr)
                 continue
             title = menu_cfg.get('title', app_shortname.title())
+            icon = menu_cfg.get('icon', '')
             section_cfg = prepared_sections.setdefault(
                 title,
                 {'title': title,
+                 'icon': icon,
                  'link_list': [],
                  'weight': menu_cfg.get('weight', 1000)}
             )
@@ -120,11 +122,9 @@ def modules_menu(context):
 pinned_menu_config = SimpleLazyObject(lambda: MenuConfig("pinned_menu_cfg"))
 
 
-# _modules_menu.html should be replaced for _pinned_menu.html
 @register.inclusion_tag('_modules_menu.html', takes_context=True)
 def pinned_menu(context):
     context["active"], context["section_list"] = pinned_menu_config.get_filtered_sections(context)
-    # _, context["dropdown_list"] = pinned_menu_config.get_filtered_sections(context)
     return context
 
 

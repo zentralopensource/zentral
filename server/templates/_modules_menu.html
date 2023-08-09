@@ -6,6 +6,9 @@
             role="button"
             aria-expanded="{% if section.is_active %}false{% else %}true{% endif %}"
             aria-controls="offcanvas{{ section.title }}Submenu">
+            {% if section.icon %}
+                <i class="bi {{ section.icon }}"></i>
+            {% endif %}
             {{ section.title }}
         </a>
     </div>

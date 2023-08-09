@@ -1,9 +1,0 @@
-{% for dropdown in dropdown_list %}
-<div class="d-flex justify-content-start">
-    <a href="{{ dropdown.link_list|first|first }}"
-        class="list-group-item list-group-item-action border-0 w-auto px-2{% if dropdown.is_active %} active{% endif %}">
-        <i class="bi bi-people-fill me-2"></i>
-        {{ dropdown.title }}
-    </a>
-</div>
-{% endfor %}
