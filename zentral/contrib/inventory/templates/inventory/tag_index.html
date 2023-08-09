@@ -12,7 +12,7 @@
 <div class="py-3">
 
     <div class="d-flex justify-content-between">
-        <div class="d-flex w-100 me-auto flex-shrink-0">
+        <div class="d-flex w-75 me-auto flex-shrink-0">
             <h2 class="mb-3">Tag{{ tag_list|length|pluralize }} ({{ tag_list|length }})</h2>
 
             {% if perms.inventory.add_tag %}
@@ -82,7 +82,7 @@
 {% if perms.inventory.view_taxonomy %}
 <div class="py-3">
     <div class="d-flex justify-content-between">
-        <div class="d-flex w-100 me-auto flex-shrink-0">
+        <div class="d-flex w-75 me-auto flex-shrink-0">
             <h2 class="mb-3">Taxonom{{ taxonomy_list|length|pluralize:"y,ies" }} ({{ taxonomy_list|length }})</h2>
 
             {% if perms.inventory.add_taxonomy %}
