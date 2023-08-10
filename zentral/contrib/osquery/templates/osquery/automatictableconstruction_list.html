@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -22,31 +23,41 @@
     </div>
 </div>
 
-<table class="table table-striped align-middle table-hover">
-    <thead>
-    <tr>
-        <th>Name</th>
-        {% if perms.osquery.change_automatictableconstrucion %}
-        <th></th>
-        {% endif %}
-    </tr>
-    </thead>
-    <tbody>
-    {% for atc in object_list %}
-    <tr class="data-row">
-        <td>
-        <a href="{{ atc.get_absolute_url }}">{{ atc }}</a>
-        </td>
-        {% if perms.osquery.change_automatictableconstrucion %}
-        <td class="text-end py-0">
-        <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_atc' atc.id %}">
-            <span class="bi bi-pencil-square" aria-hidden="true"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit ATC"></span>
-        </a>
-        </td>
-        {% endif %}
-    </tr>
-    {% endfor %}
-    </tbody>
-</table>
+{% if object_list %}
+    <table class="table table-striped align-middle table-hover">
+        <thead>
+        <tr>
+            <th>Name</th>
+            {% if perms.osquery.change_automatictableconstrucion %}
+            <th></th>
+            {% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for atc in object_list %}
+        <tr class="data-row">
+            <td>
+            <a href="{{ atc.get_absolute_url }}">{{ atc }}</a>
+            </td>
+            {% if perms.osquery.change_automatictableconstrucion %}
+            <td class="text-end py-0">
+            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_atc' atc.id %}">
+                <span class="bi bi-pencil-square" aria-hidden="true"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit ATC"></span>
+            </a>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    {% if perms.osquery.add_automatictableconstruction %}
+        {% url 'osquery:create_atc' as link %}
+        {% no_entities 'Automatic table constructions' link %}
+    {% else %}
+        {% no_entities 'Automatic table constructions' %}
+    {% endif %}
+{% endif %}
+
 {% endblock %}

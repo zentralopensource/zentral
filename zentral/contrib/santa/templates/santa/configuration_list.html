@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -28,23 +29,33 @@
   {% endif %}
 </div>
 
-<table class="table table-striped align-middle">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Rules</th>
-      <th>Enrollments</th>
-      <th>Machines</th>
-  </thead>
-  <tbody>
-    {% for configuration in configurations %}
-    <tr>
-      <td><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration.name }}</a></td>
-      <td>{{ configuration.rule_count }}</td>
-      <td>{{ configuration.enrollment_count }}</td>
-      <td>{{ configuration.machine_count }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% if configurations %}
+    <table class="table table-striped align-middle">
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>Rules</th>
+        <th>Enrollments</th>
+        <th>Machines</th>
+    </thead>
+    <tbody>
+        {% for configuration in configurations %}
+        <tr>
+        <td><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration.name }}</a></td>
+        <td>{{ configuration.rule_count }}</td>
+        <td>{{ configuration.enrollment_count }}</td>
+        <td>{{ configuration.machine_count }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+{% else %}
+    {% if perms.santa.add_configuration %}
+        {% url 'santa:create_configuration' as link %}
+        {% no_entities 'Configurations' link %}
+    {% else %}
+        {% no_entities 'Configurations' %}
+    {% endif %}
+{% endif %}
+
 {% endblock %}

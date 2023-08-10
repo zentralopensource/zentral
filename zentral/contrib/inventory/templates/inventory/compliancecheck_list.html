@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load inventory_extras inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -29,32 +29,42 @@
     </div>
 </div>
 
-<table class="table table-striped align-middle table-hover">
-  <thead>
-    <th>Name</th>
-    <th>Source</th>
-    <th>Platforms</th>
-    <th>Tags</th>
-  </thead>
-  <tbody>
-    {% for obj in object_list %}
-    {% with obj.compliance_check as cc %}
-    <tr>
-      <td>
-        <a href="{{ obj.get_absolute_url }}">{{ cc.name }}</a>
-      </td>
-      <td>{{ obj.source_name }}</td>
-      <td>{{ obj.get_platforms_display }}</td>
-      <td>
-        {% for tag in obj.tags.all %}
-        {% inventory_tag tag %}
-        {% empty %}
-        -
+{% if object_list %}
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>Name</th>
+        <th>Source</th>
+        <th>Platforms</th>
+        <th>Tags</th>
+    </thead>
+    <tbody>
+        {% for obj in object_list %}
+        {% with obj.compliance_check as cc %}
+        <tr>
+        <td>
+            <a href="{{ obj.get_absolute_url }}">{{ cc.name }}</a>
+        </td>
+        <td>{{ obj.source_name }}</td>
+        <td>{{ obj.get_platforms_display }}</td>
+        <td>
+            {% for tag in obj.tags.all %}
+            {% inventory_tag tag %}
+            {% empty %}
+            -
+            {% endfor %}
+        </td>
+        </tr>
+        {% endwith %}
         {% endfor %}
-      </td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
+    </tbody>
+    </table>
+{% else %}
+    {% if perms.inventory.add_jmespathcheck %}
+        {% url 'inventory:create_compliance_check' as link %}
+        {% no_entities 'Compliance checks' link %}
+    {% else %}
+        {% no_entities 'Compliance checks' %}
+    {% endif %}
+{% endif %}
+
 {% endblock %}

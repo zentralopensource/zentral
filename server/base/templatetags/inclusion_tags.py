@@ -27,6 +27,14 @@ def empty_results(link):
     }
 
 
+@register.inclusion_tag('_no_entities.html')
+def no_entities(entity_name, link=None):
+    return {
+        'entity_name': entity_name,
+        'create_new_entity_link': link,
+    }
+
+
 @register.filter
 def to_str(value):
     return str(value)

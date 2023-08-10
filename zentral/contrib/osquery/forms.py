@@ -387,9 +387,10 @@ class QuerySearchForm(forms.Form):
             label="Pack",
             queryset=Pack.objects.all(),
             required=False,
+            empty_label='...',
     )
     compliance_check = forms.BooleanField(
-        label="Only compliance checks",
+        label="Compliance checks",
         required=False,
     )
 

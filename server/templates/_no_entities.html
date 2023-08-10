@@ -1,0 +1,6 @@
+<div class="text-center py-5">
+    <h5>There are no {{ entity_name }} created.</h5>
+    {% if create_new_entity_link %}
+        <h6>Why don't you <a href="{{ create_new_entity_link }}">create one</a>?</h6>
+    {% endif %}
+</div>

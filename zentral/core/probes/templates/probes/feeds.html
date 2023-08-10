@@ -45,6 +45,9 @@
     </table>
 
     {% pagination next_url previous_url %}
+{% else %}
+    {% url 'probes:create_feed' as link %}
+    {% no_entities 'Feeds' link %}
 {% endif %}
 
 {% endblock %}
