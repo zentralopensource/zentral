@@ -1497,7 +1497,12 @@ class CreateEnrolledDeviceCommandView(PermissionRequiredMixin, FormView):
             self.command_class = registered_manual_commands[cmd_db_name]
         except KeyError:
             # should not happen
-            raise SuspiciousOperation("Unknown command model class: %s", cmd_db_name)
+            raise SuspiciousOperation(f"Unknown command model class: {cmd_db_name}")
+        if not self.command_class.verify_target(Target(self.enrolled_device)):
+            # should not happen
+            raise SuspiciousOperation(
+                f"Command {cmd_db_name} incompatible with enrolled device {self.enrolled_device}"
+            )
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_class(self):

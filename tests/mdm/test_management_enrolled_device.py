@@ -383,6 +383,15 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
 
+    def test_create_enrolled_device_unknown_command_get_error(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "UnknownCommand"))
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_create_enrolled_device_custom_command_invalid_property_list(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self._login("mdm.add_devicecommand")
@@ -612,6 +621,140 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
             cmd.build_command(),
             {"Message": "Yolo Fomo",
              "PhoneNumber": "+123456789"},
+        )
+
+    # create restart device command
+
+    def test_enrolled_device_no_restart_device_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "RestartDevice"))
+        )
+
+    def test_enrolled_device_restart_device_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "RestartDevice"))
+        )
+
+    def test_create_enrolled_device_restart_device_command_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login_redirect(reverse("mdm:create_enrolled_device_command",
+                                     args=(session.enrolled_device.pk, "RestartDevice")))
+
+    def test_create_enrolled_device_restart_device_command_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RestartDevice"))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrolled_device_restart_device_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.os_version = "11.3"
+        session.enrolled_device.save()
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RestartDevice"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertContains(response, 'id="id_notify_user"')
+
+    def test_create_enrolled_device_restart_device_command_older_os_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.os_version = "11.2"
+        session.enrolled_device.save()
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RestartDevice"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertNotContains(response, 'id="id_notify_user"')
+
+    def test_create_enrolled_device_restart_device_command_ios_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.supervised = True
+        session.enrolled_device.platform = Platform.IOS
+        session.enrolled_device.save()
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RestartDevice"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertNotContains(response, 'id="id_notify_user"')
+
+    def test_create_enrolled_device_restart_device_command_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.os_version = "11.3"
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RestartDevice")),
+            {"notify_user": "on"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Restart device command successfully created")
+        db_cmd = session.enrolled_device.commands.first()
+        self.assertEqual(db_cmd.name, "RestartDevice")
+        cmd = load_command(db_cmd)
+        self.assertEqual(
+            cmd.build_command(),
+            {"NotifyUser": True},
+        )
+
+    def test_create_enrolled_device_restart_device_command_unsupervised_ios_not_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.platform = Platform.IOS
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RestartDevice")),
+            follow=True
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_enrolled_device_restart_device_command_ios_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.supervised = True
+        session.enrolled_device.platform = Platform.IOS
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "RestartDevice")),
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Restart device command successfully created")
+        db_cmd = session.enrolled_device.commands.first()
+        self.assertEqual(db_cmd.name, "RestartDevice")
+        cmd = load_command(db_cmd)
+        self.assertEqual(
+            cmd.build_command(),
+            {},
         )
 
     # create security info command
