@@ -88,13 +88,15 @@ class DeviceConfiguredCommandTestCase(TestCase):
             RequestStatus.IDLE,
         ))
 
-    def test_device_configured_notnow_noop(self):
+    def test_device_configured_notnow_ok(self):
         self.enrolled_device.awaiting_configuration = True
-        self.assertIsNone(_finish_dep_enrollment_configuration(
+        command = _finish_dep_enrollment_configuration(
             Target(self.enrolled_device),
             self.dep_enrollment_session,
             RequestStatus.NOT_NOW,
-        ))
+        )
+        self.assertIsInstance(command, DeviceConfigured)
+        self.assertEqual(command.channel, Channel.DEVICE)
 
     def test_device_configured(self):
         self.enrolled_device.awaiting_configuration = True

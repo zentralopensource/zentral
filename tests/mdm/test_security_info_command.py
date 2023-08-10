@@ -10,7 +10,7 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import SecurityInfo
-from zentral.contrib.mdm.commands.scheduling import _update_inventory
+from zentral.contrib.mdm.commands.scheduling import _update_base_inventory
 from zentral.contrib.mdm.commands.setup_filevault import get_escrow_key_certificate_der_bytes
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
 from zentral.contrib.mdm.events import FileVaultPRKUpdatedEvent
@@ -223,26 +223,26 @@ class SecurityInfoCommandTestCase(TestCase):
         self.assertIsNone(self.enrolled_device.bootstrap_token_required_for_software_update)
         self.assertIsNone(self.enrolled_device.bootstrap_token_required_for_kext_approval)
 
-    # _update_inventory
+    # _update_base_inventory
 
-    def test_update_inventory_security_info_updated_at_old(self):
+    def test_update_base_inventory_security_info_updated_at_old(self):
         self.enrolled_device.device_information_updated_at = datetime.utcnow()
         self.enrolled_device.security_info_updated_at = datetime(2000, 1, 1)
-        cmd = _update_inventory(
+        cmd = _update_base_inventory(
             Target(self.enrolled_device),
             self.dep_enrollment_session,
             RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, SecurityInfo)
 
-    def test_update_inventory_security_info_updated_at_ok_no_inventory_items_collection_noop(self):
+    def test_update_base_inventory_security_info_updated_at_ok_no_inventory_items_collection_noop(self):
         self.enrolled_device.device_information_updated_at = datetime.utcnow()
         self.enrolled_device.security_info_updated_at = datetime.utcnow()
         self.assertEqual(self.blueprint.collect_apps, Blueprint.InventoryItemCollectionOption.NO)
         self.assertEqual(self.blueprint.collect_certificates, Blueprint.InventoryItemCollectionOption.NO)
         self.assertEqual(self.blueprint.collect_profiles, Blueprint.InventoryItemCollectionOption.NO)
         self.assertIsNone(
-            _update_inventory(
+            _update_base_inventory(
                 Target(self.enrolled_device),
                 self.dep_enrollment_session,
                 RequestStatus.IDLE,

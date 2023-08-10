@@ -8,7 +8,7 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import DeviceInformation, SecurityInfo
-from zentral.contrib.mdm.commands.scheduling import _update_inventory
+from zentral.contrib.mdm.commands.scheduling import _update_base_inventory
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session
 
@@ -211,30 +211,30 @@ class DeviceInformationCommandTestCase(TestCase):
         self.assertEqual(enrolled_device.build_version_extra, "22E772610a")
         self.assertEqual(enrolled_device.full_os_version, "13.0 (a) (22E772610a)")
 
-    # _update_inventory
+    # _update_base_inventory
 
-    def test_update_inventory_device_information_updated_at_none(self):
+    def test_update_base_inventory_device_information_updated_at_none(self):
         self.assertIsNone(self.enrolled_device.device_information_updated_at)
-        cmd = _update_inventory(
+        cmd = _update_base_inventory(
             Target(self.enrolled_device),
             self.dep_enrollment_session,
             RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, DeviceInformation)
 
-    def test_update_inventory_device_information_updated_at_old(self):
+    def test_update_base_inventory_device_information_updated_at_old(self):
         self.enrolled_device.device_information_updated_at = datetime(2000, 1, 1)
-        cmd = _update_inventory(
+        cmd = _update_base_inventory(
             Target(self.enrolled_device),
             self.dep_enrollment_session,
             RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, DeviceInformation)
 
-    def test_update_inventory_device_information_updated_at_ok(self):
+    def test_update_base_inventory_device_information_updated_at_ok(self):
         self.enrolled_device.device_information_updated_at = datetime.utcnow()
         self.assertIsNone(self.enrolled_device.security_info_updated_at)
-        cmd = _update_inventory(
+        cmd = _update_base_inventory(
             Target(self.enrolled_device),
             self.dep_enrollment_session,
             RequestStatus.IDLE,

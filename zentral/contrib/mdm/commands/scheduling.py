@@ -34,7 +34,31 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.scheduling")
 # Next command
 
 
-def _update_inventory(target, enrollment_session, status):
+def _update_base_inventory(target, enrollment_session, status):
+    if status == RequestStatus.NOT_NOW:
+        return
+    if not target.is_device:
+        return
+    try:
+        min_date = datetime.utcnow() - timedelta(seconds=target.blueprint.inventory_interval)
+    except Exception:
+        min_date = None
+    enrolled_device = target.enrolled_device
+    # device information
+    if (
+        enrolled_device.device_information_updated_at is None
+        or (min_date and enrolled_device.device_information_updated_at < min_date)
+    ):
+        return DeviceInformation.create_for_target(target)
+    # security info
+    if (
+        enrolled_device.security_info_updated_at is None
+        or (min_date and enrolled_device.security_info_updated_at < min_date)
+    ):
+        return SecurityInfo.create_for_target(target)
+
+
+def _update_extra_inventory(target, enrollment_session, status):
     if status == RequestStatus.NOT_NOW:
         return
     if not target.is_device:
@@ -44,18 +68,6 @@ def _update_inventory(target, enrollment_session, status):
         return
     enrolled_device = target.enrolled_device
     min_date = datetime.utcnow() - timedelta(seconds=blueprint.inventory_interval)
-    # device information
-    if (
-        enrolled_device.device_information_updated_at is None
-        or enrolled_device.device_information_updated_at < min_date
-    ):
-        return DeviceInformation.create_for_target(target)
-    # security info
-    if (
-        enrolled_device.security_info_updated_at is None
-        or enrolled_device.security_info_updated_at < min_date
-    ):
-        return SecurityInfo.create_for_target(target)
     # apps
     if (
         blueprint.collect_apps > Blueprint.InventoryItemCollectionOption.NO
@@ -328,11 +340,7 @@ def _configure_dep_enrollment_accounts(target, enrollment_session, status):
 
 
 def _finish_dep_enrollment_configuration(target, enrollment_session, status):
-    if status == RequestStatus.NOT_NOW:
-        return
-    if not target.is_device:
-        return
-    if not target.awaiting_configuration:
+    if not DeviceConfigured.verify_target(target):
         return
     return DeviceConfigured.create_for_target(target)
 
@@ -342,7 +350,7 @@ def get_next_command_response(target, enrollment_session, status):
         # first, take care of all the pending commands
         _get_next_queued_command,
         # no pending commands, we can create new ones
-        _update_inventory,
+        _update_base_inventory,
         _reenroll,
         _trigger_declarative_management_sync,
         _install_artifacts,
@@ -351,7 +359,8 @@ def get_next_command_response(target, enrollment_session, status):
         _rotate_filevault_key,
         _manage_recovery_password,
         _configure_dep_enrollment_accounts,
-        _finish_dep_enrollment_configuration
+        _finish_dep_enrollment_configuration,
+        _update_extra_inventory,
     ):
         command = next_command_func(target, enrollment_session, status)
         if command:

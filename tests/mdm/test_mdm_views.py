@@ -750,15 +750,33 @@ class MDMViewsTestCase(TestCase):
 
     # connect
 
-    def test_device_channel_connect_idle_no_command(self, post_event):
+    def test_device_channel_connect_idle_base_inventory_up_to_date_no_command(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         now = datetime.utcnow()
         enrolled_device = EnrolledDevice.objects.get(udid=udid)
+        enrolled_device.device_information_updated_at = now
+        enrolled_device.security_info_updated_at = now
+        enrolled_device.save()
         self.assertIsNone(enrolled_device.last_seen_at)
         payload = {"UDID": udid, "Status": "Idle"}
         response = self._put(reverse("mdm_public:connect"), payload, session)
         self.assertEqual(response.content, b"")
         self.assertEqual(response.status_code, 200)
+        enrolled_device.refresh_from_db()
+        self.assertTrue(enrolled_device.last_seen_at > now)
+
+    def test_device_channel_connect_idle_base_inventoryup_to_date_no_command(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        now = datetime.utcnow()
+        enrolled_device = EnrolledDevice.objects.get(udid=udid)
+        self.assertIsNone(enrolled_device.device_information_updated_at)
+        self.assertIsNone(enrolled_device.security_info_updated_at)
+        self.assertIsNone(enrolled_device.last_seen_at)
+        payload = {"UDID": udid, "Status": "Idle"}
+        response = self._put(reverse("mdm_public:connect"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        data = plistlib.loads(response.content)
+        self.assertEqual(data["Command"]["RequestType"], "DeviceInformation")
         enrolled_device.refresh_from_db()
         self.assertTrue(enrolled_device.last_seen_at > now)
 
@@ -778,6 +796,9 @@ class MDMViewsTestCase(TestCase):
     def test_device_channel_connect_idle_device_cert_expiry_reenroll(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         session.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=1)
+        now = datetime.utcnow()
+        session.enrolled_device.device_information_updated_at = now
+        session.enrolled_device.security_info_updated_at = now
         session.enrolled_device.save()
         payload = {"UDID": udid, "Status": "Idle"}
         response = self._put(reverse("mdm_public:connect"), payload, session)
