@@ -10,230 +10,228 @@
   <li class="breadcrumb-item active">{{ object.name }}</li>
 </ol>
 
-    <div class="py-3">
-        <div class="object-details">
-            <div class="d-flex align-items-center mb-1">
-                <h2 class="m-0">{{ object.name }}</h2>
-                <div class="ms-3">
-                    {% if show_events_link %}
-                        <a type="button" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Browse the events" href="{% url 'santa:configuration_events' object.pk %}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-activity" viewBox="0 0 16 16">
-                                <path fill-rule="evenodd" d="M6 2a.5.5 0 0 1 .47.33L10 12.036l1.53-4.208A.5.5 0 0 1 12 7.5h3.5a.5.5 0 0 1 0 1h-3.15l-1.88 5.17a.5.5 0 0 1-.94 0L6 3.964 4.47 8.171A.5.5 0 0 1 4 8.5H.5a.5.5 0 0 1 0-1h3.15l1.88-5.17A.5.5 0 0 1 6 2Z"></path>
-                            </svg>
-                        </a>
-                    {% endif %}
-                    {% for link, anchor_text in store_links  %}
-                        <a type="button" class="btn btn-large btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{ anchor_text }}" href="{{ link }}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-clipboard-pulse" viewBox="0 0 16 16">
-                                <path fill-rule="evenodd" d="M10 1.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-1Zm-5 0A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5v1A1.5 1.5 0 0 1 9.5 4h-3A1.5 1.5 0 0 1 5 2.5v-1Zm-2 0h1v1H3a1 1 0 0 0-1 1V14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3.5a1 1 0 0 0-1-1h-1v-1h1a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V3.5a2 2 0 0 1 2-2Zm6.979 3.856a.5.5 0 0 0-.968.04L7.92 10.49l-.94-3.135a.5.5 0 0 0-.895-.133L4.232 10H3.5a.5.5 0 0 0 0 1h1a.5.5 0 0 0 .416-.223l1.41-2.115 1.195 3.982a.5.5 0 0 0 .968-.04L9.58 7.51l.94 3.135A.5.5 0 0 0 11 11h1.5a.5.5 0 0 0 0-1h-1.128L9.979 5.356Z"></path>
-                            </svg>
-                        </a>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="d-flex align-items-center mb-3">
-                <h3 class="m-0 fs-5 text-secondary">Santa configuration</h3>
-                <div class="ms-auto">
-                    {% if perms.santa.change_configuration %}
-                    <a href="{% url 'santa:update_configuration' object.pk %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                        <i class="bi bi-pencil-square"></i>
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="table-responsive mb-3">
-                <table class="table table-striped align-middle table-object-properties">
-                    <thead>
-                    <tr>
-                        <th scope="col">Attribute</th>
-                        <th scope="col">Value</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr>
-                        <td>Name</td>
-                        <td>{{ object.name }}</td>
-                    </tr>
-                    <tr>
-                        <td>Mode</td>
-                        <td>
-                            {% if object.is_monitor_mode %}
-                                <span class="badge text-bg-success">
-                            {% else %}
-                                <span class="badge text-bg-danger">
-                            {% endif %}
-                                    {{ object.get_client_mode_display }}
-                                </span>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Client certificate auth</td>
-                        <td>{{ object.client_certificate_auth|yesno }}</td>
-                    </tr>
-                    <tr>
-                        <td>Batch size</td>
-                        <td>{{ object.batch_size }}</td>
-                    </tr>
-                    <tr>
-                        <td>Full synk interval</td>
-                        <td>{{ object.full_sync_interval }}s</td>
-                    </tr>
-                    <tr>
-                        <td>Enable bundles</td>
-                        <td>{{ object.enable_bundles|yesno }}</td>
-                    </tr>
-                    <tr>
-                        <td>Enable transitive rules</td>
-                        <td>{{ object.enable_transitive_rules|yesno }}</td>
-                    </tr>
-                    {% if object.allowed_path_regex %}
-                    <tr>
-                        <td>Allow path regex</td>
-                        <td>
-                            <code class="badge text-bg-danger text-white fw-normal">{{ object.allowed_path_regex }}</code>
-                        </td>
-                    </tr>
-                    {% endif %}
-                    {% if object.blocked_path_regex %}
-                    <tr>
-                        <td>Blocked path regex</td>
-                        <td>
-                            <code class="badge text-bg-danger text-white fw-normal">{{ object.blocked_path_regex }}</code>
-                        </td>
-                    </tr>
-                    {% endif %}
-                    <tr>
-                        <td>Block USB mass storage</td>
-                        <td>{{ object.block_usb_mount|yesno }}</td>
-                    </tr>
-                    <tr>
-                        <td>Remount USB mode</td>
-                        <td>
-                            {% if object.remount_usb_mode %}
-                                <code>{{ object.remount_usb_mode|join:" " }}</code>
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Allow Unknown shard</td>
-                        <td>{{ object.allow_unknown_shard }}%</td>
-                    </tr>
-                    <tr>
-                        <td>Enable all event upload shard</td>
-                        <td>{{ object.enable_all_event_upload_shard }}%</td>
-                    </tr>
-                    <tr>
-                        <td>Sync incident severity</td>
-                        <td>{{ object.get_sync_incident_severity|default:"Configuration error" }}</td>
-                    </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            {% created_updated_at object %}
-
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object.name }}</h2>
+        <div class="ms-3">
+            {% if show_events_link %}
+                <a type="button" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Browse the events" href="{% url 'santa:configuration_events' object.pk %}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-activity" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M6 2a.5.5 0 0 1 .47.33L10 12.036l1.53-4.208A.5.5 0 0 1 12 7.5h3.5a.5.5 0 0 1 0 1h-3.15l-1.88 5.17a.5.5 0 0 1-.94 0L6 3.964 4.47 8.171A.5.5 0 0 1 4 8.5H.5a.5.5 0 0 1 0-1h3.15l1.88-5.17A.5.5 0 0 1 6 2Z"></path>
+                    </svg>
+                </a>
+            {% endif %}
+            {% for link, anchor_text in store_links  %}
+                <a type="button" class="btn btn-large btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{ anchor_text }}" href="{{ link }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-clipboard-pulse" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M10 1.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-1Zm-5 0A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5v1A1.5 1.5 0 0 1 9.5 4h-3A1.5 1.5 0 0 1 5 2.5v-1Zm-2 0h1v1H3a1 1 0 0 0-1 1V14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3.5a1 1 0 0 0-1-1h-1v-1h1a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V3.5a2 2 0 0 1 2-2Zm6.979 3.856a.5.5 0 0 0-.968.04L7.92 10.49l-.94-3.135a.5.5 0 0 0-.895-.133L4.232 10H3.5a.5.5 0 0 0 0 1h1a.5.5 0 0 0 .416-.223l1.41-2.115 1.195 3.982a.5.5 0 0 0 .968-.04L9.58 7.51l.94 3.135A.5.5 0 0 0 11 11h1.5a.5.5 0 0 0 0-1h-1.128L9.979 5.356Z"></path>
+                    </svg>
+                </a>
+            {% endfor %}
         </div>
-
-        {% if perms.santa.view_enrollment %}
-        <div class="d-flex justify-content-between mb-3">
-            <h2 class="m-0">Enrollment{{ enrollments_count|pluralize }} ({{ enrollments_count }})</h2>
-            {% if perms.santa.add_enrollment %}
-                <div class="ms-auto">
-                    <a type="button" href="{% url 'santa:create_enrollment' object.id %}" class="btn btn-link text-dark text-decoration-none"
-                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Enrollment">
-                        <i class="bi bi-plus-circle"></i>
-                    </a>
-                </div>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Santa configuration</h3>
+        <div class="ms-auto">
+            {% if perms.santa.change_configuration %}
+            <a href="{% url 'santa:update_configuration' object.pk %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
+                <i class="bi bi-pencil-square"></i>
+            </a>
             {% endif %}
         </div>
-        {% if enrollments %}
-        <div class="table-responsive mb-3">
-            <table class="table table-striped align-middle table-hover">
-                <thead>
-                <tr>
-                    <th scope="col">Business unit</th>
-                    <th scope="col">Tags</th>
-                    <th scope="col">Created at</th>
-                    <th scope="col">Request count</th>
-                    <th scope="col">Version</th>
-                    <th scope="col">Distributor</th>
-                    <th scope="col"></th>
-                </tr>
-                </thead>
-                <tbody>
-                {% for enrollment in enrollments %}
-                {% with enrollment.secret as secret %}
-                {% with enrollment.distributor as distributor %}                
-                <tr>
-                    <td><a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a></td>
-                    <td>
-                        {% for tag in secret.tags.all %}
-                            {% inventory_tag tag %}
-                        {% empty %}
-                            -
-                        {% endfor %}
-                    </td>
-                    <td>
-                        <a name="enrollment_{{ enrollment.pk }}"></a>
-                        {{ secret.created_at }}
-                    </td>
-                    <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
-                    <td>{{ enrollment.version }}</td>
-                    <td>
-                        {% if distributor %}
-                            <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td class="text-center">
-                        {% if not distributor and not secret.is_used_up %}
-                            <a type="button" class="btn btn-link text-dark text-decoration-none"
-                            aria-label="Download Santa configuration plist"
-                            title="Download santa configuration plist"
-                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download santa configuration plist"
-                            href="{% url 'santa_api:enrollment_plist' enrollment.id %}">
-                                <i class="bi bi-arrow-down-circle"> plist</i>
-                            </a>
-                            <a type="button" class="btn btn-link text-dark text-decoration-none"
-                            aria-label="Download Santa configuration profile"
-                            title="Download santa configuration profile"
-                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download santa configuration profile"
-                            href="{% url 'santa_api:enrollment_configuration_profile' enrollment.id %}">
-                                <i class="bi bi-arrow-down-circle"> configuration profile</i>
-                            </a>
-                        {% elif secret.is_used_up %}
-                            <span class="text-danger">Enrollment used up.</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endwith %}
-                {% endwith %}
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div>
-            <p>
-                <a class="btn btn-primary" type="button" href="{% url 'santa:create_enrollment' object.id %}">Create Enrollment</a>
-            </p>
-        </div>
-        {% endif %}
-        {% endif %}
-
-        {% if perms.santa.view_rule %}
-        <div class="d-flex justify-content-between mb-3">
-            <h2 class="m-0">Rule{{ rules_count|pluralize }} ({{ rules_count }})</h2>
-        </div>
-        <div>
-            <p>
-                <a class="btn btn-primary" type="button" href="{% url 'santa:configuration_rules' object.id %}">Manage rules</a>
-            </p>
-        </div>
-        {% endif %}
     </div>
+
+    <div class="table-responsive mb-3">
+        <table class="table table-striped align-middle table-object-properties">
+            <thead>
+            <tr>
+                <th scope="col">Attribute</th>
+                <th scope="col">Value</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Name</td>
+                <td>{{ object.name }}</td>
+            </tr>
+            <tr>
+                <td>Mode</td>
+                <td>
+                    {% if object.is_monitor_mode %}
+                        <span class="badge text-bg-success">
+                    {% else %}
+                        <span class="badge text-bg-danger">
+                    {% endif %}
+                            {{ object.get_client_mode_display }}
+                        </span>
+                </td>
+            </tr>
+            <tr>
+                <td>Client certificate auth</td>
+                <td>{{ object.client_certificate_auth|yesno }}</td>
+            </tr>
+            <tr>
+                <td>Batch size</td>
+                <td>{{ object.batch_size }}</td>
+            </tr>
+            <tr>
+                <td>Full synk interval</td>
+                <td>{{ object.full_sync_interval }}s</td>
+            </tr>
+            <tr>
+                <td>Enable bundles</td>
+                <td>{{ object.enable_bundles|yesno }}</td>
+            </tr>
+            <tr>
+                <td>Enable transitive rules</td>
+                <td>{{ object.enable_transitive_rules|yesno }}</td>
+            </tr>
+            {% if object.allowed_path_regex %}
+            <tr>
+                <td>Allow path regex</td>
+                <td>
+                    <code class="badge text-bg-danger text-white fw-normal">{{ object.allowed_path_regex }}</code>
+                </td>
+            </tr>
+            {% endif %}
+            {% if object.blocked_path_regex %}
+            <tr>
+                <td>Blocked path regex</td>
+                <td>
+                    <code class="badge text-bg-danger text-white fw-normal">{{ object.blocked_path_regex }}</code>
+                </td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td>Block USB mass storage</td>
+                <td>{{ object.block_usb_mount|yesno }}</td>
+            </tr>
+            <tr>
+                <td>Remount USB mode</td>
+                <td>
+                    {% if object.remount_usb_mode %}
+                        <code>{{ object.remount_usb_mode|join:" " }}</code>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Allow Unknown shard</td>
+                <td>{{ object.allow_unknown_shard }}%</td>
+            </tr>
+            <tr>
+                <td>Enable all event upload shard</td>
+                <td>{{ object.enable_all_event_upload_shard }}%</td>
+            </tr>
+            <tr>
+                <td>Sync incident severity</td>
+                <td>{{ object.get_sync_incident_severity|default:"Configuration error" }}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {% created_updated_at object %}
+
+</div>
+
+{% if perms.santa.view_enrollment %}
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Enrollment{{ enrollments_count|pluralize }} ({{ enrollments_count }})</h2>
+    {% if perms.santa.add_enrollment %}
+        <div class="ms-auto">
+            <a type="button" href="{% url 'santa:create_enrollment' object.id %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Enrollment">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+        </div>
+    {% endif %}
+</div>
+{% if enrollments %}
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+        <thead>
+        <tr>
+            <th scope="col">Business unit</th>
+            <th scope="col">Tags</th>
+            <th scope="col">Created at</th>
+            <th scope="col">Request count</th>
+            <th scope="col">Version</th>
+            <th scope="col">Distributor</th>
+            <th scope="col"></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for enrollment in enrollments %}
+        {% with enrollment.secret as secret %}
+        {% with enrollment.distributor as distributor %}
+        <tr>
+            <td><a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a></td>
+            <td>
+                {% for tag in secret.tags.all %}
+                    {% inventory_tag tag %}
+                {% empty %}
+                    -
+                {% endfor %}
+            </td>
+            <td>
+                <a name="enrollment_{{ enrollment.pk }}"></a>
+                {{ secret.created_at }}
+            </td>
+            <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
+            <td>{{ enrollment.version }}</td>
+            <td>
+                {% if distributor %}
+                    <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td class="text-center">
+                {% if not distributor and not secret.is_used_up %}
+                    <a type="button" class="btn btn-link text-dark text-decoration-none"
+                    aria-label="Download Santa configuration plist"
+                    title="Download santa configuration plist"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download santa configuration plist"
+                    href="{% url 'santa_api:enrollment_plist' enrollment.id %}">
+                        <i class="bi bi-arrow-down-circle"> plist</i>
+                    </a>
+                    <a type="button" class="btn btn-link text-dark text-decoration-none"
+                    aria-label="Download Santa configuration profile"
+                    title="Download santa configuration profile"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download santa configuration profile"
+                    href="{% url 'santa_api:enrollment_configuration_profile' enrollment.id %}">
+                        <i class="bi bi-arrow-down-circle"> configuration profile</i>
+                    </a>
+                {% elif secret.is_used_up %}
+                    <span class="text-danger">Enrollment used up.</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endwith %}
+        {% endwith %}
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div>
+    <p>
+        <a class="btn btn-primary" type="button" href="{% url 'santa:create_enrollment' object.id %}">Create Enrollment</a>
+    </p>
+</div>
+{% endif %}
+{% endif %}
+
+{% if perms.santa.view_rule %}
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Rule{{ rules_count|pluralize }} ({{ rules_count }})</h2>
+</div>
+<div>
+    <p>
+        <a class="btn btn-primary" type="button" href="{% url 'santa:configuration_rules' object.id %}">Manage rules</a>
+    </p>
+</div>
+{% endif %}
 {% endblock %}

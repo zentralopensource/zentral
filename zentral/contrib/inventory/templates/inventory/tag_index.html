@@ -9,95 +9,87 @@
 
 {% if perms.inventory.view_tag %}
 
-<div class="py-3">
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="mb-0">Tag{{ tag_list|length|pluralize }} ({{ tag_list|length }})</h3>
 
-    <div class="d-flex justify-content-between">
-        <div class="d-flex w-75 me-auto flex-shrink-0">
-            <h2 class="mb-3">Tag{{ tag_list|length|pluralize }} ({{ tag_list|length }})</h2>
-
-            {% if perms.inventory.add_tag %}
-            <div class="ms-auto">
-                <a type="button" href="{% url 'inventory:create_tag' %}"
-                    class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="bottom"
-                    data-bs-title="Add new Tag">
-                    <i class="bi bi-plus-circle"></i>
-                </a>
-            </div>
-            {% endif %}
-        </div>
+    {% if perms.inventory.add_tag %}
+    <div class="ms-auto">
+        <a type="button" href="{% url 'inventory:create_tag' %}"
+            class="btn btn-link text-dark text-decoration-none"
+            data-bs-toggle="tooltip"
+            data-bs-placement="bottom"
+            data-bs-title="Add new Tag">
+            <i class="bi bi-plus-circle"></i>
+        </a>
     </div>
+    {% endif %}
+</div>
 
-    <div class="table-responsive mb-3">
-        <table class="table table-striped align-middle table-hover">
-            <thead>
-                <tr>
-                    <th class="col-md-3">Taxonomy</th>
-                    <th>Meta Business Unit</th>
-                    <th>Tag</th>
-                    {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
-                    <th>Actions</th>
-                    {% endif %}
-                </tr>
-            </thead>
-            <tbody>
-            {% for tag in tag_list %}
-            <tr class="data-row">
-                <td class="col-md-3">{{ tag.taxonomy|default:"-" }}</td>
-                <td>{{ tag.meta_business_unit|default:"-" }}</td>
-                <td>{% inventory_tag tag %}</td>
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+        <thead>
+            <tr>
+                <th class="col-md-3">Taxonomy</th>
+                <th>Meta Business Unit</th>
+                <th>Tag</th>
                 {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
-                <td>
-                {% if perms.inventory.change_tag %}
-                    <a type="button"
-                        href="{% url 'inventory:update_tag' tag.id %}"
-                        class="btn btn-link text-dark text-decoration-none"
-                        data-bs-toggle="tooltip"
-                        data-bs-placement="bottom"
-                        data-bs-title="Edit">
-                        <i class="bi bi-pencil-square"></i>
-                    </a>
-                {% endif %}
-                {% if perms.inventory.delete_tag %}
-                <a type="button"
-                    href="{% url 'inventory:delete_tag' tag.id %}"
-                    class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="bottom"
-                    data-bs-title="Delete">
-                    <i class="bi bi-trash"></i>
-                </a>
-                {% endif %}
-                </td>
+                <th></th>
                 {% endif %}
             </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        </thead>
+        <tbody>
+        {% for tag in tag_list %}
+        <tr class="data-row">
+            <td class="col-md-3">{{ tag.taxonomy|default:"-" }}</td>
+            <td>{{ tag.meta_business_unit|default:"-" }}</td>
+            <td>{% inventory_tag tag %}</td>
+            {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
+            <td class="text-end py-0">
+            {% if perms.inventory.change_tag %}
+                <a type="button"
+                    href="{% url 'inventory:update_tag' tag.id %}"
+                    class="btn btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="bottom"
+                    data-bs-title="Edit">
+                    <i class="bi bi-pencil-square"></i>
+                </a>
+            {% endif %}
+            {% if perms.inventory.delete_tag %}
+            <a type="button"
+                href="{% url 'inventory:delete_tag' tag.id %}"
+                class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip"
+                data-bs-placement="bottom"
+                data-bs-title="Delete">
+                <i class="bi bi-trash"></i>
+            </a>
+            {% endif %}
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
 </div>
 {% endif %}
 
 {% if perms.inventory.view_taxonomy %}
-<div class="py-3">
-    <div class="d-flex justify-content-between">
-        <div class="d-flex w-75 me-auto flex-shrink-0">
-            <h2 class="mb-3">Taxonom{{ taxonomy_list|length|pluralize:"y,ies" }} ({{ taxonomy_list|length }})</h2>
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="mb-0">Taxonom{{ taxonomy_list|length|pluralize:"y,ies" }} ({{ taxonomy_list|length }})</h3>
 
-            {% if perms.inventory.add_taxonomy %}
-            <div class="ms-auto">
-                <a type="button" href="{% url 'inventory:create_taxonomy' %}" 
-                    class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="bottom"
-                    data-bs-title="Add new Taxonomy">
-                    <i class="bi bi-plus-circle"></i>
-                </a>
-            </div>
-            {% endif %}
-        </div>
+    {% if perms.inventory.add_taxonomy %}
+    <div class="ms-auto">
+        <a type="button" href="{% url 'inventory:create_taxonomy' %}"
+            class="btn btn-link text-dark text-decoration-none"
+            data-bs-toggle="tooltip"
+            data-bs-placement="bottom"
+            data-bs-title="Add new Taxonomy">
+            <i class="bi bi-plus-circle"></i>
+        </a>
     </div>
+    {% endif %}
+</div>
 
 <div class="table-responsive mb-3">
   <table class="table table-striped align-middle table-hover">
@@ -107,7 +99,7 @@
             <th>Meta Business Unit</th>
             <th>Name</th>
             {% if perms.inventory.change_taxonomy or perms.inventory.delete_taxonomy %}
-            <th>Actions</th>
+            <th></th>
             {% endif %}
         </tr>
     </thead>
@@ -118,7 +110,7 @@
         <td>{{ taxonomy.meta_business_unit|default:"-" }}</td>
         <td>{{ taxonomy.name }}</td>
         {% if perms.inventory.change_taxonomy or perms.inventory.delete_taxonomy %}
-        <td>
+        <td class="text-end py-0">
           {% if perms.inventory.change_taxonomy %}
           <a type="button"
                         href="{% url 'inventory:update_taxonomy' taxonomy.id %}"
@@ -145,7 +137,6 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
 </div>
 {% endif %}
 {% endblock %}

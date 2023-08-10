@@ -7,32 +7,29 @@
   <li class="breadcrumb-item active">Delete tag {{ object }}</li>
 </ol>
 
-<div class="py-3">
-    <div class="alert alert-warning w-50" role="alert">
-        <h4 class="alert-heading">
-            You are about to delete the tag "{{ object }}"
-        </h4>
-        <p>Do you really want to delete this tag ?</p>
-        {% if links %}
-        <hr>
-        <p class="mb-0">This tag is used in:</p>
-        <ul>
-            {% for label, link in object.links %}
-            <li>
-            {% if link %}
-                <a href="{{ link }}">{{ label }}</a>
-            {% else %}
-                {{ label }}
-            {% endif %}
-            </li>
-        {% endfor %}
-        </ul>
-        {% endif %}
-    </div>
-      
-    <form method="POST">{% csrf_token %}
-    <a href="{% url 'inventory:tags' %}" class="btn btn-outline-secondary">Cancel</a>
-    <button type="submit" class="btn btn-danger">Delete</button>
-    </form>
-</div>
+<h4 class="alert-heading">
+    You are about to delete the tag "{{ object }}"
+</h4>
+<p>Do you really want to delete this tag ?</p>
+{% if links %}
+<hr>
+<p class="mb-0">This tag is used in:</p>
+<ul>
+    {% for label, link in object.links %}
+    <li>
+    {% if link %}
+        <a href="{{ link }}">{{ label }}</a>
+    {% else %}
+        {{ label }}
+    {% endif %}
+    </li>
+{% endfor %}
+</ul>
+{% endif %}
+
+<form method="POST">{% csrf_token %}
+<a href="{% url 'inventory:tags' %}" class="btn btn-outline-secondary">Cancel</a>
+<button type="submit" class="btn btn-danger">Delete</button>
+</form>
+
 {% endblock %}

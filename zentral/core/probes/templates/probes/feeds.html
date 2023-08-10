@@ -13,18 +13,18 @@
   {% endfor %}
 </ol>
 
-<div class="py-3">
-    <div class="d-flex align-items-center mb-1">
-        <h2 class="mb-3">Feed{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="mb-3">Feed{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
 
-        <div class="ms-auto">
-            <a href="{% url 'probes:create_feed' %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create Feed">
-                <i class="bi bi-plus-circle"></i>
-            </a>
-        </div>
+    <div class="ms-auto">
+        <a href="{% url 'probes:create_feed' %}" class="btn btn-link text-dark text-decoration-none"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create Feed">
+            <i class="bi bi-plus-circle"></i>
+        </a>
     </div>
+</div>
 
+{% if object_list %}
     {% pagination next_url previous_url %}
 
     <table class="table table-striped align-middle table-hover">
@@ -45,6 +45,6 @@
     </table>
 
     {% pagination next_url previous_url %}
-</div>
+{% endif %}
 
 {% endblock %}

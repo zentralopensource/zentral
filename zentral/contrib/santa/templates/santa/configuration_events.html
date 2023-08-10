@@ -10,15 +10,13 @@
   <li class="breadcrumb-item active">Events</a></li>
 </ol>
 
-<div class="py-3" style="position:sticky;top:0;background-color:#fff;padding:10px 0">
-  <h2>{{ configuration }}</h2>
-  <h3 class="m-0 fs-5 text-secondary mb-3">Events</h3>
-    <div class="d-flex justify-content-between">
-        <div class="d-flex w-75 me-auto flex-shrink-0">
-            
-            {% include "core/stores/events_form.html" %}
+<h2 class="mb-0">{{ configuration }}</h2>
+<h3 class="m-0 fs-5 text-secondary mb-3">Events</h3>
+<div class="d-flex justify-content-between">
+    <div class="d-flex w-75 me-auto flex-shrink-0">
 
-        </div>
+        {% include "core/stores/events_form.html" %}
+
     </div>
 </div>
 

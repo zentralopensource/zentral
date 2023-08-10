@@ -14,96 +14,93 @@
   {% endfor %}
 </ol>
 
-<div class="py-3">
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Business unit{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+</div>
 
-    <div class="d-flex justify-content-between mb-3">
-        <h2 class="m-0">Business unit{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
-    </div>
+<div class="d-flex justify-content-between">
+    <div class="d-flex w-75 me-auto flex-shrink-0">
+        <form method="GET" class="d-flex w-75 me-auto flex-shrink-0 align-items-center">
 
-    <div class="d-flex justify-content-between">
-        <div class="d-flex w-75 me-auto flex-shrink-0">
-            <form method="GET" class="d-flex w-75 me-auto flex-shrink-0 align-items-center">
-                
-                {{ form }}
+            {{ form }}
 
-                <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
-                    <i class="bi bi-search"></i>
-                </button>
-            </form>
-        </div>
-        <div class="ms-auto">
-        {% if perms.inventory.add_metabusinessunit %}
-            <a type="button" href="{% url 'inventory:create_mbu' %}" class="btn btn-link text-dark text-decoration-none mb-2"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Business Unit">
-                <i class="bi bi-plus-circle"></i>
-            </a>
-        {% endif %}
-        {% if perms.inventory.change_metabusinessunit %}
-            <button form="merge_form" type="submit" disabled id="merge-btn-container" class="btn btn-link text-dark text-decoration-none mb-2"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Merge Business Units">
-                <i class="bi text-dark bi-sign-merge-left"></i>
+            <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
+                <i class="bi bi-search"></i>
             </button>
-        </div>
-        {% endif %}
-    </div>
-
-    {% pagination next_url previous_url %}
-
-    <div class="table-responsive mb-3">
-        <form id="merge_form" method="GET" action="{% url 'inventory:review_mbu_merge' %}">
-            <table class="table table-striped align-middle table-hover">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th>Name</th>
-                        <th>Tags</th>
-                        <th>API enrollment</th>
-                    <tr>
-                </thead>
-                {% for mbu in object_list %}
-                <tr>
-                    {% if perms.inventory.change_metabusinessunit %}
-                        <td>
-                            <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
-                        </td>
-                    {% endif %}
-                    {% if perms.inventory.view_machinesnapshot %}
-                        <td>
-                            <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu.name }}</a>
-                        </td>
-                    {% else %}
-                        <td>
-                            {{ mbu.name }}
-                        </td>
-                    {% endif %}
-                    <td>
-                    {% for tag in mbu.tags %}
-                        {% inventory_tag tag %}
-                    {% endfor %}
-                    </td>
-                    {% if mbu.api_enrollment_enabled %}
-                        <td>
-                            <span class="badge text-bg-success">Available for API enrollment</span>
-                        </td>
-                    {% endif %}
-                </tr>
-                {% for bu in mbu.get_current_business_units %}
-                <tr>
-                <td>{{ bu.source.name }}</td>
-                <td>{{ bu.name }}</td>
-                <td>
-                    {% for link in bu.links.all %}
-                    <a href="{{ link.url }}" class="btn btn-default">
-                    {{ bu.source.name }} - {{ link.anchor_text }}
-                    </a>
-                    {% endfor %}
-                </td>
-                </tr>
-                {% endfor %}
-                {% endfor %}
-            </table>
         </form>
     </div>
+    <div class="ms-auto">
+    {% if perms.inventory.add_metabusinessunit %}
+        <a type="button" href="{% url 'inventory:create_mbu' %}" class="btn btn-link text-dark text-decoration-none mb-2"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Business Unit">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+    {% endif %}
+    {% if perms.inventory.change_metabusinessunit %}
+        <button form="merge_form" type="submit" disabled id="merge-btn-container" class="btn btn-link text-dark text-decoration-none mb-2"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Merge Business Units">
+            <i class="bi text-dark bi-sign-merge-left"></i>
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+{% pagination next_url previous_url %}
+
+<div class="table-responsive mb-3">
+    <form id="merge_form" method="GET" action="{% url 'inventory:review_mbu_merge' %}">
+        <table class="table table-striped align-middle table-hover">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Name</th>
+                    <th>Tags</th>
+                    <th>API enrollment</th>
+                <tr>
+            </thead>
+            {% for mbu in object_list %}
+            <tr>
+                {% if perms.inventory.change_metabusinessunit %}
+                    <td>
+                        <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
+                    </td>
+                {% endif %}
+                {% if perms.inventory.view_machinesnapshot %}
+                    <td>
+                        <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu.name }}</a>
+                    </td>
+                {% else %}
+                    <td>
+                        {{ mbu.name }}
+                    </td>
+                {% endif %}
+                <td>
+                {% for tag in mbu.tags %}
+                    {% inventory_tag tag %}
+                {% endfor %}
+                </td>
+                {% if mbu.api_enrollment_enabled %}
+                    <td>
+                        <span class="badge text-bg-success">Available for API enrollment</span>
+                    </td>
+                {% endif %}
+            </tr>
+            {% for bu in mbu.get_current_business_units %}
+            <tr>
+            <td>{{ bu.source.name }}</td>
+            <td>{{ bu.name }}</td>
+            <td>
+                {% for link in bu.links.all %}
+                <a href="{{ link.url }}" class="btn btn-default">
+                {{ bu.source.name }} - {{ link.anchor_text }}
+                </a>
+                {% endfor %}
+            </td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </table>
+    </form>
     
     {% pagination next_url previous_url %}
     
