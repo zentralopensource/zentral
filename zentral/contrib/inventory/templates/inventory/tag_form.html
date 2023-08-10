@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -13,37 +12,26 @@
   {% endif %}
 </ol>
 
-<div class="py-3">
+<div class="d-flex align-items-center mb-3">
+    <h2 class="m-0">{% if object %}Update{% else %}Create{% endif %} Tag</h2>
+</div>
 
-    <div class="d-flex align-items-center mb-3">
-        <h2 class="m-0">{% if object %}Update{% else %}Create{% endif %} Tag</h2>
-    </div>
+<form method="POST" class="update-form">{% csrf_token %}
 
-    <form method="POST" class="update-form">{% csrf_token %}
-    {{ form.taxonomy|bootstrap }}
-    {% if object %}
-    <dl>
-        <dt>Meta business unit</dt>
-        <dd>{{ object.meta_business_unit|default:"-" }}</dd>
-    </dl>
-    {% else %}
-    {{ form.meta_business_unit|bootstrap }}
-    {% endif %}
-    {{ form.name|bootstrap }}
-    <div class="form-group">
-        <label for="id_color">{{ form.color.label|title }}</label>
+    {{ form }}
+
+    <div class="form-group mb-3">
+        <label for="id_color">{{ form.color.label|title }} presets:</label>
         <div>
-        presets:
-        {% for color_name, color_code in color_presets.items %}
-            <span class="label color-preset" data-color="{{ color_code }}" style="background-color:#{{ color_code }};padding: 0 10px;margin:0 0 5px 0;">&nbsp;</span>
-        {% endfor %}
+            {% for color_name, color_code in color_presets.items %}
+                <span class="label color-preset" data-color="{{ color_code }}" style="background-color:#{{ color_code }};padding: 0 10px;margin:0 0 5px 0;">&nbsp;</span>
+            {% endfor %}
         </div>
-        <input type="text" id="id_color"{% if form.color.value %} value="{{ form.color.value }}"{% endif %} name="color" class="form-control" placeholder="{{ form.color.label }}">
     </div>
+
     <a href="{% url 'inventory:tags' %}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
-    </form>
-</div>
+</form>
 
 {% endblock %}
 

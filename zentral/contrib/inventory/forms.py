@@ -122,11 +122,12 @@ class CreateTagForm(forms.ModelForm):
 class UpdateTagForm(forms.ModelForm):
     class Meta:
         model = Tag
-        fields = ("taxonomy", "name", "color")
+        fields = ("meta_business_unit", "taxonomy", "name", "color")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.meta_business_unit:
+            self.fields['meta_business_unit'].disabled = True
             self.fields["taxonomy"].queryset = self.fields["taxonomy"].queryset.filter(
                 meta_business_unit=self.instance.meta_business_unit
             )
