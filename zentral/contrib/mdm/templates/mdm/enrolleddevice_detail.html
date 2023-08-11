@@ -267,6 +267,10 @@
         {% else %}
         No
         {% endif %}
+        {% if  object.pending_firmware_password_created_at %}
+        <br>
+        Pending change, {{ object.pending_firmware_password_created_at }}
+        {% endif %}
       </td>
     </tr>
     {% endif %}

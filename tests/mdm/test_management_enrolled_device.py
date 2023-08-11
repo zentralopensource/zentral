@@ -198,6 +198,17 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
 
+    def test_enrolled_device_pending_firmware_password_change(self):
+        session, _, _ = force_ota_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.set_recovery_password("12345678")
+        session.enrolled_device.set_pending_firmware_password("")
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.change_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Firmware password")
+        self.assertContains(response, "Pending change")
+
     def test_enrolled_device_one_command(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
         self._login("mdm.view_enrolleddevice")
