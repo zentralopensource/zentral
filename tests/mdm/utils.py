@@ -427,11 +427,12 @@ def force_filevault_config(prk_rotation_interval_days=0):
     )
 
 
-def force_recovery_password_config(rotation_interval_days=0, static_password=None):
+def force_recovery_password_config(rotation_interval_days=0, static_password=None, rotate_firmware_password=False):
     cfg = RecoveryPasswordConfig.objects.create(
         name=get_random_string(12),
         dynamic_password=static_password is None,
         rotation_interval_days=rotation_interval_days,
+        rotate_firmware_password=rotate_firmware_password,
     )
     if static_password:
         cfg.set_static_password(static_password)

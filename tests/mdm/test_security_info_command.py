@@ -13,7 +13,10 @@ from zentral.contrib.mdm.commands import SecurityInfo
 from zentral.contrib.mdm.commands.scheduling import _update_base_inventory
 from zentral.contrib.mdm.commands.setup_filevault import get_escrow_key_certificate_der_bytes
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
-from zentral.contrib.mdm.events import FileVaultPRKUpdatedEvent
+from zentral.contrib.mdm.events import (FileVaultPRKUpdatedEvent,
+                                        RecoveryPasswordClearedEvent,
+                                        RecoveryPasswordSetEvent,
+                                        RecoveryPasswordUpdatedEvent)
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
 from .utils import force_dep_enrollment_session
 
@@ -199,6 +202,162 @@ class SecurityInfoCommandTestCase(TestCase):
             cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
         self.enrolled_device.refresh_from_db()
         self.assertEqual(self.enrolled_device.get_filevault_prk(), "BBBB-BBBB-BBBB-BBBB-BBBB-BBBB")
+        # no events
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_pending_firmware_password_pending(self, post_event):
+        self.assertIsNone(self.enrolled_device.recovery_password)
+        self.enrolled_device.set_pending_firmware_password("12345678")
+        self.enrolled_device.save()
+        new_db_cmd_qs = self.enrolled_device.commands.filter(name="RestartDevice")
+        self.assertEqual(new_db_cmd_qs.count(), 0)
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FirmwarePasswordStatus"] = {
+            "PasswordExists": False,
+            "AllowOroms": True,
+            "ChangePending": True
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.get_pending_firmware_password(), "12345678")
+        self.assertIsNone(self.enrolled_device.recovery_password)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 0)
+        self.assertEqual(new_db_cmd_qs.count(), 1)
+        new_db_cmd = new_db_cmd_qs.first()
+        self.assertEqual(new_db_cmd.kwargs, {"NotifyUser": True})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_pending_firmware_password_set(self, post_event):
+        self.assertIsNone(self.enrolled_device.recovery_password)
+        self.enrolled_device.set_pending_firmware_password("12345678")
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FirmwarePasswordStatus"] = {
+            "PasswordExists": True,
+            "AllowOroms": True,
+            "Mode": "command",
+            "ChangePending": False,
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertIsNone(self.enrolled_device.get_pending_firmware_password())
+        self.assertIsNone(self.enrolled_device.pending_firmware_password_created_at)
+        self.assertEqual(self.enrolled_device.get_recovery_password(), "12345678")
+        self.assertEqual(self.enrolled_device.commands.filter(name="RestartDevice").count(), 0)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, RecoveryPasswordSetEvent)
+        self.assertEqual(
+            event.payload,
+            {'command': {'request_type': 'SecurityInfo',
+                         'uuid': str(cmd.uuid)},
+             'password_type': 'firmware_password'}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_pending_firmware_password_update(self, post_event):
+        self.assertIsNone(self.enrolled_device.recovery_password)
+        self.enrolled_device.set_recovery_password("87654321")
+        self.enrolled_device.set_pending_firmware_password("12345678")
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FirmwarePasswordStatus"] = {
+            "PasswordExists": True,
+            "AllowOroms": True,
+            "Mode": "command",
+            "ChangePending": False,
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertIsNone(self.enrolled_device.get_pending_firmware_password())
+        self.assertIsNone(self.enrolled_device.pending_firmware_password_created_at)
+        self.assertEqual(self.enrolled_device.get_recovery_password(), "12345678")
+        self.assertEqual(self.enrolled_device.commands.filter(name="RestartDevice").count(), 0)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, RecoveryPasswordUpdatedEvent)
+        self.assertEqual(
+            event.payload,
+            {'command': {'request_type': 'SecurityInfo',
+                         'uuid': str(cmd.uuid)},
+             'password_type': 'firmware_password'}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_pending_firmware_password_clear(self, post_event):
+        self.assertIsNone(self.enrolled_device.recovery_password)
+        self.enrolled_device.set_recovery_password("87654321")
+        self.enrolled_device.set_pending_firmware_password("")
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FirmwarePasswordStatus"] = {
+            "PasswordExists": False,
+            "AllowOroms": True,
+            "Mode": "command",
+            "ChangePending": False,
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertIsNone(self.enrolled_device.get_pending_firmware_password())
+        self.assertIsNone(self.enrolled_device.pending_firmware_password_created_at)
+        self.assertIsNone(self.enrolled_device.get_recovery_password())
+        self.assertEqual(self.enrolled_device.commands.filter(name="RestartDevice").count(), 0)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, RecoveryPasswordClearedEvent)
+        self.assertEqual(
+            event.payload,
+            {'command': {'request_type': 'SecurityInfo',
+                         'uuid': str(cmd.uuid)},
+             'password_type': 'firmware_password'}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_pending_firmware_password_clear_error(self, post_event):
+        self.assertIsNone(self.enrolled_device.recovery_password)
+        self.enrolled_device.set_recovery_password("87654321")
+        self.enrolled_device.set_pending_firmware_password("")
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FirmwarePasswordStatus"] = {
+            "PasswordExists": True,  # the problem
+            "AllowOroms": True,
+            "Mode": "command",
+            "ChangePending": False,
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.get_recovery_password(), "87654321")
+        self.assertIsNone(self.enrolled_device.pending_firmware_password)
+        self.assertIsNone(self.enrolled_device.pending_firmware_password_created_at)
         # no events
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 0)

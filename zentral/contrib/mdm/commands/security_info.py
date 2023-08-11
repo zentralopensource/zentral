@@ -3,10 +3,11 @@ import logging
 from cryptography.hazmat.primitives.serialization import load_der_private_key
 from django.db import transaction
 from zentral.contrib.mdm.crypto import decrypt_cms_payload
-from zentral.contrib.mdm.events import post_filevault_prk_updated_event
+from zentral.contrib.mdm.events import post_filevault_prk_updated_event, post_recovery_password_event
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.utils.json import prepare_loaded_plist
 from .base import register_command, Command, CommandBaseForm
+from .restart_device import RestartDevice
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.security_info")
@@ -53,6 +54,39 @@ class SecurityInfo(Command):
                     if prk and prk != self.enrolled_device.get_filevault_prk():
                         self.enrolled_device.set_filevault_prk(prk)
                         transaction.on_commit(lambda: post_filevault_prk_updated_event(self))
+
+        # Firmware password
+        if self.enrolled_device.pending_firmware_password:
+            firmware_password_status = security_info.get("FirmwarePasswordStatus", {})
+            if firmware_password_status.get("ChangePending"):
+                # schedule a reboot notification for the pending firmware password to be applied
+                RestartDevice.create_for_target(self.target, kwargs={"NotifyUser": True}, queue=True, delay=0)
+            else:
+                pending_firmware_password = self.enrolled_device.get_pending_firmware_password()
+                operation = None
+                if pending_firmware_password:
+                    if not self.enrolled_device.recovery_password:
+                        operation = "set"
+                    else:
+                        recovery_password = self.enrolled_device.get_recovery_password()
+                        if recovery_password != pending_firmware_password:
+                            operation = "update"
+                elif self.enrolled_device.recovery_password:
+                    if firmware_password_status.get("PasswordExists"):
+                        logger.error("Enrolled device %s security info %s: password exists, but pending removal",
+                                     self.enrolled_device, self.uuid)
+                        # clear the pending firmware password
+                        self.enrolled_device.set_pending_firmware_password(None)
+                        self.enrolled_device.save()
+                    else:
+                        operation = "clear"
+                if operation:
+                    self.enrolled_device.set_pending_firmware_password(None)
+                    self.enrolled_device.set_recovery_password(pending_firmware_password)
+                    self.enrolled_device.save()
+                    transaction.on_commit(lambda: post_recovery_password_event(
+                        self, password_type="firmware_password", operation=operation
+                    ))
 
         self.enrolled_device.security_info = prepare_loaded_plist(security_info)
         self.enrolled_device.security_info_updated_at = datetime.utcnow()

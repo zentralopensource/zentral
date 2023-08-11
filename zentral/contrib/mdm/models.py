@@ -761,6 +761,8 @@ class EnrolledDevice(models.Model):
     # Recovery password
     recovery_password = models.TextField(null=True)
     recovery_password_updated_at = models.DateTimeField(null=True)
+    pending_firmware_password = models.TextField(null=True)
+    pending_firmware_password_created_at = models.DateTimeField(null=True)
 
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
@@ -847,6 +849,23 @@ class EnrolledDevice(models.Model):
         self.recovery_password = encrypt_str(recovery_password, **self._get_secret_engine_kwargs("recovery_password"))
         self.recovery_password_updated_at = datetime.utcnow()
 
+    def get_pending_firmware_password(self):
+        if not self.pending_firmware_password:
+            return
+        return decrypt_str(self.pending_firmware_password,
+                           **self._get_secret_engine_kwargs("pending_firmware_password"))
+
+    def set_pending_firmware_password(self, pending_firmware_password):
+        if pending_firmware_password is None:
+            self.pending_firmware_password = None
+            self.pending_firmware_password_created_at = None
+            return
+        self.pending_firmware_password = encrypt_str(
+            pending_firmware_password,
+            **self._get_secret_engine_kwargs("pending_firmware_password")
+        )
+        self.pending_firmware_password_created_at = datetime.utcnow()
+
     def rewrap_secrets(self):
         if self.bootstrap_token:
             self.bootstrap_token = rewrap(self.bootstrap_token, **self._get_secret_engine_kwargs("bootstrap_token"))
@@ -860,6 +879,9 @@ class EnrolledDevice(models.Model):
         if self.recovery_password:
             self.recovery_password = rewrap(self.recovery_password,
                                             **self._get_secret_engine_kwargs("recovery_password"))
+        if self.pending_firmware_password:
+            self.pending_firmware_password = rewrap(self.pending_firmware_password,
+                                                    **self._get_secret_engine_kwargs("pending_firmware_password"))
 
     def get_urlsafe_serial_number(self):
         if self.serial_number:

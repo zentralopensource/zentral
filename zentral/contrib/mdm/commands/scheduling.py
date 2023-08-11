@@ -24,6 +24,7 @@ from .remove_application import RemoveApplication
 from .remove_profile import RemoveProfile
 from .rotate_filevault_key import RotateFileVaultKey
 from .security_info import SecurityInfo
+from .set_firmware_password import SetFirmwarePassword
 from .set_recovery_lock import SetRecoveryLock
 from .setup_filevault import SetupFileVault
 
@@ -283,7 +284,7 @@ def _manage_recovery_password(target, enrollment_session, status):
         return
     if not recovery_password_config:
         return
-    for cmd_class in (SetRecoveryLock,):
+    for cmd_class in (SetRecoveryLock, SetFirmwarePassword):
         if cmd_class.verify_target(target):
             break
     else:
@@ -292,7 +293,13 @@ def _manage_recovery_password(target, enrollment_session, status):
     if (
         enrolled_device.recovery_password
         and (
-            not recovery_password_config.rotation_interval_days
+            not (
+                recovery_password_config.rotation_interval_days
+                and (
+                    enrolled_device.apple_silicon
+                    or recovery_password_config.rotate_firmware_password
+                )
+            )
             or (enrolled_device.recovery_password_updated_at
                 and (datetime.utcnow() - enrolled_device.recovery_password_updated_at
                      < timedelta(days=recovery_password_config.rotation_interval_days))
