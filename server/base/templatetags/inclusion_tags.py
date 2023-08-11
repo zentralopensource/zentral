@@ -38,3 +38,8 @@ def no_entities(entity_name, link=None):
 @register.filter
 def to_str(value):
     return str(value)
+
+
+@register.filter
+def to_int(value):
+    return int(value)

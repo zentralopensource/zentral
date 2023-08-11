@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load incidents_extras inventory_extras %}
+{% load incidents_extras inventory_extras inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -26,102 +26,156 @@
   </div>
 </div>
 
-<div class="modal{% if filter_form_errors %} modal-with-errors{% endif %}" id="add-filter" tabindex="-1" role="dialog" aria-labelledby="add-filter">
+<div class="modal{% if filter_form_errors %} modal-with-errors{% endif %} modal fade" id="add-filter" tabindex="-1" role="dialog" aria-labelledby="add-filter" aria-hidden="true"> 
   <div class="modal-dialog" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
         <h4 class="modal-title" id="myModalLabel">Add a drill down filter</h4>
+        <button type="button" class="ms-auto btn btn-link text-dark text-decoration-none close" data-bs-dismiss="modal" aria-label="Close">
+            <i class="bi bi-x"></i>
+        </button>
       </div>
       <div class="modal-body">
         <div>
           {% for anchor_text, link in msquery.available_filters %}
-          <a href="{{ link }}" class="btn btn-primary" style="margin: 0 0 .3em 0">
-            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-            {{ anchor_text }}
-          </a>
-          {% endfor %}
+            <a href="{{ link }}" class="btn btn-primary m-1">
+                <span class="bi bi-plus" aria-hidden="true"></span>
+                {{ anchor_text }}
+            </a>
+            {% endfor %}
         </div>
-        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
-          <div class="form-group">
-            <label for="id_{{ android_app_filter_form.prefix }}-name" class="sr-only">Android app name</label>
-            {{ android_app_filter_form.display_name }}
-            <button name="filter_key" value="android_app_filter_form" type="submit" class="btn btn-primary">
-              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-              App
-            </button>
-            {% for error in android_app_filter_form.non_field_errors %}
-            <p class="text-danger">{{ error }}</p>
-            {% endfor %}
+        <form method="POST" class="form-inline my-2">{% csrf_token %}
+            <div class="row g-2">
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        {{ android_app_filter_form.display_name }}
+                        <label for="id_{{ android_app_filter_form.prefix }}-name" class="form-label fw-bold">Android app name</label>
+                    </div>
+                </div>
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        <button name="filter_key" value="android_app_filter_form" type="submit" class="btn btn-primary">
+                        <span class="bi bi-plus" aria-hidden="true"></span>
+                        App
+                        </button>
+                        {% for error in android_app_filter_form.non_field_errors %}
+                        <p class="text-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </form>
+        <form method="POST" class="form-inline my-2">{% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        {{ bundle_filter_form.bundle_id }}
+                        <label for="id_{{ bundle_filter_form.prefix }}-bundle_id" class="form-label fw-bold">Bundle ID</label>
+                    </div>
+                </div>
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        {{ bundle_filter_form.bundle_name }}
+                        <label for="id_{{ bundle_filter_form.prefix }}-bundle_name" class="form-label fw-bold">Bundle name</label>
+                    </div>
+                </div>
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">                        
+                        <button name="filter_key" value="bundle_filter_form" type="submit" class="btn btn-primary">
+                        <span class="bi bi-plus" aria-hidden="true"></span>
+                        App
+                        </button>
+                        {% for error in bundle_filter_form.non_field_errors %}
+                        <p class="text-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            </form>
+        <form method="POST" class="form-inline my-2">{% csrf_token %}
+            <div class="row g-2">
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        {{ deb_package_filter_form.name }}
+                        <label for="id_{{ deb_package_filter_form.prefix }}-name" class="form-label fw-bold">Debian package name</label>
+                    </div>
+                </div>
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        <button name="filter_key" value="deb_package_filter_form" type="submit" class="btn btn-primary">
+                        <span class="bi bi-plus" aria-hidden="true"></span>
+                        Deb
+                        </button>
+                        {% for error in deb_package_filter_form.non_field_errors %}
+                        <p class="text-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
           </div>
         </form>
-        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
-          <div class="form-group">
-            <label for="id_{{ bundle_filter_form.prefix }}-bundle_id" class="sr-only">Bundle ID</label>
-            {{ bundle_filter_form.bundle_id }}
-            <label for="id_{{ bundle_filter_form.prefix }}-bundle_name" class="sr-only">Bundle name</label>
-            {{ bundle_filter_form.bundle_name }}
-            <button name="filter_key" value="bundle_filter_form" type="submit" class="btn btn-primary">
-              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-              App
-            </button>
-            {% for error in bundle_filter_form.non_field_errors %}
-            <p class="text-danger">{{ error }}</p>
-            {% endfor %}
-          </div>
+        <form method="POST" class="form-inline my-2">{% csrf_token %}
+            <div class="row g-2">
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        {{ ios_app_filter_form.name }}
+                        <label for="id_{{ ios_app_filter_form.prefix }}-name" class="form-label fw-bold">iOS app name</label>
+                    </div>
+                </div>
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        <button name="filter_key" value="ios_app_filter_form" type="submit" class="btn btn-primary">
+                        <span class="bi bi-plus" aria-hidden="true"></span>
+                        App
+                        </button>
+                        {% for error in ios_app_filter_form.non_field_errors %}
+                        <p class="text-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
         </form>
-        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
-          <div class="form-group">
-            <label for="id_{{ deb_package_filter_form.prefix }}-name" class="sr-only">Debian package name</label>
-            {{ deb_package_filter_form.name }}
-            <button name="filter_key" value="deb_package_filter_form" type="submit" class="btn btn-primary">
-              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-              Deb
-            </button>
-            {% for error in deb_package_filter_form.non_field_errors %}
-            <p class="text-danger">{{ error }}</p>
-            {% endfor %}
-          </div>
-        </form>
-        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
-          <div class="form-group">
-            <label for="id_{{ ios_app_filter_form.prefix }}-name" class="sr-only">iOS app name</label>
-            {{ ios_app_filter_form.name }}
-            <button name="filter_key" value="ios_app_filter_form" type="submit" class="btn btn-primary">
-              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-              App
-            </button>
-            {% for error in ios_app_filter_form.non_field_errors %}
-            <p class="text-danger">{{ error }}</p>
-            {% endfor %}
-          </div>
-        </form>
-        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
-          <div class="form-group">
-            <label for="id_{{ program_filter_form.prefix }}-name" class="sr-only">Program name</label>
-            {{ program_filter_form.name }}
-            <button name="filter_key" value="program_filter_form" type="submit" class="btn btn-primary">
-              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-              Program
-            </button>
-            {% for error in program_filter_form.non_field_errors %}
-            <p class="text-danger">{{ error }}</p>
-            {% endfor %}
+        <form method="POST" class="form-inline my-2">{% csrf_token %}
+            <div class="row g-2">
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        {{ program_filter_form.name }}
+                        <label for="id_{{ program_filter_form.prefix }}-name" class="form-label fw-bold">Program name</label>
+                    </div>
+                </div>
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        <button name="filter_key" value="program_filter_form" type="submit" class="btn btn-primary">
+                        <span class="bi bi-plus" aria-hidden="true"></span>
+                        Program
+                        </button>
+                        {% for error in program_filter_form.non_field_errors %}
+                        <p class="text-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
           </div>
         </form>
         {% if not compliance_check_status_filter_form.disabled %}
-        <form method="POST" class="form-inline" style="margin: 10px 0">{% csrf_token %}
-          <div class="form-group">
-            <label for="id_{{ compliance_check_status_filter_form.prefix }}-compliance_check" class="sr-only">Compliance check</label>
-            {{ compliance_check_status_filter_form.compliance_check }}
-            <button type="submit" name="filter_key" value="compliance_check_status_filter_form" class="btn btn-primary">
-              <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-              Compliance check
-            </button>
-            {% for error in compliance_check_status_filter_form.non_field_errors %}
-            <p class="text-danger">{{ error }}</p>
-            {% endfor %}
-          </div>
+        <form method="POST" class="form-inline my-2">{% csrf_token %}
+            <div class="row g-2">
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        {{ compliance_check_status_filter_form.compliance_check }}
+                        <label for="id_{{ compliance_check_status_filter_form.prefix }}-compliance_check" class="form-label fw-bold">Compliance check</label>
+                    </div>
+                </div>
+                <div class="col-md">
+                    <div class="d-flex justify-content-between form-floating">
+                        <button type="submit" name="filter_key" value="compliance_check_status_filter_form" class="btn btn-primary">
+                        <span class="bi bi-plus" aria-hidden="true"></span>
+                        Compliance check
+                        </button>
+                        {% for error in compliance_check_status_filter_form.non_field_errors %}
+                        <p class="text-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
         </form>
         {% endif %}
       </div>
@@ -130,132 +184,127 @@
 </div>
 
 
-<div class="row">
-  <div class="col-md-12">
-    <form id="inventory-form" method="GET" class="form-inline" style="margin:1em 0">
+<div class="d-flex justify-content-between">
+    <form id="inventory-form" method="GET" class="align-items-center">
+    <div class="row g-6 me-2 mb-2">
       {% for key, val in search_form_qd.items %}
       <input type="hidden" name="{{ key }}" value="{{ val }}">
       {% endfor %}
-      <div class="form-group">
-        <label for="id_serial_number" class="sr-only">Serial number</label>
-        <input type="text" id="id_serial_number" value="{{ msquery.query_dict.sn }}" name="sn" class="form-control" placeholder="serial number" autofocus style="width:auto">
-      </div>
-      <div class="form-group">
-        <label for="id_name" class="sr-only">Name</label>
-        <input type="text" id="id_name" value="{{ msquery.query_dict.cn }}" name="cn" class="form-control" placeholder="computer name" style="width:auto">
-      </div>
-      <div class="form-group">
-        <label for="id_principal_user_name" class="sr-only">Principal user</label>
-        <input type="text" id="id_principal_user_name" value="{{ msquery.query_dict.pu }}" name="pu" class="form-control" placeholder="principal user" autocomplete="off" style="width:auto">
-      </div>
-      <div class="form-group">
-        <label for="id_mac_address" class="sr-only">MAC address</label>
-        <input type="text" id="id_mac_address" value="{{ msquery.query_dict.ma }}" name="ma" class="form-control" placeholder="MAC address" autocomplete="off" style="width:auto">
-      </div>
-      <div class="form-group">
-        <label for="id_last_seen" class="sr-only">Last seen</label>
-        <select id="id_last_seen" name="ls" class="form-control">
-          <option value="">Last seen</option>
-          <option value="1d"{% if msquery.query_dict.ls == '1d' %} selected{% endif %}>24 hours</option>
-          <option value="7d"{% if msquery.query_dict.ls == '7d' %} selected{% endif %}>7 days</option>
-          <option value="14d"{% if msquery.query_dict.ls == '14d' %} selected{% endif %}>14 days</option>
-          <option value="30d"{% if msquery.query_dict.ls == '30d' %} selected{% endif %}>30 days</option>
-          <option value="45d"{% if msquery.query_dict.ls == '45d' %} selected{% endif %}>45 days</option>
-          <option value="90d"{% if msquery.query_dict.ls == '90d' %} selected{% endif %}>90 days</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <button class="btn btn-success" type="button" data-toggle="modal" data-target="#add-filter"
-                                        aria-expanded="false" aria-controls="add-filter">
-          <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-          Filter
-        </button>
-        <button type="submit" class="btn btn-primary">
-          <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
-          Search
-        </button>
-        <div class="btn-group">
-          <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-            Export <span class="caret"></span>
-          </button>
-          <ul class="dropdown-menu">
-            {% for format, link in export_links %}
-            <li><a href="{{ link }}" class="task">{{ format|upper }}</a></li>
-            {% endfor %}
-          </ul>
+      <div class="col-md p-2">
+        <div class="form-floating">
+            <input type="text" id="id_serial_number" value="{{ msquery.query_dict.sn }}" name="sn" class="form-control" autofocus>
+            <label for="id_serial_number" class="form-label fw-bold">Serial number</label>
         </div>
       </div>
+      <div class="col-md p-2">
+        <div class="form-floating">
+            <input type="text" id="id_name" value="{{ msquery.query_dict.cn }}" name="cn" class="form-control">
+            <label for="id_name" class="form-label fw-bold">Name</label>
+        </div>
+      </div>
+      <div class="col-md p-2">
+        <div class="form-floating">
+            <input type="text" id="id_principal_user_name" value="{{ msquery.query_dict.pu }}" name="pu" class="form-control" autocomplete="off">
+            <label for="id_principal_user_name" class="form-label fw-bold">Principal user</label>
+        </div>
+      </div>
+      <div class="col-md p-2">
+        <div class="form-floating">
+            <input type="text" id="id_mac_address" value="{{ msquery.query_dict.ma }}" name="ma" class="form-control" autocomplete="off">
+            <label for="id_mac_address" class="form-label fw-bold">MAC address</label>
+        </div>
+      </div>
+      <div class="col-md p-2">
+        <div class="form-floating">
+                <select id="id_last_seen" name="ls" class="form-select">
+                <option value="">Last seen</option>
+                <option value="1d"{% if msquery.query_dict.ls == '1d' %} selected{% endif %}>24 hours</option>
+                <option value="7d"{% if msquery.query_dict.ls == '7d' %} selected{% endif %}>7 days</option>
+                <option value="14d"{% if msquery.query_dict.ls == '14d' %} selected{% endif %}>14 days</option>
+                <option value="30d"{% if msquery.query_dict.ls == '30d' %} selected{% endif %}>30 days</option>
+                <option value="45d"{% if msquery.query_dict.ls == '45d' %} selected{% endif %}>45 days</option>
+                <option value="90d"{% if msquery.query_dict.ls == '90d' %} selected{% endif %}>90 days</option>
+                </select>
+                <label for="id_last_seen" class="form-label fw-bold">Last seen</label>
+        </div>
+      </div>
+      <div class="col-md p-2 pt-3">
+        <div class="form-floating">
+            <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2" type="button">
+                <i class="bi bi-search"></i>
+            </button>
+            <button class="btn btn-link text-dark text-decoration-none mb-2" type="button" data-bs-toggle="modal" data-bs-target="#add-filter">
+                <i class="bi bi-filter" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Filter"></i>
+            </button>
+            <button class="btn btn-link text-dark text-decoration-none mb-2 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-download"></i>
+            </button>
+            <ul class="dropdown-menu">
+                {% for format, link in export_links %}
+                <li><a href="{{ link }}" class="task dropdown-item">{{ format|upper }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+      </div>
+    </div>
     </form>
-  </div>
 </div>
 
-<div class="row">
+<div class="row g-4">
   {% for f, f_links, f_r_link, f_up_link in grouping_links %}
   <div class="col-md-3">
-    <div class="panel panel-default{% if f_up_link %} panel-info{% endif %}">
-      <div class="panel-heading filter-title">
-        {{ f.title }}
-        <div class="pull-right{% if not f_up_link %} panel-heading-btns{% endif %}"{% if not f_up_link %} style="display:none"{% endif %}>
-          {% if not f_up_link %}
-          <a href="#filter-{{ f.get_query_kwarg }}-links" class="btn btn-default btn-xs reorder-filter">
-            <span class="glyphicon glyphicon-sort-by-alphabet-alt" aria-hidden="true"></span>
-          </a>
-          {% if f_r_link %}
-          <a href="{{ f_r_link }}" class="btn btn-danger btn-xs">
-            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-          </a>
-          {% endif %}
-          {% else %}
-          <a href="{{ f_up_link }}" class="btn btn-link btn-xs">
-            <span class="glyphicon glyphicon-remove" aria-hidden="true"></span>
-          </a>
-          {% endif %}
+    <div class="card mb-3 {% if f_up_link %} panel-info{% endif %}">
+        <div class="card-header filter-title d-flex justify-content-between">
+            <div class="py-1">
+                {{ f.title }}
+            </div>
+            <div class="{% if not f_up_link %} panel-heading-btns{% endif %}"{% if not f_up_link %} style="display:none"{% endif %}>
+                {% if not f_up_link %}
+                <a href="#filter-{{ f.get_query_kwarg }}-links" class="btn btn-outline-secondary btn-sm reorder-filter">
+                    <span class="bi bi-sort-alpha-down-alt" aria-hidden="true"></span>
+                </a>
+                {% if f_r_link %}
+                <a href="{{ f_r_link }}" class="btn btn-danger btn-sm">
+                    <span class="bi bi-trash" aria-hidden="true"></span>
+                </a>
+                {% endif %}
+                {% else %}
+                <a href="{{ f_up_link }}" class="btn btn-outline-secondary btn-sm">
+                    <span class="bi bi-x" aria-hidden="true"></span>
+                </a>
+                {% endif %}
+            </div>
         </div>
-      </div>
-      <div id="filter-{{ f.get_query_kwarg }}-links" data-sort="az" class="panel-body" style="max-height:25vh;overflow-y:auto;">
-        {% for label, count, percentage, down_link, up_link in f_links %}
-        <div data-label="{{ label }}" data-count="{{ count }}" style="margin:0;position:relative;height:1.8em;width:100%;margin:0 0 .2em 0">
-          <div style="z-index:0;position:absolute;top:0;bottom:0;left:0;width:{{ percentage }}%;border-bottom: 3px solid #337ab7">
-          </div>
-          <div style="z-index:10;position:absolute;top:0;bottom:0;right:0;left:0;">
-            <span class="badge pull-right">{{ count }}</span>
-          </div>
-          <a title="{{ label }}" style="z-index:20;position:absolute;display:block;padding:0 2.5em 0 0;left:0;right:0;top:0;bottom:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}">
-            {{ label }}
-          </a>
+        <div class="card-body d-flex container">
+        <div class="col" id="filter-{{ f.get_query_kwarg }}-links" data-sort="az">
+          {% for label, count, percentage, down_link, up_link in f_links %}
+                <div data-label="{{ label }}" data-count="{{ count }}">
+                    <div class="d-flex justify-content-between py-2">
+                        <a title="{{ label }}" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}" class="link-underline link-underline-opacity-0">
+                            {{ label }}
+                        </a>
+                        <span class="badge text-bg-secondary py-2">{{ count }}</span>
+                    </div>
+                    <div class="d-flex progress" role="progressbar" aria-label="Basic example" aria-valuenow="{{ percentage|to_int }}" aria-valuemin="0" aria-valuemax="100" style="height: 3px">
+                        <div class="progress-bar" style="width:{{ percentage|to_int }}%"></div>
+                    </div>
+                </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-      </div>
+        </div>
     </div>
   </div>
   {% if forloop.counter|divisibleby:4 and not forloop.last %}
 </div>
-<div class="row">
+<div class="row g-4">
   {% endif %}
   {% endfor %}
 </div>
 
-
-{% if next_url or previous_url %}
-<div class="row">
-  <div class="col-md-12">
-    <nav>
-      <ul class="pager">
-        {% if next_url %}
-        <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-        {% endif %}
-        {% if previous_url %}
-        <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-        {% endif %}
-      </ul>
-    </nav>
-  </div>
-</div>
-{% endif %}
+{% pagination next_url previous_url %}
 
 <div class="table-reponsive">
-  <table class="table">
+  <table class="table table-striped align-top table-hover">
     {% for serial_number, machine_snapshots in machines %}
     {% for machine_snapshot in machine_snapshots %}
     <tr>
@@ -290,31 +339,21 @@
   </table>
 </div>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
+
 {% endblock %}
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
   var filter_list_sorts = ["az", "za", "09", "90"];
-  var filter_list_sort_logos = ["alphabet", "alphabet-alt", "order", "order-alt"];
+  var filter_list_sort_logos = ["sort-alpha-down", "sort-alpha-down-alt", "sort-numeric-down", "sort-numeric-down-alt"];
 
   function getNextSort (sort) {
     return filter_list_sorts[(filter_list_sorts.indexOf(sort) + 1) % filter_list_sorts.length];
   }
 
   function getNextButtonIcon (sort) {
-    return "glyphicon-sort-by-" + filter_list_sort_logos[(filter_list_sorts.indexOf(sort) + 1) % filter_list_sort_logos.length];
+    return "bi bi-" + filter_list_sort_logos[(filter_list_sorts.indexOf(sort) + 1) % filter_list_sort_logos.length];
   }
 
   function azSort(a, b) {
