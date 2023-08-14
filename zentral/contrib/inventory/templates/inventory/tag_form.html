@@ -21,7 +21,7 @@
     {{ form }}
 
     <div class="form-group mb-3">
-        <label for="id_color">{{ form.color.label|title }} presets:</label>
+        <label for="id_color">Color presets:</label>
         <div>
             {% for color_name, color_code in color_presets.items %}
                 <span class="label color-preset" data-color="{{ color_code }}" style="background-color:#{{ color_code }};padding: 0 10px;margin:0 0 5px 0;">&nbsp;</span>

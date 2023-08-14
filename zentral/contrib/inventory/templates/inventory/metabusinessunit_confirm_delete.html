@@ -2,19 +2,19 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:mbu' %}">Inventory business units</a>
-  <li><a href="{% url 'inventory:mbu_machines' object.id %}">{{ object }}</a>
-  <li class="active">Delete</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:mbu' %}">Inventory business units</a>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:mbu_machines' object.id %}">{{ object }}</a>
+  <li class="breadcrumb-item active">Delete</li>
 </ol>
 
 <h2>Delete business unit <i>{{ object }}</i></h2>
 
 <p>Do you really want to delete this business unit ?</p>
 <form method="POST">{% csrf_token %}
-  <a href="{% url 'inventory:mbu_machines' object.id %}" class="btn btn-default">Cancel</a>
+  <a href="{% url 'inventory:mbu_machines' object.id %}" class="btn btn-outline-secondary">Cancel</a>
   <button type="submit" class="btn btn-danger">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    <span class="bi bi-trash" aria-hidden="true"></span>
     Delete
   </button>
 </form>

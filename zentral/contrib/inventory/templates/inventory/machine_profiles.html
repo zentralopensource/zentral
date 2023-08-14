@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-  <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
-  <li class="active">Profiles</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+  <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
+  <li class="breadcrumb-item active">Profiles</li>
 </ol>
 
 <h2>

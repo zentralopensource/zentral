@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -9,9 +9,9 @@
   <li class="breadcrumb-item active">Tags</li>
 </ol>
 
-<h2>{{ tags|length }} Tag{{ tags|length|pluralize }}</h2>
+<h2>Tag{{ tags|length|pluralize }} ({{ tags|length }})</h2>
 <div class="table-responsive">
-  <table class="table">
+  <table class="table table-striped align-middle">
     <thead>
       <th>Tag ID</th>
       <th>Tag</th>
@@ -19,13 +19,13 @@
     </thead>
     <tbody>
       {% for tag in tags %}
-      <tr>
+      <tr class="data-row">
         <td>{{ tag.id }}</td>
         <td>{% inventory_tag tag %}</td>
-        <td>
+        <td class="text-end py-0">
           <form action="{% url 'inventory:remove_mbu_tag' meta_business_unit.id tag.id %}" method="POST">{% csrf_token %}
             <button class="btn btn-default">
-              <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+                <span class="bi bi-trash" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Tag"></span>
             </button>
           </form>
         </td>
@@ -35,28 +35,22 @@
   </table>
 </div>
 
-<h2>Add tag</h2>
-<form method="POST" class="form" action="{% url 'inventory:mbu_tags' meta_business_unit.id %}">{% csrf_token %}
-  {{form.existing_tag|bootstrap }}
-  <div id="new-tag" style="display:none">
-  <h3> or create new tag</h3>
-  {{ form.restrict_new_tag_to_mbu|bootstrap }}
-  {{ form.new_tag_name|bootstrap }}
-  <div class="form-group">
-    <label class="control-label  " for="id_new_tag_color">color</label>
-    <div>
-      presets:
-      {% for color_name, color_code in color_presets.items %}
-        <span class="label color-preset" data-color="{{ color_code }}" style="background-color:#{{ color_code }};padding: 0 10px;margin:0 0 5px 0;">&nbsp;</span>
-      {% endfor %}
+<h3>Add tag (or create a new one)</h3>
+<form method="POST" class="update-form" action="{% url 'inventory:mbu_tags' meta_business_unit.id %}">{% csrf_token %}
+
+    {{ form }}
+
+    <div class="form-group mb-3">
+        <label for="id_color">Color presets:</label>
+        <div>
+            {% for color_name, color_code in color_presets.items %}
+                <span class="label color-preset" data-color="{{ color_code }}" style="background-color:#{{ color_code }};padding: 0 10px;margin:0 0 5px 0;">&nbsp;</span>
+            {% endfor %}
+        </div>
     </div>
-    <input class=" form-control" id="id_new_tag_color" maxlength="6" name="new_tag_color" type="text">
-  </div>
-  </div>
-  <p>
-    <a href="{% url 'inventory:mbu_machines' meta_business_unit.id %}" class="btn btn-default">Cancel</a>
+
+    <a href="{% url 'inventory:mbu_machines' meta_business_unit.id %}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-primary">Add tag</button>
-  </p>
 </form>
 {% endblock %}
 

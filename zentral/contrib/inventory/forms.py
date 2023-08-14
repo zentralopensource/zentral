@@ -147,9 +147,12 @@ class UpdateTagForm(forms.ModelForm):
 
 
 class AddTagForm(forms.Form):
-    existing_tag = forms.ModelChoiceField(label="existing tag", queryset=Tag.objects.none(), required=False)
-    new_tag_name = forms.CharField(label="new tag name", max_length=50, required=False)
-    new_tag_color = forms.CharField(label="color", max_length=6, required=False)
+    existing_tag = forms.ModelChoiceField(label="Existing tag",
+                                          queryset=Tag.objects.none(),
+                                          required=False,
+                                          empty_label='...')
+    new_tag_name = forms.CharField(label="New tag name", max_length=50, required=False)
+    new_tag_color = forms.CharField(label="Color", max_length=6, required=False)
 
     def clean(self):
         cleaned_data = super(AddTagForm, self).clean()
@@ -183,7 +186,7 @@ class AddTagForm(forms.Form):
 
 
 class AddMBUTagForm(AddTagForm):
-    restrict_new_tag_to_mbu = forms.BooleanField(label="restrict new tag to mbu", required=False)
+    restrict_new_tag_to_mbu = forms.BooleanField(label="Restrict new tag to mbu", required=False)
 
     def __init__(self, *args, **kwargs):
         self.mbu = kwargs.pop('meta_business_unit')
@@ -201,8 +204,9 @@ class AddMBUTagForm(AddTagForm):
 
 
 class AddMachineTagForm(AddTagForm):
-    new_tag_mbu = forms.ModelChoiceField(label="restricted to business unit",
-                                         queryset=MetaBusinessUnit.objects.none(), required=False)
+    new_tag_mbu = forms.ModelChoiceField(label="Restricted to business unit",
+                                         queryset=MetaBusinessUnit.objects.none(),
+                                         required=False, empty_label='...')
 
     def __init__(self, *args, **kwargs):
         self.machine = MetaMachine(kwargs.pop('machine_serial_number'))
