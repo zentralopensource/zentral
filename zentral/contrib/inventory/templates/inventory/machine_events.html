@@ -4,14 +4,14 @@
 {% block content %}
 
 <ol class="breadcrumb" style="margin-bottom:10px">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-  <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
-  <li class="active">Events</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+  <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
+  <li class="breadcrumb-item active">Events</li>
 </ol>
 
-<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
-  <h3 style="margin:0 0 20px 0">
+<div class="sticky-top bg-white">
+  <h3>
     {% machine_type_icon machine %}
     {% machine_platform_icon machine %}
     {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a> / Events

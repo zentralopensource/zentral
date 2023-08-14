@@ -4,15 +4,15 @@
 {% block content %}
 
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'wsone:index' %}">Workspace ONE</a></li>
-  <li><a href="{% url 'wsone:instances' %}">Instances</a></li>
-  <li><a href="{% url 'wsone:instance' instance.pk %}">{{ instance }}</a></li>
-  <li class="active">Events</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'wsone:index' %}">Workspace ONE</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'wsone:instances' %}">Instances</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'wsone:instance' instance.pk %}">{{ instance }}</a></li>
+  <li class="breadcrumb-item active">Events</a></li>
 </ol>
 
-<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
-  <h3 style="margin:0 0 20px 0">
+<div style="sticky-top bg-white">
+  <h3>
     {{ instance }} - events
   </h3>
   {% include "core/stores/events_form.html" %}
