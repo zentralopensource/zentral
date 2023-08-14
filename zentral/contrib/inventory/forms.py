@@ -604,7 +604,6 @@ class IOSAppSearchForm(BaseAppSearchForm):
 
     field_order = ("name", "source", "last_seen",)
 
-
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
         filter_kwargs = {"name": result["name"]}
@@ -692,7 +691,6 @@ class MacOSAppSearchForm(BaseAppSearchForm):
     version_sort_keys = ("bundle_version", "bundle_version_str")
 
     field_order = ("bundle", "source", "last_seen",)
-
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
@@ -788,7 +786,6 @@ class ProgramsSearchForm(BaseAppSearchForm):
     )
 
     field_order = ("name", "source", "last_seen",)
-
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
