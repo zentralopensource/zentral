@@ -54,7 +54,7 @@
     {% if perms.osquery.add_pack %}
         {% url 'osquery:create_pack' as link %}
         {% no_entities 'Packs' link %}
-    {% elif %}
+    {% else %}
         {% no_entities 'Packs' %}
     {% endif %}
 {% endif %}
