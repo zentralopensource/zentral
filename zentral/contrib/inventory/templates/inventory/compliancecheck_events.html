@@ -3,7 +3,7 @@
 
 {% block content %}
 
-<ol class="breadcrumb" style="margin-bottom:10px">
+<ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'inventory:compliance_checks' %}">Compliance checks</a></li>
   <li class="breadcrumb-item"><a href="{{ jmespath_check.get_absolute_url }}">{{ compliance_check.name }}</a></li>

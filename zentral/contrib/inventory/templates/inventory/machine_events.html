@@ -3,7 +3,7 @@
 
 {% block content %}
 
-<ol class="breadcrumb" style="margin-bottom:10px">
+<ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
   <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
