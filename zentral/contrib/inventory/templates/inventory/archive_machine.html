@@ -5,10 +5,10 @@
 <div class="row">
   <div class="col-md-12">
     <ol class="breadcrumb">
-      <li><a href="/">Home</a></li>
-      <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-      <li><a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a></li>
-      <li class="active">archive</li>
+      <li class="breadcrumb-item"><a href="/">Home</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+      <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a></li>
+      <li class="breadcrumb-item active">archive</li>
     </ol>
 
     <h2>
@@ -25,7 +25,7 @@
 
     <p>Do you really want to archive this machine?</p>
     <form method="POST">{% csrf_token %}
-      <a class="btn btn-default" href="{{ machine.get_absolute_url }}">No</a>
+      <a class="btn btn-outline-secondary" href="{{ machine.get_absolute_url }}">No</a>
       <button type="submit" class="btn btn-danger">Yes</button>
     </form>
 
