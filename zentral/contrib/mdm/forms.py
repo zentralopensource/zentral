@@ -99,7 +99,7 @@ class DEPDeviceSearchForm(forms.Form):
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Serial number",
                                                       "autofocus": True}))
-    include_deleted = forms.BooleanField(label="incl. deleted?", required=False)
+    include_deleted = forms.BooleanField(label="Incl. deleted?", required=False)
     enrollment = forms.ModelChoiceField(queryset=DEPEnrollment.objects.all(), required=False, empty_label="Enrollment")
     server = forms.ModelChoiceField(queryset=DEPVirtualServer.objects.all(), required=False, empty_label="Server")
 

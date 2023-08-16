@@ -28,7 +28,7 @@ from .utils import (AndroidAppFilter,
 class MachineGroupSearchForm(forms.Form):
     template_name = "django/forms/search.html"
 
-    name = forms.CharField(label="name", max_length=64, required=False)
+    name = forms.CharField(label="Name", max_length=64, required=False)
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_group_sources(),
                                     required=False,
                                     empty_label='...',)

@@ -60,7 +60,7 @@ class ProbeSearchForm(forms.Form):
 
 class InventoryFilterForm(forms.Form):
     meta_business_units = forms.ModelMultipleChoiceField(queryset=MetaBusinessUnit.objects.all(),
-                                                         label="business units",
+                                                         label="Business units",
                                                          required=False)
     tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(),
                                           required=False)
@@ -100,8 +100,8 @@ class InventoryFilterForm(forms.Form):
 
 
 class MetadataFilterForm(forms.Form):
-    event_tags = forms.MultipleChoiceField(label="event tags", choices=[], required=False)
-    event_types = forms.MultipleChoiceField(label="event types", choices=[], required=False,
+    event_tags = forms.MultipleChoiceField(label="Event tags", choices=[], required=False)
+    event_types = forms.MultipleChoiceField(label="Event types", choices=[], required=False,
                                             widget=forms.SelectMultiple(attrs={"size": 10}))
 
     def __init__(self, *args, **kwargs):
