@@ -12,8 +12,10 @@
 
 <p>Please confirm you want to delete the {{ object }} device.</p>
 
-<form class="form" method="POST">{% csrf_token %}
+<form class="update-form" method="POST">{% csrf_token %}
+
   {{ form }}
+
   <p>
     <a href="{% url 'accounts:verification_devices' %}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-danger">Delete</button>

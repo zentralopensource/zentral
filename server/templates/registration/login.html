@@ -32,12 +32,14 @@
                     Sign in
                 {% endif %}
             </h1>
-            {% for ff in form %}
-                <div class="form-floating">
-                    {{ ff }}
-                    <label for="floatingInput">{{ ff.label }}</label>
-                </div>
-            {% endfor %}
+            <div class="col-md">
+                {% for ff in form %}
+                    <div class="form-floating me-2 mb-2">
+                        {{ ff }}
+                        <label for="floatingInput">{{ ff.label }}</label>
+                    </div>
+                {% endfor %}
+            </div>
             <div class="text-start my-3">
                 <p><a href="{% url 'password_reset' %}">Password forgotten?</a></p>
             </div>
