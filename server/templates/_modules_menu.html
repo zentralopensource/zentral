@@ -1,6 +1,6 @@
 {% for section in section_list %}
     <div class="d-flex justify-content-start">
-        <a class="list-group-item list-group-item-action border-0 w-auto px-2 collapse-toggler{%if not section.is_active %} collapsed{% endif %}"
+        <a class="list-group-item list-group-item-action border-0 w-auto px-2 collapse-toggler-light text-dark{%if not section.is_active %} collapsed{% endif %}"
             data-bs-toggle="collapse"
             href="#offcanvas{{ section.title }}Submenu"
             role="button"
@@ -16,7 +16,7 @@
         <div class="list-group rounded-0 border-0">
                 {% for link, anchor_text, active in section.link_list %}
                 <div class="d-flex justify-content-start px-4">
-                    <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2{%if active %} active{% endif %}" href="{{ link }}">{{ anchor_text }}</a>
+                    <a class="list-group-item list-group-item-action border-0 w-auto px-2 ms-2 text-dark{%if active %} active{% endif %}" href="{{ link }}">{{ anchor_text }}</a>
                 </div>
                 {% endfor %}
         </div>
