@@ -24,60 +24,22 @@
         }
 
         if (theme === 'dark') {
+            document.querySelectorAll([".light", "[class*='-light']"]).forEach(element => {
+                element.className = element.className.replace("light","dark")
+            })
             document.querySelectorAll([".text-dark"]).forEach(element => {
                 element.classList.remove('text-dark')
                 element.classList.add('text-light')
             })
-            document.querySelectorAll([".light", "[class*='-light']"]).forEach(element => {
-                if (element.classList.contains('.light')) {
-                    element.classList.remove('.light')
-                    element.classList.add('.dark')
-                }
-                if (element.classList.contains('navbar-light')) {
-                    element.classList.remove('navbar-light')
-                    element.classList.add('navbar-dark')
-                }
-                if (element.classList.contains('table-light')) {
-                    element.classList.remove('table-light')
-                    element.classList.add('table-dark')
-                }
-                if (element.classList.contains('bg-light')) {
-                    element.classList.remove('bg-light')
-                    element.classList.add('bg-dark')
-                }
-                if (element.classList.contains('collapse-toggler-light')) {
-                    element.classList.remove('collapse-toggler-light')
-                    element.classList.add('collapse-toggler-dark')
-                }
-            })
             document.getElementById("zentral-logo").src='/static_debug/logo-dark.svg'  // FIXME Hardcoded
         }
         if (theme === 'light') {
+            document.querySelectorAll([".dark", "[class*='-dark']"]).forEach(element => {
+                element.className = element.className.replace("dark","light")
+            })
             document.querySelectorAll([".text-light"]).forEach(element => {
                 element.classList.remove('text-light')
                 element.classList.add('text-dark')
-            })
-            document.querySelectorAll([".dark", "[class*='-dark']"]).forEach(element => {
-                if (element.classList.contains('.dark')) {
-                    element.classList.remove('.dark')
-                    element.classList.add('.light')
-                }
-                if (element.classList.contains('navbar-dark')) {
-                    element.classList.remove('navbar-dark')
-                    element.classList.add('navbar-light')
-                }
-                if (element.classList.contains('table-dark')) {
-                    element.classList.remove('table-dark')
-                    element.classList.add('table-light')
-                }
-                if (element.classList.contains('bg-dark')) {
-                    element.classList.remove('bg-dark')
-                    element.classList.add('bg-light')
-                }
-                if (element.classList.contains('collapse-toggler-dark')) {
-                    element.classList.remove('collapse-toggler-dark')
-                    element.classList.add('collapse-toggler-light')
-                }
             })
             document.getElementById("zentral-logo").src='/static_debug/logo-light.svg'  // FIXME Hardcoded
         }
