@@ -208,7 +208,7 @@
 
       {% if ms.ec2_instance_tag_list %}
       <h3>EC2 instance tag{{ ms.ec2_instance_tag_list|length|pluralize }}</h3>
-      <table class="table table-striped align-middle table-hover">
+      <table class="table table-light table-striped align-middle table-hover">
         <thead>
           <tr>
             <th>Key</th>
@@ -228,7 +228,7 @@
       {% with ms.disks.count as disks %}
       {% if disks %}
       <h3>{{ disks }} Disk{{ disks|pluralize }}</h3>
-      <table class="table table-striped align-middle table-hover">
+      <table class="table table-light table-striped align-middle table-hover">
         <thead>
           <th>Name</th>
           <th>Size</th>
@@ -247,7 +247,7 @@
       {% with ms.network_interfaces.count as nic %}
       {% if nic %}
       <h3>{{ nic }} Interface{{ nic|pluralize }}</h3>
-      <table class="table table-striped align-middle table-hover">
+      <table class="table table-light table-striped align-middle table-hover">
         <thead>
           <th>Name</th>
           <th>MAC</th>
@@ -286,7 +286,7 @@
 
       {% if ms.groups.count %}
       <h3>Groups</h3>
-      <table class="table table-striped align-middle table-hover">
+      <table class="table table-light table-striped align-middle table-hover">
         <thead>
           <th>Name</th>
           {% if perms.inventory.view_link %}
@@ -465,7 +465,7 @@
     {% if perms.compliance_checks.view_machinestatus %}
     <h3>Compliance check{{ compliance_check_statuses|length|pluralize }} ({{ compliance_check_statuses|length }})</h3>
     {% if compliance_check_statuses %}
-    <table class="table table-striped align-middle table-hover">
+    <table class="table table-light table-striped align-middle table-hover">
       <thead>
         <th>Name</th>
         <th>Status</th>
@@ -494,7 +494,7 @@
     {% with machine.open_incidents as open_incidents %}
     {% if open_incidents %}
     <h3>Open incident{{ open_incidents|length|pluralize }} ({{ open_incidents|length }})</h3>
-    <table class="table table-striped align-middle table-hover">
+    <table class="table table-light table-striped align-middle table-hover">
       <thead>
         <th>Name</th>
         <th>Status</th>

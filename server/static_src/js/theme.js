@@ -38,6 +38,10 @@
                     element.classList.remove('navbar-light')
                     element.classList.add('navbar-dark')
                 }
+                if (element.classList.contains('table-light')) {
+                    element.classList.remove('table-light')
+                    element.classList.add('table-dark')
+                }
                 if (element.classList.contains('bg-light')) {
                     element.classList.remove('bg-light')
                     element.classList.add('bg-dark')
@@ -62,6 +66,10 @@
                 if (element.classList.contains('navbar-dark')) {
                     element.classList.remove('navbar-dark')
                     element.classList.add('navbar-light')
+                }
+                if (element.classList.contains('table-dark')) {
+                    element.classList.remove('table-dark')
+                    element.classList.add('table-light')
                 }
                 if (element.classList.contains('bg-dark')) {
                     element.classList.remove('bg-dark')
