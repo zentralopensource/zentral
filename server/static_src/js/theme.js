@@ -27,7 +27,6 @@
             document.querySelectorAll([".text-dark"]).forEach(element => {
                 element.classList.remove('text-dark')
                 element.classList.add('text-light')
-                console.log("text a light")
             })
             document.querySelectorAll([".light", "[class*='-light']"]).forEach(element => {
                 if (element.classList.contains('.light')) {
