@@ -38,7 +38,8 @@
             element.classList.remove('text-dark')
             element.classList.add('text-light')
         })
-        document.getElementById("zentral-logo").src='/static_debug/logo-dark.svg'  // FIXME Hardcoded
+        var logo_src = document.getElementById("zentral-logo").src 
+         document.getElementById("zentral-logo").src = logo_src.replace('light','dark')
     }
     const setLight = () => {
         document.querySelectorAll([".dark", "[class*='-dark']"]).forEach(element => {
@@ -48,7 +49,8 @@
             element.classList.remove('text-light')
             element.classList.add('text-dark')
         })
-        document.getElementById("zentral-logo").src='/static_debug/logo-light.svg'  // FIXME Hardcoded
+        var logo_src = document.getElementById("zentral-logo").src
+        document.getElementById("zentral-logo").src = logo_src.replace('dark', 'light')
     }
 
     const showActiveTheme = (theme, focus = false) => {
