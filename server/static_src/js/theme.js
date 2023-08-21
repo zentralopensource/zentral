@@ -17,32 +17,38 @@
             document.querySelectorAll("[data-bs-theme]").forEach(element => {
                 document.documentElement.setAttribute('data-bs-theme', 'dark')
             })
+            setDark()
         } else {
             document.querySelectorAll("[data-bs-theme]").forEach(element => {
                 element.setAttribute('data-bs-theme', theme)
             })
+            if (theme === 'dark') {
+                setDark()
+            }
+            if (theme === 'light') {
+                setLight()
+            }
         }
-
-        if (theme === 'dark') {
-            document.querySelectorAll([".light", "[class*='-light']"]).forEach(element => {
-                element.className = element.className.replace("light","dark")
-            })
-            document.querySelectorAll([".text-dark"]).forEach(element => {
-                element.classList.remove('text-dark')
-                element.classList.add('text-light')
-            })
-            document.getElementById("zentral-logo").src='/static_debug/logo-dark.svg'  // FIXME Hardcoded
-        }
-        if (theme === 'light') {
-            document.querySelectorAll([".dark", "[class*='-dark']"]).forEach(element => {
-                element.className = element.className.replace("dark","light")
-            })
-            document.querySelectorAll([".text-light"]).forEach(element => {
-                element.classList.remove('text-light')
-                element.classList.add('text-dark')
-            })
-            document.getElementById("zentral-logo").src='/static_debug/logo-light.svg'  // FIXME Hardcoded
-        }
+    }
+    const setDark = () => {
+        document.querySelectorAll([".light", "[class*='-light']"]).forEach(element => {
+            element.className = element.className.replace("light","dark")
+        })
+        document.querySelectorAll([".text-dark"]).forEach(element => {
+            element.classList.remove('text-dark')
+            element.classList.add('text-light')
+        })
+        document.getElementById("zentral-logo").src='/static_debug/logo-dark.svg'  // FIXME Hardcoded
+    }
+    const setLight = () => {
+        document.querySelectorAll([".dark", "[class*='-dark']"]).forEach(element => {
+            element.className = element.className.replace("dark","light")
+        })
+        document.querySelectorAll([".text-light"]).forEach(element => {
+            element.classList.remove('text-light')
+            element.classList.add('text-dark')
+        })
+        document.getElementById("zentral-logo").src='/static_debug/logo-light.svg'  // FIXME Hardcoded
     }
 
     const showActiveTheme = (theme, focus = false) => {
