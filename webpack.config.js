@@ -6,12 +6,12 @@ const miniCssExtractPlugin = require('mini-css-extract-plugin')
 
 module.exports = {
   mode: 'development',
-  entry: [
-    './server/static_src/js/main.js',
-    './server/static_src/js/theme.js',
-  ],
+  entry: {
+    main: './server/static_src/js/main.js',
+    theme: './server/static_src/js/theme.js',
+  },
   output: {
-    filename: 'main.js',
+    filename: '[name].js',
     path: path.resolve(__dirname, './server/static/dist')
   },
   plugins: [
