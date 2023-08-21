@@ -66,7 +66,12 @@
             type: 'bar',
             data: {labels: data.labels,
                    datasets: [data.datasets[dataset]]},
-            options: {}
+            options: {
+                scales: {
+                    xAxes: [{gridLines: { color: "darkgray", zeroLineColor: "darkgray" }}],
+                    yAxes: [{gridLines: { color: "darkgray", zeroLineColor: "darkgray" }}]
+                }
+            }
           });
         }
       }
