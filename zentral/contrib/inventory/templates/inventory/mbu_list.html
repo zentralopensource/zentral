@@ -79,11 +79,11 @@
                     {% inventory_tag tag %}
                 {% endfor %}
                 </td>
-                {% if mbu.api_enrollment_enabled %}
-                    <td>
-                        <span class="badge text-bg-success">Available for API enrollment</span>
-                    </td>
-                {% endif %}
+                <td>
+                    {% if mbu.api_enrollment_enabled %}
+                    <span class="badge text-bg-success">Available for API enrollment</span>
+                    {% endif %}
+                </td>
             </tr>
             {% for bu in mbu.get_current_business_units %}
             <tr>
