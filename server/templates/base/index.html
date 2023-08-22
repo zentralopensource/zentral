@@ -3,7 +3,7 @@
 {% block content %}
 <h2>Welcome to Zentral!</h2>
 
-<h3>{{ apps|length }} Configured app{{ apps|pluralize }}</h3>
+<h3>Configured app{{ apps|pluralize }}: {{ apps|length }}</h3>
 
 {% for app in apps %}
 <div class="row">
