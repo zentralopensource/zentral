@@ -12,7 +12,7 @@
     <script src="{% static 'dist/theme.js' %}"></script>
 </head>
 <body class="d-flex flex-column h-100">
-    <nav class="navbar navbar-expand-lg sticky-top bg-light" data-bs-theme="light">
+    <nav class="navbar navbar-expand-lg sticky-top bg-light">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">
                 <img id="zentral-logo" src="{% static 'logo-light.svg' %}" width="150" height="48" alt="Zentral">
@@ -23,7 +23,7 @@
             {% if user.is_authenticated %}
             <ul class="nav ms-auto">
                 {% if zentral_extra_links %}
-                <li class="nav-item dropdown" data-bs-theme="light">
+                <li class="nav-item dropdown">
                     <button id="bd-theme" type="button" class="nav-link text-dark" href="#" role="button" aria-expanded="false" data-bs-toggle="dropdown" data-bs-display="static" aria-label="Toggle theme">
                         <i class="bi bi-moon-stars" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Toggle theme"></i>
                     </button>
@@ -38,7 +38,7 @@
                         </li>
                     </ul>
                 </li>
-                <li class="nav-item dropdown" data-bs-theme="light">
+                <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-display" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Extra links"></i>
                     </a>
@@ -54,7 +54,7 @@
                     </ul>
                 </li>
                 {% endif %}
-                <li class="nav-item dropdown" data-bs-theme="light">
+                <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-exclamation-triangle" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Incidents"></i>
                     </a>
@@ -64,7 +64,7 @@
                         <li><a class="dropdown-item" href="#">Incident 3</a></li>
                     </ul>
                 </li>
-                <li class="nav-item dropdown" data-bs-theme="light">
+                <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-three-dots-vertical" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Platform settings"></i>
                     </a>
@@ -74,7 +74,7 @@
                         <li><a class="dropdown-item" href="{% url 'realms:list' %}">Realms</a></li>
                     </ul>
                 </li>
-                <li class="nav-item dropdown" data-bs-theme="light">
+                <li class="nav-item dropdown">
                     <a class="nav-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-person-circle" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="User settings"></i>
                     </a>
@@ -96,7 +96,7 @@
     </nav>
     <div class="d-flex h-100 overflow-auto">
         {% if user.is_authenticated %}
-        <div class="offcanvas offcanvas-start sidebar sticky-lg-top flex-lg-shrink-0 bg-light" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel" data-bs-theme="light">
+        <div class="offcanvas offcanvas-start sidebar sticky-lg-top flex-lg-shrink-0 bg-light" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
             <div class="offcanvas-header d-lg-none">
                 <h5 class="offcanvas-title" id="offcanvasNavbarLabel">
                     <a class="navbar-brand" href="/">

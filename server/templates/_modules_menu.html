@@ -13,9 +13,9 @@
         </a>
     </div>
     <div class="collapse{%if section.is_active %} show{% endif %}" id="offcanvas{{ section.title }}Submenu">
-        <div class="list-group rounded-0 border-0">
+        <div class="list-group rounded-0 border-0 small">
                 {% for link, anchor_text, active in section.link_list %}
-                <div class="d-flex justify-content-start px-4">
+                <div class="d-flex justify-content-start px-2">
                     <a class="list-group-item list-group-item-action rounded m-1 p-1 border-0 w-auto px-2 ms-2 text-dark{%if active %} active{% endif %}" href="{{ link }}">{{ anchor_text }}</a>
                 </div>
                 {% endfor %}
