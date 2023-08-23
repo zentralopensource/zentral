@@ -55,6 +55,9 @@
     </div>
 
     {% pagination next_url previous_url %}
+{% else %}
+    {% url 'incidents:index' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
 
 {% endblock %}

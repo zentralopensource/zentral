@@ -15,7 +15,7 @@ def incident_severity(severity, default=""):
     color_dict = {
         300: "ff0000",
         200: "ff9900",
-        100: "ffff00",
+        100: "DDDD00",
     }
     color = color_dict.get(severity, "000000")
     style = {'background-color': "#" + color,

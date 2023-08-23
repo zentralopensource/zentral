@@ -11,8 +11,8 @@
 </ol>
 
 <h2>Incident <em>{{ incident.name }}</em></h2>
-<p>{% incident_severity incident.severity %}</p>
 <h3>Update machine incident status</h3>
+<p>{% incident_severity incident.severity %}</p>
 <dl>
   <dt>Machine</dt>
   <dd><a href="{% machine_url object.serial_number %}">{{ object.serial_number }}</a></dd>
@@ -24,15 +24,17 @@
   <dd>{{ object.updated_at }}</dd>
 </dl>
 
-<form method="post">{% csrf_token %}
-  {{ form }}
-  <p>
-    <a href="{{ object.get_absolute_url }}" class="btn btn-default">
-      Cancel
-    </a>
-    <button class="btn btn-primary" type="submit">
-      Update
-    </button>
-  </p>
+<form method="post" class="update-form">{% csrf_token %}
+  
+    {{ form }}
+  
+    <p>
+        <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">
+        Cancel
+        </a>
+        <button class="btn btn-primary" type="submit">
+        Update
+        </button>
+    </p>
 </form>
 {% endblock %}

@@ -15,63 +15,76 @@
   {% endif %}
 </ol>
 
-<h2>Incident <em>{{ incident.name }}</em></h2>
 
-<table class="table table-condensed">
-  <tbody>
-    <tr>
-      <td style="width:20vw">Severity</td>
-      <td>{% incident_severity incident.severity %}</td>
-    </tr>
-    <tr>
-      <td>Status</td>
-      <td>{{ incident.get_status_display }}</td>
-    </tr>
-    {% for section, objects in objects %}
-    <tr>
-      <td>{{ section }}</td>
-      <td>
-        <ul class="list-unstyled">
-          {% for link, obj in objects %}
-          <li>
-            {% if link %}
-            <a href="{{ link }}">{{ obj }}</a>
-            {% else %}
-            {{ obj }}
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ incident.name }}</h2>
+        <div class="ms-3">
+            {% if show_events_link %}
+                <a type="button" class="btn btn-link text-decoration-none text-dark" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Browse the events" href="{% url 'incidents:incident_events' object.pk %}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-activity" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M6 2a.5.5 0 0 1 .47.33L10 12.036l1.53-4.208A.5.5 0 0 1 12 7.5h3.5a.5.5 0 0 1 0 1h-3.15l-1.88 5.17a.5.5 0 0 1-.94 0L6 3.964 4.47 8.171A.5.5 0 0 1 4 8.5H.5a.5.5 0 0 1 0-1h3.15l1.88-5.17A.5.5 0 0 1 6 2Z"></path>
+                    </svg>
+                </a>
             {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+            {% for link, anchor_text in store_links %}
+                <a class="btn btn-default" href="{{ link }}">
+                    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
 
-<dl>
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-  <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-</dl>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Incident</h3>
+        <div class="ms-auto">
+            {% if perms.incidents.change_incident %}
+                <a class="btn btn-link text-dark text-decoration-none{% if not object.get_next_statuses %} disabled{% endif %}"
+                    href="{% url 'incidents:update_incident' object.pk %}"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="bottom"
+                    data-bs-title="Change Status">
+                    <i class="bi bi-pencil-square"></i>
+                </a>
+            {% endif %}
+        </div>
+    </div>
 
-<div class="btn-group" role="group" style="margin:0 0 10px 0">
-  {% if show_events_link %}
-  <a class="btn btn-default" href="{% url 'incidents:incident_events' object.pk %}">
-    <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
-  </a>
-  {% endif %}
-  {% for link, anchor_text in store_links %}
-  <a class="btn btn-default" href="{{ link }}">
-    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
-  </a>
-  {% endfor %}
-  {% if perms.incidents.change_incident %}
-  <a class="btn btn-default{% if not object.get_next_statuses %} disabled{% endif %}" href="{% url 'incidents:update_incident' object.pk %}">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Change status
-  </a>
-  {% endif %}
+    <table class="table table-striped align-middle table-object-properties">
+    <tbody>
+        <tr>
+        <td style="width:20vw">Severity</td>
+        <td>{% incident_severity incident.severity %}</td>
+        </tr>
+        <tr>
+        <td>Status</td>
+        <td>{{ incident.get_status_display }}</td>
+        </tr>
+        {% for section, objects in objects %}
+        <tr>
+        <td>{{ section }}</td>
+        <td>
+            <ul class="list-unstyled">
+            {% for link, obj in objects %}
+            <li>
+                {% if link %}
+                <a href="{{ link }}">{{ obj }}</a>
+                {% else %}
+                {{ obj }}
+                {% endif %}
+            </li>
+            {% endfor %}
+            </ul>
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% created_updated_at object %}
+
 </div>
+
 
 {% if perms.incidents.view_machineincident and paginator.count %}
 <h3>{{ paginator.count }} machine incident{{ paginator.count|pluralize }}</h3>

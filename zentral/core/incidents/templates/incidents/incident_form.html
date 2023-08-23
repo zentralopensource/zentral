@@ -9,7 +9,8 @@
   <li class="breadcrumb-item active">update</li>
 </ol>
 
-<h2>Incident <em>{{ incident.name }}</em></h2>
+<h2>{{ incident.name }}</h2>
+<h3>Update machine incident status</h3>
 <p>{% incident_severity incident.severity %}</p>
 <dl>
   <dt>Current status</dt>
@@ -20,16 +21,16 @@
   <dd>{{ object.updated_at }}</dd>
 </dl>
 
-<form method="post">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
 
     {{ form }}
 
     <p>
         <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">
-        Cancel
+            Cancel
         </a>
         <button class="btn btn-primary" type="submit">
-        Update
+            Update
         </button>
     </p>
 </form>
