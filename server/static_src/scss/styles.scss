@@ -1,6 +1,9 @@
 $list-group-bg: transparent;
 $list-group-hover-bg: lightgray;
+$list-group-hover-bg-dark: gray;
 $list-group-active-bg: lightgray;
+$list-group-active-bg-dark: #7ea9b2;
+$list-group-active-bg-light: #e17261;
 $offcanvas-border-color: transparent;
 $offcanvas-horizontal-width: 250px;
 $box-max-width: 1304px;
@@ -11,6 +14,20 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 
 @import "~bootstrap/scss/bootstrap";
 @import "~bootstrap-icons/font/bootstrap-icons";
+
+.list-group-item.text-dark:hover {
+    background: $list-group-hover-bg;
+}
+.list-group-item.text-dark.active {
+    background: $list-group-active-bg-light;
+}
+
+.list-group-item.text-light:hover {
+    background: $list-group-hover-bg-dark;
+}
+.list-group-item.text-light.active {
+    background: $list-group-active-bg-dark;
+}
 
 .table-probe  {
     margin-bottom: -1px;
