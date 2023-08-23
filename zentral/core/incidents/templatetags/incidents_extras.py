@@ -28,7 +28,7 @@ def incident_severity(severity, default=""):
     except ValueError:
         severity_display = escape(str(severity))
     return mark_safe(
-        f'<span class="label" style="{style_str}">'
+        f'<span class="label rounded p-1" style="{style_str}">'
         f'{severity_display}&nbsp;<i class="fas fa-skull-crossbones"></i>'
         '</span>'
     )
