@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'probes:index' %}">Probes</a>
-  <li><a href="{% url 'probes:probe' probe.pk %}">{{ probe.name }}</a></li>
-  <li class="active">dashboard</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'probes:index' %}">Probes</a>
+  <li class="breadcrumb-item"><a href="{% url 'probes:probe' probe.pk %}">{{ probe.name }}</a></li>
+  <li class="breadcrumb-item active">dashboard</li>
 </ol>
 
 <h2>

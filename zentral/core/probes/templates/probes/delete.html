@@ -9,9 +9,14 @@
 </ol>
 
 <h2>Delete probe {{ object.name }}</h2>
-<p>Do you really want to delete this probe ?</p>
+
+<p>Do you really want to delete this Probe ?</p>
+
 <form method="POST">{% csrf_token %}
-  <a class="btn btn-outline-secondary" href="{% url 'probes:probe' object.id %}">Cancel</a>
-  <button class="btn btn-danger" type="submit">Delete</button>
+
+    <a class="btn btn-outline-secondary" href="{% url 'probes:probe' object.id %}">Cancel</a>
+
+    <button class="btn btn-danger" type="submit">Delete</button>
+
 </form>
 {% endblock %}

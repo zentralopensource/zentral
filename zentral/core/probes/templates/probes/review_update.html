@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'probes:index' %}">Probes</a>
-  <li><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
-  <li class="active">review update</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'probes:index' %}">Probes</a>
+  <li class="breadcrumb-item"><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
+  <li class="breadcrumb-item active">review update</li>
 </ol>
 
 <h2>
@@ -22,10 +22,10 @@
   </div>
   <div class="panel-footer">
     <form class="btn-group" role="group" method="POST">{% csrf_token %}
-      <a href="{% url 'probes:probe' probe_source.id %}" class="btn btn-default">
+      <a href="{% url 'probes:probe' probe_source.id %}" class="btn btn-outline-secondary">
         Cancel
       </a>
-      <button name="action" value="skip" class="btn btn-default">
+      <button name="action" value="skip" class="btn btn-secondary">
         Skip update
       </button>
       <button name="action" value="apply" class="btn btn-primary">

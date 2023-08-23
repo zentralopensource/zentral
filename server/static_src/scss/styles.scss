@@ -12,6 +12,10 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 @import "~bootstrap/scss/bootstrap";
 @import "~bootstrap-icons/font/bootstrap-icons";
 
+.table-probe  {
+    margin-bottom: -1px;
+}
+
 .sidebar {
   @media (min-width: 992px) {
     transform: none !important;

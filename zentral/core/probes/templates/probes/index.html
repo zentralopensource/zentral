@@ -14,21 +14,15 @@
 </ol>
 
     <div class="d-flex align-items-center mb-1">
-        <h2 class="mb-3">Probe{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
+        <h2 class="mb-0">Probe{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
 
-    {% if perms.probes.add_probesource %}
-        <div class="dropdown mb-2 btn btn-link">
-            <button class="btn btn-primary dropdown-toggle" type="button" id="createProbe"
-                data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                Add
-            </button>
-            <ul class="dropdown-menu" aria-labelledby="createProbe">
-                {% for link in probe_extra_links.create %}
-                    <li><a href="{{ link.url }}" class="dropdown-item">{{ link.anchor_text }}</a></li>
-                {% endfor %}
-            </ul>
+        {% if perms.probes.add_probesource %}
+        <div class="ms-auto">
+            <a href="{% url 'probes:create' %}" class="btn btn-link text-decoration-none text-dark" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
+                <i class="bi bi-plus-circle"></i>
+            </a>
         </div>
-    {% endif %}
+        {% endif %}
     </div>
 
     <form method="GET" class="d-flex w-75 me-auto flex-shrink-0 align-items-center">
@@ -43,8 +37,8 @@
 {% if object_list %}
     {% pagination next_url previous_url %}
 
-    <div class="table-reponsive">
-    <table class="table">
+    <div class="table-reponsive mb-3">
+    <table class="table table-light table-striped align-middle table-hover">
         <thead>
         <th>Model</th>
         <th>Events</th>
@@ -69,9 +63,9 @@
         <td><a href="{% url 'probes:probe' probe.pk %}">{{ probe.name }}</a></td>
         <td>
             {% if probe.status == 'ACTIVE' %}
-            <span class="label label-info">Active</span>
+            <span class="badge text-bg-info">Active</span>
             {% else %}
-            <span class="label label-danger">Inactive</span>
+            <span class="badge text-bg-danger">Inactive</span>
             {% endif %}
         </td>
         </tr>
@@ -81,5 +75,8 @@
     </div>
 
     {% pagination next_url previous_url %}
+{% else %}
+    {% url 'probes:index' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
 {% endblock %}

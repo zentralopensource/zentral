@@ -3,11 +3,11 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'probes:index' %}">Probes</a>
-  <li><a href="{% url 'probes:feeds' %}">Feeds</a>
-  <li><a href="{% url 'probes:feed' object.feed_id %}">{{ object.feed }}</a>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'probes:index' %}">Probes</a>
+  <li class="breadcrumb-item"><a href="{% url 'probes:feeds' %}">Feeds</a>
+  <li class="breadcrumb-item"><a href="{% url 'probes:feed' object.feed_id %}">{{ object.feed }}</a>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
 <h2>
@@ -52,16 +52,16 @@
       </td>
       <td>
         {% if probe_source.status == 'ACTIVE' %}
-        <span class="label label-info">Active</span>
+        <span class="badge text-bg-info">Active</span>
         {% else %}
-        <span class="label label-danger">Inactive</span>
+        <span class="badge text-bg-danger">Inactive</span>
         {% endif %}
       </td>
       <td>
         {% if probe_source.feed_probe_update_available %}
-        <span class="label label-default">UPDATE AVAILABLE</span>
+        <span class="badge text-bg-default">UPDATE AVAILABLE</span>
         {% else %}
-        <span class="label label-success">OK</span>
+        <span class="badge text-bg-success">OK</span>
         {% endif %}
       </td>
     </tr>
