@@ -12,44 +12,8 @@
         {% endif %}
         {% endfor %}
     </ol>
-    
-    <div class="object-details">
-        <div class="d-flex align-items-center mb-1">
-            {% if object_list_title %}
-                <h2 class="m-0">{{ object_list_title }}</h2>
-            {% endif %}
-        </div>
-        <div class="d-flex align-items-center mb-3">
-            <h3 class="m-0 fs-5 text-secondary">Business Unit</h3>
-            <div class="ms-auto">
-                {% if perms.inventory.change_metabusinessunit %}
-                    <a href="{% url 'inventory:update_mbu' object.id %}" type="button" class="btn btn-link text-decoration-none text-dark" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Update BU">
-                        <i class="bi bi-pencil-square"></i>
-                    </a>
-                {% endif %}
-                {% if perms.inventory.view_metabusinessunittag and perms.inventory.add_metabusinessunittag and perms.inventory.change_metabusinessunittag and perms.inventory.delete_metabusinessunittag and perms.inventory.add_tag %}
-                    <a href="{% url 'inventory:mbu_tags' object.id %}" type="button" class="btn btn-link text-decoration-none text-dark" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Manage Tags">
-                        <i class="bi bi-tags"></i>
-                    </a>
-                {% endif %}
-                {% if not object.api_enrollment_enabled and perms.inventory.change_metabusinessunit %}
-                    <a href="{% url 'inventory:mbu_api_enrollment' object.id %}" type="button" class="btn btn-link text-decoration-none text-dark" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Enable API Enrollment">
-                        <i class="bi bi-boxes"></i>
-                    </a>
-                {% endif %}
-                {% if object.can_be_deleted and perms.inventory.delete_metabusinessunit %}
-                    <a href="{% url 'inventory:delete_mbu' object.id %}" type="button" class="btn btn-link text-decoration-none text-dark" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete BU">
-                        <i class="bi bi-trash"></i>
-                    </a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
 
-    {% block objectextras %}
-    {% endblock %}
-
-    <h3>Machine{{ msquery.count|pluralize }} ({{ msquery.count }})</h3>
+<h3>Machine{{ msquery.count|pluralize }} ({{ msquery.count }})</h3>
 
 <div class="modal{% if filter_form_errors %} modal-with-errors{% endif %} modal fade" id="add-filter" tabindex="-1" role="dialog" aria-labelledby="add-filter" aria-hidden="true"> 
   <div class="modal-dialog" role="document">
@@ -209,7 +173,7 @@
 </div>
 
 
-<div class="d-flex justify-content-between">
+<div class="d-flex justify-content-between px-1">
     <form id="inventory-form" method="GET" class="align-items-center">
     <div class="row g-6 me-2 mb-2">
       {% for key, val in search_form_qd.items %}
