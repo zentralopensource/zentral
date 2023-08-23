@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -14,10 +13,12 @@
 </ol>
 
 <h2>{% if object %}Update{% else %}Create{% endif %} Taxonomy</h2>
-<form method="post" class="form">{% csrf_token %}
-  {{ form|bootstrap }}
-  <p>
-    <a href="{% url 'inventory:tags' %}" class="btn btn-default">Cancel</a>
+<form method="post" class="update-form">{% csrf_token %}
+  
+    {{ form }}
+  
+    <p>
+    <a href="{% url 'inventory:tags' %}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
         <form>
     </p>
