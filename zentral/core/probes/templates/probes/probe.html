@@ -66,32 +66,38 @@
   <div class="card-footer">
     <div class="btn-group" role="group">
       {% if perms.probes.change_probesource %}
-      <a class="btn btn-outline-secondary" href="{% url 'probes:update' probe.pk %}">
+      <a class="btn btn-outline-secondary" href="{% url 'probes:update' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
         <span class="bi bi-pencil-square" aria-hidden="true"></span>
       </a>
       {% endif %}
       {% if perms.probes.add_probesource %}
-      <a class="btn btn-outline-secondary" href="{% url 'probes:clone' probe.pk %}">
+      <a class="btn btn-outline-secondary" href="{% url 'probes:clone' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Clone">
         <span class="bi bi-layers" aria-hidden="true"></span>
       </a>
       {% endif %}
       {% if perms.probes.delete_probesource %}
-      <a class="btn btn-danger" href="{% url 'probes:delete' probe.pk %}">
+      <a class="btn btn-danger" href="{% url 'probes:delete' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
         <span class="bi bi-trash" aria-hidden="true"></span>
       </a>
       {% endif %}
       {% if show_events_link %}
-      <a class="btn btn-outline-secondary" href="{% url 'probes:probe_events' probe.pk %}">
+      <a class="btn btn-outline-secondary" href="{% url 'probes:probe_events' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Events">
         <span class="bi bi-list" aria-hidden="true"></span> Events
       </a>
       {% endif %}
       {% if show_dashboard_link %}
-      <a class="btn btn-outline-secondary" href="{% url 'probes:probe_dashboard' probe.pk %}">
+      <a class="btn btn-outline-secondary" href="{% url 'probes:probe_dashboard' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Dashboard">
         <span class="bi bi-bar-chart-fill" aria-hidden="true"></span> Dashboard
       </a>
       {% endif %}
       {% for link, store_name in store_links %}
-      <a class="btn btn-outline-secondary" href="{{ link }}">
+      <a class="btn btn-outline-secondary" href="{{ link }}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{store_name}}">
         <span class="bi bi-link" aria-hidden="true"></span> {{ store_name }}
       </a>
       {% endfor %}
@@ -190,10 +196,12 @@
   {% if perms.probes.change_probesource %}
   <div class="card-footer">
     <div class="btn-group" role="group">
-      <a href="{% url 'probes:update_filter' object.id "inventory" forloop.counter0 %}" class="btn btn-outline-secondary">
+      <a href="{% url 'probes:update_filter' object.id "inventory" forloop.counter0 %}" class="btn btn-outline-secondary"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
         <span class="bi bi-pencil-square" aria-hidden="true"></span>
        </a>
-      <a href="{% url 'probes:delete_filter' object.id "inventory" forloop.counter0 %}" class="btn btn-danger">
+      <a href="{% url 'probes:delete_filter' object.id "inventory" forloop.counter0 %}" class="btn btn-danger"
+      data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
         <span class="bi bi-trash" aria-hidden="true"></span>
       </a>
     </div>
@@ -231,10 +239,12 @@
   {% if perms.probes.change_probesource %}
   <div class="card-footer">
     <div class="btn-group" role="group">
-      <a href="{% url 'probes:update_filter' object.id "metadata" forloop.counter0 %}" class="btn btn-outline-secondary">
+      <a href="{% url 'probes:update_filter' object.id "metadata" forloop.counter0 %}" class="btn btn-outline-secondary"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
         <span class="bi bi-pencil-square" aria-hidden="true"></span>
        </a>
-      <a href="{% url 'probes:delete_filter' object.id "metadata" forloop.counter0 %}" class="btn btn-danger">
+      <a href="{% url 'probes:delete_filter' object.id "metadata" forloop.counter0 %}" class="btn btn-danger"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
         <span class="bi bi-trash" aria-hidden="true"></span>
       </a>
     </div>
@@ -265,10 +275,12 @@
   {% if perms.probes.change_probesource %}
   <div class="card-footer">
     <div class="btn-group" role="group">
-      <a href="{% url 'probes:update_filter' object.id "payload" forloop.counter0 %}" class="btn btn-outline-secondary">
+      <a href="{% url 'probes:update_filter' object.id "payload" forloop.counter0 %}" class="btn btn-outline-secondary"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
         <span class="bi bi-pencil-square" aria-hidden="true"></span>
        </a>
-      <a href="{% url 'probes:delete_filter' object.id "payload" forloop.counter0 %}" class="btn btn-danger">
+      <a href="{% url 'probes:delete_filter' object.id "payload" forloop.counter0 %}" class="btn btn-danger"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
         <span class="bi bi-trash" aria-hidden="true"></span>
       </a>
     </div>
@@ -317,10 +329,12 @@
       {% if perms.probes.change_probesource %}
       <td>
           <a href="{% url 'probes:edit_action' object.id action.name %}"
-             class="btn btn-outline-secondary{% if not action.can_be_updated %} disabled{% endif %}">
+             class="btn btn-outline-secondary{% if not action.can_be_updated %} disabled{% endif %}"
+             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
             <span class="bi bi-pencil-square" aria-hidden="true"></span>
           </a>
-          <a href="{% url 'probes:delete_action' object.id action.name %}" class="btn btn-danger">
+          <a href="{% url 'probes:delete_action' object.id action.name %}" class="btn btn-danger"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
             <span class="bi bi-trash" aria-hidden="true"></span>
           </a>
       </td>
