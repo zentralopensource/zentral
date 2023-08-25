@@ -2,7 +2,6 @@ from collections import OrderedDict
 import logging
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.contrib.auth.models import Group
-from django.db.models import Case, Count, IntegerField, Sum, When
 from django.db.models.functions import Lower
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -14,25 +13,19 @@ logger = logging.getLogger("zentral.accounts.views.groups")
 
 class GroupsView(PermissionRequiredMixin, ListView):
     permission_required = 'auth.view_group'
-    model = Group
     template_name = "accounts/group_list.html"
 
     def get_queryset(self):
-        return (
-            super().get_queryset()
-                   .annotate(
-                       user_count=Sum(
-                           Case(When(user__is_service_account=False, then=1),
-                                default=0,
-                                output_field=IntegerField())
-                       ),
-                       service_account_count=Sum(
-                           Case(When(user__is_service_account=1, then=1),
-                                default=0,
-                                output_field=IntegerField())
-                       ),
-                       realm_group_mapping_count=Count("realmgroupmapping", distinct=True)
-                   ).order_by(Lower("name"))
+        return Group.objects.raw(
+            "select g.*, g.name,"
+            "(select count(*) from accounts_user u "
+            " join accounts_user_groups ug on (ug.user_id = u.id) "
+            " where ug.group_id=g.id and is_service_account = TRUE) service_account_count,"
+            "(select count(*) from accounts_user u "
+            " join accounts_user_groups ug on (ug.user_id = u.id) "
+            " where ug.group_id=g.id and is_service_account = FALSE) user_count,"
+            "(select count(*) from realms_realmgroupmapping where group_id=g.id) realm_group_mapping_count "
+            "from auth_group g order by g.name"
         )
 
 
