@@ -11,7 +11,7 @@ ARG APP_VERSION=unknown
 # - Make venv and install common requirements
 #
 
-FROM python:3.10-bullseye AS base-builder
+FROM python:3.10-bookworm AS base-builder
 
 # zentral apt dependencies
 RUN apt-get update && \
@@ -29,7 +29,9 @@ RUN apt-get update && \
             libmemcached-dev \
 # dep for python-ldap
             libldap2-dev \
-            libsasl2-dev && \
+            libsasl2-dev \
+# dep to build the css and js dist files
+            npm && \
 # clean cache
     rm -rf /var/lib/apt/lists/*
 
@@ -79,6 +81,11 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY constraints.txt requirements.txt ./
 RUN pip install -r requirements.txt
 
+# Build the CSS and JS dist files
+COPY package.json package-lock.json webpack.config.js ./
+COPY server/static_src ./server/static_src
+RUN npm install && npm run build
+
 
 ####
 # Build stage 1:
@@ -111,7 +118,7 @@ RUN pip install -r requirements_gcp.txt
 # - copy tini, mkbom and xar from stage 0
 #
 
-FROM python:3.10-slim-bullseye as base-runner
+FROM python:3.10-slim-bookworm as base-runner
 
 # zentral apt dependencies
 RUN apt-get update && \
@@ -126,10 +133,10 @@ RUN apt-get update && \
 # libpq5 for psycopg2
             libpq5 \
 # extra dependencies for python crypto / WebAuthn
-            libssl1.1 \
-            libffi7 \
+            libssl3 \
+            libffi8 \
 # dep for python-ldap
-            libldap-2.4-2 \
+            libldap-2.5-0 \
             libsasl2-2 && \
 # clean cache
     rm -rf /var/lib/apt/lists/*
@@ -203,6 +210,7 @@ COPY docker-entrypoint.py /zentral/
 COPY ./ee /zentral/ee
 COPY ./server /zentral/server
 COPY ./zentral /zentral/zentral
+COPY --from=base-builder /server/static/dist /zentral/server/static/dist
 RUN printf "version = \"\"\"$APP_VERSION\"\"\"\n" > /zentral/server/base/deployment.py
 
 WORKDIR /zentral
