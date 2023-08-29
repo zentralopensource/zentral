@@ -109,6 +109,8 @@ class SantaRuleEngineTestCase(TestCase):
                                    ("yolo", False),
                                    ("yolo:com.apple.curl", False),
                                    ("EQHXZ8M8AV:com.google.Chrome", True),
+                                   ("EQHXZ8M8AV:chrome_crashpad_handler", True),
+                                   ("EQHXZ8M8AV:not-a-thing", True),
                                    ("EQHXZ8M8AV", False)):
             self.assertEqual(test_signing_id_identifier(identifier), result)
 

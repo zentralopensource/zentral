@@ -176,7 +176,7 @@ def test_signing_id_identifier(identifier):
     team_id, signing_id = identifier.split(":", 1)
     if not test_team_id(team_id) and team_id != "platform":
         return False
-    return re.match(r'^([0-9a-zA-Z]+\.)*([0-9a-zA-Z]+)\Z', signing_id) is not None
+    return re.match(r'^([0-9a-zA-Z_\-]+\.)*([0-9a-zA-Z_\-]+)\Z', signing_id) is not None
 
 
 def test_team_id(team_id):
