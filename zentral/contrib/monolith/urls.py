@@ -101,8 +101,7 @@ urlpatterns = [
 ]
 
 
-pinned_menu_cfg = {
-    'weight': 10,
+modules_menu_cfg = {
     'items': (
         ('catalogs', 'Catalogs', False, ("monolith.view_catalog",)),
         ('pkg_infos', 'PkgInfos', False, ("monolith.view_pkginfo",)),
