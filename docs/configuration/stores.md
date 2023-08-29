@@ -102,6 +102,58 @@ Use `included_event_filters` instead.
 
 A list of group names. Empty by default (i.e. all users will get the links). Can be used to display the links to the events in the store to only a subset of Zentral users, if not all users have direct access to the store.
 
+## OpenSearch backend options
+
+Use this store if you have a managed AWS OpenSearch domain. API calls to store and retrieve the events can be authenticated using the standard AWS signatures. It is recommended to use a role attached to the EC2 instance or to the container, but an IAM key and a secret can be provided.
+
+### `aws_auth`
+
+**OPTIONAL**
+
+A dictionary to configure the AWS authentication. If omitted, the API calls will not be authenticated. It must contain the AWS region in the `region` key. `access_key_id` and `secret_access_key` can also be used if the default AWS authentication via instance or container profile is not set.
+
+### Simple example
+
+```json
+{
+  "backend": "zentral.core.stores.backends.opensearch",
+  "frontend": true,
+  "index": "zentral-events",
+  "hosts": ["https://example-00000000000000000000000000.us-east-1.es.amazonaws.com"],
+  "kibana_discover_url": "https://example-00000000000000000000000000.us-east-1.es.amazonaws.com/_dashboards",
+  "kibana_index_pattern_uuid": "00000000-0000-0000-0000-000000000000",
+  "aws_auth": {"region": "us-east-1"}
+}
+```
+
+### Full example
+
+In this example, a separate index is setup to receive the Osquery events. You could configure it with a different [OpenSearch policy](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ism.html) to change the retention time or the storage type. Use the index name as the key, add `included_event_filters` and `excluded_event_filters`. Set a priority to make sure that only one index will be chosen by Zentral. Finally do not forget to add a default unfiltered index with the lowest priority. A `read_index` is also required in this kind of setup. It should point to an alias that is covering all the events you want to be able to retrieve in the Zentral GUI.
+
+```json
+{
+  "backend": "zentral.core.stores.backends.opensearch",
+  "frontend": true,
+  "batch_size": 100,
+  "indices": {
+    "zentral-osquery": {
+      "priority": 10,
+      "included_event_filters": {
+        "tags": ["osquery"]
+      }
+    },
+    "zentral-other": {
+      "priority": 1
+    }
+  },
+  "read_index": "zentral-all",
+  "hosts": ["https://example-00000000000000000000000000.us-east-1.es.amazonaws.com"],
+  "kibana_discover_url": "https://example-00000000000000000000000000.us-east-1.es.amazonaws.com/_dashboards",
+  "kibana_index_pattern_uuid": "00000000-0000-0000-0000-000000000000",
+  "aws_auth": {"region": "us-east-1"}
+}
+```
+
 ## Kinesis backend options
 
 This store is capable of batch operation. The maximum `batch_size` is 500. See the [`kinesis:PutRecords`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_PutRecords.html) documentation for more details.

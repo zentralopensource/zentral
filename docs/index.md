@@ -34,10 +34,14 @@ You can deploy it on your machine with [Docker](./deployment/docker-compose), or
 
 ## Event stores
 
-* [Elasticsearch](https://www.elastic.co/products/elasticsearch)
-* Kinesis
+* [AWS Kinesis](https://aws.amazon.com/kinesis/)
 * [Azure log analytics](https://docs.microsoft.com/en-us/azure/azure-monitor/log-query/get-started-portal)
+* [DataDog](https://www.datadoghq.com/)
+* [Elasticsearch](https://www.elastic.co/products/elasticsearch)
+* [OpenSearch](https://opensearch.org/)
+* [Snowflake](https://www.snowflake.com/en/)
 * [Splunk](https://www.splunk.com/en_us/software/features-comparison-chart.html)
+* [sumo logic](https://www.sumologic.com/)
 * Generic HTTP POST endpoint
 
 ## Actions
