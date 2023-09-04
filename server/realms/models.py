@@ -28,6 +28,8 @@ class Realm(models.Model):
     first_name_claim = models.CharField(max_length=255, blank=True)
     last_name_claim = models.CharField(max_length=255, blank=True)
     full_name_claim = models.CharField(max_length=255, blank=True)
+    custom_attr_1_claim = models.CharField(max_length=255, blank=True)
+    custom_attr_2_claim = models.CharField(max_length=255, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -48,7 +50,9 @@ class Realm(models.Model):
         return reverse("realms:view", args=(self.uuid,))
 
     def iter_user_claim_mappings(self):
-        for user_claim in ("username", "email", "first_name", "last_name", "full_name"):
+        for user_claim in ("username", "email",
+                           "first_name", "last_name", "full_name",
+                           "custom_attr_1", "custom_attr_2"):
             yield user_claim, getattr(self, "{}_claim".format(user_claim))
 
 
@@ -64,6 +68,8 @@ class RealmUser(models.Model):
     first_name = models.CharField(max_length=255, blank=True)
     last_name = models.CharField(max_length=255, blank=True)
     full_name = models.CharField(max_length=255, blank=True)
+    custom_attr_1 = models.CharField(max_length=255, blank=True)
+    custom_attr_2 = models.CharField(max_length=255, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

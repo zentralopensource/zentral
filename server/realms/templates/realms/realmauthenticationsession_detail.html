@@ -53,6 +53,10 @@
   <dd>{{ realm_user.last_name|default:"-" }}</dd>
   <dt>Full name</dt>
   <dd>{{ realm_user.full_name|default:"-" }}</dd>
+  <dt>Custom attr. 1</dt>
+  <dd>{{ realm_user.custom_attr_1|default:"-" }}</dd>
+  <dt>Custom attr. 2</dt>
+  <dd>{{ realm_user.custom_attr_2|default:"-" }}</dd>
 </dl>
 
 {% if perms.auth.view_group %}

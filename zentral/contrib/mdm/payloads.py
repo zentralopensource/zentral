@@ -199,9 +199,10 @@ def substitute_variables(obj, enrollment_session, enrolled_user=None):
         realm_user = enrollment_session.realm_user
         if realm_user:
             for attr in ("username", "device_username",
-                         "email_prefix", "email_prefix",  # WARNING order is important
-                         "email", "email",
-                         "first_name", "last_name", "full_name"):
+                         "email_prefix",  # WARNING order is important
+                         "email",
+                         "first_name", "last_name", "full_name",
+                         "custom_attr_1", "custom_attr_2"):
                 obj = obj.replace(f"$REALM_USER.{attr.upper()}",
                                   getattr(realm_user, attr))
         managed_apple_id = getattr(enrollment_session, "managed_apple_id", None)

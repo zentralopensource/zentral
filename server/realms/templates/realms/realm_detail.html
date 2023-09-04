@@ -63,6 +63,14 @@
         <td>Full name claim</td>
         <td>{{ object.full_name_claim|default:"-" }}</td>
       </tr>
+      <tr>
+        <td>Custom attr. 1 claim</td>
+        <td>{{ object.custom_attr_1_claim|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Custom attr. 2 claim</td>
+        <td>{{ object.custom_attr_2_claim|default:"-" }}</td>
+      </tr>
       {% for name, value, hidden in object.backend_instance.extra_attributes_for_display %}
       <tr>
         <td>{{ name }}</td>
