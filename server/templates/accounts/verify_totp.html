@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="px-4 py-5 my-5 text-center w-50 m-auto">
+<div class="px-4 py-5 my-5 text-center w-100 m-auto">
     <form class="panel panel-default" method="POST">{% csrf_token %}
     <div class="panel-heading">
         <h3 class="panel-title">
@@ -25,7 +25,7 @@
     </div>
     </form>
     {% for link, anchor_text in form.get_alternative_verification_links %}
-    <p><a href="{{ link }}"><u>{{ anchor_text }}</u></a></p>
+    <p class="mt-2"><a href="{{ link }}"><u>{{ anchor_text }}</u></a></p>
     {% endfor %}
 </div>
 {% endblock %}

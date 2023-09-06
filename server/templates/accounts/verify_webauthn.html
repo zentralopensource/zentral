@@ -1,31 +1,21 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="row">
-  <div class="col-md-4 col-md-offset-4">
+<div class="px-4 py-5 my-5 text-center w-100 m-auto">
     <form id="form" action="{% url 'accounts:verify_webauthn' %}" class="panel panel-default" method="POST">{% csrf_token %}
       <input type="hidden" id="token_response" name="token_response">
-      <div class="panel-heading">
-        <h3 class="panel-title">
+        <h3 class="text-center">
           Two-factor authentication - Security key
         </h3>
-      </div>
-      <div class="panel-body">
         <p id="message">When you are ready to authenticate, press the button below.</p>
-      </div>
-      <div id="footer" class="panel-footer btn-group btn-group-justified" role="group" aria-label="retry security key verification">
-        <div class="btn-group" role="group">
-          <a id="start" class="btn btn-success">Use security key</a>
-        </div>
-        <div class="btn-group" role="group" style="display:none;">
-          <a id="message_retry" class="btn btn-primary">Retry</a>
-        </div>
+      <div id="footer" class="panel-footer" aria-label="retry security key verification">
+          <button type="button" id="start" class="btn btn-primary">Use security key</a>
+          <button type="button" id="message_retry" class="btn btn-primary" style="display:none;">Retry</a>
       </div>
     </form>
     {% for link, anchor_text in form.get_alternative_verification_links %}
-    <p><a href="{{ link }}"><u>{{ anchor_text }}</u></a></p>
+    <p class="mt-2"><a href="{{ link }}"><u>{{ anchor_text }}</u></a></p>
     {% endfor %}
-  </div>
 </div>
 {% endblock %}
 
@@ -58,7 +48,8 @@
 
   function show_message (message, retry) {
     $("#footer").toggle(retry);
-    $("#message_retry").parent().toggle(retry);
+    $("#start").toggle(!retry);
+    $("#message_retry").toggle(retry);
     $("#message").text(message);
   }
 
