@@ -10,14 +10,14 @@
         </div>
     {% endfor %}
 </div>
-<div class="form-signin d-flex justify-content-center w-100 m-auto px-4 py-3 my-0">
+<div class="form-signin d-flex flex-column align-items-center w-100 m-auto px-4 py-3 my-0">
 {% else %}
-<div class="form-signin d-flex justify-content-center w-100 m-auto px-4 py-5 my-5">
+<div class="form-signin d-flex flex-column align-items-center w-100 m-auto px-4 py-5 my-5">
 {% endif %}
     {% for realm, login_link in login_realms %}
         <form action="{{ login_link }}" method="POST">{% csrf_token %}
             <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_to }}" required>
-            <button href="{{ login_link }}" class="btn btn-large btn-primary">Sign in with {{ realm }}</button>
+            <button href="{{ login_link }}" class="btn btn-primary w-100 py-2">Sign in with {{ realm }}</button>
         </form>
         {% if not forloop.last or form %}
             <h3 class="text-center">or</h3>
