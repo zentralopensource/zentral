@@ -10,7 +10,7 @@
     </div>
     <div class="panel-body">
         {% for ff in form %}
-            <div class="form-floating d-flex justify-content-center w-25 m-auto p-1 my-2">
+            <div class="form-floating d-flex justify-content-center w-25 m-auto p-1 my-2" style="max-width:150px; min-width:150px;">
                 {{ ff }}
                 <label for="floatingInput">{{ ff.label }}</label>
             </div>
