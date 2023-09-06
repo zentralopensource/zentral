@@ -1,11 +1,12 @@
 {% load inclusion_tags %}
 {% for field in form %}
     {% if field in form.visible_fields %}
-    <div class={% if field.widget_type == 'checkbox' %}"form-checkbox col-md me-2 mb-2"{% elif field.widget_type == 'text' %}"form-floating col-md{{ form.fields|length|add:"-9" }} me-2 mb-2"{% else %}"form-floating col-md me-2 mb-2"{% endif %}>
+    <div class={% if field.widget_type == 'checkbox' %}"form-checkbox col-md me-2 mb-2 text-center"{% elif field.widget_type == 'text' %}"form-floating col-md{{ form.fields|length|add:"-9" }} me-2 mb-2"{% else %}"form-floating col-md me-2 mb-2"{% endif %}>
 
         {% if field.widget_type == 'select' %}
             <select class="form-select"
         {% elif field.widget_type == 'checkbox' %}
+            {{ field.label_tag }}
             <input class="form-check-input" {% if field.value %} checked {% endif %}
         {% else %}
             <input class="form-control"
@@ -28,8 +29,9 @@
             </select>
         {% endif %}
     
-        
-        {{ field.label_tag }}
+        {% if field.widget_type != 'checkbox' %}
+            {{ field.label_tag }}
+        {% endif %}
     </div>
     {% endif %}
 {% endfor %}
