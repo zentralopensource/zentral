@@ -13,7 +13,7 @@
 <form method="POST">{% csrf_token %}
   <p>Do you really want to delete this tag config ?</p>
   <p>
-    <a href="{{ jamf_instance.get_absolute_url }}" class="btn btn-secondary">Cancel</a>
+    <a href="{{ jamf_instance.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
     <button class="btn btn-danger">Delete</button>
   </p>
 </form>
