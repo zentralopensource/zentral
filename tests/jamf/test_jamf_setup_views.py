@@ -76,7 +76,7 @@ class JamfSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("jamf:jamf_instances"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "jamf/jamfinstance_list.html")
-        self.assertContains(response, "0 jamf instances")
+        self.assertContains(response, "Jamf instances (0)")
 
     # create jamf instance
 
@@ -112,7 +112,7 @@ class JamfSetupViewsTestCase(TestCase):
                                      "inventory_completed_heartbeat_timeout": 5432},
                                     follow=True)
         self.assertEqual(response.template_name, ["jamf/jamfinstance_detail.html"])
-        self.assertContains(response, "0 Tag configs")
+        self.assertContains(response, "Tag configs (0)")
         jamf_instance = response.context["object"]
         self.assertEqual(jamf_instance.version, 0)
         self.assertEqual(jamf_instance.get_password(), "pwd")
@@ -236,7 +236,7 @@ class JamfSetupViewsTestCase(TestCase):
                                      "inventory_completed_heartbeat_timeout": 5432},
                                     follow=True)
         self.assertTemplateUsed(response, "jamf/jamfinstance_detail.html")
-        self.assertContains(response, "0 Tag configs")
+        self.assertContains(response, "Tag configs (0)")
         self.assertContains(response, "https://yo.example2.com:8443/JSSResource")
         jamf_instance2 = response.context["object"]
         self.assertEqual(jamf_instance, jamf_instance2)
@@ -277,7 +277,7 @@ class JamfSetupViewsTestCase(TestCase):
                                      "replacement": r"\1"},
                                     follow=True)
         self.assertTemplateUsed(response, "jamf/jamfinstance_detail.html")
-        self.assertContains(response, "1 Tag config")
+        self.assertContains(response, "Tag config (1)")
         self.assertContains(response, t.name)
 
     def test_create_tag_config_error(self):
@@ -317,7 +317,7 @@ class JamfSetupViewsTestCase(TestCase):
                                      "replacement": r"haha: \1"},
                                     follow=True)
         self.assertTemplateUsed(response, "jamf/jamfinstance_detail.html")
-        self.assertContains(response, "1 Tag config")
+        self.assertContains(response, "Tag config (1)")
         self.assertContains(response, "haha")
 
     # delete tag config
@@ -341,4 +341,4 @@ class JamfSetupViewsTestCase(TestCase):
         response = self.client.post(reverse("jamf:delete_tag_config", args=(jamf_instance.pk, tag_config.pk)),
                                     follow=True)
         self.assertTemplateUsed(response, "jamf/jamfinstance_detail.html")
-        self.assertContains(response, "0 Tag configs")
+        self.assertContains(response, "Tag configs (0)")
