@@ -81,7 +81,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:index"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/index.html")
-        self.assertContains(response, "0 Incidents")
+        self.assertContains(response, "Incidents (0)")
 
     def test_index_with_one_incident(self):
         self._force_incident()
@@ -89,7 +89,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:index"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/index.html")
-        self.assertContains(response, "1 Incident")
+        self.assertContains(response, "Incident (1)")
         self.assertContains(response, self.probe_source.name)
 
     def test_index_search(self):
@@ -98,7 +98,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:index") + "?q=" + self.probe_source.name)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/index.html")
-        self.assertContains(response, "1 Incident")
+        self.assertContains(response, "Incident (1)")
         self.assertContains(response, self.probe_source.name)
 
     # detail
@@ -119,7 +119,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/incident_detail.html")
-        self.assertNotContains(response, "Change status")
+        self.assertNotContains(response, "Change Status")
 
     def test_incident_detail_with_status_update(self):
         incident = self._force_incident()
@@ -127,7 +127,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/incident_detail.html")
-        self.assertContains(response, "Change status")
+        self.assertContains(response, "Change Status")
 
     def test_incident_detail_no_perms_no_object_link(self):
         incident = self._force_incident()
@@ -152,7 +152,7 @@ class InventoryViewsTestCase(TestCase):
         self._login("incidents.view_incident", "incidents.view_machineincident")
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "23 machine incidents")
+        self.assertContains(response, "Machine incidents (23)")
         self.assertContains(response, "page 1 of 2")
 
     def test_incident_detail_machine_incidents_second_page(self):
@@ -162,7 +162,7 @@ class InventoryViewsTestCase(TestCase):
         self._login("incidents.view_incident", "incidents.view_machineincident")
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)) + "?page=2")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "23 machine incidents")
+        self.assertContains(response, "Machine incidents (23)")
         self.assertContains(response, "page 2 of 2")
 
     def test_incident_detail_no_perm_no_machine_incidents(self):
@@ -172,7 +172,7 @@ class InventoryViewsTestCase(TestCase):
         self._login("incidents.view_incident")
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "23 machine incidents")
+        self.assertNotContains(response, "Machine incidents (23)")
         self.assertNotContains(response, "page 1 of 2")
 
     # update incident
