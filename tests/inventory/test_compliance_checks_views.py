@@ -212,7 +212,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_detail.html")
         self.assertContains(response, cc.compliance_check.name)
-        self.assertContains(response, f"/inventory/compliance_checks/{cc.pk}/events/store_redirect/")
+        self.assertContains(response, f"/inventory/compliance_checks/{cc.pk}/events/")
 
     # events
 
