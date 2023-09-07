@@ -29,7 +29,7 @@
             {% endif %}
             {% for link, anchor_text in store_links %}
                 <a class="btn btn-default" href="{{ link }}">
-                    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
+                    <span class="bi bi-link-45deg" aria-hidden="true"></span> {{ anchor_text }}
                 </a>
             {% endfor %}
         </div>
@@ -87,7 +87,7 @@
 
 
 {% if perms.incidents.view_machineincident and paginator.count %}
-<h3>{{ paginator.count }} machine incident{{ paginator.count|pluralize }}</h3>
+<h3>Machine incident{{ paginator.count|pluralize }} ({{ paginator.count }})</h3>
 
 {% pagination next_url previous_url %}
 
@@ -117,7 +117,7 @@
       {% if perms.incidents.change_machineincident %}
       <td>
         <a href="{% url 'incidents:update_machine_incident' object.pk machine_incident.pk %}" class="btn btn-default">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Change status
+          <span class="bi bi-pencil-square" aria-hidden="true"></span> Change status
         </a>
       </td>
       {% endif %}
