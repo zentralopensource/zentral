@@ -169,4 +169,4 @@ class AccountUsersViewsTestCase(TestCase):
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/group_list.html")
         self.assertNotContains(response, group_name)
-        self.assertContains(response, "2 Groups")
+        self.assertContains(response, "Groups (2)")
