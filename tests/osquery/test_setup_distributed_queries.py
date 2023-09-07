@@ -361,7 +361,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/distributedquerymachine_list.html")
-        self.assertContains(response, "Machine (1)")
+        self.assertContains(response, "1 Machine")
         self.assertContains(response, serial_search)
         for serial_number in serial_numbers[1:]:
             self.assertNotContains(response, serial_number)
@@ -431,14 +431,14 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, search_term)
-        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, "0 Results")
         search_term = serial_numbers[0]
         response = self.client.get(
             "{}?q={}".format(reverse("osquery:distributed_query_results", args=(distributed_query.pk,)),
                              search_term)
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Result (1)")
+        self.assertContains(response, "1 Result")
 
     # distributed query file carving sessions
 
