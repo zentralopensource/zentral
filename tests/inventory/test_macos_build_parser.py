@@ -66,6 +66,7 @@ class MacOSBuildTestCase(TestCase):
            ("22F770820b", ("macOS", 13, 4, 1, "(a)"), "macOS 13.4.1 (a) (22F770820b)"),
            ("22F770820d", ("macOS", 13, 4, 1, "(c)"), "macOS 13.4.1 (c) (22F770820d)"),
            ("22G90", ("macOS", 13, 5, 1, None), "macOS 13.5.1 (22G90)"),
+           ("22G91", ("macOS", 13, 5, 2, None), "macOS 13.5.2 (22G91)"),
         ):
             expected_version_d = {
                 "name": name,
