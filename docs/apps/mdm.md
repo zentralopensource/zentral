@@ -96,3 +96,31 @@ Response:
   "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd4/"
 }
 ```
+
+### `/api/mdm/software_updates/sync/`
+
+ * method: `POST`
+ * required_permission:
+    * `mdm.add_softwareupdate`
+    * `mdm.change_softwareupdate`
+    * `mdm.delete_softwareupdate`
+
+Use this endpoint to trigger a Software Updates sync.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/software_updates/sync/ \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd4",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd4/"
+}
+```

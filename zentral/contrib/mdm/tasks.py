@@ -2,6 +2,7 @@ import logging
 from celery import shared_task
 from .dep import sync_dep_virtual_server_devices, DEPClientError
 from .models import DEPVirtualServer
+from .software_updates import sync_software_updates
 
 
 logger = logging.getLogger("zentral.contrib.mdm.tasks")
@@ -38,3 +39,12 @@ def sync_dep_virtual_server_devices_task(dep_virtual_server_pk):
             raise
 
     return result
+
+
+#
+# Software updates
+#
+
+@shared_task
+def sync_software_updates_task():
+    return sync_software_updates()

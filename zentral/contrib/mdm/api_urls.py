@@ -7,7 +7,8 @@ from .api_views import (ArtifactDetail, ArtifactList,
                         ProfileDetail, ProfileList,
                         RecoveryPasswordConfigList, RecoveryPasswordConfigDetail,
                         DEPVirtualServerSyncDevicesView,
-                        EnrolledDeviceFileVaultPRK, EnrolledDeviceRecoveryPassword)
+                        EnrolledDeviceFileVaultPRK, EnrolledDeviceRecoveryPassword,
+                        SyncSoftwareUpdatesView)
 
 
 app_name = "mdm_api"
@@ -32,6 +33,8 @@ urlpatterns = [
          name="enrolled_device_filevault_prk"),
     path('enrolled_devices/<int:pk>/recovery_password/', EnrolledDeviceRecoveryPassword.as_view(),
          name="enrolled_device_recovery_password"),
+    path('software_updates/sync/',
+         SyncSoftwareUpdatesView.as_view(), name="sync_software_updates"),
 ]
 
 

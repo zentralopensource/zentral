@@ -8,12 +8,13 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.models import SoftwareUpdate, SoftwareUpdateDeviceID
+from zentral.contrib.mdm.models import Platform, SoftwareUpdate, SoftwareUpdateDeviceID
 from zentral.contrib.mdm.software_updates import (
     available_software_updates,
     iter_available_software_updates,
     sync_software_updates,
 )
+from zentral.core.events.base import AuditEvent
 from .utils import force_ota_enrollment_session
 
 
@@ -62,9 +63,11 @@ class MDMSoftwareUpdateTestCase(TestCase):
         public=False,
         version_extra="",
         prerequisite_build="",
+        platform=Platform.MACOS,
     ):
         major, minor, patch = (int(i) for i in version.split("."))
         su = SoftwareUpdate.objects.create(
+            platform=platform,
             public=public,
             major=major,
             minor=minor,
@@ -76,17 +79,18 @@ class MDMSoftwareUpdateTestCase(TestCase):
         SoftwareUpdateDeviceID.objects.create(software_update=su, device_id=device_id)
         return su
 
-    # software_update __str__
+    # software_update __str__ and summary
 
-    def test_software_update_str(self):
+    def test_software_update_representations(self):
         su = self._force_software_update(
             device_id="J413AP",
             version="12.6.2",
             posting_date=datetime.date(2022, 12, 13)
         )
         self.assertEqual(str(su), "12.6.2")
+        self.assertEqual(su.summary(), "macOS 12.6.2")
 
-    def test_software_update_rsr_str(self):
+    def test_software_update_rsr_representations(self):
         su = self._force_software_update(
             device_id="J413AP",
             version="13.3.1",
@@ -95,17 +99,20 @@ class MDMSoftwareUpdateTestCase(TestCase):
             prerequisite_build="22E261"
         )
         self.assertEqual(str(su), "13.3.1 (a)")
+        self.assertEqual(su.summary(), "macOS 13.3.1 (a)")
 
     # sync_software_update
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.mdm.software_updates.requests.get")
-    def test_sync_software_update(self, get):
+    def test_sync_software_update(self, get, post_event):
         response_json = Mock()
         response_json.return_value = self.fake_response
         response = Mock()
         response.json = response_json
         get.return_value = response
-        sync_software_updates()
+        result = sync_software_updates()
+        self.assertEqual(result, {'created': 12, 'deleted': 0, 'present': 0})
         self.assertEqual(SoftwareUpdate.objects.count(), 12)
         self.assertEqual(SoftwareUpdateDeviceID.objects.count(), 18)
         self.assertEqual(SoftwareUpdate.objects.filter(public=True).count(), 4)
@@ -128,15 +135,26 @@ class MDMSoftwareUpdateTestCase(TestCase):
         rsr_su = rsr_su_qs.first()
         self.assertEqual(rsr_su.extra, "(a)")
         self.assertEqual(rsr_su.prerequisite_build, "22E261")
+        event_count = 0
+        for event in [cal.args[0] for cal in post_event.call_args_list]:
+            self.assertIsInstance(event, AuditEvent)
+            event_metadata = event.metadata.serialize()
+            self.assertEqual(event.payload["action"], "created")
+            self.assertEqual(event.payload["object"]["model"], "mdm.softwareupdate")
+            self.assertEqual(event_metadata["index"], event_count)
+            event_count += 1
+        self.assertEqual(event_count, 12)
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.mdm.software_updates.requests.get")
-    def test_sync_software_update_update(self, get):
+    def test_sync_software_update_update(self, get, post_event):
         response_json = Mock()
         response_json.return_value = self.fake_response
         response = Mock()
         response.json = response_json
         get.return_value = response
-        sync_software_updates()
+        result = sync_software_updates()
+        self.assertEqual(result, {'created': 12, 'deleted': 0, 'present': 0})
         fake_response2 = copy.deepcopy(self.fake_response)
         # add one / remove one device id
         supported_device = fake_response2["PublicAssetSets"]["iOS"][0][
@@ -167,7 +185,8 @@ class MDMSoftwareUpdateTestCase(TestCase):
         )
         # re-run sync with updated response
         response_json.return_value = fake_response2
-        sync_software_updates()
+        result = sync_software_updates()
+        self.assertEqual(result, {'created': 1, 'deleted': 1, 'present': 11})
         # check updated device ids
         self.assertEqual(
             set(
@@ -189,6 +208,19 @@ class MDMSoftwareUpdateTestCase(TestCase):
         self.assertEqual(
             SoftwareUpdate.objects.filter(public=False, major=12, minor=6, patch=1).count(), 1
         )
+        event_count = 0
+        for event in [cal.args[0] for cal in post_event.call_args_list[12:]]:
+            self.assertIsInstance(event, AuditEvent)
+            event_metadata = event.metadata.serialize()
+            if event_count == 0:
+                action = "created"
+            else:
+                action = "deleted"
+            self.assertEqual(event.payload["action"], action)
+            self.assertEqual(event.payload["object"]["model"], "mdm.softwareupdate")
+            self.assertEqual(event_metadata["index"], event_count)
+            event_count += 1
+        self.assertEqual(event_count, 2)
 
     # available_software_updates
 

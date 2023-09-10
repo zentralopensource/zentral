@@ -24,6 +24,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "otaenrollment",
         "recoverypasswordconfig",
         "scepconfig",
+        "softwareupdate",
         "userartifact",
         "userenrollment",
     )

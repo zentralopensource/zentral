@@ -2566,6 +2566,40 @@ class SoftwareUpdate(models.Model):
             s = f"{s} {self.extra}"
         return s
 
+    def summary(self):
+        return f"{self.platform} {self}"
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "summary": self.summary()}
+        if keys_only:
+            return d
+        for attr in (
+            "platform",
+            "major",
+            "minor",
+            "patch",
+            "extra",
+            "prerequisite_build",
+            "public",
+            "created_at",
+            "updated_at"
+        ):
+            val = getattr(self, attr)
+            if val != "" and val is not None:
+                d[attr] = val
+        if isinstance(self.availability, tuple):
+            # Set during creation or update
+            available_from, available_until = self.availability
+        else:
+            # DateRange object from the DB adaptor
+            available_from = self.availability.lower
+            available_until = self.availability.upper
+        if available_from:
+            d["available_from"] = available_from
+        if available_until:
+            d["available_until"] = available_until
+        return d
+
 
 class SoftwareUpdateDeviceID(models.Model):
     software_update = models.ForeignKey(SoftwareUpdate, on_delete=models.CASCADE)
