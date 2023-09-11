@@ -240,7 +240,7 @@ class TestMDMArtifacts(TestCase):
         configurations.pop()
         for artifact_version, valid, active in extra_configurations:
             configurations.append({
-                "valid": valid,
+                "valid": "valid" if valid else "invalid",
                 "active": active,
                 "identifier": f"zentral.legacy-profile.{artifact_version.artifact.pk}",
                 "server-token": str(artifact_version.pk),
