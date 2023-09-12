@@ -1,8 +1,10 @@
 import datetime
 import logging
+import uuid
 from django.db import transaction
 from django.db.models import Q
 import requests
+from zentral.core.events.base import AuditEvent
 from .crypto import IPHONE_DEVICE_CA_FULLCHAIN
 from .models import SoftwareUpdate, SoftwareUpdateDeviceID
 
@@ -54,16 +56,40 @@ def _iter_software_updates(response):
 
 def sync_software_updates():
     response = _fetch_software_updates()
+    events = []
+    event_uuid = uuid.uuid4()
+    event_index = 0
+    result = {
+        "created": 0,
+        "deleted": 0,
+        "present": 0,
+    }
     with transaction.atomic():
         seen_software_updates = []
         for kwargs, supported_devices in _iter_software_updates(response):
-            su, _ = SoftwareUpdate.objects.update_or_create(**kwargs)
+            su, created = SoftwareUpdate.objects.select_for_update().get_or_create(**kwargs)
+            if created:
+                result["created"] += 1
+                events.append(AuditEvent.build(su, AuditEvent.Action.CREATED,
+                                               event_uuid=event_uuid, event_index=event_index))
+                event_index += 1
+            else:
+                # no updates are possible since all attributes are used in the get_or_create call
+                result["present"] += 1
             seen_software_updates.append(su.pk)
             for device_id in supported_devices:
                 sd, _ = SoftwareUpdateDeviceID.objects.get_or_create(software_update=su, device_id=device_id)
             (SoftwareUpdateDeviceID.objects.filter(software_update=su)
                                            .exclude(device_id__in=supported_devices).delete())
-        SoftwareUpdate.objects.exclude(pk__in=seen_software_updates).delete()
+        for su in SoftwareUpdate.objects.exclude(pk__in=seen_software_updates):
+            events.append(AuditEvent.build(su, AuditEvent.Action.DELETED, prev_value=su.serialize_for_event(),
+                                           event_uuid=event_uuid, event_index=event_index))
+            event_index += 1
+            su.delete()
+            result["deleted"] += 1
+    for event in events:
+        event.post()
+    return result
 
 
 def available_software_updates(enrolled_device, date=None):

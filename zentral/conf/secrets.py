@@ -1,6 +1,5 @@
 import logging
-import os
-import requests
+from zentral.utils.aws import get_region as get_aws_region
 
 
 logger = logging.getLogger("zentral.conf.secrets")
@@ -12,28 +11,10 @@ class AWSSecretClient:
 
     def __init__(self):
         import boto3
-        sts = boto3.client("sts")
         # fail early if no authentication
+        sts = boto3.client("sts")
         sts.get_caller_identity()
-        # get region
-        region = os.environ.get("AWS_REGION")
-        if not region:
-            r = requests.put(
-                self.metadata_service_url + "api/token",
-                headers={"X-aws-ec2-metadata-token-ttl-seconds": "10"},
-                timeout=.5
-            )
-            r.raise_for_status()
-            token = r.text.strip()
-            r = requests.get(
-                self.metadata_service_url + "dynamic/instance-identity/document",
-                headers={"X-aws-ec2-metadata-token": token}
-            )
-            r.raise_for_status()
-            data = r.json()
-            region = data["region"]
-        # setup secrets manager client
-        self._client = boto3.client('secretsmanager', region_name=region)
+        self._client = boto3.client('secretsmanager', region_name=get_aws_region())
 
     def get(self, name):
         logger.debug("Get AWS secret %s", name)

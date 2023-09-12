@@ -1,5 +1,6 @@
 import logging
 import requests
+from zentral.utils.aws import get_region as get_aws_region
 
 
 logger = logging.getLogger("zentral.conf.params")
@@ -10,9 +11,10 @@ class AWSSSMClient:
 
     def __init__(self):
         import boto3
+        # fail early if no authentication
         sts = boto3.client("sts")
         sts.get_caller_identity()
-        self._client = boto3.client('ssm')
+        self._client = boto3.client('ssm', region_name=get_aws_region())
 
     def get(self, key):
         return self._client.get_parameter(Name=key)["Parameter"]["Value"]

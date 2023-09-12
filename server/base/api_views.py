@@ -19,10 +19,13 @@ class TaskResultView(APIView):
         try:
             task_result = TaskResult.objects.get(task_id=task_id)
         except TaskResult.DoesNotExist:
-            response = {"status": "UNKNOWN",
+            response = {"id": task_id,
+                        "status": "UNKNOWN",
                         "unready": True}
         else:
-            response = {"status": task_result.status,
+            response = {"name": task_result.task_name,
+                        "id": task_id,
+                        "status": task_result.status,
                         "unready": task_result.status in celery.states.UNREADY_STATES}
             if task_result.status == "SUCCESS":
                 try:
@@ -30,9 +33,10 @@ class TaskResultView(APIView):
                 except (TypeError, ValueError):
                     logger.exception("Could not load task result")
                 else:
-                    filepath = result.get("filepath")
+                    filepath = result.pop("filepath", None)
                     if filepath:
                         response["download_url"] = reverse("base_api:task_result_file_download", args=(task_id,))
+                    response["result"] = result
         return Response(response)
 
 

@@ -509,9 +509,9 @@ class Target:
             if "legacy-profile" not in configuration["identifier"]:
                 continue
             artifact_version_pk = configuration["server-token"].split(".")[0]
-            if configuration["active"] and configuration["valid"]:
+            if configuration["active"] and configuration["valid"] == "valid":
                 status = TargetArtifact.Status.INSTALLED
-            elif configuration["valid"]:
+            elif configuration["valid"] == "valid":
                 status = TargetArtifact.Status.UNINSTALLED
             else:
                 status = TargetArtifact.Status.FAILED
