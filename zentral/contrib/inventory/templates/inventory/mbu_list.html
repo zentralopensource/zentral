@@ -45,6 +45,8 @@
     {% endif %}
 </div>
 
+{% if object_list %}
+
 {% pagination next_url previous_url %}
 
 <div class="table-responsive mb-3">
@@ -56,10 +58,11 @@
                     <th>Name</th>
                     <th>Tags</th>
                     <th>API enrollment</th>
+                    <th></th>
                 <tr>
             </thead>
             {% for mbu in object_list %}
-            <tr>
+            <tr class="data-row">
                 {% if perms.inventory.change_metabusinessunit %}
                     <td>
                         <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
@@ -84,6 +87,32 @@
                     <span class="badge text-bg-success">Available for API enrollment</span>
                     {% endif %}
                 </td>
+                <td class="text-end py-0">
+                    {% if not mbu.api_enrollment_enabled and perms.inventory.change_metabusinessunit %}
+                        <a href="{% url 'inventory:mbu_api_enrollment' mbu.id %}" class="btn btn-link text-decoration-none text-dark"
+                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Enable API enrollment">
+                            <i class="bi bi-person"></i>
+                        </a>
+                    {% endif %}
+                    {% if perms.inventory.view_metabusinessunittag and perms.inventory.add_metabusinessunittag and perms.inventory.change_metabusinessunittag and perms.inventory.delete_metabusinessunittag and perms.inventory.add_tag %}
+                        <a href="{% url 'inventory:mbu_tags' mbu.id %}" class="btn btn-link text-decoration-none text-dark"
+                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Manage Tags">
+                            <i class="bi bi-tags"></i>
+                        </a>
+                    {% endif %}
+                    {% if perms.mbu.change_metabusinessunit %}
+                    <a class="btn btn-link text-decoration-none text-dark" href="{% url 'inventory:update_mbu' mbu.pk %}"
+                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Business Unit">
+                        <i class="bi bi-pencil-square"></i>
+                    </a>
+                    {% endif %}
+                    {% if mbu.can_be_deleted and perms.inventory.delete_metabusinessunit %}
+                    <a class="btn btn-link text-decoration-none text-dark" href="{% url 'inventory:delete_mbu' mbu.pk %}"
+                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Business Unit">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                    {% endif %}
+                </td>
             </tr>
             {% for bu in mbu.get_current_business_units %}
             <tr>
@@ -101,18 +130,28 @@
             {% endfor %}
         </table>
     </form>
-    
-    {% pagination next_url previous_url %}
-    
-    {% endblock %}
+</div>    
 
-    {% block extrajs %}
-    <script nonce="{{ request.csp_nonce }}">
-    function test_checkbox() {
-        return $('input[type=checkbox]:checked').length > 1;
-    }
-    $('input[type=checkbox]').change(function() {
-        $('#merge-btn-container').prop( "disabled", !test_checkbox());
-    });
-    </script>
+{% pagination next_url previous_url %}
+
+{% else %}
+    {% if perms.inventory.add_metabusinessunit %}
+        {% url 'inventory:create_mbu' as link %}
+        {% no_entities 'Business Units' link %}
+    {% else %}
+        {% no_entities 'Business Units' %}
+    {% endif %}
+{% endif %}
+
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+function test_checkbox() {
+    return $('input[type=checkbox]:checked').length > 1;
+}
+$('input[type=checkbox]').change(function() {
+    $('#merge-btn-container').prop( "disabled", !test_checkbox());
+});
+</script>
 {% endblock %}
