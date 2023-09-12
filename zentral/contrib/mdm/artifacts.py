@@ -227,7 +227,7 @@ class Target:
 
         return False
 
-    def _build_topological_sorter(self, included_types=None):
+    def _build_topological_sorter(self):
 
         def _add_artifact_to_topological_sorter(artifact, ts, seen_artifacts):
             requires = artifact["requires"]
@@ -251,21 +251,18 @@ class Target:
             # awaiting configuration
             if self.awaiting_configuration and not artifact["install_during_setup_assistant"]:
                 continue
-            # type
-            if included_types and Artifact.Type(artifact["type"]) not in included_types:
-                continue
             # common blueprint item scoping
             if self._test_filtered_blueprint_item(artifact):
                 _add_artifact_to_topological_sorter(artifact, ts, seen_artifacts)
         ts.prepare()
         return ts
 
-    def _walk_artifact_versions(self, callback, included_types=None):
+    def _walk_artifact_versions(self, callback):
         if self.blueprint is None:
             return
 
         # iterate other the tree
-        ts = self._build_topological_sorter(included_types)
+        ts = self._build_topological_sorter()
         iterate = True
         while iterate:
             artifact_pks = ts.get_ready()
@@ -275,8 +272,6 @@ class Target:
                 artifact = self.blueprint.serialized_artifacts[artifact_pk]
                 if Channel(artifact["channel"]) != self.channel:
                     # should never happen
-                    continue
-                if included_types and artifact["type"] not in included_types:
                     continue
                 # we have an artifact in scope
                 stop, done = False, False
@@ -370,16 +365,18 @@ class Target:
 
         def all_to_install_callback(artifact, artifact_version):
             nonlocal only_first
-            if self._test_artifact_version_to_install(artifact, artifact_version):
+            if (
+                (not included_types or artifact["type"] in included_types)
+                and self._test_artifact_version_to_install(artifact, artifact_version)
+            ):
                 artifact_to_install_pks.append((artifact["pk"], artifact_version["pk"]))
-                # stop if returning only the first to install, and do not mark the artifact as done,
-                # even if, because we stop, it doesn't matter.
+                # stop if returning only the first to install, and do not mark the artifact as done
                 return only_first, False
             else:
                 # continue, but mark artifact as done only if present
                 return False, self._serialized_target_artifacts.get(artifact["pk"], {}).get("present", False)
 
-        self._walk_artifact_versions(all_to_install_callback, included_types)
+        self._walk_artifact_versions(all_to_install_callback)
         return artifact_to_install_pks
 
     def all_to_install(self, included_types=None, only_first=False):
@@ -394,14 +391,28 @@ class Target:
         return self.all_to_install(included_types, only_first=True).first()
 
     @lru_cache
-    def all_in_scope_serialized(self, included_types=None):
+    def all_installed_or_to_install_serialized(self, included_types):
+        artifacts = []
+
+        def all_installed_or_to_install_callback(artifact, artifact_version):
+            if artifact["type"] not in included_types:
+                # if not the type, only mark as done if present
+                return False, self._serialized_target_artifacts.get(artifact["pk"], {}).get("present", False)
+            else:
+                artifacts.append((artifact, artifact_version))
+                return False, True
+
+        self._walk_artifact_versions(all_installed_or_to_install_callback)
+        return artifacts
+
+    def all_in_scope_serialized(self):
         artifacts_in_scope = []
 
         def all_in_scope_callback(artifact, artifact_version):
             artifacts_in_scope.append((artifact, artifact_version))
             return False, True
 
-        self._walk_artifact_versions(all_in_scope_callback, included_types)
+        self._walk_artifact_versions(all_in_scope_callback)
         return artifacts_in_scope
 
     def next_to_remove(self, included_types=None):
@@ -547,7 +558,7 @@ class Target:
                 get_declaration_identifier(self.blueprint, "management-status-subscriptions"),
             ]
         }
-        for artifact, _ in self.all_in_scope_serialized(included_types=(Artifact.Type.PROFILE,)):
+        for artifact, _ in self.all_installed_or_to_install_serialized((Artifact.Type.PROFILE,)):
             payload["StandardConfigurations"].append(get_legacy_profile_identifier(artifact))
         payload["StandardConfigurations"].sort()
         h = hashlib.sha1()
@@ -577,7 +588,7 @@ class Target:
             ],
             "Management": []
         }
-        for artifact, artifact_version in self.all_in_scope_serialized(included_types=(Artifact.Type.PROFILE,)):
+        for artifact, artifact_version in self.all_installed_or_to_install_serialized((Artifact.Type.PROFILE,)):
             declarations["Configurations"].append(
                {"Identifier": get_legacy_profile_identifier(artifact),
                 "ServerToken": get_legacy_profile_server_token(self, artifact, artifact_version)}

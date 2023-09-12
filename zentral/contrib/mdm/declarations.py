@@ -118,7 +118,7 @@ def build_legacy_profile(enrollment_session, target, declaration_identifier):
     # artifact version
     artifact_pk = declaration_identifier.split(".")[-1]
     profile_artifact_version = profile_artifact = None
-    for artifact, artifact_version in target.all_in_scope_serialized(included_types=(Artifact.Type.PROFILE,)):
+    for artifact, artifact_version in target.all_installed_or_to_install_serialized((Artifact.Type.PROFILE,)):
         if artifact["pk"] == artifact_pk:
             profile_artifact = artifact
             profile_artifact_version = artifact_version

@@ -293,6 +293,20 @@ class TestMDMArtifacts(TestCase):
         self._force_blueprint_artifact(requires=required_artifact)
         self.assertEqual(Target(self.enrolled_device).next_to_install(), av)
 
+    def test_blueprint_enterprise_app_requires_installed_profile(self):
+        ra, (ra_av,) = self._force_artifact(
+                artifact_type=Artifact.Type.PROFILE,
+                version_count=1,
+        )
+        target = Target(self.enrolled_device)
+        target.update_target_artifact(ra_av, TargetArtifact.Status.INSTALLED)
+        _, a, (av,) = self._force_blueprint_artifact(
+                artifact_type=Artifact.Type.ENTERPRISE_APP,
+                version_count=1,
+                requires=ra,
+        )
+        self.assertEqual(target.next_to_install(included_types=(Artifact.Type.ENTERPRISE_APP,)), av)
+
     def test_blueprint_install_device_profile_awaiting_configuration_false(self):
         _, _, artifact_versions = self._force_blueprint_artifact()
         _, _, artifact_versions_2 = self._force_blueprint_artifact(install_during_setup_assistant=True)
@@ -729,8 +743,9 @@ class TestMDMArtifacts(TestCase):
 
     # activation
 
-    def test_device_activation_store_app_not_included(self):
+    def test_device_activation_enterprise_app_not_included(self):
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
+        self._force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         activation = Target(self.enrolled_device).activation
         self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
         self.assertEqual(sorted(activation["Payload"].keys()), ["StandardConfigurations"])
@@ -739,7 +754,37 @@ class TestMDMArtifacts(TestCase):
         self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
         self.assertIn(f"zentral.legacy-profile.{profile_a.pk}", scs)
 
-    def test_user_declaration_items_store_app_not_included(self):
+    def test_device_activation_required_profile_included(self):
+        profile_a, _ = self._force_artifact(
+            artifact_type=Artifact.Type.PROFILE,
+            version_count=1,
+        )
+        self._force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP, requires=profile_a)
+        activation = Target(self.enrolled_device).activation
+        self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
+        self.assertEqual(sorted(activation["Payload"].keys()), ["StandardConfigurations"])
+        scs = activation["Payload"]["StandardConfigurations"]
+        self.assertEqual(len(scs), 2)
+        self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
+        self.assertIn(f"zentral.legacy-profile.{profile_a.pk}", scs)
+
+    def test_device_activation_required_enterprise_app_installed_profile_included(self):
+        ea_a, (ea_av,) = self._force_artifact(
+            artifact_type=Artifact.Type.ENTERPRISE_APP,
+            version_count=1,
+        )
+        _, profile_a, _ = self._force_blueprint_artifact(artifact_type=Artifact.Type.PROFILE, requires=ea_a)
+        target = Target(self.enrolled_device)
+        target.update_target_artifact(ea_av, TargetArtifact.Status.INSTALLED)
+        activation = target.activation
+        self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
+        self.assertEqual(sorted(activation["Payload"].keys()), ["StandardConfigurations"])
+        scs = activation["Payload"]["StandardConfigurations"]
+        self.assertEqual(len(scs), 2)
+        self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
+        self.assertIn(f"zentral.legacy-profile.{profile_a.pk}", scs)
+
+    def test_user_declaration_items_enterprise_app_not_included(self):
         _, profile_a, (profile_av,) = self._force_blueprint_artifact(channel=Channel.USER)
         profile_a.reinstall_on_os_update = Artifact.ReinstallOnOSUpdate.PATCH
         profile_a.reinstall_interval = 100000
@@ -765,6 +810,32 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(configurations[0]["ServerToken"], "0ed215547af3061ce18ea6cf7a69dac4a3d52f3f")
         self.assertEqual(configurations[1]["Identifier"], f"zentral.legacy-profile.{profile_a.pk}")
         self.assertEqual(configurations[1]["ServerToken"], f"{profile_av.pk}.ov-13.1.0.ri-0")
+
+    def test_device_declaration_items_required_profile_included(self):
+        profile_a, (profile_av,) = self._force_artifact(
+            artifact_type=Artifact.Type.PROFILE,
+            version_count=1,
+        )
+        self._force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP, requires=profile_a)
+        target = Target(self.enrolled_device)
+        declaration_items = target.declaration_items
+        self.assertEqual(sorted(declaration_items.keys()), ["Declarations", "DeclarationsToken"])
+        declarations = declaration_items["Declarations"]
+        self.assertEqual(sorted(declarations.keys()), ["Activations", "Assets", "Configurations", "Management"])
+        self.assertEqual(len(declarations["Assets"]), 0)
+        self.assertEqual(len(declarations["Management"]), 0)
+        self.assertEqual(
+            declarations["Activations"],
+            [{"Identifier": target.activation["Identifier"],
+              "ServerToken": target.activation["ServerToken"]}],
+        )
+        configurations = declarations["Configurations"]
+        self.assertEqual(len(configurations), 2)
+        self.assertEqual(configurations[0]["Identifier"],
+                         f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions")
+        self.assertEqual(configurations[0]["ServerToken"], "0ed215547af3061ce18ea6cf7a69dac4a3d52f3f")
+        self.assertEqual(configurations[1]["Identifier"], f"zentral.legacy-profile.{profile_a.pk}")
+        self.assertEqual(configurations[1]["ServerToken"], f"{profile_av.pk}")
 
     # update_target_artifact
 
