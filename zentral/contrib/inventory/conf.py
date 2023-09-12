@@ -251,6 +251,18 @@ def macos_version_from_build(build):
                 patch = 2
             elif build in ("21G417", "21G419"):
                 patch = 3
+            elif build == "21G526":
+                patch = 4
+            elif build == "21G531":
+                patch = 5
+            elif build == "21G646":
+                patch = 6
+            elif build == "21G651":
+                patch = 7
+            elif build == "21G725":
+                patch = 8
+            elif build == "21G726":
+                patch = 9
             else:
                 patch = 0
             if patch_letter >= "G" and patch_number >= 115:
@@ -271,16 +283,20 @@ def macos_version_from_build(build):
                 patch = 2
             elif build in ("20D91", "20G415", "20G1116"):
                 patch = 3
-            elif build == "20G417":
+            elif build in ("20G417", "20G1120"):
                 patch = 4
-            elif build == "20G527":
+            elif build in ("20G527", "20G1225"):
                 patch = 5
-            elif build == "20G624":
+            elif build in ("20G624", "20G1231"):
                 patch = 6
-            elif build == "20G630":
+            elif build in ("20G630", "20G1345"):
                 patch = 7
-            elif build == "20G730":
+            elif build in ("20G730", "20G1351"):
                 patch = 8
+            elif build == "20G1426":
+                patch = 9
+            elif build == "20G1427":
+                patch = 10
             else:
                 patch = 0
         else:
