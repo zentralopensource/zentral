@@ -1,22 +1,23 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+  <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 
 <h2>{% if object %}Update{% else %}Create{% endif %} Sub manifest</h2>
-<form method="POST" class="form">{% csrf_token %}
-  {{ form|bootstrap }}
-  <a href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'monolith:sub_manifests' %}{% endif %}" class="btn btn-default">Cancel</a>
-  <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
+<form method="POST" class="update-form">{% csrf_token %}
+
+    {{ form }}
+
+    <a href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'monolith:sub_manifests' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+    <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
 </form>
 {% endblock %}

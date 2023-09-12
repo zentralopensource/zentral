@@ -2,32 +2,39 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Monolith conditions</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Monolith conditions</li>
 </ol>
 
-<h2>{{ object_list|length }} Condition{{ object_list|length|pluralize }}</h2>
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Condition{{ object_list|length|pluralize }} ({{ object_list|length }})</h2>
+    <div class="ms-auto">
+        {% if perms.monolith.add_condition %}
+        <a class="btn btn-link text-dark text-decoration-none" href="{% url 'monolith:create_condition' %}">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+        {% endif %}
+    </div>
+</div>
 
-{% if perms.monolith.add_condition %}
-<p><a class="btn btn-default" href="{% url 'monolith:create_condition' %}">Create</a></p>
-{% endif %}
-
-<table class="table">
-  <thead>
-    <th>Name</th>
-    <th>Predicate</th>
-    <th>Updated at</th>
-  </thead>
-  <tbody>
-    {% for condition in object_list %}
-    <tr>
-      <td>
-        <a href="{{ condition.get_absolute_url }}">{{ condition.name }}</a>
-      </td>
-      <td><pre>{{ condition.predicate }}</pre></td>
-      <td>{{ condition.updated_at|date:"r"|default:"-" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="table-responsive mb-3">
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <th>Name</th>
+        <th>Predicate</th>
+        <th>Updated at</th>
+    </thead>
+    <tbody>
+        {% for condition in object_list %}
+        <tr>
+        <td>
+            <a href="{{ condition.get_absolute_url }}">{{ condition.name }}</a>
+        </td>
+        <td><pre>{{ condition.predicate }}</pre></td>
+        <td>{{ condition.updated_at|date:"r"|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
 {% endblock %}

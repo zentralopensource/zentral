@@ -74,6 +74,7 @@ class InventoryMachineSubview:
 class PkgInfosView(PermissionRequiredMixin, TemplateView):
     permission_required = "monolith.view_pkginfo"
     template_name = "monolith/pkg_info_list.html"
+    # template_name = "django/forms/search.html"
 
     def get_context_data(self, **kwargs):
         ctx = super(PkgInfosView, self).get_context_data(**kwargs)

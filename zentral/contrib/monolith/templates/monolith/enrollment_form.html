@@ -1,23 +1,23 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
-  <li><a href="{% url 'monolith:manifest' manifest.id %}">{{ manifest }}</a></li>
-  <li class="active">add enrollment</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:manifest' manifest.id %}">{{ manifest }}</a></li>
+  <li class="breadcrumb-item active">add enrollment</li>
 </ol>
 
-<h2>Manifest <i>{{ manifest }}</i></h2>
+<h2 class="m-0">{{ manifest }}</h2>
+<h3 class="m-0 fs-5 text-secondary">Add Manifest enrollment</h3>
 
-<h3>Add enrollment</h3>
+<form method="post" class="update-form">{% csrf_token %}
+    {{ secret_form }}
 
-<form method="post">{% csrf_token %}
-  {{ secret_form|bootstrap }}
-  {{ enrollment_form|bootstrap }}
-  <div>
-    <a href="{% url 'monolith:manifest' manifest.id %}" class="btn btn-default">Cancel</a>
+    {{ enrollment_form }}
+
+    <div>
+    <a href="{% url 'monolith:manifest' manifest.id %}" class="btn btn-outline-secondary">Cancel</a>
     <button class="btn btn-primary" type="submit">Save</button>
   </div>
 </form>

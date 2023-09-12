@@ -1,69 +1,64 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Monolith manifests</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Monolith manifests</li>
 </ol>
 
-<h2>{{ paginator.count }} Manifest{{ paginator.count|pluralize }}</h2>
-<p>
-  {% if perms.monolith.add_manifest %}
-  <a class="btn btn-default" href="{% url 'monolith:create_manifest' %}">Create</a>
-  {% endif %}
-  {% if show_terraform_export %}
-  <a href="{% url 'monolith:terraform_export' %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-    Terraform config
-  </a>
-  {% endif %}
-</p>
+<div class="d-flex align-items-center mb-1">
+    <h2>Manifest{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
+</div>
+<div class="d-flex align-items-center mb-1">
+    <form method="GET" class="d-flex w-75 me-auto flex-shrink-0">
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-    <div class="form-group">
-      {{ form.name|bootstrap_inline }}
+        {{ form }}
+
+        <button type="submit" class="btn btn-link text-decoration-none mb-2 text-dark">
+            <i class="bi bi-search"></i>
+        </button>
+    </form>
+    <div class="ms-auto">
+        {% if perms.monolith.add_manifest %}
+        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:create_manifest' %}" type="button"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Manifest">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+        {% endif %}
+        {% if show_terraform_export %}
+        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:terraform_export' %}" type="button"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Export Terraform confing">
+            <i class="bi bi-download"></i>
+        </a>
+        {% endif %}
     </div>
-    <button type="submit" class="btn btn-default">Search</button>
-</form>
+</div>
 
-<nav>
-  <ul class="pager">
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-  </ul>
-</nav>
+{% if object_list %}
+    {% pagination next_url previous_url %}
 
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <tr>
+        <th>Manifest</th>
+        <th>Business unit</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for manifest in object_list %}
+        <tr>
+        <td><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></td>
+        <td><a href="{{ manifest.meta_business_unit.get_absolute_url }}">{{ manifest.meta_business_unit }}</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Manifest</th>
-      <th>Business unit</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for manifest in object_list %}
-    <tr>
-      <td><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></td>
-      <td><a href="{{ manifest.meta_business_unit.get_absolute_url }}">{{ manifest.meta_business_unit }}</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    {% pagination next_url previous_url %}
+{% elif form.is_bound %}
+    {% url 'monolith:manifests' as empty_results_url %}
+    {% empty_results empty_results_url %}
+{% endif %}
 
-<nav>
-  <ul class="pager">
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-  </ul>
-</nav>
 {% endblock %}

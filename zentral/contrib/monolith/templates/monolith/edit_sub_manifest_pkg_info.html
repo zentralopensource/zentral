@@ -1,27 +1,30 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
-  <li><a href="{{ sub_manifest.get_absolute_url }}">{{ sub_manifest }}</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
+  <li class="breadcrumb-item"><a href="{{ sub_manifest.get_absolute_url }}">{{ sub_manifest }}</a></li>
   {% if object %}
-  <li class="active">Update PkgInfo</li>
+  <li class="breadcrumb-item active">Update PkgInfo</li>
   {% else %}
-  <li class="active">Add PkgInfo</li>
+  <li class="breadcrumb-item active">Add PkgInfo</li>
   {% endif %}
 </ol>
 
 <h3>{% if object %}Update{% else %}Add{% endif %} PkgInfo</h3>
-<form method="POST" class="form">{% csrf_token %}
+
+<form method="POST" class="update-form">{% csrf_token %}
   {% if object %}
   <div class="form-group">
     <label class="control-label">Pkg info name</label>
     <p>{{ object.pkg_info_name }}</p>
   </div>
   {% endif %}
-  {{ form|bootstrap }}
+  
+  {{ form }}
+  
   <div class="form-group">
     <label class="control-label">Tag shards</label>
     <div>
@@ -43,14 +46,14 @@
         </td>
         <td>
           <button type="button" data-tag-pk="{{ tag.pk }}" class="btn btn-danger del-tag-shard">
-            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+            <span class="bi bi-trash" aria-hidden="true"></span>
           </button>
         </td>
       </tr>
       {% endfor %}
     </table>
   </div>
-  <a href="{{ sub_manifest.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <a href="{{ sub_manifest.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
   <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Add{% endif %}</button>
 </form>
 {% endblock %}

@@ -1,33 +1,35 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{%  url 'monolith:pkg_infos' %}">Monolith pkg infos</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:pkg_infos' %}">Monolith pkg infos</a></li>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
-  <li class="active">Update version {{ object.version }}</li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
+  <li class="breadcrumb-item active">Update version {{ object.version }}</li>
   {% else %}
   {% if pkg_info_name %}
-  <li><a href="{{ pkg_info_name.get_absolute_url }}">{{ pkg_info_name }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ pkg_info_name.get_absolute_url }}">{{ pkg_info_name }}</a></li>
   {% endif %}
-  <li class="active">Upload package</li>
+  <li class="breadcrumb-item active">Upload package</li>
   {% endif %}
 </ol>
 
 <h2>{% if object %}Update{% else %}Upload{% endif %} package</h2>
 
-<form class="form", method="POST" enctype="multipart/form-data">{% csrf_token %}
+<form class="update-form", method="POST" enctype="multipart/form-data">{% csrf_token %}
   {% if object %}
   <div class="form-group">
     <label class="control-label">File</label>
     <div>{{ object.data.installer_item_location|default:"-" }}</div>
   </div>
   {% endif %}
-  {{ form|bootstrap }}
-  <div class="form-group">
-    <label class="control-label">Tag shards</label>
+
+  {{ form }}
+
+  <div class="form-group my-3">
+    <label class="control-label fw-bold">Tag shards</label>
     <div>
       <select id="add-tag-shard-sel">
         {% for tag, active, shard in form.tag_shards %}
@@ -47,7 +49,7 @@
         </td>
         <td>
           <button type="button" data-tag-pk="{{ tag.pk }}" class="btn btn-danger del-tag-shard">
-            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+            <i class="bi bi-trash" aria-hidden="true"></i>
           </button>
         </td>
       </tr>
@@ -56,12 +58,12 @@
   </div>
   <p>
     {% if object %}
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     {% else %}
     {% if pkg_info_name %}
-    <a class="btn btn-default" href="{{ pkg_info_name.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ pkg_info_name.get_absolute_url }}">Cancel</a>
     {% else %}
-    <a class="btn btn-default" href="{% url 'monolith:pkg_infos' %}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{% url 'monolith:pkg_infos' %}">Cancel</a>
     {% endif %}
     {% endif %}
     <button class="btn btn-primary" type="submit">Save</button>

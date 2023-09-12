@@ -1,52 +1,53 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
   {% else %}
-  <li class="active">{{ anchor_text }}</li>
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
   {% endfor %}
 </ol>
 
+<div class="d-flex align-items-center mb-1">
+    <h2>Package name{{ name_number|pluralize }} ({{ name_number }}) / Package{{ info_number|pluralize }} ({{ info_number }})</h2>
+</div>
+<div class="d-flex align-items-center mb-1">
+    <form method="GET" class="d-flex w-75 me-auto flex-shrink-0">
 
-<h2>{{ name_number }} Package name{{ name_number|pluralize }} / {{ info_number }} Package{{ info_number|pluralize }}</h2>
+        {{ form }}
 
+        <button type="submit" class="btn btn-link text-decoration-none mb-2 text-dark">
+            <i class="bi bi-search"></i>
+        </button>
+    </form>
+    <div class="ms-auto">
+        {% if perms.add_pkginfoname or perms.add_pkginfo %}
+        <div class="dropdown">
+            <button class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="pkgInfoAdd"
+                    data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                <i class="bi bi-plus-circle"></i>
+                <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="pkgInfoAdd">
+            {% if perms.add_pkginfoname %}
+                <li><a class="dropdown-item" href="{% url 'monolith:create_pkg_info_name' %}">Package info name</a></li>
+            {% endif %}
+            {% if perms.add_pkginfo %}
+                <li><a class="dropdown-item" href="{% url 'monolith:upload_package' %}">Package</a></li>
+            {% endif %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-  <div class="form-group">
-    {{ form.name|bootstrap_inline }}
-  </div>
-  <div class="form-group">
-    {{ form.catalog.label_tag }}
-    {{ form.catalog|bootstrap_inline }}
-  </div>
-  <button type="submit" class="btn btn-default">Search</button>
-  {% if perms.add_pkginfoname or perms.add_pkginfo %}
-  <div class="dropdown" style="display:inline-block">
-    <button class="btn btn-default dropdown-toggle" type="button" id="pkgInfoAdd"
-            data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-      Add
-      <span class="caret"></span>
-    </button>
-    <ul class="dropdown-menu" aria-labelledby="pkgInfoAdd">
-      {% if perms.add_pkginfoname %}
-      <li><a href="{% url 'monolith:create_pkg_info_name' %}">Package info name</a></li>
-      {% endif %}
-      {% if perms.add_pkginfo %}
-      <li><a href="{% url 'monolith:upload_package' %}">Package</a></li>
-      {% endif %}
-    </ul>
-  </div>
-  {% endif %}
-
-</form>
-
-<table class="table">
+{% if pkg_names %}
+<table class="table table-light table-striped align-middle">
   <thead>
     <th>Package</th>
     <th>Catalogs</th>
@@ -128,4 +129,9 @@
   {% endfor %}
   </tbody>
 </table>
+{% elif form.is_bound %}
+    {% url 'monolith:pkg_infos' as empty_results_url %}
+    {% empty_results empty_results_url %}
+{% endif %}
+
 {% endblock %}

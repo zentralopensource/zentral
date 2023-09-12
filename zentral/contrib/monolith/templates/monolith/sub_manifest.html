@@ -3,145 +3,177 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h2>Sub manifest - {{ object }}</i></h2>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Sub manifest</h3>
+        <div class="ms-auto">
+            {% if perms.monolith.change_submanifest %}
+            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:update_sub_manifest' object.id %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Update">
+                <i class="bi bi-pencil-square"></i>
+            </a>
+            {% endif %}
+            {% if object.can_be_deleted and perms.monolith.delete_submanifest %}
+            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_sub_manifest' object.id %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
+                <i class="bi bi-trash"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
 
-<p>
-  {% if perms.monolith.change_submanifest %}
-  <a href="{% url 'monolith:update_sub_manifest' object.id %}" class="btn btn-default">Update</a>
-  {% endif %}
-  {% if object.can_be_deleted and perms.monolith.delete_submanifest %}
-  <a href="{% url 'monolith:delete_sub_manifest' object.id %}" class="btn btn-danger">Delete</a>
-  {% endif %}
-</p>
+    <table class="table table-light table-striped align-middle table-object-properties">
+        <thead>
+            <tr><th style="width:30vw">Attribute</th>
+            <th>Value</th>
+        </tr></thead>
+        <tbody>
+            <tr>
+                <td>Business unit</td>
+                <td>
+                    {% if object.meta_business_unit %}
+                        <span class="text-danger">restricted to </span>
+                        {% if perms.inventory.view_metabusinessunit %}
+                            <a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a>
+                        {% else %}
+                            {{ object.meta_business_unit }}
+                        {% endif %}
+                    {% else %}
+                        <span class="text-success">not restricted</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Description</td>
+                <td>
+                    {{ object.description|default:"-"|urlize|linebreaks }}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
 
-<dl class="dl-horizontal">
-  <dt>Business unit</dt>
-  <dd>
-    {% if object.meta_business_unit %}
-    <span class="text-danger">restricted to </span>
-    {% if perms.inventory.view_metabusinessunit %}
-    <a href="{{ object.meta_business_unit.get_absolute_url }}">{{ object.meta_business_unit }}</a>
-    {% else %}
-    {{ object.meta_business_unit }}
-    {% endif %}
-    {% else %}
-    <span class="text-success">not restricted</span>
-    {% endif %}
-  </dd>
-  <dt>Description</dt>
-  <dd>{{ object.description|default:"-"|urlize|linebreaks }}</dd>
-</dl>
+<div class="d-flex align-items-center mb-1">
+    <h3>Package{{ total.pkginfo|pluralize }} ({{ total.pkginfo }})</h3>
+    <div class="ms-auto">
+        {% if perms.monolith.add_submanifestpkginfo %}
+        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:sub_manifest_add_pkg_info' object.id %}"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Package">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+        {% endif %}
+    </div>
+</div>
 
-<h3>
-  {% if total.pkginfo %}
-  {{ total.pkginfo }} Package{{ total.pkginfo|pluralize }}
-  {% endif %}
-</h3>
-
-{% if perms.monolith.add_submanifestpkginfo %}
-<p>
-  <a class="btn btn-default" type="button" href="{% url 'monolith:sub_manifest_add_pkg_info' object.id %}">
-    Add
-  </a>
-</p>
+{% if keys %}
+    <table class="table table-light table-striped align-middle table-hover">
+    <thead>
+        <th>Name</th>
+        <th>Feat.</th>
+        <th>Condition</th>
+        <th>Excl. tags</th>
+        <th>Def. shard</th>
+        <th>Tag shards</th>
+        <th></th>
+    </thead>
+    <tbody>
+    {% for key_display, key_list in keys %}
+    <tr>
+        <td colspan="8">
+        <h4>{{ key_display }}</h4>
+        </td>
+    </tr>
+    {% for name, smpi in key_list %}
+    <tr class="data-row{% if not smpi.pkg_info_name.has_active_pkginfos %} danger{% endif %}">
+        <td>
+            {% if perms.monolith.view_pkginfoname %}
+            <a name="smp_{{ smpi.pk }}" href="{% url 'monolith:pkg_info_name' smpi.pkg_info_name.id %}">{{ name }}</a>
+            {% else %}
+            {{ name }}
+            {% endif %}
+        </td>
+        <td>
+        {{ smpi.featured_item|yesno:"★,-" }}
+        </td>
+        <td>
+        {% if smpi.condition %}
+        {% if perms.monolith.view_condition %}
+        <a href="{{ smpi.condition.get_absolute_url }}"
+            data-toggle="tooltip" data-placement="top"
+            title="{{ smpi.condition.predicate }}">{{ smpi.condition }}</a>
+        {% else %}
+        {{ smpi.condition }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+        </td>
+        <td>
+        {% for tag in smpi.excluded_tags %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+        </td>
+        <td>
+        {{ smpi.default_shard }}/{{ smpi.shard_modulo }}
+        </td>
+        <td>
+        {% if smpi.tag_shards %}
+        <table>
+        {% for tag_shard in smpi.tag_shards %}
+        <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag_shard.tag %}</td><td>{{ tag_shard.shard }}</td></tr>
+        {% endfor %}
+        </table>
+        {% else %}
+        -
+        {% endif %}
+        </td>
+        <td class="text-end py-0">
+        {% if smpi.pkg_info_name.has_active_pkginfos and perms.monolith.change_submanifestpkginfo %}
+        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:update_sub_manifest_pkg_info' object.id smpi.id %}"
+            aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Package">
+            <span class="bi bi-pencil-square" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+        {% if perms.monolith.delete_submanifestpkginfo %}
+        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_sub_manifest_pkg_info' object.id smpi.id %}"
+            aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Package">
+            <span class="bi bi-trash" aria-hidden="true"></span>
+        </a>
+        {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    {% endfor %}
+    </tbody>
+    </table>
 {% endif %}
 
-<table class="table">
-  <thead>
-    <th>Name</th>
-    <th>Feat.</th>
-    <th>Condition</th>
-    <th>Excl. tags</th>
-    <th>Def. shard</th>
-    <th>Tag shards</th>
-    <th></th>
-  </thead>
-{% for key_display, key_list in keys %}
-  <tr>
-    <td colspan="8">
-      <h4>{{ key_display }}</h4>
-    </td>
-  </tr>
-  {% for name, smpi in key_list %}
-  <tr{% if not smpi.pkg_info_name.has_active_pkginfos %} class="danger"{% endif %}>
-    <td>
-        {% if perms.monolith.view_pkginfoname %}
-        <a name="smp_{{ smpi.pk }}" href="{% url 'monolith:pkg_info_name' smpi.pkg_info_name.id %}">{{ name }}</a>
-        {% else %}
-        {{ name }}
-        {% endif %}
-    </td>
-    <td>
-      {{ smpi.featured_item|yesno:"★,-" }}
-    </td>
-    <td>
-      {% if smpi.condition %}
-      {% if perms.monolith.view_condition %}
-      <a href="{{ smpi.condition.get_absolute_url }}"
-         data-toggle="tooltip" data-placement="top"
-         title="{{ smpi.condition.predicate }}">{{ smpi.condition }}</a>
-      {% else %}
-      {{ smpi.condition }}
-      {% endif %}
-      {% else %}
-      -
-      {% endif %}
-    </td>
-    <td>
-      {% for tag in smpi.excluded_tags %}
-      {% inventory_tag tag %}
-      {% empty %}
-      -
-      {% endfor %}
-    </td>
-    <td>
-      {{ smpi.default_shard }}/{{ smpi.shard_modulo }}
-    </td>
-    <td>
-      {% if smpi.tag_shards %}
-      <table>
-      {% for tag_shard in smpi.tag_shards %}
-      <tr><td style="padding:0 5px 2px 0">{% inventory_tag tag_shard.tag %}</td><td>{{ tag_shard.shard }}</td></tr>
-      {% endfor %}
-      </table>
-      {% else %}
-      -
-      {% endif %}
-    </td>
-    <td>
-      {% if smpi.pkg_info_name.has_active_pkginfos and perms.monolith.change_submanifestpkginfo %}
-      <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest_pkg_info' object.id smpi.id %}">
-        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-      </a>
-      {% endif %}
-      {% if perms.monolith.delete_submanifestpkginfo %}
-      <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest_pkg_info' object.id smpi.id %}">
-        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-      </a>
-      {% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-{% endfor %}
-</table>
 
 {% if perms.monolith.view_manifest %}
-<h3>Included in {{ manifests|length }} manifest{{ manifests|length|pluralize }}</h3>
-<table class="table">
-  {% for tags, manifest in manifests %}
-  <tr>
-    <td><a href="{{ manifest.get_absolute_url }}#sm_{{ object.id }}">{{ manifest }}</a></td>
-    <td>
-      {% for tag in tags %}{% inventory_tag tag %}{% endfor %}
-    </td>
-  </tr>
-  {% endfor %}
-</table>
+    <h3>Included in {{ manifests|length }} manifest{{ manifests|length|pluralize }}</h3>
+
+    {%if manifests %}
+        <table class="table table-light table-striped align-middle table-hover">
+        {% for tags, manifest in manifests %}
+        <tr>
+            <td><a href="{{ manifest.get_absolute_url }}#sm_{{ object.id }}">{{ manifest }}</a></td>
+            <td>
+            {% for tag in tags %}{% inventory_tag tag %}{% endfor %}
+            </td>
+        </tr>
+        {% endfor %}
+        </table>
+    {% endif %}
 {% endif %}
 
 {% endblock %}

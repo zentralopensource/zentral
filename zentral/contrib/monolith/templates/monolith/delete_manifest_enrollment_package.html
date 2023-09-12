@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
-  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
-  <li class="active">Delete manifest enrollment package</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li class="breadcrumb-item"><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="breadcrumb-item active">Delete manifest enrollment package</li>
 </ol>
 
 <h2>Delete manifest enrollment package</h2>
@@ -21,7 +21,7 @@
     {% endif %}
     {% endwith %}
   </dl>
-  <a href="{{ manifest_enrollment_package.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <a href="{{ manifest_enrollment_package.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
   <button type="submit" class="btn btn-danger">Delete</button>
 </form>
 {% endblock %}
