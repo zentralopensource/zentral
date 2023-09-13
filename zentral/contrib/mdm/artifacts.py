@@ -8,6 +8,7 @@ from django.db import transaction
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.text import shard as compute_shard
+from .apns import send_enrolled_device_notification, send_enrolled_user_notification
 from .declarations import (build_target_management_status_subscriptions,
                            get_declaration_identifier,
                            get_legacy_profile_identifier,
@@ -454,6 +455,7 @@ class Target:
         """
         Updates the status of an artifact/version for this target
         """
+        target_updated = False
         model, kwargs = self.get_target_artifact_model_and_kwargs()
         defaults = {"status": status,
                     "extra_info": extra_info or {},
@@ -472,6 +474,7 @@ class Target:
                 artifact_version=artifact_version,
                 **kwargs
             )
+            target_updated = created
             if not created:
                 prev_status_present = TargetArtifact.Status(obj.status).present
                 uii_changed = unique_install_identifier and obj.unique_install_identifier != unique_install_identifier
@@ -499,22 +502,26 @@ class Target:
                         setattr(obj, k, v)
                         updated = True
                 if updated:
+                    target_updated = True
                     obj.save()
             # cleanup
             if status.present or status == TargetArtifact.Status.UNINSTALLED:
-                model.objects.filter(
+                deleted_count, _ = model.objects.filter(
                     artifact_version__artifact=artifact_version.artifact,
                     **kwargs
                 ).exclude(
                     artifact_version=artifact_version
                 ).delete()
+                target_updated |= deleted_count > 0
+        return target_updated
 
     def update_target_artifacts_with_status_report(self, status_report):
+        target_updated = False
         try:
             configurations = status_report["StatusItems"]["management"]["declarations"]["configurations"]
         except KeyError:
             logger.warning("Could not find configurations in status report")
-            return
+            return target_updated
         target_artifacts_info = {}
         for configuration in configurations:
             if "legacy-profile" not in configuration["identifier"]:
@@ -535,7 +542,7 @@ class Target:
                                                         .filter(pk__in=target_artifacts_info.keys())):
             seen_artifact_pks.append(artifact_version.artifact.pk)
             status, extra_info, unique_install_identifier = target_artifacts_info[str(artifact_version.pk)]
-            self.update_target_artifact(
+            target_updated |= self.update_target_artifact(
                 artifact_version,
                 status,
                 extra_info,
@@ -543,10 +550,14 @@ class Target:
             )
         # cleanup
         model, kwargs = self.get_target_artifact_model_and_kwargs()
-        (model.objects.filter(artifact_version__artifact__type=Artifact.Type.PROFILE,
-                              **kwargs)
-                      .exclude(artifact_version__artifact__pk__in=seen_artifact_pks)
-                      .delete())
+        deleted_count, _ = model.objects.filter(
+            artifact_version__artifact__type=Artifact.Type.PROFILE,
+            **kwargs
+        ).exclude(
+            artifact_version__artifact__pk__in=seen_artifact_pks
+        ).delete()
+        target_updated |= deleted_count > 0
+        return target_updated
 
     # declarations
 
@@ -628,15 +639,21 @@ class Target:
             self.target.save()
 
     def update_client_capabilities(self, status_report):
+        target_updated = False
         try:
             client_capabilities = status_report["StatusItems"]["management"]["client-capabilities"]
         except KeyError:
             logger.warning("Could not find client capabilities in status report")
-            return
-        if client_capabilities != self.client_capabilities:
-            self.target.client_capabilities = client_capabilities
-            self.target.save()
+        else:
+            if client_capabilities != self.client_capabilities:
+                self.target.client_capabilities = client_capabilities
+                self.target.save()
+                target_updated = True
+        return target_updated
 
     def update_target_with_status_report(self, status_report):
-        self.update_client_capabilities(status_report)
-        self.update_target_artifacts_with_status_report(status_report)
+        target_updated = self.update_client_capabilities(status_report)
+        target_updated |= self.update_target_artifacts_with_status_report(status_report)
+        if target_updated:
+            func = send_enrolled_device_notification if self.is_device else send_enrolled_user_notification
+            transaction.on_commit(lambda: func(self.target))

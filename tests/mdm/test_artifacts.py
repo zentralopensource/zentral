@@ -1180,7 +1180,7 @@ class TestMDMArtifacts(TestCase):
         status_report = self._build_status_report([(profile_av, True, True)])
         self.enrolled_device.os_version = "10.5.2"
         target = Target(self.enrolled_device)
-        target.update_target_artifacts_with_status_report(status_report)
+        self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
         self.assertEqual(
             serialized_av,
@@ -1194,7 +1194,7 @@ class TestMDMArtifacts(TestCase):
         status_report = self._build_status_report([(profile_av, True, False)])
         self.enrolled_device.os_version = "10.5.2"
         target = Target(self.enrolled_device)
-        target.update_target_artifacts_with_status_report(status_report)
+        self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
         self.assertEqual(
             serialized_av,
@@ -1208,7 +1208,7 @@ class TestMDMArtifacts(TestCase):
         status_report = self._build_status_report([(profile_av, False, False)])
         self.enrolled_device.os_version = "10.5.2"
         target = Target(self.enrolled_device)
-        target.update_target_artifacts_with_status_report(status_report)
+        self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
         self.assertEqual(
             serialized_av,
@@ -1228,7 +1228,7 @@ class TestMDMArtifacts(TestCase):
             1
         )
         status_report = self._build_status_report([])
-        target.update_target_artifacts_with_status_report(status_report)
+        self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         self.assertEqual(DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device).count(), 0)
 
     def test_update_target_artifacts_from_status_report_missing_configurations_noop(self):
@@ -1241,15 +1241,41 @@ class TestMDMArtifacts(TestCase):
             status=TargetArtifact.Status.INSTALLED
         )
         self.assertEqual(da_qs.count(), 1)
-        target.update_target_artifacts_with_status_report({})
+        self.assertTrue(target.update_target_artifacts_with_status_report({}) is False)
         self.assertEqual(da_qs.count(), 1)
 
     # test update client capabilities
 
-    def test_update_target_with_status_report(self):
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_update_device_target_with_status_report(self, send_enrolled_device_notification):
         target = Target(self.enrolled_device)
         status_report = self._build_status_report([])
         self.assertIsNone(target.client_capabilities)
-        target.update_target_with_status_report(status_report)
+        # first time, device notified
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            target.update_target_with_status_report(status_report)
+        send_enrolled_device_notification.assert_called_once_with(self.enrolled_device)
         self.assertEqual(target.client_capabilities,
                          status_report["StatusItems"]["management"]["client-capabilities"])
+        # second time, no changes, device not notified
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            target.update_target_with_status_report(status_report)
+        self.assertEqual(len(callbacks), 0)
+        send_enrolled_device_notification.assert_called_once_with(self.enrolled_device)
+
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_user_notification")
+    def test_update_user_target_with_status_report(self, send_enrolled_user_notification):
+        target = Target(self.enrolled_device, self.enrolled_user)
+        status_report = self._build_status_report([])
+        self.assertIsNone(target.client_capabilities)
+        # first time, device notified
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            target.update_target_with_status_report(status_report)
+        send_enrolled_user_notification.assert_called_once_with(self.enrolled_user)
+        self.assertEqual(target.client_capabilities,
+                         status_report["StatusItems"]["management"]["client-capabilities"])
+        # second time, no changes, device not notified
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            target.update_target_with_status_report(status_report)
+        self.assertEqual(len(callbacks), 0)
+        send_enrolled_user_notification.assert_called_once_with(self.enrolled_user)
