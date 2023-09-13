@@ -37,7 +37,7 @@
                 </button>
                 <ul class="dropdown-menu" aria-labelledby="downloadTargets">
                     {% for format, link in export_links %}
-                        <li><a class="dropdown-item" href="{{ link }}">{{ format|upper }}</a></li>
+                        <li><a class="dropdown-item task" href="{{ link }}">{{ format|upper }}</a></li>
                     {% endfor %}
                 </ul>
             </div>

@@ -27,7 +27,7 @@
       </button>
       <ul class="dropdown-menu">
         {% for format, link in export_links %}
-        <li><a href="{{ link }}" class="task">{{ format|upper }}</a></li>
+        <li><a class="dropdown-item task" href="{{ link }}">{{ format|upper }}</a></li>
         {% endfor %}
       </ul>
     </div>
