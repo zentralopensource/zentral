@@ -1,45 +1,62 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="active">Locations</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">Locations</li>
 </ol>
 
-<h3>{{ object_list|length }} Location{{ object_list|length|pluralize }}</h3>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Location{{ object_list|length|pluralize }} ({{ object_list|length }})</h2>
+    <div class="ms-auto">
+        {% if perms.mdm.add_location %}
+            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:create_location' %}">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+        {% endif %}  
+    </div>
+</div>
 
-{% if perms.mdm.add_location %}
-<p>
-  <a class="btn btn-default" href="{% url 'mdm:create_location' %}">
-    Add
-  </a>
-</p>
+{% if object_list %}
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <th>Organization</th>
+        <th>Location</th>
+        <th>Token expiry</th>
+    </thead>
+    <tbody>
+        {% for location in object_list %}
+        <tr>
+        <td>{{ location.organization_name }}</td>
+        <td><a href="{{ location.get_absolute_url }}">{{ location.name }}</a></td>
+        <td>
+            {% if location.server_token_expires_soon %}
+            <span class="text-danger">
+            {{ location.server_token_expiration_date|date:'SHORT_DATETIME_FORMAT' }} ({{location.server_token_expiration_date|timeuntil }})
+            </span>
+            {% else %}
+            {{ location.server_token_expiration_date|date:'SHORT_DATE_FORMAT' }}
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+
+{% else %}
+    {% if perms.mdm.add_location %}
+        {% url 'mdm:create_location' as link %}
+        {% no_entities 'Locations' link %}
+    {% else %}
+        {% no_entities 'Locations' %}
+    {% endif %}
 {% endif %}
 
-<table class="table">
-  <thead>
-    <th>Organization</th>
-    <th>Location</th>
-    <th>Token expiry</th>
-  </thead>
-  <tbody>
-    {% for location in object_list %}
-    <tr>
-      <td>{{ location.organization_name }}</td>
-      <td><a href="{{ location.get_absolute_url }}">{{ location.name }}</a></td>
-      <td>
-        {% if location.server_token_expires_soon %}
-        <span class="text-danger">
-          {{ location.server_token_expiration_date|date:'SHORT_DATETIME_FORMAT' }} ({{location.server_token_expiration_date|timeuntil }})
-        </span>
-        {% else %}
-        {{ location.server_token_expiration_date|date:'SHORT_DATE_FORMAT' }}
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 {% endblock %}
