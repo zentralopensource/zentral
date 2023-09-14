@@ -16,8 +16,8 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Location</h3>
         <div class="ms-auto">
-            {% if perms.munki.change_location %}
-                <a href="{% url 'munki:update_location' object.pk %}" class="btn btn-link text-dark text-decoration-none"
+            {% if perms.mdm.change_location %}
+                <a href="{% url 'mdm:update_location' object.pk %}" class="btn btn-link text-dark text-decoration-none"
                     data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
                     <i class="bi bi-pencil-square"></i>
                 </a>
