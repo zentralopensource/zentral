@@ -3,7 +3,7 @@ from io import BytesIO
 import operator
 import plistlib
 from django.contrib.auth.models import Group, Permission
-from django.core.files import File
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Q
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -160,10 +160,10 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
     def test_upgrade_enterprise_app_post_same_package(self):
         artifact, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         package = self._build_package()
+        uploaded_package = SimpleUploadedFile(package.name, package.read())
+        _, product_id, product_version, manifest, bundles, _ = build_enterprise_app_manifest(uploaded_package)
         enterprise_app = enterprise_app_av.enterprise_app
-        package_file = File(package, name=package.name)
-        _, product_id, product_version, manifest, bundles, _ = build_enterprise_app_manifest(package_file)
-        enterprise_app.package = package_file
+        enterprise_app.package = uploaded_package
         enterprise_app.product_id = product_id
         enterprise_app.product_version = product_version
         enterprise_app.manifest = manifest

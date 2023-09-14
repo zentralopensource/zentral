@@ -1,11 +1,14 @@
 import base64
+import os
+from django.core.files import File
 from django.db import transaction
 from rest_framework import serializers
 from zentral.contrib.inventory.models import Tag
+from .app_manifest import build_enterprise_app_manifest, download_source, validate_configuration
 from .artifacts import update_blueprint_serialized_artifacts
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
-                     FileVaultConfig,
+                     EnterpriseApp, FileVaultConfig,
                      Platform, Profile,
                      RecoveryPasswordConfig)
 from .payloads import get_configuration_profile_info
@@ -304,4 +307,98 @@ class ProfileSerializer(ArtifactVersionSerializer):
         with transaction.atomic(durable=True):
             for blueprint in instance.artifact_version.artifact.blueprints():
                 update_blueprint_serialized_artifacts(blueprint)
+        return instance
+
+
+class EnterpriseAppSerializer(ArtifactVersionSerializer):
+    source_uri = serializers.CharField(required=True, write_only=True)
+    source_sha256 = serializers.CharField(required=True, write_only=True)
+    filename = serializers.CharField(read_only=True)
+    product_id = serializers.CharField(read_only=True)
+    product_version = serializers.CharField(read_only=True)
+    configuration = serializers.CharField(required=False, source="get_configuration_plist",
+                                          default=None, allow_null=True)
+    bundles = serializers.JSONField(read_only=True)
+    manifest = serializers.JSONField(read_only=True)
+    ios_app = serializers.BooleanField(required=False, default=False)
+    install_as_managed = serializers.BooleanField(required=False, default=False)
+    remove_on_unenroll = serializers.BooleanField(required=False, default=False)
+
+    def validate_configuration(self, value):
+        try:
+            return validate_configuration(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
+
+    def validate(self, data):
+        data = super().validate(data)
+        if data.get("remove_on_unenroll") and not data.get("install_as_managed"):
+            raise serializers.ValidationError({
+                "remove_on_unenroll": "Only available if installed as managed is also set"
+            })
+        source_uri = data.pop("source_uri", None)
+        if source_uri is None:
+            return data
+        source_sha256 = data.pop("source_sha256", None)
+        if source_sha256 is None:
+            return data
+        try:
+            filename, tmp_file = download_source(source_uri, source_sha256)
+            title, product_id, product_version, manifest, bundles, platforms = build_enterprise_app_manifest(
+                tmp_file
+            )
+        except Exception as e:
+            raise serializers.ValidationError({"source_uri": str(e)})
+        # same product ID?
+        artifact = data["artifact_version"]["artifact"]
+        if EnterpriseApp.objects.filter(artifact_version__artifact=artifact).exclude(product_id=product_id).exists():
+            raise serializers.ValidationError(
+                {"source_uri": "The product ID of the new app is not identical "
+                               "to the product ID of the other versions"}
+            )
+        # non-field attributes
+        ea_data = data["enterprise_app"] = {
+            "filename": filename,
+            "package": File(tmp_file),
+            "product_id": product_id,
+            "product_version": product_version,
+            "bundles": bundles,
+            "manifest": manifest
+        }
+        # field attributes
+        for attr in ("ios_app", "configuration", "install_as_managed", "remove_on_unenroll"):
+            if attr == "configuration":
+                data_attr = "get_configuration_plist"
+            else:
+                data_attr = attr
+            ea_data[attr] = data.pop(data_attr)
+        return data
+
+    def create(self, validated_data):
+        try:
+            with transaction.atomic(durable=True):
+                artifact_version = super().create(validated_data)
+                instance = EnterpriseApp.objects.create(
+                    artifact_version=artifact_version,
+                    **validated_data["enterprise_app"]
+                )
+            with transaction.atomic(durable=True):
+                for blueprint in artifact_version.artifact.blueprints():
+                    update_blueprint_serialized_artifacts(blueprint)
+        finally:
+            os.unlink(validated_data["enterprise_app"]["package"].name)
+        return instance
+
+    def update(self, instance, validated_data):
+        try:
+            with transaction.atomic(durable=True):
+                super().update(instance, validated_data)
+                for attr, value in validated_data["enterprise_app"].items():
+                    setattr(instance, attr, value)
+                instance.save()
+            with transaction.atomic(durable=True):
+                for blueprint in instance.artifact_version.artifact.blueprints():
+                    update_blueprint_serialized_artifacts(blueprint)
+        finally:
+            os.unlink(validated_data["enterprise_app"]["package"].name)
         return instance

@@ -1,11 +1,15 @@
-from hashlib import md5
+from hashlib import md5, sha256
 import logging
 import os
 import plistlib
 import subprocess
 import tempfile
+from urllib.parse import urlparse
 import zipfile
+import boto3
 from defusedxml.ElementTree import fromstring, ParseError
+from django.core.files.uploadedfile import TemporaryUploadedFile, UploadedFile
+from zentral.utils.aws import get_region as get_aws_region
 from .models import Platform
 
 
@@ -15,15 +19,75 @@ logger = logging.getLogger("zentral.contrib.mdm.app_manifest")
 MD5_SIZE = 10 * 2**20  # 10MB
 
 
-def ensure_tmp_file(uploaded_file):
-    if hasattr(uploaded_file, "temporary_file_path"):
-        return uploaded_file.temporary_file_path(), False
-    tmp_fd, tmp_filepath = tempfile.mkstemp()
-    tmp_f = os.fdopen(tmp_fd, "wb")
-    for chunk in uploaded_file.chunks():
-        tmp_f.write(chunk)
-    tmp_f.close()
-    return tmp_filepath, True
+def validate_configuration(configuration):
+    if configuration:
+        if configuration.startswith("<dict>"):
+            # to make it easier for the users
+            configuration = f'<plist version="1.0">{configuration}</plist>'
+        try:
+            loaded_configuration = plistlib.loads(configuration.encode("utf-8"))
+        except Exception:
+            raise ValueError("Invalid property list")
+        if not isinstance(loaded_configuration, dict):
+            raise ValueError("Not a dictionary")
+        return plistlib.dumps(loaded_configuration)
+    else:
+        return None
+
+
+def download_s3_source(parse_source_uri, source_sha256):
+    bucket = parse_source_uri.netloc
+    key = parse_source_uri.path.lstrip("/")
+    _, ext = os.path.splitext(key)
+    if ext not in (".pkg", ".ipa"):
+        raise ValueError(f"Unsupported file extension: '{ext}'")
+    file = tempfile.NamedTemporaryFile(suffix=f".downloaded_s3_source{ext}", delete=False)
+    try:
+        s3_client = boto3.client('s3', region_name=get_aws_region())
+        s3_client.download_fileobj(bucket, key, file)
+    except Exception:
+        file.close()
+        os.unlink(file.name)
+        raise
+    return file
+
+
+def download_source(source_uri, source_sha256):
+    parsed_source_uri = urlparse(source_uri)
+    if parsed_source_uri.scheme == "s3":
+        file = download_s3_source(parsed_source_uri, source_sha256)
+    else:
+        raise ValueError(f"Unknown source URI scheme: '{parsed_source_uri.scheme}'")
+    # verify hash
+    file.seek(0)
+    h = sha256()
+    while True:
+        chunk = file.read(2**10 * 64)
+        if not chunk:
+            break
+        h.update(chunk)
+    if h.hexdigest() != source_sha256:
+        raise ValueError("Hash mismatch")
+    file.seek(0)
+    return os.path.basename(parsed_source_uri.path), file
+
+
+def ensure_tmp_file(file):
+    if isinstance(file, TemporaryUploadedFile):
+        return file.temporary_file_path(), False
+    elif isinstance(file, UploadedFile):
+        tmp_fd, tmp_filepath = tempfile.mkstemp()
+        tmp_f = os.fdopen(tmp_fd, "wb")
+        while True:
+            chunk = file.read(2**10 * 64)
+            if not chunk:
+                break
+            tmp_f.write(chunk)
+        tmp_f.close()
+        return tmp_filepath, True
+    elif hasattr(file, "name"):
+        return file.name, False
+    raise ValueError("Unsupported file type")
 
 
 def read_distribution_info(tmp_filepath):
@@ -137,7 +201,11 @@ def get_md5s(package_file, md5_size=MD5_SIZE):
     md5s = []
     h = md5()
     current_size = 0
-    for chunk in package_file.chunks(chunk_size=file_chunk_size):
+    package_file.seek(0)
+    while True:
+        chunk = package_file.read(2**10 * 64)
+        if not chunk:
+            break
         h.update(chunk)
         current_size += len(chunk)
         if current_size == md5_size:

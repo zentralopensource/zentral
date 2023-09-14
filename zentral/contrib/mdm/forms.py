@@ -2,7 +2,6 @@ import base64
 import hashlib
 import json
 import logging
-import plistlib
 from dateutil import parser
 from django import forms
 from django.db import IntegrityError, transaction
@@ -10,7 +9,7 @@ from django.db.models import Count, Q
 from realms.utils import build_password_hash_dict
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.os_version import make_comparable_os_version
-from .app_manifest import build_enterprise_app_manifest
+from .app_manifest import build_enterprise_app_manifest, validate_configuration
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
 from .commands.set_recovery_lock import validate_recovery_password
@@ -461,26 +460,16 @@ class AppConfigurationMixin(forms.Form):
     )
 
     def set_initial_config(self):
-        configuration = self.instance.get_configuration()
-        if configuration:
-            self.fields["configuration"].initial = plistlib.dumps(configuration).decode("utf-8")
+        configuration_plist = self.instance.get_configuration_plist()
+        if configuration_plist:
+            self.fields["configuration"].initial = configuration_plist
 
     def clean_configuration(self):
         configuration = self.cleaned_data.pop("configuration")
-        if configuration:
-            if configuration.startswith("<dict>"):
-                # to make it easier for the users
-                configuration = f'<plist version="1.0">{configuration}</plist>'
-            try:
-                loaded_configuration = plistlib.loads(configuration.encode("utf-8"))
-            except Exception:
-                raise forms.ValidationError("Invalid property list")
-            if not isinstance(loaded_configuration, dict):
-                raise forms.ValidationError("Not a dictionary")
-            configuration = plistlib.dumps(loaded_configuration)
-        else:
-            configuration = None
-        return configuration
+        try:
+            return validate_configuration(configuration)
+        except ValueError as e:
+            raise forms.ValidationError(str(e))
 
 
 class BaseEnterpriseAppForm(forms.ModelForm, AppConfigurationMixin):
@@ -507,12 +496,12 @@ class BaseEnterpriseAppForm(forms.ModelForm, AppConfigurationMixin):
             title, product_id, product_version, manifest, bundles, platforms = build_enterprise_app_manifest(package)
         except Exception as e:
             raise forms.ValidationError(f"Invalid app: {e}")
-        self.instance.filename = package.name
-        self.instance.bundles = bundles
         self.cleaned_data["name"] = title or product_id
+        self.cleaned_data["filename"] = package.name
         self.cleaned_data["product_id"] = product_id
         self.cleaned_data["product_version"] = product_version
         self.cleaned_data["manifest"] = manifest
+        self.cleaned_data["bundles"] = bundles
         self.cleaned_data["platforms"] = platforms
         # management
         install_as_managed = self.cleaned_data.get("install_as_managed")
@@ -568,6 +557,7 @@ class UpgradeEnterpriseAppForm(BaseEnterpriseAppForm):
             )
         has_changed = False
         for k in ("product_version",
+                  "bundles",
                   "manifest",
                   "ios_app",
                   "configuration",
@@ -586,10 +576,14 @@ class UpgradeEnterpriseAppForm(BaseEnterpriseAppForm):
     def save(self, artifact_version):
         self.instance.id = None  # force insert
         self.instance.artifact_version = artifact_version
-        self.instance.product_id = self.cleaned_data["product_id"]
-        self.instance.product_version = self.cleaned_data["product_version"]
-        self.instance.manifest = self.cleaned_data["manifest"]
-        self.instance.configuration = self.cleaned_data["configuration"]
+        # save non-field attributes (configuration is not editable, so not a standard "field")
+        for attr in ("configuration",
+                     "filename",
+                     "product_id",
+                     "product_version",
+                     "bundles",
+                     "manifest"):
+            setattr(self.instance, attr, self.cleaned_data[attr])
         return super().save()
 
 

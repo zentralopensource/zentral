@@ -2364,8 +2364,34 @@ class EnterpriseApp(models.Model):
         if self.configuration:
             return plistlib.loads(self.configuration)
 
+    def get_configuration_plist(self):
+        configuration = self.get_configuration()
+        if configuration:
+            return plistlib.dumps(configuration).decode("utf-8")
+
     def has_configuration(self):
         return self.configuration is not None
+
+    def serialize_for_event(self):
+        d = self.artifact_version.serialize_for_event()
+        d.update({
+            "filename": self.filename,
+            "product_id": self.product_id,
+            "product_version": self.product_version,
+            "bundles": self.bundles,
+            "manifest": self.manifest,
+            "ios_app": self.ios_app,
+            "install_as_managed": self.install_as_managed,
+            "remove_on_unenroll": self.remove_on_unenroll,
+        })
+        configuration_plist = self.get_configuration_plist()
+        if configuration_plist:
+            d["configuration"] = configuration_plist
+        return d
+
+    def delete(self, *args, **kwargs):
+        self.artifact_version.delete(*args, **kwargs)
+        super().delete(*args, **kwargs)
 
 
 @receiver(post_delete, sender=EnterpriseApp)
@@ -2406,6 +2432,11 @@ class StoreApp(models.Model):
     def get_configuration(self):
         if self.configuration:
             return plistlib.loads(self.configuration)
+
+    def get_configuration_plist(self):
+        configuration = self.get_configuration()
+        if configuration:
+            return plistlib.dumps(configuration).decode("utf-8")
 
     def has_configuration(self):
         return self.configuration is not None
