@@ -96,12 +96,14 @@ class PushCertificateForm(forms.ModelForm):
 
 
 class DEPDeviceSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Serial number",
                                                       "autofocus": True}))
-    include_deleted = forms.BooleanField(label="Incl. deleted?", required=False)
     enrollment = forms.ModelChoiceField(queryset=DEPEnrollment.objects.all(), required=False, empty_label="Enrollment")
     server = forms.ModelChoiceField(queryset=DEPVirtualServer.objects.all(), required=False, empty_label="Server")
+    include_deleted = forms.BooleanField(label="Incl. deleted?", required=False)
 
     def get_queryset(self):
         qs = DEPDevice.objects.all().order_by("-updated_at")
@@ -128,6 +130,8 @@ class DEPDeviceSearchForm(forms.Form):
 
 
 class EnrolledDeviceSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Serial number, UDID",
                                                       "autofocus": True}))
@@ -156,6 +160,8 @@ class EnrolledDeviceSearchForm(forms.Form):
 
 
 class ArtifactSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Name, Profile ID, Bundle ID",
                                                       "size": 24,

@@ -3,17 +3,17 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="active">Enrollments</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">Enrollments</li>
 </ol>
 
 {% if perms.mdm.view_depenrollment %}
-<h3>{{ dep_enrollments|length }} DEP enrollment{{ dep_enrollments|length|pluralize }}</h3>
+<h3>DEP enrollment{{ dep_enrollments|length|pluralize }} ({{ dep_enrollments|length }})</h3>
 
 {% if perms.mdm.add_depenrollment %}
 <p>
-  <a class="btn btn-default" href="{% url 'mdm:create_dep_enrollment' %}">
+  <a class="btn btn-outline-secondary" href="{% url 'mdm:create_dep_enrollment' %}">
     Create
   </a>
 </p>
@@ -48,11 +48,11 @@
 {% endif %}
 
 {% if perms.mdm.view_otaenrollment %}
-<h3>{{ ota_enrollments|length }} OTA enrollment{{ ota_enrollments|length|pluralize }}</h3>
+<h3>OTA enrollment{{ ota_enrollments|length|pluralize }} ({{ ota_enrollments|length }})</h3>
 
 {% if perms.mdm.add_otaenrollment %}
 <p>
-  <a class="btn btn-default" href="{% url 'mdm:create_ota_enrollment' %}">
+  <a class="btn btn-outline-secondary" href="{% url 'mdm:create_ota_enrollment' %}">
     Create
   </a>
 </p>
@@ -91,11 +91,11 @@
 {% endif %}
 
 {% if perms.mdm.view_userenrollment %}
-<h3>{{ user_enrollments|length }} User enrollment{{ user_enrollments|length|pluralize }}</h3>
+<h3>User enrollment{{ user_enrollments|length|pluralize }} ({{ user_enrollments|length }})</h3>
 
 {% if perms.mdm.add_userenrollment %}
 <p>
-  <a class="btn btn-default" href="{% url 'mdm:create_user_enrollment' %}">
+  <a class="btn btn-outline-secondary" href="{% url 'mdm:create_user_enrollment' %}">
     Create
   </a>
 </p>

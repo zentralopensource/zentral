@@ -1,117 +1,123 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inclusion_tags %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h3>{{ object }}</h3>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Artifact</h3>
+        <div class="ms-auto">
+            {% if perms.mdm.change_artifact %}
+            <a href="{% url 'mdm:update_artifact' object.pk %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
+                <i class="bi bi-pencil-square"></i>
+            </a>
+            {% endif %}
+            {% if perms.mdm.delete_artifact and object.can_be_deleted %}
+            <a href="{% url 'mdm:delete_artifact' object.pk %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
+                <span class="bi bi-trash" aria-hidden="true"></span>
+                Delete
+            </a>
+            {% endif %}
+        </div>
+    </div>
 
-<p>
-  {% if perms.mdm.change_artifact %}
-  <a class="btn btn-default" href="{% url 'mdm:update_artifact' object.pk %}">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    Update
-  </a>
-  {% endif %}
-  {% if perms.mdm.delete_artifact and object.can_be_deleted %}
-  <a class="btn btn-danger" href="{% url 'mdm:delete_artifact' object.pk %}">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-    Delete
-  </a>
-  {% endif %}
-</p>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <tbody>
+        <tr>
+        <th style="width:33vw">Type</th>
+        <td>{{ object.get_type_display }}</td>
+        </tr>
+        <tr>
+        <th>Channel</th>
+        <td>{{ object.channel }}</td>
+        </tr>
+        <tr>
+        <th>Platform{{ object.platforms|length|pluralize }}</th>
+        <td>{{ object.platforms|join:", "|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Depends on</th>
+        <td>
+            {% for required_artifact in object.requires.all %}
+            <a href="{{ required_artifact.get_absolute_url }}">{{ required_artifact }}</a>{% if not forloop.last %}, {% endif %}
+            {% empty %}
+            -
+            {% endfor %}
+        </td>
+        </tr>
+        <tr>
+        <th>Install during setup assistant</th>
+        <td>{{ object.install_during_setup_assistant|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Auto update</th>
+        <td>{{ object.auto_update|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Reinstall interval</th>
+        <td>
+            {% if not object.reinstall_interval %}
+            Never
+            {% else %}
+            {{ object.reinstall_interval }} day{{ object.reinstall_interval|pluralize }}
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Reinstall on OS update</th>
+        <td>{{ object.get_reinstall_on_os_update_display }}</td>
+        </tr>
 
-<table class="table">
-  <tbody>
-    <tr>
-      <th style="width:33vw">Type</th>
-      <td>{{ object.get_type_display }}</td>
-    </tr>
-    <tr>
-      <th>Channel</th>
-      <td>{{ object.channel }}</td>
-    </tr>
-    <tr>
-      <th>Platform{{ object.platforms|length|pluralize }}</th>
-      <td>{{ object.platforms|join:", "|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Depends on</th>
-      <td>
-        {% for required_artifact in object.requires.all %}
-        <a href="{{ required_artifact.get_absolute_url }}">{{ required_artifact }}</a>{% if not forloop.last %}, {% endif %}
-        {% empty %}
-        -
-        {% endfor %}
-      </td>
-    </tr>
-    <tr>
-      <th>Install during setup assistant</th>
-      <td>{{ object.install_during_setup_assistant|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Auto update</th>
-      <td>{{ object.auto_update|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Reinstall interval</th>
-      <td>
-        {% if not object.reinstall_interval %}
-        Never
-        {% else %}
-        {{ object.reinstall_interval }} day{{ object.reinstall_interval|pluralize }}
+        {% if enterpriseapp_list %}
+        {% with enterpriseapp_list|first as enterprise_app %}
+        {% include "mdm/_enterprise_app_detail.html" %}
+        {% endwith %}
         {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Reinstall on OS update</th>
-      <td>{{ object.get_reinstall_on_os_update_display }}</td>
-    </tr>
 
-    {% if enterpriseapp_list %}
-    {% with enterpriseapp_list|first as enterprise_app %}
-    {% include "mdm/_enterprise_app_detail.html" %}
-    {% endwith %}
-    {% endif %}
+        {% if profile_list %}
+        {% with profile_list|first as profile %}
+        {% include "mdm/_profile_detail.html" %}
+        {% endwith %}
+        {% endif %}
 
-    {% if profile_list %}
-    {% with profile_list|first as profile %}
-    {% include "mdm/_profile_detail.html" %}
-    {% endwith %}
-    {% endif %}
+        {% if storeapp_list %}
+        {% with storeapp_list|first as store_app %}
+        {% include "mdm/_store_app_detail.html" %}
+        {% endwith %}
+        {% endif %}
+    </tbody>
+    </table>
 
-    {% if storeapp_list %}
-    {% with storeapp_list|first as store_app %}
-    {% include "mdm/_store_app_detail.html" %}
-    {% endwith %}
-    {% endif %}
-  </tbody>
-</table>
-<dl class="dl-horizontal">
-  <dt class="small text-muted">Created at</dt>
-  <dd class="small text-muted">{{ object.created_at|date:'r' }}</dd>
-  <dt class="small text-muted">Updated at</dt>
-  <dd class="small text-muted">{{ object.updated_at|date:'r' }}</dd>
-</dl>
+    {% created_updated_at object %}
 
-<h4>{{ versions_count }} Version{{ versions_count|pluralize }}</h4>
-
-{% if upgrade_link %}
-<p>
-  <a class="btn btn-default" href="{{ upgrade_link }}">
-    <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-    Create
-  </a>
-</p>
-{% endif %}
+</div>
 
 {% if versions_count %}
-<table class="table">
+<div class="d-flex justify-content-between mb-3">
+    <h3>Version{{ versions_count|pluralize }} ({{ versions_count }})</h3>
+    <div class="ms-auto">            
+        {% if upgrade_link %}
+        <a href="{{ upgrade_link }}" type="button" class="btn btn-link text-dark text-decoration-none" 
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Version">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th>Version</th>
@@ -124,7 +130,7 @@
   </thead>
   <tbody>
     {% for av in versions %}
-    <tr id="ba-{{ av.pk }}">
+    <tr id="ba-{{ av.pk }}" class="data-row">
       <td>
         {% if perms.mdm.view_artifactversion %}
         <a href="{{ av.get_absolute_url }}">{{ av.version }}</a>
@@ -164,15 +170,17 @@
         -
         {% endif %}
       </td>
-      <td>
+      <td class="text-end py-0">
         {% if perms.mdm.change_artifactversion %}
-        <a href="{% url 'mdm:update_artifact_version' object.pk av.pk %}" class="btn btn-default">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        <a href="{% url 'mdm:update_artifact_version' object.pk av.pk %}" class="btn btn-link text-decoration-none text-dark"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Update Version">
+          <span class="bi bi-pencil-square" aria-hidden="true"></span>
         </a>
         {% endif %}
         {% if perms.mdm.delete_artifactversion and av.can_be_deleted %}
-        <a href="{% url 'mdm:delete_artifact_version' object.pk av.pk %}" class="btn btn-danger">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        <a href="{% url 'mdm:delete_artifact_version' object.pk av.pk %}" class="btn btn-link text-decoration-none text-dark"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Version">
+          <span class="bi bi-trash" aria-hidden="true"></span>
         </a>
         {% endif %}
       </td>
@@ -182,18 +190,21 @@
 </table>
 {% endif %}
 
-<h4>{{ blueprint_artifacts_count }} Blueprint{{ blueprint_artifacts_count|pluralize }}</h4>
-
-{% if perms.mdm.add_blueprint %}
-<p>
-  <a href="{% url 'mdm:create_blueprint_artifact' object.pk %}" class="btn btn-default">
-    Add
-  </a>
-</p>
-{% endif %}
 
 {% if blueprint_artifacts_count %}
-<table class="table">
+<div class="d-flex justify-content-between mb-3">
+    <h3>Blueprint{{ blueprint_artifacts_count|pluralize }} ({{ blueprint_artifacts_count }})</h3>
+    <div class="ms-auto">            
+        {% if perms.mdm.add_blueprint %}
+        <a href="{% url 'mdm:create_blueprint_artifact' object.pk %}" type="button" class="btn btn-link text-dark text-decoration-none" 
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Blueprint">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th>Name</th>
@@ -206,7 +217,7 @@
   </thead>
   <tbody>
     {% for ba in blueprint_artifacts %}
-    <tr id="ba-{{ ba.pk }}">
+    <tr id="ba-{{ ba.pk }}" class="data-row">
       <td>
         {% if perms.mdm.view_blueprint %}
         <a href="{{ ba.blueprint.get_absolute_url }}">{{ ba.blueprint }}</a>
@@ -246,15 +257,17 @@
         -
         {% endif %}
       </td>
-      <td>
+      <td class="text-end py-0">
         {% if perms.mdm.change_blueprintartifact %}
-        <a href="{% url 'mdm:update_blueprint_artifact' object.pk ba.pk %}" class="btn btn-default">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+        <a href="{% url 'mdm:update_blueprint_artifact' object.pk ba.pk %}" class="btn btn-link text-decoration-none text-dark"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Blueprint">
+          <span class="bi bi-pencil-square" aria-hidden="true"></span>
         </a>
         {% endif %}
         {% if perms.mdm.delete_blueprintartifact %}
-        <a href="{% url 'mdm:delete_blueprint_artifact' object.pk ba.pk %}" class="btn btn-danger">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        <a href="{% url 'mdm:delete_blueprint_artifact' object.pk ba.pk %}" class="btn btn-link text-decoration-none text-dark"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Blueprint">
+          <span class="bi bi-trash" aria-hidden="true"></span>
         </a>
         {% endif %}
       </td>

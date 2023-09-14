@@ -1,37 +1,55 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="active">Push certificates</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">Push certificates</li>
 </ol>
 
-<h3>{{ object_list|length }} MDM push certificate{{ object_list|length|pluralize }}</h3>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">MDM push certificate{{ object_list|length|pluralize }} ({{ object_list|length }})</h2>
+    <div class="ms-auto">
+        {% if perms.mdm.add_pushcertificate %}
+            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:add_push_certificate' %}">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+        {% endif %}  
+    </div>
+</div>
 
-{% if perms.mdm.add_pushcertificate %}
-<p>
-  <a href="{% url 'mdm:add_push_certificate' %}" class="btn btn-default">Add</a>
-</p>
+{% if object_list %}
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <th>Name</th>
+        <th>Topic</th>
+        <th>Not before</th>
+        <th>Not after</th>
+    </thead>
+    <tbody>
+        {% for push_certificate in object_list %}
+        <tr>
+        <td><a href="{{ push_certificate.get_absolute_url }}">{{ push_certificate.name }}</a></td>
+        <td>{{ push_certificate.topic }}</td>
+        <td>{{ push_certificate.not_before }}</td>
+        <td>{{ push_certificate.not_after }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+
+{% else %}
+    {% if perms.mdm.add_pushcertificate %}
+        {% url 'mdm:add_push_certificate' as link %}
+        {% no_entities 'MDM Push Certificates' link %}
+    {% else %}
+        {% no_entities 'MDM Push Certificates' %}
+    {% endif %}
 {% endif %}
-
-<table class="table">
-  <thead>
-    <th>Name</th>
-    <th>Topic</th>
-    <th>Not before</th>
-    <th>Not after</th>
-  </thead>
-  <tbody>
-    {% for push_certificate in object_list %}
-    <tr>
-      <td><a href="{{ push_certificate.get_absolute_url }}">{{ push_certificate.name }}</a></td>
-      <td>{{ push_certificate.topic }}</td>
-      <td>{{ push_certificate.not_before }}</td>
-      <td>{{ push_certificate.not_after }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 {% endblock %}

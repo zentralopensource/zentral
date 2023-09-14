@@ -1,74 +1,63 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="active">SCEP configurations</a></li>
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">SCEP configurations</a></li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h3>{{ page_obj.paginator.count }} SCEP configuration{{ page_obj.paginator.count|pluralize }}</h3>
-
-{% if perms.mdm.add_scepconfig %}
-<p>
-  <a class="btn btn-default" href="{% url 'mdm:create_scep_config' %}">
-  Create
-  </a>
-</p>
-{% endif %}
-
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">SCEP configuration{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+    <div class="ms-auto">
+        {% if perms.mdm.add_scepconfig %}
+            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:create_scep_config' %}">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+        {% endif %}  
+    </div>
+</div>
 
 {% if object_list %}
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>URL</th>
-      <th>created at</th>
-      <th>updated at</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for scep_config in object_list %}
-    <tr>
-      <td>
-        <a href="{{ scep_config.get_absolute_url }}">{{ scep_config }}</a>
-      </td>
-      <td>
-        {{ scep_config.url }}
-      </td>
-      <td>{{ scep_config.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td>{{ scep_config.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>URL</th>
+        <th>created at</th>
+        <th>updated at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for scep_config in object_list %}
+        <tr>
+        <td>
+            <a href="{{ scep_config.get_absolute_url }}">{{ scep_config }}</a>
+        </td>
+        <td>
+            {{ scep_config.url }}
+        </td>
+        <td>{{ scep_config.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        <td>{{ scep_config.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+
+{% else %}
+    {% if perms.mdm.add_scepconfig %}
+        {% url 'mdm:create_scep_config' as link %}
+        {% no_entities 'SCEP Configurations' link %}
+    {% else %}
+        {% no_entities 'SCEP Configurations' %}
+    {% endif %}
 {% endif %}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
 {% endblock %}

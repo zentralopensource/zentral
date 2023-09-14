@@ -1,44 +1,57 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="active">Blueprints</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">Blueprints</li>
 </ol>
 
-<h3>{{ object_list|length  }} blueprint{{ object_list|length|pluralize }}</h3>
-
-{% if perms.mdm.add_blueprint %}
-<p>
-  <a class="btn btn-default" href="{% url 'mdm:create_blueprint' %}">Create</a>
-</p>
-{% endif %}
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Blueprint{{ object_list|length|pluralize }} ({{ object_list|length  }})</h2>
+    <div class="ms-auto">
+        {% if perms.mdm.add_blueprint %}
+            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:create_blueprint' %}">
+                <i class="bi bi-plus-circle"></i>
+            </a>
+        {% endif %}  
+    </div>
+</div>
 
 {% if object_list %}
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Artifacts</th>
-      <th>DEP enr.</th>
-      <th>OTA enr.</th>
-      <th>User enr.</th>
-      <th>updated at</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for blueprint in object_list %}
-    <tr>
-      <td><a href="{{ blueprint.get_absolute_url }}">{{ blueprint }}</a></td>
-      <td>{{ blueprint.blueprintartifact__count }}</td>
-      <td>{{ blueprint.depenrollment__count }}</td>
-      <td>{{ blueprint.otaenrollment__count }}</td>
-      <td>{{ blueprint.userenrollment__count }}</td>
-      <td>{{ blueprint.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>Artifacts</th>
+        <th>DEP enr.</th>
+        <th>OTA enr.</th>
+        <th>User enr.</th>
+        <th>updated at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for blueprint in object_list %}
+        <tr>
+        <td><a href="{{ blueprint.get_absolute_url }}">{{ blueprint }}</a></td>
+        <td>{{ blueprint.blueprintartifact__count }}</td>
+        <td>{{ blueprint.depenrollment__count }}</td>
+        <td>{{ blueprint.otaenrollment__count }}</td>
+        <td>{{ blueprint.userenrollment__count }}</td>
+        <td>{{ blueprint.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+{% else %}
+    {% if perms.mdm.add_blueprint %}
+        {% url 'mdm:add_blueprint' as link %}
+        {% no_entities 'Blueprints' link %}
+    {% else %}
+        {% no_entities 'Blueprints' %}
+    {% endif %}
 {% endif %}
+
+
 {% endblock %}

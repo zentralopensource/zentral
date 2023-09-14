@@ -1,19 +1,19 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
-  <li><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
-  <li class="active">Add to blueprint</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
+  <li class="breadcrumb-item active">Add to blueprint</li>
 </ol>
 
 <h3>Add {{ artifact }} to blueprint</h3>
 
 <form class="form" method="post">{% csrf_token %}
-  {{ form|bootstrap }}
+  {{ form }}
   {% if form.tag_shards %}
   <div class="form-group">
     <label class="control-label">Tag shards</label>

@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
 <h3>DEP virtual server <i>{{ object }}</i></h3>
@@ -34,12 +34,9 @@
         {% endif %}
       </dd>
     </dl>
-    <dl class="dl-horizontal">
-      <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-      <dt class="small" style="opacity:0.5">Updated at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-    </dl>
+
+    {% created_updated_at object %}
+
   </div>
   {% with object.organization as org %}
   <div class="col-md-6">
@@ -89,7 +86,7 @@
     <h3>{{ enrollment_count }} Profile{{ enrollment_count|pluralize }}</h3>
 
     {% if enrollment_count %}
-    <table class="table">
+    <table class="table table-light table-striped align-middle table-object-properties">
       <thead>
         <th class="col-md-4">Enrollment</th>
         <th class="col-md-2">Business unit</th>
@@ -130,7 +127,7 @@
     {% endif %}
 
     {% if devices_count %}
-    <table class="table">
+    <table class="table table-light table-striped align-middle table-object-properties">
       <thead>
         <th>Serial number</th>
         <th>Profile</th>
@@ -174,10 +171,10 @@
             {% if not dep_device.is_deleted %}
             <form action="{% url 'mdm:refresh_dep_device' device.pk %}" method="post">{% csrf_token %}
             <a href="{% url 'mdm:assign_dep_device_profile' device.pk %}" class="btn btn-default">
-              <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+              <span class="bi bi-pencil-square" aria-hidden="true"></span>
             </a>
             <button type="submit" class="btn btn-default">
-              <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
+              <span class="bi bi-refresh" aria-hidden="true"></span>
             </button>
             </form>
             {% endif %}

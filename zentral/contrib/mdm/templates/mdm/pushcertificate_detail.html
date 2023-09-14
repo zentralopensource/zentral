@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></li>
-  <li class="active">{{ object.name }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></li>
+  <li class="breadcrumb-item active">{{ object.name }}</li>
 </ol>
 
 <h3>MDM push certificate <i>{{ object.name }}</i></h3>

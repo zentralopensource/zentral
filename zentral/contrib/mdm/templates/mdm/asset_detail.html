@@ -1,19 +1,19 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:assets' %}">Store apps</a></li>
-  <li class="active">{{ asset.name }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:assets' %}">Store apps</a></li>
+  <li class="breadcrumb-item active">{{ asset.name }}</li>
 </ol>
 
 <h3>{% if object.icon_url %}<img style="max-width:48px;max-height:48px" src="{{ object.icon_url}}">{% endif %}{{ object.name }}</h3>
 
 <div class="row">
   <div class="col-md-12">
-    <table class="table">
+    <table class="table table-light table-striped align-middle">
       <thead>
         <th width="33%">Attribute</th>
         <th>Value</th>
@@ -71,12 +71,7 @@
       </tbody>
     </table>
 
-    <dl class="dl-horizontal">
-      <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-      <dt class="small" style="opacity:0.5">Updated at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-    </dl>
+    {% created_updated_at object %}
 
   </div>
 </div>
@@ -84,7 +79,7 @@
 <h4>Location{{ location_assets|length|pluralize }}</h4>
 
 {% if location_assets %}
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <th>Location</th>
     <th>Assigned</th>
@@ -116,18 +111,21 @@
 <p>No locations found for this asset.</p>
 {% endif %}
 
-<h4>Artifact{{ artifacts|length|pluralize }}</h4>
 
-{% if perms.mdm.add_artifact %}
-<p>
-  <a class="btn btn-default" href="{% url 'mdm:create_asset_artifact' object.pk %}">
-    Add
-  </a>
-</p>
-{% endif %}
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Artifact{{ artifacts|length|pluralize }}</h2>
+    <div class="ms-auto">
+        {% if perms.mdm.add_artifact %}
+        <a href="{% url 'mdm:create_asset_artifact' object.pk %}" class="btn btn-link text-dark text-decoration-none"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+        {% endif %}
+    </div>
+</div>
 
 {% if artifacts %}
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <th>Name</th>
     <th>Location</th>

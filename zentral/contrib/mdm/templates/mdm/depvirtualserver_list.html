@@ -1,45 +1,56 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="active">DEP virtual servers</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">DEP virtual servers</li>
 </ol>
 
-<h2>{{ object_list|length }} DEP virtual server{{ object_list|length|pluralize }}</h2>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">DEP virtual server{{ object_list|length|pluralize }} ({{ object_list|length }})</h2>
+    <div class="ms-auto">
+        {% if perms.mdm.add_depvirtualserver %}
+        <form action="{% url 'mdm:connect_dep_virtual_server' %}" method="post">{% csrf_token %}
+            <button class="btn btn-link text-decoration-none text-dark" name="action" value="start">
+                <i class="bi bi-plug"></i>
+            </button>
+        {% endif %}  
+    </div>
+</div>
 
-{% if perms.mdm.add_depvirtualserver %}
-<form action="{% url 'mdm:connect_dep_virtual_server' %}" method="post">{% csrf_token %}
-  <button class="btn btn-default" name="action" value="start">
-    Connect an existing server
-  </button>
-</form>
+
+{% if object_list %}
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <th>Name</th>
+        <th>Organization</th>
+        <th>Token expiry</th>
+    </thead>
+    <tbody>
+        {% for dep_virtual_server in object_list %}
+        <tr>
+        <td><a href="{{ dep_virtual_server.get_absolute_url }}">{{ dep_virtual_server }}</a></td>
+        <td>{{ dep_virtual_server.organization }}</td>
+        <td>
+            {% if dep_virtual_server.token %}
+            {% if dep_virtual_server.token.expires_soon %}
+            <span class="text-danger">{{ dep_virtual_server.token.access_token_expiry|date:'r' }}</span>
+            {% else %}
+            {{ dep_virtual_server.token.access_token_expiry|date:'r' }}
+            {% endif %}
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+{% else %}
+    {% no_entities 'DEP Virtual Servers' %}
 {% endif %}
-
-<table class="table">
-  <thead>
-    <th>Name</th>
-    <th>Organization</th>
-    <th>Token expiry</th>
-  </thead>
-  <tbody>
-    {% for dep_virtual_server in object_list %}
-    <tr>
-      <td><a href="{{ dep_virtual_server.get_absolute_url }}">{{ dep_virtual_server }}</a></td>
-      <td>{{ dep_virtual_server.organization }}</td>
-      <td>
-        {% if dep_virtual_server.token %}
-        {% if dep_virtual_server.token.expires_soon %}
-        <span class="text-danger">{{ dep_virtual_server.token.access_token_expiry|date:'r' }}</span>
-        {% else %}
-        {{ dep_virtual_server.token.access_token_expiry|date:'r' }}
-        {% endif %}
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 {% endblock %}

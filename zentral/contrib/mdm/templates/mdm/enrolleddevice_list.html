@@ -1,96 +1,84 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
   {% else %}
-  <li class="active">{{ anchor_text }}</li>
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
   {% endfor %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h3>{{ page_obj.paginator.count }} device{{ page_obj.paginator.count|pluralize }}</h3>
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Device{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+</div>
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-  <div class="form-group">
-    {{ form.q|bootstrap_inline }}
-  </div>
-  <div class="form-group">
-    {{ form.platform|bootstrap_inline }}
-  </div>
-  <div class="form-group">
-    {{ form.blueprint|bootstrap_inline }}
-  </div>
-  <button type="submit" class="btn btn-default">Search</button>
-</form>
+<div class="d-flex justify-content-between">
+    <div class="d-flex w-100 me-auto flex-shrink-0">
+        <form method="GET" class="d-flex w-75 me-auto flex-shrink-0 align-items-center">
+        
+            {{ form }}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
+            <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
+                <i class="bi bi-search"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if object_list %}
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle table-hover">
+    <thead>
+        <tr>
+        <th>serial number</th>
+        <th>UDID</th>
+        <th>model</th>
+        <th>name</th>
+        <th>created at</th>
+        <th>updated at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for enrolled_device in object_list %}
+        <tr>
+        <td>
+            {% with enrolled_device.get_urlsafe_serial_number as urlsafe_serial_number %}
+            {% if urlsafe_serial_number %}
+            {% if perms.inventory.view_machinsnapshot %}
+            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ enrolled_device.serial_number|default:"-" }}</a>
+            {% else %}
+            {{ enrolled_device.serial_number|default:"-" }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+            {% endwith %}
+        </td>
+        <td>
+            <a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device.udid }}</a>
+        </td>
+        <td>{{ enrolled_device.model|default:"-" }}</td>
+        <td>{{ enrolled_device.name|default:"-" }}</td>
+        <td>{{ enrolled_device.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        <td>{{ enrolled_device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+
+{% elif form.is_bound %}
+    {% url 'inventory:enrolled_device' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>serial number</th>
-      <th>UDID</th>
-      <th>model</th>
-      <th>name</th>
-      <th>created at</th>
-      <th>updated at</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for enrolled_device in object_list %}
-    <tr>
-      <td>
-        {% with enrolled_device.get_urlsafe_serial_number as urlsafe_serial_number %}
-        {% if urlsafe_serial_number %}
-        {% if perms.inventory.view_machinsnapshot %}
-        <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ enrolled_device.serial_number|default:"-" }}</a>
-        {% else %}
-        {{ enrolled_device.serial_number|default:"-" }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-        {% endwith %}
-      </td>
-      <td>
-        <a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device.udid }}</a>
-      </td>
-      <td>{{ enrolled_device.model|default:"-" }}</td>
-      <td>{{ enrolled_device.name|default:"-" }}</td>
-      <td>{{ enrolled_device.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td>{{ enrolled_device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
 {% endblock %}

@@ -3,11 +3,11 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:filevault_configs' %}">FileVault configurations</a></li>
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">delete</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:filevault_configs' %}">FileVault configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">delete</li>
 </ol>
 
 <h3>Delete FileVault configuration <i>{{ object }}</i></h3>

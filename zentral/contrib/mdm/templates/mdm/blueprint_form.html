@@ -1,25 +1,24 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:blueprints' %}">Blueprints</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:blueprints' %}">Blueprints</a></li>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+  <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 
 <h3>{% if object %}Update blueprint <i>{{ object }}</i>{% else %}Create blueprint{% endif %}</h3>
 
-<form class="form" method="post">{% csrf_token %}
-  {{ form|bootstrap }}
+<form class="update-form" method="post">{% csrf_token %}
+  {{ form }}
   <p>
-    <a href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'mdm:blueprints' %}{% endif %}" class="btn btn-default">
+    <a href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'mdm:blueprints' %}{% endif %}" class="btn btn-outline-secondary">
       Cancel
     </a>
     <button type="submit" class="btn btn-primary">
