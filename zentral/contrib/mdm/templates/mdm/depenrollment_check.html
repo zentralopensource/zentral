@@ -4,7 +4,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item active">MDM</li>
+  <li class="breadcrumb-item active"><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">[DEP] {{ object }}</a></li>
   <li class="breadcrumb-item active">Downloaded ABM profile</li>
