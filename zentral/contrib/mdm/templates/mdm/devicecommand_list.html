@@ -1,100 +1,80 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
-  <li><a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device }}</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device }}</a></li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Commands</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Commands</a></li>
   {% else %}
-  <li class="active">Commands</li>
+  <li class="breadcrumb-item active">Commands</li>
   {% endif %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
 <h3>Device command{{ page_obj.paginator.count|pluralize }}</h3>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
-
 {% if page_obj %}
-<table class="table table-condensed">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Artifact</th>
-      <th>Time</th>
-      <th>Result time</th>
-      <th>Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for loaded_command in loaded_commands %}
-    {% with loaded_command.db_command as command %}
-    <tr>
-      <td>
-        {{ command.name }}{% if command.name != loaded_command.request_type %} ({{ loaded_command.request_type }}){% endif %}
-      </td>
-      <td>
-        {% if command.artifact_version %}
-        {% if perms.mdm.view_artifactversion %}
-        <a href="{{ command.artifact_version.get_absolute_url }}">{{ command.artifact_version }}</a>
-        {% else %}
-        {{ command.artifact_version }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-      </td>
-      <td>
-        {% if command.time %}
-        {{ command.time|date:"SHORT_DATETIME_FORMAT" }}
-        {% else %}
-        Queued since {{ command.created_at|date:"SHORT_DATETIME_FORMAT" }}
-        {% endif %}
-      </td>
-      <td>
-        {{ command.result_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
-      </td>
-      <td>
-        {{ command.get_status_display|default:"-" }}
-        {% if command.result %}
-        <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_device_command_result' command.uuid %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-        </a>
-        {% endif %}
-      </td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>Artifact</th>
+        <th>Time</th>
+        <th>Result time</th>
+        <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for loaded_command in loaded_commands %}
+        {% with loaded_command.db_command as command %}
+        <tr>
+        <td>
+            {{ command.name }}{% if command.name != loaded_command.request_type %} ({{ loaded_command.request_type }}){% endif %}
+        </td>
+        <td>
+            {% if command.artifact_version %}
+            {% if perms.mdm.view_artifactversion %}
+            <a href="{{ command.artifact_version.get_absolute_url }}">{{ command.artifact_version }}</a>
+            {% else %}
+            {{ command.artifact_version }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        <td>
+            {% if command.time %}
+            {{ command.time|date:"SHORT_DATETIME_FORMAT" }}
+            {% else %}
+            Queued since {{ command.created_at|date:"SHORT_DATETIME_FORMAT" }}
+            {% endif %}
+        </td>
+        <td>
+            {{ command.result_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
+        </td>
+        <td>
+            {{ command.get_status_display|default:"-" }}
+            {% if command.result %}
+            <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_device_command_result' command.uuid %}">
+            <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+            </a>
+            {% endif %}
+        </td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+
 {% endif %}
 
 {% endblock %}

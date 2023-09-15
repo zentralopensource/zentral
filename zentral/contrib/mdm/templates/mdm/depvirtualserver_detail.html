@@ -13,13 +13,13 @@
 
 <div class="row">
   <div class="col-md-12">
-    <dl class="dl-horizontal">
-      <dt>name</dt>
-      <dd>{{ object.name }}</dd>
-      <dt>uuid</dt>
-      <dd>{{ object.uuid }}</dd>
-      <dt>default enrollment</dt>
-      <dd>
+    <dl class="row">
+      <dt class="col-sm-3 text-md-end">name</dt>
+      <dd  class="col-sm-9">{{ object.name }}</dd>
+      <dt class="col-sm-3 text-md-end">uuid</dt>
+      <dd  class="col-sm-9">{{ object.uuid }}</dd>
+      <dt class="col-sm-3 text-md-end">default enrollment</dt>
+      <dd  class="col-sm-9">
         {% if object.default_enrollment %}
         {% if perms.mdm.view_depenrollment %}
         <a href="{{ object.default_enrollment.get_absolute_url }}">{{ object.default_enrollment }}</a>
@@ -65,7 +65,7 @@
     {% if perms.mdm.change_depvirtualserver and token %}
     <a href="{% url 'mdm:renew_dep_token' token.id %}" class="btn btn-secondary">Renew</a>
     {% endif %}
-    <dl class="dl-horizontal">
+    <dl class="row">
       <dt class="col-sm-3 text-md-end">expiry</dt>
       <dd class="col-sm-9">
         {% if token.expires_soon %}
@@ -122,10 +122,11 @@
 <div class="row">
   <div class="col-md-12">
     <div class="d-flex align-items-center mb-1">
-        <h2 class="m-0">Device{{ devices_count|pluralize }} ({{ devices_count }})</h2>
+        <h3>Device{{ devices_count|pluralize }} ({{ devices_count }})</h3>
         <div class="ms-auto">
             {% if perms.mdm.change_depvirtualserver %}
-            <a id="devices-sync-btn" href="{% url 'mdm_api:dep_virtual_server_sync_devices' object.id %}" class="btn btn-link text-decoration-none text-dark task">
+            <a id="devices-sync-btn" href="{% url 'mdm_api:dep_virtual_server_sync_devices' object.id %}" class="btn btn-link text-decoration-none text-dark task"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Syncrhonize">
                 <i class="bi bi-arrow-repeat"></i>
             </a>
             {% endif %}
@@ -175,10 +176,12 @@
           <td class="text-end py-0">
             {% if not dep_device.is_deleted %}
             <form action="{% url 'mdm:refresh_dep_device' device.pk %}" method="post">{% csrf_token %}
-            <a href="{% url 'mdm:assign_dep_device_profile' device.pk %}" class="btn btn-link text-decoration-none text-dark">
+            <a href="{% url 'mdm:assign_dep_device_profile' device.pk %}" class="btn btn-link text-decoration-none text-dark"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
               <span class="bi bi-pencil-square" aria-hidden="true"></span>
             </a>
-            <button type="submit" class="btn btn-link text-decoration-none text-dark">
+            <button type="submit" class="btn btn-link text-decoration-none text-dark"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Syncrhonize">
               <span class="bi bi-arrow-repeat" aria-hidden="true"></span>
             </button>
             </form>

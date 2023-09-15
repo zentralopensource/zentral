@@ -9,219 +9,224 @@
   <li class="breadcrumb-item active">[DEP] {{ object }}</li>
 </ol>
 
-<h2 class="m-0">{{ object }}</h2>
-<h3 class="m-0 fs-5 text-secondary">[DEP]</h3>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">[DEP]</h3>
+        <div class="ms-auto">
+            <a href="{% url 'mdm:check_dep_enrollment' object.pk %}" class="btn btn-link text-decoration-none text-dark"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download from ABM">
+                <i class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
+              </a>
+              {% if perms.mdm.change_depenrollment %}
+              <a href="{% url 'mdm:update_dep_enrollment' object.pk %}" class="btn btn-link text-decoration-none text-dark"
+                  data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
+                <i class="bi bi-pencil-square" aria-hidden="true"></i>
+              </a>
+              {% endif %}
+        </div>
+    </div>
+    <h4>Configuration</h4>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <tbody>
+        <tr>
+        <th width="200px">Push certificate</th>
+        <td>
+            {% if perms.mdm.view_pushcertificate %}
+            <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
+            {% else %}
+            {{ object.push_certificate }}
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th width="160px">SCEP config</th>
+        <td>
+            {% if perms.mdm.view_scepconfig %}
+            <a href="{{ object.scep_config.get_absolute_url }}">{{ object.scep_config }}</a>
+            {% else %}
+            {{ object.scep_config }}
+            {% endif %}
+            {% if object.scep_verification %}
+            / with CSR verification
+            {% else %}
+            / without CSR verification
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Blueprint</th>
+        <td>
+            {% if object.blueprint %}
+            {% if perms.mdm.view_blueprint %}
+            <a href="{{ object.blueprint.get_absolute_url }}">{{ object.blueprint }}</a>
+            {% else %}
+            {{ object.blueprint }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Business unit</th>
+        <td>{{ object.enrollment_secret.meta_business_unit }}</td>
+        </tr>
+        <tr>
+        <th>Enrollment tag{{ secret.tags.count|pluralize }}</th>
+        <td>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</td>
+        </tr>
+        <tr>
+        <th>Required iOS version</th>
+        <td>{{ object.ios_min_version|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Required macOS version</th>
+        <td>{{ object.macos_min_version|default:"-" }}</td>
+        </tr>
+    </tbody>
+    </table>
 
-<h4>Configuration</h4>
-<table class="table table-light table-striped align-middle table-object-properties">
-  <tbody>
-    <tr>
-      <th width="200px">Push certificate</th>
-      <td>
-        {% if perms.mdm.view_pushcertificate %}
-        <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
-        {% else %}
-        {{ object.push_certificate }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th width="160px">SCEP config</th>
-      <td>
-        {% if perms.mdm.view_scepconfig %}
-        <a href="{{ object.scep_config.get_absolute_url }}">{{ object.scep_config }}</a>
-        {% else %}
-        {{ object.scep_config }}
-        {% endif %}
-        {% if object.scep_verification %}
-        / with CSR verification
-        {% else %}
-        / without CSR verification
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Blueprint</th>
-      <td>
-        {% if object.blueprint %}
-        {% if perms.mdm.view_blueprint %}
-        <a href="{{ object.blueprint.get_absolute_url }}">{{ object.blueprint }}</a>
-        {% else %}
-        {{ object.blueprint }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Business unit</th>
-      <td>{{ object.enrollment_secret.meta_business_unit }}</td>
-    </tr>
-    <tr>
-      <th>Enrollment tag{{ secret.tags.count|pluralize }}</th>
-      <td>{% for tag in secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}</td>
-    </tr>
-    <tr>
-      <th>Required iOS version</th>
-      <td>{{ object.ios_min_version|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Required macOS version</th>
-      <td>{{ object.macos_min_version|default:"-" }}</td>
-    </tr>
-  </tbody>
-</table>
+    <h4>Authentication</h4>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <tbody>
+        <tr>
+        <th width="200px">Realm</th>
+        <td>
+            {% if object.realm %}
+            {% if perms.realms.view_realm %}
+            <a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a>
+            {% else %}
+            {{ object.realm }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Use realm user</th>
+        <td>{{ object.use_realm_user|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Realm user is admin</th>
+        <td>{{ object.realm_user_is_admin|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Admin full name</th>
+        <td>{{ object.admin_full_name|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Admin short name</th>
+        <td>{{ object.admin_short_name|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Admin password set</th>
+        <td>{% if object.admin_password_hash %}yes{% else %}no{% endif %}</td>
+        </tr>
+    </tbody>
+    </table>
 
-<h4>Authentication</h4>
-<table class="table table-light table-striped align-middle table-object-properties">
-  <tbody>
-    <tr>
-      <th width="200px">Realm</th>
-      <td>
-        {% if object.realm %}
-        {% if perms.realms.view_realm %}
-        <a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a>
-        {% else %}
-        {{ object.realm }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Use realm user</th>
-      <td>{{ object.use_realm_user|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Realm user is admin</th>
-      <td>{{ object.realm_user_is_admin|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Admin full name</th>
-      <td>{{ object.admin_full_name|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Admin short name</th>
-      <td>{{ object.admin_short_name|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Admin password set</th>
-      <td>{% if object.admin_password_hash %}yes{% else %}no{% endif %}</td>
-    </tr>
-  </tbody>
-</table>
+    <h4>DEP Profile</h4>
 
-<h4>DEP Profile</h4>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <tbody>
+        {% with object.virtual_server as virtual_server %}
+        <tr>
+        <th style="width:200px">Virtual server</th>
+        <td>
+            {% if perms.mdm.view_depvirtualserver %}
+            <a href="{{ virtual_server.get_absolute_url }}">{{ virtual_server }}</a>
+            {% else %}
+            {{ virtual_server }}
+            {% endif %}
+            {% if virtual_server.default_enrollment == object %}
+            <span class="label label-success">Default</span>
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Organization</th>
+        <td>{{ virtual_server.organization }}</dt>
+        </tr>
+        {% endwith %}
+        <tr>
+        <th colspan="2"><h5>Org info</h5></th>
+        </tr>
+        <tr>
+        <th>Support phone number</th>
+        <td>{{ object.support_phone_number|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Support email</th>
+        <td>{{ object.support_email_atdress|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Org magic</th>
+        <td>{{ object.org_magic|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Department</th>
+        <td>{{ object.department|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th colspan="2"><h5>Localization</h5></th>
+        </tr>
+        <tr>
+        <th>Language</th>
+        <td>{{ object.get_language_display|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Region</th>
+        <td>{{ object.get_region_display|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th colspan="2"><h5>Settings</h5></th>
+        </tr>
+        <tr>
+        <th>allow pairing</th>
+        <td>{{ object.allow_pairing|yesno }}</td>
+        </tr>
+        <tr>
+        <th>supervised</th>
+        <td>{{ object.is_supervised|yesno }}</td>
+        </tr>
+        <tr>
+        <th>mandatory</th>
+        <td>{{ object.is_mandatory|yesno }}</td>
+        </tr>
+        <tr>
+        <th>await device configured</th>
+        <td>{{ object.await_device_configured|yesno }}</td>
+        </tr>
+        <tr>
+        <th>auto advance setup</th>
+        <td>{{ object.auto_advance_setup|yesno }}</td>
+        </tr>
+        <tr>
+        <th>mdm removable</th>
+        <td>{{ object.is_mdm_removable|yesno }}</td>
+        </tr>
+        <tr>
+        <th>include tls certificates</th>
+        <td>{{ object.include_tls_certificates|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Skip setup items</th>
+        <td>
+            <ul class="list">
+            {% for key in skip_keys %}
+            <li>{{ key }}</li>
+            {% endfor %}
+            <ul>
+        </td>
+        </tr>
+    </tbody>
+    </table>
 
-<table class="table table-light table-striped align-middle table-object-properties">
-  <tbody>
-    {% with object.virtual_server as virtual_server %}
-    <tr>
-      <th style="width:200px">Virtual server</th>
-      <td>
-        {% if perms.mdm.view_depvirtualserver %}
-        <a href="{{ virtual_server.get_absolute_url }}">{{ virtual_server }}</a>
-        {% else %}
-        {{ virtual_server }}
-        {% endif %}
-        {% if virtual_server.default_enrollment == object %}
-        <span class="label label-success">Default</span>
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Organization</th>
-      <td>{{ virtual_server.organization }}</dt>
-    </tr>
-    {% endwith %}
-    <tr>
-      <th colspan="2"><h5>Org info</h5></th>
-    </tr>
-    <tr>
-      <th>Support phone number</th>
-      <td>{{ object.support_phone_number|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Support email</th>
-      <td>{{ object.support_email_atdress|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Org magic</th>
-      <td>{{ object.org_magic|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Department</th>
-      <td>{{ object.department|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th colspan="2"><h5>Localization</h5></th>
-    </tr>
-    <tr>
-      <th>Language</th>
-      <td>{{ object.get_language_display|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Region</th>
-      <td>{{ object.get_region_display|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th colspan="2"><h5>Settings</h5></th>
-    </tr>
-    <tr>
-      <th>allow pairing</th>
-      <td>{{ object.allow_pairing|yesno }}</td>
-    </tr>
-    <tr>
-      <th>supervised</th>
-      <td>{{ object.is_supervised|yesno }}</td>
-    </tr>
-    <tr>
-      <th>mandatory</th>
-      <td>{{ object.is_mandatory|yesno }}</td>
-    </tr>
-    <tr>
-      <th>await device configured</th>
-      <td>{{ object.await_device_configured|yesno }}</td>
-    </tr>
-    <tr>
-      <th>auto advance setup</th>
-      <td>{{ object.auto_advance_setup|yesno }}</td>
-    </tr>
-    <tr>
-      <th>mdm removable</th>
-      <td>{{ object.is_mdm_removable|yesno }}</td>
-    </tr>
-    <tr>
-      <th>include tls certificates</th>
-      <td>{{ object.include_tls_certificates|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Skip setup items</th>
-      <td>
-        <ul class="list">
-          {% for key in skip_keys %}
-          <li>{{ key }}</li>
-          {% endfor %}
-        <ul>
-      </td>
-    </tr>
-  </tbody>
-</table>
-
-<p>
-  <a href="{% url 'mdm:check_dep_enrollment' object.pk %}" class="btn btn-link text-decoration-none text-dark">
-    <i class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
-    Download from ABM
-  </a>
-  {% if perms.mdm.change_depenrollment %}
-  <a href="{% url 'mdm:update_dep_enrollment' object.pk %}" class="btn btn-link text-decoration-none text-dark">
-    <i class="bi bi-pencil-square" aria-hidden="true"></i>
-    Edit
-  </a>
-  {% endif %}
-</p>
+</div>
 
 {% with object.depdevice_set.count as device_count %}
 {% with object.assigned_devices.count as assigned_device_count %}

@@ -17,10 +17,12 @@
         <div class="ms-auto">
             {% if not dep_device.is_deleted and perms.mdm.change_depdevice %}
             <form action="{% url 'mdm:refresh_dep_device' object.pk %}" method="post">{% csrf_token %}
-            <a href="{% url 'mdm:assign_dep_device_profile' object.pk %}" class="btn btn-link text-decoration-none text-dark">
+            <a href="{% url 'mdm:assign_dep_device_profile' object.pk %}" class="btn btn-link text-decoration-none text-dark"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
                 <span class="bi bi-pencil-square" aria-hidden="true"></span>
             </a>
-            <button type="submit" class="btn btn-link text-decoration-none text-dark">
+            <button type="submit" class="btn btn-link text-decoration-none text-dark"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Syncrhonize">
                 <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
             </button>
             </form>
