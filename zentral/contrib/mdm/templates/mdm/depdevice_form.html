@@ -1,21 +1,22 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:dep_devices' %}">DEP devices</a></li>
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">Assign DEP profile</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:dep_devices' %}">DEP devices</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Assign DEP profile</li>
 </ol>
 
 <h3>DEP device {{ object }}</h3>
 
-<form class="form" method="POST">{% csrf_token %}
-  {{ form|bootstrap }}
-  <p>
-    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+<form class="update-form" method="POST">{% csrf_token %}
+
+    {{ form }}
+
+    <p>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-primary">Save</button>
   </p>
 </form>

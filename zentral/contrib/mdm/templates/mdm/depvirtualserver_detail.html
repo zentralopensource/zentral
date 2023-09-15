@@ -30,7 +30,7 @@
         -
         {% endif %}
         {% if perms.mdm.change_depvirtualserver %}
-        <a href="{% url 'mdm:update_dep_virtual_server' object.pk %}" class="btn btn-primary btn-xs">Change</a>
+        <a href="{% url 'mdm:update_dep_virtual_server' object.pk %}" class="btn btn-secondary btn-xs">Change</a>
         {% endif %}
       </dd>
     </dl>
@@ -41,21 +41,21 @@
   {% with object.organization as org %}
   <div class="col-md-6">
     <h4>DEP organization</h3>
-    <dl class="dl-horizontal">
-      <dt>name</dt>
-      <dd>{{ org.name }}</dd>
-      <dt>admin</dt>
-      <dd>{{ org.admin_id }}</dd>
-      <dt>email</dt>
-      <dd>{{ org.email }}</dd>
-      <dt>phone</dt>
-      <dd>{{ org.phone }}</dd>
-      <dt>address</dt>
-      <dd>{{ org.address_lines|linebreaksbr }}</dd>
-      <dt>type</dt>
-      <dd>{{ org.type }}</dd>
-      <dt>version</dt>
-      <dd>{{ org.version }}</dd>
+    <dl class="row">
+      <dt class="col-sm-3 text-md-end">name</dt>
+      <dd class="col-sm-9">{{ org.name }}</dd>
+      <dt class="col-sm-3 text-md-end">admin</dt>
+      <dd class="col-sm-9"{{ org.admin_id }}</dd>
+      <dt class="col-sm-3 text-md-end">email</dt>
+      <dd class="col-sm-9">{{ org.email }}</dd>
+      <dt class="col-sm-3 text-md-end">phone</dt>
+      <dd class="col-sm-9">{{ org.phone }}</dd>
+      <dt class="col-sm-3 text-md-end">address</dt>
+      <dd class="col-sm-9">{{ org.address_lines|linebreaksbr }}</dd>
+      <dt class="col-sm-3 text-md-end">type</dt>
+      <dd class="col-sm-9">{{ org.type }}</dd>
+      <dt class="col-sm-3 text-md-end">version</dt>
+      <dd class="col-sm-9">{{ org.version }}</dd>
     </dl>
   </div>
   {% endwith %}
@@ -63,11 +63,11 @@
   <div class="col-md-6">
     <h4>DEP Token</h3>
     {% if perms.mdm.change_depvirtualserver and token %}
-    <a href="{% url 'mdm:renew_dep_token' token.id %}" class="btn btn-default">Renew</a>
+    <a href="{% url 'mdm:renew_dep_token' token.id %}" class="btn btn-secondary">Renew</a>
     {% endif %}
     <dl class="dl-horizontal">
-      <dt>expiry</dt>
-      <dd>
+      <dt class="col-sm-3 text-md-end">expiry</dt>
+      <dd class="col-sm-9">
         {% if token.expires_soon %}
         <span class="text-danger">{{ token.access_token_expiry|date:'r' }}</span>
         {% else %}
@@ -83,7 +83,7 @@
   <div class="col-md-12">
     {% with object.depenrollment_set.count as enrollment_count %}
 
-    <h3>{{ enrollment_count }} Profile{{ enrollment_count|pluralize }}</h3>
+    <h3>Profile{{ enrollment_count|pluralize }} ({{ enrollment_count }})</h3>
 
     {% if enrollment_count %}
     <table class="table table-light table-striped align-middle table-object-properties">
@@ -121,11 +121,16 @@
 
 <div class="row">
   <div class="col-md-12">
-    <h3>{{ devices_count }} Device{{ devices_count|pluralize }}</h3>
-    {% if perms.mdm.change_depvirtualserver %}
-    <a id="devices-sync-btn" href="{% url 'mdm_api:dep_virtual_server_sync_devices' object.id %}" class="btn btn-default task">Sync</a>
-    {% endif %}
-
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">Device{{ devices_count|pluralize }} ({{ devices_count }})</h2>
+        <div class="ms-auto">
+            {% if perms.mdm.change_depvirtualserver %}
+            <a id="devices-sync-btn" href="{% url 'mdm_api:dep_virtual_server_sync_devices' object.id %}" class="btn btn-link text-decoration-none text-dark task">
+                <i class="bi bi-arrow-repeat"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
     {% if devices_count %}
     <table class="table table-light table-striped align-middle table-object-properties">
       <thead>
@@ -139,7 +144,7 @@
       </thead>
       <tbody>
         {% for device in latest_devices %}
-        <tr id="{{ device.serial_number }}">
+        <tr id="{{ device.serial_number }}" class="data-row">
           <td>
             {% if perms.mdm.view_depdevice %}
             <a href="{{ device.get_absolute_url }}">{{ device }}</a>
@@ -167,14 +172,14 @@
             {% if device.profile_status == "pushed" and device.profile_push_time  %} - {{ device.profile_push_time|date:"SHORT_DATETIME_FORMAT" }}{% endif %}
           </td>
           {% if perms.mdm.change_depdevice %}
-          <td>
+          <td class="text-end py-0">
             {% if not dep_device.is_deleted %}
             <form action="{% url 'mdm:refresh_dep_device' device.pk %}" method="post">{% csrf_token %}
-            <a href="{% url 'mdm:assign_dep_device_profile' device.pk %}" class="btn btn-default">
+            <a href="{% url 'mdm:assign_dep_device_profile' device.pk %}" class="btn btn-link text-decoration-none text-dark">
               <span class="bi bi-pencil-square" aria-hidden="true"></span>
             </a>
-            <button type="submit" class="btn btn-default">
-              <span class="bi bi-refresh" aria-hidden="true"></span>
+            <button type="submit" class="btn btn-link text-decoration-none text-dark">
+              <span class="bi bi-arrow-repeat" aria-hidden="true"></span>
             </button>
             </form>
             {% endif %}

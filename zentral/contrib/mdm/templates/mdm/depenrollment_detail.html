@@ -3,16 +3,17 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
-  <li class="active">[DEP] {{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
+  <li class="breadcrumb-item active">[DEP] {{ object }}</li>
 </ol>
 
-<h3>[DEP] {{ object }}</h3>
+<h2 class="m-0">{{ object }}</h2>
+<h3 class="m-0 fs-5 text-secondary">[DEP]</h3>
 
-<h4 style="margin-top:20px">Configuration</h4>
-<table class="table table-condensed">
+<h4>Configuration</h4>
+<table class="table table-light table-striped align-middle table-object-properties">
   <tbody>
     <tr>
       <th width="200px">Push certificate</th>
@@ -73,7 +74,7 @@
 </table>
 
 <h4>Authentication</h4>
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle table-object-properties">
   <tbody>
     <tr>
       <th width="200px">Realm</th>
@@ -114,7 +115,7 @@
 
 <h4>DEP Profile</h4>
 
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle table-object-properties">
   <tbody>
     {% with object.virtual_server as virtual_server %}
     <tr>
@@ -210,13 +211,13 @@
 </table>
 
 <p>
-  <a href="{% url 'mdm:check_dep_enrollment' object.pk %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-cloud-download" aria-hidden="true"></span>
+  <a href="{% url 'mdm:check_dep_enrollment' object.pk %}" class="btn btn-link text-decoration-none text-dark">
+    <i class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
     Download from ABM
   </a>
   {% if perms.mdm.change_depenrollment %}
-  <a href="{% url 'mdm:update_dep_enrollment' object.pk %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+  <a href="{% url 'mdm:update_dep_enrollment' object.pk %}" class="btn btn-link text-decoration-none text-dark">
+    <i class="bi bi-pencil-square" aria-hidden="true"></i>
     Edit
   </a>
   {% endif %}
@@ -228,7 +229,7 @@
 <h3 style="margin-top:40px">Assigned to {{ assigned_device_count }} device{{ assigned_device_count|pluralize }} ({{ device_count }} total)</h3>
 
 {% if device_count %}
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <th class="col-md-4">Serial number</th>
     <th class="col-md-4">Profile status</th>
@@ -256,9 +257,9 @@
 {% endwith %}
 {% endwith %}
 
-<h3 style="margin-top:40px">{{ dep_enrollment_sessions_count }} Session{{ dep_enrollment_sessions_count|pluralize }}</h3>
+<h3>Session{{ dep_enrollment_sessions_count|pluralize }} ({{ dep_enrollment_sessions_count }})</h3>
 
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <th>Serial number</th>
     {% if object.realm %}
