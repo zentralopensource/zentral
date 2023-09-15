@@ -41,6 +41,7 @@
     <dt class="col-sm-3 text-md-end">Not after</dt>
     <dd class="col-sm-9">{{ object.not_after }}</dd>
     </dl>
+</div>
 
     {% if perms.mdm.view_depenrollment %}
     <h3>DEP enrollment{{ dep_enrollments|length|pluralize }} ({{ dep_enrollments|length }})</h3>
@@ -140,6 +141,5 @@
     </table>
     {% endif %}
     {% endif %}
-</div>
 
 {% endblock %}
