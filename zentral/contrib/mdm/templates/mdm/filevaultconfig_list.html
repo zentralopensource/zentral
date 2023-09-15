@@ -44,12 +44,12 @@
         <td>
             {% if perms.mdm.change_filevaultconfig %}
             <a href="{% url 'mdm:update_filevault_config' filevault_config.pk %}" class="btn btn-xs btn-default">
-            <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+            <span class="bi bi-pencil-square" aria-hidden="true"></span>
             </a>
             {% endif %}
             {% if perms.mdm.delete_filevaultconfig and filevault_config.can_be_deleted %}
             <a href="{% url 'mdm:delete_filevault_config' filevault_config.pk %}" class="btn btn-xs btn-danger">
-            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+            <span class="bi bi-trash" aria-hidden="true"></span>
             </a>
             {% endif %}
         </td>
