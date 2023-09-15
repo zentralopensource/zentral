@@ -15,7 +15,7 @@
 
 <h3>{% if object %}[USER] {{ object }}{% else %}Create user enrollment{% endif %}</h3>
 
-<form class="form" method="POST">{% csrf_token %}
+<form class="update-form" method="POST">{% csrf_token %}
   {{ user_enrollment_form }}
   {{ enrollment_secret_form }}
   <p>
