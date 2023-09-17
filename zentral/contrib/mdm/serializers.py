@@ -4,7 +4,7 @@ from django.core.files import File
 from django.db import transaction
 from rest_framework import serializers
 from zentral.contrib.inventory.models import Tag
-from .app_manifest import build_enterprise_app_manifest, download_source, validate_configuration
+from .app_manifest import download_package, read_package_info, validate_configuration
 from .artifacts import update_blueprint_serialized_artifacts
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
@@ -311,8 +311,9 @@ class ProfileSerializer(ArtifactVersionSerializer):
 
 
 class EnterpriseAppSerializer(ArtifactVersionSerializer):
-    source_uri = serializers.CharField(required=True, write_only=True)
-    source_sha256 = serializers.CharField(required=True, write_only=True)
+    package_uri = serializers.CharField(required=True)
+    package_sha256 = serializers.CharField(required=True)
+    package_size = serializers.IntegerField(read_only=True)
     filename = serializers.CharField(read_only=True)
     product_id = serializers.CharField(read_only=True)
     product_version = serializers.CharField(read_only=True)
@@ -336,42 +337,40 @@ class EnterpriseAppSerializer(ArtifactVersionSerializer):
             raise serializers.ValidationError({
                 "remove_on_unenroll": "Only available if installed as managed is also set"
             })
-        source_uri = data.pop("source_uri", None)
-        if source_uri is None:
+        package_uri = data.get("package_uri")
+        if package_uri is None:
             return data
-        source_sha256 = data.pop("source_sha256", None)
-        if source_sha256 is None:
+        package_sha256 = data.get("package_sha256")
+        if package_sha256 is None:
             return data
         try:
-            filename, tmp_file = download_source(source_uri, source_sha256)
-            title, product_id, product_version, manifest, bundles, platforms = build_enterprise_app_manifest(
-                tmp_file
-            )
+            filename, tmp_file = download_package(package_uri, package_sha256)
+            _, _, ea_data = read_package_info(tmp_file)
         except Exception as e:
-            raise serializers.ValidationError({"source_uri": str(e)})
+            raise serializers.ValidationError({"package_uri": str(e)})
         # same product ID?
         artifact = data["artifact_version"]["artifact"]
-        if EnterpriseApp.objects.filter(artifact_version__artifact=artifact).exclude(product_id=product_id).exists():
+        if (
+            EnterpriseApp.objects.filter(artifact_version__artifact=artifact)
+                                 .exclude(product_id=ea_data["product_id"]).exists()
+        ):
             raise serializers.ValidationError(
-                {"source_uri": "The product ID of the new app is not identical "
-                               "to the product ID of the other versions"}
+                {"package_uri": "The product ID of the new app is not identical "
+                                "to the product ID of the other versions"}
             )
         # non-field attributes
-        ea_data = data["enterprise_app"] = {
-            "filename": filename,
-            "package": File(tmp_file),
-            "product_id": product_id,
-            "product_version": product_version,
-            "bundles": bundles,
-            "manifest": manifest
-        }
+        ea_data["filename"] = filename
+        ea_data["package"] = File(tmp_file)
         # field attributes
-        for attr in ("ios_app", "configuration", "install_as_managed", "remove_on_unenroll"):
+        for attr in ("package_uri", "package_sha256",
+                     "ios_app", "configuration",
+                     "install_as_managed", "remove_on_unenroll"):
             if attr == "configuration":
                 data_attr = "get_configuration_plist"
             else:
                 data_attr = attr
             ea_data[attr] = data.pop(data_attr)
+        data["enterprise_app"] = ea_data
         return data
 
     def create(self, validated_data):

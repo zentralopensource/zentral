@@ -9,7 +9,7 @@ from django.db.models import Count, Q
 from realms.utils import build_password_hash_dict
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.os_version import make_comparable_os_version
-from .app_manifest import build_enterprise_app_manifest, validate_configuration
+from .app_manifest import read_package_info, validate_configuration
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
 from .commands.set_recovery_lock import validate_recovery_password
@@ -493,16 +493,13 @@ class BaseEnterpriseAppForm(forms.ModelForm, AppConfigurationMixin):
         if not package:
             return
         try:
-            title, product_id, product_version, manifest, bundles, platforms = build_enterprise_app_manifest(package)
+            name, platforms, ea_data = read_package_info(package, compute_sha256=True)
         except Exception as e:
             raise forms.ValidationError(f"Invalid app: {e}")
-        self.cleaned_data["name"] = title or product_id
+        self.cleaned_data["name"] = name
         self.cleaned_data["filename"] = package.name
-        self.cleaned_data["product_id"] = product_id
-        self.cleaned_data["product_version"] = product_version
-        self.cleaned_data["manifest"] = manifest
-        self.cleaned_data["bundles"] = bundles
         self.cleaned_data["platforms"] = platforms
+        self.cleaned_data.update(ea_data)
         # management
         install_as_managed = self.cleaned_data.get("install_as_managed")
         remove_on_unenroll = self.cleaned_data.get("remove_on_unenroll")
@@ -556,10 +553,7 @@ class UpgradeEnterpriseAppForm(BaseEnterpriseAppForm):
                 "The product ID of the new app is not identical to the product ID of the latest version"
             )
         has_changed = False
-        for k in ("product_version",
-                  "bundles",
-                  "manifest",
-                  "ios_app",
+        for k in ("manifest",
                   "configuration",
                   "install_as_managed",
                   "remove_on_unenroll"):
@@ -577,7 +571,9 @@ class UpgradeEnterpriseAppForm(BaseEnterpriseAppForm):
         self.instance.id = None  # force insert
         self.instance.artifact_version = artifact_version
         # save non-field attributes (configuration is not editable, so not a standard "field")
-        for attr in ("configuration",
+        for attr in ("package_sha256",
+                     "package_size",
+                     "configuration",
                      "filename",
                      "product_id",
                      "product_version",

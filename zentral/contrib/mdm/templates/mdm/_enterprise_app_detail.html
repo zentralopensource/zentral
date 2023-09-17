@@ -3,6 +3,18 @@
   <th colspan="2"><h4>Enterprise app</h4></th>
 </tr>
 <tr>
+  <th>Package URI</th>
+  <td>{{ enterprise_app.package_uri|default:"-" }}</td>
+</tr>
+<tr>
+  <th>Package SHA256</th>
+  <td><code>{{ enterprise_app.package_sha256 }}</code></td>
+</tr>
+<tr>
+  <th>Package size</th>
+  <td>{{ enterprise_app.package_size|filesizeformat }}</td>
+</tr>
+<tr>
   <th>Product ID</th>
   <td>{{ enterprise_app.product_id }}</td>
 </tr>

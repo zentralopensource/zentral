@@ -127,6 +127,9 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
               'tvos_max_version': '',
               'tvos_min_version': '',
               'version': ea_av.version,
+              'package_uri': "",
+              'package_sha256': 64 * "0",
+              'package_size': 123,
               'bundles': [],
               'manifest': {'items': [{'assets': [{}]}]},
               'configuration': None,
@@ -146,8 +149,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         response = self.post(reverse("mdm_api:enterprise_apps"),
                              data={"artifact": str(artifact.pk),
-                                   "source_uri": "s3://yolo/fomo.pkg",
-                                   "source_sha256": 40 * "0",
+                                   "package_uri": "s3://yolo/fomo.pkg",
+                                   "package_sha256": 64 * "0",
                                    "macos": True},
                              include_token=False)
         self.assertEqual(response.status_code, 401)
@@ -156,8 +159,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         response = self.post(reverse("mdm_api:enterprise_apps"),
                              data={"artifact": str(artifact.pk),
-                                   "source_uri": "s3://yolo/fomo.pkg",
-                                   "source_sha256": 40 * "0",
+                                   "package_uri": "s3://yolo/fomo.pkg",
+                                   "package_sha256": 64 * "0",
                                    "macos": True})
         self.assertEqual(response.status_code, 403)
 
@@ -170,8 +173,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         self.set_permissions("mdm.add_enterpriseapp")
         response = self.post(reverse("mdm_api:enterprise_apps"),
                              data={"artifact": str(artifact.pk),
-                                   "source_uri": "s3://yolo/fomo.pkg",
-                                   "source_sha256": 40 * "0",
+                                   "package_uri": "s3://yolo/fomo.pkg",
+                                   "package_sha256": 64 * "0",
                                    "macos": True,
                                    "install_as_managed": False,
                                    "remove_on_unenroll": True,  # requires install_as_managed == True
@@ -191,8 +194,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         self.set_permissions("mdm.add_enterpriseapp")
         response = self.post(reverse("mdm_api:enterprise_apps"),
                              data={"artifact": str(artifact.pk),
-                                   "source_uri": "s3://yolo/fomo.pkg",
-                                   "source_sha256": 40 * "0",
+                                   "package_uri": "s3://yolo/fomo.pkg",
+                                   "package_sha256": 64 * "0",
                                    "macos": True,
                                    "configuration": "well well well",
                                    "version": 2})
@@ -211,14 +214,14 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         self.set_permissions("mdm.add_enterpriseapp")
         response = self.post(reverse("mdm_api:enterprise_apps"),
                              data={"artifact": str(artifact.pk),
-                                   "source_uri": "ftp://yolo/fomo.pkg",
-                                   "source_sha256": 40 * "0",
+                                   "package_uri": "ftp://yolo/fomo.pkg",
+                                   "package_sha256": 64 * "0",
                                    "macos": True,
                                    "version": 2})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'source_uri': ["Unknown source URI scheme: 'ftp'"]}
+            {'package_uri': ["Unknown package URI scheme: 'ftp'"]}
         )
 
     def test_create_enterprise_app_unsupported_file_extension(self):
@@ -230,14 +233,14 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         self.set_permissions("mdm.add_enterpriseapp")
         response = self.post(reverse("mdm_api:enterprise_apps"),
                              data={"artifact": str(artifact.pk),
-                                   "source_uri": "s3://yolo/fomo.dmg",
-                                   "source_sha256": 40 * "0",
+                                   "package_uri": "s3://yolo/fomo.dmg",
+                                   "package_sha256": 64 * "0",
                                    "macos": True,
                                    "version": 2})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'source_uri': ["Unsupported file extension: '.dmg'"]}
+            {'package_uri': ["Unsupported file extension: '.dmg'"]}
         )
 
     @patch("zentral.contrib.mdm.app_manifest.boto3.client")
@@ -252,65 +255,65 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         with patch.dict(os.environ, {"AWS_REGION": "eu-central-17"}):
             response = self.post(reverse("mdm_api:enterprise_apps"),
                                  data={"artifact": str(artifact.pk),
-                                       "source_uri": "s3://yolo/fomo.pkg",
-                                       "source_sha256": 40 * "0",
+                                       "package_uri": "s3://yolo/fomo.pkg",
+                                       "package_sha256": 64 * "0",
                                        "macos": True,
                                        "version": 2})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'source_uri': ['Boom!!!']}
+            {'package_uri': ['Boom!!!']}
         )
         boto3_client.assert_called_once_with("s3", region_name="eu-central-17")
         boom.download_fileobj.assert_called_once()
         self.assertEqual(boom.download_fileobj.call_args[0][0], "yolo")
         self.assertEqual(boom.download_fileobj.call_args[0][1], "fomo.pkg")
 
-    @patch("zentral.contrib.mdm.app_manifest.download_s3_source")
-    def test_create_enterprise_app_hash_mismatch(self, download_s3_source):
+    @patch("zentral.contrib.mdm.app_manifest.download_s3_package")
+    def test_create_enterprise_app_hash_mismatch(self, download_s3_package):
         _, artifact, _ = force_blueprint_artifact(
             artifact_type=Artifact.Type.ENTERPRISE_APP
         )
         package, _, _, _ = self._build_package()
-        download_s3_source.return_value = package
+        download_s3_package.return_value = package
         self.set_permissions("mdm.add_enterpriseapp")
         response = self.post(reverse("mdm_api:enterprise_apps"),
                              data={"artifact": str(artifact.pk),
-                                   "source_uri": "s3://yolo/fomo.pkg",
-                                   "source_sha256": 40 * "0",
+                                   "package_uri": "s3://yolo/fomo.pkg",
+                                   "package_sha256": 64 * "0",
                                    "macos": True,
                                    "version": 2})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'source_uri': ['Hash mismatch']}
+            {'package_uri': ['Hash mismatch']}
         )
 
-    @patch("zentral.contrib.mdm.app_manifest.download_s3_source")
-    def test_create_enterprise_app_different_product_id(self, download_s3_source):
+    @patch("zentral.contrib.mdm.app_manifest.download_s3_package")
+    def test_create_enterprise_app_different_product_id(self, download_s3_package):
         _, artifact, _ = force_blueprint_artifact(
             artifact_type=Artifact.Type.ENTERPRISE_APP
         )
         package, package_sha256, _, _ = self._build_package()
-        download_s3_source.return_value = package
+        download_s3_package.return_value = package
         self.set_permissions("mdm.add_enterpriseapp")
         response = self.post(reverse("mdm_api:enterprise_apps"),
                              data={"artifact": str(artifact.pk),
-                                   "source_uri": "s3://yolo/fomo.pkg",
-                                   "source_sha256": package_sha256,
+                                   "package_uri": "s3://yolo/fomo.pkg",
+                                   "package_sha256": package_sha256,
                                    "macos": True,
                                    "version": 2})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'source_uri': ['The product ID of the new app is not identical to the product ID of the other versions']}
+            {'package_uri': ['The product ID of the new app is not identical to the product ID of the other versions']}
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.contrib.mdm.app_manifest.download_s3_source")
-    def test_create_enterprise_app(self, download_s3_source, post_event):
+    @patch("zentral.contrib.mdm.app_manifest.download_s3_package")
+    def test_create_enterprise_app(self, download_s3_package, post_event):
         package, package_sha256, package_md5, package_size = self._build_package()
-        download_s3_source.return_value = package
+        download_s3_package.return_value = package
         blueprint_artifact, artifact, (ea_av,) = force_blueprint_artifact(
             artifact_type=Artifact.Type.ENTERPRISE_APP
         )
@@ -324,8 +327,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:enterprise_apps"),
                                  data={"artifact": str(artifact.pk),
-                                       "source_uri": "s3://yolo/fomo.pkg",
-                                       "source_sha256": package_sha256,
+                                       "package_uri": "s3://yolo/fomo.pkg",
+                                       "package_sha256": package_sha256,
                                        "macos": True,
                                        "macos_max_version": "",  # blank OK
                                        "macos_min_version": "13.3.1",
@@ -360,6 +363,9 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
              'tvos_max_version': '',
              'tvos_min_version': '',
              'version': 17,
+             'package_uri': 's3://yolo/fomo.pkg',
+             'package_sha256': package_sha256,
+             'package_size': package_size,
              'filename': "fomo.pkg",
              'product_id': "io.zentral.test123",
              'product_version': '1.0',
@@ -410,6 +416,9 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
                      'tvos_max_version': '',
                      'tvos_min_version': '',
                      'version': 17,
+                     'package_uri': 's3://yolo/fomo.pkg',
+                     'package_sha256': package_sha256,
+                     'package_size': package_size,
                      'filename': 'fomo.pkg',
                      'product_id': "io.zentral.test123",
                      'product_version': "1.0",
@@ -480,6 +489,9 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
              'tvos_max_version': '',
              'tvos_min_version': '',
              'version': ea_av.version,
+             'package_uri': '',
+             'package_sha256': 64 * "0",
+             'package_size': 123,
              'bundles': [],
              'manifest': {'items': [{'assets': [{}]}]},
              'configuration': None,
@@ -499,8 +511,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         artifact, (ea_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         response = self.put(reverse("mdm_api:enterprise_app", args=(ea_av.pk,)),
                             data={"artifact": str(artifact.pk),
-                                  "source_uri": "s3://yolo/fomo.pkg",
-                                  "source_sha256": 40 * "0",
+                                  "package_uri": "s3://yolo/fomo.pkg",
+                                  "package_sha256": 64 * "0",
                                   "macos": True},
                             include_token=False)
         self.assertEqual(response.status_code, 401)
@@ -509,19 +521,19 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         artifact, (ea_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         response = self.put(reverse("mdm_api:enterprise_app", args=(ea_av.pk,)),
                             data={"artifact": str(artifact.pk),
-                                  "source_uri": "s3://yolo/fomo.pkg",
-                                  "source_sha256": 40 * "0",
+                                  "package_uri": "s3://yolo/fomo.pkg",
+                                  "package_sha256": 64 * "0",
                                   "macos": True})
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.contrib.mdm.app_manifest.download_s3_source")
-    def test_update_enterprise_app(self, download_s3_source, post_event):
+    @patch("zentral.contrib.mdm.app_manifest.download_s3_package")
+    def test_update_enterprise_app(self, download_s3_package, post_event):
         blueprint_artifact, artifact, (ea_av,) = force_blueprint_artifact(
             artifact_type=Artifact.Type.ENTERPRISE_APP
         )
         package, package_sha256, package_md5, package_size = self._build_package()
-        download_s3_source.return_value = package
+        download_s3_package.return_value = package
         blueprint = blueprint_artifact.blueprint
         self.assertEqual(blueprint.serialized_artifacts[str(artifact.pk)]["versions"][0]["excluded_tags"], [])
         ea_av.excluded_tags.set([Tag.objects.create(name=get_random_string(12))])
@@ -537,8 +549,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(reverse("mdm_api:enterprise_app", args=(ea_av.pk,)),
                                 data={"artifact": str(artifact.pk),
-                                      "source_uri": "s3://yolo/fomo.pkg",
-                                      "source_sha256": package_sha256,
+                                      "package_uri": "s3://yolo/fomo.pkg",
+                                      "package_sha256": package_sha256,
                                       "macos": True,
                                       "macos_min_version": "13.3.1",
                                       "excluded_tags": [excluded_tag.pk],
@@ -574,6 +586,9 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
              'tvos_max_version': '',
              'tvos_min_version': '',
              'version': 17,
+             'package_sha256': package_sha256,
+             'package_size': package_size,
+             'package_uri': 's3://yolo/fomo.pkg',
              'configuration': None,
              'filename': 'fomo.pkg',
              'install_as_managed': True,
@@ -616,6 +631,9 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
                      'tvos_max_version': '',
                      'tvos_min_version': '',
                      'version': 17,
+                     'package_sha256': package_sha256,
+                     'package_size': package_size,
+                     'package_uri': 's3://yolo/fomo.pkg',
                      'filename': 'fomo.pkg',
                      'product_id': "io.zentral.test123",
                      'product_version': "1.0",

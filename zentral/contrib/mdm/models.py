@@ -2344,6 +2344,9 @@ def enterprise_application_package_path(instance, filename):
 class EnterpriseApp(models.Model):
     artifact_version = models.OneToOneField(ArtifactVersion, related_name="enterprise_app", on_delete=models.CASCADE)
     package = models.FileField(upload_to=enterprise_application_package_path)
+    package_uri = models.TextField(default="")
+    package_sha256 = models.CharField(max_length=64)
+    package_size = models.BigIntegerField()
     filename = models.TextField()
     product_id = models.TextField()
     product_version = models.TextField()
@@ -2375,6 +2378,8 @@ class EnterpriseApp(models.Model):
     def serialize_for_event(self):
         d = self.artifact_version.serialize_for_event()
         d.update({
+            "package_sha256": self.package_sha256,
+            "package_size": self.package_size,
             "filename": self.filename,
             "product_id": self.product_id,
             "product_version": self.product_version,
@@ -2384,6 +2389,8 @@ class EnterpriseApp(models.Model):
             "install_as_managed": self.install_as_managed,
             "remove_on_unenroll": self.remove_on_unenroll,
         })
+        if self.package_uri:
+            d["package_uri"] = self.package_uri
         configuration_plist = self.get_configuration_plist()
         if configuration_plist:
             d["configuration"] = configuration_plist

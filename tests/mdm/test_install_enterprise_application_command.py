@@ -44,6 +44,8 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
         )
         cls.enterprise_app = EnterpriseApp.objects.create(
             artifact_version=cls.artifact_version0,
+            package_sha256=64 * "0",
+            package_size=12345678,
             filename="yolo.pkg",
             product_id="com.example.enterprise-app",
             product_version="0.0.0",
@@ -66,6 +68,8 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
         )
         cls.enterprise_app = EnterpriseApp.objects.create(
             artifact_version=cls.artifact_version,
+            package_sha256=64 * "0",
+            package_size=12345678,
             filename="yolo.pkg",
             product_id="com.example.enterprise-app",
             product_version="1.0.0",

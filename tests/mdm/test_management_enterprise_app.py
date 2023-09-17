@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from utils.packages import build_dummy_package
-from zentral.contrib.mdm.app_manifest import build_enterprise_app_manifest
+from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.models import Artifact, Channel
 from .utils import force_artifact, force_blueprint_artifact
 
@@ -161,13 +161,11 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
         artifact, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         package = self._build_package()
         uploaded_package = SimpleUploadedFile(package.name, package.read())
-        _, product_id, product_version, manifest, bundles, _ = build_enterprise_app_manifest(uploaded_package)
+        name, platforms, ea_data = read_package_info(uploaded_package)
         enterprise_app = enterprise_app_av.enterprise_app
         enterprise_app.package = uploaded_package
-        enterprise_app.product_id = product_id
-        enterprise_app.product_version = product_version
-        enterprise_app.manifest = manifest
-        enterprise_app.bundles = bundles
+        for key, val in ea_data.items():
+            setattr(enterprise_app, key, val)
         enterprise_app.configuration = plistlib.dumps({"un": 1})
         enterprise_app.save()
         package.seek(0)

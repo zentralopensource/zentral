@@ -509,6 +509,8 @@ def force_artifact(
         elif artifact_type == Artifact.Type.ENTERPRISE_APP:
             EnterpriseApp.objects.create(
                 artifact_version=artifact_version,
+                package_sha256=64 * "0",
+                package_size=123,
                 filename="{}.pkg".format(get_random_string(17)),
                 product_id="{}.{}.{}".format(get_random_string(2), get_random_string(4), get_random_string(8)),
                 product_version="17",

@@ -35,13 +35,13 @@ def validate_configuration(configuration):
         return None
 
 
-def download_s3_source(parse_source_uri, source_sha256):
-    bucket = parse_source_uri.netloc
-    key = parse_source_uri.path.lstrip("/")
+def download_s3_package(parsed_package_uri, package_sha256):
+    bucket = parsed_package_uri.netloc
+    key = parsed_package_uri.path.lstrip("/")
     _, ext = os.path.splitext(key)
     if ext not in (".pkg", ".ipa"):
         raise ValueError(f"Unsupported file extension: '{ext}'")
-    file = tempfile.NamedTemporaryFile(suffix=f".downloaded_s3_source{ext}", delete=False)
+    file = tempfile.NamedTemporaryFile(suffix=f".downloaded_s3_package{ext}", delete=False)
     try:
         s3_client = boto3.client('s3', region_name=get_aws_region())
         s3_client.download_fileobj(bucket, key, file)
@@ -52,12 +52,12 @@ def download_s3_source(parse_source_uri, source_sha256):
     return file
 
 
-def download_source(source_uri, source_sha256):
-    parsed_source_uri = urlparse(source_uri)
-    if parsed_source_uri.scheme == "s3":
-        file = download_s3_source(parsed_source_uri, source_sha256)
+def download_package(package_uri, package_sha256):
+    parsed_package_uri = urlparse(package_uri)
+    if parsed_package_uri.scheme == "s3":
+        file = download_s3_package(parsed_package_uri, package_sha256)
     else:
-        raise ValueError(f"Unknown source URI scheme: '{parsed_source_uri.scheme}'")
+        raise ValueError(f"Unknown package URI scheme: '{parsed_package_uri.scheme}'")
     # verify hash
     file.seek(0)
     h = sha256()
@@ -66,10 +66,10 @@ def download_source(source_uri, source_sha256):
         if not chunk:
             break
         h.update(chunk)
-    if h.hexdigest() != source_sha256:
+    if h.hexdigest() != package_sha256:
         raise ValueError("Hash mismatch")
     file.seek(0)
-    return os.path.basename(parsed_source_uri.path), file
+    return os.path.basename(parsed_package_uri.path), file
 
 
 def ensure_tmp_file(file):
@@ -100,11 +100,8 @@ def read_distribution_info(tmp_filepath):
         installer_script_elm = fromstring(cp.stdout)
     except ParseError:
         raise ValueError("Invalid Distribution file")
-    title_elm = installer_script_elm.find("title")
-    if title_elm:
-        title = title_elm.text or ""
-    else:
-        title = None
+    # product ID product version
+    product_id = product_version = None
     product_elm = installer_script_elm.find("product")
     if product_elm is None:
         logger.warning("Could not find <product/>")
@@ -131,17 +128,26 @@ def read_distribution_info(tmp_filepath):
         raise ValueError("Product ID is null")
     if not product_version:
         raise ValueError("Production version is null")
-    bundles = []
+    ea_data = {
+        "product_id": product_id,
+        "product_version": product_version,
+        "bundles": [],
+    }
     for bundle in installer_script_elm.findall(".//bundle"):
         try:
-            bundles.append({k: bundle.attrib[v]
-                            for k, v in (("version_str", "CFBundleShortVersionString"),
-                                         ("version", "CFBundleVersion"),
-                                         ("id", "id"),
-                                         ("path", "path"))})
+            ea_data["bundles"].append({k: bundle.attrib[v]
+                                       for k, v in (("version_str", "CFBundleShortVersionString"),
+                                                    ("version", "CFBundleVersion"),
+                                                    ("id", "id"),
+                                                    ("path", "path"))})
         except KeyError as e:
             logger.error(f"Missing <bundle/> attr: {e.args[0]}")
-    return title, product_id, product_version, bundles, None, [Platform.MACOS]
+    # name
+    name = product_id
+    title_elm = installer_script_elm.find("title")
+    if title_elm and title_elm.text:
+        name = title_elm.text
+    return name, [Platform.MACOS], ea_data
 
 
 def read_ipa_info(tmp_filepath):
@@ -150,9 +156,9 @@ def read_ipa_info(tmp_filepath):
     except zipfile.BadZipFile:
         raise ValueError("Could not read IPA file")
     info_plist_path = None
-    for info in zf.infolist():
-        if info.filename.endswith("Info.plist"):
-            info_plist_path = info.filename
+    for zinfo in zf.infolist():
+        if zinfo.filename.endswith("Info.plist"):
+            info_plist_path = zinfo.filename
             break
     if not info_plist_path:
         raise ValueError("Could not find Info.plist")
@@ -162,20 +168,22 @@ def read_ipa_info(tmp_filepath):
         except Exception:
             raise ValueError("Could not load Info.plist")
     try:
-        title = info_plist["CFBundleExecutable"]
-        product_id = info_plist["CFBundleIdentifier"]
-        product_version = info_plist["CFBundleShortVersionString"]
-        bundles = [{
-            "version_str": info_plist["CFBundleShortVersionString"],
-            "version": info_plist["CFBundleVersion"],
-            "id": info_plist["CFBundleIdentifier"],
-        }]
-        metadata = {
-            "bundle-identifier": info_plist["CFBundleIdentifier"],
-            "bundle-version": info_plist["CFBundleShortVersionString"],
-            "kind": "software",
-            "platform-identifier": f"com.apple.platform.{info_plist['DTPlatformName']}",
-            "title": info_plist["CFBundleExecutable"],
+        name = info_plist["CFBundleExecutable"]
+        ea_data = {
+            "product_id": info_plist["CFBundleIdentifier"],
+            "product_version": info_plist["CFBundleShortVersionString"],
+            "bundles": [{
+                "version_str": info_plist["CFBundleShortVersionString"],
+                "version": info_plist["CFBundleVersion"],
+                "id": info_plist["CFBundleIdentifier"],
+            }],
+            "metadata": {
+                "bundle-identifier": info_plist["CFBundleIdentifier"],
+                "bundle-version": info_plist["CFBundleShortVersionString"],
+                "kind": "software",
+                "platform-identifier": f"com.apple.platform.{info_plist['DTPlatformName']}",
+                "title": info_plist["CFBundleExecutable"],
+            },
         }
     except KeyError as e:
         raise ValueError(f"Missing key {e.args[0]} in Info.plist")
@@ -192,22 +200,29 @@ def read_ipa_info(tmp_filepath):
         platforms.append(Platform.IPADOS)
     if 3 in device_families:
         platforms.append(Platform.TVOS)
-    return title, product_id, product_version, bundles, metadata, platforms
+    return name, platforms, ea_data
 
 
-def get_md5s(package_file, md5_size=MD5_SIZE):
+def get_md5s(package_file, md5_size=MD5_SIZE, compute_sha256=False):
     file_chunk_size = 64 * 2**10  # 64KB
     md5_size = (md5_size // file_chunk_size) * file_chunk_size
     md5s = []
     h = md5()
+    if compute_sha256:
+        h2 = sha256()
     current_size = 0
+    package_size = 0
     package_file.seek(0)
     while True:
         chunk = package_file.read(2**10 * 64)
         if not chunk:
             break
         h.update(chunk)
-        current_size += len(chunk)
+        if compute_sha256:
+            h2.update(chunk)
+        chunk_length = len(chunk)
+        current_size += chunk_length
+        package_size += chunk_length
         if current_size == md5_size:
             md5s.append(h.hexdigest())
             h = md5()
@@ -216,10 +231,10 @@ def get_md5s(package_file, md5_size=MD5_SIZE):
         md5s.append(h.hexdigest())
         if len(md5s) == 1:
             md5_size = current_size
-    return md5_size, md5s
+    return md5_size, md5s, package_size, h2.hexdigest() if compute_sha256 else None
 
 
-def build_enterprise_app_manifest(package_file):
+def read_package_info(package_file, compute_sha256=False):
     # see https://support.apple.com/lt-lt/guide/deployment/dep873c25ac4/web
     _, ext = os.path.splitext(package_file.name)
     if ext == ".pkg":
@@ -230,12 +245,17 @@ def build_enterprise_app_manifest(package_file):
         raise ValueError(f"Unsupported file extension: {ext}")
     tmp_filepath, cleanup_tmp_file = ensure_tmp_file(package_file)
     try:
-        title, product_id, product_version, bundles, metadata, platforms = file_opener(tmp_filepath)
+        name, platforms, ea_data = file_opener(tmp_filepath)
     finally:
         if cleanup_tmp_file:
             os.unlink(tmp_filepath)
-    md5_size, md5s = get_md5s(package_file)
+    md5_size, md5s, package_size, package_sha256 = get_md5s(package_file, compute_sha256=compute_sha256)
     manifest = {"items": [{"assets": [{"kind": "software-package", "md5-size": md5_size, "md5s": md5s}]}]}
+    metadata = ea_data.pop("metadata", None)
     if metadata:
         manifest["items"][0]["metadata"] = metadata
-    return title, product_id, product_version, manifest, bundles, platforms
+    ea_data["manifest"] = manifest
+    ea_data["package_size"] = package_size
+    if compute_sha256:
+        ea_data["package_sha256"] = package_sha256
+    return name, platforms, ea_data
