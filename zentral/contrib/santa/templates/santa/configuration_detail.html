@@ -15,17 +15,15 @@
         <h2 class="m-0">{{ object.name }}</h2>
         <div class="ms-3">
             {% if show_events_link %}
-                <a type="button" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Browse the events" href="{% url 'santa:configuration_events' object.pk %}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-activity" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd" d="M6 2a.5.5 0 0 1 .47.33L10 12.036l1.53-4.208A.5.5 0 0 1 12 7.5h3.5a.5.5 0 0 1 0 1h-3.15l-1.88 5.17a.5.5 0 0 1-.94 0L6 3.964 4.47 8.171A.5.5 0 0 1 4 8.5H.5a.5.5 0 0 1 0-1h3.15l1.88-5.17A.5.5 0 0 1 6 2Z"></path>
-                    </svg>
+                <a type="button" class="btn btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Browse the events" href="{% url 'santa:configuration_events' object.pk %}">
+                    <i class="bi bi-activity"></i>
                 </a>
             {% endif %}
             {% for link, anchor_text in store_links  %}
-                <a type="button" class="btn btn-large btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{ anchor_text }}" href="{{ link }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-clipboard-pulse" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd" d="M10 1.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-1Zm-5 0A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5v1A1.5 1.5 0 0 1 9.5 4h-3A1.5 1.5 0 0 1 5 2.5v-1Zm-2 0h1v1H3a1 1 0 0 0-1 1V14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3.5a1 1 0 0 0-1-1h-1v-1h1a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V3.5a2 2 0 0 1 2-2Zm6.979 3.856a.5.5 0 0 0-.968.04L7.92 10.49l-.94-3.135a.5.5 0 0 0-.895-.133L4.232 10H3.5a.5.5 0 0 0 0 1h1a.5.5 0 0 0 .416-.223l1.41-2.115 1.195 3.982a.5.5 0 0 0 .968-.04L9.58 7.51l.94 3.135A.5.5 0 0 0 11 11h1.5a.5.5 0 0 0 0-1h-1.128L9.979 5.356Z"></path>
-                    </svg>
+                <a type="button" class="btn btn-large btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{ anchor_text }}" href="{{ link }}">
+                    <i class="bi bi-link-45deg" aria-hidden="true"></i>
                 </a>
             {% endfor %}
         </div>
