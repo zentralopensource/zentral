@@ -1,47 +1,60 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'wsone:index' %}">Workspace ONE</a></li>
-  <li class="active">Instance{{ instance_count|pluralize }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'wsone:index' %}">Workspace ONE</a></li>
+  <li class="breadcrumb-item active">Instance{{ instance_count|pluralize }}</li>
 </ol>
 
-<h2>{{ instance_count }} Workspace ONE instance{{ instance_count|pluralize }}</h2>
-
-{% if perms.wsone.add_instance %}
-<p>
-  <a href="{% url 'wsone:create_instance' %}" class="btn btn-default">Create</a>
-</p>
-{% endif %}
-
-<table class="table">
-  <thead>
-    <tr>
-      <th>Host</th>
-      <th>Business unit</th>
-      {% if perms.wsone.change_instance %}
-      <th></th>
-      {% endif %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for instance in object_list %}
-    <tr>
-      <td><a href="{{ instance.get_absolute_url }}">{{ instance.hostname }}</a></td>
-      <td>
-        {{ instance.business_unit }}
-      </td>
-      {% if perms.wsone.change_instance %}
-      <td>
-        <a href="{% url 'wsone:update_instance' instance.pk %}" class="btn btn-default">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>Update
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">{{ instance_count }} Workspace ONE instance{{ instance_count|pluralize }}</h3>
+    <div class="ms-auto">
+        {% if perms.wsone.add_instance %}
+        <a href="{% url 'wsone:create_instance' %}" type="button" class="btn btn-link text-decoration-none text-dark"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new instance">
+            <i class="bi bi-plus-circle"></i>
         </a>
-      </td>
-      {% endif %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+        {% endif %}
+    </div>
+</div>
+
+{% if object_list %}
+    <table class="table table-light table-striped align-middle table-hover">
+    <thead>
+        <tr>
+        <th>Host</th>
+        <th>Business unit</th>
+        {% if perms.wsone.change_instance %}
+        <th></th>
+        {% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for instance in object_list %}
+        <tr>
+        <td><a href="{{ instance.get_absolute_url }}">{{ instance.hostname }}</a></td>
+        <td>
+            {{ instance.business_unit }}
+        </td>
+        {% if perms.wsone.change_instance %}
+        <td>
+            <a href="{% url 'wsone:update_instance' instance.pk %}" class="btn btn-default">
+            <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>Update
+            </a>
+        </td>
+        {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+{% else %}
+    {% if perms.wsone.add_instance %}
+        {% url 'wsone:create_instance' as link %}
+        {% no_entities 'Workspace ONE Instances' link %}
+    {% else %}
+        {% no_entities 'Workspace ONE Instances' %}
+    {% endif %}
+{% endif %}
 {% endblock %}
