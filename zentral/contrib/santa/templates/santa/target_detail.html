@@ -169,7 +169,7 @@
   </button>
   <ul class="dropdown-menu" aria-labelledby="createRule">
     {% for text, url in add_rule_links %}
-    <li><a href="{{ url }}">{{ text }}</a></li>
+    <li><a class="dropdown-item" href="{{ url }}">{{ text }}</a></li>
     {% endfor %}
   </ul>
 </div>
