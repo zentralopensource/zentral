@@ -416,7 +416,8 @@
       <td>
         {{ command.get_status_display|default:"-" }}
         {% if command.result %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:download_enrolled_device_command_result' command.uuid %}">
+        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:download_enrolled_device_command_result' command.uuid %}"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download">
           <span class="bi bi-download" aria-hidden="true"></span>
         </a>
         {% endif %}
