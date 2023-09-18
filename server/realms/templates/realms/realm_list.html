@@ -11,23 +11,25 @@
 
 <div class="d-flex align-items-center mb-1">
     <h3 class="mb-3">Realm{{ realms_count|pluralize }} ({{ realms_count }})</h3>
-
-    {% if create_links %}
-    <div class="dropdown mb-2 btn btn-link">
-        <button class="btn btn-primary dropdown-toggle" type="button" id="createRealm"
-                data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            Add
-        </button>
-        <ul class="dropdown-menu" aria-labelledby="createRealm">
-            {% for link in create_links %}
-            <li><a href="{{ link.url }}" class="dropdown-item">{{ link.anchor_text }} realm</a></li>
-            {% endfor %}
-        </ul>
+    <div class="ms-auto">
+        {% if create_links %}
+        <div class="dropdown mb-2 btn btn-link">
+            <button class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="createRealm"
+                    data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="bi bi-plus-circle"></i>
+                <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="createRealm">
+                {% for link in create_links %}
+                <li><a href="{{ link.url }}" class="dropdown-item">{{ link.anchor_text }} realm</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 
-<table class="table table-light table-striped align-middle">
+<table class="table table-light table-striped align-middle table-hover">
     <thead>
         <tr>
         <th>Name</th>
