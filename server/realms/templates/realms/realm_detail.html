@@ -5,7 +5,7 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
-  <li class="breadcrumb-item active">{{ object }}</li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
 <div class="object-details">
@@ -35,84 +35,6 @@
     </div>
 
     <div class="table-responsive mb-3">
-    <table class="table table-striped align-middle table-hover">
-    <thead>
-        <th>Claim</th>
-        <th>Separator</th>
-        <th>Value</th>
-        <th>Group</th>
-        <th></th>
-    </thead>
-    <tbody>
-        {% for group_mapping in group_mappings %}
-        {% with group_mapping.group as group %}
-        <tr id="{{ group_mapping.pk }}" class="data-row">
-        <td>{{ group_mapping.claim }}</td>
-        <td>{{ group_mapping.separator|default:"∅" }}</td>
-        <td>{{ group_mapping.value }}</td>
-        <td>
-            {% if perms.auth.view_group %}
-            <a href="{% url 'accounts:group' group.pk %}">{{ group }}</a>
-            {% else %}
-            {{ group }}
-            {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td>Username claim</td>
-        <td>{{ object.username_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Email claim</td>
-        <td>{{ object.email_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>First name claim</td>
-        <td>{{ object.first_name_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Last name claim</td>
-        <td>{{ object.last_name_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Full name claim</td>
-        <td>{{ object.full_name_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Custom attr. 1 claim</td>
-        <td>{{ object.custom_attr_1_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Custom attr. 2 claim</td>
-        <td>{{ object.custom_attr_2_claim|default:"-" }}</td>
-      </tr>
-      {% for name, value, hidden in object.backend_instance.extra_attributes_for_display %}
-      <tr>
-        <td>{{ name }}</td>
-        <td>
-          {% if hidden %}
-          <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
-          <span hidden>{{ value }}</span>
-          {% else %}
-          {{ value }}
-          {% endif %}
-        <td class="text-end py-0">
-            {% if not request.realm_authentication_session.is_remote and perms.realms.change_realmgroupmapping %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'realms:update_group_mapping' object.pk group_mapping.pk %}">
-                <span class="bi bi-pencil-square" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Group Mapping"></span>
-            </a>
-            {% endif %}
-            {% if not request.realm_authentication_session.is_remote and perms.realms.delete_realmgroupmapping %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'realms:delete_group_mapping' object.pk group_mapping.pk %}">
-                <span class="bi bi-trash" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Group Mapping"></span>
-            </a>
-            {% endif %}
-        </td>
-        </tr>
-        {% endwith %}
-        {% endfor %}
-    </tbody>
-    </table>
         <table class="table table-light table-striped align-middle table-object-properties">
             <thead>
                 <th>Attribute</th>
@@ -164,13 +86,21 @@
                 <td>Full name claim</td>
                 <td>{{ object.full_name_claim|default:"-" }}</td>
             </tr>
+            <tr>
+                <td>Custom attr. 1 claim</td>
+                <td>{{ object.custom_attr_1_claim|default:"-" }}</td>
+              </tr>
+              <tr>
+                <td>Custom attr. 2 claim</td>
+                <td>{{ object.custom_attr_2_claim|default:"-" }}</td>
+            </tr>
             {% for name, value, hidden in object.backend_instance.extra_attributes_for_display %}
             <tr>
                 <td>{{ name }}</td>
                 <td>
                 {% if hidden %}
                 <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
-                <span hidden>{{ value }}</span>
+                <span hidden>{{ value }}</span>
                 {% else %}
                 {{ value }}
                 {% endif %}
@@ -187,7 +117,7 @@
 
 {% if perms.realms.view_realmgroupmapping %}
 <div class="d-flex justify-content-between mb-3">
-    <h2 class="m-0">Group mapping{{ group_mapping_count|pluralize }} ({{ group_mapping_count }})</h2>
+    <h2 class="m-0">Group mapping{{ group_mapping_count|pluralize }} ({{ group_mapping_count }})</h2>
 
     <div class="ms-auto">
     {% if not request.realm_authentication_session.is_remote and perms.realms.add_realmgroupmapping %}
@@ -212,9 +142,9 @@
 <tbody>
     {% for group_mapping in group_mappings %}
     {% with group_mapping.group as group %}
-    <tr id="{{ group_mapping.pk }}" class="data-row">
-    <td>{{ group_mapping.claim }}</td>
-    <td>{{ group_mapping.separator|default:"∅" }}</td>
+    <tr id="{{ group_mapping.pk }}" class="data-row">
+    <td>{{ group_mapping.claim }}</td>
+    <td>{{ group_mapping.separator|default:"∅" }}</td>
     <td>{{ group_mapping.value }}</td>
     <td>
         {% if perms.auth.view_group %}
