@@ -187,7 +187,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:push_certificates"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_list.html")
-        self.assertContains(response, "1 MDM push certificate")
+        self.assertContains(response, "MDM push certificate (1)")
         self.assertContains(response, push_certificate.name)
 
     # delete push certificate
@@ -216,7 +216,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_list.html")
-        self.assertContains(response, "0 MDM push certificates")
+        self.assertContains(response, "MDM push certificates (0)")
 
     def test_delete_push_certificate_bad_request(self):
         enrollment = self._force_user_enrollment()

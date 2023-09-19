@@ -174,5 +174,5 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self._login("mdm.view_userenrollment")
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "1 User enrollment")
+        self.assertContains(response, "User enrollment (1)")
         self.assertContains(response, enrollment.name)

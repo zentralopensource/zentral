@@ -233,5 +233,5 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self._login("mdm.view_otaenrollment")
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "1 OTA enrollment")
+        self.assertContains(response, "OTA enrollment (1)")
         self.assertContains(response, enrollment.name)

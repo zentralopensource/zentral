@@ -60,7 +60,7 @@ class ArtifactManagementViewsTestCase(TestCase):
         self.assertNotContains(response, artifacts[0].name)
         self.assertContains(response, artifacts[1].name)
         self.assertNotContains(response, artifacts[2].name)
-        self.assertContains(response, "3 Artifacts")
+        self.assertContains(response, "Artifacts (3)")
         self.assertContains(response, "page 2 of 3")
 
     def test_artifacts_search(self):
@@ -75,7 +75,7 @@ class ArtifactManagementViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_list.html")
-        self.assertContains(response, "2 Artifacts")
+        self.assertContains(response, "Artifacts (2)")
         self.assertContains(response, artifact.name)
         self.assertContains(response, artifact2.name)
         self.assertNotContains(response, artifact3.name)

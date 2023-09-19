@@ -65,7 +65,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
         self.assertNotContains(response, '<li class="active">Search</li>')
-        self.assertContains(response, "3 devices")
+        self.assertContains(response, "Devices (3)")
         self.assertContains(response, "page 2 of 3")
         for idx, (udid, serial_number) in enumerate(devices):
             if idx != 1:
@@ -121,9 +121,9 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self._login("mdm.view_enrolleddevice")
         response = self.client.get(reverse("mdm:enrolled_devices"), {"blueprint": blueprint.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '<li class="active">Search</li>')
+        self.assertContains(response, '<li class="breadcrumb-item active">Search</li>')
         self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
-        self.assertContains(response, "2 devices")
+        self.assertContains(response, "Devices (2)")
         self.assertContains(response, "page 1 of 1")
         self.assertContains(response, serial_number1)
         self.assertContains(response, serial_number2)
@@ -149,7 +149,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
         self.assertContains(response, device_udid)
         self.assertContains(response, serial_number)
-        self.assertContains(response, "1 Enrollment session")
+        self.assertContains(response, "Enrollment session (1)")
         self.assertContains(response, session.get_enrollment().name)
         self.assertContains(response, session.realm_user.username)
         self.assertNotContains(response, reverse("mdm:user_enrollment", args=(session.get_enrollment().pk,)))
@@ -164,7 +164,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
         self.assertContains(response, device_udid)
         self.assertContains(response, serial_number)
-        self.assertContains(response, "1 Enrollment session")
+        self.assertContains(response, "Enrollment session (1)")
         self.assertContains(response, session.get_enrollment().name)
         self.assertContains(response, reverse("mdm:ota_enrollment", args=(session.get_enrollment().pk,)))
 
