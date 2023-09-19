@@ -213,23 +213,20 @@
         </tbody>
     </table>
 </div>
-{% else %}
-<div>
-    <p>
-        <a class="btn btn-primary" type="button" href="{% url 'santa:create_enrollment' object.id %}">Create Enrollment</a>
-    </p>
-</div>
 {% endif %}
 {% endif %}
 
 {% if perms.santa.view_rule %}
 <div class="d-flex justify-content-between mb-3">
     <h2 class="m-0">Rule{{ rules_count|pluralize }} ({{ rules_count }})</h2>
-</div>
-<div>
-    <p>
-        <a class="btn btn-primary" type="button" href="{% url 'santa:configuration_rules' object.id %}">Manage rules</a>
-    </p>
+    {% if perms.santa.add_rule %}
+        <div class="ms-auto">
+            <a type="button" href="{% url 'santa:configuration_rules' object.id %}" class="btn btn-link text-dark text-decoration-none"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Manage rules">
+                <i class="bi bi-list"></i>
+            </a>
+        </div>
+    {% endif %}
 </div>
 {% endif %}
 {% endblock %}

@@ -25,7 +25,27 @@
   <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h3 class="mb-3">Rule{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h3>
+<div class="d-flex justify-content-between">
+    <h2 class="m-0">Rule{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+    <div class="ms-auto">
+        {% if perms.santa.add_rule %}
+        <div class="dropdown mb-2 btn btn-link">
+            <button class="btn btn-link text-dark text-decoration-none dropdown-toggle" type="button" id="createRule"
+                    data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
+                <i class="bi bi-plus-circle"></i>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="createRule">
+                <li><a class="dropdown-item" href="{% url 'santa:create_configuration_rule' configuration.id %}">Base rule</a></li>
+                <li><a class="dropdown-item" href="{% url 'santa:pick_rule_binary' configuration.id %}">Binary rule</a></li>
+                <li><a class="dropdown-item" href="{% url 'santa:pick_rule_bundle' configuration.id %}">Bundle rule</a></li>
+                <li><a class="dropdown-item" href="{% url 'santa:pick_rule_certificate' configuration.id %}">Certificate rule</a></li>
+                <li><a class="dropdown-item" href="{% url 'santa:pick_rule_team_id' configuration.id %}">Team ID rule</a></li>
+                <li><a class="dropdown-item" href="{% url 'santa:pick_rule_signing_id' configuration.id %}">Signing ID rule</a></li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
 
 <div class="d-flex justify-content-between">
     <div class="d-flex w-100 me-auto flex-shrink-0">
@@ -36,22 +56,6 @@
             <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
                 <i class="bi bi-search"></i>
             </button>
-            {% if perms.santa.add_rule %}
-                <div class="dropdown mb-2 btn btn-link">
-                <button class="btn btn-primary dropdown-toggle" type="button" id="createRule"
-                        data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
-                    Add
-                </button>
-                <ul class="dropdown-menu" aria-labelledby="createRule">
-                    <li><a class="dropdown-item" href="{% url 'santa:create_configuration_rule' configuration.id %}">Base rule</a></li>
-                    <li><a class="dropdown-item" href="{% url 'santa:pick_rule_binary' configuration.id %}">Binary rule</a></li>
-                    <li><a class="dropdown-item" href="{% url 'santa:pick_rule_bundle' configuration.id %}">Bundle rule</a></li>
-                    <li><a class="dropdown-item" href="{% url 'santa:pick_rule_certificate' configuration.id %}">Certificate rule</a></li>
-                    <li><a class="dropdown-item" href="{% url 'santa:pick_rule_team_id' configuration.id %}">Team ID rule</a></li>
-                    <li><a class="dropdown-item" href="{% url 'santa:pick_rule_signing_id' configuration.id %}">Signing ID rule</a></li>
-                </ul>
-                </div>
-            {% endif %}
         </form>
     </div>
 </div>
