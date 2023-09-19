@@ -48,6 +48,15 @@ class InstanceListView(PermissionRequiredMixin, ListView):
     permission_required = "wsone.view_instance"
     model = Instance
 
+    def get_context_data(self, **kwargs):
+        if not self.request.user.has_module_perms("wsone"):
+            raise PermissionDenied("Not allowed")
+        ctx = super().get_context_data(**kwargs)
+        instance_qs = Instance.objects.all()
+        ctx["instances"] = instance_qs
+        ctx["instance_count"] = instance_qs.count()
+        return ctx
+
 
 class CreateInstanceView(PermissionRequiredMixin, CreateView):
     permission_required = "wsone.add_instance"
