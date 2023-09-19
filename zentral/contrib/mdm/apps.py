@@ -14,6 +14,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "depenrollment",
         "depvirtualserver",
         "deviceartifact",
+        "devicecommand",
         "enrolleddevice",
         "enrolleduser",
         "enterpriseapp",
@@ -26,5 +27,6 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "scepconfig",
         "softwareupdate",
         "userartifact",
+        "usercommand",
         "userenrollment",
     )
