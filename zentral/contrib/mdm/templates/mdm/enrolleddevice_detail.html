@@ -242,7 +242,7 @@
         <th>Personal recovery key</th>
         <td>
             {% if object.filevault_prk and perms.mdm.view_filevault_prk %}
-            <span class="show-ed-secret glyphicon glyphicon-eye-open" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" data-key="filevault_prk" style="cursor:pointer"></span>
+            <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" data-key="filevault_prk" style="cursor:pointer"></span>
             <span class="ed-secret" hidden></span>
             {% else %}
             {{ security_info.FDE_HasPersonalRecoveryKey|yesno }}
@@ -264,7 +264,7 @@
         <td>
             {% if object.recovery_password %}
             {% if perms.mdm.view_recovery_password %}
-            <span class="show-ed-secret glyphicon glyphicon-eye-open" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}" data-key="recovery_password" style="cursor:pointer"></span>
+            <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}" data-key="recovery_password" style="cursor:pointer"></span>
             <span class="ed-secret" hidden></span>
             {% else %}
             Yes
@@ -452,19 +452,19 @@
       url: $btn.data("url"),
       success: function ( data ) {
         $btn.next().text(data[key]).show();
-        $btn.removeClass("glyphicon-eye-open").addClass("glyphicon-eye-close");
+        $btn.removeClass("bi-eye").addClass("bi-eye-slash");
       }
     });
   }
 
   function hideEDSecret($btn) {
     $btn.next().text("").hide();
-    $btn.removeClass("glyphicon-eye-close").addClass("glyphicon-eye-open");
+    $btn.removeClass("bi-eye-slash").addClass("bi-eye");
   }
 
   function toggleEDSecret($btn) {
       console.log($btn.data("url"));
-      if ($btn.hasClass("glyphicon-eye-open")) {
+      if ($btn.hasClass("bi-eye-slash")) {
         showEDSecret($btn);
       } else {
         hideEDSecret($btn);

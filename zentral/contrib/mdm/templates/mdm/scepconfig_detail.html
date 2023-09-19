@@ -63,7 +63,7 @@
           {% if object.challenge_type == "STATIC" %}
           <dt>Challenge</dt>
           <dd>
-            <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
             <span hidden>{{ kwargs.challenge }}</span>
           </dd>
           {% elif object.challenge_type == "MICROSOFT_CA" %}
@@ -73,7 +73,7 @@
           <dd>{{ kwargs.username }}</dt>
           <dt>mscep admin password</dt>
           <dd>
-            <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
             <span hidden>{{ kwargs.password }}</span>
           </dd>
           {% endif %}
@@ -92,18 +92,18 @@
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
+  var openEyes = document.querySelectorAll(".bi-eye");
   openEyes.forEach(function(openEye) {
     openEye.addEventListener("click", function(event) {
       var valueSpan = openEye.nextElementSibling;
       if (valueSpan.hidden) {
         valueSpan.hidden = false;
-        openEye.classList.remove("glyphicon-eye-open");
-        openEye.classList.add("glyphicon-eye-close");
+        openEye.classList.remove("bi-eye");
+        openEye.classList.add("bi-eye-slash");
       } else {
         valueSpan.hidden = true;
-        openEye.classList.remove("glyphicon-eye-close");
-        openEye.classList.add("glyphicon-eye-open");
+        openEye.classList.remove("bi-eye-slash");
+        openEye.classList.add("bi-eye");
       }
     });
   });
