@@ -34,6 +34,15 @@ class TenantListView(PermissionRequiredMixin, ListView):
     permission_required = "intune.view_tenant"
     model = Tenant
 
+    def get_context_data(self, **kwargs):
+        if not self.request.user.has_module_perms("intune"):
+            raise PermissionDenied("Not allowed")
+        ctx = super().get_context_data(**kwargs)
+        tenant_qs = Tenant.objects.all()
+        ctx["tenants"] = tenant_qs
+        ctx["tenant_count"] = tenant_qs.count()
+        return ctx
+
 
 class CreateTenantView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "intune.add_tenant"
