@@ -1,13 +1,12 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
-  <li><a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a></li>
-  <li class="active">User {{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
+  <li class="breadcrumb-item"><a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a></li>
+  <li class="breadcrumb-item active">User {{ object }}</li>
 </ol>
 
 

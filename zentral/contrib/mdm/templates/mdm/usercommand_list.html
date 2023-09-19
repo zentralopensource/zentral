@@ -1,19 +1,18 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
-  <li><a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device }}</a></li>
-  <li><a href="{% url 'mdm:enrolled_user' enrolled_device.pk enrolled_user.pk %}">User {{ enrolled_user }}</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_user' enrolled_device.pk enrolled_user.pk %}">User {{ enrolled_user }}</a></li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Commands</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Commands</a></li>
   {% else %}
-  <li class="active">Commands</li>
+  <li class="breadcrumb-item active">Commands</li>
   {% endif %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
 <h3>User command{{ page_obj.paginator.count|pluralize }}</h3>

@@ -1,21 +1,20 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'puppet:index' %}">Puppet</a></li>
-  <li><a href="{% url 'puppet:instances' %}">Instances</a></li>
-  <li><a href="{% url 'puppet:instance' object.pk %}">{{ instance }}</a></li>
-  <li class="active">Delete instance</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'puppet:index' %}">Puppet</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'puppet:instances' %}">Instances</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'puppet:instance' object.pk %}">{{ instance }}</a></li>
+  <li class="breadcrumb-item active">Delete instance</li>
 </ol>
 
 <h2>Delete Puppet instance</h2>
 
-<form method="POST" class="form">{% csrf_token %}
+<form method="POST" class="update-form">{% csrf_token %}
   <p>Do you really want to delete this Puppet instance?</p>
   <p>
-    <a class="btn btn-default" href="{% url 'puppet:instance' object.pk %}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{% url 'puppet:instance' object.pk %}">Cancel</a>
     <button class="btn btn-danger" type="submit">Delete</button>
   </p>
 </form>

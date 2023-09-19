@@ -1,23 +1,22 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'puppet:index' %}">Puppet</a></li>
-  <li><a href="{% url 'puppet:instances' %}">Instances</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'puppet:index' %}">Puppet</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'puppet:instances' %}">Instances</a></li>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+  <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 
 <h2>{% if object %}Update Puppet instance {{ object }}{% else %}Create Puppet instance{% endif %}</h2>
 
 <form method="POST">{% csrf_token %}
-  {{ form|bootstrap }}
+  {{ form }}
   <p>
     {% if object %}
     <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
