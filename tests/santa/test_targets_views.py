@@ -189,7 +189,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, self.file_sha256)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
 
     def test_binary_target_configuration_no_add_rule_perm(self):
         configuration = self._force_configuration()
@@ -198,14 +198,14 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, self.file_sha256)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
         self.assertNotContains(response, configuration.name)
 
     def test_binary_target_configuration_add_rule_perm(self):
         configuration = self._force_configuration()
         self._login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
-        self.assertContains(response, "Add rule to configuration")
+        self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_binary_target_events_redirect(self):
@@ -274,7 +274,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, bundle.target.identifier)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
 
     def test_bundle_target_configuration_no_add_rule_perm(self):
         bundle = self._force_bundle()
@@ -284,7 +284,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, bundle.target.identifier)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
         self.assertNotContains(response, configuration.name)
 
     def test_bundle_target_configuration_add_rule_perm(self):
@@ -292,7 +292,7 @@ class SantaSetupViewsTestCase(TestCase):
         configuration = self._force_configuration()
         self._login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:bundle", args=(bundle.target.identifier,)))
-        self.assertContains(response, "Add rule to configuration")
+        self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_bundle_target_events_permission_denied(self):
@@ -363,7 +363,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, self.file_cert_sha256)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
 
     def test_certificate_target_configuration_no_add_rule_perm(self):
         configuration = self._force_configuration()
@@ -372,14 +372,14 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, self.file_cert_sha256)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
         self.assertNotContains(response, configuration.name)
 
     def test_certificate_target_configuration_add_rule_perm(self):
         configuration = self._force_configuration()
         self._login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:certificate", args=(self.file_cert_sha256,)))
-        self.assertContains(response, "Add rule to configuration")
+        self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_certificate_target_events_permission_denied(self):
@@ -442,7 +442,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, self.file_team_id)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
 
     def test_team_id_target_configuration_no_add_rule_perm(self):
         configuration = self._force_configuration()
@@ -451,14 +451,14 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, self.file_team_id)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
         self.assertNotContains(response, configuration.name)
 
     def test_team_id_target_configuration_add_rule_perm(self):
         configuration = self._force_configuration()
         self._login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:teamid", args=(self.file_team_id,)))
-        self.assertContains(response, "Add rule to configuration")
+        self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_team_id_target_events_permission_denied(self):
@@ -521,7 +521,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, self.file_signing_id)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
 
     def test_signing_id_target_configuration_no_add_rule_perm(self):
         configuration = self._force_configuration()
@@ -530,14 +530,14 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, self.file_signing_id)
-        self.assertNotContains(response, "Add rule to configuration")
+        self.assertNotContains(response, "createRule")
         self.assertNotContains(response, configuration.name)
 
     def test_signing_id_target_configuration_add_rule_perm(self):
         configuration = self._force_configuration()
         self._login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:signingid", args=(self.file_signing_id,)))
-        self.assertContains(response, "Add rule to configuration")
+        self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_signing_id_target_events_permission_denied(self):
