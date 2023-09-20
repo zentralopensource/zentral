@@ -96,7 +96,7 @@
   <div class="col-md-6">
     <ul class="nav nav-tabs" role="tablist">
       {% for source_display, ms, source_subviews in machine_snapshots %}
-      <li role="presentation" class="nav-item" style="max-width:{{ max_source_tab_with }}%">
+      <li role="presentation" class="nav-item">
         <a href="#ms-{{ ms.id }}" class="nav-link{% if forloop.first %} active{% endif %}"
             data-source="{{ ms.source.name }}" role="tab" data-bs-toggle="tab">
           {{ source_display }}

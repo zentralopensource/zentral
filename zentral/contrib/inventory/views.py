@@ -550,9 +550,6 @@ class MachineView(PermissionRequiredMixin, TemplateView):
                                                  key=ms_sort_key):
             source_subview = _get_source_machine_subview(source, machine.serial_number, self.request.user)
             context['machine_snapshots'].append((source_display, ms, source_subview))
-        machine_snapshots_count = len(context['machine_snapshots'])
-        if machine_snapshots_count:
-            context['max_source_tab_with'] = 100 // machine_snapshots_count
 
         # heartbeats?
         context['fetch_heartbeats'] = frontend_store.last_machine_heartbeats
