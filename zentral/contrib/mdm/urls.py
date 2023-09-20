@@ -310,6 +310,7 @@ urlpatterns = [
 ]
 
 modules_menu_cfg = {
+    'title': 'MDM',
     'items': (
         ('index', 'Overview', False, ('mdm',)),
         ('enrollments', 'Enrollments', False, ('mdm',)),
