@@ -492,6 +492,10 @@ class BaseEnterpriseAppForm(forms.ModelForm, AppConfigurationMixin):
             "remove_on_unenroll",
         ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['ios_app'].label = "iOS app"
+
     def clean(self):
         super().clean()
         # package
