@@ -107,7 +107,7 @@
 {% if perms.osquery.view_packquery %}
 
 <div class="d-flex align-items-center mb-1">
-    <h2 class="m-0"id="queries">Scheduled quer{{ pack_query_count|pluralize:"y,ies" }} ({{ pack_query_count }})</h2>
+    <h2 class="m-0" id="queries">Scheduled quer{{ pack_query_count|pluralize:"y,ies" }} ({{ pack_query_count }})</h2>
     <div class="ms-auto">
         {% if can_add_pack_query %}
         <a href="{% url 'osquery:add_pack_query' object.pk %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Scheduled Query">
@@ -121,7 +121,21 @@
 {% with pack_query.query as query %}
 <div id="pq{{ pack_query.pk }}" class="panel panel-default">
   <div class="panel-heading">
-    <h3 class="panel-title">{{ query }}</h3>
+    <div class="d-flex align-items-center mb-1">
+        <h3 class="m-0">{{ query }}</h3>
+        <div class="ms-auto">
+            {% if perms.osquery.change_packquery %}
+            <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_pack_query' object.pk pack_query.pk %}">
+                <i class="bi bi-pencil-square"></i>
+            </a>
+            {% endif %}
+            {% if perms.osquery.delete_packquery %}
+            <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:delete_pack_query' object.pk pack_query.pk %}">
+                <i class="bi bi-trash"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
   </div>
   <table class="table table-light table-striped align-middle table-object-properties">
     <tr>
@@ -176,22 +190,6 @@
       <td>{{ pack_query.can_be_denylisted|yesno }}</td>
     </tr>
   </table>
-    {% if perms.osquery.change_packquery or perms.osquery.delete_packquery %}
-    <div class="panel-footer">
-        <div class="btn-group" role="group">
-        {% if perms.osquery.change_packquery %}
-        <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_pack_query' object.pk pack_query.pk %}">
-            <i class="bi bi-pencil-square"></i>
-        </a>
-        {% endif %}
-        {% if perms.osquery.delete_packquery %}
-        <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:delete_pack_query' object.pk pack_query.pk %}">
-            <i class="bi bi-trash"></i>
-        </a>
-        {% endif %}
-        </div>
-    </div>
-  {% endif %}
 </div>
 {% endwith %}
 {% endfor %}
