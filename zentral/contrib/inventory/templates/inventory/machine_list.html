@@ -269,7 +269,7 @@
           {% for label, count, percentage, down_link, up_link in f_links %}
                 <div data-label="{{ label }}" data-count="{{ count }}">
                     <div class="d-flex justify-content-between py-2">
-                        <a title="{{ label }}" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}" class="link-underline link-underline-opacity-0">
+                        <a title="{{ label }}" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}" class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover">
                             {{ label }}
                         </a>
                         <span class="badge text-bg-secondary py-2">{{ count }}</span>
