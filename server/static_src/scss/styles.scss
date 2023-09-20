@@ -92,3 +92,15 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 .btn-link.text-dark:hover {
   background: #f8f9fa;
 }
+
+.btn-link.text-light:hover {
+    background: #393939;
+}
+
+.btn-link.nav-link.text-dark:hover {
+    background: $list-group-hover-bg;
+}
+
+.btn-link.nav-link.text-light:hover {
+    background: $list-group-hover-bg-dark;
+}
