@@ -125,12 +125,14 @@
         <h3 class="m-0">{{ query }}</h3>
         <div class="ms-auto">
             {% if perms.osquery.change_packquery %}
-            <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_pack_query' object.pk pack_query.pk %}">
+            <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_pack_query' object.pk pack_query.pk %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Update Scheduled Query">
                 <i class="bi bi-pencil-square"></i>
             </a>
             {% endif %}
             {% if perms.osquery.delete_packquery %}
-            <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:delete_pack_query' object.pk pack_query.pk %}">
+            <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:delete_pack_query' object.pk pack_query.pk %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Scheduled Query">
                 <i class="bi bi-trash"></i>
             </a>
             {% endif %}
