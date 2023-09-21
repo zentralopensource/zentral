@@ -119,6 +119,8 @@ class DistributedQueryForm(forms.ModelForm):
 
 
 class DistributedQueryMachineSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     serial_number = forms.CharField(
         label="Serial number", required=False,
         widget=forms.TextInput(attrs={"autofocus": True,
