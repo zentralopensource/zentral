@@ -15,30 +15,30 @@
   <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h2>Run <i>{{ object }}</i></h2>
+<h2>Run #{{ object }}</h2>
 
-<h3 id="results">{{ page_obj.paginator.count }} File carving session{{ page_obj.paginator.count|pluralize }}</h3>
+<h3 id="results">File carving session{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h3>
 
 {% pagination next_url previous_url %}
 
 {% if page_obj %}
-<table class="table table-light table-striped align-middle">
+<table class="table table-light table-striped align-middle table-hover">
   <thead>
     <th>Serial number</th>
     <th>Created at</th>
     <th>Blocks</th>
+    <th></th>
   </thead>
   <tbody>
   {% for file_carving_session in page_obj %}
-  <tr>
+  <tr class="data-row">
     <td>{{ file_carving_session.serial_number }}</a></td>
     <td>{{ file_carving_session.created_at }}</a></td>
     <td>{{ file_carving_session.block_seen }}/{{ file_carving_session.block_count }}</td>
-    <td>
+    <td class="text-end py-0">
       {% if file_carving_session.archive %}
-      <a href="{% url 'osquery:download_file_carving_session_archive' file_carving_session.pk %}" class="btn btn-primary">
+      <a href="{% url 'osquery:download_file_carving_session_archive' file_carving_session.pk %}" class="btn btn-link text-dark text-decoration-none">
         <span class="bi bi-download" aria-hidden="true"></span>
-        Download
       </a>
       {% endif %}
   </tr>
