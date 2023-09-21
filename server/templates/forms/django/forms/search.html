@@ -13,14 +13,20 @@
         {% endif %}
 
         {% if field.widget_type == 'text' %}
-            size="{{ size }}"
             {% if field.value %}
                 value="{{ field.value }}"
             {% endif %}
         {% endif %}
             type="{{ field.widget_type }}"
             name="{{ field.html_name }}"
-            id="{{ field.id_for_label }}">
+            id="{{ field.id_for_label }}" 
+            {% for name, value in field.field.widget.attrs.items %}
+            {% comment %} We avoid "placeholder" because of bootstrap behavior with it {% endcomment %}
+                {% if name != "placeholder" %}
+                    {{ name }}={{ value }}
+                {% endif %}
+            {% endfor %}
+            >
             
         {% if field.widget_type == 'select' %}
             {% for option, value in field.field.choices %}

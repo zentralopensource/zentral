@@ -117,7 +117,7 @@ class RuleSearchForm(forms.Form):
         required=False,
         widget=forms.TextInput(
             attrs={
-                "autofocus": "true",
+                "autofocus": True,
                 "size": 32,
             }
         ),
@@ -476,7 +476,7 @@ class TargetSearchForm(forms.Form):
         label='SHA256, Name, …',
         required=False,
         widget=forms.TextInput(
-            attrs={"autofocus": "true",
+            attrs={"autofocus": True,
                    "size": 32,
                    }
         )

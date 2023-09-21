@@ -378,7 +378,7 @@ class QuerySearchForm(forms.Form):
             required=False,
             widget=forms.TextInput(
                 attrs={
-                    "autofocus": "true",
+                    "autofocus": True,
                     "size": 36,
                 }
             )

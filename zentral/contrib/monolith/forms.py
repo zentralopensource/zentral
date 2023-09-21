@@ -38,7 +38,7 @@ class ManifestSearchForm(forms.Form):
     template_name = "django/forms/search.html"
 
     name = forms.CharField(label="Name", required=False,
-                           widget=forms.TextInput(attrs={"autofocus": "true",
+                           widget=forms.TextInput(attrs={"autofocus": True,
                                                          "size": 32,
                                                          "placeholder": "Name or business unit name"}))
 
@@ -54,7 +54,7 @@ class SubManifestSearchForm(forms.Form):
     template_name = "django/forms/search.html"
 
     keywords = forms.CharField(label="Keywords", required=False,
-                               widget=forms.TextInput(attrs={"placeholder": "Keywords…"}))
+                               widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Keywords…"}))
 
     def get_queryset(self):
         qs = SubManifest.objects.select_related("meta_business_unit").all()

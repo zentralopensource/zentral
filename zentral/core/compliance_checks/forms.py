@@ -12,7 +12,7 @@ class ComplianceCheckForm(forms.ModelForm):
         model = ComplianceCheck
         fields = ("name", "description")
         widgets = {
-            "name": forms.TextInput(attrs={"autofocus": "true"})
+            "name": forms.TextInput(attrs={"autofocus": True})
         }
 
     def clean_name(self):

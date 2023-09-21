@@ -28,7 +28,8 @@ from .utils import (AndroidAppFilter,
 class MachineGroupSearchForm(forms.Form):
     template_name = "django/forms/search.html"
 
-    name = forms.CharField(label="Name", max_length=64, required=False)
+    name = forms.CharField(label="Name", max_length=64, required=False,
+                           widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),)
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_group_sources(),
                                     required=False,
                                     empty_label='...',)
@@ -40,7 +41,8 @@ class MetaBusinessUnitSearchForm(forms.Form):
     name = forms.CharField(
         max_length=64,
         required=False,
-        label='Name'
+        label='Name',
+        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),
         )
     source = forms.ModelChoiceField(
         queryset=Source.objects.current_business_unit_sources(),
@@ -414,7 +416,7 @@ class AndroidAppSearchForm(BaseAppSearchForm):
     template_name = "django/forms/search.html"
 
     display_name = forms.CharField(label="Name", max_length=64,
-                                   widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
+                                   widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),
                                    required=False)
     order_mapping = {"dn": "display_name",
                      "mc": "ms_count"}
@@ -501,7 +503,7 @@ class DebPackageSearchForm(BaseAppSearchForm):
     template_name = "django/forms/search.html"
 
     name = forms.CharField(label="Package name", max_length=64,
-                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Package name"}),
+                           widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Package name"}),
                            required=False)
     order_mapping = {"n": "name",
                      "mc": "ms_count"}
@@ -585,7 +587,7 @@ class IOSAppSearchForm(BaseAppSearchForm):
     template_name = "django/forms/search.html"
 
     name = forms.CharField(label="Name", max_length=64,
-                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
+                           widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),
                            required=False)
     order_mapping = {"n": "name",
                      "mc": "ms_count"}
@@ -673,7 +675,7 @@ class MacOSAppSearchForm(BaseAppSearchForm):
     template_name = "django/forms/search.html"
 
     bundle = forms.CharField(label='Bundle', max_length=64,
-                             widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Bundle"}),
+                             widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Bundle"}),
                              required=False)
     order_mapping = {"bn": "bundle_name",
                      "mc": "ms_count"}
@@ -770,7 +772,7 @@ class ProgramsSearchForm(BaseAppSearchForm):
     template_name = "django/forms/search.html"
 
     name = forms.CharField(label='Name', max_length=64,
-                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
+                           widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),
                            required=False)
     order_mapping = {"n": "name",
                      "mc": "ms_count"}
