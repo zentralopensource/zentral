@@ -90,6 +90,7 @@
 </table>
 {% endif %}
 
+{% if commands_count %}
 <div class="d-flex align-items-center mb-1">
     <h3 class="m-0">Last commands</h3>
     <div class="ms-auto">
@@ -104,7 +105,6 @@
     </div>
 </div>
 
-{% if commands_count %}
 <table class="table table-light table-striped align-middle">
   <thead>
     <tr>
