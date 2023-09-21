@@ -8,7 +8,7 @@ class IncidentSearchForm(forms.Form):
     template_name = "django/forms/search.html"
 
     q = forms.CharField(label="Query", required=False,
-                        widget=forms.TextInput(attrs={"placeholder": "Keywords…"}))
+                        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Keywords…"}))
     severity = forms.ChoiceField(label="Severity", choices=[], required=False)
     status = forms.ChoiceField(label="Status", choices=[], required=False)
 
