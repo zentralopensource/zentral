@@ -9,39 +9,46 @@
   <li class="breadcrumb-item active">User {{ object }}</li>
 </ol>
 
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">User</h3>
+    </div>
 
-<h3>User {{ object }}</h3>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <tbody>
+        <tr>
+        <th style="width:160px">User ID</th>
+        <td><code>{{ object.user_id }}</code></th>
+        </tr>
+        <tr>
+        <th>Short name</th>
+        <td>{{ object.short_name }}</th>
+        </tr>
+        <tr>
+        <th>Long name</th>
+        <td>{{ object.long_name }}</th>
+        </tr>
+        <tr>
+        <th>Device</th>
+        <td>
+            {% if perms.mdm.view_enrolleddevice %}
+            <a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a>
+            {% else %}
+            {{ enrolled_device }}
+            {% endif %}
+        </td>
+    </tbody>
+    </table>
+</div>
 
-<table class="table table-condensed">
-  <tbody>
-    <tr>
-      <th style="width:160px">User ID</th>
-      <td><code>{{ object.user_id }}</code></th>
-    </tr>
-    <tr>
-      <th>Short name</th>
-      <td>{{ object.short_name }}</th>
-    </tr>
-    <tr>
-      <th>Long name</th>
-      <td>{{ object.long_name }}</th>
-    </tr>
-    <tr>
-      <th>Device</th>
-      <td>
-        {% if perms.mdm.view_enrolleddevice %}
-        <a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a>
-        {% else %}
-        {{ enrolled_device }}
-        {% endif %}
-      </td>
-  </tbody>
-</table>
 
-<h3>{{ target_artifacts_count }} Artifact{{ target_artifacts_count|pluralize }}</h3>
+<h3>Artifact{{ target_artifacts_count|pluralize }} ({{ target_artifacts_count }})</h3>
 
 {% if target_artifacts_count %}
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th>Type</th>
@@ -83,16 +90,22 @@
 </table>
 {% endif %}
 
-<h3>Last commands</h3>
-
-{% if perms.mdm.change_enrolleduser %}
-<form style="display:inline-block" method="POST" action="{% url 'mdm:poke_enrolled_user' enrolled_device.pk object.pk %}">{% csrf_token %}
-  <button type="submit" class="btn btn-success" {% if not enrolled_device.can_be_poked %}disabled="disabled"{% endif %}>Poke!</button>
-</form>
-{% endif %}
+<div class="d-flex align-items-center mb-1">
+    <h3 class="m-0">Last commands</h3>
+    <div class="ms-auto">
+        {% if perms.mdm.change_enrolleduser %}
+        <form style="display:inline-block" method="POST" action="{% url 'mdm:poke_enrolled_user' enrolled_device.pk object.pk %}">{% csrf_token %}
+            <button type="submit" class="btn btn-success" {% if not enrolled_device.can_be_poked %}disabled="disabled"{% endif %}
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Poke!">
+                <i class="bi bi-hand-index"></i>
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
 
 {% if commands_count %}
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th>Name</th>
