@@ -11,7 +11,8 @@ from .models import (Catalog, Enrollment,
 class PkgInfoSearchForm(forms.Form):
     template_name = "django/forms/search.html"
 
-    name = forms.CharField(label="Name", required=False)
+    name = forms.CharField(label="Name", required=False,
+                           widget=forms.TextInput(attrs={"autofocus": True}))
     catalog = forms.ModelChoiceField(
         queryset=Catalog.objects.filter(archived_at__isnull=True),
         empty_label="...",
