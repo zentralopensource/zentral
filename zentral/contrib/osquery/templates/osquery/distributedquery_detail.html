@@ -12,10 +12,10 @@
 
 <div class="object-details">
     <div class="d-flex align-items-center mb-1">
-        <h2 class="m-0">Run</h2>
+        <h2 class="m-0">Run #{{ object }}</h2>
     </div>
     <div class="d-flex align-items-center mb-3">
-        <h3 class="m-0 fs-5 text-secondary">Run #{{ object }}</h3>
+        <h3 class="m-0 fs-5 text-secondary">Run</h3>
         <div class="ms-auto">
             {% if perms.osquery.change_distributedquery %}
                 <a href="{% url 'osquery:update_distributed_query' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
@@ -87,24 +87,32 @@
   </div>
 
 
-<h3 id="machines">Machine{{ dqm_count|pluralize }} ({{ dqm_count }})</h3>
-
 {% if dqm_count %}
-    <a class="btn btn-primary" href="{% url 'osquery:distributed_query_machines' object.pk %}">See the machine{{ dqm_count|pluralize }}</a>
+    <a class="btn btn-primary" href="{% url 'osquery:distributed_query_machines' object.pk %}">
+{% endif %}
+    <h3 id="machines">Machine{{ dqm_count|pluralize }} ({{ dqm_count }})</h3>
+{% if dqm_count %}
+    </a>
 {% endif %}
 
-<h3 id="results">Result{{ result_count|pluralize }} ({{ result_count }})</h3>
 
 {% if perms.osquery.view_distributedqueryresult and result_count %}
-    <a class="btn btn-primary" href="{% url 'osquery:distributed_query_results' object.pk %}">See the result{{ result_count|pluralize }}</a>
+    <a class="btn btn-primary" href="{% url 'osquery:distributed_query_results' object.pk %}">
 {% endif %}
+    <h3 id="results">Result{{ result_count|pluralize }} ({{ result_count }})</h3>
+{% if perms.osquery.view_distributedqueryresult and result_count %}
+    </a>
+{% endif %}
+
 
 {% if perms.osquery.view_filecarvingsession %}
-    <h3 id="results">File carving session{{ file_carving_session_count|pluralize }} ({{ file_carving_session_count }})</h3>
-
-{% if file_carving_session_count %}
-<a class="btn btn-primary" href="{% url 'osquery:distributed_query_file_carving_sessions' object.pk %}">See file carving session{{ file_carving_session_count|pluralize }}</a>
-{% endif %}
+    {% if file_carving_session_count %}
+        <a class="btn btn-primary" href="{% url 'osquery:distributed_query_file_carving_sessions' object.pk %}">
+    {% endif %}
+        <h3 id="results">File carving session{{ file_carving_session_count|pluralize }} ({{ file_carving_session_count }})</h3>
+    {% if file_carving_session_count %}
+        </a>
+    {% endif %}
 {% endif %}
 </div>
 {% endblock %}
