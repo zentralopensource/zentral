@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load inventory_extras inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -17,20 +17,20 @@
 
 <div class="row">
   <div class="col-md-2" style="position:sticky;top:20px">
-    <h3 style="margin-top:0">Run <i>{{ distributed_query }}</i></h3>
-    <h4 id="results">{{ page_obj.paginator.count }} Result{{ page_obj.paginator.count|pluralize }}</h4>
+    <h2 style="margin-top:0">Run {{ distributed_query }}</h2>
+    <h4 id="results">Result{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h4>
     {% if page_obj.paginator.count %}
-    <div class="btn-group" style="margin:0 0 10px 0">
-      <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-        <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-        Export <span class="caret"></span>
-      </button>
-      <ul class="dropdown-menu">
-        {% for format, link in export_links %}
-        <li><a class="dropdown-item task" href="{{ link }}">{{ format|upper }}</a></li>
-        {% endfor %}
-      </ul>
-    </div>
+        <div class="btn-group" style="margin:0 0 10px 0">
+        <button type="button" class="btn btn-link text-dark text-decoration-none dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            <span class="bi bi-download" aria-hidden="true"></span>
+            Export <span class="caret"></span>
+        </button>
+        <ul class="dropdown-menu">
+            {% for format, link in export_links %}
+            <li><a class="dropdown-item task" href="{{ link }}">{{ format|upper }}</a></li>
+            {% endfor %}
+        </ul>
+        </div>
     {% endif %}
     <form method="get">
       <div class="form-group">
@@ -64,22 +64,11 @@
     {% endif %}
   </div>
   <div class="col-md-10">
-    {% if next_url or previous_url %}
-    <nav>
-      <ul class="pager">
-        {% if next_url %}
-        <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-        {% endif %}
-        {% if previous_url %}
-        <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-        {% endif %}
-      </ul>
-    </nav>
-    {% endif %}
+    {% pagination next_url previous_url %}
 
     {% if rows %}
     <div class="table-responsive">
-      <table class="table table-condensed">
+      <table class="table table-light table-striped align-middle">
         <thead>
           <tr>
             {% for header in headers %}
@@ -103,7 +92,7 @@
     </div>
     {% else %}
     {% for object in page_obj %}
-    <table class="table table-condensed">
+    <table class="table table-light table-striped align-middle">
       <thead>
         <tr>
           <th colspan="2"><a href="{% machine_url object.serial_number %}">{{ object.serial_number }}</a></th>
@@ -121,18 +110,8 @@
     {% endfor %}
     {% endif %}
 
-    {% if next_url or previous_url %}
-    <nav>
-      <ul class="pager">
-        {% if next_url %}
-        <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-        {% endif %}
-        {% if previous_url %}
-        <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-        {% endif %}
-      </ul>
-    </nav>
-    {% endif %}
+    {% pagination next_url previous_url %}
+
   </div>
 </div>
 {% endblock %}
