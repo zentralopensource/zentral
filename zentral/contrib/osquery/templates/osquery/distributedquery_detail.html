@@ -88,7 +88,7 @@
 
 
 {% if dqm_count %}
-    <a class="btn btn-primary" href="{% url 'osquery:distributed_query_machines' object.pk %}">
+    <a href="{% url 'osquery:distributed_query_machines' object.pk %}">
 {% endif %}
     <h3 id="machines">Machine{{ dqm_count|pluralize }} ({{ dqm_count }})</h3>
 {% if dqm_count %}
@@ -97,7 +97,7 @@
 
 
 {% if perms.osquery.view_distributedqueryresult and result_count %}
-    <a class="btn btn-primary" href="{% url 'osquery:distributed_query_results' object.pk %}">
+    <a href="{% url 'osquery:distributed_query_results' object.pk %}">
 {% endif %}
     <h3 id="results">Result{{ result_count|pluralize }} ({{ result_count }})</h3>
 {% if perms.osquery.view_distributedqueryresult and result_count %}
@@ -107,7 +107,7 @@
 
 {% if perms.osquery.view_filecarvingsession %}
     {% if file_carving_session_count %}
-        <a class="btn btn-primary" href="{% url 'osquery:distributed_query_file_carving_sessions' object.pk %}">
+        <a href="{% url 'osquery:distributed_query_file_carving_sessions' object.pk %}">
     {% endif %}
         <h3 id="results">File carving session{{ file_carving_session_count|pluralize }} ({{ file_carving_session_count }})</h3>
     {% if file_carving_session_count %}
