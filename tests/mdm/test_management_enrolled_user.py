@@ -70,8 +70,8 @@ class EnrolledUserManagementViewsTestCase(TestCase):
         self.assertContains(response, enrolled_user.short_name)
         self.assertContains(response, enrolled_user.long_name)
         self.assertContains(response, enrolled_device.udid)
-        self.assertContains(response, "0 Artifacts")
-        self.assertContains(response, "Last commands")
+        self.assertContains(response, "Artifacts (0)")
+        self.assertNotContains(response, "Last commands")
         self.assertNotContains(response, "See all commands")
 
     def test_enrolled_user_one_command(self):
