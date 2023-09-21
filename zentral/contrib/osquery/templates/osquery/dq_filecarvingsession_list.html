@@ -32,12 +32,13 @@
   <tbody>
   {% for file_carving_session in page_obj %}
   <tr class="data-row">
-    <td>{{ file_carving_session.serial_number }}</a></td>
+    <td><a href="{% machine_url file_carving_session.serial_number %}">{{ file_carving_session.serial_number }}</a></td>
     <td>{{ file_carving_session.created_at }}</a></td>
     <td>{{ file_carving_session.block_seen }}/{{ file_carving_session.block_count }}</td>
     <td class="text-end py-0">
       {% if file_carving_session.archive %}
-      <a href="{% url 'osquery:download_file_carving_session_archive' file_carving_session.pk %}" class="btn btn-link text-dark text-decoration-none">
+      <a href="{% url 'osquery:download_file_carving_session_archive' file_carving_session.pk %}" class="btn btn-link text-dark text-decoration-none"
+      data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download">
         <span class="bi bi-download" aria-hidden="true"></span>
       </a>
       {% endif %}
