@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -17,21 +18,10 @@
 
 <h3>User command{{ page_obj.paginator.count|pluralize }}</h3>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% if page_obj %}
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th>Name</th>
@@ -72,8 +62,8 @@
       <td>
         {{ command.get_status_display|default:"-" }}
         {% if command.result %}
-        <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_user_command_result' command.uuid %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        <a class="btn btn-link text-dark text-decoration-none" href="{% url 'mdm:download_enrolled_user_command_result' command.uuid %}">
+          <span class="bi bi-download" aria-hidden="true"></span>
         </a>
         {% endif %}
       </td>
@@ -84,17 +74,6 @@
 </table>
 {% endif %}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% endblock %}
