@@ -18,12 +18,12 @@
 <div class="row">
   <div class="col-md-2" style="position:sticky;top:20px">
     <h2 style="margin-top:0">Run {{ distributed_query }}</h2>
-    <h4 id="results">Result{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h4>
     {% if page_obj.paginator.count %}
         <div class="btn-group" style="margin:0 0 10px 0">
-        <button type="button" class="btn btn-link text-dark text-decoration-none dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        <h4 id="results">Result{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h4>
+        <button type="button" class="btn btn-link text-dark text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
             <span class="bi bi-download" aria-hidden="true"></span>
-            Export <span class="caret"></span>
+            <span class="caret"></span>
         </button>
         <ul class="dropdown-menu">
             {% for format, link in export_links %}
