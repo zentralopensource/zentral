@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load inventory_extras inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -19,21 +19,10 @@
 
 <h3 id="results">{{ page_obj.paginator.count }} File carving session{{ page_obj.paginator.count|pluralize }}</h3>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% if page_obj %}
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <th>Serial number</th>
     <th>Created at</th>
@@ -48,7 +37,7 @@
     <td>
       {% if file_carving_session.archive %}
       <a href="{% url 'osquery:download_file_carving_session_archive' file_carving_session.pk %}" class="btn btn-primary">
-        <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+        <span class="bi bi-download" aria-hidden="true"></span>
         Download
       </a>
       {% endif %}
@@ -58,17 +47,6 @@
 </table>
 {% endif %}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% endblock %}
