@@ -104,3 +104,21 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 .btn-link.nav-link.text-light:hover {
     background: $list-group-hover-bg-dark;
 }
+
+// Zentral logo
+
+.navbar-brand.light {
+    background-image: url(../images/logo-light.svg);
+    background-repeat: no-repeat;
+    width: 150px;
+    height: 48px;
+    display: block;
+}
+
+.navbar-brand.dark {
+    background-image: url(../images/logo-dark.svg);
+    background-repeat: no-repeat;
+    width: 150px;
+    height: 48px;
+    display: block;
+}

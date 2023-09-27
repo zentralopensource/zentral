@@ -38,8 +38,6 @@
             element.classList.remove('text-dark')
             element.classList.add('text-light')
         })
-        var logo_src = document.getElementById("zentral-logo").src 
-         document.getElementById("zentral-logo").src = logo_src.replace('light','dark')
     }
     const setLight = () => {
         document.querySelectorAll([".dark", "[class*='-dark']"]).forEach(element => {
@@ -49,8 +47,6 @@
             element.classList.remove('text-light')
             element.classList.add('text-dark')
         })
-        var logo_src = document.getElementById("zentral-logo").src
-        document.getElementById("zentral-logo").src = logo_src.replace('dark', 'light')
     }
 
     const showActiveTheme = (theme, focus = false) => {
