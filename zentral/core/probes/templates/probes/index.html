@@ -65,9 +65,9 @@
         <td><a href="{% url 'probes:probe' probe.pk %}">{{ probe.name }}</a></td>
         <td>
             {% if probe.status == 'ACTIVE' %}
-            <span class="badge text-bg-info">Active</span>
+            <span class="badge text-bg-success">Active</span>
             {% else %}
-            <span class="badge text-bg-danger">Inactive</span>
+            <span class="badge text-bg-secondary">Inactive</span>
             {% endif %}
         </td>
         </tr>
