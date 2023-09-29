@@ -16,7 +16,7 @@ class ProbeSearchForm(forms.Form):
     template_name = "django/forms/search.html"
 
     q = forms.CharField(label="Query", required=False,
-                        widget=forms.TextInput(attrs={"placeholder": "Keywords…"}))
+                        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Keywords…"}))
     model = forms.ChoiceField(label="Model", choices=[], required=False)
     event_type = forms.ChoiceField(label="Event type", choices=[], required=False)
     status = forms.ChoiceField(label="Status",
