@@ -2,10 +2,10 @@
     <div class="d-flex justify-content-start">
         <a class="list-group-item list-group-item-action rounded m-1 p-1 w-100 px-2 text-dark"
             data-bs-toggle="collapse"
-            href="#offcanvas{{ section.title }}Submenu"
+            href="#offcanvas{{ section.title|cut:" " }}Submenu"
             role="button"
             aria-expanded="{% if section.is_active %}false{% else %}true{% endif %}"
-            aria-controls="offcanvas{{ section.title }}Submenu">
+            aria-controls="offcanvas{{ section.title|cut:" " }}Submenu">
             {% if section.icon %}
                 <i class="bi {{ section.icon }}"></i>
             {% endif %}
@@ -13,11 +13,11 @@
             <i class="collapse-toggler-light float-end{% if not section.is_active %} collapsed{% endif %}"
                 data-bs-toggle="collapse"
                 aria-expanded="{% if section.is_active %}false{% else %}true{% endif %}"
-                data-bs-target="#offcanvas{{ section.title }}Submenu" 
+                data-bs-target="#offcanvas{{ section.title|cut:" " }}Submenu" 
                 ></i>
         </a>
     </div>
-    <div class="collapse{%if section.is_active %} show{% endif %}" id="offcanvas{{ section.title }}Submenu">
+    <div class="collapse{%if section.is_active %} show{% endif %}" id="offcanvas{{ section.title|cut:" " }}Submenu">
         <div class="list-group rounded-0 small">
                 {% for link, anchor_text, active in section.link_list %}
                 <div class="d-flex justify-content-start px-2">
