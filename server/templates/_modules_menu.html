@@ -1,6 +1,6 @@
 {% for section in section_list %}
     <div class="d-flex justify-content-start">
-        <a class="list-group-item list-group-item-action rounded m-1 p-1 border-0 w-auto px-2 collapse-toggler-light text-dark{%if not section.is_active %} collapsed{% endif %}"
+        <a class="list-group-item list-group-item-action rounded m-1 p-1 w-auto px-2 collapse-toggler-light text-dark{%if not section.is_active %} collapsed{% endif %}"
             data-bs-toggle="collapse"
             href="#offcanvas{{ section.title }}Submenu"
             role="button"
@@ -13,21 +13,13 @@
         </a>
     </div>
     <div class="collapse{%if section.is_active %} show{% endif %}" id="offcanvas{{ section.title }}Submenu">
-        <div class="list-group rounded-0 border-0 small">
+        <div class="list-group rounded-0 small">
                 {% for link, anchor_text, active in section.link_list %}
                 <div class="d-flex justify-content-start px-2">
-                    <a class="list-group-item list-group-item-action rounded m-1 p-1 border-0 w-auto px-2 ms-2 text-dark{%if active %} active{% endif %}" href="{{ link }}">{{ anchor_text }}</a>
+                    <a class="list-group-item list-group-item-action rounded m-1 p-1 w-auto px-2 ms-2 text-dark{%if active %} active{% endif %}" href="{{ link }}">{{ anchor_text }}</a>
                 </div>
                 {% endfor %}
         </div>
     </div>
 {% endfor %}
 
-{% if request.zentral_deployment.items_for_display %}
-<div class="position-absolute bottom-0 start-10 bg-light">
-    <small>Deployment</small><br/>
-    {% for k, v in request.zentral_deployment.items_for_display %}
-    <small>{{ k }} : {{ v }}</small><br/>
-    {% endfor %}
-</div>
-{% endif %}
