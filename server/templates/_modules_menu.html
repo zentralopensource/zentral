@@ -1,6 +1,6 @@
 {% for section in section_list %}
     <div class="d-flex justify-content-start">
-        <a class="list-group-item list-group-item-action rounded m-1 p-1 w-auto px-2 collapse-toggler-light text-dark{%if not section.is_active %} collapsed{% endif %}"
+        <a class="list-group-item list-group-item-action rounded m-1 p-1 w-100 px-2 text-dark"
             data-bs-toggle="collapse"
             href="#offcanvas{{ section.title }}Submenu"
             role="button"
@@ -10,6 +10,11 @@
                 <i class="bi {{ section.icon }}"></i>
             {% endif %}
             {{ section.title }}
+            <i class="collapse-toggler-light float-end{% if not section.is_active %} collapsed{% endif %}"
+                data-bs-toggle="collapse"
+                aria-expanded="{% if section.is_active %}false{% else %}true{% endif %}"
+                data-bs-target="#offcanvas{{ section.title }}Submenu" 
+                ></i>
         </a>
     </div>
     <div class="collapse{%if section.is_active %} show{% endif %}" id="offcanvas{{ section.title }}Submenu">
