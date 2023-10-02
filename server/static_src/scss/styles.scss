@@ -1,7 +1,12 @@
-$zzgreen: #6bbdb1;
-$zgreen: #79c6bc;
-$ygreen: #9ad2c9;
-$xgreen: #e0f0ed;
+$zzgreen: rgb(107, 189, 177);
+$zgreen: rgb(121, 198, 188);
+$ygreen: rgb(154, 210, 201);
+$xgreen: rgb(224, 240, 237);
+
+$zzred: rgb(210, 72, 90);
+$zred: rgb(234, 81, 101);
+$yred: rgb(255, 93, 114);
+$xred: rgb(255, 123, 150);
 
 $light: white;
 
@@ -9,11 +14,12 @@ $font-size-root: 14px;
 
 $list-group-bg: transparent;
 $list-group-hover-bg: $xgreen;
-$list-group-hover-bg-dark: gray;
+$list-group-hover-bg-dark: $xred;
 $list-group-active-bg: lightgray;
-$list-group-active-bg-dark: #7ea9b2;
+$list-group-active-bg-dark: $xred;
 $list-group-active-bg-light: $xgreen;
-$list-group-hover-border-color: $zgreen;
+$list-group-hover-border-color-light: $zgreen;
+$list-group-hover-border-color-dark: $zred;
 $list-group-border-width: 1px;
 
 $offcanvas-border-color: transparent;
@@ -40,7 +46,7 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 
 // // Light theme
 .list-group-item.text-dark:hover {
-    border-color: $list-group-hover-border-color;
+    border-color: $list-group-hover-border-color-light;
     border-width: $list-group-border-width;
 }
 
@@ -55,11 +61,13 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 
 // // Dark theme
 .list-group-item.text-light:hover {
+    border-color: $list-group-hover-border-color-dark;
     background: $list-group-hover-bg-dark;
 }
 
 .list-group-item.text-light.active {
     background: $list-group-active-bg-dark;
+    border-color: transparent;
 }
 
 .list-group-item.text-light:focus {
