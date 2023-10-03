@@ -46,16 +46,14 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
     border-width: $list-group-border-width;
 }
 
-.list-group-item:hover {
+.list-group-item:hover,
+.list-group-item:active,
+.list-group-item:focus {
     border-color: $zgreen;
     color: black !important;
 }
 .list-group-item.active {
     background: $list-group-active-bg-light;
-    color: black !important;
-}
-.list-group-item:active {
-    background: $zgreen;
     color: black !important;
 }
 
