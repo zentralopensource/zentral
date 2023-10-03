@@ -10,7 +10,9 @@
 <h2>Create Jamf Protect enrollment</h2>
 
 <form method="post" class="update-form">{% csrf_token %}
-  {{ secret_form }}
+
+    {{ secret_form }}
+
   <p>
     <a class="btn btn-outline-secondary" href="{% url 'jamf_protect:enrollments' %}">
       Cancel

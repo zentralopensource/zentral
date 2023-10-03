@@ -31,11 +31,7 @@ class EnrollmentsView(LoginRequiredMixin, ListView):
         ctx["setup"] = True
         ctx["events_url"] = "{}{}".format(settings["api"]["tls_hostname"],
                                           reverse("jamf_protect:events"))
-        enrollments_count = len(ctx["object_list"])
-        ctx["title"] = "{} Jamf Protect enrollment{}".format(
-            enrollments_count,
-            "" if enrollments_count == 1 else "s"
-        )
+        ctx["enrollments_count"] = len(ctx["object_list"])
         return ctx
 
 
