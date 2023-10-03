@@ -1,3 +1,4 @@
+$zzzgreen: rgb(92, 132, 124);
 $zzgreen: rgb(107, 189, 177);
 $zgreen: rgb(121, 198, 188);
 $ygreen: rgb(154, 210, 201);
@@ -8,19 +9,21 @@ $zred: rgb(234, 81, 101);
 $yred: rgb(255, 93, 114);
 $xred: rgb(255, 123, 150);
 
+$primary: $zzgreen;
 $light: white;
 
 $font-size-root: 14px;
 
 $list-group-bg: transparent;
 $list-group-hover-bg: $xgreen;
-$list-group-hover-bg-dark: $xred;
-$list-group-active-bg: lightgray;
-$list-group-active-bg-dark: $xred;
+$list-group-hover-bg-dark: $xgreen;
+$list-group-active-bg-dark: $xgreen;
 $list-group-active-bg-light: $xgreen;
-$list-group-hover-border-color-light: $zgreen;
-$list-group-hover-border-color-dark: $zred;
+$list-group-hover-border-color-dark: $xgreen;
 $list-group-border-width: 1px;
+
+$dropdown-link-hover-bg: $list-group-hover-bg;
+$dropdown-link-active-bg: $zgreen;
 
 $offcanvas-border-color: transparent;
 $offcanvas-horizontal-width: 180px;
@@ -43,35 +46,17 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
     border-width: $list-group-border-width;
 }
 
-
-// // Light theme
-.list-group-item.text-dark:hover {
-    border-color: $list-group-hover-border-color-light;
-    border-width: $list-group-border-width;
+.list-group-item:hover {
+    border-color: $zgreen;
+    color: black !important;
 }
-
-.list-group-item.text-dark.active {
+.list-group-item.active {
     background: $list-group-active-bg-light;
-    border-color: transparent;
+    color: black !important;
 }
-.list-group-item.text-dark:active {
+.list-group-item:active {
     background: $zgreen;
-}
-
-
-// // Dark theme
-.list-group-item.text-light:hover {
-    border-color: $list-group-hover-border-color-dark;
-    background: $list-group-hover-bg-dark;
-}
-
-.list-group-item.text-light.active {
-    background: $list-group-active-bg-dark;
-    border-color: transparent;
-}
-
-.list-group-item.text-light:focus {
-    background: $list-group-hover-bg-dark;
+    color: black !important;
 }
 
 
@@ -145,11 +130,9 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 
 .btn-link.nav-link.text-dark:hover {
     background: $list-group-hover-bg;
+    color: black !important;
 }
 
-.btn-link.nav-link.text-light:hover {
-    background: $list-group-hover-bg-dark;
-}
 
 // Zentral logo
 
