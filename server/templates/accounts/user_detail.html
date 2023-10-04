@@ -58,10 +58,10 @@
         <th>verification device{{ verification_devices|length|pluralize }}</th>
         <td>
             {% if verification_devices %}
-            <dl>
+            <dl class="row">
             {% for verification_device in verification_devices %}
-            <dt>{{ verification_device.get_type_for_display }}</dt>
-            <dd>{{ verification_device.name }}</dd>
+            <dt class="col-sm-3 text-md-end">{{ verification_device.get_type_for_display }}</dt>
+            <dd class="col-sm-9">{{ verification_device.name }}</dd>
             {% endfor %}
             </dl>
             {% else %}

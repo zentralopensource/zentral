@@ -4,17 +4,17 @@
 <p class="text-danger">{{ err_message }}</p>
 {% endif %}
 {% for enrolled_device, enrolled_users in enrolled_devices %}
-<dl class="dl-horizontal">
-  <dt>Device</dt>
-  <dd>
+<dl class="row">
+  <dt class="col-sm-3 text-md-end">Device</dt>
+  <dd class="col-sm-9">
     {% if can_view_device %}
     <a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a>
     {% else %}
     {{ enrolled_device }}
     {% endif %}
   </dd>
-  <dt>User{{ users|pluralize }}</dt>
-  <dd>
+  <dt class="col-sm-3 text-md-end">User{{ users|pluralize }}</dt>
+  <dd class="col-sm-9">
     {% if enrolled_users %}
     <ul class="list-unstyled">
       {% for enrolled_user in enrolled_users %}

@@ -22,30 +22,30 @@
     <tr>
       <td style="width:15%">Query</td>
       <td>
-        <dl>
-          <dt>Name</dt>
-          <dd><a href="{{ query.get_absolute_url }}">{{ query }}</a></dd>
-          <dt>SQL</dt>
-          <dd>{{ query.get_sql_html|safe }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">Name</dt>
+          <dd class="col-sm-9"><a href="{{ query.get_absolute_url }}">{{ query }}</a></dd>
+          <dt class="col-sm-3 text-md-end">SQL</dt>
+          <dd class="col-sm-9">{{ query.get_sql_html|safe }}</dd>
           {% if query.platforms %}
-          <dt>Platform{{ query.platforms|length|pluralize }}</dt>
-          <dd>{{ query.platforms|join:", " }}</dd>
+          <dt class="col-sm-3 text-md-end">Platform{{ query.platforms|length|pluralize }}</dt>
+          <dd class="col-sm-9">{{ query.platforms|join:", " }}</dd>
           {% endif %}
           {% if query.minimum_osquery_version %}
-          <dt>Min. osquery ver.</dt>
-          <dd>{{ query.minimum_osquery_version }}</dd>
+          <dt class="col-sm-3 text-md-end">Min. osquery ver.</dt>
+          <dd class="col-sm-9">{{ query.minimum_osquery_version }}</dd>
           {% endif %}
           {% if query.description %}
-          <dt>Description</dt>
-          <dd>{{ query.description|default:"-" }}</dd>
+          <dt class="col-sm-3 text-md-end">Description</dt>
+          <dd class="col-sm-9">{{ query.description|default:"-" }}</dd>
           {% endif %}
           {% if query.value %}
-          <dt>Value</dt>
-          <dd>{{ query.value }}</dd>
+          <dt class="col-sm-3 text-md-end">Value</dt>
+          <dd class="col-sm-9">{{ query.value }}</dd>
           {% endif %}
           {% if query.compliance_check %}
-          <dt>Compliance check</dt>
-          <dd>yes</dt>
+          <dt class="col-sm-3 text-md-end">Compliance check</dt>
+          <dd class="col-sm-9">yes</dt>
           {% endif %}
         </dl>
       </td>

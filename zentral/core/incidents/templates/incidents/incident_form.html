@@ -12,13 +12,13 @@
 <h2>{{ incident.name }}</h2>
 <h3>Update machine incident status</h3>
 <p>{% incident_severity incident.severity %}</p>
-<dl>
-  <dt>Current status</dt>
-  <dd>{{ object.get_status_display }}</dd>
-  <dt>Created at</dt>
-  <dd>{{ object.created_at }}</dd>
-  <dt>Updated at</dt>
-  <dd>{{ object.updated_at }}</dd>
+<dl class="row">
+  <dt class="col-sm-3 text-md-end">Current status</dt>
+  <dd class="col-sm-9">{{ object.get_status_display }}</dd>
+  <dt class="col-sm-3 text-md-end">Created at</dt>
+  <dd class="col-sm-9">{{ object.created_at }}</dd>
+  <dt class="col-sm-3 text-md-end">Updated at</dt>
+  <dd class="col-sm-9">{{ object.updated_at }}</dd>
 </dl>
 
 <form method="post" class="update-form">{% csrf_token %}

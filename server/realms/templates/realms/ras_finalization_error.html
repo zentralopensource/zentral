@@ -11,16 +11,16 @@
 {{ original_claims|pythonprettyprint }}
 
 <h3>Mapped claims</h3>
-<dl class="dl-horizontal">
-  <dt>Username</dt>
-  <dd>{{ claims.username|default:"-" }}</dd>
-  <dt>Email</dt>
-  <dd>{{ claims.email|default:"-" }}</dd>
-  <dt>First name</dt>
-  <dd>{{ claims.first_name|default:"-" }}</dd>
-  <dt>Last name</dt>
-  <dd>{{ claims.last_name|default:"-" }}</dd>
-  <dt>Full name</dt>
-  <dd>{{ claims.full_name|default:"-" }}</dd>
+<dl class="row">
+  <dt class="col-sm-3 text-md-end">Username</dt>
+  <dd class="col-sm-9">{{ claims.username|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Email</dt>
+  <dd class="col-sm-9">{{ claims.email|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">First name</dt>
+  <dd class="col-sm-9">{{ claims.first_name|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Last name</dt>
+  <dd class="col-sm-9">{{ claims.last_name|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Full name</dt>
+  <dd class="col-sm-9">{{ claims.full_name|default:"-" }}</dd>
 </dl>
 {% endblock %}

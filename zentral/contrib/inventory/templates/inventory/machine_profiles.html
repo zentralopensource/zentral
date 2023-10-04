@@ -44,31 +44,31 @@
       {% for profile in ms.ordered_profiles %}
       <tr>
         <td>
-          <dl>
+          <dl class="row">
             {% if profile.display_name %}
-            <dt>Display name</dt>
+            <dt class="col-sm-3 text-md-end">Display name</dt>
             <dd class="search-field">{{ profile.display_name }}</dd>
             {% endif %}
             {% if profile.identifier %}
-            <dt>Identifier</dt>
-            <dd><code>{{ profile.identifier }}</code></dd>
+            <dt class="col-sm-3 text-md-end">Identifier</dt>
+            <dd class="col-sm-9"><code>{{ profile.identifier }}</code></dd>
             {% endif %}
             {% if profile.organization %}
-            <dt>Organization</dt>
+            <dt class="col-sm-3 text-md-end">Organization</dt>
             <dd class="search-field">{{ profile.organization }}</dd>
             {% endif %}
             {% if profile.description %}
-            <dt>Description</dt>
-            <dd>{{ profile.description }}</dd>
+            <dt class="col-sm-3 text-md-end">Description</dt>
+            <dd class="col-sm-9">{{ profile.description }}</dd>
             {% endif %}
             {% if profile.install_date %}
-            <dt>Install date</dt>
-            <dd>{{ profile.install_date }}</dd>
+            <dt class="col-sm-3 text-md-end">Install date</dt>
+            <dd class="col-sm-9">{{ profile.install_date }}</dd>
             {% endif %}
-            <dt>Removal allowed</dt>
-            <dd>{{ profile.removal_allowed|yesno }}</dd>
-            <dt>Verified</dt>
-            <dd>{{ profile.verified|yesno }}</dd>
+            <dt class="col-sm-3 text-md-end">Removal allowed</dt>
+            <dd class="col-sm-9">{{ profile.removal_allowed|yesno }}</dd>
+            <dt class="col-sm-3 text-md-end">Verified</dt>
+            <dd class="col-sm-9">{{ profile.verified|yesno }}</dd>
           </dl>
         </td>
         <td>
@@ -84,7 +84,7 @@
     </tbody>
   </table>
 
-  <dl class="dl-horizontal">
+  <dl class="row">
     <dt class="small" style="opacity:0.5">last change</dt>
     <dd class="small" style="opacity:0.5">
       {% if ms.public_ip_address %}{{ ms.public_ip_address }} - {% endif %}

@@ -56,23 +56,23 @@
     <tr>
       <th>Challenge
       <td>
-        <dl>
-          <dt>Type</dt>
-          <dd>{{ object.get_challenge_type_display }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">Type</dt>
+          <dd class="col-sm-9">{{ object.get_challenge_type_display }}</dd>
           {% with object.get_challenge_kwargs as kwargs %}
           {% if object.challenge_type == "STATIC" %}
-          <dt>Challenge</dt>
-          <dd>
+          <dt class="col-sm-3 text-md-end">Challenge</dt>
+          <dd class="col-sm-9">
             <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
             <span hidden>{{ kwargs.challenge }}</span>
           </dd>
           {% elif object.challenge_type == "MICROSOFT_CA" %}
-          <dt>NDES mscep_admin/ endpoint</dt>
-          <dd>{{ kwargs.url }}</dd>
-          <dt>mscep admin user</dt>
-          <dd>{{ kwargs.username }}</dt>
-          <dt>mscep admin password</dt>
-          <dd>
+          <dt class="col-sm-3 text-md-end">NDES mscep_admin/ endpoint</dt>
+          <dd class="col-sm-9">{{ kwargs.url }}</dd>
+          <dt class="col-sm-3 text-md-end">mscep admin user</dt>
+          <dd class="col-sm-9">{{ kwargs.username }}</dt>
+          <dt class="col-sm-3 text-md-end">mscep admin password</dt>
+          <dd class="col-sm-9">
             <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
             <span hidden>{{ kwargs.password }}</span>
           </dd>

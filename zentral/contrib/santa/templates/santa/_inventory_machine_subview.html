@@ -3,7 +3,7 @@
 {% if err_message %}
 <p class="text-danger">{{ err_message }}</p>
 {% endif %}
-<dl class="dl-horizontal">
+<dl class="row">
   {% if configuration %}
   <dt class="col-sm-3 text-md-end">Configuration</dt>
   <dd class="col-sm-9"><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration }}</a></dd>

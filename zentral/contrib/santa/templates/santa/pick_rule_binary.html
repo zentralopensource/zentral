@@ -33,28 +33,28 @@
       <td>
         <p><code>{{ binary.sha_256 }}</code></p>
         {% if binary.bundle %}
-        <dl class="dl-horizontal">
+        <dl class="row">
           {% if binary.bundle.bundle_id %}
-          <dt>bundle id</dd>
-          <dd>{{ binary.bundle.bundle_id }}</dd>
+          <dt class="col-sm-3 text-md-end">bundle id</dd>
+          <dd class="col-sm-9">{{ binary.bundle.bundle_id }}</dd>
           {% endif %}
           {% if binary.bundle.bundle_name %}
-          <dt>bundle name</dt>
-          <dd>{{ binary.bundle.bundle_name }}</dd>
+          <dt class="col-sm-3 text-md-end">bundle name</dt>
+          <dd class="col-sm-9">{{ binary.bundle.bundle_name }}</dd>
           {% endif %}
-          <dt>bundle version</dt>
-          <dd>{% if  binary.bundle.bundle_version_str %}{{ binary.bundle.bundle_version_str }}{% else %}{% if binary.bundle.bundle_version %}{{ binary.bundle.bundle_version }}{% else %}-{% endif %}{% endif %}</dd>
+          <dt class="col-sm-3 text-md-end">bundle version</dt>
+          <dd class="col-sm-9">{% if  binary.bundle.bundle_version_str %}{{ binary.bundle.bundle_version_str }}{% else %}{% if binary.bundle.bundle_version %}{{ binary.bundle.bundle_version }}{% else %}-{% endif %}{% endif %}</dd>
           {% if binary.bundle_path %}
-          <dt>bundle path</dt>
-          <dd>{{ binary.bundle_path }}</dd>
+          <dt class="col-sm-3 text-md-end">bundle path</dt>
+          <dd class="col-sm-9">{{ binary.bundle_path }}</dd>
           {% endif %}
         </dl>
         {% endif %}
-        <dl class="dl-horizontal">
-          <dt>binary path</dt>
-          <dd>{{ binary.path }}</dd>
-          <dt>binary name</dt>
-          <dd>{{ binary.name }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">binary path</dt>
+          <dd class="col-sm-9">{{ binary.path }}</dd>
+          <dt class="col-sm-3 text-md-end">binary name</dt>
+          <dd class="col-sm-9">{{ binary.name }}</dd>
         </dl>
       </td>
       <td>

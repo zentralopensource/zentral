@@ -21,23 +21,23 @@
     <tr>
       <th>Query</th>
       <td>
-        <dl>
+        <dl class="row">
           {% if perms.osquery.view_query and object.query %}
-          <dt>Name</dt>
-          <dd>
+          <dt class="col-sm-3 text-md-end">Name</dt>
+          <dd class="col-sm-9">
             <a href="{{ object.query.get_absolute_url }}">{{ query }}</a>
             {% if object.query_version < object.query.version %}/ <span class="text-danger">Updated since run creation</span>{% endif %}
           </dd>
           {% endif %}
-          <dt>SQL</dt>
-          <dd>{{ object.get_sql_html|safe }}</dd>
+          <dt class="col-sm-3 text-md-end">SQL</dt>
+          <dd class="col-sm-9">{{ object.get_sql_html|safe }}</dd>
           {% if object.platforms %}
-          <dt>Platform{{ object.platforms|length|pluralize }}</dt>
-          <dd>{{ object.platforms|join:", " }}</dd>
+          <dt class="col-sm-3 text-md-end">Platform{{ object.platforms|length|pluralize }}</dt>
+          <dd class="col-sm-9">{{ object.platforms|join:", " }}</dd>
           {% endif %}
           {% if object.minimum_osquery_version %}
-          <dt>Min. osquery ver.</dt>
-          <dd>{{ object.minimum_osquery_version }}</dd>
+          <dt class="col-sm-3 text-md-end">Min. osquery ver.</dt>
+          <dd class="col-sm-9">{{ object.minimum_osquery_version }}</dd>
           {% endif %}
         </dl>
       </td>

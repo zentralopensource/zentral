@@ -42,13 +42,13 @@
       <td>CA chain</td>
       <td>
         {% for cert_tree in object.iter_ca_chain_cert_trees %}
-        <dl>
-          <dt>Common name</dt>
-          <dd>{{ cert_tree.common_name }}</dd>
-          <dt>Issuer common name</dt>
-          <dd>{{ cert_tree.signed_by.common_name }}</dd>
-          <dt>Validity</dt>
-          <dd>{{ cert_tree.valid_from }} → {{ cert_tree.valid_until }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">Common name</dt>
+          <dd class="col-sm-9">{{ cert_tree.common_name }}</dd>
+          <dt class="col-sm-3 text-md-end">Issuer common name</dt>
+          <dd class="col-sm-9">{{ cert_tree.signed_by.common_name }}</dd>
+          <dt class="col-sm-3 text-md-end">Validity</dt>
+          <dd class="col-sm-9">{{ cert_tree.valid_from }} → {{ cert_tree.valid_until }}</dd>
         </dl>
         {% empty %}
         Could not get CA chain info
@@ -59,16 +59,16 @@
     <tr>
       <td>Client certificate</td>
       <td>
-        <dl>
+        <dl class="row">
           {% with object.get_cert_tree as cert_tree %}
           {% if cert_tree %}
-          <dl>
-            <dt>Common name</dt>
-            <dd>{{ cert_tree.common_name }}</dd>
-            <dt>Issuer common name</dt>
-            <dd>{{ cert_tree.signed_by.common_name }}</dd>
-            <dt>Validity</dt>
-            <dd>{{ cert_tree.valid_from }} → {{ cert_tree.valid_until }}</dd>
+          <dl class="row">
+            <dt class="col-sm-3 text-md-end">Common name</dt>
+            <dd class="col-sm-9">{{ cert_tree.common_name }}</dd>
+            <dt class="col-sm-3 text-md-end">Issuer common name</dt>
+            <dd class="col-sm-9">{{ cert_tree.signed_by.common_name }}</dd>
+            <dt class="col-sm-3 text-md-end">Validity</dt>
+            <dd class="col-sm-9">{{ cert_tree.valid_from }} → {{ cert_tree.valid_until }}</dd>
           </dl>
           {% else %}
           Could not get cert info
@@ -158,7 +158,7 @@
   </tbody>
 </table>
 
-<dl>
+<dl class="row">
   <dt class="small" style="opacity:0.5">Version</dt>
   <dd class="small" style="opacity:0.5">{{ object.version }}</dd>
   <dt class="small" style="opacity:0.5">Created at</dt>

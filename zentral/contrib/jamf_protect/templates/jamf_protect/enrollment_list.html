@@ -49,11 +49,11 @@
         <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
         <td>
             {% if not distributor and not secret.is_used_up %}
-            <dl>
-            <dt>URL</dt>
-            <dd>{{ events_url }}</dd>
-            <dt>Authorization header</dt>
-            <dd><pre>Bearer {{ enrollment.secret.secret }}</pre></dd>
+            <dl class="row">
+            <dt class="col-sm-3 text-md-end">URL</dt>
+            <dd class="col-sm-9">{{ events_url }}</dd>
+            <dt class="col-sm-3 text-md-end">Authorization header</dt>
+            <dd class="col-sm-9"><pre>Bearer {{ enrollment.secret.secret }}</pre></dd>
             </dl>
             {% elif secret.is_used_up %}
             <span class="text-danger">Enrollment used up.</span>

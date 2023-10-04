@@ -11,7 +11,7 @@
 
 <h2>Delete manifest enrollment package</h2>
 <form method="POST" class="form">{% csrf_token %}
-  <dl class="dl-horizontal">
+  <dl class="row">
     <dt class="col-sm-3 text-md-end">Name</dt>
     <dd class="col-sm-9">{{ manifest_enrollment_package.get_name }}<dd>
     {% with manifest_enrollment_package.get_enrollment as enrollment %}

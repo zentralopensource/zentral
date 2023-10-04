@@ -14,11 +14,11 @@
 {% if realm_user.realm.enabled_for_login %}
 <h3>Login session expiry</h3>
 
-<dl>
-  <dt>IDP</dt>
-  <dd>{{ object.expires_at|default:"-" }}{% if idp_expiry_age %} — ~{{ idp_expiry_age }} seconds{% endif %}</dd>
-  <dt>User’s session cookie</dt>
-  <dd>
+<dl class="row">
+  <dt class="col-sm-3 text-md-end">IDP</dt>
+  <dd class="col-sm-9">{{ object.expires_at|default:"-" }}{% if idp_expiry_age %} — ~{{ idp_expiry_age }} seconds{% endif %}</dd>
+  <dt class="col-sm-3 text-md-end">User’s session cookie</dt>
+  <dd class="col-sm-9">
     {% if login_session_expire_at_browser_close %}
     The user’s session cookie will expire when the user’s Web browser is closed.
     {% else %}
@@ -42,21 +42,21 @@
 <p class="text-danger">{{ error }}</p>
 {% endif %}
 
-<dl class="dl-horizontal">
-  <dt>Username</dt>
-  <dd>{{ realm_user.username }}</dd>
-  <dt>Email</dt>
-  <dd>{{ realm_user.email|default:"-" }}</dd>
-  <dt>First name</dt>
-  <dd>{{ realm_user.first_name|default:"-" }}</dd>
-  <dt>Last name</dt>
-  <dd>{{ realm_user.last_name|default:"-" }}</dd>
-  <dt>Full name</dt>
-  <dd>{{ realm_user.full_name|default:"-" }}</dd>
-  <dt>Custom attr. 1</dt>
-  <dd>{{ realm_user.custom_attr_1|default:"-" }}</dd>
-  <dt>Custom attr. 2</dt>
-  <dd>{{ realm_user.custom_attr_2|default:"-" }}</dd>
+<dl class="row">
+  <dt class="col-sm-3 text-md-end">Username</dt>
+  <dd class="col-sm-9">{{ realm_user.username }}</dd>
+  <dt class="col-sm-3 text-md-end">Email</dt>
+  <dd class="col-sm-9">{{ realm_user.email|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">First name</dt>
+  <dd class="col-sm-9">{{ realm_user.first_name|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Last name</dt>
+  <dd class="col-sm-9">{{ realm_user.last_name|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Full name</dt>
+  <dd class="col-sm-9">{{ realm_user.full_name|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Custom attr. 1</dt>
+  <dd class="col-sm-9">{{ realm_user.custom_attr_1|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Custom attr. 2</dt>
+  <dd class="col-sm-9">{{ realm_user.custom_attr_2|default:"-" }}</dd>
 </dl>
 
 {% if perms.auth.view_group %}
