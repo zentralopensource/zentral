@@ -12,12 +12,12 @@
 <h2>Delete manifest enrollment package</h2>
 <form method="POST" class="form">{% csrf_token %}
   <dl class="dl-horizontal">
-    <dt>Name</dt>
-    <dd>{{ manifest_enrollment_package.get_name }}<dd>
+    <dt class="col-sm-3 text-md-end">Name</dt>
+    <dd class="col-sm-9">{{ manifest_enrollment_package.get_name }}<dd>
     {% with manifest_enrollment_package.get_enrollment as enrollment %}
     {% if enrollment %}
-    <dt>Description</dt>
-    <dd><a href="{{ enrollment.get_absolute_url }}">{{ enrollment.get_description_for_distributor }}</a></dd>
+    <dt class="col-sm-3 text-md-end">Description</dt>
+    <dd class="col-sm-9"><a href="{{ enrollment.get_absolute_url }}">{{ enrollment.get_description_for_distributor }}</a></dd>
     {% endif %}
     {% endwith %}
   </dl>
