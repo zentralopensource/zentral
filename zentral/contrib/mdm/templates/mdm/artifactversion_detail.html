@@ -23,10 +23,8 @@
                 {% button 'UPDATE' url "Edit Scope" %}
             {% endif %}
             {% if artifact.type == "Profile" %}
-            <a href="{% url 'mdm:download_profile' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download">
-                <i class="bi bi-download" aria-hidden="true"></i>
-            </a>
+                {% url 'mdm:download_profile' object.pk as url %}
+                {% button 'DOWNLOAD' url "Download Profile" %}
             {% endif %}
             {% if perms.mdm.delete_artifactversion and object.can_be_deleted %}
                 {% url 'mdm:delete_artifact_version' artifact.pk object.pk as url %}

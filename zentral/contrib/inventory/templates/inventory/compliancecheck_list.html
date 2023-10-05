@@ -20,10 +20,8 @@
                 <i class="bi bi-tools"></i>
             </a>
         {% endif %}
-        <a href="{% url 'inventory:compliance_check_terraform_export' %}" class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download Terraform Config">
-            <i class="bi bi-download"></i>
-        </a>
+        {% url 'inventory:compliance_check_terraform_export' as url %}
+        {% button 'DOWNLOAD' url "Download Terraform config" %}
     </div>
 </div>
 

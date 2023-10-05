@@ -17,11 +17,8 @@
         {% button 'CREATE' url "Create new Configuration" %}
   {% endif %}
   {% if perms.santa.view_enrollment and perms.santa.view_rule %}
-        <a href="{% url 'santa:terraform_export' %}" type="button" 
-            class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download Terraform file">
-            <i class="bi bi-download"></i>
-        </a>
+        {% url 'santa:terraform_export' as url %}
+        {% button 'DOWNLOAD' url "Download Terraform config" %}
     </div>
   {% endif %}
 </div>

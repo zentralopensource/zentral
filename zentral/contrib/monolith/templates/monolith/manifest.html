@@ -70,7 +70,7 @@
         {% with enrollment.secret as secret %}
         {% with secret.tags.count as secret_tags_count %}
         {% with enrollment.distributor as distributor %}
-        <tr>
+        <tr class="data-row">
         <td>
             {% if secret_tags_count %}
             {% for tag in secret.tags.all %}
@@ -90,16 +90,12 @@
             -
             {% endif %}
         </td>
-        <td>
+        <td class="text-end py-0">
             {% if not distributor and not secret.is_used_up %}
-            <a class="btn btn-link text-decoration-none text-dark download-tool"
-                href="{% url 'monolith_api:enrollment_plist' enrollment.id %}">
-                <span class="bi bi-download" aria-hidden="true"></span> .plist
-            </a>
-            <a class="btn btn-link text-decoration-none text-dark download-tool"
-                href="{% url 'monolith_api:enrollment_configuration_profile' enrollment.id %}">
-                <span class="bi bi-download" aria-hidden="true"></span> .mobileconfig
-            </a>
+                {% url 'monolith_api:enrollment_plist' enrollment.id as url %}
+                {% button 'DOWNLOAD' url "Download .plist" %}
+                {% url 'monolith_api:enrollment_configuration_profile' enrollment.id as url %}
+                {% button 'DOWNLOAD' url "Download .mobileconfig" %}
             {% elif secret.is_used_up %}
             <span class="text-danger">Enrollment used up.</span>
             {% endif %}

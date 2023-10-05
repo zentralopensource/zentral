@@ -23,7 +23,6 @@
         <h4 id="results">Result{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h4>
         <button type="button" class="btn btn-link text-dark text-decoration-none dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
             <span class="bi bi-download" aria-hidden="true"></span>
-            <span class="caret"></span>
         </button>
         <ul class="dropdown-menu">
             {% for format, link in export_links %}

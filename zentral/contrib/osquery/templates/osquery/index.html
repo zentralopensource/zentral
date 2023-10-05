@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -8,7 +9,15 @@
 
 <div class="row">
   <div class="col-md-12">
-    <h2>Osquery</h2>
+    <div class="d-flex justify-content-between mb-3">
+        <h2>Osquery</h2>
+        <div class="ms-auto">
+            {% if show_terraform_export %}
+                {% url 'osquery:terraform_export' as url %}
+                {% button 'DOWNLOAD' url "Download Terraform config" %}
+            {% endif %}
+        </div>
+    </div>
   </div>
   <div class="col-sm-6">
     <canvas class="chart"
@@ -42,14 +51,6 @@
     {% endif %}
     {% if perms.osquery.view_filecategory %}
     <p><a href="{% url 'osquery:file_categories' %}">File categories</a></p>
-    {% endif %}
-    {% if show_terraform_export %}
-    <p>
-      <a href="{% url 'osquery:terraform_export' %}" class="btn btn-primary">
-        <span class="bi bi-download" aria-hidden="true"></span>
-        Terraform config
-      </a>
-    </p>
     {% endif %}
   </div>
 </div>

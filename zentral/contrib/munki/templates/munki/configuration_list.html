@@ -16,10 +16,8 @@
                 {% button 'CREATE' url "Create new Configuration" %}
             {% endif %}
             {% if perms.munki.view_enrollment %}
-            <a href="{% url 'munki:terraform_export' %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download Terraform config">
-                <i class="bi bi-download"></i>
-            </a>
+                {% url 'munki:terraform_export' as url %}
+                {% button 'DOWNLOAD' url "Create Terraform Configuration" %}
             {% endif %}
         </div>
     </div>

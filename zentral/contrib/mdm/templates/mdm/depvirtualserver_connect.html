@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -10,13 +11,9 @@
 
 <h2>Connect a DEP virtual server</h2>
 
-<p class="lead">1. Download the new public key</p>
-
-<p class="lead">
-  <a href="{% url 'mdm:download_dep_token_public_key' dep_token.pk %}" class="btn btn-primary">
-    <span class="bi bi-download" aria-hidden="true"></span>
-    Download public key
-  </a>
+<p class="lead">1. Download the new public key 
+    {% url 'mdm:download_dep_token_public_key' dep_token.pk as url %}
+    {% button 'DOWNLOAD' url "Download public key" %}
 </p>
 
 <p class="lead">2. Use it to replace the virtual server key in the DEP admin</p>

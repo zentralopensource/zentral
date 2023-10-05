@@ -37,10 +37,8 @@
     <td>{{ file_carving_session.block_seen }}/{{ file_carving_session.block_count }}</td>
     <td class="text-end py-0">
       {% if file_carving_session.archive %}
-      <a href="{% url 'osquery:download_file_carving_session_archive' file_carving_session.pk %}" class="btn btn-link text-dark text-decoration-none"
-      data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download">
-        <span class="bi bi-download" aria-hidden="true"></span>
-      </a>
+        {% url 'osquery:download_file_carving_session_archive' file_carving_session.pk as url %}
+        {% button 'DOWNLOAD' url "Download Session Archive" %}
       {% endif %}
   </tr>
   {% endfor %}

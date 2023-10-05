@@ -25,10 +25,8 @@
             {% button 'CREATE' url "Create new Manifest" %}
         {% endif %}
         {% if show_terraform_export %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:terraform_export' %}" type="button"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Export Terraform confing">
-            <i class="bi bi-download"></i>
-        </a>
+            {% url 'monolith:terraform_export' as url %}
+            {% button 'DOWNLOAD' url "Export Terraform confing" %}
         {% endif %}
     </div>
 </div>

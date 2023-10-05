@@ -64,6 +64,10 @@ ACTION = {
         'icon': "bi bi-activity",
         'tooltip': "Browse the Events",
     },
+    'DOWNLOAD': {
+        'icon': "bi bi-download",
+        'tooltip': "Download",
+    },
 }
 
 
