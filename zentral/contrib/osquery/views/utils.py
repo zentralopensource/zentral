@@ -46,6 +46,9 @@ def update_os_version(tree, t):
                 pass
             else:
                 return
+        elif "macos" in name:
+            if "patch" not in os_version:
+                os_version["patch"] = 0
         elif "windows" in name:
             os_version = cleanup_windows_os_version(os_version)
     if os_version.get("major"):

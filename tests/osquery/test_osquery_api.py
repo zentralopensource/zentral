@@ -229,11 +229,14 @@ class OsqueryAPIViewsTestCase(TestCase):
         missing_windows_build_data=False,
         unknown_windows_build=False,
         macos_os_version_name=None,
+        macos_os_version_empty_patch=False,
     ):
         if platform == "macos":
             qs = [d.copy() for d in INVENTORY_QUERY_SNAPSHOT]
             if macos_os_version_name is not None:
                 qs[0]["name"] = macos_os_version_name
+            if macos_os_version_empty_patch:
+                qs[0]["patch"] = ""
         elif platform == "windows":
             qs = [d.copy() for d in WIN_INVENTORY_QUERY_SNAPSHOT]
             if no_windows_build_data:
@@ -448,13 +451,32 @@ class OsqueryAPIViewsTestCase(TestCase):
         tree = {}
         snapshot = self.get_default_inventory_query_snapshot("macos")
         update_tree_with_inventory_query_snapshot(tree, snapshot)
-        self.assertEqual(tree["os_version"]["major"], 10)
+        self.assertEqual(
+            tree["os_version"],
+            {'build': '19H1824', 'major': 10, 'minor': 15, 'name': 'macOS', 'patch': 7}
+        )
 
     def test_os_version_numbers_cleanup(self):
         tree = {}
         snapshot = self.get_default_inventory_query_snapshot("macos", macos_os_version_name="macOS")
         update_tree_with_inventory_query_snapshot(tree, snapshot)
-        self.assertEqual(tree["os_version"]["major"], 10)
+        self.assertEqual(
+            tree["os_version"],
+            {'build': '19H1824', 'major': 10, 'minor': 15, 'name': 'macOS', 'patch': 7}
+        )
+
+    def test_os_version_numbers_empty_patch(self):
+        tree = {}
+        snapshot = self.get_default_inventory_query_snapshot(
+            "macos",
+            macos_os_version_name="macOS",
+            macos_os_version_empty_patch=True
+        )
+        update_tree_with_inventory_query_snapshot(tree, snapshot)
+        self.assertEqual(
+            tree["os_version"],
+            {'build': '19H1824', 'major': 10, 'minor': 15, 'name': 'macOS', 'patch': 0}
+        )
 
     def test_osx_app_instance_schedule(self):
         em = self.force_enrolled_machine()
