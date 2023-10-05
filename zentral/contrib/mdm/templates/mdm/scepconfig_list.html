@@ -13,9 +13,8 @@
     <h2 class="m-0">SCEP configuration{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
     <div class="ms-auto">
         {% if perms.mdm.add_scepconfig %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:create_scep_config' %}">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+            {% url 'mdm:create_scep_config' as url %}
+            {% button 'CREATE' url "Create new SCEP configuration" %}
         {% endif %}  
     </div>
 </div>

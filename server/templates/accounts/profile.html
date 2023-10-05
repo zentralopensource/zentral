@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <nav aria-label="breadcrumb">
@@ -35,9 +36,8 @@
         <td>
             {% if user.api_token %}
             yes
-            <a href="{% url 'accounts:delete_user_api_token' user.pk %}" class="btn btn-link text-dark text-decoration-noner">
-            <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+            {% url 'accounts:delete_user_api_token' user.pk as url %}
+            {% button 'DELETE' url "Delete API Token" %}
             {% else %}
             <form method="post" action="{% url 'accounts:create_user_api_token' user.pk %}">{% csrf_token %}
             no

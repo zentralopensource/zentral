@@ -28,9 +28,8 @@
         </form>
     {% if perms.probes.add_probesource %}
         <div class="ms-auto">
-            <a href="{% url 'probes:create' %}" class="btn btn-link text-decoration-none text-dark" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+            {% url 'probes:create' as url %}
+            {% button 'CREATE' url "Create new Probe" %}
         </div>
     {% endif %}
     </div>
@@ -40,7 +39,7 @@
     {% pagination next_url previous_url %}
 
     <div class="table-reponsive mb-3">
-    <table class="table table-light table-striped align-middle table-hover">
+    <table class="table table-light table-striped align-middle">
         <thead>
         <th>Model</th>
         <th>Events</th>

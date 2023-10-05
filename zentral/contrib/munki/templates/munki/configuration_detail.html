@@ -18,10 +18,8 @@
         <h3 class="m-0 fs-5 text-secondary">Configuration</h3>
         <div class="ms-auto">
             {% if perms.munki.change_configuration %}
-            <a href="{% url 'munki:update_configuration' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'munki:update_configuration' object.pk as url %}
+                {% button 'UPDATE' url "Edit Configuration" %}
             {% endif %}
         </div>
     </div>
@@ -85,9 +83,8 @@
     <h3>Enrollment{{ enrollment_count|pluralize }} ({{ enrollment_count }})</h3>
     <div class="ms-auto">            
         {% if perms.munki.add_enrollment %}
-        <a href="{% url 'munki:create_enrollment' object.id %}" type="button" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Enrollment">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+            {% url 'munki:create_enrollment' object.id as url %}
+            {% button 'CREATE' url "Create new Enrollment" %}
         {% endif %}
     </div>
 </div>
@@ -153,10 +150,8 @@
             </a>
             {% endif %}
             {% if perms.munki.delete_enrollment %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'munki:delete_enrollment' configuration.pk enrollment.pk %}">
-                <span class="bi bi-trash" aria-hidden="true"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Enrollment"></span>
-            </a>
+                {% url 'munki:delete_enrollment' configuration.pk enrollment.pk as url %}
+                {% button 'DELETE' url "Delete Enrollment" %}
             {% endif %}
             <a class="btn btn-link text-dark text-decoration-none"
                 aria-label="Download macOS enrollment package"

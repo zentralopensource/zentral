@@ -16,16 +16,12 @@
         <h3 class="m-0 fs-5 text-secondary">Catalog</h3>
         <div class="ms-auto">
             {% if not object.archived_at and perms.monolith.change_catalog %}
-                <a class="btn btn-link text-dark text-decoration-none" href="{% url edit_catalog_view object.pk %}"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit catalog">
-                    <i class="bi bi-pencil-square" aria-hidden="true"></i>
-                </a>
+                {% url edit_catalog_view object.pk as url %}
+                {% button 'UPDATE' url "Edit Catalog View" %}
             {% endif %}
             {% if object.can_be_deleted and perms.monolith.delete_catalog %}
-                <a class="btn btn-link text-dark text-decoration-none" href="{% url 'monolith:delete_catalog' object.pk %}"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete catalog">
-                    <i class="bi bi-trash" aria-hidden="true"></i>
-                </a>
+                {% url 'monolith:delete_catalog' object.pk as url %}
+                {% button 'DELETE' url "Delete Catalog" %}
             {% endif %}
         </div>
     </div>

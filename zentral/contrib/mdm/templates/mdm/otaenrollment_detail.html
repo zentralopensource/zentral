@@ -18,10 +18,8 @@
         <div class="ms-auto">
             {% if not secret.is_revoked %}
                 {% if perms.mdm.change_otaenrollment %}
-                <a href="{% url 'mdm:update_ota_enrollment' object.pk %}" class="btn btn-link text-decoration-none text-dark"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                    <i class="bi bi-pencil-square" aria-hidden="true"></i>
-                </a>
+                    {% url 'mdm:update_ota_enrollment' object.pk as url %}
+                    {% button 'UPDATE' url "Edit OTA Enrollment" %}
                 {% endif %}
                 {% if not object.realm %}
                 <a href="{% url 'mdm:download_profile_service_payload' object.pk %}" class="btn btn-link text-decoration-none text-dark"

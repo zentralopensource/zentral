@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <nav aria-label="breadcrumb">
@@ -13,10 +14,8 @@
 
     <div class="ms-auto">
         {% if perms.auth.add_group %}
-        <a href="{% url 'accounts:create_group' %}" class="btn btn-link text-dark text-decoration-none" type="button"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create Group">
-            <span class="bi bi-plus-circle" aria-hidden="true"></span>
-        </a>
+            {% url 'accounts:create_group' as url %}
+            {% button 'CREATE' url "Create new Group" %}
         {% endif %}
     </div>
 </div>
@@ -55,16 +54,12 @@
         {% endif %}
         <td class="text-end py-0">
             {% if perms.auth.change_group %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'accounts:update_group' group.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Group">
-            <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+                {% url 'accounts:update_group' group.pk as url %}
+                {% button 'UPDATE' url "Edit Group" %}
             {% endif %}
             {% if perms.auth.delete_group %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'accounts:delete_group' group.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Group">
-            <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+                {% url 'accounts:delete_group' group.pk as url %}
+                {% button 'DELETE' url "Delete Group" %}
             {% endif %}
         </td>
         </tr>

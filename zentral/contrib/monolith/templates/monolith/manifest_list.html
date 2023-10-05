@@ -21,10 +21,8 @@
     </form>
     <div class="ms-auto">
         {% if perms.monolith.add_manifest %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:create_manifest' %}" type="button"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Manifest">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'monolith:create_manifest' as url %}
+            {% button 'CREATE' url "Create new Manifest" %}
         {% endif %}
         {% if show_terraform_export %}
         <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:terraform_export' %}" type="button"

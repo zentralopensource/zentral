@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -14,11 +15,8 @@
         <div class="ms-3">
             {% if show_events_link or store_links %}
             {% if show_events_link %}
-                <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:pkg_info_name_events' object.pk %}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-activity" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd" d="M6 2a.5.5 0 0 1 .47.33L10 12.036l1.53-4.208A.5.5 0 0 1 12 7.5h3.5a.5.5 0 0 1 0 1h-3.15l-1.88 5.17a.5.5 0 0 1-.94 0L6 3.964 4.47 8.171A.5.5 0 0 1 4 8.5H.5a.5.5 0 0 1 0-1h3.15l1.88-5.17A.5.5 0 0 1 6 2Z"></path>
-                    </svg>
-                </a>
+                {% url 'monolith:pkg_info_name_events' object.pk as url %}
+                {% button 'EVENTS' url %}
             {% endif %}
             {% for link, anchor_text in store_links  %}
                 <a class="btn btn-link text-decoration-none text-dark" href="{{ link }}">
@@ -35,7 +33,6 @@
                     <button class="btn btn-link text-decoration-none text-dark dropdown-toggle" type="button" id="pkgInfoAdd"
                             data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
                         <i class="bi bi-plus-circle"></i>
-                        <span class="caret"></span>
                     </button>
                     <ul class="dropdown-menu" aria-labelledby="pkgInfoAdd">
                     {% if perms.monolith.add_pkginfo %}
@@ -44,9 +41,8 @@
                     </ul>
             {% endif %}
             {% if perms.monolith.delete_pkginfo and object.can_be_deleted %}
-                <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_pkg_info_name' object.pk %}">
-                    <span class="bi bi-trash" aria-hidden="true"></span>
-                </a>
+                {% url 'monolith:delete_pkg_info_name' object.pk as url %}
+                {% button 'DELETE' url "Delete Package Info" %}
             {% endif %}
         </div>
     </div>
@@ -138,9 +134,8 @@
         </a>
         {% endif %}
         {% if perms.monolith.delete_pkginfo %}
-        <a class="btn btn-danger" href="{% url 'monolith:delete_pkg_info' pkg_info.pk %}">
-          <span class="bi bi-trash" aria-hidden="true"></span>
-        </a>
+            {% url 'monolith:delete_pkg_info' pkg_info.pk as url %}
+            {% button 'DELETE' url "Delete Package Info" %}
         {% endif %}
         {% else %}
         {% if perms.monolith.change_pkginfo and manual_catalog_management %}

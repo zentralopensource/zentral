@@ -21,10 +21,8 @@
     </form>
     {% if perms.monolith.add_submanifest %}
     <div class="ms-auto">
-        <a href="{% url 'monolith:create_sub_manifest' %}"  class="btn btn-link text-decoration-none text-dark"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+        {% url 'monolith:create_sub_manifest' as url %}
+        {% button 'CREATE' url "Create new Sub Manifest" %}
     </div>
     {% endif %}
 </div>
@@ -63,16 +61,12 @@
         <td>{{ sub_manifest.description|default:"-"|urlize|linebreaksbr }}</td>
         <td class="text-end py-0">
             {% if perms.monolith.change_submanifest %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:update_sub_manifest' sub_manifest.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Sub Manifest">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'monolith:update_sub_manifest' sub_manifest.pk as url %}
+                {% button 'UPDATE' url "Edit Sub Manifest" %}
             {% endif %}
             {% if sub_manifest.can_be_deleted and perms.monolith.delete_submanifest %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_sub_manifest' sub_manifest.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Sub Manifest">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'monolith:delete_sub_manifest' sub_manifest.pk as url %}
+                {% button 'DELETE' url "Delete Sub Manifest" %}
             {% endif %}
         </td>
         </tr>

@@ -16,25 +16,20 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Jamf Instance</h3>
         <div class="ms-auto">
-            <a href="{{ object.api_doc_url }}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="API resource documentation">
-                <i class="bi bi-link"></i>
-            </a>
+            {% url 'jamf:delete_jamf_instance' object.pk as url %}
+            {% button 'LINK' object.api_doc_url "API resource documentation" %}
+
             {% if perms.jamf.change_jamfinstance %}
             <a href="{% url 'jamf:setup_jamf_instance' object.pk %}" class="btn btn-link text-dark text-decoration-none"
                 data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Setup webhooks">
                 <i class="bi bi-arrow-left-right"></i>
             </a>
-            <a href="{% url 'jamf:update_jamf_instance' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'jamf:update_jamf_instance' object.pk as url %}
+                {% button 'UPDATE' url "Edit Instance" %}
             {% endif %}
             {% if perms.jamf.delete_jamfinstance %}
-            <a href="{% url 'jamf:delete_jamf_instance' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'jamf:delete_jamf_instance' object.pk as url %}
+                {% button 'DELETE' url "Delete Instance" %}
             {% endif %}
         </div>
     </div>
@@ -110,10 +105,8 @@
     <h3>Tag config{{  tag_config_count|pluralize }} ({{ tag_config_count }})</h3>
     <div class="ms-auto">            
         {% if perms.jamf.add_tagconfig %}
-        <a href="{% url 'jamf:create_tag_config' object.pk %}" type="button" class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Tag Config">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+            {% url 'jamf:create_tag_config' object.pk as url %}
+            {% button 'CREATE' url "Add new Tag Config" %}
         {% endif %}
     </div>
 </div>
@@ -140,18 +133,14 @@
         <td>{{ tag_config.regex }}</td>
         <td>{{ tag_config.replacement }}</td>
         {% if perms.jamf.change_tagconfig or perms.jamf.delete_tagconfig %}
-        <td>
+        <td class="text-end py-0">
             {% if perms.jamf.change_tagconfig %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'jamf:update_tag_config' object.pk tag_config.pk %}">
-                <span class="bi bi-pencil-square" aria-hidden="true"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit"></span>
-            </a>
+                {% url 'jamf:update_tag_config' object.pk tag_config.pk  as url %}
+                {% button 'UPDATE' url "Edit Tag Configuration" %}
             {% endif %}
             {% if perms.jamf.delete_tagconfig %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'jamf:delete_tag_config' object.pk tag_config.pk %}">
-                <span class="bi bi-trash" aria-hidden="true"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete"></span>
-            </a>
+                {% url 'jamf:delete_tag_config' object.pk tag_config.pk as url %}
+                {% button 'DELETE' url "Delete Tag Configuration" %}
             {% endif %}
         </td>
         {% endif %}

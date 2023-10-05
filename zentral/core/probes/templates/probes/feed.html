@@ -18,16 +18,12 @@
         {% if perms.probes.update_feed or perms.probes.delete_feed %}
         <div class="ms-auto">
             {% if perms.probes.change_feed %}
-            <a href="{% url 'probes:update_feed' feed.id %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'probes:update_feed' feed.id as url %}
+                {% button 'UPDATE' url "Edit Feed" %}
             {% endif %}
             {% if perms.probes.delete_feed %}
-            <a href="{% url 'probes:delete_feed' feed.id %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'probes:delete_feed' feed.id as url %}
+                {% button 'DELETE' url "Delete Feed" %}
             {% endif %}
         </div>
         {% endif %}

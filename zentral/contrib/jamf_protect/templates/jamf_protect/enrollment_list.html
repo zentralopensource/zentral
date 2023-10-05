@@ -11,15 +11,13 @@
 <div class="d-flex align-items-center mb-1">
     <h2 class="m-0">Jamf Protect enrollment{{enrollments_count|pluralize}} ({{ enrollments_count }})</h2>
     <div class="ms-auto">
-        <a href="{% url 'jamf_protect:create_enrollment' %}" class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+        {% url 'jamf_protect:create_enrollment' as url %}
+        {% button 'CREATE' url "Create new Enrollment" %}
     </div>
 </div>
 
 {% if enrollments_count %}
-    <table class="table table-light table-striped align-middle object-details">
+    <table class="table table-light table-striped align-middle">
     <thead>
         <tr>
         <th>Business unit</th>

@@ -16,10 +16,8 @@
         <h3 class="m-0 fs-5 text-secondary">Manifest</h3>
         <div class="ms-auto">
             {% if perms.monolith.change_manifest %}
-                <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:update_manifest' object.id %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Rename">
-                <i class="bi bi-pencil-square"></i>
-                </a>
+                {% url 'monolith:update_manifest' object.id as url %}
+                {% button 'UPDATE' url "Edit Manifest" %}
             {% endif %}
         </div>
     </div>
@@ -52,10 +50,8 @@
     <h3>Enrollment{{ enrollments|length|pluralize }} ({{ enrollments|length }})</h3>
     <div class="ms-auto">
         {% if perms.monolith.add_enrollment %}
-          <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:add_manifest_enrollment' object.id %}"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Enrollment">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'monolith:add_manifest_enrollment' object.id as url %}
+            {% button 'CREATE' url "Add new Enrollment" %}
         {% endif %}
     </div>
 </div>
@@ -123,10 +119,8 @@
         <h3 id="catalogs">Catalog{{ manifest_catalogs|length|pluralize }} ({{ manifest_catalogs|length }})</h3>
         <div class="ms-auto">
             {% if perms.monolith.add_manifestcatalog %}
-                <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:add_manifest_catalog' object.id %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Catalog">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+                {% url 'monolith:add_manifest_catalog' object.id as url %}
+                {% button 'CREATE' url "Add new Catalog" %}
             {% endif %}
         </div>
     </div>
@@ -158,16 +152,12 @@
         {% if perms.monolith.change_manifestcatalog or perms.monolith.delete_manifestcatalog %}
         <td class="text-end py-0">
             {% if perms.monolith.change_manifestcatalog %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:edit_manifest_catalog' object.id manifest_catalog.catalog.id %}"
-                aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Manifest Catalog">
-                <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+                {% url 'monolith:edit_manifest_catalog' object.id manifest_catalog.catalog.id as url %}
+                {% button 'UPDATE' url "Edit Manifest Catalog" %}
             {% endif %}
             {% if perms.monolith.delete_manifestcatalog %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_manifest_catalog' object.id manifest_catalog.catalog.id %}"
-                aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Manifest Catalog">
-                <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+                {% url 'monolith:delete_manifest_catalog' object.id manifest_catalog.catalog.id as url %}
+                {% button 'DELETE' url "Delete Manifest Catalog" %}
             {% endif %}
         </td>
         {% endif %}
@@ -186,7 +176,6 @@
             <button class="btn btn-link text-decoration-none text-dark dropdown-toggle" type="button" id="addEnrollmentPackage"
                     data-bs-toggle="dropdown" aria-expanded="false">
                 <i class="bi bi-plus-circle"></i>
-                <span class="caret"></span>
             </button>
             <ul class="dropdown-menu" aria-labelledby="addEnrollmentPackage">
                 {% for link, anchor_text in add_enrollment_package_links %}
@@ -236,16 +225,12 @@
       {% if perms.monolith.change_manifestenrollmentpackage or perms.monolith.delete_manifestenrollmentpackage %}
       <td class="text-end py-0">
         {% if perms.monolith.change_manifestenrollmentpackage %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:update_manifest_enrollment_package' object.id manifest_enrollment_package.id %}"
-            aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Enrollment Package">
-            <i class="bi bi-pencil-square"></i>
-        </a>
+            {% url 'monolith:update_manifest_enrollment_package' object.id manifest_enrollment_package.id as url %}
+            {% button 'UPDATE' url "Edit Enrollment Package" %}
         {% endif %}
         {% if perms.monolith.delete_manifestenrollmentpackage %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_manifest_enrollment_package' object.id manifest_enrollment_package.id %}"
-            aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Enrollment Package">
-          <i class="bi bi-trash" aria-hidden="true"></i>
-        </a>
+            {% url 'monolith:delete_manifest_enrollment_package' object.id manifest_enrollment_package.id as url %}
+            {% button 'DELETE' url "Delete Enrollment Package" %}
         {% endif %}
       </td>
       {% endif %}
@@ -261,10 +246,8 @@
         <h3 id="submanifests">Sub manifest{{ manifest_sub_manifests|length|pluralize }} ({{ manifest_sub_manifests|length }})</h3>
         <div class="ms-auto">
             {% if perms.monolith.add_manifestsubmanifest %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:add_manifest_sub_manifest' object.id %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Sub Manifest">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+                {% url 'monolith:add_manifest_sub_manifest' object.id as url %}
+                {% button 'CREATE' url "Add new Sub Manifest" %}
             {% endif %}
         </div>
     </div>
@@ -300,16 +283,12 @@
         {% if perms.monolith.change_manifestsubmanifest or perms.monolith.delete_manifestsubmanifest %}
         <td class="text-end py-0">
             {% if perms.monolith.change_manifestsubmanifest %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:edit_manifest_sub_manifest' object.id sub_manifest.id %}"
-                aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Sub Manifest">
-                <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+                {% url 'monolith:edit_manifest_sub_manifest' object.id sub_manifest.id as url %}
+                {% button 'UPDATE' url "Edit Sub Manifest" %}
             {% endif %}
             {% if perms.monolith.delete_manifestsubmanifest %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_manifest_sub_manifest' object.id sub_manifest.id %}"
-                aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Sub Manifest">
-                <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+                {% url 'monolith:delete_manifest_sub_manifest' object.id sub_manifest.id as url %}
+                {% button 'DELETE' url "Delete Sub Manifest" %}
             {% endif %}
         </td>
         {% endif %}

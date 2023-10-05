@@ -17,16 +17,12 @@
         <h3 class="m-0 fs-5 text-secondary">MDM blueprint</h3>
         <div class="ms-auto">
             {% if perms.mdm.change_blueprint %}
-            <a href="{% url 'mdm:update_blueprint' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'mdm:update_blueprint' object.pk as url %}
+                {% button 'UPDATE' url "Edit Blueprint" %}
             {% endif %}
             {% if perms.mdm.delete_blueprint and object.can_be_deleted %}
-            <a href="{% url 'mdm:delete_blueprint' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'mdm:delete_blueprint' object.pk as url %}
+                {% button 'DELETE' url "Delete Blueprint" %}
             {% endif %}
         </div>
     </div>

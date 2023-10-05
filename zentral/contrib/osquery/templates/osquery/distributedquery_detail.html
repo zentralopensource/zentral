@@ -18,14 +18,12 @@
         <h3 class="m-0 fs-5 text-secondary">Run</h3>
         <div class="ms-auto">
             {% if perms.osquery.change_distributedquery %}
-                <a href="{% url 'osquery:update_distributed_query' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                    <i class="bi bi-pencil-square"></i>
-                </a>
+                {% url 'osquery:update_distributed_query' object.id as url %}
+                {% button 'UPDATE' url "Edit Distributed Query" %}
             {% endif %}
             {% if perms.osquery.delete_distributedquery %}
-                <a href="{% url 'osquery:delete_distributed_query' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                    <i class="bi bi-trash"></i>
-                </a>
+                {% url 'osquery:delete_distributed_query' object.id as url %}
+                {% button 'DELETE' url "Delete Distributed Query" %}
             {% endif %}
         </div>
     </div>

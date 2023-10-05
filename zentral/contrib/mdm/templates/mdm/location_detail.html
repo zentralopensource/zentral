@@ -17,16 +17,12 @@
         <h3 class="m-0 fs-5 text-secondary">Location</h3>
         <div class="ms-auto">
             {% if perms.mdm.change_location %}
-                <a href="{% url 'mdm:update_location' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                    <i class="bi bi-pencil-square"></i>
-                </a>
+                {% url 'mdm:update_location' object.pk as url %}
+                {% button 'UPDATE' url "Edit Location" %}
             {% endif %}
-            {% if perms.mdm.delete_location %}
-                <a class="btn btn-link text-dark text-decoration-none {% if not object.can_be_deleted %} disabled{% endif %}" href="{% url 'mdm:delete_location' object.pk %}"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                    <i class="bi bi-trash"></i>
-                </a>
+            {% if perms.mdm.delete_location and object.can_be_deleted %}
+                {% url 'mdm:delete_location' object.pk as url %}
+                {% button 'DELETE' url "Delete Location" %}
             {% endif %}
         </div>
     </div>

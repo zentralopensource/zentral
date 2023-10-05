@@ -12,10 +12,8 @@
     <h3 class="m-0">Microsoft Intune Inventory Tenant{{ tenant_count|pluralize }} ({{ tenant_count }})</h3>
     <div class="ms-auto">
         {% if perms.intune.add_tenant %}
-        <a href="{% url 'intune:create_tenant' %}" type="button" class="btn btn-link text-decoration-none text-dark"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new tenant">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'intune:create_tenant' as url %}
+            {% button 'CREATE' url "Add new Tenant" %}
         {% endif %}
     </div>
 </div>
@@ -40,10 +38,8 @@
       <td>{{ tenant.business_unit }}</td>
       {% if perms.intune.change_tenant %}
       <td class="text-end py-0">
-        <a href="{% url 'intune:update_tenant' tenant.pk %}" class="btn btn-link text-decoration-none text-dark"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-            <i class="bi bi-pencil-square" aria-hidden="true"></i>
-        </a>
+        {% url 'intune:update_tenant' tenant.pk as url %}
+        {% button 'UPDATE' url "Edit Tenant" %}
       </td>
       {% endif %}
     </tr>

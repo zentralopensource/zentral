@@ -19,10 +19,8 @@
         <h3 class="m-0 fs-5 text-secondary">Artifact version</h3>
         <div class="ms-auto">
             {% if perms.mdm.change_artifactversion %}
-            <a href="{% url 'mdm:update_artifact_version' artifact.pk object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Update Scope">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'mdm:update_artifact_version' artifact.pk object.pk as url %}
+                {% button 'UPDATE' url "Edit Scope" %}
             {% endif %}
             {% if artifact.type == "Profile" %}
             <a href="{% url 'mdm:download_profile' object.pk %}" class="btn btn-link text-dark text-decoration-none"
@@ -31,10 +29,8 @@
             </a>
             {% endif %}
             {% if perms.mdm.delete_artifactversion and object.can_be_deleted %}
-            <a href="{% url 'mdm:delete_artifact_version' artifact.pk object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+                {% url 'mdm:delete_artifact_version' artifact.pk object.pk as url %}
+                {% button 'DELETE' url "Delete Artifact Version" %}
             {% endif %}
         </div>
     </div>

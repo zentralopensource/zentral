@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load inventory_extras inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -46,24 +46,12 @@
             {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
             <td class="text-end py-0">
             {% if perms.inventory.change_tag %}
-                <a type="button"
-                    href="{% url 'inventory:update_tag' tag.id %}"
-                    class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="bottom"
-                    data-bs-title="Edit">
-                    <i class="bi bi-pencil-square"></i>
-                </a>
+                {% url 'inventory:update_tag' tag.id as url %}
+                {% button 'UPDATE' url "Edit Tag" %}
             {% endif %}
             {% if perms.inventory.delete_tag %}
-            <a type="button"
-                href="{% url 'inventory:delete_tag' tag.id %}"
-                class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip"
-                data-bs-placement="bottom"
-                data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'inventory:delete_tag' tag.id as url %}
+                {% button 'DELETE' url "Delete Tag" %}
             {% endif %}
             </td>
             {% endif %}
@@ -112,24 +100,12 @@
         {% if perms.inventory.change_taxonomy or perms.inventory.delete_taxonomy %}
         <td class="text-end py-0">
           {% if perms.inventory.change_taxonomy %}
-          <a type="button"
-                        href="{% url 'inventory:update_taxonomy' taxonomy.id %}"
-                        class="btn btn-link text-dark text-decoration-none"
-                        data-bs-toggle="tooltip"
-                        data-bs-placement="bottom"
-                        data-bs-title="Edit">
-                        <i class="bi bi-pencil-square"></i>
-          </a>
+            {% url 'inventory:update_taxonomy' taxonomy.id as url %}
+            {% button 'UPDATE' url "Edit Taxonomy" %}
           {% endif %}
           {% if perms.inventory.delete_taxonomy %}
-          <a type="button"
-                    href="{% url 'inventory:delete_taxonomy' taxonomy.id %}"
-                    class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="bottom"
-                    data-bs-title="Delete">
-                    <i class="bi bi-trash"></i>
-          </a>
+              {% url 'inventory:delete_taxonomy' taxonomy.id as url %}
+              {% button 'DELETE' url "Delete Taxonomy" %}
           {% endif %}
         </td>
         {% endif %}

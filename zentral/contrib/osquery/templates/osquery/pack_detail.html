@@ -18,17 +18,15 @@
         <h3 class="m-0 fs-5 text-secondary">Pack</h3>
         <div class="ms-auto">
             {% if perms.osquery.change_pack %}
-            <a href="{% url 'osquery:update_pack' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
-            <a href="{% url 'osquery:upload_pack' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Upload">
+                {% url 'osquery:update_pack' object.id as url %}
+                {% button 'UPDATE' url "Edit Pack" %}
+            <a href="{% url 'osquery:upload_pack' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Upload Pack">
                 <i class="bi bi-upload"></i>
             </a>
             {% endif %}
             {% if perms.osquery.delete_pack %}
-            <a href="{% url 'osquery:delete_pack' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'osquery:delete_pack' object.id as url %}
+                {% button 'DELETE' url "Delete Pack" %}
             {% endif %}
         </div>
     </div>
@@ -110,9 +108,8 @@
     <h2 class="m-0" id="queries">Scheduled quer{{ pack_query_count|pluralize:"y,ies" }} ({{ pack_query_count }})</h2>
     <div class="ms-auto">
         {% if can_add_pack_query %}
-        <a href="{% url 'osquery:add_pack_query' object.pk %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Scheduled Query">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'osquery:add_pack_query' object.pk as url %}
+            {% button 'CREATE' url "Create new Scheduled Query" %}
         {% endif %}
     </div>
 </div>
@@ -125,16 +122,12 @@
         <h3 class="m-0">{{ query }}</h3>
         <div class="ms-auto">
             {% if perms.osquery.change_packquery %}
-            <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_pack_query' object.pk pack_query.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Update Scheduled Query">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'osquery:update_pack_query' object.pk pack_query.pk as url %}
+                {% button 'UPDATE' url "Edit Scheduled Query" %}
             {% endif %}
             {% if perms.osquery.delete_packquery %}
-            <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:delete_pack_query' object.pk pack_query.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Scheduled Query">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'osquery:delete_pack_query' object.pk pack_query.pk as url %}
+                {% button 'DELETE' url "Delete Scheduled Query" %}
             {% endif %}
         </div>
     </div>

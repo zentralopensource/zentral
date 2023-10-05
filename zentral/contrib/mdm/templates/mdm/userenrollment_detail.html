@@ -17,10 +17,8 @@
         <h3 class="m-0 fs-5 text-secondary">[USER]</h3>
         <div class="ms-auto">
             {% if not secret.is_revoked %}
-            <a href="{% url 'mdm:update_user_enrollment' object.pk %}" class="btn btn-link text-decoration-none text-dark"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square" aria-hidden="true"></i>
-            </a>
+                {% url 'mdm:update_user_enrollment' object.pk as url %}
+                {% button 'UPDATE' url "Edit User Enrollment" %}
             {% endif %}
         </div>
     </div>

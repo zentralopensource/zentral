@@ -12,9 +12,8 @@
     <h2 class="m-0">MDM push certificate{{ object_list|length|pluralize }} ({{ object_list|length }})</h2>
     <div class="ms-auto">
         {% if perms.mdm.add_pushcertificate %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:add_push_certificate' %}">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+            {% url 'mdm:add_push_certificate' as url %}
+            {% button 'CREATE' url "Create new Push Certificate" %}
         {% endif %}  
     </div>
 </div>

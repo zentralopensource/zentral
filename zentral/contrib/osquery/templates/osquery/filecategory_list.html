@@ -13,11 +13,8 @@
     <h3 class="m-0">File categor{{ file_category_count|pluralize:"y,ies" }} ({{ file_category_count }})</h3>
     <div class="ms-auto">
     {% if perms.osquery.add_filecategory %}
-        <a href="{% url 'osquery:create_file_category' %}" type="button" 
-                class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new File Category">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+        {% url 'osquery:create_file_category' as url %}
+        {% button 'CREATE' url "Create new File Category" %}
     {% endif %}
     </div>
 </div>
@@ -40,10 +37,8 @@
             </td>
             {% if perms.osquery.change_filecategory %}
             <td class="text-end py-0">
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_file_category' file_category.id %}">
-                <span class="bi bi-pencil-square" aria-hidden="true"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit File Category"></span>
-            </a>
+                {% url 'osquery:update_file_category' file_category.id as url %}
+                {% button 'UPDATE' url "Edit File Category" %}
             </td>
             {% endif %}
         </tr>

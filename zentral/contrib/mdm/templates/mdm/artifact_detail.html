@@ -18,17 +18,12 @@
         <h3 class="m-0 fs-5 text-secondary">Artifact</h3>
         <div class="ms-auto">
             {% if perms.mdm.change_artifact %}
-            <a href="{% url 'mdm:update_artifact' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'mdm:update_artifact' object.pk as url %}
+                {% button 'UPDATE' url "Edit Artifact" %}
             {% endif %}
             {% if perms.mdm.delete_artifact and object.can_be_deleted %}
-            <a href="{% url 'mdm:delete_artifact' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <span class="bi bi-trash" aria-hidden="true"></span>
-                Delete
-            </a>
+                {% url 'mdm:delete_artifact' object.pk as url %}
+                {% button 'DELETE' url "Delete Artifact" %}
             {% endif %}
         </div>
     </div>
@@ -109,10 +104,7 @@
     <h3>Version{{ versions_count|pluralize }} ({{ versions_count }})</h3>
     <div class="ms-auto">            
         {% if upgrade_link %}
-        <a href="{{ upgrade_link }}" type="button" class="btn btn-link text-dark text-decoration-none" 
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Version">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% button 'CREATE' upgrade_link "Add new Version" %}
         {% endif %}
     </div>
 </div>
@@ -172,16 +164,12 @@
       </td>
       <td class="text-end py-0">
         {% if perms.mdm.change_artifactversion %}
-        <a href="{% url 'mdm:update_artifact_version' object.pk av.pk %}" class="btn btn-link text-decoration-none text-dark"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Update Version">
-          <span class="bi bi-pencil-square" aria-hidden="true"></span>
-        </a>
+            {% url 'mdm:update_artifact_version' object.pk av.pk as url %}
+            {% button 'UPDATE' url "Edit Version" %}
         {% endif %}
         {% if perms.mdm.delete_artifactversion and av.can_be_deleted %}
-        <a href="{% url 'mdm:delete_artifact_version' object.pk av.pk %}" class="btn btn-link text-decoration-none text-dark"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Version">
-          <span class="bi bi-trash" aria-hidden="true"></span>
-        </a>
+            {% url 'mdm:delete_artifact_version' object.pk av.pk as url %}
+            {% button 'DELETE' url "Delete Version" %}
         {% endif %}
       </td>
     </tr>
@@ -196,10 +184,8 @@
     <h3>Blueprint{{ blueprint_artifacts_count|pluralize }} ({{ blueprint_artifacts_count }})</h3>
     <div class="ms-auto">            
         {% if perms.mdm.add_blueprint %}
-        <a href="{% url 'mdm:create_blueprint_artifact' object.pk %}" type="button" class="btn btn-link text-dark text-decoration-none" 
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Blueprint">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'mdm:create_blueprint_artifact' object.pk as url %}
+            {% button 'CREATE' url "Add new Blueprint" %}
         {% endif %}
     </div>
 </div>
@@ -259,16 +245,12 @@
       </td>
       <td class="text-end py-0">
         {% if perms.mdm.change_blueprintartifact %}
-        <a href="{% url 'mdm:update_blueprint_artifact' object.pk ba.pk %}" class="btn btn-link text-decoration-none text-dark"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Blueprint">
-          <span class="bi bi-pencil-square" aria-hidden="true"></span>
-        </a>
+            {% url 'mdm:update_blueprint_artifact' object.pk ba.pk as url %}
+            {% button 'UPDATE' url "Edit Blueprint" %}
         {% endif %}
         {% if perms.mdm.delete_blueprintartifact %}
-        <a href="{% url 'mdm:delete_blueprint_artifact' object.pk ba.pk %}" class="btn btn-link text-decoration-none text-dark"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Blueprint">
-          <span class="bi bi-trash" aria-hidden="true"></span>
-        </a>
+            {% url 'mdm:delete_blueprint_artifact' object.pk ba.pk as url %}
+            {% button 'DELETE' url "Delete Blueprint" %}
         {% endif %}
       </td>
     </tr>

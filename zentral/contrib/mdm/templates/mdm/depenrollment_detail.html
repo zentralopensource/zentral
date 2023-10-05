@@ -21,10 +21,8 @@
                 <i class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
               </a>
               {% if perms.mdm.change_depenrollment %}
-              <a href="{% url 'mdm:update_dep_enrollment' object.pk %}" class="btn btn-link text-decoration-none text-dark"
-                  data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square" aria-hidden="true"></i>
-              </a>
+                {% url 'mdm:update_dep_enrollment' object.pk as url %}
+                {% button 'UPDATE' url "Edit DEP Enrollment" %}
               {% endif %}
         </div>
     </div>

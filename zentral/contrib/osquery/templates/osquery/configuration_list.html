@@ -14,11 +14,8 @@
     <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
     <div class="ms-auto">
     {% if perms.osquery.add_configuration %}
-        <a href="{% url 'osquery:create_configuration' %}" type="button" 
-                class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new configuration">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+        {% url 'osquery:create_configuration' as url %}
+        {% button 'CREATE' url "Create new Configuration" %}
     {% endif %}
     </div>
 </div>
@@ -41,10 +38,8 @@
                 </td>
                 {% if perms.osquery.change_configuration %}
                 <td class="text-end py-0">
-                <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_configuration' configuration.id %}">
-                    <span class="bi bi-pencil-square" aria-hidden="true"
-                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Configuration"></span>
-                </a>
+                    {% url 'osquery:update_configuration' configuration.id as url %}
+                    {% button 'UPDATE' url "Edit Configuration" %}
                 </td>
                 {% endif %}
             </tr>

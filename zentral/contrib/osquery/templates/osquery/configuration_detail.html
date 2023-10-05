@@ -18,10 +18,8 @@
         <h3 class="m-0 fs-5 text-secondary">Configuration</h3>
         <div class="ms-auto">
             {% if perms.osquery.change_configuration %}
-            <a href="{% url 'osquery:update_configuration' object.id %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'osquery:update_configuration' object.id as url %}
+                {% button 'UPDATE' url "Edit Configuration" %}
             {% endif %}
         </div>
     </div>
@@ -103,11 +101,8 @@
     <h3 class="m-0" id="packs">Pack{{ pack_count|pluralize }} ({{configuration_pack_count }})</h3>
     <div class="ms-auto">
     {% if perms.can_add_configuration_pack %}
-        <a href="{% url 'osquery:add_configuration_pack' object.id %}" type="button" 
-                class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Pack">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+        {% url 'osquery:add_configuration_pack' object.id as url %}
+        {% button 'CREATE' url "Create new Pack" %}
     {% endif %}
     </div>
 </div>
@@ -138,14 +133,10 @@
         </td>
         {% if perms.osquery.change_configuration %}
         <td class="text-end py-0">
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_configuration_pack' configuration.pk configuration_pack.pk %}">
-                <span class="bi bi-pencil-square" aria-hidden="true"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Pack"></span>
-            </a>
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:remove_configuration_pack' configuration.pk configuration_pack.pk %}">
-                <span class="bi bi-trash" aria-hidden="true"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Pack"></span>
-            </a>
+            {% url 'osquery:update_configuration_pack' configuration.pk configuration_pack.pk as url %}
+            {% button 'UPDATE' url "Edit Configuration Pack" %}
+            {% url 'osquery:remove_configuration_pack' configuration.pk configuration_pack.pk as url %}
+            {% button 'DELETE' url "Delete Configuration Pack" %}
         </td>
         {% endif %}
         </tr>
@@ -162,11 +153,8 @@
     <h3 class="m-0" id="packs">Enrollment{{ enrollments_count|pluralize }} ({{enrollments_count }})</h3>
     <div class="ms-auto">
         {% if perms.osquery.add_enrollment %}
-        <a href="{% url 'osquery:create_enrollment' object.id %}" type="button" 
-                class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Enrollment">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+            {% url 'osquery:create_enrollment' object.id as url %}
+            {% button 'CREATE' url "Create new Enrollment" %}
     {% endif %}
     </div>
 </div>
@@ -231,10 +219,8 @@
             </a>
             {% endif %}
             {% if perms.osquery.delete_enrollment %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:delete_enrollment' configuration.pk enrollment.pk %}">
-                <span class="bi bi-trash" aria-hidden="true"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Enrollment"></span>
-            </a>
+                {% url 'osquery:delete_enrollment' configuration.pk enrollment.pk as url %}
+                {% button 'DELETE' url "Delete Enrollment" %}
             {% endif %}
             <a class="btn btn-link text-dark text-decoration-none"
                 aria-label="Download macOS enrollment package"

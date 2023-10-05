@@ -17,17 +17,15 @@
     <h2 class="mb-3">Feed{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
 
     <div class="ms-auto">
-        <a href="{% url 'probes:create_feed' %}" class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create Feed">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'probes:create_feed' as url %}
+            {% button 'CREATE' url "Create new Feed" %}
     </div>
 </div>
 
 {% if object_list %}
     {% pagination next_url previous_url %}
 
-    <table class="table table-light table-striped align-middle table-hover">
+    <table class="table table-light table-striped align-middle">
         <thead>
         <th>Name</th>
         <th>Created at</th>

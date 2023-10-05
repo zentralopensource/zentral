@@ -242,14 +242,12 @@
     <div class="panel-footer">
         <div class="btn-group" role="group">
         {% if perms.santa.change_rule %}
-        <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'santa:update_configuration_rule' configuration.pk rule.pk %}">
-            <i class="bi bi-pencil-square"></i>
-        </a>
+            {% url 'santa:update_configuration_rule' configuration.pk rule.pk as url %}
+            {% button 'UPDATE' url "Edit Configuration" %}
         {% endif %}
         {% if perms.santa.delete_rule %}
-        <a type="button" class="btn btn-link text-dark text-decoration-none" href="{% url 'santa:delete_configuration_rule' configuration.pk rule.pk %}">
-            <i class="bi bi-trash"></i>
-        </a>
+            {% url 'santa:delete_configuration_rule' configuration.pk rule.pk as url %}
+            {% button 'DELETE' url "Delete Rule" %}
         {% endif %}
         </div>
     </div>

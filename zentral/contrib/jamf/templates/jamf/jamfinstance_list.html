@@ -11,9 +11,8 @@
     <h2 class="m-0">Jamf instance{{ jamf_instances_count|pluralize }} ({{ jamf_instances_count }})</h2>
     <div class="ms-auto">
         {% if perms.jamf.add_jamfinstance %}
-        <a href="{% url 'jamf:create_jamf_instance' %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'jamf:create_jamf_instance' as url %}
+            {% button 'CREATE' url "Create new Instance" %}
         {% endif %}
     </div>
 </div>
@@ -44,9 +43,8 @@
             </td>
             {% if perms.jamf.change_jamfinstance %}
             <td class="text-end py-0">
-                <a class="btn btn-link text-dark text-decoration-none" href="{% url 'jamf:update_jamf_instance' jamf_instance.pk %}">
-                    <span class="bi bi-pencil-square" aria-hidden="true"></span>
-                </a>
+                {% url 'jamf:update_jamf_instance' jamf_instance.pk as url %}
+                {% button 'UPDATE' url "Edit Instance" %}
             </td>
             {% endif %}
             </tr>

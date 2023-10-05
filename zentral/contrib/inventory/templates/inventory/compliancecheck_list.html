@@ -11,10 +11,8 @@
     <h2 class="mb-0">Compliance Check</h2>
     <div class="ms-auto">
         {% if perms.inventory.add_jmespathcheck %}
-            <a href="{% url 'inventory:create_compliance_check' %}" class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Compliance Check">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+            {% url 'inventory:create_compliance_check' as url %}
+            {% button 'CREATE' url "Create new Compliance Check" %}
         {% endif %}
         {% if perms.inventory.view_machinesnapshot %}
             <a href="{% url 'inventory:compliance_check_devtool' %}" class="btn btn-link text-dark text-decoration-none"

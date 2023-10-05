@@ -13,11 +13,8 @@
     <h3 class="m-0">Pack{{ pack_count|pluralize }} ({{ pack_count }})</h3>
     <div class="ms-auto">
     {% if perms.osquery.add_pack %}
-        <a href="{% url 'osquery:create_pack' %}" type="button" 
-                class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Pack">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+        {% url 'osquery:create_pack' as url %}
+        {% button 'CREATE' url "Create new Pack" %}
     {% endif %}
     </div>
 </div>
@@ -40,10 +37,8 @@
         </td>
         {% if perms.osquery.change_pack %}
         <td class="text-end py-0">
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_pack' pack.id %}">
-            <span class="bi bi-pencil-square" aria-hidden="true"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Pack"></span>
-            </a>
+            {% url 'osquery:update_pack' pack.id as url %}
+            {% button 'UPDATE' url "Edit Pack" %}
         </td>
         {% endif %}
         </tr>

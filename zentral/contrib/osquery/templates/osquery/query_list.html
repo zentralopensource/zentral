@@ -36,11 +36,8 @@
     </form>
     <div class="ms-auto">
         {% if perms.osquery.add_query %}
-            <a href="{% url 'osquery:create_query' %}" type="button" 
-                    class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Query">
-                    <i class="bi bi-plus-circle"></i>
-                </a>
+            {% url 'osquery:create_query' as url %}
+            {% button 'CREATE' url "Create new Query" %}
         {% endif %}
         </div>
 </div>

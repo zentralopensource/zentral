@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load inventory_extras %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -16,16 +17,12 @@
         <h3 class="m-0 fs-5 text-secondary">Sub manifest</h3>
         <div class="ms-auto">
             {% if perms.monolith.change_submanifest %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:update_sub_manifest' object.id %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Update">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'monolith:update_sub_manifest' object.id as url %}
+                {% button 'UPDATE' url "Edit Sub Manifest" %}
             {% endif %}
             {% if object.can_be_deleted and perms.monolith.delete_submanifest %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_sub_manifest' object.id %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'monolith:delete_sub_manifest' object.id as url %}
+                {% button 'DELETE' url "Delete Sub Manifest" %}
             {% endif %}
         </div>
     </div>
@@ -65,10 +62,8 @@
     <h3>Package{{ total.pkginfo|pluralize }} ({{ total.pkginfo }})</h3>
     <div class="ms-auto">
         {% if perms.monolith.add_submanifestpkginfo %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:sub_manifest_add_pkg_info' object.id %}"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Package">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'monolith:sub_manifest_add_pkg_info' as url %}
+            {% button 'CREATE' url "Create new Package" %}
         {% endif %}
     </div>
 </div>
@@ -139,16 +134,12 @@
         </td>
         <td class="text-end py-0">
         {% if smpi.pkg_info_name.has_active_pkginfos and perms.monolith.change_submanifestpkginfo %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:update_sub_manifest_pkg_info' object.id smpi.id %}"
-            aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Package">
-            <span class="bi bi-pencil-square" aria-hidden="true"></span>
-        </a>
+            {% url 'monolith:update_sub_manifest_pkg_info' object.id smpi.id as url %}
+            {% button 'UPDATE' url "Edit Package" %}
         {% endif %}
         {% if perms.monolith.delete_submanifestpkginfo %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_sub_manifest_pkg_info' object.id smpi.id %}"
-            aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Package">
-            <span class="bi bi-trash" aria-hidden="true"></span>
-        </a>
+            {% url 'monolith:delete_sub_manifest_pkg_info' object.id smpi.id as url %}
+            {% button 'DELETE' url "Delete Package" %}
         {% endif %}
         </td>
     </tr>

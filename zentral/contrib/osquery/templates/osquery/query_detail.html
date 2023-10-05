@@ -15,11 +15,7 @@
         <h2 class="m-0">{{ object.name }}</h2>
         <div class="ms-3">
             {% if events_url %}
-                <a type="button" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Browse the events" href="{{ events_url }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-activity" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd" d="M6 2a.5.5 0 0 1 .47.33L10 12.036l1.53-4.208A.5.5 0 0 1 12 7.5h3.5a.5.5 0 0 1 0 1h-3.15l-1.88 5.17a.5.5 0 0 1-.94 0L6 3.964 4.47 8.171A.5.5 0 0 1 4 8.5H.5a.5.5 0 0 1 0-1h3.15l1.88-5.17A.5.5 0 0 1 6 2Z"></path>
-                    </svg>
-                </a>
+                {% button 'EVENTS' events_url %}
             {% endif %}
             {% for link, anchor_text in store_links  %}
                 <a class="btn btn-link text-dark text-decoration-none" href="{{ link }}">
@@ -32,14 +28,12 @@
         <h3 class="m-0 fs-5 text-secondary">Query</h3>
         <div class="ms-auto">
             {% if perms.osquery.change_query %}
-            <a href="{% url 'osquery:update_query' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'osquery:update_query' object.id as url %}
+                {% button 'UPDATE' url "Edit Query" %}
             {% endif %}
             {% if perms.osquery.delete_query %}
-            <a href="{% url 'osquery:delete_query' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'osquery:delete_query' object.id as url %}
+                {% button 'DELETE' url "Delete Query" %}
             {% endif %}
         </div>
     </div>

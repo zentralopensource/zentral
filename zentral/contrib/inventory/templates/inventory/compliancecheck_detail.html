@@ -13,11 +13,8 @@
         <h2 class="m-0">{{ compliance_check.name }}</h2>
         <div class="ms-3">
             {% if show_events_link %}
-            <a type="button" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Browse the events" href="{% url 'inventory:compliance_check_events' object.pk %}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-activity" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M6 2a.5.5 0 0 1 .47.33L10 12.036l1.53-4.208A.5.5 0 0 1 12 7.5h3.5a.5.5 0 0 1 0 1h-3.15l-1.88 5.17a.5.5 0 0 1-.94 0L6 3.964 4.47 8.171A.5.5 0 0 1 4 8.5H.5a.5.5 0 0 1 0-1h3.15l1.88-5.17A.5.5 0 0 1 6 2Z"></path>
-                </svg>
-            </a>
+                {% url 'inventory:compliance_check_events' object.pk as url %}
+                {% button 'EVENTS' url %}
             {% endif %}
             {% for link, anchor_text in store_links  %}
             <a href="{{ link }}" class="btn btn-link text-dark text-decoration-none"
@@ -31,10 +28,8 @@
         <h3 class="m-0 fs-5 text-secondary">Compliance check</h3>
         <div class="ms-auto">
             {% if perms.inventory.update_jmespathcheck %}
-            <a href="{% url 'inventory:update_compliance_check' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'inventory:update_compliance_check' object.pk as url %}
+                {% button 'UPDATE' url "Edit Compliance Check" %}
             {% endif %}
             {% if devtool_link %}
             <a href="{{ devtool_link }}" class="btn btn-link text-dark text-decoration-none"
@@ -43,10 +38,8 @@
             </a>
             {% endif %}
             {% if perms.inventory.delete_jmespathcheck %}
-            <a href="{% url 'inventory:delete_compliance_check' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'inventory:delete_compliance_check' object.pk as url %}
+                {% button 'DELETE' url "Delete Compliance Check" %}
             {% endif %}
         </div>
     </div>

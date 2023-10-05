@@ -38,11 +38,10 @@
     <div class="ms-auto">
         {% if perms.mdm.add_artifact %}
         <div class="dropdown">
-          <button class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="addArtifact"
+          <a class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="addArtifact"
                 data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
                 <i class="bi bi-plus-circle"></i>
-                <span class="caret"></span>  
-          </button>
+          </a>
           <ul class="dropdown-menu" aria-labelledby="addArtifact">
             <li><a class="dropdown-item" href="{% url 'mdm:upload_enterprise_app' %}">Enterprise app</a></li>
             <li><a class="dropdown-item" href="{% url 'mdm:upload_profile' %}">Profile</a></li>

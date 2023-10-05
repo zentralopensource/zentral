@@ -13,11 +13,8 @@
     <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
     <div class="ms-auto">
   {% if perms.santa.add_configuration %}
-        <a href="{% url 'santa:create_configuration' %}" type="button" 
-            class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new configuration">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+        {% url 'santa:create_configuration' as url %}
+        {% button 'CREATE' url "Create new Configuration" %}
   {% endif %}
   {% if perms.santa.view_enrollment and perms.santa.view_rule %}
         <a href="{% url 'santa:terraform_export' %}" type="button" 

@@ -29,15 +29,13 @@
             </button>
         </form>
     </div>
-    <div class="ms-auto">
+    <div class="ms-auto mb-2 pt-2">
     {% if perms.inventory.add_metabusinessunit %}
-        <a type="button" href="{% url 'inventory:create_mbu' %}" class="btn btn-link text-dark text-decoration-none mb-2"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Business Unit">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+        {% url 'inventory:create_mbu' as url %}
+        {% button 'CREATE' url "Create new Business Unit" %}
     {% endif %}
     {% if perms.inventory.change_metabusinessunit %}
-        <button form="merge_form" type="submit" disabled id="merge-btn-container" class="btn btn-link text-dark text-decoration-none mb-2"
+        <button form="merge_form" type="submit" disabled id="merge-btn-container" class="btn btn-link text-dark text-decoration-none"
             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Merge Business Units">
             <i class="bi text-dark bi-sign-merge-left"></i>
         </button>
@@ -101,16 +99,12 @@
                         </a>
                     {% endif %}
                     {% if perms.mbu.change_metabusinessunit %}
-                    <a class="btn btn-link text-decoration-none text-dark" href="{% url 'inventory:update_mbu' mbu.pk %}"
-                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Business Unit">
-                        <i class="bi bi-pencil-square"></i>
-                    </a>
+                        {% url 'inventory:update_mbu' mbu.pk as url %}
+                        {% button 'UPDATE' url "Edit Business Unit" %}
                     {% endif %}
                     {% if mbu.can_be_deleted and perms.inventory.delete_metabusinessunit %}
-                    <a class="btn btn-link text-decoration-none text-dark" href="{% url 'inventory:delete_mbu' mbu.pk %}"
-                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Business Unit">
-                        <i class="bi bi-trash"></i>
-                    </a>
+                        {% url 'inventory:delete_mbu' mbu.pk as url %}
+                        {% button 'DELETE' url "Delete Business Unit" %}
                     {% endif %}
                 </td>
             </tr>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <nav aria-label="breadcrumb">
@@ -16,7 +17,6 @@
             <button class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="createRealm"
                     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                 <i class="bi bi-plus-circle"></i>
-                <span class="caret"></span>
             </button>
             <ul class="dropdown-menu" aria-labelledby="createRealm">
                 {% for link in create_links %}
@@ -51,10 +51,8 @@
         </td>
         <td class="text-end py-0">
             {% if not request.realm_authentication_session.is_remote and perms.realms.change_realm %}
-            <a class="btn btn-default" href="{% url 'realms:update' realm.uuid %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Realm">
-                <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+                {% url 'realms:update' realm.uuid as url %}
+                {% button 'UPDATE' url "Edit Realm" %}
             {% endif %}
         </td>
         </tr>

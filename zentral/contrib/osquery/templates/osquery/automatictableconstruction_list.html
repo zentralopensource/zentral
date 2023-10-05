@@ -14,11 +14,8 @@
     <h3 class="m-0">Automatic Table Construction{{ atc_count|pluralize }} ({{ atc_count }})</h3>
     <div class="ms-auto">
     {% if perms.osquery.add_automatictableconstruction %}
-        <a href="{% url 'osquery:create_atc' %}" type="button" 
-                class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new ATC">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+        {% url 'osquery:create_atc' as url %}
+        {% button 'CREATE' url "Create new ATC" %}
     {% endif %}
     </div>
 </div>
@@ -41,10 +38,8 @@
             </td>
             {% if perms.osquery.change_automatictableconstrucion %}
             <td class="text-end py-0">
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:update_atc' atc.id %}">
-                <span class="bi bi-pencil-square" aria-hidden="true"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit ATC"></span>
-            </a>
+                {% url 'osquery:update_atc' atc.id as url %}
+                {% button 'UPDATE' url "Edit ATC" %}
             </td>
             {% endif %}
         </tr>

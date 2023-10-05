@@ -17,14 +17,12 @@
         <h3 class="m-0 fs-5 text-secondary">File category</h3>
         <div class="ms-auto">
             {% if perms.osquery.change_filecategory %}
-            <a href="{% url 'osquery:update_file_category' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'osquery:update_file_category' object.id as url %}
+                {% button 'UPDATE' url "Edit File Category" %}
             {% endif %}
             {% if perms.osquery.delete_filecategory %}
-            <a href="{% url 'osquery:delete_file_category' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'osquery:delete_file_category' object.id as url %}
+                {% button 'DELETE' url "Delete File Category" %}
             {% endif %}
         </div>
     </div>

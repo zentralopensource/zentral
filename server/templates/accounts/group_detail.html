@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -15,18 +16,12 @@
         <h3 class="m-0 fs-5 text-secondary">Group</h3>
         <div class="ms-auto">
             {% if perms.auth.change_group and perms.accounts.change_user %}
-                <a href="{% url 'accounts:update_group' object.pk %}" type="button" 
-                        class="btn btn-link text-dark text-decoration-none"
-                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Group">
-                        <i class="bi bi-pencil-square"></i>
-                    </a>
+                {% url 'accounts:update_group' object.pk as url %}
+                {% button 'UPDATE' url "Edit Group" %}
             {% endif %}
             {% if perms.auth.delete_group and perms.accounts.change_user %}
-                <a href="{% url 'accounts:delete_group' object.pk %}" type="button" 
-                        class="btn btn-link text-dark text-decoration-none"
-                        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Group">
-                        <i class="bi bi-trash"></i>
-                    </a>
+                {% url 'accounts:delete_group' object.pk as url %}
+                {% button 'DELETE' url "Delete Group" %}
             {% endif %}        
         </div>
     </div>

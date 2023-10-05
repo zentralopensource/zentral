@@ -12,9 +12,8 @@
     <h2 class="m-0">Location{{ object_list|length|pluralize }} ({{ object_list|length }})</h2>
     <div class="ms-auto">
         {% if perms.mdm.add_location %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:create_location' %}">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+            {% url 'mdm:create_location' as url %}
+            {% button 'CREATE' url "Add Location" %}
         {% endif %}  
     </div>
 </div>

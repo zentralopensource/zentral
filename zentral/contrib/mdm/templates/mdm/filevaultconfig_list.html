@@ -13,9 +13,8 @@
     <h2 class="m-0">FileVault configuration{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
     <div class="ms-auto">
         {% if perms.mdm.add_filevaultconfig %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:create_filevault_config' %}">
-                <i class="bi bi-plus-circle"></i>
-            </a>
+            {% url 'mdm:create_filevault_config' as url %}
+            {% button 'CREATE' url "Create new FileVault Configuration" %}
         {% endif %}  
     </div>
 </div>
@@ -43,14 +42,12 @@
         <td>{{ filevault_config.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
         <td class="text-end py-0">
             {% if perms.mdm.change_filevaultconfig %}
-            <a href="{% url 'mdm:update_filevault_config' filevault_config.pk %}" class="btn btn-link text-decoration-none text-dark">
-                <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+                {% url 'mdm:update_filevault_config' filevault_config.pk as url %}
+                {% button 'UPDATE' url "Edit FileVault Configuration" %}
             {% endif %}
             {% if perms.mdm.delete_filevaultconfig and filevault_config.can_be_deleted %}
-            <a href="{% url 'mdm:delete_filevault_config' filevault_config.pk %}" class="btn btn-link text-decoration-none text-dark">
-                <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+                {% url 'mdm:delete_filevault_config' filevault_config.pk as url %}
+                {% button 'DELETE' url "Delete FileVault Configuration" %}
             {% endif %}
         </td>
         </tr>

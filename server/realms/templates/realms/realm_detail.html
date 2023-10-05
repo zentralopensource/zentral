@@ -26,10 +26,8 @@
         <h3 class="m-0 fs-5 text-secondary">Realm</i></h3>
         <div class="ms-auto">
             {% if perms.realms.change_realm and not request.realm_authentication_session.is_remote %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'realms:update' object.uuid %}"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Realm">
-                <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+                {% url 'realms:update' object.uuid as url %}
+                {% button 'UPDATE' url "Edit Realm" %}
             {% endif %}
         </div>
     </div>
@@ -121,10 +119,8 @@
 
     <div class="ms-auto">
     {% if not request.realm_authentication_session.is_remote and perms.realms.add_realmgroupmapping %}
-        <a class="btn btn-link text-dark text-decoration-none" href="{% url 'realms:create_group_mapping' object.pk %}"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new Group mapping">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+        {% url 'realms:create_group_mapping' object.pk as url %}
+        {% button 'CREATE' url "Create new Group Mapping" %}
     {% endif %}
     </div>
 </div>
@@ -155,14 +151,12 @@
     </td>
     <td class="text-end py-0">
         {% if not request.realm_authentication_session.is_remote and perms.realms.change_realmgroupmapping %}
-        <a class="btn btn-link text-dark text-decoration-none" href="{% url 'realms:update_group_mapping' object.pk group_mapping.pk %}">
-            <span class="bi bi-pencil-square" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Group Mapping"></span>
-        </a>
+            {% url 'realms:update_group_mapping' object.pk group_mapping.pk as url %}
+            {% button 'UPDATE' url "Edit Group Mapping" %}
         {% endif %}
         {% if not request.realm_authentication_session.is_remote and perms.realms.delete_realmgroupmapping %}
-        <a class="btn btn-link text-dark text-decoration-none" href="{% url 'realms:delete_group_mapping' object.pk group_mapping.pk %}">
-            <span class="bi bi-trash" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Group Mapping"></span>
-        </a>
+            {% url 'realms:delete_group_mapping' object.pk group_mapping.pk as url %}
+            {% button 'DELETE' url "Delete Group Mapping" %}
         {% endif %}
     </td>
     </tr>

@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load inclusion_tags %}
+
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
@@ -16,14 +17,12 @@
         <h3 class="m-0 fs-5 text-secondary">Automatic table construction</h3>
         <div class="ms-auto">
             {% if perms.osquery.change_automatictableconstruction %}
-            <a href="{% url 'osquery:update_atc' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'osquery:update_atc' object.id as url %}
+                {% button 'UPDATE' url "Edit ATC" %}
             {% endif %}
             {% if perms.osquery.delete_automatictableconstruction %}
-            <a href="{% url 'osquery:delete_atc' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'osquery:delete_atc' object.id as url %}
+                {% button 'DELETE' url "Delete ATC" %}
             {% endif %}
         </div>
     </div>

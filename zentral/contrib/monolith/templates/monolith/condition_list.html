@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -10,9 +11,8 @@
     <h2 class="m-0">Condition{{ object_list|length|pluralize }} ({{ object_list|length }})</h2>
     <div class="ms-auto">
         {% if perms.monolith.add_condition %}
-        <a class="btn btn-link text-dark text-decoration-none" href="{% url 'monolith:create_condition' %}">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'monolith:create_condition' as url %}
+            {% button 'CREATE' url "Create new Monolith Condition" %}
         {% endif %}
     </div>
 </div>

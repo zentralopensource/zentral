@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <nav aria-label="breadcrumb">
@@ -9,18 +10,19 @@
     </ol>
 </nav>
 
-<div class="d-flex align-items-center mb-1">
-    <h3 class="mb-3">Verification device{{ verification_devices|length|pluralize }} ({{ verification_devices|length }})</h3>
-
-    <div class="dropdown mb-2 btn btn-link">
-        <button class="btn btn-primary dropdown-toggle" type="button" id="addVD"
-                data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            Add
-        </button>
-        <ul class="dropdown-menu" aria-labelledby="addVD">
-            <li><a class="dropdown-item" href="{% url 'accounts:add_totp' %}">TOTP</a></li>
-            <li><a class="dropdown-item" href="{% url 'accounts:register_webauthn_device' %}">Security key</a></li>
-        </ul>
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Verification device{{ verification_devices|length|pluralize }} ({{ verification_devices|length }})</h3>
+    <div class="ms-auto">
+        <div class="dropdown">
+            <button class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="addVD"
+                    data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="bi bi-plus-circle"></i>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="addVD">
+                <li><a class="dropdown-item" href="{% url 'accounts:add_totp' %}">TOTP</a></li>
+                <li><a class="dropdown-item" href="{% url 'accounts:register_webauthn_device' %}">Security key</a></li>
+            </ul>
+        </div>
     </div>
 </div>
 
@@ -36,10 +38,7 @@
       <td>{{ verification_device.get_type_for_display }}</td>
       <td>{{ verification_device.name }}</td>
       <td class="text-end py-0">
-        <a class="btn btn-link text-dark text-decoration-none" href="{{ verification_device.get_delete_url }}">
-          <span class="bi bi-trash" aria-hidden="true"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Verification Device"></span>
-        </a>
+            {% button 'DELETE' verification_device.get_delete_url "Delete Verification Device" %}
       </td>
     </tr>
     {% endfor %}

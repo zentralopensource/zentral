@@ -116,10 +116,8 @@
     <h2 class="m-0">Artifact{{ artifacts|length|pluralize }}</h2>
     <div class="ms-auto">
         {% if perms.mdm.add_artifact %}
-        <a href="{% url 'mdm:create_asset_artifact' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'mdm:create_asset_artifact' object.pk as url %}
+            {% button 'CREATE' url "Add new Artifact" %}
         {% endif %}
     </div>
 </div>

@@ -16,16 +16,12 @@
         <h3 class="m-0 fs-5 text-secondary">Condition</h3>
         <div class="ms-auto">
         {% if perms.monolith.change_condition %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:update_condition' object.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit condition">
-                <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+            {% url 'monolith:update_condition' object.pk as url %}
+            {% button 'UPDATE' url "Edit Condition" %}
         {% endif %}
         {% if object.can_be_deleted and perms.monolith.delete_condition %}
-            <a class="btn btn-link text-decoration-none text-dark" href="{% url 'monolith:delete_condition' object.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete condition">
-                <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+            {% url 'monolith:delete_condition' object.pk as url %}
+            {% button 'DELETE' url "Delete Condition" %}
         {% endif %}
         </div>
     </div>

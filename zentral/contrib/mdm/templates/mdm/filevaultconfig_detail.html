@@ -18,16 +18,12 @@
         <h3 class="m-0 fs-5 text-secondary">FileVault Configuration</h3>
         <div class="ms-auto">
             {% if perms.mdm.change_filevaultconfig %}
-            <a href="{% url 'mdm:update_filevault_config' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
-                <i class="bi bi-pencil-square"></i>
-            </a>
+                {% url 'mdm:update_filevault_config' object.pk as url %}
+                {% button 'UPDATE' url "Edit FileVault Config" %}
             {% endif %}
             {% if perms.mdm.delete_filevaultconfig and object.can_be_deleted %}
-            <a href="{% url 'mdm:delete_filevault_config' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
-                <i class="bi bi-trash"></i>
-            </a>
+                {% url 'mdm:delete_filevault_config' object.pk as url %}
+                {% button 'DELETE' url "Delete Filevault Configuration" %}
             {% endif %}
         </div>
     </div>

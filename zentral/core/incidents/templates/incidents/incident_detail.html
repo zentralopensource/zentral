@@ -21,11 +21,8 @@
         <h2 class="m-0">{{ incident.name }}</h2>
         <div class="ms-3">
             {% if show_events_link %}
-                <a type="button" class="btn btn-link text-decoration-none text-dark" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Browse the events" href="{% url 'incidents:incident_events' object.pk %}">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-activity" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd" d="M6 2a.5.5 0 0 1 .47.33L10 12.036l1.53-4.208A.5.5 0 0 1 12 7.5h3.5a.5.5 0 0 1 0 1h-3.15l-1.88 5.17a.5.5 0 0 1-.94 0L6 3.964 4.47 8.171A.5.5 0 0 1 4 8.5H.5a.5.5 0 0 1 0-1h3.15l1.88-5.17A.5.5 0 0 1 6 2Z"></path>
-                    </svg>
-                </a>
+                {% url 'incidents:incident_events' object.pk as url %}
+                {% button 'EVENTS' url %}
             {% endif %}
             {% for link, anchor_text in store_links %}
                 <a class="btn btn-link text-decoration-none text-dark" href="{{ link }}">
@@ -38,14 +35,9 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Incident</h3>
         <div class="ms-auto">
-            {% if perms.incidents.change_incident %}
-                <a class="btn btn-link text-dark text-decoration-none{% if not object.get_next_statuses %} disabled{% endif %}"
-                    href="{% url 'incidents:update_incident' object.pk %}"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="bottom"
-                    data-bs-title="Change Status">
-                    <i class="bi bi-pencil-square"></i>
-                </a>
+            {% if perms.incidents.change_incident and object.get_next_statuses %}
+                {% url 'incidents:update_incident' object.pk as url %}
+                {% button 'UPDATE' url "Edit Status" %}
             {% endif %}
         </div>
     </div>
@@ -116,9 +108,8 @@
       <td>{{ machine_incident.updated_at }}</td>
       {% if perms.incidents.change_machineincident %}
       <td>
-        <a href="{% url 'incidents:update_machine_incident' object.pk machine_incident.pk %}" class="btn btn-default">
-          <span class="bi bi-pencil-square" aria-hidden="true"></span> Change status
-        </a>
+        {% url 'incidents:update_machine_incident' object.pk machine_incident.pk as url %}
+        {% button 'UPDATE' url "Edit Status" %}
       </td>
       {% endif %}
     </tr>

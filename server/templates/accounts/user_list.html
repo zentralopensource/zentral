@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <nav aria-label="breadcrumb">
@@ -50,16 +51,12 @@
         {% endif %}
         <td class="text-end py-0">
             {% if perms.accounts.change_user and managed_user.editable %}
-            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:update_user' managed_user.id %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit User">
-            <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+                {% url 'accounts:update_user' managed_user.id as url %}
+                {% button 'UPDATE' url "Edit User" %}
             {% endif %}
             {% if perms.accounts.delete_user and managed_user.deletable %}
-            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:delete_user' managed_user.id %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete User">
-            <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+                {% url 'accounts:delete_user' managed_user.id as url %}
+                {% button 'DELETE' url "Delete User" %}
             {% endif %}
         </td>
         </tr>
@@ -73,10 +70,8 @@
 
     <div class="ms-auto">
         {% if perms.accounts.add_user and perms.accounts.add_apitoken %}
-        <a href="{% url 'accounts:create_service_account' %}" class="btn btn-link text-dark text-decoration-none" type="button"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Create service account">
-            <span class="bi bi-plus-circle" aria-hidden="true"></span>
-        </a>
+            {% url 'accounts:create_service_account' as url %}
+            {% button 'CREATE' url "Create new Service Account" %}
         {% endif %}
     </div>
 </div>
@@ -102,16 +97,12 @@
         {% endif %}
         <td class="text-end py-0">
             {% if perms.accounts.change_user and service_account.editable %}
-            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:update_user' service_account.id %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit Service Account">
-                <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+                {% url 'accounts:update_user' service_account.id as url %}
+                {% button 'UPDATE' url "Edit Sevice Account" %}
             {% endif %}
             {% if perms.accounts.delete_user and service_account.deletable %}
-            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:delete_user' service_account.id %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Service Account">
-                <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+                {% url 'accounts:delete_user' service_account.id as url %}
+                {% button 'DELETE' url "Delete Service Account" %}
             {% endif %}
         </td>
         </tr>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -12,16 +13,12 @@
         <h3 class="m-0">{{ object.get_type_display|title }} {{ object }}</h3>
         <div class="ms-auto">
             {% if perms.accounts.change_user and object.editable %}
-            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:update_user' object.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit User">
-            <span class="bi bi-pencil-square" aria-hidden="true"></span>
-            </a>
+                {% url 'accounts:update_user' object.pk as url %}
+                {% button 'UPDATE' url "Edit User" %}
             {% endif %}
             {% if perms.accounts.delete_user and object.deletable %}
-            <a class="btn btn-link text-dark text-decoration-none" type="button" href="{% url 'accounts:delete_user' object.pk %}"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete User">
-            <span class="bi bi-trash" aria-hidden="true"></span>
-            </a>
+                {% url 'accounts:delete_user' object.pk as url %}
+                {% button 'DELETE' url "Delete User" %}
             {% endif %}
         </div>
     </div>
@@ -77,10 +74,8 @@
             {% if object.api_token %}
             yes
             {% if can_delete_token %}
-                <a href="{% url 'accounts:delete_user_api_token' object.pk %}" class="btn btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Token">
-                    <span class="bi bi-trash" aria-hidden="true"></span>
-                </a>
+                {% url 'accounts:delete_user_api_token' object.pk as url %}
+                {% button 'DELETE' url "Delete API Token" %}
             {% endif %}
             {% else %}
             <form method="post" action="{% url 'accounts:create_user_api_token' object.pk %}">{% csrf_token %}

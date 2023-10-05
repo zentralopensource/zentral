@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inclusion_tags %}
 {% load inventory_extras %}
 
 {% block content %}
@@ -13,10 +14,8 @@
     <h3 class="m-0">DEP enrollment{{ dep_enrollments|length|pluralize }} ({{ dep_enrollments|length }})</h3>
     <div class="ms-auto">
         {% if perms.mdm.add_depenrollment %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:create_dep_enrollment' %}"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new DEP Enrollment">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'mdm:create_dep_enrollment' as url %}
+            {% button 'CREATE' url "Add new DEP Enrollment" %}
         {% endif %}
     </div>
 </div>
@@ -55,10 +54,8 @@
     <h3 class="m-0">OTA enrollment{{ ota_enrollments|length|pluralize }} ({{ ota_enrollments|length }})</h3>
     <div class="ms-auto">
         {% if perms.mdm.add_otaenrollment %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:create_ota_enrollment' %}"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new OTA Enrollment">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'mdm:create_ota_enrollment' as url %}
+            {% button 'CREATE' url "Add new OTA Enrollment" %}
         {% endif %}
     </div>
 </div>
@@ -101,10 +98,8 @@
 
     <div class="ms-auto">
         {% if perms.mdm.add_userenrollment %}
-        <a class="btn btn-link text-decoration-none text-dark" href="{% url 'mdm:create_user_enrollment' %}"
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add new User Enrollment">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+            {% url 'mdm:create_user_enrollment' as url %}
+            {% button 'CREATE' url "Add new User Enrollment" %}
         {% endif %}
     </div>
 </div>
