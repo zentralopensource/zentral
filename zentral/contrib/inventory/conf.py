@@ -267,7 +267,7 @@ def macos_version_from_build(build):
                 patch = 0
             if patch_letter >= "G" and patch_number >= 115:
                 minor = 6
-            elif minor > 0:
+            elif minor > 0 and major < 14:
                 minor -= 1
         elif minor == 16:
             major = 11
