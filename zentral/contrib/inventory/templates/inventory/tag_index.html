@@ -14,13 +14,8 @@
 
     {% if perms.inventory.add_tag %}
     <div class="ms-auto">
-        <a type="button" href="{% url 'inventory:create_tag' %}"
-            class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip"
-            data-bs-placement="bottom"
-            data-bs-title="Add new Tag">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+        {% url 'inventory:create_tag' as url %}
+        {% button 'CREATE' url "Add new Tag" %}
     </div>
     {% endif %}
 </div>
@@ -68,13 +63,8 @@
 
     {% if perms.inventory.add_taxonomy %}
     <div class="ms-auto">
-        <a type="button" href="{% url 'inventory:create_taxonomy' %}"
-            class="btn btn-link text-dark text-decoration-none"
-            data-bs-toggle="tooltip"
-            data-bs-placement="bottom"
-            data-bs-title="Add new Taxonomy">
-            <i class="bi bi-plus-circle"></i>
-        </a>
+        {% url 'inventory:create_taxonomy' as url %}
+        {% button 'CREATE' url "Add new Taxonomy" %}
     </div>
     {% endif %}
 </div>
