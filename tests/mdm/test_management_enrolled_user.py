@@ -121,11 +121,11 @@ class EnrolledUserManagementViewsTestCase(TestCase):
         self.assertContains(response, "See all commands")
         self.assertContains(
             response,
-            reverse("mdm:download_enrolled_user_command_result", args=(first_command.db_command.uuid,))
+            reverse("mdm:download_enrolled_device_command_result", args=(first_command.db_command.uuid,))
         )
         self.assertNotContains(
             response,
-            reverse("mdm:download_enrolled_user_command_result", args=(second_command.db_command.uuid,))
+            reverse("mdm:download_enrolled_device_command_result", args=(second_command.db_command.uuid,))
         )
 
     # test enrolled user commands

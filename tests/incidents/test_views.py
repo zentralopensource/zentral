@@ -119,7 +119,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/incident_detail.html")
-        self.assertNotContains(response, "Change Status")
+        self.assertNotContains(response, "Edit Status")
 
     def test_incident_detail_with_status_update(self):
         incident = self._force_incident()
@@ -127,7 +127,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/incident_detail.html")
-        self.assertContains(response, "Change Status")
+        self.assertContains(response, "Edit Status")
 
     def test_incident_detail_no_perms_no_object_link(self):
         incident = self._force_incident()

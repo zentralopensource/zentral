@@ -62,8 +62,9 @@
       <td>
         {{ command.get_status_display|default:"-" }}
         {% if command.result %}
-            {% url 'mdm:download_enrolled_user_command_result' command.uuid as url %}
-            {% button 'DOWNLOAD' url "Download Result" %}
+            <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_user_command_result' command.uuid %}">
+                <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+            </a>
         {% endif %}
       </td>
     </tr>

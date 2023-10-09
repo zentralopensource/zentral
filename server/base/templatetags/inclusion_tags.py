@@ -68,6 +68,11 @@ ACTION = {
         'icon': "bi bi-download",
         'tooltip': "Download",
     },
+    'LINK': {
+        'icon': "bi bi-link-45deg",
+        'tooltip': "External Link"
+    }
+
 }
 
 

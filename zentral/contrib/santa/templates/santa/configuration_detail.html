@@ -19,10 +19,7 @@
                 {% button 'EVENTS' url %}
             {% endif %}
             {% for link, anchor_text in store_links  %}
-                <a type="button" class="btn btn-large btn-link text-dark text-decoration-none"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{ anchor_text }}" href="{{ link }}">
-                    <i class="bi bi-link-45deg" aria-hidden="true"></i>
-                </a>
+                {% button 'LINK' link anchor_text %}
             {% endfor %}
         </div>
     </div>
