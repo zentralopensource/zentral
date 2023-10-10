@@ -96,7 +96,7 @@
     </nav>
     <div class="d-flex h-100 overflow-auto">
         {% if user.is_authenticated %}
-        <div class="offcanvas offcanvas-start sidebar sticky-lg-top flex-lg-shrink-0 navbar-light" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
+        <div class="offcanvas offcanvas-start sidebar sticky-lg-top flex-lg-shrink-0 d-flex flex-column navbar-light" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
             <div class="offcanvas-header d-lg-none">
                 <h5 class="offcanvas-title" id="offcanvasNavbarLabel">
                     <a class="navbar-brand" href="/">
@@ -114,15 +114,16 @@
 
                 {% modules_menu %}
 
-                {% if request.zentral_deployment.items_for_display %}
-                <div class="position-absolute bottom-0 start-10 bg-light">
-                    <small>Deployment</small><br/>
-                    {% for k, v in request.zentral_deployment.items_for_display %}
-                    <small>{{ k }} : {{ v }}</small><br/>
-                    {% endfor %}
-                </div>
-                {% endif %}
             </div>
+            {% if request.zentral_deployment.items_for_display %}
+            <div class="mt-auto w-100 bg-light">
+                <small>Deployment</small><br/>
+                {% for k, v in request.zentral_deployment.items_for_display %}
+                <small>{{ k }} : {{ v }}</small><br/>
+                {% endfor %}
+            </div>
+            {% endif %}
+
         </div>
         {% endif %}
         <main class="container-fluid overflow-auto">
