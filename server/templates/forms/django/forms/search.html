@@ -1,7 +1,8 @@
 {% load inclusion_tags %}
+
 {% for field in form %}
     {% if field in form.visible_fields %}
-    <div class={% if field.widget_type == 'checkbox' %}"form-checkbox col-md me-2 mb-2 text-center"{% elif field.widget_type == 'text' %}"form-floating col-md{{ form.fields|length|add:"-9" }} me-2 mb-2"{% else %}"form-floating col-md me-2 mb-2"{% endif %}>
+    <div class={% if field.widget_type == 'checkbox' %}"form-checkbox col me-2 mb-2 text-center"{% elif field.widget_type == 'text' %}"form-floating col{{ form.visible_fields|length|flex_field_width }} me-2 mb-2"{% else %}"form-floating col me-2 mb-2"{% endif %}>
 
         {% if field.widget_type == 'select' %}
             <select class="form-select"

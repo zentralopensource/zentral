@@ -10,8 +10,9 @@
 <div class="d-flex align-items-center mb-1">
     <h2>Sub manifest{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
 </div>
-<div class="d-flex align-items-center mb-1">
-    <form method="GET" class="d-flex w-75 me-auto flex-shrink-0">
+
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
         
           {{ form }}
         

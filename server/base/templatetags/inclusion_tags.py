@@ -45,6 +45,24 @@ def to_int(value):
     return int(value)
 
 
+@register.filter
+def flex_field_width(value):
+    """ Given the amount of fields, returns a width to use with flexbox. """
+    prefix = "-"
+    if value == 1:
+        return ""
+    elif value == 2:
+        return prefix + "8"
+    elif value == 3:
+        return prefix + "6"
+    elif value == 4:
+        return prefix + "6"
+    elif value == 5:
+        return prefix + "5"
+    else:
+        return prefix + str(value)  # FIXME: probably needs adjustment for more controls
+
+
 # Buttons
 
 ACTION = {

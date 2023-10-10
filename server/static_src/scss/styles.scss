@@ -62,6 +62,17 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
     margin-bottom: -1px;
 }
 
+.search-form {
+  @media screen and (max-width: 992px) {
+    flex-direction: column !important;
+    width: 100% !important;
+
+    .form-floating {
+        width: 100%;
+    }
+  }
+}
+
 .sidebar {
   @media (min-width: 992px) {
     transform: none !important;

@@ -25,8 +25,8 @@
 
 <h3 class="mb-3">Quer{{ page_obj.paginator.count|pluralize:"y,ies" }} ({{ page_obj.paginator.count }})</h3>
 
-<div class="d-flex align-items-center mb-1">
-    <form method="GET" class="d-flex w-75 me-auto flex-shrink-0 align-items-center">            
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form d-flex flex-row flex-wrap w-75 align-items-center">
         
         {{ form }}
         
@@ -39,7 +39,7 @@
             {% url 'osquery:create_query' as url %}
             {% button 'CREATE' url "Create new Query" %}
         {% endif %}
-        </div>
+    </div>
 </div>
 
 {% if not page_obj %}
