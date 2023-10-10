@@ -144,19 +144,15 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 
 
 // Zentral logo
-
-.navbar-brand.light {
-    background-image: url(../images/logo-light.svg);
+.navbar-brand {
     background-repeat: no-repeat;
     width: 150px;
     height: 38px;
     display: block;
-}
-
-.navbar-brand.dark {
-    background-image: url(../images/logo-dark.svg);
-    background-repeat: no-repeat;
-    width: 150px;
-    height: 38px;
-    display: block;
+    .light {
+        background-image: url(../images/logo-light.svg);   
+    }
+    .dark {
+        background-image: url(../images/logo-dark.svg);
+    }
 }
