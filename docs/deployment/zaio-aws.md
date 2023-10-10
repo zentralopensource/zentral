@@ -59,7 +59,7 @@ Zentral requires a domain name resolving to the IP address of the launched insta
 
 ## Log onto your instance
 
-You need the path to the key pair you have just setup. The default username is `admin`.
+You need the path to the key pair you have just setup. The default username is `ubuntu`.
 
 ```cmd
 ssh -i ~/.ssh/TheNameOfTheKeyPairFile admin@zentral.example.com
