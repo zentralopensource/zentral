@@ -40,6 +40,11 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 @import "~bootstrap-icons/font/bootstrap-icons";
 
 
+.errorlist {
+    color: $zred;
+    font-weight: bold;
+}
+
 // Side menu
 .list-group-item {
     border-color: transparent;
