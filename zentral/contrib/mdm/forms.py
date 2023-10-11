@@ -136,8 +136,8 @@ class EnrolledDeviceSearchForm(forms.Form):
                         widget=forms.TextInput(attrs={"placeholder": "Serial number, UDID",
                                                       "autofocus": True}))
     platform = forms.ChoiceField(
-        choices=[("", "Platform"),] + [(p.value, p.value) for p in Platform], required=False)
-    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="Blueprint")
+        choices=[("", "..."), ] + [(p.value, p.value) for p in Platform], required=False)
+    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="...")
 
     def get_queryset(self):
         qs = EnrolledDevice.objects.all().order_by("-updated_at")
@@ -167,12 +167,12 @@ class ArtifactSearchForm(forms.Form):
                                                       "size": 24,
                                                       "autofocus": True}))
     artifact_type = forms.ChoiceField(
-        choices=[("", "Type"),] + Artifact.Type.choices, required=False)
+        choices=[("", "..."), ] + Artifact.Type.choices, required=False)
     channel = forms.ChoiceField(
-        choices=[("", "Channel"),] + Channel.choices, required=False)
+        choices=[("", "..."), ] + Channel.choices, required=False)
     platform = forms.ChoiceField(
-        choices=[("", "Platform"),] + [(p.value, p.value) for p in Platform], required=False)
-    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="Blueprint")
+        choices=[("", "..."), ] + [(p.value, p.value) for p in Platform], required=False)
+    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="...")
 
     def get_queryset(self):
         qs = Artifact.objects.annotate(Count("blueprintartifact", distinct=True)).order_by("name")
