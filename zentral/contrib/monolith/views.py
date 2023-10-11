@@ -135,7 +135,7 @@ class DeletePkgInfoView(PermissionRequiredMixin, DeleteViewWithAudit):
     queryset = PkgInfo.objects.local()
 
     def get_success_url(self):
-        return reverse("monolith:pkg_info", args=(self.object.pk,))
+        return reverse("monolith:pkg_info_name", args=(self.object.name.pk,))
 
 
 class CreatePkgInfoNameView(PermissionRequiredMixin, CreateViewWithAudit):
