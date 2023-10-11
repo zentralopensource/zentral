@@ -90,7 +90,7 @@
     <tr class="data-row{% if not smpi.pkg_info_name.has_active_pkginfos %} danger{% endif %}">
         <td>
             {% if perms.monolith.view_pkginfoname %}
-            <a name="smp_{{ smpi.pk }}" href="{% url 'monolith:pkg_info_name' smpi.pkg_info_name.id %}">{{ name }}</a>
+            <a name="smp_{{ smpi.pk }}" href="{% url 'monolith:pkg_info' smpi.pkg_info_name.id %}">{{ name }}</a>
             {% else %}
             {{ name }}
             {% endif %}
