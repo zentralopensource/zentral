@@ -74,7 +74,6 @@ class InventoryMachineSubview:
 class PkgInfosView(PermissionRequiredMixin, TemplateView):
     permission_required = "monolith.view_pkginfo"
     template_name = "monolith/pkg_info_list.html"
-    # template_name = "django/forms/search.html"
 
     def get_context_data(self, **kwargs):
         ctx = super(PkgInfosView, self).get_context_data(**kwargs)
@@ -136,13 +135,16 @@ class DeletePkgInfoView(PermissionRequiredMixin, DeleteViewWithAudit):
     queryset = PkgInfo.objects.local()
 
     def get_success_url(self):
-        return reverse("monolith:pkg_info_name", args=(self.object.name.pk,))
+        return reverse("monolith:pkg_info", args=(self.object.pk,))
 
 
 class CreatePkgInfoNameView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "monolith.add_pkginfoname"
     model = PkgInfoName
     fields = ("name",)
+
+    def get_success_url(self):
+        return reverse("monolith:pkg_info", args=(self.object.pk,))
 
 
 class PkgInfoNameView(PermissionRequiredMixin, DetailView):

@@ -62,7 +62,7 @@
   <tbody>
   {% for pkg_info_name in pkg_names %}
   <tr>
-    <td colspan="5"><a href="{% url 'monolith:pkg_info_name' pkg_info_name.id %}">{{ pkg_info_name.name }}</a></td>
+    <td colspan="5"><a href="{% url 'monolith:pkg_info' pkg_info_name.id %}">{{ pkg_info_name.name }}</a></td>
     <td>{{ pkg_info_name.count }}</td>
     {% if perms.monolith.delete_pkginfo or perms.monolith.change_pkginfo %}
     <td></td>
