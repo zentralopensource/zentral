@@ -20,6 +20,7 @@ __pycache__
 !/docker-compose.saml2.yml
 !/docker-compose.syslog.yml
 !/mkdocs.yml
+!/.readthedocs.yaml
 
 /conf/*
 !/conf/start
