@@ -52,5 +52,6 @@ urlpatterns = [
 modules_menu_cfg = {
     'items': (
         ('configurations', 'Configurations', False, ('munki.view_configuration',)),
-    )
+    ),
+    'weight': 30,
 }

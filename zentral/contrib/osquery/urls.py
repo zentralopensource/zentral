@@ -103,5 +103,6 @@ modules_menu_cfg = {
         ('configurations', 'Configurations', False, ('osquery.view_configuration',)),
         ('atcs', 'ATCs', False, ('osquery.view_automatictableconstruction',)),
         ('file_categories', 'File categories', False, ('osquery.view_filecategory',)),
-    )
+    ),
+    'weight': 40,
 }

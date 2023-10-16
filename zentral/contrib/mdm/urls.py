@@ -317,5 +317,6 @@ modules_menu_cfg = {
         ('enrolled_devices', 'Devices', False, ('mdm.view_enrolleddevice',)),
         ('artifacts', 'Artifacts', False, ('mdm.view_artifact',)),
         ('blueprints', 'Blueprints', False, ('mdm.view_blueprint',)),
-    )
+    ),
+    'weight': 10,
 }

@@ -111,5 +111,6 @@ modules_menu_cfg = {
         ('index', 'Overview', False, ('santa',)),
         ('configuration_list', 'Configurations', False, ('santa.view_configuration',)),
         ('targets', 'Targets', False, ('santa.view_target',)),
-    )
+    ),
+    'weight': 50,
 }

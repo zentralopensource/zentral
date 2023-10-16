@@ -109,5 +109,6 @@ modules_menu_cfg = {
         ('conditions', 'Conditions', False, ("monolith.view_condition",)),
         ('manifests', 'Manifests', False, ("monolith.view_manifest",)),
         ('sub_manifests', 'Sub manifests', False, ("monolith.view_submanifest",)),
-    )
+    ),
+    'weight': 20,
 }

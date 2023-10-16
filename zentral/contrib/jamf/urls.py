@@ -28,5 +28,6 @@ urlpatterns = [
 modules_menu_cfg = {
     'items': (
         ('jamf_instances', 'jamf instances', False, ('jamf.view_jamfinstance',)),
-    )
+    ),
+    'weight': 60,
 }
