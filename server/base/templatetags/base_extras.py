@@ -12,6 +12,7 @@ from pygments import lexers, highlight
 from pygments.formatters import HtmlFormatter
 from django.conf import settings
 from zentral.utils.time import duration_repr as _duration_repr
+from zentral.core.incidents.models import Incident
 
 register = template.Library()
 
@@ -169,3 +170,8 @@ def duration_repr(val):
         return _duration_repr(val)
     except Exception:
         return "-"
+
+
+@register.simple_tag
+def get_latest_open_incidents(latest=10):
+    return Incident().get_open(latest=latest)
