@@ -12,96 +12,31 @@
     <script src="{% static 'dist/theme.js' %}"></script>
 </head>
 <body class="d-flex flex-column h-100">
-    <nav class="navbar navbar-expand-lg sticky-top navbar-light">
-        <div class="container-fluid">
+    <nav class="navbar navbar-expand-lg sticky-top" data-bs-theme="light">
+        <div class="d-flex flex-row flex-wrap w-100 align-items-center px-3">
             <a class="navbar-brand" href="/">
-                <i class="navbar-brand light" alt="Zentral"></i>
+                <i class="zentral-logo light" alt="Zentral"></i>
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <ul class="nav ms-auto z-3">
-                <li class="nav-item dropdown">
-                    <button id="bd-theme" type="button" class="nav-link btn btn-link text-dark" href="#" role="button" aria-expanded="false" data-bs-toggle="dropdown" data-bs-display="static" aria-label="Toggle theme">
-                        <i class="bi bi-moon-stars" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Toggle theme"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="bd-theme-text">
-                        <li>
-                            <button type="button" id="bd-theme-dark" class="dropdown-item bi bi-moon" aria-pressed="true" data-bs-theme-value="dark"> Dark Mode</button>
-                        </li>
-                        <li>
-                            <button type="button" id="bd-theme-light" class="dropdown-item bi bi-sun" aria-pressed="true" data-bs-theme-value="light"> Light Mode</button>
-                        <li>
-                            <button type="button" id="bd-theme-auto" class="dropdown-item bi bi-circle-half" aria-pressed="true" data-bs-theme-value="auto"> Auto</button>
-                        </li>
-                    </ul>
-                </li>
-                {% if user.is_authenticated %}
-                {% if zentral_extra_links %}
-                <li class="nav-item dropdown">
-                    <a class="nav-link btn btn-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-display" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Extra links"></i>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        {% for link in zentral_extra_links %}
-                            <li>
-                                <a class="dropdown-item" href="{{ link.url }}" target="_blank">
-                                    {{ link.anchor_text }}
-                                    <span class="bi bi-box-arrow-up-right"></span>
-                                </a>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                </li>
-                {% endif %}
-                <li class="nav-item dropdown">
-                    <a class="nav-link btn btn-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-exclamation-triangle" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Incidents"></i>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="#">Incident 1</a></li>
-                        <li><a class="dropdown-item" href="#">Incident 2</a></li>
-                        <li><a class="dropdown-item" href="#">Incident 3</a></li>
-                    </ul>
-                </li>
-                <li class="nav-item dropdown">
-                    <a class="nav-link btn btn-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-three-dots-vertical" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Platform settings"></i>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="{% url 'accounts:users' %}">Users</a></li>
-                        <li><a class="dropdown-item" href="{% url 'accounts:groups' %}">Groups</a></li>
-                        <li><a class="dropdown-item" href="{% url 'realms:list' %}">Realms</a></li>
-                    </ul>
-                </li>
-                <li class="nav-item dropdown">
-                    <a class="nav-link btn btn-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-person-circle" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="User settings"></i>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">Profile</a></li>
-                        {% if not request.realm_authentication_session.is_remote %}
-                        <li><a class="dropdown-item" href="{% url 'password_change' %}">Change Password</a></li>
-                        <li><a class="dropdown-item" href="{% url 'accounts:verification_devices' %}">Verification Devices</a></li>
-                        {% else %}
-                        <li style="padding:3px 20px"><span class="glyphicon glyphicon-cloud" aria-hidden="true"></span> {{ request.realm_authentication_session.realm }}</li>
-                        <li role="separator" class="divider"></li>
-                        {% endif %}
-                        <li><form id="logout-form" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="dropdown-item">Sign Out</button></form></li>
-                    </ul>
-                </li>
-            </ul>
-            {% endif %}
+            <div class="ms-auto">
+                <div class="user-menu">
+
+                    {% include "user_menu.html" %}
+
+                </div>
+                <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+            </div>
         </div>
     </nav>
     <div class="d-flex h-100 overflow-auto">
         {% if user.is_authenticated %}
-        <div class="offcanvas offcanvas-start sidebar sticky-lg-top flex-lg-shrink-0 d-flex flex-column navbar-light" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
+        <div class="offcanvas offcanvas-start sidebar sticky-lg-top flex-lg-shrink-0 d-flex flex-column" data-bs-theme="light" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
             <div class="offcanvas-header d-lg-none">
                 <h5 class="offcanvas-title" id="offcanvasNavbarLabel">
-                    <a class="navbar-brand" href="/">
-                        <i class="navbar-brand light" alt="Zentral"></i>
-                    </a>
+
+                    {% include "user_menu.html" %}
+
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
             </div>

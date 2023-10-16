@@ -26,7 +26,7 @@ $dropdown-link-hover-bg: $list-group-hover-bg;
 $dropdown-link-active-bg: $zgreen;
 
 $offcanvas-border-color: transparent;
-$offcanvas-horizontal-width: 180px;
+$offcanvas-horizontal-width: 186px;
 
 $box-max-width: 1304px;
 
@@ -79,10 +79,22 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 }
 
 .sidebar {
-  @media (min-width: 992px) {
+  @media screen and (min-width: 992px) {
     transform: none !important;
     visibility: visible !important;
+    font-size: $font-size-root;
+    width: $offcanvas-horizontal-width !important;
   }
+  width: 300px !important;
+  font-size: large;
+}
+
+.user-menu {
+    @media screen and (max-width: 992px) {
+        width: 0px; height: 0px;
+        transform: none !important;
+        visibility: hidden !important;
+    }
 }
 
 .object-details,
@@ -149,15 +161,17 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 
 
 // Zentral logo
-.navbar-brand {
+.zentral-logo {
     background-repeat: no-repeat;
     width: 150px;
     height: 38px;
     display: block;
-    .light {
-        background-image: url(../images/logo-light.svg);   
-    }
-    .dark {
-        background-image: url(../images/logo-dark.svg);
-    }
+}
+
+.zentral-logo.light {
+    background-image: url(../images/logo-light.svg);
+}
+
+.zentral-logo.dark {
+    background-image: url(../images/logo-dark.svg);
 }
