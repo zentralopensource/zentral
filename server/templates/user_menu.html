@@ -42,7 +42,7 @@
             {% get_latest_open_incidents as open_incidents %}
             {% if open_incidents %}
                 {% for incident in open_incidents %}
-                    <li class="text-nowrap"><a class="dropdown-item" href="{{ incident.get_absolute_url }}">{% incident_severity incident.incident_severity %} {{ incident.name }}</a></li>
+                    <li class="text-nowrap"><a class="dropdown-item" href="{{ incident.get_absolute_url }}">{% incident_severity incident.severity %} {{ incident.name }}</a></li>
                 {% endfor %}
             {% else %}
                 <li class="text-nowrap">No Open Incidents 🎉</li>
