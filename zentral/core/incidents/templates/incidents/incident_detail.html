@@ -93,7 +93,7 @@
   </thead>
   <tbody>
     {% for machine_incident in machine_incidents %}
-    <tr>
+    <tr class="data-row">
       <td id="{{ machine_incident.pk }}">
         {% if perms.inventory.view_machinesnapshot %}
         <a href="{% machine_url machine_incident.serial_number %}">{{ machine_incident.serial_number }}</a>
@@ -105,7 +105,7 @@
       <td>{{ machine_incident.created_at }}</td>
       <td>{{ machine_incident.updated_at }}</td>
       {% if perms.incidents.change_machineincident %}
-      <td>
+      <td class="text-end py-0">
         {% url 'incidents:update_machine_incident' object.pk machine_incident.pk as url %}
         {% button 'UPDATE' url "Edit Status" %}
       </td>
