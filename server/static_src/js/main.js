@@ -5,9 +5,11 @@ import '../scss/styles.scss'
 // TODO: only the plugins we need!
 import * as bootstrap from 'bootstrap'
 
-// Enable bootstrap tooltip
+// Enable bootstrap tooltip if the device doesn't have touch events.
 
-const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
-const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl, {
-    trigger : 'hover'
-}))
+if(!('ontouchstart' in window)) {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl, {
+        trigger : 'hover'
+    }))
+}
