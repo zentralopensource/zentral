@@ -26,7 +26,7 @@
     <div class="btn-group" role="group" style="margin:0 0 10px 0">
       {% if show_events_link %}
       <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_events' machine.get_urlsafe_serial_number %}">
-        <span class="bi bi-list" aria-hidden="true"></span> Events
+        <span class="bi bi-activity" aria-hidden="true"></span> Events
       </a>
       {% endif %}
       {% for link, anchor_text in store_links  %}
