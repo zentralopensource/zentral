@@ -18,6 +18,12 @@
                 {% url 'santa:configuration_events' object.pk as url %}
                 {% button 'EVENTS' url %}
             {% endif %}
+            {% if perms.santa.add_rule %}
+                <a type="button" href="{% url 'santa:configuration_rules' object.id %}" class="btn btn-link text-dark text-decoration-none"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Manage rules">
+                    <i class="bi bi-list"></i>
+                </a>
+            {% endif %}
             {% for link, anchor_text in store_links  %}
                 {% button 'LINK' link anchor_text %}
             {% endfor %}
@@ -210,14 +216,12 @@
 
 {% if perms.santa.view_rule %}
 <div class="d-flex justify-content-between mb-3">
-    <h2 class="m-0">Rule{{ rules_count|pluralize }} ({{ rules_count }})</h2>
     {% if perms.santa.add_rule %}
-        <div class="ms-auto">
-            <a type="button" href="{% url 'santa:configuration_rules' object.id %}" class="btn btn-link text-dark text-decoration-none"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Manage rules">
-                <i class="bi bi-list"></i>
-            </a>
-        </div>
+        <a type="button" href="{% url 'santa:configuration_rules' object.id %}">
+    {% endif %}
+            <h2 class="m-0">Rule{{ rules_count|pluralize }} ({{ rules_count }})</h2>
+    {% if perms.santa.add_rule %}
+        </a>
     {% endif %}
 </div>
 {% endif %}
