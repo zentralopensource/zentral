@@ -95,7 +95,7 @@ ACTION = {
 
 
 @register.inclusion_tag('_button.html')
-def button(action, url, tooltip=None, placement="bottom"):
+def button(action, url, tooltip=None, classes=None, placement="bottom"):
     """ Displays a Button.
 
     Args:
@@ -103,6 +103,7 @@ def button(action, url, tooltip=None, placement="bottom"):
         url (str): a reversible url like "application:action".
         tooltip (string, optional): A tooltip to display. If None, is not displayed.
             Defaults to ACTION[key]['icon'].
+        classes (string, optional): Optional classes to add to button.
         placement (str, optional): Tooltip placement. Defaults to "bottom".
     """
     if action not in ACTION.keys():
@@ -112,5 +113,6 @@ def button(action, url, tooltip=None, placement="bottom"):
         'url': url,
         'icon': ACTION[action]['icon'],
         'tooltip': ACTION[action]['tooltip'] if tooltip is None else tooltip,
+        'classes': classes,
         'placement': placement,
     }

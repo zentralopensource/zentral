@@ -51,7 +51,7 @@
     <div class="ms-auto">
         {% if perms.monolith.add_enrollment %}
             {% url 'monolith:add_manifest_enrollment' object.id as url %}
-            {% button 'CREATE' url "Add new Enrollment" %}
+            {% button 'CREATE' url "Add new Enrollment" 'mx-3' %}
         {% endif %}
     </div>
 </div>
@@ -116,7 +116,7 @@
         <div class="ms-auto">
             {% if perms.monolith.add_manifestcatalog %}
                 {% url 'monolith:add_manifest_catalog' object.id as url %}
-                {% button 'CREATE' url "Add new Catalog" %}
+                {% button 'CREATE' url "Add new Catalog" 'mx-3' %}
             {% endif %}
         </div>
     </div>
@@ -243,7 +243,7 @@
         <div class="ms-auto">
             {% if perms.monolith.add_manifestsubmanifest %}
                 {% url 'monolith:add_manifest_sub_manifest' object.id as url %}
-                {% button 'CREATE' url "Add new Sub Manifest" %}
+                {% button 'CREATE' url "Add new Sub Manifest"  'mx-3' %}
             {% endif %}
         </div>
     </div>
