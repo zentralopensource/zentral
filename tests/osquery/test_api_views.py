@@ -2495,6 +2495,7 @@ class APIViewsTestCase(TestCase):
                            "version": 1,
                            "compliance_check_enabled": False,
                            "sql": query.sql,
+                           "tag": None,
                            "minimum_osquery_version": None,
                            "description": query.description,
                            "value": '',
@@ -2525,6 +2526,7 @@ class APIViewsTestCase(TestCase):
                            "version": 1,
                            "compliance_check_enabled": False,
                            "sql": query.sql,
+                           "tag": None,
                            "minimum_osquery_version": None,
                            "description": query.description,
                            "value": '',
@@ -2548,6 +2550,7 @@ class APIViewsTestCase(TestCase):
                            "version": 1,
                            "compliance_check_enabled": False,
                            "sql": query.sql,
+                           "tag": None,
                            "minimum_osquery_version": None,
                            "description": query.description,
                            "value": '',
@@ -2582,6 +2585,7 @@ class APIViewsTestCase(TestCase):
                           "version": 1,
                           "compliance_check_enabled": False,
                           "sql": "select * from osquery_info;",
+                          "tag": None,
                           "minimum_osquery_version": None,
                           "description": "",
                           "value": '',
@@ -2613,6 +2617,7 @@ class APIViewsTestCase(TestCase):
                           "version": 1,
                           "compliance_check_enabled": False,
                           "sql": "select * from osquery_info;",
+                          "tag": None,
                           "minimum_osquery_version": None,
                           "description": "",
                           "value": "",
@@ -2628,6 +2633,62 @@ class APIViewsTestCase(TestCase):
                           "created_at": query.created_at.isoformat(),
                           "updated_at": query.updated_at.isoformat()
                           })
+
+    def test_create_compliance_check_query(self):
+        data = {
+            "name": "test_query01",
+            "sql": "select 'OK' ztl_status;",
+            "compliance_check_enabled": True
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
+        query = Query.objects.get(name='test_query01')
+        self.assertEqual(response.json(),
+                         {"id": query.pk,
+                          "name": query.name,
+                          "version": 1,
+                          "compliance_check_enabled": True,
+                          "sql": "select 'OK' ztl_status;",
+                          "tag": None,
+                          "minimum_osquery_version": None,
+                          "description": "",
+                          "value": '',
+                          "platforms": [],
+                          "scheduling": None,
+                          "created_at": query.created_at.isoformat(),
+                          "updated_at": query.updated_at.isoformat()
+                          })
+
+    def test_create_tag_update_query(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        data = {
+            "name": "test_query01",
+            "sql": "select 'OK' ztl_status;",
+            "tag": tag.pk,
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
+        query = Query.objects.get(name='test_query01')
+        self.assertEqual(response.json(),
+                         {"id": query.pk,
+                          "name": query.name,
+                          "version": 1,
+                          "compliance_check_enabled": False,
+                          "sql": "select 'OK' ztl_status;",
+                          "tag": tag.pk,
+                          "minimum_osquery_version": None,
+                          "description": "",
+                          "value": '',
+                          "platforms": [],
+                          "scheduling": None,
+                          "created_at": query.created_at.isoformat(),
+                          "updated_at": query.updated_at.isoformat()
+                          })
+        self.assertEqual(query.tag, tag)
 
     def test_create_query_with_scheduling_slug_collision(self):
         query = self.force_query(pack_query_mode="diff")
@@ -2658,6 +2719,23 @@ class APIViewsTestCase(TestCase):
         response = self.post_json_data(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'compliance_check_enabled': ['ztl_status not in sql']})
+
+    def test_create_query_tag_and_compliance_check_error(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        data = {
+            "name": get_random_string(12),
+            "sql": "select * from osquery_info;",
+            "compliance_check_enabled": True,
+            "tag": tag.pk,
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'compliance_check_enabled': ['A query can either be a compliance check or a tag update, not both'],
+             'tag': ['A query can either be a compliance check or a tag update, not both']}
+        )
 
     def test_create_query_ztl_status_validate_success(self):
         query_name = get_random_string(12)
@@ -2693,6 +2771,27 @@ class APIViewsTestCase(TestCase):
                          {'scheduling': {
                              "snapshot_mode": [
                                  "A compliance check query can only be scheduled in 'snapshot' mode."]}})
+
+    def test_create_query_tag_diff_mode_error(self):
+        pack = self.force_pack()
+        tag = Tag.objects.create(name=get_random_string(12))
+        data = {
+            "name": get_random_string(12),
+            "sql": "ztl_status;",
+            "tag": tag.pk,
+            "scheduling": {
+                "pack": pack.pk,
+                "interval": 60,
+                "snapshot_mode": False
+            }
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(),
+                         {'scheduling': {
+                             "snapshot_mode": [
+                                 "A tag update query can only be scheduled in 'snapshot' mode."]}})
 
     def test_create_query_snapshot_mode_log_removed_actions_exclusive(self):
         pack = self.force_pack()
@@ -2778,6 +2877,7 @@ class APIViewsTestCase(TestCase):
                           "version": 1,
                           "compliance_check_enabled": False,
                           "sql": query.sql,
+                          "tag": None,
                           "minimum_osquery_version": None,
                           "description": query.description,
                           "value": '',
@@ -2862,6 +2962,7 @@ class APIViewsTestCase(TestCase):
                  'snapshot_mode': True
              },
              'sql': 'SELECT * FROM osquery_schedule;',
+             'tag': None,
              'updated_at': query.updated_at.isoformat(),
              'value': '',
              'version': 1}  # no sql change
@@ -2917,6 +3018,7 @@ class APIViewsTestCase(TestCase):
                  'snapshot_mode': False
              },
              'sql': 'SELECT * FROM osquery_schedule;',
+             'tag': None,
              'updated_at': query.updated_at.isoformat(),
              'value': '',
              'version': 1}  # no sql change
@@ -2959,6 +3061,7 @@ class APIViewsTestCase(TestCase):
              'platforms': [],
              'scheduling': None,
              'sql': 'SELECT * FROM osquery_schedule;',
+             'tag': None,
              'updated_at': query.updated_at.isoformat(),
              'value': '',
              'version': 1}  # no sql change
@@ -3044,7 +3147,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(query.sql, "select 'OK' as ztl_status;")
         self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
 
-    def test_update_query_with_pack_query_diff_mode_validation_error(self):
+    def test_update_cc_query_with_pack_query_diff_mode_validation_error(self):
         query = self.force_query(pack_query_mode="diff", compliance_check=False)
         pack_query = PackQuery.objects.get(slug=slugify(query.name))
         data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
@@ -3054,6 +3157,18 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(
             response.json(),
             {'compliance_check_enabled': [f'query scheduled in diff mode in {pack_query.pack} pack']})
+
+    def test_update_tag_query_with_pack_query_diff_mode_validation_error(self):
+        query = self.force_query(pack_query_mode="diff", compliance_check=False)
+        pack_query = PackQuery.objects.get(slug=slugify(query.name))
+        tag = Tag.objects.create(name=get_random_string(12))
+        data = {"name": query.name, "sql": query.sql, "tag": tag.pk}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'tag': [f'query scheduled in diff mode in {pack_query.pack} pack']})
 
     def test_update_query_add_platforms(self):
         query = self.force_query()

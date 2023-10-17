@@ -193,7 +193,8 @@ def build_osquery_conf(machine, enrollment):
                                             .distinct()
                                             .filter(Q(tags__isnull=True) | Q(tags__in=machine.tags))
                                             .select_related("pack")
-                                            .prefetch_related("pack__packquery_set__query")):
+                                            .prefetch_related("pack__packquery_set__query__compliance_check",
+                                                              "pack__packquery_set__query__tag")):
         pack = configuration_pack.pack
         conf.setdefault("packs", {})[pack.configuration_key()] = pack.serialize()
 

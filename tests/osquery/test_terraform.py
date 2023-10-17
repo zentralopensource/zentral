@@ -2,6 +2,7 @@ from datetime import datetime
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
+from zentral.contrib.inventory.models import Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Configuration, DistributedQuery, Pack, PackQuery, Query
 from zentral.contrib.osquery.terraform import ConfigurationResource, QueryResource
@@ -15,12 +16,22 @@ class OsqueryTerraformTestCase(TestCase):
         name = get_random_string(12)
         return Pack.objects.create(name=name, slug=slugify(name))
 
-    def _force_query(self, force_pack=False, force_compliance_check=False, force_distributed_query=False):
+    def _force_query(
+        self,
+        force_pack=False,
+        force_compliance_check=False,
+        force_distributed_query=False,
+        force_tag=False,
+    ):
         if force_compliance_check:
             sql = "select 'OK' as ztl_status;"
         else:
             sql = "select 1 from processes;"
-        query = Query.objects.create(name=get_random_string(12), sql=sql)
+        if force_tag:
+            tag = Tag.objects.create(name=get_random_string(12))
+        else:
+            tag = None
+        query = Query.objects.create(name=get_random_string(12), sql=sql, tag=tag)
         pack = None
         if force_pack:
             pack = self._force_pack()
@@ -64,6 +75,20 @@ class OsqueryTerraformTestCase(TestCase):
         resource_repr = resource.to_representation()
         self.assertIn("compliance_check_enabled = true", resource_repr)
         self.assertNotIn("scheduling", resource_repr)
+
+    # tag
+
+    def test_tag(self):
+        query, _, _ = self._force_query(force_tag=True)
+        resource = QueryResource(query)
+        resource_repr = resource.to_representation()
+        self.assertIn(f"tag_id    = zentral_tag.tag{query.tag.pk}.id", resource_repr)
+
+    def test_no_tag(self):
+        query, _, _ = self._force_query()
+        resource = QueryResource(query)
+        resource_repr = resource.to_representation()
+        self.assertNotIn("tag_id", resource_repr)
 
     # configuration
 

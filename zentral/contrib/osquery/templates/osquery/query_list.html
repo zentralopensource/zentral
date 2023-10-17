@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load bootstrap inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -42,6 +42,10 @@
       {{ form.compliance_check.label_tag }}
       {{ form.compliance_check }}
     </div>
+    <div class="form-group">
+      {{ form.tag_update.label_tag }}
+      {{ form.tag_update }}
+    </div>
     <button type="submit" class="btn btn-default">Search</button>
 </form>
 
@@ -63,6 +67,7 @@
     <tr>
       <th>Name / Tables</th>
       <th>Compliance check</th>
+      <th>Tag</th>
       {% if perms.osquery.view_pack %}
       <th>Pack</th>
       {% endif %}
@@ -80,6 +85,7 @@
         {% if tables %}<p style="margin:5px 0 0 0">{% for table in query.tables %}<code>{{ table }}</code> {% endfor %}</p>{% endif %}
       </td>
       <td>{% if query.compliance_check %}yes{% else %}no{% endif %}</td>
+      <td>{% if query.tag %}{% inventory_tag query.tag %}{% else %}-{% endif %}</td>
       {% if perms.osquery.view_pack %}
       <td>
         {% if query.packquery %}<a href="{{ query.packquery.get_absolute_url }}">{{ query.packquery.pack }}</a>{% else %}-{% endif %}
@@ -109,4 +115,22 @@
 </nav>
 {% endif %}
 
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function testCheckboxes(elm) {
+    checkedInputs = $('input[type=checkbox]:checked');
+    if (checkedInputs.length > 1) {
+      checkedInputs.each(function (index, input) {
+        if (input !== elm) {
+          $(input).prop("checked", false);
+        }
+      });
+    }
+  }
+  $('input[type=checkbox]').change(function() {
+    testCheckboxes(this);
+  });
+</script>
 {% endblock %}

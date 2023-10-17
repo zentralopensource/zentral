@@ -53,6 +53,12 @@ class Platform(enum.Enum):
 osquery_version_validator = RegexValidator(r"^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(\.[0-9]{1,4})?$")
 
 
+class QueryType(enum.Enum):
+    STANDARD = "std"
+    COMPLIANCE_CHECK = "cc"
+    TAG = "tag"
+
+
 class Query(models.Model):
     name = models.CharField(max_length=256, unique=True)
 
@@ -77,11 +83,20 @@ class Query(models.Model):
 
     version = models.PositiveIntegerField(default=1, editable=False)
 
+    # if the query is linked to a compliance check, it is a COMPLIANCE_CHECK query
     compliance_check = models.OneToOneField(
         "compliance_checks.ComplianceCheck",
         on_delete=models.SET_NULL,
         related_name="query",
         editable=False,
+        null=True
+    )
+    # if the query is linked to a tag, it is a TAG query
+    tag = models.ForeignKey(
+        "inventory.Tag",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
         null=True
     )
 
@@ -100,6 +115,15 @@ class Query(models.Model):
     @cached_property
     def tables(self):
         return sorted(tables_in_query(self.sql))
+
+    @property
+    def type(self):
+        if self.compliance_check:
+            return QueryType.COMPLIANCE_CHECK
+        elif self.tag:
+            return QueryType.TAG
+        else:
+            return QueryType.STANDARD
 
     def serialize(self):
         d = {"query": self.sql}
@@ -197,17 +221,24 @@ class Pack(models.Model):
 def parse_pack_query_configuration_key(key):
     try:
         items = key.split(Pack.DELIMITER)
-        if len(items) == 6:
+        len_items = len(items)
+        if len_items == 7:
+            _, pack_pk, _, query_type, query_pk, query_version, event_routing_key = items
+            if not event_routing_key:
+                event_routing_key = None
+            query_type = QueryType(query_type)
+        elif len_items == 6:
             _, pack_pk, _, query_pk, query_version, event_routing_key = items
+            query_type = None
         else:
             _, pack_pk, _, query_pk, query_version = items
-            event_routing_key = None
+            event_routing_key = query_type = None
         pack_pk = int(pack_pk)
         query_pk = int(query_pk)
         query_version = int(query_version)
     except (AttributeError, ValueError):
         raise ValueError("Not an osquery pack query configuration key")
-    return pack_pk, query_pk, query_version, event_routing_key
+    return pack_pk, query_type, query_pk, query_version, event_routing_key
 
 
 def parse_result_name(name):
@@ -216,12 +247,6 @@ def parse_result_name(name):
         raise ValueError("result query name doesn't start with expected prefix")
     configuration_key = name[len(expected_prefix):]
     return parse_pack_query_configuration_key(configuration_key)
-
-
-class PackQueryManager(models.Manager):
-    def get_with_config_key(self, key):
-        pack_pk, query_pk, _, _ = parse_pack_query_configuration_key(key)
-        return self.get(pack__pk=pack_pk, query__pk=query_pk)
 
 
 class PackQuery(models.Model):
@@ -256,8 +281,6 @@ class PackQuery(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    objects = PackQueryManager()
-
     class Meta:
         unique_together = (("pack", "slug"),)
 
@@ -265,10 +288,13 @@ class PackQuery(models.Model):
         return "{}#pq{}".format(self.pack.get_absolute_url(), self.pk)
 
     def pack_key(self):
-        items = [self.slug, str(self.query.pk), str(self.query.version)]
-        if self.pack.event_routing_key:
-            items.append(self.pack.event_routing_key)
-        return Pack.DELIMITER.join(items)
+        return Pack.DELIMITER.join([
+            self.slug,
+            self.query.type.value,
+            str(self.query.pk),
+            str(self.query.version),
+            self.pack.event_routing_key or ""
+        ])
 
     def serialize(self):
         d = self.query.serialize()

@@ -339,13 +339,20 @@ class QueryForm(forms.ModelForm):
         return sql
 
     def clean(self):
-        if self.cleaned_data.get("compliance_check"):
+        compliance_check = self.cleaned_data.get("compliance_check")
+        tag = self.cleaned_data.get("tag")
+        if tag and compliance_check:
+            err = "A query can either be a compliance check or a tag update, not both"
+            self.add_error("compliance_check", err)
+            self.add_error("tag", err)
+        if compliance_check:
             sql = self.cleaned_data.get("sql")
             if sql and "ztl_status" not in sql:
                 self.add_error(
                     "compliance_check",
                     "The query doesn't contain the 'ztl_status' keyword"
                 )
+        if compliance_check or tag:
             try:
                 pack_query = self.instance.packquery
             except PackQuery.DoesNotExist:
@@ -353,7 +360,7 @@ class QueryForm(forms.ModelForm):
             else:
                 if not pack_query.snapshot_mode:
                     self.add_error(
-                        "compliance_check",
+                        "tag" if tag else "compliance_check",
                         f"This query is scheduled in 'diff' mode in the {pack_query.pack} pack"
                     )
 
@@ -372,11 +379,12 @@ class QuerySearchForm(forms.Form):
     )
     pack = forms.ModelChoiceField(queryset=Pack.objects.all(), required=False)
     compliance_check = forms.BooleanField(label="Only compliance checks", required=False)
+    tag_update = forms.BooleanField(label="Only tag updates", required=False)
 
     def get_queryset(self):
         qs = (
             Query.objects
-                 .select_related("compliance_check")
+                 .select_related("compliance_check", "tag__taxonomy")
                  .prefetch_related("packquery__pack")
                  .annotate(distributed_query_count=Count("distributedquery"))
                  .order_by("name", "pk")
@@ -395,4 +403,6 @@ class QuerySearchForm(forms.Form):
             qs = qs.filter(packquery__pack=pack)
         if self.cleaned_data.get("compliance_check"):
             qs = qs.filter(compliance_check__isnull=False)
+        if self.cleaned_data.get("tag_update"):
+            qs = qs.filter(tag__isnull=False)
         return qs

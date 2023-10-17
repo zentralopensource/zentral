@@ -206,28 +206,48 @@ class QuerySerializer(serializers.ModelSerializer):
         exclude = ("compliance_check",)
 
     def validate(self, data):
-        # compliance check
-        if data.get("compliance_check_enabled"):
+        compliance_check_enabled = data.get("compliance_check_enabled")
+        tag = data.get("tag")
+        # compliance check & tag mutually exclusive
+        if compliance_check_enabled and tag:
+            err = "A query can either be a compliance check or a tag update, not both"
+            raise serializers.ValidationError({
+                'compliance_check_enabled': err,
+                'tag': err,
+            })
+        # check compliance check query syntax
+        if compliance_check_enabled:
             sql = data.get("sql")
             if sql is not None and 'ztl_status' not in sql:
                 raise serializers.ValidationError({'compliance_check_enabled': 'ztl_status not in sql'})
+        # check query scheduling during update
+        if compliance_check_enabled or tag:
             try:
                 pack_query = self.instance.packquery
             except AttributeError:
                 pass
             else:
                 if not pack_query.snapshot_mode:
+                    err_key = "tag" if tag else "compliance_check_enabled"
                     raise serializers.ValidationError(
-                        {'compliance_check_enabled': f'query scheduled in diff mode in {pack_query.pack} pack'})
+                        {err_key: f'query scheduled in diff mode in {pack_query.pack} pack'})
+        # check query scheduling during creation
         pack_data = data.get("packquery")
         if not pack_data:
             return data
-        if data.get("compliance_check_enabled") and not pack_data.get("snapshot_mode"):
-            raise serializers.ValidationError({
-                "scheduling": {
-                    "snapshot_mode": ["A compliance check query can only be scheduled in 'snapshot' mode."]
-                }
-            })
+        if not pack_data.get("snapshot_mode"):
+            if compliance_check_enabled:
+                raise serializers.ValidationError({
+                    "scheduling": {
+                        "snapshot_mode": ["A compliance check query can only be scheduled in 'snapshot' mode."]
+                    }
+                })
+            if tag:
+                raise serializers.ValidationError({
+                    "scheduling": {
+                        "snapshot_mode": ["A tag update query can only be scheduled in 'snapshot' mode."]
+                    }
+                })
         return data
 
     def create(self, validated_data):

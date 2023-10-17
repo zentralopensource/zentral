@@ -55,6 +55,10 @@
         <td>Compliance check</td>
         <td>{% if object.compliance_check %}yes{% else %}no{% endif %}</td>
       </tr>
+      <tr>
+        <td>Tag</td>
+        <td>{% if object.tag %}{% inventory_tag object.tag %}{% else %}-{% endif %}</td>
+      </tr>
       </tbody>
     </table>
 

@@ -3,7 +3,8 @@ import logging
 import uuid
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
-from zentral.contrib.osquery.models import parse_result_name, EnrolledMachine, PackQuery
+from zentral.contrib.osquery.models import parse_result_name, EnrolledMachine, PackQuery, QueryType
+from zentral.contrib.osquery.tags import TagUpdateAggregator
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
 
@@ -89,7 +90,7 @@ class OsqueryResultEvent(OsqueryEvent):
     def get_linked_objects_keys(self):
         keys = {}
         try:
-            pack_pk, query_pk, _, _ = self.parse_result_name()
+            pack_pk, _, query_pk, _, _ = self.parse_result_name()
         except ValueError as e:
             logger.warning(str(e))
             return keys
@@ -236,6 +237,7 @@ def post_results(msn, user_agent, ip, results):
     else:
         request = None
     cc_status_agg = ComplianceCheckStatusAggregator(msn)
+    tag_update_agg = TagUpdateAggregator(msn)
     for index, result in enumerate(_iter_cleaned_up_records(results)):
         try:
             event_time = _get_record_created_at(result)
@@ -248,7 +250,7 @@ def post_results(msn, user_agent, ip, results):
                                  created_at=event_time)
         event = OsqueryResultEvent(metadata, result)
         try:
-            _, query_pk, query_version, event_routing_key = event.parse_result_name()
+            _, query_type, query_pk, query_version, event_routing_key = event.parse_result_name()
         except ValueError:
             logger.exception("Could not parse result name")
             query_pk = query_version = event_routing_key = None
@@ -256,12 +258,13 @@ def post_results(msn, user_agent, ip, results):
             event.metadata.routing_key = event_routing_key
         event.post()
         snapshot = event.payload.get("snapshot")
-        if snapshot is None:
-            # no snapshot, cannot be a compliance check
-            continue
-        if query_pk is not None and query_version is not None:
-            cc_status_agg.add_result(query_pk, query_version, event_time, snapshot)
+        if snapshot is not None and query_pk is not None and query_version is not None:
+            if query_type == QueryType.COMPLIANCE_CHECK:
+                cc_status_agg.add_result(query_pk, query_version, event_time, snapshot)
+            elif query_type == QueryType.TAG:
+                tag_update_agg.add_result(query_pk, query_version, event_time, snapshot)
     cc_status_agg.commit_and_post_events()
+    tag_update_agg.commit()
 
 
 # Utility function for the audit trail

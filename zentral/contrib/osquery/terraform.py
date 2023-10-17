@@ -87,6 +87,7 @@ class QueryResource(Resource):
     description = StringAttr()
     value = StringAttr()
     compliance_check_enabled = BoolAttr(default=False)
+    tag_id = RefAttr(TagResource, required=False)
     scheduling = QuerySchedulingAttr(source="pack_query")
 
 
