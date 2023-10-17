@@ -2281,7 +2281,7 @@ def inventory_events_from_machine_snapshot_commit(machine_snapshot_commit):
                    exclude=["deb_packages",
                             "disks",
                             "network_interfaces",
-                            "osx_app_instance",
+                            "osx_app_instances",
                             "program_instances"]
                ))
         yield ('inventory_heartbeat',
