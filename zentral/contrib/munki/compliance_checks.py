@@ -17,7 +17,8 @@ def convert_bool_expected_result(expected_result):
         expected_result = "0"
     elif expected_result in ("t", "true"):
         expected_result = "1"
-    assert int(expected_result) in (0, 1)
+    expected_result = int(expected_result)
+    assert expected_result in (0, 1)
     return bool(expected_result)
 
 

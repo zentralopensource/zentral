@@ -305,6 +305,24 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "munki/scriptcheck_form.html")
         self.assertContains(response, "Update script check")
 
+    def test_update_script_post_arch_err(self):
+        sc = force_script_check()
+        self._login("munki.change_scriptcheck")
+        response = self.client.post(
+            reverse("munki:update_script_check", args=(sc.pk,)),
+            {"ccf-name": "yolo",
+             "ccf-description": "fomo",
+             "scf-type": "ZSH_INT",
+             "scf-source": "echo 1",
+             "scf-expected_result": "yolo",
+             "scf-arch_amd64": False,
+             "scf-arch_arm64": False},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_form.html")
+        self.assertFormError(response.context["script_check_form"], "expected_result", "Invalid integer")
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_script_check_post_ok(self, post_event):
         sc = force_script_check()

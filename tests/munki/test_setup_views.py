@@ -209,6 +209,17 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "munki/enrollment_form.html")
         self.assertContains(response, "Munki enrollment")
 
+    def test_create_enrollment_post_err(self):
+        configuration = self._force_configuration()
+        self._login("munki.add_enrollment", "munki.view_configuration", "munki.view_enrollment")
+        response = self.client.post(reverse("munki:create_enrollment", args=(configuration.pk,)),
+                                    {"configuration": 0,
+                                     "secret-meta_business_unit": self.mbu.pk}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/enrollment_form.html")
+        self.assertFormError(response.context["enrollment_form"], "configuration",
+                             "Select a valid choice. That choice is not one of the available choices.")
+
     def test_create_enrollment_post(self):
         configuration = self._force_configuration()
         self._login("munki.add_enrollment", "munki.view_configuration", "munki.view_enrollment")

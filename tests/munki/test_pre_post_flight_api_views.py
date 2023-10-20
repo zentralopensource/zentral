@@ -27,6 +27,7 @@ class MunkiAPIViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
+        cls.enrollment_secret.tags.set([Tag.objects.create(name=get_random_string(12)) for _ in range(2)])
         cls.enrollment = Enrollment.objects.create(configuration=cls.configuration, secret=cls.enrollment_secret)
 
     # utility methods
@@ -73,6 +74,10 @@ class MunkiAPIViewsTestCase(TestCase):
         token = json_response["token"]
         enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, serial_number=serial_number)
         self.assertEqual(token, enrolled_machine.token)
+        self.assertEqual(
+            set(mt.tag for mt in MachineTag.objects.select_related("tag").filter(serial_number=serial_number)),
+            set(self.enrollment.secret.tags.all())
+        )
 
     # job details
 
@@ -132,6 +137,21 @@ class MunkiAPIViewsTestCase(TestCase):
             "tags": [],
         }
         self.assertEqual(expected_response, response.json())
+
+    def test_job_details_with_principal_user_detection(self):
+        enrolled_machine = self._make_enrolled_machine()
+        self.configuration.principal_user_detection_sources = ["Google Chrome"]
+        self.configuration.principal_user_detection_domains = ["zentral.com"]
+        self.configuration.save()
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["principal_user_detection"],
+            {"sources": ["Google Chrome"],
+             "domains": ["zentral.com"]}
+        )
 
     def test_job_details_with_open_incident(self):
         enrolled_machine = self._make_enrolled_machine()
