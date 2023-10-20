@@ -229,10 +229,31 @@ class MunkiAPIViewsTestCase(TestCase):
             arch_amd64=False,
             tags=tags[:1]
         )
+        force_script_check(max_os_version="14.0.1", arch_arm64=True)  # max OS version
         response = self._post_as_json(reverse("munki:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number,
                                        "os_version": "14.1",
                                        "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(
+            response.json()["script_checks"],
+            [{'pk': sc.pk, 'version': 1, 'type': 'ZSH_BOOL', 'source': 'echo true', 'expected_result': True}]
+        )
+
+    def test_job_details_first_time_script_check_amd64(self):
+        enrolled_machine = self._make_enrolled_machine()
+        sc = force_script_check(
+            type=ScriptCheck.Type.ZSH_BOOL,
+            source="echo true",
+            expected_result="t",
+            arch_arm64=False,
+            arch_amd64=True,
+        )
+        force_script_check(min_os_version="15", arch_amd64=True)  # min OS version
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "amd64"},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(
             response.json()["script_checks"],

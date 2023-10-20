@@ -111,6 +111,29 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertFormError(response.context["script_check_form"], "arch_amd64", err_msg)
         self.assertFormError(response.context["script_check_form"], "arch_arm64", err_msg)
 
+    def test_create_script_check_post_os_errors(self):
+        self._login("munki.add_scriptcheck")
+        name = get_random_string(12)
+        description = get_random_string(12)
+        response = self.client.post(
+            reverse("munki:create_script_check"),
+            {"ccf-name": name,
+             "ccf-description": description,
+             "scf-type": "ZSH_STR",
+             "scf-source": "echo yolo",
+             "scf-expected_result": "yolo",
+             "scf-arch_amd64": True,
+             "scf-arch_arm64": True,
+             "scf-min_os_version": "yolo",
+             "scf-max_os_version": "fomo"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_form.html")
+        err_msg = "Not a valid OS version"
+        self.assertFormError(response.context["script_check_form"], "min_os_version", err_msg)
+        self.assertFormError(response.context["script_check_form"], "max_os_version", err_msg)
+
     def test_create_script_check_post_int_err(self):
         self._login("munki.add_scriptcheck")
         name = get_random_string(12)
