@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li><a href="{% url 'munki:script_checks' %}">Script checks</a></li>
+  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="active">Delete</li>
+</ol>
+
+<h3>Delete script check <i>{{ object }}</i></h3>
+
+<p>Do you really want to delete this script check?</p>
+<form method="POST">{% csrf_token %}
+  <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+  <button type="submit" class="btn btn-danger">Delete</button>
+</form>
+{% endblock %}

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from unittest.mock import patch
 import uuid
@@ -6,10 +6,13 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
-from zentral.contrib.munki.events import MunkiInstallEvent, MunkiInstallFailedEvent
+from zentral.contrib.munki.events import MunkiInstallEvent, MunkiInstallFailedEvent, MunkiScriptCheckStatusUpdated
 from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
-from zentral.contrib.munki.models import Configuration, EnrolledMachine, Enrollment, ManagedInstall
+from zentral.contrib.munki.models import (Configuration, EnrolledMachine, Enrollment,
+                                          ManagedInstall, MunkiState, ScriptCheck)
+from zentral.core.compliance_checks.models import MachineStatus
 from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
+from .utils import force_script_check
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -164,6 +167,102 @@ class MunkiAPIViewsTestCase(TestCase):
                                       {"machine_serial_number": get_random_string(3)},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.munki.views.logger.error")
+    def test_job_details_bad_os_version(self, logger_error):
+        enrolled_machine = self._make_enrolled_machine()
+        force_script_check()
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "yolo",
+                                       "arch": "amd64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        logger_error.assert_called_once_with("Machine %s: could not build comparable OS version",
+                                             enrolled_machine.serial_number)
+        self.assertNotIn("script_checks", response.json())
+
+    @patch("zentral.contrib.munki.views.logger.error")
+    def test_job_details_unknown_arch_version(self, logger_error):
+        enrolled_machine = self._make_enrolled_machine()
+        force_script_check()
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "yolo"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        logger_error.assert_called_once_with("Machine %s: unknown arch",
+                                             enrolled_machine.serial_number)
+        self.assertNotIn("script_checks", response.json())
+
+    def test_job_details_first_time_script_check(self):
+        enrolled_machine = self._make_enrolled_machine()
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
+        for tag in tags:
+            MachineTag.objects.create(serial_number=enrolled_machine.serial_number, tag=tag)
+        sc = force_script_check(
+            type=ScriptCheck.Type.ZSH_BOOL,
+            source="echo true",
+            expected_result="t",
+            min_os_version="14",
+            max_os_version="15",
+            arch_arm64=True,
+            arch_amd64=False,
+            tags=tags[:1]
+        )
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(
+            response.json()["script_checks"],
+            [{'pk': sc.pk, 'version': 1, 'type': 'ZSH_BOOL', 'source': 'echo true', 'expected_result': True}]
+        )
+
+    def test_job_details_second_time_too_early_no_script_check(self):
+        enrolled_machine = self._make_enrolled_machine()
+        tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number=enrolled_machine.serial_number, tag=tag)
+        force_script_check(
+            type=ScriptCheck.Type.ZSH_BOOL,
+            source="echo true",
+            expected_result="t",
+        )
+        MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
+                                  last_script_checks_run=datetime.utcnow())
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertNotIn("script_checks", response.json())
+
+    def test_job_details_second_time_script_check(self):
+        enrolled_machine = self._make_enrolled_machine()
+        tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number=enrolled_machine.serial_number, tag=tag)
+        sc = force_script_check(
+            type=ScriptCheck.Type.ZSH_INT,
+            source="echo 10",
+            expected_result="10",
+        )
+        configuration = enrolled_machine.enrollment.configuration
+        last_script_checks_run = (
+            datetime.utcnow()
+            - timedelta(seconds=configuration.script_checks_run_interval_seconds)
+            - timedelta(seconds=1)
+        )
+        MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
+                                  last_script_checks_run=last_script_checks_run)
+        response = self._post_as_json(reverse("munki:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(
+            response.json()["script_checks"],
+            [{'pk': sc.pk, 'version': 1, 'type': 'ZSH_INT', 'source': 'echo 10', 'expected_result': 10}]
+        )
 
     # post job
 
@@ -409,3 +508,63 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertFalse(mi.reinstall)  # no reinstall, even if same PkgInfo, because last seen report found false
         self.assertIsNone(mi.failed_at)
         self.assertIsNone(mi.failed_version)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_job_script_check_results(self, post_event):
+        enrolled_machine = self._make_enrolled_machine()
+        sc = force_script_check()
+        start_dt = datetime.utcnow()
+        machine_status_qs = MachineStatus.objects.filter(serial_number=enrolled_machine.serial_number)
+        # no MachineStatus yet
+        self.assertEqual(machine_status_qs.count(), 0)
+
+        # post job with 1 script check result
+        response = self._post_as_json(reverse("munki:post_job"),
+                                      {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                                            "system_info": {"computer_name": get_random_string(12)}},
+                                       "reports": [],
+                                       "script_check_results": [{
+                                           "pk": sc.pk,
+                                           "version": sc.compliance_check.version,
+                                           "status": 0,
+                                           "time": 0.1
+                                        }]},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+
+        # check all events
+        status_updated_event = None
+        for call_args in post_event.call_args_list:
+            event = call_args.args[0]
+            if isinstance(event, MunkiScriptCheckStatusUpdated):
+                status_updated_event = event
+            # all events linked to the machine
+            self.assertEqual(event.metadata.machine_serial_number, enrolled_machine.serial_number)
+
+        # check MunkiScriptCheckStatusUpdated event
+        self.assertEqual(
+            status_updated_event.payload,
+            {"pk": sc.compliance_check.pk,
+             "model": "MunkiScriptCheck",
+             "name": sc.compliance_check.name,
+             "description": "",
+             "version": 1,
+             "munki_script_check": {"pk": sc.pk},
+             "status": "OK"}
+        )
+        status_updated_event_metadata = status_updated_event.metadata.serialize()
+        self.assertEqual(
+            status_updated_event_metadata["objects"],
+            {"compliance_check": [str(sc.compliance_check.pk)],
+             "munki_script_check": [str(sc.pk)]}
+        )
+
+        # check MunkiState
+        munki_state = MunkiState.objects.get(machine_serial_number=enrolled_machine.serial_number)
+        self.assertTrue(munki_state.last_script_checks_run > start_dt)
+
+        # check MachineStatus
+        self.assertEqual(machine_status_qs.count(), 1)
+        machine_status = machine_status_qs.first()
+        self.assertEqual(machine_status.status, 0)
+        self.assertEqual(machine_status.compliance_check, sc.compliance_check)

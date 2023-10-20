@@ -9,6 +9,7 @@ import plistlib
 import ssl
 import subprocess
 import sys
+import time
 import urllib.request
 import warnings
 import zlib
@@ -17,12 +18,17 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.14"
+USER_AGENT = "Zentral/munkipostflight 0.15"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
 
 SYSTEM_PROFILER = "/usr/sbin/system_profiler"
+
+SCRIPT_CHECK_TIMEOUT = 3  # timeout in seconds for each script check
+SCRIPT_CHECK_STATUS_OK = 0
+SCRIPT_CHECK_STATUS_UNKNOWN = 200
+SCRIPT_CHECK_STATUS_FAILED = 300
 
 
 # OSX apps
@@ -287,6 +293,64 @@ def build_managed_installs_payload():
     for mir in iter_manage_install_reports(reverse=False):
         managed_installs = mir.updated_managed_installs(managed_installs)
     return sorted((n, v, dn, t) for n, (v, dn, t) in managed_installs.items())
+
+
+# Script checks
+
+
+def convert_script_check_int_result(result):
+    return int(result)
+
+
+def convert_script_check_bool_result(result):
+    result = result.lower()
+    if result in ("f", "false"):
+        result = "0"
+    elif result in ("t", "true"):
+        result = "1"
+    assert int(result) in (0, 1)
+    return bool(result)
+
+
+def run_script_check(script_check):
+    start_time = time.monotonic()
+    cp = subprocess.run(
+        ["/bin/zsh"],
+        input=script_check["source"],
+        capture_output=True,
+        encoding="utf-8",
+        timeout=SCRIPT_CHECK_TIMEOUT,
+    )
+    time_elapsed = time.monotonic() - start_time
+    expected_result = script_check["expected_result"]
+    result = cp.stdout
+    if script_check["type"] == "ZTL_INT":
+        try:
+            result = convert_script_check_int_result(result)
+        except Exception:
+            return SCRIPT_CHECK_STATUS_UNKNOWN, time_elapsed
+    elif script_check["type"] == "ZTL_BOOL":
+        try:
+            result = convert_script_check_bool_result(result)
+        except Exception:
+            return SCRIPT_CHECK_STATUS_UNKNOWN, time_elapsed
+    if result == expected_result:
+        return SCRIPT_CHECK_STATUS_OK, time_elapsed
+    else:
+        return SCRIPT_CHECK_STATUS_FAILED, time_elapsed
+
+
+def run_script_checks(script_checks):
+    results = []
+    for script_check in script_checks:
+        status, time_elapsed = run_script_check(script_check)
+        results.append({
+            "pk": script_check["pk"],
+            "version": script_check["version"],
+            "status": status,
+            "time": time_elapsed,
+        })
+    return results
 
 
 # Machine infos
@@ -785,6 +849,11 @@ if __name__ == '__main__':
     # add the managed installs if requested or last seen report not found
     if job_details.get('managed_installs', True) or not data['last_seen_report_found']:
         data['managed_installs'] = build_managed_installs_payload()
+
+    # run the script checks
+    script_checks = job_details.get("script_checks")
+    if isinstance(script_checks, list):
+        data["script_check_results"] = run_script_checks(script_checks)
 
     # post the payload to zentral
     post_job(data)

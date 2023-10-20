@@ -101,6 +101,7 @@ class APIViewsTestCase(TestCase):
              'id': configuration.pk,
              'inventory_apps_full_info_shard': 100,
              'managed_installs_sync_interval_days': 7,
+             'script_checks_run_interval_seconds': 86400,
              'name': configuration.name,
              'principal_user_detection_domains': [],
              'principal_user_detection_sources': [],
@@ -125,6 +126,7 @@ class APIViewsTestCase(TestCase):
               'id': configuration.pk,
               'inventory_apps_full_info_shard': 100,
               'managed_installs_sync_interval_days': 7,
+              'script_checks_run_interval_seconds': 86400,
               'name': configuration.name,
               'principal_user_detection_domains': [],
               'principal_user_detection_sources': [],
@@ -164,6 +166,7 @@ class APIViewsTestCase(TestCase):
              'principal_user_detection_domains': [],
              'collected_condition_keys': [],
              'managed_installs_sync_interval_days': 7,
+             'script_checks_run_interval_seconds': 86400,
              'auto_reinstall_incidents': False,
              'auto_failed_install_incidents': False,
              'version': 0,
@@ -177,6 +180,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(configuration.principal_user_detection_domains, [])
         self.assertEqual(configuration.collected_condition_keys, [])
         self.assertEqual(configuration.managed_installs_sync_interval_days, 7)
+        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
         self.assertFalse(configuration.auto_reinstall_incidents)
         self.assertFalse(configuration.auto_failed_install_incidents)
         self.assertEqual(configuration.version, 0)
@@ -193,6 +197,7 @@ class APIViewsTestCase(TestCase):
              "principal_user_detection_domains": ["zentral.io"],
              "collected_condition_keys": ["yolo"],
              "managed_installs_sync_interval_days": 1,
+             "script_checks_run_interval_seconds": 86400,
              "auto_reinstall_incidents": True,
              "auto_failed_install_incidents": True}
         )
@@ -208,6 +213,7 @@ class APIViewsTestCase(TestCase):
              'principal_user_detection_domains': ["zentral.io"],
              'collected_condition_keys': ["yolo"],
              'managed_installs_sync_interval_days': 1,
+             'script_checks_run_interval_seconds': 86400,
              'auto_reinstall_incidents': True,
              'auto_failed_install_incidents': True,
              'version': 0,
@@ -221,6 +227,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
         self.assertEqual(configuration.collected_condition_keys, ["yolo"])
         self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
+        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
         self.assertTrue(configuration.auto_reinstall_incidents)
         self.assertTrue(configuration.auto_failed_install_incidents)
         self.assertEqual(configuration.version, 0)
@@ -250,6 +257,7 @@ class APIViewsTestCase(TestCase):
              'id': configuration.pk,
              'inventory_apps_full_info_shard': 100,
              'managed_installs_sync_interval_days': 7,
+             'script_checks_run_interval_seconds': 86400,
              'name': configuration.name,
              'principal_user_detection_domains': [],
              'principal_user_detection_sources': [],
@@ -283,6 +291,7 @@ class APIViewsTestCase(TestCase):
              "principal_user_detection_domains": ["zentral.io"],
              "collected_condition_keys": ["yolo"],
              "managed_installs_sync_interval_days": 1,
+             "script_checks_run_interval_seconds": 86400,
              "auto_reinstall_incidents": True,
              "auto_failed_install_incidents": True}
         )
@@ -298,6 +307,7 @@ class APIViewsTestCase(TestCase):
              'principal_user_detection_domains': ["zentral.io"],
              'collected_condition_keys': ["yolo"],
              'managed_installs_sync_interval_days': 1,
+             'script_checks_run_interval_seconds': 86400,
              'auto_reinstall_incidents': True,
              'auto_failed_install_incidents': True,
              'version': 1,
@@ -311,6 +321,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
         self.assertEqual(configuration.collected_condition_keys, ["yolo"])
         self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
+        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
         self.assertTrue(configuration.auto_reinstall_incidents)
         self.assertTrue(configuration.auto_failed_install_incidents)
         self.assertEqual(configuration.version, 1)

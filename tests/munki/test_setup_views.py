@@ -56,6 +56,30 @@ class MunkiSetupViewsTestCase(TestCase):
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
         return Enrollment.objects.create(configuration=self._force_configuration(), secret=enrollment_secret)
 
+    # index
+
+    def test_index_redirect(self):
+        self._login_redirect(reverse("munki:index"))
+
+    def test_index_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("munki:index"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_index_configurations(self):
+        self._login("munki.view_configuration")
+        response = self.client.get(reverse("munki:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("munki:configurations"))
+        self.assertNotContains(response, reverse("munki:script_checks"))
+
+    def test_index_script_checks(self):
+        self._login("munki.view_scriptcheck")
+        response = self.client.get(reverse("munki:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("munki:configurations"))
+        self.assertContains(response, reverse("munki:script_checks"))
+
     # configurations
 
     def test_configurations_redirect(self):
@@ -100,6 +124,7 @@ class MunkiSetupViewsTestCase(TestCase):
                                      "principal_user_detection_domains": "yolo.fr",
                                      "collected_condition_keys": " ,  ".join(collected_condition_keys),
                                      "managed_installs_sync_interval_days": 1,
+                                     "script_checks_run_interval_seconds": 7231,
                                      "auto_reinstall_incidents": "on"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -111,6 +136,8 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(configuration.description, description)
         self.assertTrue(configuration.auto_reinstall_incidents)
         self.assertFalse(configuration.auto_failed_install_incidents)
+        self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
+        self.assertEqual(configuration.script_checks_run_interval_seconds, 7231)
         self.assertEqual(sorted(configuration.collected_condition_keys), collected_condition_keys)
         for condition_key in collected_condition_keys:
             self.assertContains(response, condition_key)
@@ -145,6 +172,7 @@ class MunkiSetupViewsTestCase(TestCase):
                                      "principal_user_detection_domains": "yolo.fr",
                                      "collected_condition_keys": ",".join(collected_condition_keys),
                                      "managed_installs_sync_interval_days": 2,
+                                     "script_checks_run_interval_seconds": 3600,
                                      "auto_failed_install_incidents": "on"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -155,6 +183,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(configuration2.principal_user_detection_sources, ["logged_in_user"])
         self.assertEqual(configuration2.principal_user_detection_domains, ["yolo.fr"])
         self.assertEqual(configuration2.managed_installs_sync_interval_days, 2)
+        self.assertEqual(configuration2.script_checks_run_interval_seconds, 3600)
         self.assertTrue(configuration2.auto_failed_install_incidents)
         self.assertEqual(sorted(configuration2.collected_condition_keys), collected_condition_keys)
         for condition_key in collected_condition_keys:

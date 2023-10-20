@@ -1,12 +1,16 @@
 from datetime import datetime, timedelta
 import json
 import logging
+from urllib.parse import urlencode
 from dateutil import parser
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.cache import cache
-from django.core.exceptions import SuspiciousOperation
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.db import transaction
+from django.db.models import F
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse, reverse_lazy
 from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
@@ -14,20 +18,40 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events, verify_enrollment_secret
-from zentral.core.events.base import post_machine_conflict_event
+from zentral.core.compliance_checks.forms import ComplianceCheckForm
+from zentral.core.events.base import AuditEvent, post_machine_conflict_event
 from zentral.core.probes.models import ProbeSource
+from zentral.core.stores.conf import frontend_store, stores
+from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
+from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.terraform import build_config_response
+from zentral.utils.text import encode_args
+from .compliance_checks import (MunkiScriptCheck,
+                                serialize_script_check_for_job,
+                                update_machine_munki_script_check_statuses)
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
-from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, UpdateInstallProbeForm
+from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, ScriptCheckForm, UpdateInstallProbeForm
 from .models import (Configuration, EnrolledMachine, Enrollment, ManagedInstall, MunkiState,
-                     PrincipalUserDetectionSource)
+                     PrincipalUserDetectionSource, ScriptCheck)
 from .terraform import iter_resources
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
 logger = logging.getLogger('zentral.contrib.munki.views')
+
+
+# index
+
+
+class IndexView(LoginRequiredMixin, TemplateView):
+    template_name = "munki/index.html"
+
+    def get_context_data(self, **kwargs):
+        if not self.request.user.has_module_perms("munki"):
+            raise PermissionDenied("Not allowed")
+        return super().get_context_data(**kwargs)
 
 
 # configuration
@@ -183,6 +207,234 @@ class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         self.enrollment.save()  # will bump the version
         return redirect(self.enrollment)
+
+
+# script check
+
+
+class ScriptCheckListView(PermissionRequiredMixin, ListView):
+    permission_required = "munki.view_scriptcheck"
+    model = ScriptCheck
+
+
+class CreateScriptCheckView(PermissionRequiredMixin, TemplateView):
+    permission_required = "munki.add_scriptcheck"
+    template_name = "munki/scriptcheck_form.html"
+
+    def get_forms(self):
+        compliance_check_form_kwargs = {
+            "prefix": "ccf",
+            "model": MunkiScriptCheck.get_model()
+        }
+        script_check_form_kwargs = {
+            "prefix": "scf"
+        }
+        if self.request.method == "POST":
+            compliance_check_form_kwargs["data"] = self.request.POST
+            script_check_form_kwargs["data"] = self.request.POST
+        return (
+            ComplianceCheckForm(**compliance_check_form_kwargs),
+            ScriptCheckForm(**script_check_form_kwargs)
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        if "compliance_check_form" not in kwargs and "script_check_form" not in kwargs:
+            ctx["compliance_check_form"], ctx["script_check_form"] = self.get_forms()
+        return ctx
+
+    def forms_invalid(self, compliance_check_form, script_check_form):
+        return self.render_to_response(
+            self.get_context_data(compliance_check_form=compliance_check_form,
+                                  script_check_form=script_check_form)
+        )
+
+    def forms_valid(self, compliance_check_form, script_check_form):
+        compliance_check = compliance_check_form.save(commit=False)
+        compliance_check.model = MunkiScriptCheck.get_model()
+        compliance_check.save()
+        script_check = script_check_form.save(commit=False)
+        script_check.compliance_check = compliance_check
+        script_check.save()
+        script_check_form.save_m2m()
+
+        def post_event():
+            event = AuditEvent.build_from_request_and_instance(
+                self.request, script_check,
+                action=AuditEvent.Action.CREATED,
+            )
+            event.post()
+        transaction.on_commit(lambda: post_event())
+        return redirect(script_check)
+
+    def post(self, request, *args, **kwargs):
+        compliance_check_form, script_check_form = self.get_forms()
+        if compliance_check_form.is_valid() and script_check_form.is_valid():
+            return self.forms_valid(compliance_check_form, script_check_form)
+        else:
+            return self.forms_invalid(compliance_check_form, script_check_form)
+
+
+class ScriptCheckView(PermissionRequiredMixin, DetailView):
+    permission_required = "munki.view_scriptcheck"
+    model = ScriptCheck
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data()
+        ctx["compliance_check"] = self.object.compliance_check
+        if self.request.user.has_perm(ScriptCheckEventsMixin.permission_required):
+            ctx["show_events_link"] = frontend_store.object_events
+            store_links = []
+            for store in stores.iter_events_url_store_for_user("object", self.request.user):
+                url = "{}?{}".format(
+                    reverse("munki:script_check_events_store_redirect", args=(self.object.pk,)),
+                    urlencode({"es": store.name,
+                               "tr": ScriptCheckEventsView.default_time_range})
+                )
+                store_links.append((url, store.name))
+            ctx["store_links"] = store_links
+        return ctx
+
+
+class UpdateScriptCheckView(PermissionRequiredMixin, TemplateView):
+    permission_required = "munki.change_scriptcheck"
+    template_name = "munki/scriptcheck_form.html"
+
+    def get_object(self, kwargs=None):
+        if kwargs is None:
+            kwargs = self.kwargs
+        return get_object_or_404(
+            ScriptCheck.objects.select_related("compliance_check").all(),
+            pk=kwargs["pk"]
+        )
+
+    def dispatch(self, request, *args, **kwargs):
+        self.object = self.get_object(kwargs)
+        self.compliance_check = self.object.compliance_check
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_forms(self):
+        compliance_check_form_kwargs = {
+            "prefix": "ccf",
+            "instance": self.compliance_check,
+            "model": MunkiScriptCheck.get_model()
+        }
+        script_check_form_kwargs = {
+            "prefix": "scf",
+            "instance": self.object,
+        }
+        if self.request.method == "POST":
+            compliance_check_form_kwargs["data"] = self.request.POST
+            script_check_form_kwargs["data"] = self.request.POST
+        return (
+            ComplianceCheckForm(**compliance_check_form_kwargs),
+            ScriptCheckForm(**script_check_form_kwargs)
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        if "compliance_check_form" not in kwargs and "script_check_form" not in kwargs:
+            ctx["compliance_check_form"], ctx["script_check_form"] = self.get_forms()
+        ctx["object"] = self.object
+        ctx["compliance_check"] = self.compliance_check
+        return ctx
+
+    def forms_invalid(self, compliance_check_form, script_check_form):
+        return self.render_to_response(
+            self.get_context_data(compliance_check_form=compliance_check_form,
+                                  script_check_form=script_check_form)
+        )
+
+    def forms_valid(self, compliance_check_form, script_check_form):
+        prev_value = self.get_object().serialize_for_event()  # self.object is already updated
+        compliance_check = compliance_check_form.save(commit=False)
+        compliance_check.model = MunkiScriptCheck.get_model()
+        if script_check_form.has_changed():
+            compliance_check.version = F("version") + 1
+        compliance_check.save()
+        script_check = script_check_form.save(commit=False)
+        script_check.compliance_check = compliance_check
+        script_check.save()
+        script_check_form.save_m2m()
+        if compliance_check_form.has_changed() or script_check_form.has_changed():
+            script_check.refresh_from_db()  # get version number
+
+            def post_event():
+                event = AuditEvent.build_from_request_and_instance(
+                    self.request, script_check,
+                    action=AuditEvent.Action.UPDATED,
+                    prev_value=prev_value
+                )
+                event.post()
+
+            transaction.on_commit(lambda: post_event())
+        return redirect(script_check)
+
+    def post(self, request, *args, **kwargs):
+        compliance_check_form, script_check_form = self.get_forms()
+        if compliance_check_form.is_valid() and script_check_form.is_valid():
+            return self.forms_valid(compliance_check_form, script_check_form)
+        else:
+            return self.forms_invalid(compliance_check_form, script_check_form)
+
+
+class DeleteScriptCheckView(PermissionRequiredMixin, DeleteView):
+    permission_required = "munki.delete_scriptcheck"
+    model = ScriptCheck
+    success_url = reverse_lazy("munki:script_checks")
+
+    def form_valid(self, form):
+        self.object = self.get_object()
+        # build the event before the object is deleted
+        event = AuditEvent.build_from_request_and_instance(
+            self.request, self.object,
+            action=AuditEvent.Action.DELETED,
+            prev_value=self.object.serialize_for_event()
+        )
+        transaction.on_commit(lambda: event.post())
+        self.object.compliance_check.delete()
+        return super().form_valid(form)
+
+
+class ScriptCheckEventsMixin:
+    permission_required = "munki.view_scriptcheck"
+    store_method_scope = "object"
+
+    def get_object(self, **kwargs):
+        return get_object_or_404(
+            ScriptCheck.objects.select_related("compliance_check").all(),
+            pk=kwargs["pk"]
+        )
+
+    def get_fetch_kwargs_extra(self):
+        return {"key": "munki_script_check", "val": encode_args((self.object.pk,))}
+
+    def get_fetch_url(self):
+        return reverse("munki:fetch_script_check_events", args=(self.object.pk,))
+
+    def get_redirect_url(self):
+        return reverse("munki:script_check_events", args=(self.object.pk,))
+
+    def get_store_redirect_url(self):
+        return reverse("munki:script_check_events_store_redirect", args=(self.object.pk,))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["script_check"] = self.object
+        ctx["compliance_check"] = self.object.compliance_check
+        return ctx
+
+
+class ScriptCheckEventsView(ScriptCheckEventsMixin, EventsView):
+    template_name = "munki/scriptcheck_events.html"
+
+
+class FetchScriptCheckEventsView(ScriptCheckEventsMixin, FetchEventsView):
+    pass
+
+
+class ScriptCheckEventsStoreRedirectView(ScriptCheckEventsMixin, EventsStoreRedirectView):
+    pass
 
 
 # install probe
@@ -345,28 +597,72 @@ class JobDetailsView(BaseView):
         # TODO better cache for the machine tags
         m = MetaMachine(self.machine_serial_number)
         response_d["incidents"] = [mi.incident.name for mi in m.open_incidents()]
-        response_d["tags"] = m.tag_names()
+        response_d["tags"] = [t[1] for t in m.tag_pks_and_names]
 
-        # last seen sha1sum
-        # last managed installs sync
+        munki_state = None
+        now = datetime.utcnow()
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
         except MunkiState.DoesNotExist:
             pass
-        else:
+
+        # last seen sha1sum
+        # last managed installs sync
+        if munki_state:
             response_d['last_seen_sha1sum'] = munki_state.sha1sum
             response_d['managed_installs'] = (
                 munki_state.last_managed_installs_sync is None
                 or (
-                    datetime.utcnow() - munki_state.last_managed_installs_sync
+                    now - munki_state.last_managed_installs_sync
                     > timedelta(days=configuration.managed_installs_sync_interval_days)
                 )
             )
+
+        # script checks
+        os_version = data.get("os_version")
+        arch = data.get("arch")
+        if (
+            os_version
+            and arch
+            and (
+                munki_state is None
+                or munki_state.last_script_checks_run is None
+                or (
+                    now - munki_state.last_script_checks_run
+                    > timedelta(seconds=configuration.script_checks_run_interval_seconds)
+                )
+            )
+        ):
+            data_err = False
+            comparable_os_version = make_comparable_os_version(os_version)
+            if comparable_os_version == (0, 0, 0):
+                logger.error("Machine %s: could not build comparable OS version", m.serial_number)
+                data_err = True
+            arch_amd64 = arch_arm64 = False
+            if arch == "arm64":
+                arch_arm64 = True
+            elif arch == "amd64":
+                arch_amd64 = True
+            else:
+                data_err = True
+                logger.error("Machine %s: unknown arch", m.serial_number)
+            if not data_err:
+                response_d['script_checks'] = []
+                for script_check in ScriptCheck.objects.iter_in_scope(
+                    comparable_os_version,
+                    arch_amd64,
+                    arch_arm64,
+                    [t[0] for t in m.tag_pks_and_names]
+                ):
+                    response_d['script_checks'].append(serialize_script_check_for_job(script_check))
+
         return response_d
 
 
 class PostJobView(BaseView):
     def do_post(self, data):
+        request_time = datetime.utcnow()
+
         # lock enrolled machine
         EnrolledMachine.objects.select_for_update().filter(serial_number=self.machine_serial_number)
 
@@ -458,11 +754,26 @@ class PostJobView(BaseView):
                         # incident updates are attached to each munki event
                         event.setdefault("incident_updates", []).append(incident_update)
 
+        # script checks
+        script_check_results = data.get("script_check_results")
+        if script_check_results:
+            munki_request_event_kwargs["script_check_results"] = True
+            munki_request_event_kwargs["script_check_result_count"] = len(script_check_results)
+            update_machine_munki_script_check_statuses(
+                self.machine_serial_number,
+                script_check_results,
+                request_time
+            )
+        else:
+            munki_request_event_kwargs["script_check_results"] = False
+
         # update machine munki state
         update_dict = {'user_agent': self.user_agent,
                        'ip': self.ip}
         if managed_installs is not None:
-            update_dict["last_managed_installs_sync"] = datetime.utcnow()
+            update_dict["last_managed_installs_sync"] = request_time
+        if script_check_results is not None:
+            update_dict["last_script_checks_run"] = request_time
         if reports:
             start_time, end_time, report = reports[-1]
             update_dict.update({'munki_version': report.get('munki_version', None),
