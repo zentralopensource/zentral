@@ -308,7 +308,8 @@ def convert_script_check_bool_result(result):
         result = "0"
     elif result in ("t", "true"):
         result = "1"
-    assert int(result) in (0, 1)
+    result = int(result)
+    assert result in (0, 1)
     return bool(result)
 
 
