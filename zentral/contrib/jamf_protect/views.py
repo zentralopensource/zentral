@@ -28,7 +28,6 @@ class EnrollmentsView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["events_url"] = "{}{}".format(settings["api"]["tls_hostname"],
                                           reverse("jamf_protect:events"))
         ctx["enrollments_count"] = len(ctx["object_list"])
@@ -46,7 +45,6 @@ class CreateEnrollmentView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         if "secret_form" not in kwargs:
             ctx["secret_form"] = self.get_form()
         return ctx

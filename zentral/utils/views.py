@@ -1,6 +1,26 @@
 from django.db import transaction
-from django.views.generic import CreateView, DeleteView, UpdateView
+from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from zentral.core.events.base import AuditEvent
+
+
+class UserPaginationMixin:
+    def get_paginate_by(self, queryset=None):
+        return self.request.user.items_per_page
+
+
+class UserPaginationListView(UserPaginationMixin, ListView):
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        page = ctx['page_obj']
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd['page'] = page.next_page_number()
+            ctx['next_url'] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd['page'] = page.previous_page_number()
+            ctx['previous_url'] = "?{}".format(qd.urlencode())
+        return ctx
 
 
 class CreateViewWithAudit(CreateView):

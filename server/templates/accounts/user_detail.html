@@ -30,29 +30,29 @@
         <td>{{ object.username }}</td>
         </tr>
         <tr>
-        <th>description</th>
+        <th>Description</th>
         <td>{{ object.description|default:"-"|linebreaks }}</td>
         </tr>
         {% else %}
         <tr>
-        <th style="width:15%">username</th>
+        <th style="width:15%">Username</th>
         <td>{{ object.username }}</td>
         </tr>
         <tr>
-        <th>email</th>
+        <th>Email</th>
         <td>{{ object.email }}</td>
         </tr>
         <tr>
-        <th>superuser?</th>
+        <th>Superuser?</th>
         <td>{{ object.is_superuser|yesno }}</td>
         </tr>
         <tr>
-        <th>remote?</th>
+        <th>Remote?</th>
         <td>{{ object.is_remote|yesno }}</td>
         </tr>
         {% if not object.is_remote %}
         <tr>
-        <th>verification device{{ verification_devices|length|pluralize }}</th>
+        <th>Verification device{{ verification_devices|length|pluralize }}</th>
         <td>
             {% if verification_devices %}
             <dl class="row">
@@ -93,7 +93,7 @@
         {% endif %}
         {% if perms.auth.view_group %}
         <tr>
-        <th>group{{ group_count|pluralize }}</th>
+        <th>Group{{ group_count|pluralize }}</th>
         <td>
             {% if group_count %}
             <ul class="list-inline">
@@ -107,6 +107,10 @@
         </td>
         </tr>
         {% endif %}
+        <tr>
+            <th>Global items per page</th>
+            <td>{{ object.items_per_page }}</td>
+        </tr>
     </tbody>
     </table>
 </div>

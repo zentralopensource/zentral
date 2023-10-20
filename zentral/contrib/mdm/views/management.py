@@ -48,7 +48,7 @@ from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
 from zentral.contrib.mdm.scep.static import StaticChallengeForm
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.contrib.mdm.software_updates import iter_available_software_updates
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
@@ -506,10 +506,9 @@ class UpdateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
 # Artifacts
 
 
-class ArtifactListView(PermissionRequiredMixin, ListView):
+class ArtifactListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_artifact"
     model = Artifact
-    paginate_by = 30
 
     def get(self, request, *args, **kwargs):
         self.form = ArtifactSearchForm(self.request.GET)
@@ -526,14 +525,6 @@ class ArtifactListView(PermissionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["form"] = self.form
         page = ctx["page_obj"]
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)
@@ -988,10 +979,9 @@ class DeleteBlueprintView(PermissionRequiredMixin, DeleteViewWithAudit):
 # FileVault Configurations
 
 
-class FileVaultConfigListView(PermissionRequiredMixin, ListView):
+class FileVaultConfigListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_filevaultconfig"
     model = FileVaultConfig
-    paginate_by = 20
 
 
 class CreateFileVaultConfigView(PermissionRequiredMixin, CreateViewWithAudit):
@@ -1028,10 +1018,9 @@ class DeleteFileVaultConfigView(PermissionRequiredMixin, DeleteViewWithAudit):
 # Recovery password configurations
 
 
-class RecoveryPasswordConfigListView(PermissionRequiredMixin, ListView):
+class RecoveryPasswordConfigListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_recoverypasswordconfig"
     model = RecoveryPasswordConfig
-    paginate_by = 20
 
 
 class CreateRecoveryPasswordConfigView(PermissionRequiredMixin, CreateViewWithAudit):
@@ -1223,10 +1212,9 @@ class DeleteSCEPConfigView(PermissionRequiredMixin, DeleteView):
 # Enrolled devices
 
 
-class EnrolledDeviceListView(PermissionRequiredMixin, ListView):
+class EnrolledDeviceListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_enrolleddevice"
     model = EnrolledDevice
-    paginate_by = 20
 
     def get(self, request, *args, **kwargs):
         self.form = EnrolledDeviceSearchForm(request.GET)
@@ -1245,14 +1233,6 @@ class EnrolledDeviceListView(PermissionRequiredMixin, ListView):
         bc = [(reverse("mdm:index"), "MDM")]
         page = ctx["page_obj"]
         reset_link = None
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)
@@ -1309,10 +1289,9 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class EnrolledDeviceCommandsView(PermissionRequiredMixin, ListView):
+class EnrolledDeviceCommandsView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_enrolleddevice"
     model = DeviceCommand
-    paginate_by = 50
 
     def get(self, request, *args, **kwargs):
         self.enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
@@ -1331,14 +1310,6 @@ class EnrolledDeviceCommandsView(PermissionRequiredMixin, ListView):
         ctx["enrolled_device"] = self.enrolled_device
         page = ctx["page_obj"]
         ctx["loaded_commands"] = (load_command(cmd) for cmd in page)
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)
@@ -1428,10 +1399,9 @@ class EnrolledUserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class EnrolledUserCommandsView(PermissionRequiredMixin, ListView):
+class EnrolledUserCommandsView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_enrolleduser"
     model = UserCommand
-    paginate_by = 50
 
     def get(self, request, *args, **kwargs):
         self.enrolled_user = get_object_or_404(
@@ -1455,14 +1425,6 @@ class EnrolledUserCommandsView(PermissionRequiredMixin, ListView):
         ctx["enrolled_device"] = self.enrolled_user.enrolled_device
         page = ctx["page_obj"]
         ctx["loaded_commands"] = (load_command(cmd) for cmd in page)
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)
@@ -1561,10 +1523,9 @@ class DownloadEnrolledUserCommandResultView(PermissionRequiredMixin, View):
 # DEP device
 
 
-class DEPDeviceListView(PermissionRequiredMixin, ListView):
+class DEPDeviceListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_depdevice"
     model = DEPDevice
-    paginate_by = 20
 
     def get(self, request, *args, **kwargs):
         self.form = DEPDeviceSearchForm(request.GET)
@@ -1583,14 +1544,6 @@ class DEPDeviceListView(PermissionRequiredMixin, ListView):
         bc = [(reverse("mdm:index"), "MDM")]
         page = ctx["page_obj"]
         reset_link = None
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)

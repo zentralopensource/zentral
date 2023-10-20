@@ -1438,7 +1438,6 @@ class EC2InstanceTypeFilter(BaseMSFilter):
 
 
 class MSQuery:
-    paginate_by = 50
     itersize = 1000
     default_filters = [
         DateTimeFilter,
@@ -1462,8 +1461,9 @@ class MSQuery:
         EC2InstanceTypeFilter,
     ]
 
-    def __init__(self, query_dict=None):
+    def __init__(self, query_dict=None, paginate_by=50):
         self.query_dict = query_dict or {}
+        self.paginate_by = paginate_by
         try:
             self.page = int(self.query_dict.get("page", 1))
         except ValueError:

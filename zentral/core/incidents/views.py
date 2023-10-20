@@ -6,20 +6,20 @@ from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.generic import DetailView, ListView, UpdateView
+from django.views.generic import DetailView, UpdateView
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
+from zentral.utils.views import UserPaginationListView, UserPaginationMixin
 from .forms import IncidentSearchForm, UpdateIncidentForm, UpdateMachineIncidentForm
 from .models import Incident, MachineIncident
 
 logger = logging.getLogger("zentral.core.incidents.views")
 
 
-class IndexView(PermissionRequiredMixin, ListView):
+class IndexView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "incidents.view_incident"
     model = Incident
-    paginate_by = 50
     template_name = "incidents/index.html"
 
     def get(self, request, *args, **kwargs):
@@ -32,17 +32,8 @@ class IndexView(PermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['incidents'] = True
         ctx['form'] = self.form
         page = ctx['page_obj']
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         bc = []
         if page.number > 1:
             qd = self.request.GET.copy()
@@ -60,14 +51,12 @@ class IndexView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class IncidentView(PermissionRequiredMixin, DetailView):
+class IncidentView(PermissionRequiredMixin, UserPaginationMixin, DetailView):
     permission_required = "incidents.view_incident"
     model = Incident
-    paginate_by = 20
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["incidents"] = True
 
         ctx["objects"] = []
         for title, permissions, objects in self.object.loaded_incident.get_objects_for_display():
@@ -84,22 +73,12 @@ class IncidentView(PermissionRequiredMixin, DetailView):
             raise Http404("Invalid page number")
         if page_number != max(1, page_number):
             page_number = 1
-        ctx["paginator"] = paginator = Paginator(self.object.machineincident_set.all(), self.paginate_by)
+        ctx["paginator"] = paginator = Paginator(self.object.machineincident_set.all(), self.get_paginate_by())
         try:
             ctx["page"] = page = paginator.page(page_number)
         except InvalidPage:
             raise Http404("Invalid page number")
         ctx["machine_incidents"] = page.object_list
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd["page"] = page.previous_page_number()
-            ctx["previous_url"] = "?" + qd.urlencode()
-            qd.pop("page")
-            ctx["reset_link"] = "?" + qd.urlencode()
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd["page"] = page.next_page_number()
-            ctx["next_url"] = "?" + qd.urlencode()
 
         # events links
         if self.request.user.has_perms(EventsMixin.permission_required):
@@ -126,11 +105,6 @@ class UpdateIncidentView(PermissionRequiredMixin, UpdateView):
         kwargs["request"] = self.request
         return kwargs
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["incidents"] = True
-        return ctx
-
     def form_valid(self, form):
         response = super().form_valid(form)
         transaction.on_commit(lambda: form.post_event())
@@ -149,7 +123,6 @@ class UpdateMachineIncidentView(PermissionRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["incidents"] = True
         ctx["incident"] = ctx["object"].incident
         return ctx
 
@@ -183,7 +156,6 @@ class EventsMixin:
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["incidents"] = True
         ctx["incident"] = self.object
         return ctx
 

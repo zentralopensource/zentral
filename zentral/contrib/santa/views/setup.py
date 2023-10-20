@@ -5,7 +5,7 @@ from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
-from django.views.generic import DetailView, ListView, TemplateView, View
+from django.views.generic import DetailView, TemplateView, View
 from django.views.generic.edit import DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import Certificate, File
@@ -19,7 +19,7 @@ from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
-from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit
+from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 
 
 logger = logging.getLogger('zentral.contrib.santa.views.setup')
@@ -31,7 +31,6 @@ class ConfigurationListView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["configurations"] = Configuration.objects.summary()
         ctx["configuration_count"] = len(ctx["configurations"])
         return ctx
@@ -53,11 +52,6 @@ class CreateConfigurationView(PermissionRequiredMixin, CreateViewWithAudit):
     model = Configuration
     form_class = ConfigurationForm
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
-
 
 class ConfigurationView(PermissionRequiredMixin, DetailView):
     permission_required = "santa.view_configuration"
@@ -65,7 +59,6 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
         ctx["enrollments"] = enrollments
         ctx["enrollments_count"] = len(enrollments)
@@ -140,11 +133,6 @@ class UpdateConfigurationView(PermissionRequiredMixin, UpdateViewWithAudit):
     model = Configuration
     form_class = ConfigurationForm
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        return ctx
-
 
 class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
     permission_required = "santa.add_enrollment"
@@ -166,7 +154,6 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["configuration"] = self.configuration
         if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
             ctx["secret_form"], ctx["enrollment_form"] = self.get_forms()
@@ -197,9 +184,8 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
 # rules
 
 
-class ConfigurationRulesView(PermissionRequiredMixin, ListView):
+class ConfigurationRulesView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "santa.view_rule"
-    paginate_by = 10
     template_name = "santa/configuration_rules.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -216,14 +202,6 @@ class ConfigurationRulesView(PermissionRequiredMixin, ListView):
         ctx["configuration"] = self.configuration
         ctx["form"] = self.form
         page = ctx["page_obj"]
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)
@@ -273,7 +251,6 @@ class CreateConfigurationRuleView(PermissionRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['setup'] = True
         ctx['configuration'] = self.configuration
         if self.binary:
             ctx['files'] = [self.binary]
@@ -331,7 +308,6 @@ class UpdateConfigurationRuleView(PermissionRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['setup'] = True
         ctx["configuration"] = ctx["object"].configuration
         ctx["target"] = ctx["object"].target
         ctx["target_type_display"] = ctx["target"].get_type_display()
@@ -360,7 +336,6 @@ class DeleteConfigurationRuleView(PermissionRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['setup'] = True
         ctx['configuration'] = ctx["object"].configuration
         ctx['target'] = ctx["object"].target
         ctx['title'] = "Delete rule"
@@ -385,7 +360,6 @@ class PickRuleBinaryView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["configuration"] = self.configuration
         form = BinarySearchForm(self.request.GET)
         form.is_valid()
@@ -412,7 +386,6 @@ class PickRuleBundleView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["configuration"] = self.configuration
         form = BundleSearchForm(self.request.GET)
         form.is_valid()
