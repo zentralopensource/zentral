@@ -2,10 +2,11 @@ from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import generics
 from rest_framework.views import APIView
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
-from .models import Configuration, Enrollment
+from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+from .models import Configuration, Enrollment, ScriptCheck
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
-from .serializers import ConfigurationSerializer, EnrollmentSerializer
+from .serializers import ConfigurationSerializer, EnrollmentSerializer, ScriptCheckSerializer
 
 
 # configurations
@@ -53,3 +54,21 @@ class EnrollmentPackage(APIView):
         enrollment = get_object_or_404(Enrollment, pk=self.kwargs["pk"])
         builder = MunkiZentralEnrollPkgBuilder(enrollment)
         return builder.get_conditional_response(self.request)
+
+
+# script checks
+
+
+class ScriptCheckFilter(filters.FilterSet):
+    name = filters.CharFilter(field_name="compliance_check__name")
+
+
+class ScriptCheckList(ListCreateAPIViewWithAudit):
+    queryset = ScriptCheck.objects.select_related("compliance_check").all()
+    serializer_class = ScriptCheckSerializer
+    filterset_class = ScriptCheckFilter
+
+
+class ScriptCheckDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+    queryset = ScriptCheck.objects.select_related("compliance_check").all()
+    serializer_class = ScriptCheckSerializer

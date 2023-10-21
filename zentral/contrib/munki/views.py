@@ -29,6 +29,7 @@ from zentral.utils.json import remove_null_character
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
+from zentral.utils.views import DeleteViewWithAudit
 from .compliance_checks import (MunkiScriptCheck,
                                 serialize_script_check_for_job,
                                 update_machine_munki_script_check_statuses)
@@ -378,22 +379,10 @@ class UpdateScriptCheckView(PermissionRequiredMixin, TemplateView):
             return self.forms_invalid(compliance_check_form, script_check_form)
 
 
-class DeleteScriptCheckView(PermissionRequiredMixin, DeleteView):
+class DeleteScriptCheckView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "munki.delete_scriptcheck"
     model = ScriptCheck
     success_url = reverse_lazy("munki:script_checks")
-
-    def form_valid(self, form):
-        self.object = self.get_object()
-        # build the event before the object is deleted
-        event = AuditEvent.build_from_request_and_instance(
-            self.request, self.object,
-            action=AuditEvent.Action.DELETED,
-            prev_value=self.object.serialize_for_event()
-        )
-        transaction.on_commit(lambda: event.post())
-        self.object.compliance_check.delete()
-        return super().form_valid(form)
 
 
 class ScriptCheckEventsMixin:

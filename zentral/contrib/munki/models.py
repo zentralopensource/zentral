@@ -215,3 +215,7 @@ class ScriptCheck(models.Model):
         if self.max_os_version:
             d["max_os_version"] = self.max_os_version
         return d
+
+    def delete(self, *args, **kwargs):
+        self.compliance_check.delete()
+        return super().delete(*args, **kwargs)

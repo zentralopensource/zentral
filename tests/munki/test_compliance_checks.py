@@ -102,7 +102,7 @@ class MunkiComplianceChecksTestCase(TestCase):
     def test_munki_script_check_script_check_does_not_exist(self):
         sc = force_script_check()
         msc = MunkiScriptCheck(sc.compliance_check)
-        sc.delete()
+        super(ScriptCheck, sc).delete()  # bypass the delete override
         sc.compliance_check.refresh_from_db()  # the compliance check still exists!
         self.assertIsNone(msc.script_check)
 
