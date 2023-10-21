@@ -98,6 +98,42 @@ class MunkiRemovalFailedEvent(BaseMunkiEvent):
 
 register_event_type(MunkiRemovalFailedEvent)
 
+# script checks
+
+
+class MunkiScriptCheckStatusUpdated(BaseEvent):
+    event_type = "munki_script_check_status_updated"
+    namespace = "compliance_check"
+    tags = ["compliance_check", "munki_script_check", "compliance_check_status"]
+
+    @classmethod
+    def build_update(
+        cls,
+        script_check,
+        serial_number,
+        status, status_time,
+        previous_status,
+    ):
+        payload = script_check.compliance_check.serialize_for_event()
+        payload["munki_script_check"] = {"pk": script_check.pk}
+        payload["status"] = status.name
+        if previous_status is not None:
+            payload["previous_status"] = previous_status.name
+        return cls(EventMetadata(machine_serial_number=serial_number, created_at=status_time), payload)
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        pk = self.payload.get("pk")
+        if pk:
+            keys["compliance_check"] = [(pk,)]
+        script_check_pk = self.payload.get("munki_script_check", {}).get("pk")
+        if script_check_pk:
+            keys["munki_script_check"] = [(script_check_pk,)]
+        return keys
+
+
+register_event_type(MunkiScriptCheckStatusUpdated)
+
 
 # utils
 

@@ -6,13 +6,14 @@ from Foundation import (CFPreferencesAppSynchronize,
                         kCFPreferencesCurrentUser)
 import json
 import os
+import platform
 import plistlib
 import ssl
 import subprocess
 import urllib.request
 import zlib
 
-USER_AGENT = "Zentral/munkipreflight 0.14"
+USER_AGENT = "Zentral/munkipreflight 0.15"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -27,6 +28,17 @@ def get_serial_number_and_uuid():
     output = subprocess.check_output(["ioreg", "-a", "-c", "IOPlatformExpertDevice", "-d", "2"])
     ioreg_result = plistlib.loads(output)["IORegistryEntryChildren"][0]
     return ioreg_result["IOPlatformSerialNumber"], ioreg_result["IOPlatformUUID"]
+
+
+def get_os_version():
+    return subprocess.check_output(
+        ["/usr/bin/sw_vers", "-productVersion"],
+        encoding="utf-8"
+    ).strip()
+
+
+def get_arch():
+    return "arm64" if platform.processor() == "arm" else "amd64"
 
 
 def update_additional_http_headers(serial_number, uuid):
@@ -67,9 +79,13 @@ def make_api_request(url, data=None):
     return json.load(response)
 
 
-def fetch_job_details(machine_serial_number):
-    url = "{}/job_details/".format(ZENTRAL_API_ENDPOINT.strip('/'))
-    return make_api_request(url, {'machine_serial_number': machine_serial_number})
+def fetch_job_details(machine_serial_number, os_version, arch):
+    return make_api_request(
+        "{}/job_details/".format(ZENTRAL_API_ENDPOINT.strip('/')),
+        {'machine_serial_number': machine_serial_number,
+         'os_version': os_version,
+         'arch': arch}
+    )
 
 
 def save_job_details(job_details):
@@ -112,7 +128,9 @@ def update_facts(job_details):
 
 if __name__ == "__main__":
     serial_number, uuid = get_serial_number_and_uuid()
+    os_version = get_os_version()
+    arch = get_arch()
     update_additional_http_headers(serial_number, uuid)
-    job_details = fetch_job_details(serial_number)
+    job_details = fetch_job_details(serial_number, os_version, arch)
     save_job_details(job_details)
     update_facts(job_details)

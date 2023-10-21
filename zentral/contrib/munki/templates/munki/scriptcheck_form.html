@@ -5,24 +5,25 @@
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
   <li><a href="{% url 'munki:index' %}">Munki</a></li>
-  <li><a href="{% url 'munki:configurations' %}">Configurations</a></li>
+  <li><a href="{% url 'munki:script_checks' %}">Script checks</a></li>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li><a href="{% url 'munki:script_check' object.pk %}">{{ object }}</a></li>
   <li class="active">Update</li>
   {% else %}
   <li class="active">Create</li>
   {% endif %}
 </ol>
 
-<h2>{% if object %}Update{% else %}Create{% endif %} Munki configuration</h2>
+<h2>{% if object %}Update{% else %}Create{% endif %} script check</h2>
 
 <form method="post" class="form">{% csrf_token %}
-  {{ form|bootstrap }}
+  {{ compliance_check_form|bootstrap }}
+  {{ script_check_form|bootstrap }}
   <p>
     {% if object %}
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">
+    <a class="btn btn-default" href="{% url 'munki:script_check' object.pk %}">
     {% else %}
-    <a class="btn btn-default" href="{% url 'munki:configurations' %}">
+    <a class="btn btn-default" href="{% url 'munki:script_checks' %}">
     {% endif %}
       Cancel
     </a>

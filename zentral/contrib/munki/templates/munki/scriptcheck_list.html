@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li class="active">Script checks</li>
+</ol>
+
+<h2>{{ paginator.count }} Script check{{ paginator.count|pluralize }}</h2>
+
+<p>
+  {% if perms.munki.add_scriptcheck %}
+  <a href="{% url 'munki:create_script_check' %}" class="btn btn-default">Create</a>
+  {% endif %}
+</p>
+
+<table class="table">
+  <thead>
+    <th>Name</th>
+    <th>Type</th>
+    <th>Tags</th>
+  </thead>
+  <tbody>
+    {% for obj in object_list %}
+    {% with obj.compliance_check as cc %}
+    <tr>
+      <td>
+        <a href="{{ obj.get_absolute_url }}">{{ cc.name }}</a>
+      </td>
+      <td>{{ obj.get_type_display }}</td>
+      <td>
+        {% for tag in obj.tags.all %}
+        {% inventory_tag tag %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

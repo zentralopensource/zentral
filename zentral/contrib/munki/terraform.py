@@ -14,6 +14,7 @@ class ConfigurationResource(Resource):
     principal_user_detection_domains = StringAttr(many=True)
     collected_condition_keys = StringAttr(many=True)
     managed_installs_sync_interval_days = IntAttr(default=7)
+    script_checks_run_interval_seconds = IntAttr(default=86400)
     auto_reinstall_incidents = BoolAttr(default=False)
     auto_failed_install_incidents = BoolAttr(default=False)
 

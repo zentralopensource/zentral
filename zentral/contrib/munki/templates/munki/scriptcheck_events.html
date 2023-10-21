@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% load base_extras incidents_extras inventory_extras %}
+
+{% block content %}
+
+<ol class="breadcrumb" style="margin-bottom:10px">
+  <li><a href="/">Home</a></li>
+  <li><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li><a href="{% url 'munki:script_checks' %}">Script checks</a></li>
+  <li><a href="{{ script_check.get_absolute_url }}">{{ script_check }}</a></li>
+  <li class="active">Events</li>
+</ol>
+
+<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
+  <h3 style="margin:0 0 20px 0">
+    Script check <i>{{ script_check }}</i>
+  </h3>
+  {% include "core/stores/events_form.html" %}
+</div>
+
+{% include "core/stores/events_table.html" %}
+
+{% endblock %}
+
+{% block extrajs %}
+{% include "core/stores/events_script.html" %}
+{% endblock %}

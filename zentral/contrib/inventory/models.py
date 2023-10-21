@@ -1085,10 +1085,11 @@ class MetaMachine:
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
         return tags
 
-    def tag_names(self):
+    @cached_property
+    def tag_pks_and_names(self):
         # Optimized for only one SQL query
         query = (
-            "select name from inventory_tag where id in ("
+            "select id, name from inventory_tag where id in ("
             "  select tag_id from inventory_machinetag where serial_number = %s"
             "  union"
             "  select tag_id from inventory_metabusinessunittag as mbut"
@@ -1100,7 +1101,7 @@ class MetaMachine:
         )
         cursor = connection.cursor()
         cursor.execute(query, [self.serial_number, self.serial_number])
-        return sorted((t[0] for t in cursor.fetchall()), key=lambda n: n.lower())
+        return sorted(cursor.fetchall(), key=lambda t: t[1].lower())
 
     def update_taxonomy_tags(self, taxonomy, tag_names):
         tag_names = set(tag_names)

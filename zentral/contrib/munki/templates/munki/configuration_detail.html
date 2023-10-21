@@ -4,7 +4,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:configurations' %}">Munki configurations</a></li>
+  <li><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li><a href="{% url 'munki:configurations' %}">Configurations</a></li>
   <li class="active">{{ object }}</li>
 </ol>
 
@@ -43,6 +44,10 @@
     <tr>
       <td>Managed installs sync interval</td>
       <td>{{ object.managed_installs_sync_interval_days }} day{{ object.managed_installs_sync_interval_days|pluralize }}</td>
+    </tr>
+    <tr>
+      <td>Script checks run interval</td>
+      <td>{{ object.script_checks_run_interval_seconds }} seconds</td>
     </tr>
     <tr>
       <td>Auto reinstall incidents</td>

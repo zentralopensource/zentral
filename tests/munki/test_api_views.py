@@ -1,6 +1,7 @@
 from datetime import datetime
 from functools import reduce
 import operator
+from unittest.mock import patch
 import uuid
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -11,7 +12,10 @@ from django.test import TestCase
 from accounts.models import APIToken, User
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
-from zentral.contrib.munki.models import Configuration, Enrollment
+from zentral.contrib.munki.models import Configuration, Enrollment, ScriptCheck
+from zentral.core.compliance_checks.models import ComplianceCheck
+from zentral.core.events.base import AuditEvent
+from .utils import force_script_check
 
 
 class APIViewsTestCase(TestCase):
@@ -101,6 +105,7 @@ class APIViewsTestCase(TestCase):
              'id': configuration.pk,
              'inventory_apps_full_info_shard': 100,
              'managed_installs_sync_interval_days': 7,
+             'script_checks_run_interval_seconds': 86400,
              'name': configuration.name,
              'principal_user_detection_domains': [],
              'principal_user_detection_sources': [],
@@ -125,6 +130,7 @@ class APIViewsTestCase(TestCase):
               'id': configuration.pk,
               'inventory_apps_full_info_shard': 100,
               'managed_installs_sync_interval_days': 7,
+              'script_checks_run_interval_seconds': 86400,
               'name': configuration.name,
               'principal_user_detection_domains': [],
               'principal_user_detection_sources': [],
@@ -164,6 +170,7 @@ class APIViewsTestCase(TestCase):
              'principal_user_detection_domains': [],
              'collected_condition_keys': [],
              'managed_installs_sync_interval_days': 7,
+             'script_checks_run_interval_seconds': 86400,
              'auto_reinstall_incidents': False,
              'auto_failed_install_incidents': False,
              'version': 0,
@@ -177,6 +184,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(configuration.principal_user_detection_domains, [])
         self.assertEqual(configuration.collected_condition_keys, [])
         self.assertEqual(configuration.managed_installs_sync_interval_days, 7)
+        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
         self.assertFalse(configuration.auto_reinstall_incidents)
         self.assertFalse(configuration.auto_failed_install_incidents)
         self.assertEqual(configuration.version, 0)
@@ -193,6 +201,7 @@ class APIViewsTestCase(TestCase):
              "principal_user_detection_domains": ["zentral.io"],
              "collected_condition_keys": ["yolo"],
              "managed_installs_sync_interval_days": 1,
+             "script_checks_run_interval_seconds": 86400,
              "auto_reinstall_incidents": True,
              "auto_failed_install_incidents": True}
         )
@@ -208,6 +217,7 @@ class APIViewsTestCase(TestCase):
              'principal_user_detection_domains': ["zentral.io"],
              'collected_condition_keys': ["yolo"],
              'managed_installs_sync_interval_days': 1,
+             'script_checks_run_interval_seconds': 86400,
              'auto_reinstall_incidents': True,
              'auto_failed_install_incidents': True,
              'version': 0,
@@ -221,6 +231,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
         self.assertEqual(configuration.collected_condition_keys, ["yolo"])
         self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
+        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
         self.assertTrue(configuration.auto_reinstall_incidents)
         self.assertTrue(configuration.auto_failed_install_incidents)
         self.assertEqual(configuration.version, 0)
@@ -250,6 +261,7 @@ class APIViewsTestCase(TestCase):
              'id': configuration.pk,
              'inventory_apps_full_info_shard': 100,
              'managed_installs_sync_interval_days': 7,
+             'script_checks_run_interval_seconds': 86400,
              'name': configuration.name,
              'principal_user_detection_domains': [],
              'principal_user_detection_sources': [],
@@ -283,6 +295,7 @@ class APIViewsTestCase(TestCase):
              "principal_user_detection_domains": ["zentral.io"],
              "collected_condition_keys": ["yolo"],
              "managed_installs_sync_interval_days": 1,
+             "script_checks_run_interval_seconds": 86400,
              "auto_reinstall_incidents": True,
              "auto_failed_install_incidents": True}
         )
@@ -298,6 +311,7 @@ class APIViewsTestCase(TestCase):
              'principal_user_detection_domains': ["zentral.io"],
              'collected_condition_keys': ["yolo"],
              'managed_installs_sync_interval_days': 1,
+             'script_checks_run_interval_seconds': 86400,
              'auto_reinstall_incidents': True,
              'auto_failed_install_incidents': True,
              'version': 1,
@@ -311,6 +325,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
         self.assertEqual(configuration.collected_condition_keys, ["yolo"])
         self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
+        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
         self.assertTrue(configuration.auto_reinstall_incidents)
         self.assertTrue(configuration.auto_failed_install_incidents)
         self.assertEqual(configuration.version, 1)
@@ -673,3 +688,435 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Last-Modified'], last_modified)
         self.assertEqual(response['ETag'], etag)
+
+    # list script checks
+
+    def test_get_script_checks_unauthorized(self):
+        response = self.get(reverse("munki_api:script_checks"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_script_checks_permission_denied(self):
+        response = self.get(reverse("munki_api:script_checks"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_script_check_by_name(self):
+        sc = force_script_check()
+        force_script_check()
+        self.set_permissions("munki.view_scriptcheck")
+        response = self.get(reverse('munki_api:script_checks'), {"name": sc.compliance_check.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [{'id': sc.pk,
+              'description': sc.compliance_check.description,
+              'expected_result': sc.expected_result,
+              'arch_amd64': True,
+              'arch_arm64': True,
+              'max_os_version': sc.min_os_version,
+              'min_os_version': sc.max_os_version,
+              'name': sc.compliance_check.name,
+              'source': sc.source,
+              'tags': [t.pk for t in sc.tags.all()],
+              'type': str(sc.type),
+              'created_at': sc.created_at.isoformat(),
+              'updated_at': sc.updated_at.isoformat(),
+              'version': 1}],
+        )
+
+    def test_get_script_checks_by_name(self):
+        sc = force_script_check()
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
+        sc2 = force_script_check(tags=tags)
+        self.set_permissions("munki.view_scriptcheck")
+        response = self.get(reverse('munki_api:script_checks'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            sorted(response.json(), key=lambda d: d["id"]),
+            [{'id': sc.pk,
+              'description': sc.compliance_check.description,
+              'expected_result': sc.expected_result,
+              'arch_amd64': True,
+              'arch_arm64': True,
+              'max_os_version': sc.min_os_version,
+              'min_os_version': sc.max_os_version,
+              'name': sc.compliance_check.name,
+              'source': sc.source,
+              'tags': [t.pk for t in sc.tags.all()],
+              'type': str(sc.type),
+              'created_at': sc.created_at.isoformat(),
+              'updated_at': sc.updated_at.isoformat(),
+              'version': 1},
+             {'id': sc2.pk,
+              'description': sc2.compliance_check.description,
+              'expected_result': sc2.expected_result,
+              'arch_amd64': True,
+              'arch_arm64': True,
+              'max_os_version': sc2.min_os_version,
+              'min_os_version': sc2.max_os_version,
+              'name': sc2.compliance_check.name,
+              'source': sc.source,
+              'tags': [tags[0].pk],
+              'type': str(sc2.type),
+              'created_at': sc2.created_at.isoformat(),
+              'updated_at': sc2.updated_at.isoformat(),
+              'version': 1}],
+        )
+
+    # create script check
+
+    def test_create_script_check_unauthorized(self):
+        response = self.post(reverse("munki_api:script_checks"), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_script_check_permission_denied(self):
+        response = self.post(reverse("munki_api:script_checks"), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_script_check_name_conflict(self):
+        self.set_permissions("munki.add_scriptcheck")
+        sc = force_script_check()
+        response = self.post(reverse("munki_api:script_checks"),
+                             {"name": sc.compliance_check.name,
+                              "type": "ZSH_STR",
+                              "source": "echo yolo",
+                              "expected_result": "yolo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'name': ['A Script check with this name already exists.']}
+        )
+
+    def test_create_script_check_expected_result_validation_error(self):
+        self.set_permissions("munki.add_scriptcheck")
+        response = self.post(reverse("munki_api:script_checks"),
+                             {"name": get_random_string(12),
+                              "type": "ZSH_INT",
+                              "source": "echo yolo",
+                              "expected_result": "yolo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'expected_result': ['Invalid integer']}
+        )
+
+    def test_create_script_check_no_arch_error(self):
+        self.set_permissions("munki.add_scriptcheck")
+        response = self.post(reverse("munki_api:script_checks"),
+                             {"name": get_random_string(12),
+                              "arch_amd64": False,
+                              "arch_arm64": False,
+                              "type": "ZSH_STR",
+                              "source": "echo yolo",
+                              "expected_result": "yolo"})
+        self.assertEqual(response.status_code, 400)
+        err_msg = "This check has to run on at least one architecture"
+        self.assertEqual(
+            response.json(),
+            {"arch_amd64": [err_msg],
+             "arch_arm64": [err_msg]}
+        )
+
+    def test_create_script_check_invalid_min_os_version(self):
+        self.set_permissions("munki.add_scriptcheck")
+        response = self.post(reverse("munki_api:script_checks"),
+                             {"name": get_random_string(12),
+                              "min_os_version": "yolo",
+                              "type": "ZSH_STR",
+                              "source": "echo yolo",
+                              "expected_result": "yolo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"min_os_version": ["Not a valid OS version"]}
+        )
+
+    def test_create_script_check_invalid_max_os_version(self):
+        self.set_permissions("munki.add_scriptcheck")
+        response = self.post(reverse("munki_api:script_checks"),
+                             {"name": get_random_string(12),
+                              "max_os_version": "yolo",
+                              "type": "ZSH_STR",
+                              "source": "echo yolo",
+                              "expected_result": "yolo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"max_os_version": ["Not a valid OS version"]}
+        )
+
+    def test_create_script_check_min_os_version_greater_than_max_os_version(self):
+        self.set_permissions("munki.add_scriptcheck")
+        response = self.post(reverse("munki_api:script_checks"),
+                             {"name": get_random_string(12),
+                              "min_os_version": "14.1",
+                              "max_os_version": "14.0.1",
+                              "type": "ZSH_STR",
+                              "source": "echo yolo",
+                              "expected_result": "yolo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"min_os_version": ["Should be smaller than the max OS version"]}
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_script_check(self, post_event):
+        self.set_permissions("munki.add_scriptcheck")
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("munki_api:script_checks"),
+                                 {"name": name,
+                                  "source": "echo yolo",
+                                  "expected_result": "yolo"})
+        self.assertEqual(response.status_code, 201)
+        script_check = ScriptCheck.objects.get(compliance_check__name=name)
+        self.assertEqual(script_check.compliance_check.name, name)
+        self.assertEqual(script_check.compliance_check.description, "")
+        self.assertEqual(script_check.compliance_check.version, 1)
+        self.assertEqual(script_check.type, ScriptCheck.Type.ZSH_STR)
+        self.assertEqual(script_check.source, "echo yolo")
+        self.assertEqual(script_check.expected_result, "yolo")
+        self.assertTrue(script_check.arch_amd64)
+        self.assertTrue(script_check.arch_arm64)
+        self.assertEqual(script_check.min_os_version, "")
+        self.assertEqual(script_check.max_os_version, "")
+        self.assertEqual(
+            response.json(),
+            {'id': script_check.pk,
+             'description': "",
+             'expected_result': "yolo",
+             'arch_amd64': True,
+             'arch_arm64': True,
+             'max_os_version': "",
+             'min_os_version': "",
+             'name': name,
+             'source': "echo yolo",
+             'tags': [],
+             'type': "ZSH_STR",
+             'created_at': script_check.created_at.isoformat(),
+             'updated_at': script_check.updated_at.isoformat(),
+             'version': 1}
+        )
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "munki.scriptcheck",
+                 "pk": str(script_check.pk),
+                 "new_value": {
+                     "pk": script_check.pk,
+                     "compliance_check": {
+                         "pk": script_check.compliance_check.pk,
+                         "name": name,
+                         "model": "MunkiScriptCheck",
+                         "description": "",
+                         "version": 1,
+                     },
+                     "type": "ZSH_STR",
+                     "source": "echo yolo",
+                     "expected_result": "yolo",
+                     "tags": [],
+                     "arch_amd64": True,
+                     "arch_arm64": True,
+                     "created_at": script_check.created_at,
+                     "updated_at": script_check.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
+        self.assertEqual(len(callbacks), 1)
+
+    # get script check
+
+    def test_get_script_check_unauthorized(self):
+        sc = force_script_check()
+        response = self.get(reverse("munki_api:script_check", args=(sc.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_script_check_permission_denied(self):
+        sc = force_script_check()
+        response = self.get(reverse("munki_api:script_check", args=(sc.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_script_check(self):
+        sc = force_script_check()
+        self.set_permissions("munki.view_scriptcheck")
+        response = self.get(reverse("munki_api:script_check", args=(sc.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'id': sc.pk,
+             'description': sc.compliance_check.description,
+             'expected_result': sc.expected_result,
+             'arch_amd64': True,
+             'arch_arm64': True,
+             'max_os_version': sc.min_os_version,
+             'min_os_version': sc.max_os_version,
+             'name': sc.compliance_check.name,
+             'source': sc.source,
+             'tags': [t.pk for t in sc.tags.all()],
+             'type': str(sc.type),
+             'created_at': sc.created_at.isoformat(),
+             'updated_at': sc.updated_at.isoformat(),
+             'version': 1}
+        )
+
+    # update script check
+
+    def test_update_script_check_unauthorized(self):
+        sc = force_script_check()
+        response = self.put(reverse("munki_api:script_check", args=(sc.pk,)), {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_script_check_permission_denied(self):
+        sc = force_script_check()
+        response = self.put(reverse("munki_api:script_check", args=(sc.pk,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_script_check_name_conflict(self):
+        sc = force_script_check()
+        sc2 = force_script_check()
+        self.set_permissions("munki.change_scriptcheck")
+        response = self.put(reverse("munki_api:script_check", args=(sc.pk,)),
+                            {"name": sc2.compliance_check.name,
+                             "type": "ZSH_BOOL",
+                             "source": "echo true",
+                             "expected_result": "true"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'name': ['A Script check with this name already exists.']}
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_script_check(self, post_event):
+        script_check = force_script_check()
+        prev_value = script_check.serialize_for_event()
+        self.set_permissions("munki.change_scriptcheck")
+        name = get_random_string(12)
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(reverse("munki_api:script_check", args=(script_check.pk,)),
+                                {"name": name,
+                                 "description": "yolo",
+                                 "type": "ZSH_BOOL",
+                                 "source": "echo true",
+                                 "expected_result": "true",
+                                 "arch_amd64": False,
+                                 "arch_arm64": True,
+                                 "min_os_version": "14",
+                                 "max_os_version": "15",
+                                 "tags": [t.pk for t in tags],
+                                 })
+        self.assertEqual(response.status_code, 200)
+        script_check2 = ScriptCheck.objects.get(compliance_check__name=name)
+        self.assertEqual(script_check, script_check2)
+        self.assertEqual(script_check.compliance_check, script_check2.compliance_check)
+        script_check.refresh_from_db()
+        self.assertEqual(script_check.compliance_check.name, name)
+        self.assertEqual(script_check.compliance_check.description, "yolo")
+        self.assertEqual(script_check.compliance_check.version, 2)
+        self.assertEqual(script_check.type, ScriptCheck.Type.ZSH_BOOL)
+        self.assertEqual(script_check.source, "echo true")
+        self.assertEqual(script_check.expected_result, "true")
+        self.assertFalse(script_check.arch_amd64)
+        self.assertTrue(script_check.arch_arm64)
+        self.assertEqual(script_check.min_os_version, "14")
+        self.assertEqual(script_check.max_os_version, "15")
+        self.assertEqual(list(script_check.tags.all()), tags)
+        self.assertEqual(
+            response.json(),
+            {'id': script_check.pk,
+             'description': "yolo",
+             'expected_result': "true",
+             'arch_amd64': False,
+             'arch_arm64': True,
+             'max_os_version': "15",
+             'min_os_version': "14",
+             'name': name,
+             'source': "echo true",
+             'tags': [tag.pk for tag in tags],
+             'type': "ZSH_BOOL",
+             'created_at': script_check.created_at.isoformat(),
+             'updated_at': script_check.updated_at.isoformat(),
+             'version': 2}
+        )
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "munki.scriptcheck",
+                 "pk": str(script_check.pk),
+                 "prev_value": prev_value,
+                 "new_value": {
+                     "pk": script_check.pk,
+                     "compliance_check": {
+                         "pk": script_check.compliance_check.pk,
+                         "name": name,
+                         "model": "MunkiScriptCheck",
+                         "description": "yolo",
+                         "version": 2,
+                     },
+                     "type": "ZSH_BOOL",
+                     "source": "echo true",
+                     "expected_result": "true",
+                     "min_os_version": "14",
+                     "max_os_version": "15",
+                     "tags": [{"pk": tag.pk, "name": tag.name} for tag in tags],
+                     "arch_amd64": False,
+                     "arch_arm64": True,
+                     "created_at": script_check.created_at,
+                     "updated_at": script_check.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
+        self.assertEqual(len(callbacks), 1)
+
+    # delete script check
+
+    def test_delete_script_check_unauthorized(self):
+        sc = force_script_check()
+        response = self.delete(reverse("munki_api:script_check", args=(sc.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_delete_script_check_permission_denied(self):
+        sc = force_script_check()
+        response = self.delete(reverse("munki_api:script_check", args=(sc.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_script_check(self, post_event):
+        script_check = force_script_check()
+        prev_pk = script_check.pk
+        prev_name = script_check.compliance_check.name
+        prev_value = script_check.serialize_for_event()
+        self.set_permissions("munki.delete_scriptcheck")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("munki_api:script_check", args=(script_check.pk,)))
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(ScriptCheck.objects.filter(pk=prev_pk).exists())
+        self.assertFalse(ComplianceCheck.objects.filter(name=prev_name).exists())
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "munki.scriptcheck",
+                 "pk": str(prev_pk),
+                 "prev_value": prev_value,
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_script_check": [str(prev_pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
+        self.assertEqual(len(callbacks), 1)
