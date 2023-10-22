@@ -1,5 +1,4 @@
 from django.urls import path
-from django.views.decorators.csrf import csrf_exempt
 from . import views
 
 app_name = "munki"
@@ -42,11 +41,6 @@ urlpatterns = [
          views.CreateInstallProbeView.as_view(), name='create_install_probe'),
     path('install_probes/<int:probe_id>/update/',
          views.UpdateInstallProbeView.as_view(), name='update_install_probe'),
-
-    # API
-    path('enroll/', csrf_exempt(views.EnrollView.as_view()), name='enroll'),
-    path('job_details/', csrf_exempt(views.JobDetailsView.as_view()), name="job_details"),
-    path('post_job/', csrf_exempt(views.PostJobView.as_view()), name="post_job"),
 
     # terraform
     path('terraform_export/',

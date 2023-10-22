@@ -6,6 +6,10 @@ New `zentral.core.stores.backends.snowflake` store backend.
 
 ### Backward incompatibilities
 
+#### 🧨 new URLs for Munki
+
+The Munki URLs used by the Munki agent are now prefixed with `public/` by default. Enrollment packages (use the enrollment bump version button to force new ones) are including those new URLs, but agents currently deployed will keep using the legacy URLs until they are reconfigured. To mount the legacy endpoints required by those agents, set the optional configuration key `mount_legacy_public_endpoints` to `true` in the `zentral.contrib.munki` app section of the `base.json` configuration in your deployments.
+
 #### 🧨 `nagios` and `simplemdm` legacy apps removed
 
 Please contact us if you are using one of those apps!
