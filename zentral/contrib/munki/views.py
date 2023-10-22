@@ -72,6 +72,7 @@ class TerraformExportView(PermissionRequiredMixin, View):
     permission_required = (
         "munki.view_configuration",
         "munki.view_enrollment",
+        "munki.view_scriptcheck",
     )
 
     def get(self, request, *args, **kwargs):

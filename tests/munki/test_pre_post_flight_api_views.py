@@ -8,11 +8,10 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
 from zentral.contrib.munki.events import MunkiInstallEvent, MunkiInstallFailedEvent, MunkiScriptCheckStatusUpdated
 from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
-from zentral.contrib.munki.models import (Configuration, EnrolledMachine, Enrollment,
-                                          ManagedInstall, MunkiState, ScriptCheck)
+from zentral.contrib.munki.models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
 from zentral.core.compliance_checks.models import MachineStatus
 from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
-from .utils import force_script_check
+from .utils import force_configuration, force_enrollment, force_script_check
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -21,14 +20,13 @@ class MunkiAPIViewsTestCase(TestCase):
     def setUpTestData(cls):
         cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.business_unit = cls.meta_business_unit.create_enrollment_business_unit()
-        cls.configuration = Configuration.objects.create(
-            name=get_random_string(12),
+        cls.configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True
         )
         cls.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=cls.meta_business_unit)
         cls.enrollment_secret.tags.set([Tag.objects.create(name=get_random_string(12)) for _ in range(2)])
-        cls.enrollment = Enrollment.objects.create(configuration=cls.configuration, secret=cls.enrollment_secret)
+        cls.enrollment = force_enrollment(configuration=cls.configuration, enrollment_secret=cls.enrollment_secret)
 
     # utility methods
 

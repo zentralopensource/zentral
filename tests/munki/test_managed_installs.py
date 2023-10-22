@@ -2,19 +2,13 @@ from datetime import datetime
 from django.utils.crypto import get_random_string
 from django.test import TestCase
 from zentral.contrib.munki.incidents import MunkiInstallFailedIncident, MunkiReinstallIncident
-from zentral.contrib.munki.models import Configuration, ManagedInstall
+from zentral.contrib.munki.models import ManagedInstall
 from zentral.contrib.munki.utils import apply_managed_installs, update_managed_install_with_event
 from zentral.core.incidents.models import Severity
+from .utils import force_configuration
 
 
 class MunkiSetupViewsTestCase(TestCase):
-    def _force_configuration(self, auto_reinstall_incidents=True, auto_failed_install_incidents=True):
-        return Configuration.objects.create(
-            name=get_random_string(12),
-            auto_failed_install_incidents=auto_failed_install_incidents,
-            auto_reinstall_incidents=auto_reinstall_incidents,
-        )
-
     def _build_event(self, **kwargs):
         return {
             "type": kwargs.get("type", "install"),
@@ -57,7 +51,7 @@ class MunkiSetupViewsTestCase(TestCase):
     # new - failed install
 
     def test_new_failed_install_no_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True
         )
@@ -84,7 +78,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertFalse(mi.reinstall)
 
     def test_new_failed_install_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False
         )
@@ -118,7 +112,7 @@ class MunkiSetupViewsTestCase(TestCase):
     # new - successful install
 
     def test_new_successful_install_no_incident(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration()
         event = self._build_install_event()
         event_time = datetime.utcnow()
         serial_number = get_random_string(12)
@@ -144,7 +138,7 @@ class MunkiSetupViewsTestCase(TestCase):
     # new - removal
 
     def test_new_removal_noop(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration()
         event = self._build_removal_event()
         event_time = datetime.utcnow()
         serial_number = get_random_string(12)
@@ -162,7 +156,7 @@ class MunkiSetupViewsTestCase(TestCase):
     # update - stalled event
 
     def test_update_removal_more_recent_successful_install_noop(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration()
         event = self._build_removal_event()
         event_time = datetime(1871, 3, 18)
         serial_number = get_random_string(12)
@@ -185,7 +179,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self._assert_mi_equal(mi_qs.first(), mi)
 
     def test_update_removal_more_recent_failed_install_noop(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration()
         event = self._build_removal_event()
         event_time = datetime(1871, 3, 18)
         serial_number = get_random_string(12)
@@ -208,7 +202,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self._assert_mi_equal(mi_qs.first(), mi)
 
     def test_update_install_more_recent_successful_install_noop(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration()
         event = self._build_install_event()
         event_time = datetime(1871, 3, 18)
         serial_number = get_random_string(12)
@@ -231,7 +225,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self._assert_mi_equal(mi_qs.first(), mi)
 
     def test_update_install_more_recent_failed_install_noop(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration()
         event = self._build_install_event()
         event_time = datetime(1871, 3, 18)
         serial_number = get_random_string(12)
@@ -256,7 +250,7 @@ class MunkiSetupViewsTestCase(TestCase):
     # update - successful removal
 
     def test_update_sucessful_removal_no_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=False
         )
@@ -284,7 +278,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(mi_qs.count(), 0)
 
     def test_update_sucessful_removal_failed_install_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False
         )
@@ -318,7 +312,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(mi_qs.count(), 0)
 
     def test_update_sucessful_removal_reinstall_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True
         )
@@ -352,7 +346,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(mi_qs.count(), 0)
 
     def test_update_sucessful_removal_reinstall_all_incident_updates(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration(auto_failed_install_incidents=True, auto_reinstall_incidents=True)
         event = self._build_removal_event()
         event_time = datetime.utcnow()
         serial_number = get_random_string(12)
@@ -388,7 +382,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(mi_qs.count(), 0)
 
     def test_update_sucessful_removal_reinstall_null_timestamps_no_incidents(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration()
         event = self._build_removal_event()
         event_time = datetime.utcnow()
         serial_number = get_random_string(12)
@@ -416,7 +410,7 @@ class MunkiSetupViewsTestCase(TestCase):
     # update - failed removal
 
     def test_update_failed_removal_noop(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration()
         event = self._build_removal_event(failed=True)
         event_time = datetime.utcnow()
         serial_number = get_random_string(12)
@@ -441,7 +435,7 @@ class MunkiSetupViewsTestCase(TestCase):
     # update - failed install
 
     def test_update_failed_install_stalled_event_noop(self):
-        configuration = self._force_configuration()
+        configuration = force_configuration()
         event = self._build_removal_event(failed=True)
         event_time = datetime(1871, 3, 18)
         serial_number = get_random_string(12)
@@ -464,7 +458,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self._assert_mi_equal(mi_qs.first(), mi)
 
     def test_update_failed_install_update_no_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True
         )
@@ -495,7 +489,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_failed_install_update_one_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False
         )
@@ -531,7 +525,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_failed_install_update_two_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False
         )
@@ -575,7 +569,7 @@ class MunkiSetupViewsTestCase(TestCase):
     # update - successful install
 
     def test_update_successful_install_no_installed_at_no_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True
         )
@@ -606,7 +600,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_successful_install_older_installed_at_no_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True
         )
@@ -637,7 +631,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_successful_install_clear_reinstall_no_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False
         )
@@ -670,7 +664,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_successful_install_clear_reinstall_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True
         )
@@ -708,7 +702,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_successful_install_set_reinstall_no_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False
         )
@@ -740,7 +734,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_successful_install_set_reinstall_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True
         )
@@ -777,7 +771,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_successful_install_reinstall_already_set_no_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True
         )
@@ -808,7 +802,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_successful_install_clear_previously_failed_no_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True
         )
@@ -841,7 +835,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_successful_install_clear_previously_failed_clear_previous_failed_incident(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False
         )
@@ -879,7 +873,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_update_successful_install_clear_two_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True,
         )
@@ -926,7 +920,7 @@ class MunkiSetupViewsTestCase(TestCase):
     # apply_managed_installs
 
     def test_a_m_i_one_install_no_existing_mi_no_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True,
         )
@@ -964,7 +958,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertFalse(mi.reinstall)
 
     def test_a_m_i_one_install_existing_mi_installed_at_null_no_update_no_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True,
         )
@@ -1004,7 +998,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self._assert_mi_equal(mi_qs.first(), mi)
 
     def test_a_m_i_one_install_existing_mi_installed_at_older_no_update_no_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True,
         )
@@ -1044,7 +1038,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self._assert_mi_equal(mi_qs.first(), mi)
 
     def test_a_m_i_one_install_existing_mi_update_no_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True,
         )
@@ -1089,7 +1083,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_a_m_i_one_install_existing_clear_failed_install_mi_update_no_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,  # blocks the incident update
             auto_reinstall_incidents=True,
         )
@@ -1136,7 +1130,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_a_m_i_one_install_existing_clear_failed_install_mi_update_one_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True,
         )
@@ -1188,7 +1182,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_a_m_i_reinstall_mi_update_no_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False,  # blocks the incident update
         )
@@ -1233,7 +1227,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_a_m_i_reinstall_on_reinstall_mi_update_no_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True,
         )
@@ -1278,7 +1272,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_a_m_i_reinstall_mi_update_reinstall_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True,
         )
@@ -1329,7 +1323,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_a_m_i_one_install_clear_reinstall_no_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False,  # will block the clear reinstall event
         )
@@ -1374,7 +1368,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_a_m_i_one_install_clear_reinstall_one_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True,
         )
@@ -1424,7 +1418,7 @@ class MunkiSetupViewsTestCase(TestCase):
         )
 
     def test_a_m_i_one_install_delete_other_install_no_incident_updates(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=True,
         )
@@ -1470,7 +1464,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertFalse(mi.reinstall)
 
     def test_a_m_i_one_install_delete_other_with_failed_at_no_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,  # will block the incident update
             auto_reinstall_incidents=True,
         )
@@ -1518,7 +1512,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertFalse(mi.reinstall)
 
     def test_a_m_i_one_install_delete_other_with_failed_at_one_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False,
         )
@@ -1571,7 +1565,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertFalse(mi.reinstall)
 
     def test_a_m_i_one_install_delete_other_with_reinstall_no_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=True,
             auto_reinstall_incidents=False,  # will block the incident update
         )
@@ -1618,7 +1612,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertFalse(mi.reinstall)
 
     def test_a_m_i_one_install_delete_other_with_reinstall_one_incident_update(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True,
         )
@@ -1670,7 +1664,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertFalse(mi.reinstall)
 
     def test_a_m_i_one_install_no_installed_at_no_reinstall(self):
-        configuration = self._force_configuration(
+        configuration = force_configuration(
             auto_failed_install_incidents=False,
             auto_reinstall_incidents=True,
         )

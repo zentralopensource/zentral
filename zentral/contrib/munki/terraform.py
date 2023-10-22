@@ -1,6 +1,6 @@
 from zentral.contrib.inventory.terraform import MetaBusinessUnitResource, TagResource
 from zentral.utils.terraform import BoolAttr, IntAttr, Resource, RefAttr, StringAttr
-from .models import Configuration
+from .models import Configuration, ScriptCheck
 
 
 class ConfigurationResource(Resource):
@@ -31,6 +31,22 @@ class EnrollmentResource(Resource):
     quota = IntAttr(source="secret.quota")
 
 
+class ScriptCheckResource(Resource):
+    tf_type = "zentral_munki_script_check"
+    tf_grouping_key = "munki_script_checks"
+
+    name = StringAttr(required=True, source="compliance_check.name")
+    description = StringAttr(source="compliance_check.description")
+    type = StringAttr(default=ScriptCheck.Type.ZSH_STR)
+    source = StringAttr()
+    expected_result = StringAttr()
+    arch_amd64 = BoolAttr(default=True)
+    arch_arm64 = BoolAttr(default=True)
+    min_os_version = StringAttr(default="")
+    max_os_version = StringAttr(default="")
+    tag_ids = RefAttr(TagResource, many=True)
+
+
 def iter_resources():
     for configuration in Configuration.objects.all():
         yield ConfigurationResource(configuration)
@@ -38,3 +54,6 @@ def iter_resources():
                                         .select_related("configuration", "secret__meta_business_unit")
                                         .prefetch_related("secret__tags")):
             yield EnrollmentResource(enrollment)
+    for script_check in (ScriptCheck.objects.select_related("compliance_check")
+                                            .prefetch_related("tags")):
+        yield ScriptCheckResource(script_check)

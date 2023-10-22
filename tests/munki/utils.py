@@ -1,7 +1,39 @@
 from django.utils.crypto import get_random_string
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.munki.compliance_checks import MunkiScriptCheck
-from zentral.contrib.munki.models import ScriptCheck
+from zentral.contrib.munki.models import Configuration, Enrollment, ScriptCheck
 from zentral.core.compliance_checks.models import ComplianceCheck
+
+
+def force_configuration(
+    auto_reinstall_incidents=False,
+    auto_failed_install_incidents=False,
+):
+    return Configuration.objects.create(
+        name=get_random_string(12),
+        auto_failed_install_incidents=auto_failed_install_incidents,
+        auto_reinstall_incidents=auto_reinstall_incidents,
+    )
+
+
+def force_enrollment(
+    configuration=None,
+    enrollment_secret=None,
+    meta_business_unit=None,
+    tags=None,
+):
+    if configuration is None:
+        configuration = force_configuration()
+    if enrollment_secret is None:
+        if meta_business_unit is None:
+            meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=meta_business_unit)
+    if tags:
+        enrollment_secret.tags.set(tags)
+    return Enrollment.objects.create(
+        configuration=configuration,
+        secret=enrollment_secret
+    )
 
 
 def force_script_check(
