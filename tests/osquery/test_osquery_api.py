@@ -2,9 +2,8 @@ from datetime import datetime
 import json
 from unittest.mock import patch
 import uuid
-from django.urls import reverse
 from django.test import TestCase, override_settings
-from django.urls import NoReverseMatch
+from django.urls import reverse, NoReverseMatch
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from server.urls import build_urlpatterns_for_zentral_apps
