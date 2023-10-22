@@ -151,17 +151,7 @@
       "scep_ca_fullchain": "NOT_A_VALID_CERT"
     },
     "zentral.contrib.munki": {
-      "metrics": true,
-      "principal_user_detection": {
-        "sources": [
-          "company_portal",
-          "google_chrome",
-          "logged_in_user"
-        ],
-        "domains": [
-          "zentral.pro"
-        ]
-      }
+      "metrics": true
     },
     "zentral.contrib.monolith": {
       "metrics": true,

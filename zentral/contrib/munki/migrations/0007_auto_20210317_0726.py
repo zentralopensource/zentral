@@ -6,42 +6,6 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 
-def create_default_configuration(apps, schema_editor):
-    try:
-        from zentral.conf import settings
-        from zentral.contrib.munki.models import PrincipalUserDetectionSource
-        current_settings = settings['apps']['zentral.contrib.munki'].serialize()
-    except Exception:
-        return
-
-    # get the current configuration from base.json
-    principal_user_detection_sources = []
-    principal_user_detection_domains = []
-    pud_d = current_settings.get("principal_user_detection")
-    if pud_d:
-        principal_user_detection_sources = [
-            i for i in pud_d.get("sources", [])
-            if i in PrincipalUserDetectionSource.accepted_sources()
-        ]
-        principal_user_detection_domains = pud_d.get("domains", [])
-
-    # save the current configuration
-    Configuration = apps.get_model("munki", "Configuration")
-    configuration, created = Configuration.objects.get_or_create(
-        name="Default",
-        inventory_apps_full_info_shard=0,
-        principal_user_detection_sources=principal_user_detection_sources,
-        principal_user_detection_domains=principal_user_detection_domains,
-        version=1
-    )
-
-    # link the current enrollments to this configuration
-    Enrollment = apps.get_model("munki", "Enrollment")
-    for enrollment in Enrollment.objects.all():
-        enrollment.configuration = configuration
-        enrollment.save()
-
-
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -78,12 +42,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='enrollment',
             name='configuration',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, to='munki.Configuration'),
-        ),
-        migrations.RunPython(create_default_configuration),
-        migrations.AlterField(
-            model_name='enrollment',
-            name='configuration',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='munki.Configuration'),
-        )
+        ),
     ]
