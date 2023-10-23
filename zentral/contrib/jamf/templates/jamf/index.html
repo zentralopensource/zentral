@@ -27,7 +27,15 @@
   </div>
   <div class="col-md-12">
     {% if perms.jamf.view_jamfinstance %}
-    <h3>Instance{{ instances_count|pluralize }} ({{ instances_count }})</h3>
+        <div class="d-flex align-items-center mb-1">
+            <h3>Instance{{ instances_count|pluralize }} ({{ instances_count }})</h3>
+            <div class="ms-auto">
+                {% if perms.jamf.add_jamfinstance %}
+                    {% url 'jamf:create_jamf_instance' as url %}
+                    {% button 'CREATE' url "Create new Instance" %}
+                {% endif %}
+            </div>
+        </div>
         {% if instances %}
         <table class="table table-light table-striped align-middle table-hover">
             <thead>
