@@ -1,17 +1,33 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h3>{{ object }}</h3>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">SCEP Configuration</h3>
+        <div class="ms-auto">
+            {% if perms.mdm.change_scepconfig %}
+                {% url 'mdm:update_scep_config' object.pk as url %}
+                {% button 'UPDATE' url "Edit SCEP Configuration" %}
+            {% endif %}
+            {% if perms.mdm.delete_scepconfig and object.can_be_deleted %}
+                {% url 'mdm:delete_scep_config' object.pk as url %}
+                {% button 'DELETE' url "Delete SCEP Configuration" %}
+            {% endif %}
+        </div>
+    </div>
 
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle table-object-properties">
   <tbody>
     <tr>
       <th width="160px">URL</th>
@@ -36,24 +52,24 @@
     <tr>
       <th>Challenge
       <td>
-        <dl>
-          <dt>Type</dt>
-          <dd>{{ object.get_challenge_type_display }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">Type</dt>
+          <dd class="col-sm-9">{{ object.get_challenge_type_display }}</dd>
           {% with object.get_challenge_kwargs as kwargs %}
           {% if object.challenge_type == "STATIC" %}
-          <dt>Challenge</dt>
-          <dd>
-            <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+          <dt class="col-sm-3 text-md-end">Challenge</dt>
+          <dd class="col-sm-9">
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
             <span hidden>{{ kwargs.challenge }}</span>
           </dd>
           {% elif object.challenge_type == "MICROSOFT_CA" %}
-          <dt>NDES mscep_admin/ endpoint</dt>
-          <dd>{{ kwargs.url }}</dd>
-          <dt>mscep admin user</dt>
-          <dd>{{ kwargs.username }}</dt>
-          <dt>mscep admin password</dt>
-          <dd>
-            <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+          <dt class="col-sm-3 text-md-end">NDES mscep_admin/ endpoint</dt>
+          <dd class="col-sm-9">{{ kwargs.url }}</dd>
+          <dt class="col-sm-3 text-md-end">mscep admin user</dt>
+          <dd class="col-sm-9">{{ kwargs.username }}</dt>
+          <dt class="col-sm-3 text-md-end">mscep admin password</dt>
+          <dd class="col-sm-9">
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
             <span hidden>{{ kwargs.password }}</span>
           </dd>
           {% endif %}
@@ -64,45 +80,26 @@
   </tbody>
 </table>
 
-<dl class="dl-horizontal">
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-  <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-</dl>
+{% created_updated_at object %}
 
-<p>
-  {% if perms.mdm.change_scepconfig %}
-  <a class="btn btn-default"
-     href="{% url 'mdm:update_scep_config' object.pk %}">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    Edit
-  </a>
-  {% endif %}
-  {% if perms.mdm.delete_scepconfig and object.can_be_deleted %}
-  <a class="btn btn-danger"
-     href="{% url 'mdm:delete_scep_config' object.pk %}">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-    Delete
-  </a>
-  {% endif %}
-</p>
+</div>
+
 {% endblock %}
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
+  var openEyes = document.querySelectorAll(".bi-eye");
   openEyes.forEach(function(openEye) {
     openEye.addEventListener("click", function(event) {
       var valueSpan = openEye.nextElementSibling;
       if (valueSpan.hidden) {
         valueSpan.hidden = false;
-        openEye.classList.remove("glyphicon-eye-open");
-        openEye.classList.add("glyphicon-eye-close");
+        openEye.classList.remove("bi-eye");
+        openEye.classList.add("bi-eye-slash");
       } else {
         valueSpan.hidden = true;
-        openEye.classList.remove("glyphicon-eye-close");
-        openEye.classList.add("glyphicon-eye-open");
+        openEye.classList.remove("bi-eye-slash");
+        openEye.classList.add("bi-eye");
       }
     });
   });

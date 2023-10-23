@@ -1,28 +1,39 @@
-<form class="form-inline" method="GET" style="margin:10px 0 0 0">
-  <div class="form-group">
-    <label for="eventType">Event type</label>
-    <select class="form-control" id="eventType" name="et">
-      {% for value, selected, label in event_type_options %}
-      <option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="form-group">
-    <label for="timeRange">Range</label>
-    <select class="form-control" id="timeRange" name="tr">
-      {% for value, selected, label in time_range_options %}
-      <option value="{{ value }}"{% if selected %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <button type="submit" class="btn btn-default">
-    <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
-    Update
-  </button>
-  {% for link, store_name in store_links %}
-  <button type="submit" name="es" value="{{ store_name }}" formaction="{{ link }}" class="btn btn-default">
-    <span class="glyphicon glyphicon-link" aria-hidden="true"></span>
-    {{ store_name }}
-  </button>
-  {% endfor %}
+<form class="row w-100 align-items-center" method="GET">
+    <div class="col-sm-3">
+        <div class="form-floating me-2 mb-2">
+            <select class="form-select" id="eventType" name="et">
+                {% for value, selected, label in event_type_options %}
+                <option value="{{ value }}"{% if selected %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <label for="eventType">Event type</label>
+        </div>
+    </div>
+
+    <div class="col-sm-3">
+        <div class="form-floating me-2 mb-2">
+            <select class="form-select" id="timeRange" name="tr">
+                {% for value, selected, label in time_range_options %}
+                <option value="{{ value }}"{% if selected %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <label for="timeRange">Range</label>
+        </div>
+    </div>
+
+    <div class="col-sm">
+        <button type="submit" class="btn btn-link text-dark text-decoration-none">
+            <i class="bi bi-arrow-clockwise"></i>
+        </button>
+    </div>
+  
+    <div class="col-sm">
+        {% for link, store_name in store_links %}
+        <button type="submit" name="es" value="{{ store_name }}" formaction="{{ link }}" class="btn btn-link text-decoration-none text-dark">
+            <i class="bi bi-link-45deg"></i>
+            {{ store_name }}
+        </button>
+        {% endfor %}
+    </div>
+
 </form>

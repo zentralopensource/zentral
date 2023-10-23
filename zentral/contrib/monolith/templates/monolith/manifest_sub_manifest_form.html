@@ -1,18 +1,19 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
-  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
-  <li class="active">{{ title }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li class="breadcrumb-item"><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="breadcrumb-item active">{{ title }}</li>
 </ol>
 
 <h2>{{ title }}</h2>
-<form method="POST" class="form">{% csrf_token %}
-  {{ form|bootstrap }}
-  <a href="{{ manifest.get_absolute_url }}#submanifests" class="btn btn-default">Cancel</a>
+<form method="POST" class="update-form">{% csrf_token %}
+
+    {{ form }}
+
+    <a href="{{ manifest.get_absolute_url }}#submanifests" class="btn btn-outline-secondary">Cancel</a>
   <button type="submit" class="btn btn-primary">Add</button>
 </form>
 {% endblock %}

@@ -15,7 +15,7 @@ from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import get_version_sort_key, shard as compute_shard, encode_args
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 from .conf import monolith_conf
 from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
@@ -143,6 +143,9 @@ class CreatePkgInfoNameView(PermissionRequiredMixin, CreateViewWithAudit):
     model = PkgInfoName
     fields = ("name",)
 
+    def get_success_url(self):
+        return reverse("monolith:pkg_info", args=(self.object.pk,))
+
 
 class PkgInfoNameView(PermissionRequiredMixin, DetailView):
     permission_required = "monolith.view_pkginfoname"
@@ -201,7 +204,6 @@ class EventsMixin:
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["monolith"] = True
         ctx["object"] = self.object
         return ctx
 
@@ -385,11 +387,10 @@ class DeleteConditionView(PermissionRequiredMixin, DeleteViewWithAudit):
 # sub manifests
 
 
-class SubManifestsView(PermissionRequiredMixin, ListView):
+class SubManifestsView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "monolith.view_submanifest"
     model = SubManifest
     template_name = "monolith/sub_manifest_list.html"
-    paginate_by = 10
 
     def get(self, request, *args, **kwargs):
         self.form = SubManifestSearchForm(request.GET)
@@ -401,18 +402,7 @@ class SubManifestsView(PermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super(SubManifestsView, self).get_context_data(**kwargs)
-        context['monolith'] = True
         context['form'] = self.form
-        # pagination
-        page = context['page_obj']
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            context['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            context['previous_url'] = "?{}".format(qd.urlencode())
         return context
 
 
@@ -421,11 +411,6 @@ class CreateSubManifestView(PermissionRequiredMixin, CreateView):
     model = SubManifest
     form_class = SubManifestForm
     template_name = "monolith/edit_sub_manifest.html"
-
-    def get_context_data(self, **kwargs):
-        context = super(CreateSubManifestView, self).get_context_data(**kwargs)
-        context['monolith'] = True
-        return context
 
 
 class SubManifestView(PermissionRequiredMixin, DetailView):
@@ -436,7 +421,6 @@ class SubManifestView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super(SubManifestView, self).get_context_data(**kwargs)
         sub_manifest = context['object']
-        context['monolith'] = True
         pkg_info_dict = sub_manifest.pkg_info_dict()
         keys = pkg_info_dict.pop("keys")
         sorted_keys = []
@@ -455,11 +439,6 @@ class UpdateSubManifestView(PermissionRequiredMixin, UpdateView):
     model = SubManifest
     form_class = SubManifestForm
     template_name = 'monolith/edit_sub_manifest.html'
-
-    def get_context_data(self, **kwargs):
-        context = super(UpdateSubManifestView, self).get_context_data(**kwargs)
-        context['monolith'] = True
-        return context
 
 
 class DeleteSubManifestView(PermissionRequiredMixin, DeleteView):
@@ -484,7 +463,6 @@ class SubManifestAddPkgInfoView(PermissionRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['monolith'] = True
         context['sub_manifest'] = self.sub_manifest
         return context
 
@@ -505,7 +483,6 @@ class UpdateSubManifestPkgInfoView(PermissionRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['monolith'] = True
         context['sub_manifest'] = self.object.sub_manifest
         return context
 
@@ -535,11 +512,10 @@ class DeleteSubManifestPkgInfoView(PermissionRequiredMixin, DeleteView):
 # manifests
 
 
-class ManifestsView(PermissionRequiredMixin, ListView):
+class ManifestsView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "monolith.view_manifest"
     model = Manifest
     template_name = "monolith/manifest_list.html"
-    paginate_by = 10
 
     def get(self, request, *args, **kwargs):
         self.form = ManifestSearchForm(request.GET)
@@ -553,22 +529,11 @@ class ManifestsView(PermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super(ManifestsView, self).get_context_data(**kwargs)
-        context['monolith'] = True
         context['form'] = self.form
         context["show_terraform_export"] = all(
             self.request.user.has_perm(perm)
             for perm in TerraformExportView.permission_required
         )
-        # pagination
-        page = context['page_obj']
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            context['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            context['previous_url'] = "?{}".format(qd.urlencode())
         return context
 
 
@@ -646,7 +611,6 @@ class AddManifestEnrollmentView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['monolith'] = True
         context["manifest"] = self.manifest
         if "secret_form" not in kwargs or "enrollment_form" not in kwargs:
             context["secret_form"], context["enrollment_form"] = self.get_forms()
@@ -866,7 +830,6 @@ class BaseManifestM2MView(FormView):
 
     def get_context_data(self, **kwargs):
         context = super(BaseManifestM2MView, self).get_context_data(**kwargs)
-        context['monolith'] = True
         context['manifest'] = self.manifest
         context['m2m_object'] = self.m2m_object
         return context

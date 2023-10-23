@@ -1,29 +1,31 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:index' %}">Munki</a></li>
-  <li><a href="{% url 'munki:script_checks' %}">Script checks</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:script_checks' %}">Script checks</a></li>
   {% if object %}
-  <li><a href="{% url 'munki:script_check' object.pk %}">{{ object }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:script_check' object.pk %}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+  <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 
 <h2>{% if object %}Update{% else %}Create{% endif %} script check</h2>
 
-<form method="post" class="form">{% csrf_token %}
-  {{ compliance_check_form|bootstrap }}
-  {{ script_check_form|bootstrap }}
-  <p>
+<form method="post" class="update-form">{% csrf_token %}
+
+    {{ compliance_check_form }}
+
+    {{ script_check_form }}
+
+    <p>
     {% if object %}
-    <a class="btn btn-default" href="{% url 'munki:script_check' object.pk %}">
+    <a class="btn btn-outline-secondary" href="{% url 'munki:script_check' object.pk %}">
     {% else %}
-    <a class="btn btn-default" href="{% url 'munki:script_checks' %}">
+    <a class="btn btn-outline-secondary" href="{% url 'munki:script_checks' %}">
     {% endif %}
       Cancel
     </a>

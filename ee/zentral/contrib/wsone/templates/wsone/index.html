@@ -1,15 +1,14 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Workspace ONE</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Workspace ONE</li>
 </ol>
 
 <div class="row">
   <div class="col-md-12">
-    <h2>Workspace one</h2>
+    <h2>Workspace ONE</h2>
   </div>
   <div class="col-sm-6">
     <canvas class="chart"
@@ -27,21 +26,24 @@
   </div>
   <div class="col-md-12">
     {% if perms.wsone.view_instance %}
-    <h3>{{ instance_count }} Instance{{ instance_count|pluralize }}</h3>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Hostname</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for instance in instances %}
-        <tr>
-          <td><a href="{{ instance.get_absolute_url }}">{{ instance }}</a></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <h3>Instance{{ instance_count|pluralize }} ({{ instance_count }})</h3>
+
+    {% if instances %}
+        <table class="table table-light table-striped align-middle">
+        <thead>
+            <tr>
+            <th>Hostname</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for instance in instances %}
+            <tr>
+            <td><a href="{{ instance.get_absolute_url }}">{{ instance }}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        </table>
+    {% endif %}    
     {% endif %}
   </div>
 </div>
@@ -58,7 +60,12 @@
             type: 'bar',
             data: {labels: data.labels,
                    datasets: [data.datasets[dataset]]},
-            options: {}
+            options: {
+                scales: {
+                    xAxes: [{gridLines: { color: "darkgray", zeroLineColor: "darkgray" }}],
+                    yAxes: [{gridLines: { color: "darkgray", zeroLineColor: "darkgray" }}]
+                }
+            }
           });
         }
       }

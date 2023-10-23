@@ -1,49 +1,56 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="active">Store apps</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">Store apps</li>
 </ol>
 
-<h3>{{ object_list|length }} Store app{{ object_list|length|pluralize }}</h3>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Store app{{ object_list|length|pluralize }} ({{ object_list|length }})</h2>
+</div>
 
-<table class="table">
-  <thead>
-    <th></th>
-    <th>Platforms</th>
-    <th>Name</th>
-    <th>Bundle ID</th>
-  </thead>
-  <tbody>
-    {% for asset in object_list %}
-    <tr>
-      <td>
-        {% if asset.icon_url %}
-          {% if asset.store_url %}
-          <a href="{{ asset.store_url }}">
+{% if object_list %}
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <th></th>
+        <th>Platforms</th>
+        <th>Name</th>
+        <th>Bundle ID</th>
+    </thead>
+    <tbody>
+        {% for asset in object_list %}
+        <tr>
+        <td>
+            {% if asset.icon_url %}
+            {% if asset.store_url %}
+            <a href="{{ asset.store_url }}">
+                <img style="max-width:64px;max-height:64px" src="{{ asset.icon_url }}">
+            </a>
+            {% else %}
             <img style="max-width:64px;max-height:64px" src="{{ asset.icon_url }}">
-          </a>
-          {% else %}
-          <img style="max-width:64px;max-height:64px" src="{{ asset.icon_url }}">
-          {% endif %}
-        {% else %}
-        -
-        {% endif %}
-      </td>
-      <td>
-        <ul>
-          {% for platform in asset.supported_platforms %}
-          <li>{{ platform }}</li>
-          {% endfor %}
-        </ul>
-      </td>
-      <td><a href="{{ asset.get_absolute_url }}">{{ asset.name }}</a></td>
-      <td>{{ asset.bundle_id }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        <td>
+            <ul>
+            {% for platform in asset.supported_platforms %}
+            <li>{{ platform }}</li>
+            {% endfor %}
+            </ul>
+        </td>
+        <td><a href="{{ asset.get_absolute_url }}">{{ asset.name }}</a></td>
+        <td>{{ asset.bundle_id }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+{% else %}
+    {% no_entities 'Store Apps' %}
+{% endif %}
 {% endblock %}

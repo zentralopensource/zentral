@@ -3,9 +3,9 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'probes:index' %}">Probes</a>
-  <li class="active">{{ probe.name }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'probes:index' %}">Probes</a>
+  <li class="breadcrumb-item active">{{ probe.name }}</li>
 </ol>
 
 <h2>
@@ -13,7 +13,7 @@
 </h2>
 
 <p>
-  <span class="label label-danger">Syntax Error</span>
+  <span class="badge text-bg-danger">Syntax Error</span>
 </p>
 
 {% if probe.description %}

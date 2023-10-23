@@ -3,32 +3,32 @@
 {% if err_message %}
 <p class="text-danger">{{ err_message }}</p>
 {% endif %}
-<dl class="dl-horizontal">
+<dl class="row">
   {% if configuration %}
-  <dt>Configuration</dt>
-  <dd><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration }}</a></dd>
+  <dt class="col-sm-3 text-md-end">Configuration</dt>
+  <dd class="col-sm-9"><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration }}</a></dd>
   {% endif %}
-  <dt>Primary user</dt>
-  <dd>{{ enrolled_machine.primary_user|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Primary user</dt>
+  <dd class="col-sm-9">{{ enrolled_machine.primary_user|default:"-" }}</dd>
   {% if enrolled_machine.hardware_uuid %}
-  <dt>UUID</dt>
-  <dd>{{ enrolled_machine.hardware_uuid }}</dd>
+  <dt class="col-sm-3 text-md-end">UUID</dt>
+  <dd class="col-sm-9">{{ enrolled_machine.hardware_uuid }}</dd>
   {% endif %}
-  <dt>Client mode</dt>
-  <dd>{{ enrolled_machine.get_client_mode_display }}</dd>
-  <dt>Version</dt>
-  <dd>{{ enrolled_machine.santa_version }}</dd>
-  <dt>Binary rule{% if binary_rule_count != "-" %}{{ binary_rule_count|pluralize }}{% else %}s{% endif %}</dt>
-  <dd>{{ binary_rule_count }}</dd>
-  <dt>Certicate rule{% if certificate_rule_count != "-" %}{{ certificate_rule_count|pluralize }}{% else %}s{% endif %}</dt>
-  <dd>{{ certificate_rule_count }}</dd>
-  <dt>Compiler rule{% if compiler_rule_count != "-" %}{{ compiler_rule_count|pluralize }}{% else %}s{% endif %}</dt>
-  <dd>{{ compiler_rule_count }}</dd>
-  <dt>Signing ID rule{% if signingid_rule_count != "-" %}{{ signingid_rule_count|pluralize }}{% else %}s{% endif %}</dt>
-  <dd>{{ signingid_rule_count }}</dd>
-  <dt>Transitive rule{% if transitive_rule_count != "-" %}{{ transitive_rule_count|pluralize }}{% else %}s{% endif %}</dt>
-  <dd>{{ transitive_rule_count }}</dd>
-  <dt>Team ID rule{% if teamid_rule_count != "-" %}{{ teamid_rule_count|pluralize }}{% else %}s{% endif %}</dt>
-  <dd>{{ teamid_rule_count }}</dd>
+  <dt class="col-sm-3 text-md-end">Client mode</dt>
+  <dd class="col-sm-9">{{ enrolled_machine.get_client_mode_display }}</dd>
+  <dt class="col-sm-3 text-md-end">Version</dt>
+  <dd class="col-sm-9">{{ enrolled_machine.santa_version }}</dd>
+  <dt class="col-sm-3 text-md-end">Binary rule{% if binary_rule_count != "-" %}{{ binary_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd class="col-sm-9">{{ binary_rule_count }}</dd>
+  <dt class="col-sm-3 text-md-end">Certicate rule{% if certificate_rule_count != "-" %}{{ certificate_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd class="col-sm-9">{{ certificate_rule_count }}</dd>
+  <dt class="col-sm-3 text-md-end">Compiler rule{% if compiler_rule_count != "-" %}{{ compiler_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd class="col-sm-9">{{ compiler_rule_count }}</dd>
+  <dt class="col-sm-3 text-md-end">Signing ID rule{% if signingid_rule_count != "-" %}{{ signingid_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd class="col-sm-9">{{ signingid_rule_count }}</dd>
+  <dt class="col-sm-3 text-md-end">Transitive rule{% if transitive_rule_count != "-" %}{{ transitive_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd class="col-sm-9">{{ transitive_rule_count }}</dd>
+  <dt class="col-sm-3 text-md-end">Team ID rule{% if teamid_rule_count != "-" %}{{ teamid_rule_count|pluralize }}{% else %}s{% endif %}</dt>
+  <dd class="col-sm-9">{{ teamid_rule_count }}</dd>
 </dl>
 {% endif %}

@@ -1,21 +1,20 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
-  <li><a href="{{ object.pack.get_absolute_url }}">{{ object.pack }}</a></li>
-  <li class="active">Remove query</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:packs' %}">Packs</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.pack.get_absolute_url }}">{{ object.pack }}</a></li>
+  <li class="breadcrumb-item active">Remove query</li>
 </ol>
 
 <h3>Remove query <i>{{ object.query.name }}</i></h3>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   <p>Do you really want to remove the <i>{{ object.query }}</i> query from the <i>{{ object.pack }}</i> pack?</p>
   <p>
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Remove</button>
   </p>
 </form>

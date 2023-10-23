@@ -37,13 +37,11 @@ urlpatterns = [
          views.ImportFeedProbeView.as_view(), name="import_feed_probe"),
 ]
 
-main_menu_cfg = {
+pinned_menu_cfg = {
     'weight': 1,
+    'icon': 'bi-eyedropper',
     'items': (
         ('index', 'all probes', False, ('probes.view_probesource',)),
         ('feeds', 'feeds', False, ('probes.view_feed',)),
-    ),
-    'extra_context_links': (
-        'probe_extra_links',
     )
 }

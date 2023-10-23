@@ -5,6 +5,7 @@ app_name = "monolith"
 urlpatterns = [
     # pkg infos
     path('pkg_infos/', views.PkgInfosView.as_view(), name='pkg_infos'),
+    path('pkg_infos/<int:pk>/', views.PkgInfoNameView.as_view(), name='pkg_info'),
     path('pkg_infos/upload_package/', views.UploadPackageView.as_view(), name='upload_package'),
     path('pkg_infos/<int:pk>/update_package/', views.UpdatePackageView.as_view(), name='update_package'),
     path('pkg_infos/<int:pk>/update_catalog/',
@@ -101,13 +102,13 @@ urlpatterns = [
 ]
 
 
-main_menu_cfg = {
-    'weight': 10,
+modules_menu_cfg = {
     'items': (
         ('catalogs', 'Catalogs', False, ("monolith.view_catalog",)),
         ('pkg_infos', 'PkgInfos', False, ("monolith.view_pkginfo",)),
         ('conditions', 'Conditions', False, ("monolith.view_condition",)),
         ('manifests', 'Manifests', False, ("monolith.view_manifest",)),
         ('sub_manifests', 'Sub manifests', False, ("monolith.view_submanifest",)),
-    )
+    ),
+    'weight': 20,
 }

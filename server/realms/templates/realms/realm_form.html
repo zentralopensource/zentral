@@ -1,35 +1,36 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
   {% if object %}
-  <li><a href="{% url 'realms:view' object.pk %}">{{ object }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:view' object.pk %}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+  <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 
 <h2>{% if object %}Update{% else %}Create{% endif %} realm</h2>
 
-<form method="post" enctype="multipart/form-data" class="form" >{% csrf_token %}
-  {{ form|bootstrap }}
-  <p>
-    <a class="btn btn-default" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'realms:list' %}{% endif %}">
-      Cancel
-    </a>
-    <button class="btn btn-primary" type="submit">Save</button>
-  </p>
+<form method="post" enctype="multipart/form-data" class="update-form">{% csrf_token %}
+  
+    {{ form }}
+  
+    <p>
+        <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'realms:list' %}{% endif %}">
+        Cancel
+        </a>
+        <button class="btn btn-primary" type="submit">Save</button>
+    </p>
 </form>
 {% endblock %}
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
   var checkBoxLogin = document.querySelector("#id_enabled_for_login"),
-      sessionExpiryGroup = document.querySelector("#id_login_session_expiry").parentElement.parentElement;
+      sessionExpiryGroup = document.querySelector("#id_login_session_expiry").parentElement;
   sessionExpiryGroup.toggleAttribute("hidden", !checkBoxLogin.checked);
   checkBoxLogin.addEventListener("click", function(event) {
     sessionExpiryGroup.toggleAttribute("hidden", !event.target.checked);

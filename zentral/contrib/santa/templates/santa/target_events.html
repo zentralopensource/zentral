@@ -1,17 +1,17 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'santa:index' %}">Santa</a></li>
-  <li><a href="{% url 'santa:targets' %}">Targets</a></li>
-  <li><a href="{{ target_url }}">{{ target_type_display }}</a></li>
-  <li class="active">Events</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:targets' %}">Targets</a></li>
+  <li class="breadcrumb-item"><a href="{{ target_url }}">{{ target_type_display }}</a></li>
+  <li class="breadcrumb-item active">Events</a></li>
 </ol>
 
-<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
+<div class="sticky-top bg-body z-1">
   <h3 style="margin:-10px 0 10px 0">
     {{ target_type_display }} - Events
   </h3>

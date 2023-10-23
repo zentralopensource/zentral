@@ -1,0 +1,25 @@
+<div class="table-responsive">
+    <table class="table w-auto">
+        <tbody>
+        {% if object.version %}
+            <tr>
+                <th class="border-0 p-0 pe-3 text-secondary">Version</th>
+                <td class="border-0 p-0 text-secondary">{{ object.version }}</td>
+            </tr>
+        {% endif %}
+        <tr>
+            <th class="border-0 p-0 pe-3 text-secondary">Created at</th>
+            <td class="border-0 p-0 text-secondary">{{ object.created_at|date:'r' }}</td>
+        </tr>
+        <tr>
+            <th class="border-0 p-0 pe-3 text-secondary">Updated at</th>
+            <td class="border-0 p-0 text-secondary">{{ object.updated_at|date:'r' }}</td>
+        </tr>
+        {% if object.archived_at %}
+        <tr>
+            <th class="border-0 p-0 pe-3 text-secondary">Archived at</th>
+            <td class="border-0 p-0 text-secondary">{{ object.archived_at|default:"-" }}</td>
+        </tr>
+        {% endif %}
+    </tbody></table>
+</div>

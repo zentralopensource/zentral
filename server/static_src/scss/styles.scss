@@ -1,0 +1,177 @@
+$zzzgreen: rgb(92, 132, 124);
+$zzgreen: rgb(107, 189, 177);
+$zgreen: rgb(121, 198, 188);
+$ygreen: rgb(154, 210, 201);
+$xgreen: rgb(224, 240, 237);
+
+$zzred: rgb(210, 72, 90);
+$zred: rgb(234, 81, 101);
+$yred: rgb(255, 93, 114);
+$xred: rgb(255, 123, 150);
+
+$primary: $zzgreen;
+$light: white;
+
+$font-size-root: 14px;
+
+$list-group-bg: transparent;
+$list-group-hover-bg: $xgreen;
+$list-group-hover-bg-dark: $xgreen;
+$list-group-active-bg-dark: $xgreen;
+$list-group-active-bg-light: $xgreen;
+$list-group-hover-border-color-dark: $xgreen;
+$list-group-border-width: 1px;
+
+$dropdown-link-hover-bg: $list-group-hover-bg;
+$dropdown-link-active-bg: $zgreen;
+
+$offcanvas-border-color: transparent;
+$offcanvas-horizontal-width: 186px;
+
+$box-max-width: 1304px;
+
+$collapse-toggler-color: #212529;
+$collapse-toggler-color-dark: #fff;
+$custom-table-padding: 0.375rem;
+
+$bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
+
+@import "~bootstrap/scss/bootstrap";
+@import "~bootstrap-icons/font/bootstrap-icons";
+
+
+.errorlist {
+    color: $zred;
+    font-weight: bold;
+}
+
+// Side menu
+.list-group-item {
+    border-color: transparent;
+    border-width: $list-group-border-width;
+}
+
+.list-group-item:hover,
+.list-group-item:active,
+.list-group-item:focus {
+    border-color: $zgreen;
+    color: black !important;
+}
+.list-group-item.active {
+    background: $list-group-active-bg-light;
+    color: black !important;
+}
+
+
+.table-probe  {
+    margin-bottom: -1px;
+}
+
+.search-form {
+  @media screen and (max-width: 992px) {
+    flex-direction: column !important;
+    width: 100% !important;
+
+    .form-floating {
+        width: 100%;
+    }
+  }
+}
+
+.sidebar {
+  @media screen and (min-width: 992px) {
+    transform: none !important;
+    visibility: visible !important;
+    font-size: $font-size-root;
+    width: $offcanvas-horizontal-width !important;
+  }
+  width: 300px !important;
+  font-size: large;
+}
+
+.user-menu {
+    @media screen and (max-width: 992px) {
+        width: 0px; height: 0px;
+        transform: none !important;
+        visibility: hidden !important;
+    }
+}
+
+.object-details,
+.update-form {
+  max-width: $box-max-width;
+}
+
+.collapse-toggler-light {
+  &:before {
+    display: inline-block;
+    border-bottom: 2px solid $collapse-toggler-color;
+    border-right: 2px solid $collapse-toggler-color;
+    content: "";
+    height: 9px;
+    transform: rotate(-45deg);
+    width: 9px;
+    transition: transform .35s ease;
+    position: relative;
+    top: -3px;
+    margin-right: 5px;
+  }
+
+  &:not(.collapsed) {
+    &:before {
+      transform: rotate(45deg);
+    }
+  }
+}
+
+.collapse-toggler-dark {
+    @extend .collapse-toggler-light;
+    &:before {
+        border-bottom: 2px solid $collapse-toggler-color-dark;
+        border-right: 2px solid $collapse-toggler-color-dark;
+    }
+}
+
+.data-row {
+  &:not(&:hover) {
+    .btn {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+  }
+}
+
+.table-object-properties > :not(caption) > * > * {
+  padding: $custom-table-padding;
+}
+
+.btn-link.text-dark:hover {
+  background: #f8f9fa;
+}
+
+.btn-link.text-light:hover {
+    background: #393939;
+}
+
+.btn-link.nav-link:hover {
+    background: $list-group-hover-bg;
+    color: black !important;
+}
+
+
+// Zentral logo
+.zentral-logo {
+    background-repeat: no-repeat;
+    width: 150px;
+    height: 38px;
+    display: block;
+}
+
+.zentral-logo.light {
+    background-image: url(../images/logo-light.svg);
+}
+
+.zentral-logo.dark {
+    background-image: url(../images/logo-dark.svg);
+}

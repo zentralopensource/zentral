@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-  <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
-  <li class="active">Programs</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+  <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
+  <li class="breadcrumb-item active">Programs</li>
 </ol>
 
 <h2>
@@ -59,7 +59,7 @@
     </tbody>
   </table>
 
-  <dl class="dl-horizontal">
+  <dl class="row">
     <dt class="small" style="opacity:0.5">last change</dt>
     <dd class="small" style="opacity:0.5">
       {% if ms.public_ip_address %}{{ ms.public_ip_address }} - {% endif %}

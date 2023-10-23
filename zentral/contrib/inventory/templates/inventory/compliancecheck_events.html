@@ -3,15 +3,15 @@
 
 {% block content %}
 
-<ol class="breadcrumb" style="margin-bottom:10px">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:compliance_checks' %}">Compliance checks</a></li>
-  <li><a href="{{ jmespath_check.get_absolute_url }}">{{ compliance_check.name }}</a></li>
-  <li class="active">Events</li>
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:compliance_checks' %}">Compliance checks</a></li>
+  <li class="breadcrumb-item"><a href="{{ jmespath_check.get_absolute_url }}">{{ compliance_check.name }}</a></li>
+  <li class="breadcrumb-item active">Events</li>
 </ol>
 
-<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
-  <h3 style="margin:0 0 20px 0">
+<div class="sticky-top bg-body z-1">
+  <h3>
     Compliance check <i>{{ compliance_check.name }}</i>
   </h3>
   {% include "core/stores/events_form.html" %}

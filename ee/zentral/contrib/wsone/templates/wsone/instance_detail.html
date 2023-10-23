@@ -1,140 +1,137 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'wsone:index' %}">Workspace ONE</a></li>
-  <li><a href="{% url 'wsone:instances' %}">Instances</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'wsone:index' %}">Workspace ONE</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'wsone:instances' %}">Instances</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h2>Workspace ONE instance <i>{{ object }}</i></h2>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+        <div class="ms-3">
+            {% if show_events_link %}
+                {% url 'wsone:instance_events' object.pk as url %}
+                {% button 'EVENTS' url %}
+            {% endif %}
+            {% for link, anchor_text in store_links  %}
+                {% button 'LINK' link anchor_text %}
+            {% endfor %}
+        </div>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Workspace ONE instance</h3>
+        <div class="ms-auto">
+            {% if perms.wsone.change_instance %}
+                {% url 'wsone:update_instance' object.pk as url %}
+                {% button 'UPDATE' url %}
+            {% endif%}
+            {% if perms.wsone.delete_instance %}
+                {% url 'wsone:delete_instance' object.pk as url %}
+                {% button 'DELETE' url %}
+            {% endif%}
+        </div>
+    </div>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th style="width:20vw">Attribute</th>
-      <th>Value</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Business unit</td>
-      <td>
-        {% if perms.inventory.view_metabusinessunit %}
-        <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.pk %}">
-          {{ object.business_unit }}
-        </a>
-        {% else %}
-        {{ object.business_unit }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <td>Server URL</td>
-      <td><a href="{{ object.server_url }}">{{ object.server_url }}</a></td>
-    </tr>
-    <tr>
-      <td colspan="2"><h5>API authentication</h5></td>
-    </tr>
-    <tr>
-      <td>API key</td>
-      <td>
-        <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
-        <span hidden>{{ object.get_api_key }}</span>
-      </td>
-    </tr>
-    <tr>
-      <td>OAuth 2.0 client ID</td>
-      <td>{{ object.client_id }}</td>
-    </tr>
-    <tr>
-      <td>OAuth 2.0 client secret</td>
-      <td>
-        <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
-        <span hidden>{{ object.get_client_secret }}</span>
-      </td>
-    </tr>
-    <tr>
-      <td>OAuth 2.0 token URL</td>
-      <td>{{ object.token_url }}</td>
-    </tr>
-    <tr>
-      <td colspan="2"><h5>Event notifications</h5></td>
-    </tr>
-    <tr>
-      <td>URL</td>
-      <td>{{ object.get_event_notifications_full_url }}</td>
-    </tr>
-    <tr>
-      <td>Username</td>
-      <td>{{ object.username }}</td>
-    </tr>
-    <tr>
-      <td>Password</td>
-      <td>
-        <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
-        <span hidden>{{ object.get_password }}</span>
-      </td>
-    </tr>
-    <tr>
-      <td colspan="2"><h5>Options</h5></td>
-    </tr>
-    <tr>
-      <td>Excluded groups</td>
-      <td>{{ object.excluded_groups|join:", "|default:"-" }}</td>
-    </tr>
-  </tbody>
-</table>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <thead>
+        <tr>
+        <th style="width:20vw">Attribute</th>
+        <th>Value</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+        <td>Business unit</td>
+        <td>
+            {% if perms.inventory.view_metabusinessunit %}
+            <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.pk %}">
+            {{ object.business_unit }}
+            </a>
+            {% else %}
+            {{ object.business_unit }}
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <td>Server URL</td>
+        <td><a href="{{ object.server_url }}">{{ object.server_url }}</a></td>
+        </tr>
+        <tr>
+        <td colspan="2"><h5>API authentication</h5></td>
+        </tr>
+        <tr>
+        <td>API key</td>
+        <td>
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ object.get_api_key }}</span>
+        </td>
+        </tr>
+        <tr>
+        <td>OAuth 2.0 client ID</td>
+        <td>{{ object.client_id }}</td>
+        </tr>
+        <tr>
+        <td>OAuth 2.0 client secret</td>
+        <td>
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ object.get_client_secret }}</span>
+        </td>
+        </tr>
+        <tr>
+        <td>OAuth 2.0 token URL</td>
+        <td>{{ object.token_url }}</td>
+        </tr>
+        <tr>
+        <td colspan="2"><h5>Event notifications</h5></td>
+        </tr>
+        <tr>
+        <td>URL</td>
+        <td>{{ object.get_event_notifications_full_url }}</td>
+        </tr>
+        <tr>
+        <td>Username</td>
+        <td>{{ object.username }}</td>
+        </tr>
+        <tr>
+        <td>Password</td>
+        <td>
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ object.get_password }}</span>
+        </td>
+        </tr>
+        <tr>
+        <td colspan="2"><h5>Options</h5></td>
+        </tr>
+        <tr>
+        <td>Excluded groups</td>
+        <td>{{ object.excluded_groups|join:", "|default:"-" }}</td>
+        </tr>
+    </tbody>
+    </table>
 
-<dl>
-  <dt class="small" style="opacity:0.5">Version</dt>
-  <dd class="small" style="opacity:0.5">{{ object.version }}</dd>
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.created_at }}</dd>
-  <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.updated_at }}</dd>
-</dl>
-
-<div class="btn-group" role="group">
-  {% if perms.wsone.change_instance %}
-  <a href="{% url 'wsone:update_instance' object.pk %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Update
-  </a>
-  {% endif %}
-  {% if perms.wsone.delete_instance %}
-  <a href="{% url 'wsone:delete_instance' object.pk %}" class="btn btn-danger">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span> Delete
-  </a>
-  {% endif %}
-  {% if show_events_link %}
-  <a class="btn btn-default" href="{% url 'wsone:instance_events' object.pk %}">
-    <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
-  </a>
-  {% endif %}
-  {% for link, anchor_text in store_links  %}
-  <a class="btn btn-default" href="{{ link }}">
-    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
-  </a>
-  {% endfor %}
+    {% created_updated_at object %}
 </div>
+
 {% endblock %}
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
+  var openEyes = document.querySelectorAll(".bi-eye");
   openEyes.forEach(function(openEye) {
     openEye.addEventListener("click", function(event) {
       var valueSpan = openEye.nextElementSibling;
       if (valueSpan.hidden) {
         valueSpan.hidden = false;
-        openEye.classList.remove("glyphicon-eye-open");
-        openEye.classList.add("glyphicon-eye-close");
+        openEye.classList.remove("bi-eye");
+        openEye.classList.add("bi-eye-slash");
       } else {
         valueSpan.hidden = true;
-        openEye.classList.remove("glyphicon-eye-close");
-        openEye.classList.add("glyphicon-eye-open");
+        openEye.classList.remove("bi-eye-slash");
+        openEye.classList.add("bi-eye");
       }
     });
   });

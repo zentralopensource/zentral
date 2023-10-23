@@ -138,20 +138,20 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/index.html")
         # 1 configuration
-        self.assertContains(response, "1 Configuration")
+        self.assertContains(response, "Configuration (1)")
         self.assertContains(response, configuration.name)
         # no perms, no targets
-        self.assertNotContains(response, "4 Collected targets")
+        self.assertNotContains(response, "Collected targets (4)")
 
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:index"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/index.html")
         # no perms, no configuration
-        self.assertNotContains(response, "1 Configuration")
+        self.assertNotContains(response, "Configuration (1)")
         self.assertNotContains(response, configuration.name)
         # 1 binary, 1 certificate, 1 team ID, 1 signing ID
-        self.assertContains(response, "4 Collected targets")
+        self.assertContains(response, "Collected targets (4)")
 
     # configurations
 

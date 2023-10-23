@@ -1,59 +1,48 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
-  <li><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
+  <li class="breadcrumb-item"><a href="{{ distributed_query.get_absolute_url }}">{{ distributed_query }}</a></li>
   {% if form.has_changed %} 
-  <li><a href="{% url 'osquery:distributed_query_machines' distributed_query.pk %}">Machines</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:distributed_query_machines' distributed_query.pk %}">Machines</a></li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Search</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Search</a></li>
   {% else %}
-  <li class="active">Search</li>
+  <li class="breadcrumb-item active">Search</li>
   {% endif %}
   {% else %} 
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Machines</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Machines</a></li>
   {% else %}
-  <li class="active">Machines</li>
+  <li class="breadcrumb-item active">Machines</li>
   {% endif %}
   {% endif %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h2>Run <i>{{ distributed_query }}</i></h2>
+<h2 class="mye-3">Run #{{ distributed_query }}</h2>
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-  <div class="form-group">
-    {{ form.serial_number|bootstrap_inline }}
-  </div>
-  <div class="form-group">
-    {{ form.status.label_tag }}
-    {{ form.status }}
-  </div>
-  <button type="submit" class="btn btn-default">Search</button>
-</form>
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
+        
+        {{ form }}
+        
+        <button type="submit" class="btn btn-link text-dark text-decoration-none mx-2">
+            <i class="bi bi-search"></i>
+        </button>
+    </form>
+</div>
 
-<h3 id="machines">{{ page_obj.paginator.count }} Machine{{ page_obj.paginator.count|pluralize }}</h3>
+<h3 id="machines">Machine{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h3>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% if page_obj %}
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <th>Serial number</th>
     <th>Status</th>
@@ -79,17 +68,6 @@
 </table>
 {% endif %}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% endblock %}

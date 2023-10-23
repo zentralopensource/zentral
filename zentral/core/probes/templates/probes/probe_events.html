@@ -4,18 +4,18 @@
 {% block content %}
 
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a>
   {% else %}
-  <li class="active">{{ anchor_text }}</li>
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
   {% endfor %}
 </ol>
 
-<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
-  <h3 style="margin:0 0 20px 0">
+<div class="sticky-top bg-body z-1">
+  <h3>
     Probe <i>{{ probe.name }}</i> events
   </h3>
   {% include "core/stores/events_form.html" %}

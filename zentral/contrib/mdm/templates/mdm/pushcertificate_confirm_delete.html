@@ -3,19 +3,19 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></li>
-  <li><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
-  <li class="active">Delete</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
+  <li class="breadcrumb-item active">Delete</li>
 </ol>
 
 <h3>Delete MDM push certificate <i>{{ object.name }}</i></h3>
 
-<form class="form" method="post">{% csrf_token %}
+<form class="update-form" method="post">{% csrf_token %}
   <p>Do you really want to delete this push certificate?</p>
   <p>
-    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-danger">Delete</button>
   </p>
 </form>

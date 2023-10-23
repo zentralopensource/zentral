@@ -1,15 +1,23 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Munki</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Munki</li>
 </ol>
 
 <div class="row">
   <div class="col-md-12">
-    <h2>Munki</h2>
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">Munki</h2>
+        <div class="me-auto">
+            {% if perms.view_configuration and perms.munki.view_enrollment and perms.view_scriptcheck %}
+                {% url 'munki:terraform_export' as url %}
+                {% button 'DOWNLOAD' url "Download Terraform Config" %}
+            {% endif %}
+        </div>
+    </div>
   </div>
   <div class="col-sm-6">
     <canvas class="chart"
@@ -31,12 +39,6 @@
     {% endif %}
     {% if perms.munki.view_scriptcheck %}
     <p><a href="{% url 'munki:script_checks' %}">Script checks</a></p>
-    {% endif %}
-    {% if perms.view_configuration and perms.munki.view_enrollment and perms.view_scriptcheck %}
-    <a href="{% url 'munki:terraform_export' %}" class="btn btn-default">
-      <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-      Terraform config
-    </a>
     {% endif %}
   </div>
 </div>

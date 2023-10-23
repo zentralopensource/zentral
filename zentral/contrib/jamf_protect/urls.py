@@ -12,9 +12,10 @@ urlpatterns = [
 ]
 
 
-setup_menu_cfg = {
+modules_menu_cfg = {
     'title': 'Jamf Protect',
     'items': (
         ('enrollments', 'Enrollments'),
-    )
+    ),
+    'weight': 70,
 }

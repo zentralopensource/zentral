@@ -96,7 +96,7 @@ class InventorySearchViewsTestCase(TestCase):
         self._login("inventory.view_machinesnapshot")
         response = self.client.get(reverse("inventory:index"), {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv"})
         self.assertTemplateUsed(response, "inventory/machine_list.html")
-        self.assertContains(response, "1 Machine")
+        self.assertContains(response, "Machine (1)")
 
     def test_index_mac_address_no_result(self):
         self._login("inventory.view_machinesnapshot")
@@ -105,7 +105,7 @@ class InventorySearchViewsTestCase(TestCase):
             {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv", "ma": get_random_string(12)}
         )
         self.assertTemplateUsed(response, "inventory/machine_list.html")
-        self.assertContains(response, "0 Machines")
+        self.assertContains(response, "Machines (0)")
 
     def test_index_mac_address_redirect(self):
         self._login("inventory.view_machinesnapshot")

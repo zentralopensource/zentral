@@ -1,45 +1,63 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:index' %}">Munki</a></li>
-  <li class="active">Script checks</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li class="breadcrumb-item active">Script checks</li>
 </ol>
 
-<h2>{{ paginator.count }} Script check{{ paginator.count|pluralize }}</h2>
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Script check{{ object_list.count|pluralize }} ({{ object_list.count }})</h3>
+    <div class="ms-auto">
+    {% if perms.munki.add_scriptcheck %}
+        {% url 'munki:create_script_check' as url %}
+        {% button 'CREATE' url "Create new Configuration" %}
+    {% endif %}
+    </div>
+</div>
 
-<p>
-  {% if perms.munki.add_scriptcheck %}
-  <a href="{% url 'munki:create_script_check' %}" class="btn btn-default">Create</a>
-  {% endif %}
-</p>
+{% if object_list %}
 
-<table class="table">
-  <thead>
-    <th>Name</th>
-    <th>Type</th>
-    <th>Tags</th>
-  </thead>
-  <tbody>
-    {% for obj in object_list %}
-    {% with obj.compliance_check as cc %}
-    <tr>
-      <td>
-        <a href="{{ obj.get_absolute_url }}">{{ cc.name }}</a>
-      </td>
-      <td>{{ obj.get_type_display }}</td>
-      <td>
-        {% for tag in obj.tags.all %}
-        {% inventory_tag tag %}
-        {% empty %}
-        -
+{% pagination next_url previous_url %}
+
+<table class="table table-light table-striped align-middle">
+    <thead>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Tags</th>
+    </thead>
+    <tbody>
+        {% for obj in object_list %}
+        {% with obj.compliance_check as cc %}
+        <tr>
+        <td>
+            <a href="{{ obj.get_absolute_url }}">{{ cc.name }}</a>
+        </td>
+        <td>{{ obj.get_type_display }}</td>
+        <td>
+            {% for tag in obj.tags.all %}
+            {% inventory_tag tag %}
+            {% empty %}
+            -
+            {% endfor %}
+        </td>
+        </tr>
+        {% endwith %}
         {% endfor %}
-      </td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+
+{% else %}
+    {% if perms.munki.add_scriptcheck %}
+        {% url 'munki:create_script_check' as link %}
+        {% no_entities 'Script checks' link %}
+    {% else %}
+        {% no_entities 'Script checks' %}
+    {% endif %}
+{% endif %}
+
 {% endblock %}

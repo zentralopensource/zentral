@@ -1,173 +1,173 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load ui_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:index' %}">Munki</a></li>
-  <li><a href="{% url 'munki:configurations' %}">Configurations</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h2>Configuration <i>{{ configuration }}</i></h2>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ configuration }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Configuration</h3>
+        <div class="ms-auto">
+            {% if perms.munki.change_configuration %}
+                {% url 'munki:update_configuration' object.pk as url %}
+                {% button 'UPDATE' url "Edit Configuration" %}
+            {% endif %}
+        </div>
+    </div>
 
-<table class="table">
-  <thead>
-    <th style="width:30vw">Attribute</th>
-    <th>Value</th>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Name</td>
-      <td>{{ object.name }}</td>
-    </tr>
-    <tr>
-      <td>Description</td>
-      <td>{{ object.description|default:"-"|linebreaksbr }}</td>
-    </tr>
-    <tr>
-      <td>Inventory apps full information shard</td>
-      <td>{{ object.inventory_apps_full_info_shard }}%</td>
-    </tr>
-    <tr>
-      <td>Principal user detection source{{ object.principal_user_detection_sources|length|pluralize }}</td>
-      <td>{{ principal_user_detection_sources|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Principal user detection domain{{ object.principal_user_detection_domains|length|pluralize }}</td>
-      <td>{{ object.principal_user_detection_domains|join:", "|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Collected condition key{{ object.collected_condition_keys|length|pluralize }}</td>
-      <td>{{ object.collected_condition_keys|join:", "|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Managed installs sync interval</td>
-      <td>{{ object.managed_installs_sync_interval_days }} day{{ object.managed_installs_sync_interval_days|pluralize }}</td>
-    </tr>
-    <tr>
-      <td>Script checks run interval</td>
-      <td>{{ object.script_checks_run_interval_seconds }} seconds</td>
-    </tr>
-    <tr>
-      <td>Auto reinstall incidents</td>
-      <td>{{ object.auto_reinstall_incidents|yesno }}</td>
-    </tr>
-    <tr>
-      <td>Auto failed install incidents</td>
-      <td>{{ object.auto_failed_install_incidents|yesno }}</td>
-    </tr>
-  </tbody>
-</table>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <thead>
+        <th style="width:30vw">Attribute</th>
+        <th>Value</th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Name</td>
+            <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+            <td>Description</td>
+            <td>{{ object.description|default:"-"|linebreaksbr }}</td>
+        </tr>
+        <tr>
+            <td>Inventory apps full information shard</td>
+            <td>{{ object.inventory_apps_full_info_shard }}%</td>
+        </tr>
+        <tr>
+            <td>Principal user detection source{{ object.principal_user_detection_sources|length|pluralize }}</td>
+            <td>{{ principal_user_detection_sources|default:"-" }}</td>
+        </tr>
+        <tr>
+            <td>Principal user detection domain{{ object.principal_user_detection_domains|length|pluralize }}</td>
+            <td>{{ object.principal_user_detection_domains|join:", "|default:"-" }}</td>
+        </tr>
+        <tr>
+            <td>Collected condition key{{ object.collected_condition_keys|length|pluralize }}</td>
+            <td>{{ object.collected_condition_keys|join:", "|default:"-" }}</td>
+        </tr>
+        <tr>
+            <td>Managed installs sync interval</td>
+            <td>{{ object.managed_installs_sync_interval_days }} day{{ object.managed_installs_sync_interval_days|pluralize }}</td>
+        </tr>
+        <tr>
+            <td>Script checks run interval</td>
+            <td>{{ object.script_checks_run_interval_seconds }} seconds</td>
+        </tr>
+        <tr>
+            <td>Auto reinstall incidents</td>
+            <td>{{ object.auto_reinstall_incidents|yesno }}</td>
+        </tr>
+        <tr>
+            <td>Auto failed install incidents</td>
+            <td>{{ object.auto_failed_install_incidents|yesno }}</td>
+        </tr>
+    </tbody>
+    </table>
 
-<dl>
-  <dt class="small" style="opacity:0.5">Version</dt>
-  <dd class="small" style="opacity:0.5">{{ object.version }}</dd>
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-  <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-</dl>
+    {% created_updated_at object %}
 
-{% if perms.munki.change_configuration %}
-<p>
-  <a class="btn btn-default" href="{% url 'munki:update_configuration' object.pk %}">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    Update
-  </a>
-</p>
-{% endif %}
+</div>
+
 
 {% if perms.munki.view_enrollment %}
-<h3>{{ enrollment_count }} Enrollment{{ enrollment_count|pluralize }}</h3>
-
-{% if perms.munki.add_enrollment %}
-<p>
-  <a class="btn btn-default" href="{% url 'munki:create_enrollment' object.id %}">Create</a>
-</p>
-{% endif %}
+<div class="d-flex justify-content-between mb-3">
+    <h3>Enrollment{{ enrollment_count|pluralize }} ({{ enrollment_count }})</h3>
+    <div class="ms-auto">            
+        {% if perms.munki.add_enrollment %}
+            {% url 'munki:create_enrollment' object.id as url %}
+            {% button 'CREATE' url "Create new Enrollment" %}
+        {% endif %}
+    </div>
+</div>
 
 {% if enrollments %}
-<table class="table">
-  <thead>
-    <th>ID</th>
-    <th>Business unit</th>
-    <th>Tags</th>
-    <th>Created at</th>
-    <th>Request count</th>
-    <th>Version</th>
-    <th>Distributor</th>
-    <th></th>
-  </thead>
-  <tbody>
-    {% for enrollment, distributor, distributor_link in enrollments %}
-    {% with enrollment.secret as secret %}
-    <tr id="enrollment-{{ enrollment.pk }}">
-      <td>{{ enrollment.pk }}</td>
-      <td>
-        {% if perms.inventory.view_metabusinessunit %}
-        <a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a>
-        {% else %}
-        {{ secret.meta_business_unit|default:"-" }}
-        {% endif %}
-      </td>
-      <td>
-        {% for tag in secret.tags.all %}
-        {% inventory_tag tag %}
-        {% empty %}
-        -
+<div class="table-responsive mb-3">
+    <table class="table table-light table-striped align-middle table-hover">
+    <thead>
+        <th>ID</th>
+        <th>Business unit</th>
+        <th>Tags</th>
+        <th>Created at</th>
+        <th>Request count</th>
+        <th>Version</th>
+        <th>Distributor</th>
+        <th>Actions</th>
+    </thead>
+    <tbody>
+        {% for enrollment, distributor, distributor_link in enrollments %}
+        {% with enrollment.secret as secret %}
+        <tr id="enrollment-{{ enrollment.pk }}" class="data-row">
+        <td>{{ enrollment.pk }}</td>
+        <td>
+            {% if perms.inventory.view_metabusinessunit %}
+            <a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a>
+            {% else %}
+            {{ secret.meta_business_unit|default:"-" }}
+            {% endif %}
+        </td>
+        <td>
+            {% for tag in secret.tags.all %}
+            {% inventory_tag tag %}
+            {% empty %}
+            -
+            {% endfor %}
+        </td>
+        <td>
+            <a name="enrollment_{{ enrollment.pk }}"></a>
+            {{ secret.created_at }}
+        </td>
+        <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
+        <td>{{ enrollment.version }}</td>
+        <td>
+            {% if distributor %}
+            {% if distributor_link %}
+            <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
+            {% else %}
+            {{ distributor.get_description_for_enrollment }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        <td>
+            {% if secret.is_used_up %}
+            <span class="text-danger">Enrollment used up.</span>
+            {% else %}
+            {% if not distributor %}
+            {% if perms.munki.change_enrollment %}
+            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'munki:bump_enrollment_version' configuration.pk enrollment.pk %}">
+                <span class="bi bi-hand-thumbs-up" aria-hidden="true"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Bump Enrollment"></span>
+            </a>
+            {% endif %}
+            {% if perms.munki.delete_enrollment %}
+                {% url 'munki:delete_enrollment' configuration.pk enrollment.pk as url %}
+                {% button 'DELETE' url "Delete Enrollment" %}
+            {% endif %}
+            <a class="btn btn-link text-dark text-decoration-none"
+                aria-label="Download macOS enrollment package"
+                title="macOS enrollment package"
+                href="{% url 'munki_api:enrollment_package' enrollment.pk %}">
+                <span class="bi bi-apple" aria-hidden="true"></span>
+            </a>
+            {% endif %}
+            {% endif %}
+        </td>
+        </tr>
+        {% endwith %}
         {% endfor %}
-      </td>
-      <td>
-        <a name="enrollment_{{ enrollment.pk }}"></a>
-        {{ secret.created_at }}
-      </td>
-      <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
-      <td>{{ enrollment.version }}</td>
-      <td>
-        {% if distributor %}
-        {% if distributor_link %}
-        <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
-        {% else %}
-        {{ distributor.get_description_for_enrollment }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-      </td>
-      <td>
-        {% if secret.is_used_up %}
-        <span class="text-danger">Enrollment used up.</span>
-        {% else %}
-        {% if not distributor %}
-        {% if perms.munki.change_enrollment %}
-        <a class="btn btn-default"
-           href="{% url 'munki:bump_enrollment_version' configuration.pk enrollment.pk %}">
-          <span class="glyphicon glyphicon-thumbs-up"></span>
-        </a>
-        {% endif %}
-        {% if perms.munki.delete_enrollment %}
-        <a class="btn btn-danger"
-           href="{% url 'munki:delete_enrollment' configuration.pk enrollment.pk %}">
-          <span class="glyphicon glyphicon-trash"></span>
-        </a>
-        {% endif %}
-        <a class="btn btn-default download-tool"
-           aria-label="Download macOS enrollment package"
-           title="macOS enrollment package"
-           href="{% url 'munki_api:enrollment_package' enrollment.pk %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-          <i class="fab fa-apple" aria-hidden="true"></i>
-        </a>
-        {% endif %}
-        {% endif %}
-      </td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
+    </tbody>
+    </table>
+    {% endif %}
+</div>
 {% endif %}
-{% endif %}
-
 {% endblock %}

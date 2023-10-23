@@ -2,17 +2,21 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
-  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
-  <li class="active">Delete {{ m2m_object }} catalog</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li class="breadcrumb-item"><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="breadcrumb-item active">Delete {{ m2m_object }} catalog</li>
 </ol>
 
 <h2>Delete catalog</h2>
+
 <p>Do you really want to remove the {{ m2m_object }} catalog from the {{ manifest }} manifest?</p>
+
 <form method="POST">{% csrf_token %}
-  {{ form.catalog }}
-  <a class="btn btn-default" href="{{ manifest.get_absolute_url }}">No</a>
-  <button class="btn btn-danger" type="submit">Yes</a>
+
+    {{ form.catalog }}
+
+    <a class="btn btn-outline-secondary" href="{{ manifest.get_absolute_url }}">No</a>
+    <button class="btn btn-danger" type="submit">Yes</a>
 </form>
 {% endblock %}

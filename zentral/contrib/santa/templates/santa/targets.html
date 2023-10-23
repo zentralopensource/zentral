@@ -1,167 +1,155 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
   {% if form.has_changed %}
-  <li><a href="{% url 'santa:targets' %}">Targets</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:targets' %}">Targets</a></li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Search</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Search</a></li>
   {% else %}
-  <li class="active">Search</li>
+  <li class="breadcrumb-item active">Search</li>
   {% endif %}
   {% else %}
-  <li class="active">Targets</li>
+  <li  class="breadcrumb-item active">Targets</li>
   {% endif %}
-  <li class="active">page {{ page_num }} of {{ num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_num }} of {{ num_pages }}</li>
 </ol>
 
-<h3>{{ target_count }} Target{{ target_count|pluralize }}</h3>
+<h3 class="mb-3">Target{{ target_count|pluralize }} ({{ target_count }})</h3>
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-    <div class="form-group">
-      {{ form.q|bootstrap_inline }}
-    </div>
-    <div class="form-group">
-      {{ form.target_type.label_tag }}
-      {{ form.target_type|bootstrap_inline }}
-    </div>
-    <button type="submit" name="search" class="btn btn-primary">Search</button>
-    <div class="btn-group">
-      <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-        <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-        Export <span class="caret"></span>
-      </button>
-      <ul class="dropdown-menu">
-        {% for format, link in export_links %}
-        <li><a href="{{ link }}" class="task">{{ format|upper }}</a></li>
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
+        
+        {{ form }}
+
+        <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
+            <i class="bi bi-search"></i>
+        </button>
+
+        <div class="dropdown mb-2 btn btn-link">
+            <button type="button" class="btn btn-link text-dark text-decoration-none dropdown-toggle"
+                data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
+                <i class="bi bi-download"></i>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="downloadTargets">
+                {% for format, link in export_links %}
+                    <li><a class="dropdown-item task" href="{{ link }}">{{ format|upper }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </form>
+</div>
+
+{% pagination next_url previous_url %}
+
+{% if targets %}
+
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>Object</th>
+            <th>Rules</th>
+        <tr>
+    </thead>
+    <tbody>
+        {% for target in targets %}
+        {% with target.object as obj %}
+        <tr>
+        <td>
+            <a href="{{ target.url }}">
+            {% if target.target_type == "TEAMID"%}
+            Team ID
+            {% else %}
+            {% if target.target_type == "SIGNINGID" %}
+            Signing ID
+            {% else %}
+            {{ target.target_type|title }}
+            {% endif %}
+            {% endif %}
+            </a>
+        </td>
+        <td>
+            <a href="{{ target.url }}"><code>{{ target.identifier }}</code></a>
+            {% if target.target_type == "BINARY" %}
+            <br>{{ obj.name }}
+            {% if obj.cert_sha256 %}
+            <br><strong>signed by:</strong> {{ obj.cert_cn }} / {{ obj.cert_ou }}
+            {% endif %}
+            {% endif %}
+            {% if target.target_type == "BUNDLE" %}
+            <br>{{ obj.name }}
+            <br>{{ obj.version|default:"-" }} / {{ obj.version_str|default:"-" }}
+            {% endif %}
+            {% if target.target_type == "CERTIFICATE" %}
+            <br>{{ obj.cn }}
+            <br>{{ obj.ou }}
+            <br>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}
+            {% endif %}
+            {% if target.target_type == "TEAMID" %}
+            <br>{{ obj.organization }}
+            {% endif %}
+            {% if target.target_type == "SIGNINGID" %}
+            {% if obj.cert_cn %}
+            <br>{{ obj.cert_cn }}
+            {% endif %}
+            {% endif %}
+        </td>
+        <td>{{ target.rule_count }}</td>
+        </tr>
+        {% endwith %}
         {% endfor %}
-      </ul>
-    </div>
-</form>
+    </tbody>
+    </table>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
+    {% pagination next_url previous_url %}
+{% elif form.is_bound %}
+    {% url 'santa:targets' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Type</th>
-      <th>Object</th>
-      <th>Rules</th>
-  </thead>
-  <tbody>
-    {% for target in targets %}
-    {% with target.object as obj %}
-    <tr>
-      <td>
-        <a href="{{ target.url }}">
-          {% if target.target_type == "TEAMID"%}
-          Team ID
-          {% else %}
-          {% if target.target_type == "SIGNINGID" %}
-          Signing ID
-          {% else %}
-          {{ target.target_type|title }}
-          {% endif %}
-          {% endif %}
-        </a>
-      </td>
-      <td>
-        <a href="{{ target.url }}"><code>{{ target.identifier }}</code></a>
-        {% if target.target_type == "BINARY" %}
-        <br>{{ obj.name }}
-        {% if obj.cert_sha256 %}
-        <br><strong>signed by:</strong> {{ obj.cert_cn }} / {{ obj.cert_ou }}
-        {% endif %}
-        {% endif %}
-        {% if target.target_type == "BUNDLE" %}
-        <br>{{ obj.name }}
-        <br>{{ obj.version|default:"-" }} / {{ obj.version_str|default:"-" }}
-        {% endif %}
-        {% if target.target_type == "CERTIFICATE" %}
-        <br>{{ obj.cn }}
-        <br>{{ obj.ou }}
-        <br>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}
-        {% endif %}
-        {% if target.target_type == "TEAMID" %}
-        <br>{{ obj.organization }}
-        {% endif %}
-        {% if target.target_type == "SIGNINGID" %}
-        {% if obj.cert_cn %}
-        <br>{{ obj.cert_cn }}
-        {% endif %}
-        {% endif %}
-      </td>
-      <td>{{ target.rule_count }}</td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
 {% endblock %}
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  var WAIT_FOR_TASK_TIMEOUT_ID;
+var WAIT_FOR_TASK_TIMEOUT_ID;
 
-  function waitForTask(url) {
+function waitForTask(url) {
     $.ajax({
-      dataType: "json",
-      url: url,
-      success: function (data) {
+    dataType: "json",
+    url: url,
+    success: function (data) {
         console.log(data);
         if (data.unready) {
-          WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 1000, url);
+        WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 1000, url);
         } else if (data.status === "SUCCESS") {
-          window.location = data.download_url;
+        window.location = data.download_url;
         }
-      }
+    }
     });
-  }
+}
 
-  function launchTask($link) {
-      var url = $link.attr("href");
-      $.ajax({
+function launchTask($link) {
+    var url = $link.attr("href");
+    $.ajax({
         dataType: "json",
         url: url,
         method: "post",
         success: function (data) {
-          WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 300, data.task_result_url);
+        WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 300, data.task_result_url);
         }
-      });
-  }
-
-  $(document).ready(function () {
-    $(".task").click(function (event) {
-      event.preventDefault();
-      launchTask($(this));
     });
-  });
+}
+
+$(document).ready(function () {
+    $(".task").click(function (event) {
+    event.preventDefault();
+    launchTask($(this));
+    });
+});
 </script>
+
 {% endblock %}

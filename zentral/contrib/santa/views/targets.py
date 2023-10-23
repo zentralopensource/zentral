@@ -10,15 +10,15 @@ from zentral.contrib.santa.forms import TargetSearchForm
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
+from zentral.utils.views import UserPaginationMixin
 
 
 logger = logging.getLogger('zentral.contrib.santa.views.targets')
 
 
-class TargetsView(PermissionRequiredMixin, TemplateView):
+class TargetsView(PermissionRequiredMixin, UserPaginationMixin, TemplateView):
     permission_required = "santa.view_target"
     template_name = "santa/targets.html"
-    paginate_by = 10
 
     def dispatch(self, request, *args, **kwargs):
         self.form = TargetSearchForm(self.request.GET)
@@ -27,7 +27,6 @@ class TargetsView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["form"] = self.form
 
         # current page
@@ -36,12 +35,12 @@ class TargetsView(PermissionRequiredMixin, TemplateView):
         except Exception:
             page = 1
         page = max(1, page)
-        offset = (page - 1) * self.paginate_by
+        offset = (page - 1) * self.get_paginate_by()
 
         # fetch results
         ctx["targets"] = Target.objects.search(q=self.form.cleaned_data.get("q"),
                                                target_type=self.form.cleaned_data.get("target_type"),
-                                               offset=offset, limit=self.paginate_by)
+                                               offset=offset, limit=self.get_paginate_by())
 
         # total
         try:
@@ -62,14 +61,14 @@ class TargetsView(PermissionRequiredMixin, TemplateView):
 
         # pagination
         ctx["page_num"] = page
-        ctx["num_pages"] = math.ceil(total / self.paginate_by) or 1
+        ctx["num_pages"] = math.ceil(total / self.get_paginate_by()) or 1
         if page > 1:
             qd = self.request.GET.copy()
             qd["page"] = page - 1
             ctx["previous_url"] = f"?{qd.urlencode()}"
             qd.pop("page")
             ctx["reset_link"] = f"?{qd.urlencode()}"
-        if offset + self.paginate_by < total:
+        if offset + self.get_paginate_by() < total:
             qd = self.request.GET.copy()
             qd["page"] = page + 1
             ctx["next_url"] = f"?{qd.urlencode()}"
@@ -234,7 +233,6 @@ class EventsMixin:
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["target_type"] = self.target_type
         ctx["target_type_display"] = getattr(self, "target_type_display", None)
         ctx["identifier"] = self.identifier

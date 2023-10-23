@@ -1,10 +1,9 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Santa</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Santa</li>
 </ol>
 
 <div class="row">
@@ -27,8 +26,8 @@
   </div>
   <div class="col-md-12">
     {% if perms.santa.view_configuration %}
-    <h3>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h3>
-    <table class="table">
+    <h3>Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+    <table class="table table-light table-striped align-middle">
       <thead>
         <tr>
           <th>Name</th>
@@ -45,14 +44,22 @@
           <td>{{ configuration.machine_count }}</td>
         </tr>
         {% empty %}
-        <p>No configuration.{% if perms.santa.add_configuration %} <a href="{% url 'santa:create_configuration' %}" class="btn btn-default">Create a configuration</a>{% endif %}</p>
+        {% if perms.santa.add_configuration %}
+        <a href="{% url 'santa:create_configuration' %}" class="btn btn-primary" type="button">
+            Create a configuration
+        </a>
+        {% else %}
+        <p class="align-middle">
+            There are no configurations.
+        </p>
+        {% endif %}
         {% endfor %}
       </tbody>
     </table>
     {% endif %}
     {% if perms.santa.view_target %}
-    <h3>{{ targets.total }} Collected target{{ targets.total|pluralize }}</h3>
-    <table class="table">
+    <h3>Collected target{{ targets.total|pluralize }} ({{ targets.total }})</h3>
+    <table class="table table-light table-striped align-middle">
       <thead>
         <tr>
           <th>Type</th>
@@ -103,7 +110,12 @@
             type: 'bar',
             data: {labels: data.labels,
                    datasets: [data.datasets[dataset]]},
-            options: {}
+            options: {
+                scales: {
+                    xAxes: [{gridLines: { color: "darkgray", zeroLineColor: "darkgray" }}],
+                    yAxes: [{gridLines: { color: "darkgray", zeroLineColor: "darkgray" }}]
+                }
+            }
           });
         }
       }

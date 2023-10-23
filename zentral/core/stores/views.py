@@ -5,6 +5,7 @@ from django.http import HttpResponseRedirect
 from django.views.generic import TemplateView, View
 from zentral.core.events import event_types
 from zentral.core.stores.conf import frontend_store, stores
+from zentral.utils.views import UserPaginationMixin
 
 
 #
@@ -147,7 +148,7 @@ class EventsView(EventsViewMixin, TemplateView):
         return ctx
 
 
-class FetchEventsView(EventsViewMixin, TemplateView):
+class FetchEventsView(EventsViewMixin, UserPaginationMixin, TemplateView):
     """The view to fetch the events linked to an object
 
     Combine this view with an EventsMixin to get a
@@ -158,7 +159,6 @@ class FetchEventsView(EventsViewMixin, TemplateView):
     """
 
     template_name = "core/stores/events_events.html"
-    paginate_by = 20
     include_machine_info = True
 
     def get(self, request, *args, **kwargs):
@@ -167,7 +167,7 @@ class FetchEventsView(EventsViewMixin, TemplateView):
             self.fetch_kwargs = self.clean_fetch_kwargs()
         except ValueError:
             return HttpResponseRedirect(self.get_redirect_url())
-        self.fetch_kwargs["limit"] = self.paginate_by
+        self.fetch_kwargs["limit"] = self.get_paginate_by()
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):

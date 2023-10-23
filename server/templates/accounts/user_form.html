@@ -1,27 +1,26 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:users' %}">Users</a></li>
   {% if user_to_update %}
-  <li><a href="{% url 'accounts:user' user_to_update.pk %}">{{ user_to_update.get_type_display|title }} {{ user_to_update }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:user' user_to_update.pk %}">{{ user_to_update.get_type_display|title }} {{ user_to_update }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">{{ title }}</li>
+  <li class="breadcrumb-item active">{{ title }}</li>
   {% endif %}
 </ol>
 
 <h3>{{ title }}</h3>
 
-<form class="form" method="POST">{% csrf_token %}
-  {{ form|bootstrap }}
+<form class="update-form" method="POST">{% csrf_token %}
+  {{ form }}
   <p>
     {% if user_to_update %}
-    <a href="{% url 'accounts:user' user_to_update.pk %}" class="btn btn-default">Cancel</a>
+    <a href="{% url 'accounts:user' user_to_update.pk %}" class="btn btn-outline-secondary">Cancel</a>
     {% else %}
-    <a href="{% url 'accounts:users' %}" class="btn btn-default">Cancel</a>
+    <a href="{% url 'accounts:users' %}" class="btn btn-outline-secondary">Cancel</a>
     {% endif %}
     <button type="submit" class="btn btn-primary">Save</button>
   </p>

@@ -119,6 +119,8 @@ class DistributedQueryForm(forms.ModelForm):
 
 
 class DistributedQueryMachineSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     serial_number = forms.CharField(
         label="Serial number", required=False,
         widget=forms.TextInput(attrs={"autofocus": True,
@@ -371,15 +373,28 @@ class QueryForm(forms.ModelForm):
 
 
 class QuerySearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(
-        label="Query", required=False,
-        widget=forms.TextInput(attrs={"autofocus": True,
-                                      "size": 36,
-                                      "placeholder": "Query name, pack name, SQL, …"})
+            label="Query name, pack name, SQL, …",
+            required=False,
+            widget=forms.TextInput(
+                attrs={
+                    "autofocus": True,
+                    "size": 36,
+                }
+            )
     )
-    pack = forms.ModelChoiceField(queryset=Pack.objects.all(), required=False)
-    compliance_check = forms.BooleanField(label="Only compliance checks", required=False)
-    tag_update = forms.BooleanField(label="Only tag updates", required=False)
+    pack = forms.ModelChoiceField(
+            label="Pack",
+            queryset=Pack.objects.all(),
+            required=False,
+            empty_label='...',
+    )
+    compliance_check = forms.BooleanField(
+        label="Compliance checks",
+        required=False,
+    )
 
     def get_queryset(self):
         qs = (

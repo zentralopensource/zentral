@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
-  <li><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
-  <li><a href="{{ object.get_absolute_url }}">v{{ object.version }}</a></li>
-  <li class="active">Update scope</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">v{{ object.version }}</a></li>
+  <li class="breadcrumb-item active">Update scope</li>
 </ol>
 
 <h3>Update artifact version v{{ object.version }}</h3>
@@ -16,8 +16,8 @@
 <h3>Scope</h3>
 <hr>
 
-<form class="form" method="post">{% csrf_token %}
-  {{ form|bootstrap }}
+<form class="update-form" method="post">{% csrf_token %}
+  {{ form }}
   {% if form.tag_shards %}
   <div class="form-group">
     <label class="control-label">Tag shards</label>
@@ -40,7 +40,7 @@
         </td>
         <td>
           <button type="button" data-tag-pk="{{ tag.pk }}" class="btn btn-danger del-tag-shard">
-            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+            <span class="bi bi-trash" aria-hidden="true"></span>
           </button>
         </td>
       </tr>
@@ -49,7 +49,7 @@
   </div>
   {% endif %}
   <p>
-    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-primary">Save</button>
   </p>
 </form>

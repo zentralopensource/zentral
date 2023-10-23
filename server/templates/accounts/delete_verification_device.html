@@ -1,21 +1,23 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
-  <li><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
-  <li class="active">Delete {{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
+  <li class="breadcrumb-item active">Delete {{ object }}</li>
 </ol>
 
-<h3>Delete {{ object }}</h3>
+<h3 class="mb-3">Delete {{ object }}</h3>
 
 <p>Please confirm you want to delete the {{ object }} device.</p>
-<form class="form" method="POST">{% csrf_token %}
-  {{ form|bootstrap }}
+
+<form class="update-form" method="POST">{% csrf_token %}
+
+  {{ form }}
+
   <p>
-    <a href="{% url 'accounts:verification_devices' %}" class="btn btn-default">Cancel</a>
+    <a href="{% url 'accounts:verification_devices' %}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-danger">Delete</button>
   </p>
 </form>

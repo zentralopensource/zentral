@@ -134,6 +134,17 @@ class Incident(models.Model):
             self.name = self.loaded_incident.get_name()
         return super().save(*args, **kwargs)
 
+    def get_open(self, latest):
+        """ Returns the latest Incidents with
+            Status OPEN ordered by severity DESC and created time DESC
+
+        Args:
+            latest (int): the 'latest' amount of incidents created.
+        """
+        return Incident.objects.all().filter(
+            status=Status.OPEN.value,
+            ).order_by("-severity").order_by("-created_at")[:latest]
+
 
 class MachineIncident(models.Model):
     incident = models.ForeignKey(Incident, on_delete=models.CASCADE)

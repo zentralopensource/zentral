@@ -1,21 +1,20 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
-  <li><a href="{% url 'osquery:pack' object.pk %}">{{ object }}</a></li>
-  <li class="active">Upload</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:packs' %}">Packs</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:pack' object.pk %}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Upload</li>
 </ol>
 
 <h2>Upload pack</h2>
 
-<form method="post" class="form" enctype="multipart/form-data">{% csrf_token %}
-  {{ form|bootstrap }}
+<form method="post" class="update-form" enctype="multipart/form-data">{% csrf_token %}
+  {{ form }}
   <p>
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

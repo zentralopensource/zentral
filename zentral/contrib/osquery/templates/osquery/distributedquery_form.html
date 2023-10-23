@@ -1,44 +1,43 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:distributed_queries' %}">Runs</a></li>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Launch query</li>
+  <li class="breadcrumb-item active">Launch query</li>
   {% endif %}
 </ol>
 
 <h2>{% if object %}Update run{% else %}🚀 Launch query <i>{{ query.name }}</i>{% endif %}</h2>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   {% if object %}
   <table class="table">
     <tr>
       <th>Query</th>
       <td>
-        <dl>
+        <dl class="row">
           {% if perms.osquery.view_query and object.query %}
-          <dt>Name</dt>
-          <dd>
+          <dt class="col-sm-3 text-md-end">Name</dt>
+          <dd class="col-sm-9">
             <a href="{{ object.query.get_absolute_url }}">{{ query }}</a>
             {% if object.query_version < object.query.version %}/ <span class="text-danger">Updated since run creation</span>{% endif %}
           </dd>
           {% endif %}
-          <dt>SQL</dt>
-          <dd>{{ object.get_sql_html|safe }}</dd>
+          <dt class="col-sm-3 text-md-end">SQL</dt>
+          <dd class="col-sm-9">{{ object.get_sql_html|safe }}</dd>
           {% if object.platforms %}
-          <dt>Platform{{ object.platforms|length|pluralize }}</dt>
-          <dd>{{ object.platforms|join:", " }}</dd>
+          <dt class="col-sm-3 text-md-end">Platform{{ object.platforms|length|pluralize }}</dt>
+          <dd class="col-sm-9">{{ object.platforms|join:", " }}</dd>
           {% endif %}
           {% if object.minimum_osquery_version %}
-          <dt>Min. osquery ver.</dt>
-          <dd>{{ object.minimum_osquery_version }}</dd>
+          <dt class="col-sm-3 text-md-end">Min. osquery ver.</dt>
+          <dd class="col-sm-9">{{ object.minimum_osquery_version }}</dd>
           {% endif %}
         </dl>
       </td>
@@ -58,9 +57,9 @@
     <div>{{ query.minimum_osquery_version|default:"-" }}</div>
   </div>
   {% endif %}
-  {{ form|bootstrap }}
+  {{ form }}
   <p>
-    <a class="btn btn-default" href="{% if object %}{{ object.get_absolute_url }}{% else %}{{ query.get_absolute_url }}#runs{% endif %}">
+    <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{{ query.get_absolute_url }}#runs{% endif %}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>
@@ -99,8 +98,8 @@
   function addTimeShortcuts() {
     $input = $("#id_valid_until");
     $.each([{label: "now", offset:0}, {label: "now + 1h", offset:1}, {label: "now + 4h", offset:4}, {label: "now + 1d", offset:24}], function( index, labelDef ) {
-      var style = labelDef.offset ? "default" : "danger";
-      $('<a style="display:inline-block;margin:0 5px 5px 0;cursor:pointer;text-decoration:none"><span class="label label-' + style + '">' + labelDef.label + '</span></a>')
+      var style = labelDef.offset ? "secondary" : "danger";
+      $('<a style="display:inline-block;margin:0 5px 5px 0;cursor:pointer;text-decoration:none"><span class="badge text-bg-' + style + '">' + labelDef.label + '</span></a>')
         .click(function(event) {event.preventDefault(); setTime($input, getNowHoursOffset(labelDef.offset))})
         .insertBefore($input);
     });

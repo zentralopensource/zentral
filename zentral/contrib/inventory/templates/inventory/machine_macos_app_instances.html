@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-  <li><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
-  <li class="active">macOS apps</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+  <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ serial_number }}</a></li>
+  <li class="breadcrumb-item active">macOS apps</li>
 </ol>
 
 <h2>
@@ -22,8 +22,8 @@
 {% if tabs %}
 <ul class="nav nav-tabs">
   {% for ms, rows in tabs %}
-  <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
-    <a href="#" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}">
+  <li role="presentation" class="nav-item">
+    <a href="#" class="nav-link{% if forloop.first %} active{% endif %}" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}">
       {{ ms.source.name }}
     </a>
   </li>
@@ -32,7 +32,7 @@
 
 {% for ms, rows in tabs %}
 <div class="table-reponsive appstab" id="apps-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
-  <table class="table table-condensed table-filtered">
+  <table class="table table-light table-striped align-middle table-hover table-filtered">
     <thead>
       <tr>
         <th>Bundle</th>
@@ -70,7 +70,7 @@
     </tbody>
   </table>
 
-  <dl class="dl-horizontal">
+  <dl class="row">
     <dt class="small" style="opacity:0.5">last change</dt>
     <dd class="small" style="opacity:0.5">
       {% if ms.public_ip_address %}{{ ms.public_ip_address }} - {% endif %}

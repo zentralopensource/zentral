@@ -1,115 +1,83 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a>
   {% else %}
-  <li class="active">{{ anchor_text }}</li>
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
   {% endfor %}
 </ol>
 
-<h2>{{ paginator.count }} Probe{{ paginator.count|pluralize }}</h2>
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="mb-3">Probe{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
+    </div>
 
-{% if perms.probes.add_probesource %}
-<div class="dropdown">
-  <button class="btn btn-default dropdown-toggle" type="button" id="createProbe"
-          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-    Create
-    <span class="caret"></span>
-  </button>
-  <ul class="dropdown-menu" aria-labelledby="createProbe">
-    {% for link in probe_extra_links.create %}
-    <li><a href="{{ link.url }}">{{ link.anchor_text }}</a></li>
-    {% endfor %}
-  </ul>
-</div>
+    <div class="d-flex flex-wrap align-items-center mb-1">
+        <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
+
+            {{ form }}
+
+            <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
+                <i class="bi bi-search"></i>
+            </button>
+        </form>
+    {% if perms.probes.add_probesource %}
+        <div class="ms-auto">
+            {% url 'probes:create' as url %}
+            {% button 'CREATE' url "Create new Probe" %}
+        </div>
+    {% endif %}
+    </div>
+
+
+{% if object_list %}
+    {% pagination next_url previous_url %}
+
+    <div class="table-reponsive mb-3">
+    <table class="table table-light table-striped align-middle">
+        <thead>
+        <th>Model</th>
+        <th>Events</th>
+        <th>Name</th>
+        <th>Status</th>
+        </thead>
+        <tbody>
+        {% for probe in object_list %}
+        <tr>
+        <td>{{ probe.get_model_display }}</td>
+        <td>
+            {% with probe.get_event_type_class_names as event_type_class_names %}
+            {% if event_type_class_names %}
+            <p>
+            {% for event_type in event_type_class_names %}
+            {{ event_type }}{% if not forloop.last %}<br>{% endif %}
+            {% endfor %}
+            </p>
+            {% endif %}
+            {% endwith %}
+        </td>
+        <td><a href="{% url 'probes:probe' probe.pk %}">{{ probe.name }}</a></td>
+        <td>
+            {% if probe.status == 'ACTIVE' %}
+            <span class="badge text-bg-success">Active</span>
+            {% else %}
+            <span class="badge text-bg-secondary">Inactive</span>
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+
+    {% pagination next_url previous_url %}
+{% else %}
+    {% url 'probes:index' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
-
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-    <div class="form-group">
-      {{ form.q|bootstrap_inline }}
-    </div>
-    <div class="form-group">
-      {{ form.model.label_tag }}
-      {{ form.model|bootstrap_inline }}
-    </div>
-    <div class="form-group">
-      {{ form.event_type.label_tag }}
-      {{ form.event_type|bootstrap_inline }}
-    </div>
-    <div class="form-group">
-      {{ form.status.label_tag }}
-      {{ form.status|bootstrap_inline }}
-    </div>
-    <button type="submit" class="btn btn-default">Search</button>
-</form>
-
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
-
-<div class="table-reponsive">
-  <table class="table">
-    <thead>
-      <th>Model</th>
-      <th>Events</th>
-      <th>Name</th>
-      <th>Status</th>
-    </thead>
-    <tbody>
-    {% for probe in object_list %}
-    <tr>
-      <td>{{ probe.get_model_display }}</td>
-      <td>
-        {% with probe.get_event_type_class_names as event_type_class_names %}
-        {% if event_type_class_names %}
-        <p>
-          {% for event_type in event_type_class_names %}
-          {{ event_type }}{% if not forloop.last %}<br>{% endif %}
-          {% endfor %}
-        </p>
-        {% endif %}
-        {% endwith %}
-      </td>
-      <td><a href="{% url 'probes:probe' probe.pk %}">{{ probe.name }}</a></td>
-      <td>
-        {% if probe.status == 'ACTIVE' %}
-        <span class="label label-info">Active</span>
-        {% else %}
-        <span class="label label-danger">Inactive</span>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
-
 {% endblock %}

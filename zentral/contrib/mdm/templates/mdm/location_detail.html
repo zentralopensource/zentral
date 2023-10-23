@@ -1,19 +1,35 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:locations' %}">Locations</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:locations' %}">Locations</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h3>Location <i>{{ object }}</i></h3>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{  object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Location</h3>
+        <div class="ms-auto">
+            {% if perms.mdm.change_location %}
+                {% url 'mdm:update_location' object.pk as url %}
+                {% button 'UPDATE' url "Edit Location" %}
+            {% endif %}
+            {% if perms.mdm.delete_location and object.can_be_deleted %}
+                {% url 'mdm:delete_location' object.pk as url %}
+                {% button 'DELETE' url "Delete Location" %}
+            {% endif %}
+        </div>
+    </div>
 
 <div class="row">
   <div class="col-md-12">
-    <table class="table">
+    <table class="table table-light table-striped align-middle table-object-properties">
       <thead>
         <th width="33%">Attribute</th>
         <th>Value</th>
@@ -50,31 +66,10 @@
       </tbody>
     </table>
 
-    <dl class="dl-horizontal">
-      <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-      <dt class="small" style="opacity:0.5">Updated at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-    </dl>
+    {% created_updated_at object %}
 
   </div>
 </div>
 
-{% if perms.mdm.change_location or perms.mdm.delete_location %}
-<div class="btn-group" role="group" style="margin:0 0 10px 0">
-  {% if perms.mdm.change_location %}
-  <a class="btn btn-default" href="{% url 'mdm:update_location' object.pk %}">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    Update
-  </a>
-  {% endif %}
-  {% if perms.mdm.delete_location %}
-  <a class="btn btn-danger{% if not object.can_be_deleted %} disabled{% endif %}" href="{% url 'mdm:delete_location' object.pk %}">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-    Delete
-  </a>
-  {% endif %}
-</div>
-{% endif %}
 
 {% endblock %}

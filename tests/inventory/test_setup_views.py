@@ -250,7 +250,6 @@ class InventorySetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "inventory/mbu_machines.html")
-        self.assertContains(response, "Available for API Enrollment")
         meta_business_unit = response.context["object"]
         self.assertTrue(meta_business_unit.api_enrollment_enabled())
         event = post_event.call_args_list[0].args[0]

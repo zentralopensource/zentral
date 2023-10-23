@@ -1,4 +1,4 @@
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle">
   <thead>
     <th class="col-md-2">type</th>
     <th class="col-md-2">enrollment</th>
@@ -54,8 +54,15 @@
       <td>
         {% if session.realm_username %}{{ session.realm_username }}{% else %}-{% endif %}
       </td>
-      <td class="{% if session.status == "COMPLETED" %}bg-success{% else %}bg-warning{% endif %}">
-        {{ session.status|title }}
+      <td>
+        <span 
+        {% if session.status == "COMPLETED" %}
+            class="badge text-bg-success">
+        {% else %}
+            class="badge text-bg-warning">
+        {% endif %}
+            {{ session.status|title }}
+        </span>
       </td>
       <td>{{ session.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
       <td>{{ session.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>

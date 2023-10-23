@@ -24,13 +24,7 @@ class JamfInstancesView(PermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
-        jamf_instances_count = len(ctx["object_list"])
-        if jamf_instances_count == 0 or jamf_instances_count > 1:
-            suffix = "s"
-        else:
-            suffix = ""
-        ctx["title"] = "{} jamf instance{}".format(jamf_instances_count, suffix)
+        ctx["jamf_instances_count"] = ctx["object_list"].count()
         return ctx
 
 
@@ -41,7 +35,6 @@ class CreateJamfInstanceView(PermissionRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["title"] = "Create jamf instance"
         return ctx
 
@@ -52,7 +45,6 @@ class JamfInstanceView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["title"] = str(ctx["object"])
         ctx["tag_configs"] = list(ctx["object"].tagconfig_set.select_related("taxonomy").all())
         ctx["tag_config_count"] = len(ctx["tag_configs"])
@@ -86,7 +78,6 @@ class UpdateJamfInstanceView(PermissionRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["title"] = "Update jamf instance"
         return ctx
 
@@ -98,7 +89,6 @@ class DeleteJamfInstanceView(PermissionRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["title"] = "Delete jamf instance"
         return ctx
 
@@ -131,7 +121,6 @@ class CreateTagConfigView(PermissionRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["title"] = "Create tag config"
         ctx["jamf_instance"] = self.jamf_instance
         return ctx
@@ -154,7 +143,6 @@ class UpdateTagConfigView(PermissionRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["title"] = "Update tag config"
         ctx["jamf_instance"] = self.jamf_instance
         return ctx
@@ -176,7 +164,6 @@ class DeleteTagConfigView(PermissionRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["setup"] = True
         ctx["title"] = "Delete tag config"
         ctx["jamf_instance"] = self.jamf_instance
         return ctx

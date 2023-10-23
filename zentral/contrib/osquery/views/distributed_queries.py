@@ -8,19 +8,19 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from zentral.utils.sql import tables_in_query
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView
+from django.views.generic import CreateView, DeleteView, DetailView, UpdateView, TemplateView
 from zentral.contrib.osquery.forms import DistributedQueryForm, DistributedQueryMachineSearchForm
 from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             FileCarvingSession, Query)
+from zentral.utils.views import UserPaginationListView, UserPaginationMixin
 
 
 logger = logging.getLogger('zentral.contrib.osquery.views.distributed_queries')
 
 
-class DistributedQueryListView(PermissionRequiredMixin, TemplateView):
+class DistributedQueryListView(PermissionRequiredMixin, UserPaginationMixin, TemplateView):
     permission_required = "osquery.view_distributedquery"
     template_name = "osquery/distributedquery_list.html"
-    paginate_by = 50
 
     def get_total(self):
         return DistributedQuery.objects.count()
@@ -38,7 +38,7 @@ class DistributedQueryListView(PermissionRequiredMixin, TemplateView):
                 "from osquery_distributedquery dq "
                 "left join osquery_query q on (dq.query_id = q.id) "
                 "order by dq.created_at desc, dq.id desc limit %s offset %s",
-                [self.paginate_by, offset]
+                [self.get_paginate_by(), offset]
             )
             columns = [col.name for col in c.description]
             for row in c.fetchall():
@@ -55,7 +55,7 @@ class DistributedQueryListView(PermissionRequiredMixin, TemplateView):
         except Exception:
             page = 1
         page = max(1, page)
-        offset = (page - 1) * self.paginate_by
+        offset = (page - 1) * self.get_paginate_by()
 
         # fetch distributed queries
         ctx["distributed_query_count"] = total = self.get_total()
@@ -63,14 +63,14 @@ class DistributedQueryListView(PermissionRequiredMixin, TemplateView):
 
         # pagination
         ctx["page_num"] = page
-        ctx["num_pages"] = math.ceil(total / self.paginate_by) or 1
+        ctx["num_pages"] = math.ceil(total / self.get_paginate_by()) or 1
         if page > 1:
             qd = self.request.GET.copy()
             qd["page"] = page - 1
             ctx["previous_url"] = f"?{qd.urlencode()}"
             qd.pop("page")
             ctx["reset_link"] = f"?{qd.urlencode()}"
-        if offset + self.paginate_by < total:
+        if offset + self.get_paginate_by() < total:
             qd = self.request.GET.copy()
             qd["page"] = page + 1
             ctx["next_url"] = f"?{qd.urlencode()}"
@@ -138,10 +138,9 @@ class DeleteDistributedQueryView(PermissionRequiredMixin, DeleteView):
         return ctx
 
 
-class DistributedQueryMachineListView(PermissionRequiredMixin, ListView):
+class DistributedQueryMachineListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "osquery.view_distributedquery"
     model = DistributedQueryMachine
-    paginate_by = 50
 
     def get(self, request, *args, **kwargs):
         self.distributed_query = get_object_or_404(
@@ -159,14 +158,6 @@ class DistributedQueryMachineListView(PermissionRequiredMixin, ListView):
         ctx["distributed_query"] = self.distributed_query
         ctx["form"] = self.form
         page = ctx["page_obj"]
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)
@@ -174,10 +165,9 @@ class DistributedQueryMachineListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
+class DistributedQueryResultListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "osquery.view_distributedqueryresult"
     model = DistributedQueryResult
-    paginate_by = 50
 
     def get_queryset(self):
         self.distributed_query = get_object_or_404(
@@ -231,15 +221,6 @@ class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
         ctx["rows"] = rows
         ctx["headers"] = ["Serial number"] + selected_fields
 
-        # pagination
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)
@@ -255,11 +236,10 @@ class DistributedQueryResultListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class DistributedQueryFileCarvingSessionListView(PermissionRequiredMixin, ListView):
+class DistributedQueryFileCarvingSessionListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = ("osquery.view_distributedquery", "osquery.view_filecarvingsession")
     model = FileCarvingSession
     template_name = "osquery/dq_filecarvingsession_list.html"
-    paginate_by = 50
 
     def get_queryset(self):
         self.distributed_query = get_object_or_404(
@@ -276,14 +256,6 @@ class DistributedQueryFileCarvingSessionListView(PermissionRequiredMixin, ListVi
         ctx = super().get_context_data(**kwargs)
         ctx["distributed_query"] = self.distributed_query
         page = ctx["page_obj"]
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)

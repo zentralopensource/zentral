@@ -25,11 +25,3 @@ urlpatterns = [
     path('<uuid:pk>/sessions/<uuid:ras_pk>/', views.RealmAuthenticationSessionView.as_view(),
          name='authentication_session'),
 ]
-
-
-setup_menu_cfg = {
-    'title': 'Accounts',
-    'items': (
-        ('list', 'Realms', False, ('realms.view_realm',)),
-    )
-}

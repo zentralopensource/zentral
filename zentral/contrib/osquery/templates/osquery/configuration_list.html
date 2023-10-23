@@ -1,47 +1,58 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li class="active">Configurations</li>
-  <li class="active">{{ configuration_count }} record{{ configuration_count|pluralize }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item active">Configurations</li>
+  <li class="breadcrumb-item active">{{ configuration_count }} record{{ configuration_count|pluralize }}</li>
 </ol>
 
-<h2>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h2>
 
-{% if perms.osquery.add_configuration %}
-<p>
-  <a href="{% url 'osquery:create_configuration' %}" class="btn btn-default">Create</a>
-</p>
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+    <div class="ms-auto">
+    {% if perms.osquery.add_configuration %}
+        {% url 'osquery:create_configuration' as url %}
+        {% button 'CREATE' url "Create new Configuration" %}
+    {% endif %}
+    </div>
+</div>
+
+{% if object_list %}
+    <table class="table table-light table-striped align-middle table-hover">
+        <thead>
+            <tr>
+            <th>Name</th>
+            {% if perms.osquery.change_configuration %}
+            <th></th>
+            {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for configuration in object_list %}
+            <tr class="data-row">
+                <td>
+                <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
+                </td>
+                {% if perms.osquery.change_configuration %}
+                <td class="text-end py-0">
+                    {% url 'osquery:update_configuration' configuration.id as url %}
+                    {% button 'UPDATE' url "Edit Configuration" %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    {% if perms.osquery.add_configuration %}
+        {% url 'osquery:create_configuration' as link %}
+        {% no_entities 'Feeds' link %}
+    {% else %}
+        {% no_entities 'Feeds' %}
+    {% endif %}
 {% endif %}
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      {% if perms.osquery.change_configuration %}
-      <th></th>
-      {% endif %}
-    </tr>
-  </thead>
-  <tbody>
-    {% for configuration in object_list %}
-    <tr>
-      <td>
-        <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
-      </td>
-      {% if perms.osquery.change_configuration %}
-      <td>
-        <a class="btn btn-default" href="{% url 'osquery:update_configuration' configuration.id %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-          Update
-        </a>
-      </td>
-      {% endif %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 {% endblock %}

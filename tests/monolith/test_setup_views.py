@@ -1234,7 +1234,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self._login("monolith.view_submanifest", "monolith.change_submanifestpkginfo")
         response = self.client.get(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
-        self.assertContains(response, 'class="danger"')
+        self.assertContains(response, 'class="data-row danger"')
         self.assertNotContains(
             response,
             reverse("monolith:update_sub_manifest_pkg_info",

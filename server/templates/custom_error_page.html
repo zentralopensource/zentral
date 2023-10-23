@@ -1,5 +1,6 @@
 {% extends 'base_error.html' %}
 
 {% block content %}
-<h2>{{ status_code }} - {{ message }}</h2>
+<p class="display-1">{{ status_code }}</p>
+<p class="fs-3">{{ message }}</p>
 {% endblock %}

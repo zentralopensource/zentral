@@ -515,7 +515,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "0 Compliance checks")
+        self.assertContains(response, "Compliance checks (0)")
 
     def test_machine_no_tags_no_compliance_checks_in_scope(self):
         self._login(
@@ -528,7 +528,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "0 Compliance checks")
+        self.assertContains(response, "Compliance checks (0)")
 
     def test_machine_with_tag_no_compliance_checks_in_scope(self):
         self._login(
@@ -543,7 +543,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "0 Compliance checks")
+        self.assertContains(response, "Compliance checks (0)")
 
     def test_machine_source_mismatch_no_compliance_checks_in_scope(self):
         self._login(
@@ -555,7 +555,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "0 Compliance checks")
+        self.assertContains(response, "Compliance checks (0)")
 
     def test_machine_source_match_platform_missmatch_no_compliance_checks_in_scope(self):
         self._login(
@@ -567,7 +567,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "0 Compliance checks")
+        self.assertContains(response, "Compliance checks (0)")
 
     def test_machine_source_match_one_compliance_checks_in_scope(self):
         self._login(
@@ -579,7 +579,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 Compliance check")
+        self.assertContains(response, "Compliance check (1)")
         self.assertContains(response, cc.compliance_check.name)
         cc_redirect_link = reverse("compliance_checks:redirect", args=(cc.compliance_check.pk,))
         compliance_check_statuses = response.context["compliance_check_statuses"]
@@ -600,7 +600,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 Compliance check")
+        self.assertContains(response, "Compliance check (1)")
         self.assertContains(response, cc_without_tag.compliance_check.name)
         self.assertNotContains(response, cc_with_tags.compliance_check.name)
         cc_redirect_link = reverse("compliance_checks:redirect", args=(cc_without_tag.compliance_check.pk,))
@@ -623,7 +623,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 Compliance check")
+        self.assertContains(response, "Compliance check (1)")
         self.assertContains(response, cc_without_tag.compliance_check.name)
         self.assertNotContains(response, cc_with_tags.compliance_check.name)
         cc_redirect_link = reverse("compliance_checks:redirect", args=(cc_without_tag.compliance_check.pk,))
@@ -646,7 +646,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertNotContains(response, "1 Compliance check")
+        self.assertNotContains(response, "Compliance check (1)")
         self.assertNotContains(response, cc_without_tag.compliance_check.name)
         cc_redirect_link = reverse("compliance_checks:redirect", args=(cc_without_tag.compliance_check.pk,))
         self.assertNotContains(response, cc_redirect_link)
@@ -673,7 +673,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 Compliance check")
+        self.assertContains(response, "Compliance check (1)")
         self.assertContains(response, cc.compliance_check.name)
         cc_redirect_link = reverse("compliance_checks:redirect", args=(cc.compliance_check.pk,))
         self.assertContains(response, cc_redirect_link)
@@ -714,7 +714,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 Compliance check")
+        self.assertContains(response, "Compliance check (1)")
         self.assertContains(response, cc.compliance_check.name)
         cc_redirect_link = reverse("compliance_checks:redirect", args=(cc.compliance_check.pk,))
         self.assertContains(response, cc_redirect_link)

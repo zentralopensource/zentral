@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from django import forms
 from django.apps import apps
 from django.conf import settings as django_settings
-from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, UsernameField
+from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, PasswordChangeForm, UsernameField, SetPasswordForm
 from django.contrib.auth.models import Group
 from django.core import signing, validators
 from django.db.models import Q
@@ -31,6 +31,35 @@ class ZentralAuthenticationForm(AuthenticationForm):
                                       'autocorrect': 'off',
                                       'autocapitalize': 'none'}),
     )
+
+    def __init__(self, *args, **kwargs):
+        super(ZentralAuthenticationForm, self).__init__(*args, **kwargs)
+        for visible in self.visible_fields():
+            visible.field.widget.attrs['class'] = 'form-control my-1'
+
+
+class ZentralPasswordResetForm(PasswordResetForm):
+
+    def __init__(self, *args, **kwargs):
+        super(ZentralPasswordResetForm, self).__init__(*args, **kwargs)
+        for visible in self.visible_fields():
+            visible.field.widget.attrs['class'] = 'form-control my-1'
+
+
+class ZentralPasswordChangeForm(PasswordChangeForm):
+
+    def __init__(self, *args, **kwargs):
+        super(ZentralPasswordChangeForm, self).__init__(*args, **kwargs)
+        for visible in self.visible_fields():
+            visible.field.widget.attrs['class'] = 'form-control my-1'
+
+
+class ZentralSetPasswordForm(SetPasswordForm):
+
+    def __init__(self, *args, **kwargs):
+        super(ZentralSetPasswordForm, self).__init__(*args, **kwargs)
+        for visible in self.visible_fields():
+            visible.field.widget.attrs['class'] = 'form-control my-1'
 
 
 class GroupForm(forms.ModelForm):
@@ -96,7 +125,7 @@ class InviteUserForm(forms.ModelForm):
         user = super(InviteUserForm, self).save(commit=False)
         user.set_password(get_random_string(1024))
         user.save()
-        prf = PasswordResetForm({"email": user.email})
+        prf = ZentralPasswordResetForm({"email": user.email})
         if prf.is_valid():
             prf.save(request=request, use_https=True,
                      email_template_name='registration/invitation_email.html',
@@ -147,7 +176,7 @@ class ServiceAccountForm(forms.ModelForm):
 class UpdateUserForm(forms.ModelForm):
     class Meta:
         model = User
-        fields = ("username", "email", "is_superuser", "groups")
+        fields = ("username", "email", "is_superuser", "groups", "items_per_page")
         field_classes = {'username': UsernameField}
 
     def __init__(self, *args, **kwargs):
@@ -163,8 +192,8 @@ class UpdateUserForm(forms.ModelForm):
 
 class AddTOTPForm(forms.Form):
     secret = forms.CharField(widget=forms.HiddenInput)
-    verification_code = forms.CharField(widget=forms.TextInput(attrs={"size": 6, "maxlength": 6}))
     name = forms.CharField(widget=forms.TextInput(attrs={'autofocus': ''}))
+    verification_code = forms.CharField(widget=forms.TextInput(attrs={"size": 6, "maxlength": 6}))
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop("user")

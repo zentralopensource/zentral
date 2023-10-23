@@ -1,29 +1,32 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
-<ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
-  <li class="active">Verification devices</li>
-</ol>
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Settings</a></li>
+        <li class="breadcrumb-item active">Verification devices</li>
+    </ol>
+</nav>
 
-<h3>{{ verification_devices|length }} Verification device{{ verification_devices|length|pluralize }}</h3>
-
-<div class="dropdown">
-  <button class="btn btn-default dropdown-toggle" type="button" id="addVD"
-          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-    Add
-    <span class="caret"></span>
-  </button>
-  <ul class="dropdown-menu" aria-labelledby="addVD">
-    <li><a href="{% url 'accounts:add_totp' %}">TOTP</a></li>
-    <li><a href="{% url 'accounts:register_webauthn_device' %}">Security key</a></li>
-  </ul>
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Verification device{{ verification_devices|length|pluralize }} ({{ verification_devices|length }})</h3>
+    <div class="ms-auto">
+        <div class="dropdown">
+            <button class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="addVD"
+                    data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="bi bi-plus-circle"></i>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="addVD">
+                <li><a class="dropdown-item" href="{% url 'accounts:add_totp' %}">TOTP</a></li>
+                <li><a class="dropdown-item" href="{% url 'accounts:register_webauthn_device' %}">Security key</a></li>
+            </ul>
+        </div>
+    </div>
 </div>
 
-
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <th>Type</th>
     <th>Name</th>
@@ -31,13 +34,11 @@
   </thead>
   <tbody>
     {% for verification_device in verification_devices %}
-    <tr>
+    <tr class="data-row">
       <td>{{ verification_device.get_type_for_display }}</td>
       <td>{{ verification_device.name }}</td>
-      <td>
-        <a class="btn btn-danger" href="{{ verification_device.get_delete_url }}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
+      <td class="text-end py-0">
+            {% button 'DELETE' verification_device.get_delete_url "Delete Verification Device" %}
       </td>
     </tr>
     {% endfor %}

@@ -2,31 +2,34 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:tags' %}">Inventory tags</a>
-  <li class="active">Delete taxonomy {{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:tags' %}">Inventory tags</a>
+  <li class="breadcrumb-item active">Delete taxonomy {{ object }}</li>
 </ol>
 
-<h2>Delete taxonomy {{ object }}</h2>
-
+<h4 class="alert-heading">
+    You are about to delete the taxonomy "{{ object }}"
+</h4>
+<p>Do you really want to delete this taxonomy ?</p>
 {% if links %}
-<p>This taxonomy is used:</p>
+<hr>
+<p class="mb-0">This taxonomy is used in:</p>
 <ul>
-{% for label, link in object.links %}
-<li>
-  {% if link %}
-  <a href="{{ link }}">{{ label }}</a>
-  {% else %}
-  {{ label }}
-  {% endif %}
-</li>
+    {% for label, link in object.links %}
+    <li>
+    {% if link %}
+        <a href="{{ link }}">{{ label }}</a>
+    {% else %}
+        {{ label }}
+    {% endif %}
+    </li>
 {% endfor %}
 </ul>
 {% endif %}
 
-<p>Do you really want to delete this taxonomy ?</p>
 <form method="POST">{% csrf_token %}
-  <a href="{% url 'inventory:tags' %}" class="btn btn-default">Cancel</a>
-  <button type="submit" class="btn btn-danger">Delete</button>
+<a href="{% url 'inventory:tags' %}" class="btn btn-outline-secondary">Cancel</a>
+<button type="submit" class="btn btn-danger">Delete</button>
 </form>
+
 {% endblock %}

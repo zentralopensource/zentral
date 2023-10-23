@@ -3,14 +3,15 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">MDM</li>
-  <li><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
-  <li><a href="{{ object.get_absolute_url }}">[DEP] {{ object }}</a></li>
-  <li class="active">Downloaded ABM profile</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">[DEP] {{ object }}</a></li>
+  <li class="breadcrumb-item active">Downloaded ABM profile</li>
 </ol>
 
-<h3>[DEP] {{ object }}</h3>
+<h2 class="m-0">{{ object }}</h2>
+<h3 class="m-0 fs-5 text-secondary">[DEP]</h3>
 
 <p>Downloaded DEP profile from ABM</p>
 

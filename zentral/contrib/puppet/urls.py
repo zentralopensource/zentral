@@ -30,7 +30,7 @@ urlpatterns = [
 ]
 
 
-setup_menu_cfg = {
+modules_menu_cfg = {
     'items': (
         ('index', 'Overview', False, ('puppet',)),
         ('instances', 'Instances', False, ('puppet.view_instance',)),

@@ -1,22 +1,20 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
-  <li><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
-  <li class="active">Register security key</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Settings</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:verification_devices' %}">Verification devices</a></li>
+  <li class="breadcrumb-item active">Register security key</li>
 </ol>
 
-<h3>Register new security key</h3>
+<h3 class="mb-3">Register new security key</h3>
 
 <form id="key_form" class="form" method="POST">{% csrf_token %}
-  {{ form.name|bootstrap }}
-  {{ form.token_response }}
+  {{ form }}
 </form>
 <p>
-  <a class="btn btn-default" href="{% url 'accounts:verification_devices' %}">Cancel</a>
+  <a class="btn btn btn-outline-secondary" href="{% url 'accounts:verification_devices' %}">Cancel</a>
   <button id="main-btn" type="button" class="btn btn-primary">Add</button>
 </p>
 <p class="text-muted" id="message" style="display:none;">Waiting for device…</p>

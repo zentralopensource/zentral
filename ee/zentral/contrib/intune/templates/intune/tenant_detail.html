@@ -1,107 +1,106 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'intune:index' %}">Microsoft Intune Inventory</a></li>
-  <li><a href="{% url 'intune:tenants' %}">Tenants</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'intune:index' %}">Microsoft Intune Inventory</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'intune:tenants' %}">Tenants</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h2>Microsoft Intune Inventory <i>{{ object }}</i></h2>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+        <div class="ms-3">
+            {% for link, anchor_text in store_links  %}
+                {% button 'LINK' link anchor_text %}
+            {% endfor %}
+        </div>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Microsoft Intune Inventory</h3>
+        <div class="ms-auto">
+            {% if perms.intune.change_tenant %}
+                {% url 'intune:update_tenant' object.pk as url %}
+                {% button 'UPDATE' url "Edit Tenant" %}
+            {% endif%}
+            {% if perms.intune.delete_tenant %}
+                {% url 'intune:delete_tenant' object.pk as url %}
+                {% button 'DELETE' url "Delete Tenant" %}
+            {% endif%}
+        </div>
+    </div>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th style="width:20vw">Attribute</th>
-      <th>Value</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Business unit</td>
-      <td>
-        {% if perms.inventory.view_metabusinessunit %}
-        <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.pk %}">
-          {{ object.business_unit }}
-        </a>
-        {% else %}
-        {{ object.business_unit }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-        <td>Name</td>
-        <td>{{ object.name }}</td>
-    </tr>
-    <tr>
-        <td>Description</td>
-        <td>{{ object.description }}</td>
-    </tr>
-    <tr>
-        <td colspan="2"><h5>API authentication</h5></td>
-    </tr>  
-    <tr>
-        <td>Tenant ID</td>
-        <td>{{ object.tenant_id }}</td>
-    </tr>
-    <tr>
-        <td>Client ID</td>
-        <td>{{ object.client_id }}</td>
-    </tr>
-    <tr>
-        <td>Client Secret</td>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <thead>
+        <tr>
+        <th style="width:20vw">Attribute</th>
+        <th>Value</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+        <td>Business unit</td>
         <td>
-            <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
-            <span hidden>{{ object.get_client_secret }}</span>
+            {% if perms.inventory.view_metabusinessunit %}
+            <a href="{% url 'inventory:mbu_machines' object.business_unit.meta_business_unit.pk %}">
+            {{ object.business_unit }}
+            </a>
+            {% else %}
+            {{ object.business_unit }}
+            {% endif %}
         </td>
-    </tr>
-  </tbody>
-</table>
+        </tr>
+        <tr>
+            <td>Name</td>
+            <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+            <td>Description</td>
+            <td>{{ object.description }}</td>
+        </tr>
+        <tr>
+            <td colspan="2"><h5>API authentication</h5></td>
+        </tr>  
+        <tr>
+            <td>Tenant ID</td>
+            <td>{{ object.tenant_id }}</td>
+        </tr>
+        <tr>
+            <td>Client ID</td>
+            <td>{{ object.client_id }}</td>
+        </tr>
+        <tr>
+            <td>Client Secret</td>
+            <td>
+                <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
+                <span hidden>{{ object.get_client_secret }}</span>
+            </td>
+        </tr>
+    </tbody>
+    </table>
 
-<dl>
-  <dt class="small" style="opacity:0.5">Version</dt>
-  <dd class="small" style="opacity:0.5">{{ object.version }}</dd>
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.created_at }}</dd>
-  <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.updated_at }}</dd>
-</dl>
+    {% created_updated_at object %}
 
-<div class="btn-group" role="group">
-  {% if perms.intune.change_tenant %}
-  <a href="{% url 'intune:update_tenant' object.pk %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Update
-  </a>
-  {% endif %}
-  {% if perms.intune.delete_tenant %}
-  <a href="{% url 'intune:delete_tenant' object.pk %}" class="btn btn-danger">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span> Delete
-  </a>
-  {% endif %}
-  {% for link, anchor_text in store_links  %}
-  <a class="btn btn-default" href="{{ link }}">
-    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
-  </a>
-  {% endfor %}
 </div>
+
 {% endblock %}
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
+  var openEyes = document.querySelectorAll(".bi-eye");
   openEyes.forEach(function(openEye) {
     openEye.addEventListener("click", function(event) {
       var valueSpan = openEye.nextElementSibling;
       if (valueSpan.hidden) {
         valueSpan.hidden = false;
-        openEye.classList.remove("glyphicon-eye-open");
-        openEye.classList.add("glyphicon-eye-close");
+        openEye.classList.remove("bi-eye");
+        openEye.classList.add("bi-eye-slash");
       } else {
         valueSpan.hidden = true;
-        openEye.classList.remove("glyphicon-eye-close");
-        openEye.classList.add("glyphicon-eye-open");
+        openEye.classList.remove("bi-eye-slash");
+        openEye.classList.add("bi-eye");
       }
     });
   });

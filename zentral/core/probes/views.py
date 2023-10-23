@@ -7,11 +7,12 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, TemplateView, UpdateView, View
 from zentral.core.actions.conf import actions as available_actions
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.charts import make_dataset
+from zentral.utils.views import UserPaginationListView
 from .forms import (CreateProbeForm, ProbeSearchForm,
                     InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
                     FeedForm, ImportFeedProbeForm,
@@ -22,10 +23,9 @@ from .models import Feed, FeedProbe, ProbeSource
 logger = logging.getLogger("zentral.core.probes.views")
 
 
-class IndexView(PermissionRequiredMixin, ListView):
+class IndexView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "probes.view_probesource"
     model = ProbeSource
-    paginate_by = 50
     template_name = "probes/index.html"
 
     def get(self, request, *args, **kwargs):
@@ -41,17 +41,8 @@ class IndexView(PermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super(IndexView, self).get_context_data(**kwargs)
-        ctx['probes'] = True
         ctx['form'] = self.form
         page = ctx['page_obj']
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         bc = []
         if page.number > 1:
             qd = self.request.GET.copy()
@@ -76,7 +67,6 @@ class CreateProbeView(PermissionRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['probes'] = True
         ctx['title'] = "Create event probe"
         return ctx
 
@@ -91,7 +81,6 @@ class ProbeView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super(ProbeView, self).get_context_data(**kwargs)
-        ctx['probes'] = True
         ctx['probe'] = self.probe = self.object.load()
         if self.probe.loaded:
             ctx['add_action_urls'] = [
@@ -126,7 +115,6 @@ class ProbeDashboardView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super(ProbeDashboardView, self).get_context_data(**kwargs)
-        ctx['probes'] = True
         ctx['probe'] = self.probe = self.object.load()
         if self.probe.loaded:
             ctx['aggregations'] = self.probe.get_aggregations()
@@ -219,7 +207,6 @@ class EventsMixin:
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["probes"] = True
         ctx["probe_source"] = self.object
         ctx["probe"] = self.object.load()
         return ctx
@@ -254,7 +241,6 @@ class UpdateProbeView(PermissionRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         ctx = super(UpdateProbeView, self).get_context_data(**kwargs)
-        ctx['probes'] = True
         probe_source = ctx['object']
         probe = probe_source.load()
         ctx["probe"] = probe
@@ -266,11 +252,6 @@ class DeleteProbeView(PermissionRequiredMixin, DeleteView):
     model = ProbeSource
     template_name = "probes/delete.html"
     success_url = reverse_lazy('probes:index')
-
-    def get_context_data(self, **kwargs):
-        ctx = super(DeleteProbeView, self).get_context_data(**kwargs)
-        ctx['probes'] = True
-        return ctx
 
 
 class CloneProbeView(PermissionRequiredMixin, FormView):
@@ -305,7 +286,6 @@ class ReviewProbeUpdateView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data()
-        ctx["probes"] = True
         ctx["probe_source"] = self.probe_source
         ctx["update_diff"] = self.probe_source.update_diff()
         return ctx
@@ -533,7 +513,6 @@ class BaseProbeItemView(PermissionRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["probes"] = True
         ctx['probe_source'] = self.probe_source
         ctx['probe'] = self.probe
         ctx['add_item'] = False
@@ -607,25 +586,15 @@ class DeleteProbeItemView(EditProbeItemView):
 # feeds
 
 
-class FeedsView(PermissionRequiredMixin, ListView):
+class FeedsView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "probes.view_feed"
     template_name = "probes/feeds.html"
     model = Feed
-    paginate_by = 10
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['probes'] = True
-        # pagination
         page = ctx['page_obj']
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
+
         bc = [(reverse('probes:index'), 'Probes')]
         if page.number > 1:
             qd = self.request.GET.copy()
@@ -663,7 +632,6 @@ class FeedView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['probes'] = True
         ctx['active_probes'] = list(self.object.feedprobe_set.filter(archived_at__isnull=True))
         return ctx
 
@@ -687,7 +655,7 @@ class DeleteFeedView(PermissionRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['probes'] = True
+        
         ctx['title'] = 'Delete feed'
         return ctx
 
@@ -717,7 +685,7 @@ class ImportFeedProbeView(PermissionRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['probes'] = True
+        
         ctx['feed_probe'] = self.feed_probe
         ctx['feed'] = self.feed_probe.feed
         ctx['title'] = "Import feed probe"

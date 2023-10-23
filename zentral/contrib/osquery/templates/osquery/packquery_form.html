@@ -1,52 +1,51 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:packs' %}">Packs</a></li>
-  <li><a href="{{ pack.get_absolute_url }}">{{ pack }}</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:packs' %}">Packs</a></li>
+  <li class="breadcrumb-item"><a href="{{ pack.get_absolute_url }}">{{ pack }}</a></li>
   {% if object %}
-  <li class="active">Update query scheduling</li>
+  <li class="breadcrumb-item active">Update query scheduling</li>
   {% else %}
-  <li class="active">Schedule query</li>
+  <li class="breadcrumb-item active">Schedule query</li>
   {% endif %}
 </ol>
 
 <h3>{% if object %}Update <i>{{ object.query.name }}</i> scheduling{% else %}Schedule query{% endif %}</h3>
 
-<form method="post" class="form">{% csrf_token %}
+<form method="post" class="update-form">{% csrf_token %}
   {% if object %}
   {% with object.query as query %}
   <table class="table table-condensed probe-panel">
     <tr>
       <td style="width:15%">Query</td>
       <td>
-        <dl>
-          <dt>Name</dt>
-          <dd><a href="{{ query.get_absolute_url }}">{{ query }}</a></dd>
-          <dt>SQL</dt>
-          <dd>{{ query.get_sql_html|safe }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">Name</dt>
+          <dd class="col-sm-9"><a href="{{ query.get_absolute_url }}">{{ query }}</a></dd>
+          <dt class="col-sm-3 text-md-end">SQL</dt>
+          <dd class="col-sm-9">{{ query.get_sql_html|safe }}</dd>
           {% if query.platforms %}
-          <dt>Platform{{ query.platforms|length|pluralize }}</dt>
-          <dd>{{ query.platforms|join:", " }}</dd>
+          <dt class="col-sm-3 text-md-end">Platform{{ query.platforms|length|pluralize }}</dt>
+          <dd class="col-sm-9">{{ query.platforms|join:", " }}</dd>
           {% endif %}
           {% if query.minimum_osquery_version %}
-          <dt>Min. osquery ver.</dt>
-          <dd>{{ query.minimum_osquery_version }}</dd>
+          <dt class="col-sm-3 text-md-end">Min. osquery ver.</dt>
+          <dd class="col-sm-9">{{ query.minimum_osquery_version }}</dd>
           {% endif %}
           {% if query.description %}
-          <dt>Description</dt>
-          <dd>{{ query.description|default:"-" }}</dd>
+          <dt class="col-sm-3 text-md-end">Description</dt>
+          <dd class="col-sm-9">{{ query.description|default:"-" }}</dd>
           {% endif %}
           {% if query.value %}
-          <dt>Value</dt>
-          <dd>{{ query.value }}</dd>
+          <dt class="col-sm-3 text-md-end">Value</dt>
+          <dd class="col-sm-9">{{ query.value }}</dd>
           {% endif %}
           {% if query.compliance_check %}
-          <dt>Compliance check</dt>
-          <dd>yes</dt>
+          <dt class="col-sm-3 text-md-end">Compliance check</dt>
+          <dd class="col-sm-9">yes</dt>
           {% endif %}
         </dl>
       </td>
@@ -54,9 +53,9 @@
   </table>
   {% endwith %}
   {% endif %}
-  {{ form|bootstrap }}
+  {{ form }}
   <p>
-    <a class="btn btn-default" href="{{ pack.get_absolute_url }}#queries">
+    <a class="btn btn-outline-secondary" href="{{ pack.get_absolute_url }}#queries">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

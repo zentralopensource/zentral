@@ -1,25 +1,24 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:configurations' %}">Munki configurations</a></li>
-  <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
-  <li class="active">Create enrollment</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:configurations' %}">Munki configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item active">Create enrollment</li>
 </ol>
 
 <h2>Create Munki enrollment</h2>
 
 <form method="post" class="form">{% csrf_token %}
   {% if secret_form %}
-  {{ secret_form|bootstrap }}
+  {{ secret_form }}
   {% endif %}
   {% if enrollment_form %}
-  {{ enrollment_form|bootstrap }}
+  {{ enrollment_form }}
   {% endif %}
   <p>
-    <a class="btn btn-default" href="{{ configuration.get_absolute_url }}">
+    <a class="btn btn-secondary" href="{{ configuration.get_absolute_url }}">
       Cancel
     </a>
     <button class="btn btn-primary" type="submit">Save</button>

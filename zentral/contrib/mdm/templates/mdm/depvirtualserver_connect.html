@@ -1,23 +1,19 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
-  <li class="active">Connect</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:dep_virtual_servers' %}">DEP virtual servers</a></li>
+  <li class="breadcrumb-item active">Connect</li>
 </ol>
 
 <h2>Connect a DEP virtual server</h2>
 
-<p class="lead">1. Download the new public key</p>
-
-<p class="lead">
-  <a href="{% url 'mdm:download_dep_token_public_key' dep_token.pk %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-    Download public key
-  </a>
+<p class="lead">1. Download the new public key 
+    {% url 'mdm:download_dep_token_public_key' dep_token.pk as url %}
+    {% button 'DOWNLOAD' url "Download public key" %}
 </p>
 
 <p class="lead">2. Use it to replace the virtual server key in the DEP admin</p>
@@ -26,10 +22,12 @@
 
 <p class="lead">4. Upload the server token</p>
 
-<form class="form" method="POST" enctype="multipart/form-data">{% csrf_token %}
-  {{ form|bootstrap }}
+<form class="update-form" method="POST" enctype="multipart/form-data">{% csrf_token %}
+  
+    {{ form }}
+  
   <p>
-    <button type="submit" name="action" value="cancel" class="btn btn-default">
+    <button type="submit" name="action" value="cancel" class="btn btn-outline-secondary">
       Cancel
     </button>
     <button type="submit" name="action" value="upload" class="btn btn-primary">

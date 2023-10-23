@@ -1,23 +1,24 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:locations' %}">Locations</a></li>
-  <li class="active">{% if object %}Update{% else %}Create{% endif %} location</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:locations' %}">Locations</a></li>
+  <li class="breadcrumb-item active">{% if object %}Update{% else %}Create{% endif %} location</li>
 </ol>
 
 <h3>{% if object %}Update{% else %}Create{% endif %} location</h3>
 
-<form class="form" method="post" enctype="multipart/form-data">{% csrf_token %}
-  {{ form|bootstrap }}
-  <p>
+<form class="update-form" method="post" enctype="multipart/form-data">{% csrf_token %}
+  
+    {{ form }}
+  
+    <p>
     {% if object %}
-    <a href="{{ object.get_absolute_url }}" class="btn btn-default">
+    <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">
     {% else %}
-    <a href="{% url "mdm:locations" %}" class="btn btn-default">
+    <a href="{% url "mdm:locations" %}" class="btn btn-outline-secondary">
     {% endif %}
       Cancel
     </a>

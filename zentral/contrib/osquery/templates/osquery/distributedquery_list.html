@@ -1,34 +1,24 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Runs</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Runs</a></li>
   {% else %}
-  <li class="active">Runs</li>
+  <li class="breadcrumb-item active">Runs</li>
   {% endif %}
-  <li class="active">page {{ page_num }} of {{ num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_num }} of {{ num_pages }}</li>
 </ol>
 
-<h3>{{ distributed_query_count }} Run{{ distributed_query_count|pluralize }}</h3>
+<h3>Run{{ distributed_query_count|pluralize }} ({{ distributed_query_count }})</h3>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
 
-<table class="table">
+{% pagination next_url previous_url %}
+
+<table class="table table-light table-striped align-middle table-hover">
   <thead>
     <tr>
       <th>#</th>
@@ -73,17 +63,6 @@
   </tbody>
 </table>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% endblock %}

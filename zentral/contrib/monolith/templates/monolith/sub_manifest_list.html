@@ -1,89 +1,84 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Monolith sub manifests</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Monolith sub manifests</li>
 </ol>
 
-<h2>{{ paginator.count }} Sub manifest{{ paginator.count|pluralize }}</h2>
+<div class="d-flex align-items-center mb-1">
+    <h2>Sub manifest{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
+</div>
 
-{% if perms.monolith.add_submanifest %}
-<p><a class="btn btn-default" href="{% url 'monolith:create_sub_manifest' %}">Create</a></p>
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
+        
+          {{ form }}
+        
+        <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
+            <i class="bi bi-search"></i>
+        </button>
+    </form>
+    {% if perms.monolith.add_submanifest %}
+    <div class="ms-auto">
+        {% url 'monolith:create_sub_manifest' as url %}
+        {% button 'CREATE' url "Create new Sub Manifest" %}
+    </div>
+    {% endif %}
+</div>
+
+
+{% if object_list %}
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle table-hover">
+    <thead>
+        <th>Business unit</th>
+        <th>Name</th>
+        <th>Description</th>
+        {% if perms.monolith.change_submanifest or perms.monolith.delete_submanifest %}
+        <th></th>
+        {% endif %}
+    </thead>
+    <tbody>
+        {% for sub_manifest in object_list %}
+        <tr class="data-row">
+        <td>
+            {% with sub_manifest.meta_business_unit as mbu %}
+            {% if mbu %}
+            {% if perms.inventory.view_metabusinessunit %}
+            <a href="{{ mbu.get_absolute_url }}">{{ mbu }}</a>
+            {% else %}
+            {{ mbu }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+            {% endwith %}
+        </td>
+        <td><a href="{{ sub_manifest.get_absolute_url }}">{{ sub_manifest.name }}</a></td>
+        <td>{{ sub_manifest.description|default:"-"|urlize|linebreaksbr }}</td>
+        <td class="text-end py-0">
+            {% if perms.monolith.change_submanifest %}
+                {% url 'monolith:update_sub_manifest' sub_manifest.pk as url %}
+                {% button 'UPDATE' url "Edit Sub Manifest" %}
+            {% endif %}
+            {% if sub_manifest.can_be_deleted and perms.monolith.delete_submanifest %}
+                {% url 'monolith:delete_sub_manifest' sub_manifest.pk as url %}
+                {% button 'DELETE' url "Delete Sub Manifest" %}
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+{% elif form.is_bound %}
+    {% url 'monolith:sub_manifests' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-    <div class="form-group">
-      {{ form.keywords|bootstrap_inline }}
-    </div>
-    <button type="submit" class="btn btn-default">Search</button>
-</form>
-
-<nav>
-  <ul class="pager">
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-  </ul>
-</nav>
-
-
-<table class="table">
-  <thead>
-    <th>Business unit</th>
-    <th>Name</th>
-    <th>Description</th>
-    {% if perms.monolith.change_submanifest or perms.monolith.delete_submanifest %}
-    <th></th>
-    {% endif %}
-  </thead>
-  <tbody>
-    {% for sub_manifest in object_list %}
-    <tr>
-      <td>
-        {% with sub_manifest.meta_business_unit as mbu %}
-        {% if mbu %}
-        {% if perms.inventory.view_metabusinessunit %}
-        <a href="{{ mbu.get_absolute_url }}">{{ mbu }}</a>
-        {% else %}
-        {{ mbu }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-        {% endwith %}
-      </td>
-      <td><a href="{{ sub_manifest.get_absolute_url }}">{{ sub_manifest.name }}</a></td>
-      <td>{{ sub_manifest.description|default:"-"|urlize|linebreaksbr }}</td>
-      <td>
-        {% if perms.monolith.change_submanifest %}
-        <a class="btn btn-default" href="{% url 'monolith:update_sub_manifest' sub_manifest.pk %}">
-          <span class="glyphicon glyphicon-pencil" aria-hidden="true"></span>
-        </a>
-        {% endif %}
-        {% if sub_manifest.can_be_deleted and perms.monolith.delete_submanifest %}
-        <a class="btn btn-danger" href="{% url 'monolith:delete_sub_manifest' sub_manifest.pk %}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-<nav>
-  <ul class="pager">
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-  </ul>
-</nav>
 {% endblock %}

@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">MDM</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">MDM</li>
 </ol>
 
 <h2>MDM</h2>
@@ -39,7 +39,15 @@
 <p><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></p>
 {% endif %}
 
-<h3>Setup</h3>
+<div class="d-flex align-items-center mb-1">
+    <h3 class="m-0">Setup</h3>
+    <div class="me-auto">
+        {% if show_terraform_export %}
+            {% url 'mdm:terraform_export' as url %}
+            {% button 'DOWNLOAD' url "Download Terraform Config" %}
+        {% endif %}
+    </div>
+</div>
 {% if perms.mdm.view_pushcertificate %}
 <p><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></p>
 {% endif %}
@@ -50,14 +58,5 @@
 <p><a href="{% url 'mdm:locations' %}">Locations</a></p>
 {% endif %}
 <p><a href="{% url 'mdm:root_ca' %}">Trusted Root CA configuration profile</a></p>
-
-{% if show_terraform_export %}
-<p>
-  <a href="{% url 'mdm:terraform_export' %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-    Terraform config
-  </a>
-</p>
-{% endif %}
 
 {% endblock %}

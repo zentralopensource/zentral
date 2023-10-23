@@ -1,104 +1,89 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
   {% else %}
-  <li class="active">{{ anchor_text }}</li>
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
   {% endfor %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h3>{{ page_obj.paginator.count }} device{{ page_obj.paginator.count|pluralize }}</h3>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Device{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+</div>
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-  <div class="form-group">
-    {{ form.q|bootstrap_inline }}
-  </div>
-  <div class="form-group">
-    {{ form.enrollment|bootstrap_inline }}
-  </div>
-  <div class="form-group">
-    {{ form.server|bootstrap_inline }}
-  </div>
-  <div class="form-group">
-    {{ form.include_deleted|bootstrap_inline }}
-  </div>
-  <button type="submit" class="btn btn-default">Search</button>
-</form>
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form d-flex flex-row flex-wrap w-75 align-items-center">
+    
+        {{ form }}
+        
+    <button type="submit" class="btn btn-link text-decoration-none mb-2 text-dark">
+        <i class="bi bi-search"></i>
+    </button>
+    </form>
+</div>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
+
+{% if object_list %}
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <tr>
+        <th>serial number</th>
+        <th>description</th>
+        <th>server</th>
+        <th>profile</th>
+        <th>updated at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for dep_device in object_list %}
+        <tr>
+        <td>
+            <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.serial_number }}</a>
+            {% if dep_device.is_deleted %}
+            <span class="label label-danger">DELETED</span>
+            {% endif %}
+        </td>
+        <td>{{ dep_device.description|default:"-" }}</td>
+        <td>
+            {% if perms.mdm.view_depvirtualserver %}
+            <a href="{{ dep_device.virtual_server.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
+            {% else %}
+            {{ dep_device.virtual_server }}
+            {% endif %}
+        </td>
+        <td>
+            {% if dep_device.enrollment %}
+            {% if perms.mdm.view_depenrollment %}
+            <a href="{{ dep_device.enrollment.get_absolute_url }}">{{ dep_device.enrollment }}</a>
+            {% else %}
+            {{ dep_device.enrollment }}
+            {% endif %}
+            {% else %}
+            {{ dep_device.profile_uuid|default:"-" }}
+            {% endif %}
+        </td>
+        <td>{{ dep_device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+
+{% elif form.is_bound %}
+    {% url 'mdm:dep_device' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>serial number</th>
-      <th>description</th>
-      <th>server</th>
-      <th>profile</th>
-      <th>updated at</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for dep_device in object_list %}
-    <tr>
-      <td>
-        <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.serial_number }}</a>
-        {% if dep_device.is_deleted %}
-        <span class="label label-danger">DELETED</span>
-        {% endif %}
-      </td>
-      <td>{{ dep_device.description|default:"-" }}</td>
-      <td>
-        {% if perms.mdm.view_depvirtualserver %}
-        <a href="{{ dep_device.virtual_server.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
-        {% else %}
-        {{ dep_device.virtual_server }}
-        {% endif %}
-      </td>
-      <td>
-        {% if dep_device.enrollment %}
-        {% if perms.mdm.view_depenrollment %}
-        <a href="{{ dep_device.enrollment.get_absolute_url }}">{{ dep_device.enrollment }}</a>
-        {% else %}
-        {{ dep_device.enrollment }}
-        {% endif %}
-        {% else %}
-        {{ dep_device.profile_uuid|default:"-" }}
-        {% endif %}
-      </td>
-      <td>{{ dep_device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
 {% endblock %}

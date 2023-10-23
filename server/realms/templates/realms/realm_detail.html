@@ -1,188 +1,191 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'realms:list' %}">Realms</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h2>Realm <i>{{ object }}</i></h2>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+        <div class="ms-3">
+            {% if not request.realm_authentication_session.is_remote %}
+                <form action="{% url 'realms:test' realm.pk %}" method="POST" target="_blank">{% csrf_token %}
+                    <button class="btn btn-link text-dark text-decoration-none">
+                        <span class="bi bi-card-checklist" aria-hidden="true"
+                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Test"></span>
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Realm</i></h3>
+        <div class="ms-auto">
+            {% if perms.realms.change_realm and not request.realm_authentication_session.is_remote %}
+                {% url 'realms:update' object.uuid as url %}
+                {% button 'UPDATE' url "Edit Realm" %}
+            {% endif %}
+        </div>
+    </div>
 
-<div class="row">
-  <div class="col-md-12">
-    <table class="table">
-      <thead>
-        <th>Attribute</th>
-        <th>Value</th>
-      </thead>
-      <tbody>
-      <tr>
-        <td>Name</td>
-        <td>{{ object }}</td>
-      </tr>
-      <tr>
-        <td>Backend</td>
-        <td>{{ object.backend }}</td>
-      </tr>
-      <tr>
-        <td>Enabled for login</td>
-        <td>
-          {{ object.enabled_for_login|yesno }}
-          {% if object.enabled_for_login %} —
-          {% if object.login_session_expiry == 0 %}
-          The user’s session cookie will expire when the user’s Web browser is closed.
-          {% else %}
-          {% if object.login_session_expiry > 0 %}
-          The user’s session cookie will expire after {{ object.login_session_expiry }}s.
-          {% else %}
-          The IDP response NotOnOrAfter value will be used for the session expiry.
-          {% endif %}
-          {% endif %}
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td>Username claim</td>
-        <td>{{ object.username_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Email claim</td>
-        <td>{{ object.email_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>First name claim</td>
-        <td>{{ object.first_name_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Last name claim</td>
-        <td>{{ object.last_name_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Full name claim</td>
-        <td>{{ object.full_name_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Custom attr. 1 claim</td>
-        <td>{{ object.custom_attr_1_claim|default:"-" }}</td>
-      </tr>
-      <tr>
-        <td>Custom attr. 2 claim</td>
-        <td>{{ object.custom_attr_2_claim|default:"-" }}</td>
-      </tr>
-      {% for name, value, hidden in object.backend_instance.extra_attributes_for_display %}
-      <tr>
-        <td>{{ name }}</td>
-        <td>
-          {% if hidden %}
-          <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
-          <span hidden>{{ value }}</span>
-          {% else %}
-          {{ value }}
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-responsive mb-3">
+        <table class="table table-light table-striped align-middle table-object-properties">
+            <thead>
+                <th>Attribute</th>
+                <th>Value</th>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Name</td>
+                <td>{{ object }}</td>
+            </tr>
+            <tr>
+                <td>Backend</td>
+                <td>{{ object.backend }}</td>
+            </tr>
+            <tr>
+                <td>Enabled for login</td>
+                <td>
+                {{ object.enabled_for_login|yesno }}
+                {% if object.enabled_for_login %} —
+                {% if object.login_session_expiry == 0 %}
+                The user’s session cookie will expire when the user’s Web browser is closed.
+                {% else %}
+                {% if object.login_session_expiry > 0 %}
+                The user’s session cookie will expire after {{ object.login_session_expiry }}s.
+                {% else %}
+                The IDP response NotOnOrAfter value will be used for the session expiry.
+                {% endif %}
+                {% endif %}
+                {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Username claim</td>
+                <td>{{ object.username_claim|default:"-" }}</td>
+            </tr>
+            <tr>
+                <td>Email claim</td>
+                <td>{{ object.email_claim|default:"-" }}</td>
+            </tr>
+            <tr>
+                <td>First name claim</td>
+                <td>{{ object.first_name_claim|default:"-" }}</td>
+            </tr>
+            <tr>
+                <td>Last name claim</td>
+                <td>{{ object.last_name_claim|default:"-" }}</td>
+            </tr>
+            <tr>
+                <td>Full name claim</td>
+                <td>{{ object.full_name_claim|default:"-" }}</td>
+            </tr>
+            <tr>
+                <td>Custom attr. 1 claim</td>
+                <td>{{ object.custom_attr_1_claim|default:"-" }}</td>
+              </tr>
+              <tr>
+                <td>Custom attr. 2 claim</td>
+                <td>{{ object.custom_attr_2_claim|default:"-" }}</td>
+            </tr>
+            {% for name, value, hidden in object.backend_instance.extra_attributes_for_display %}
+            <tr>
+                <td>{{ name }}</td>
+                <td>
+                {% if hidden %}
+                <span class="glyphicon glyphicon-eye-open" aria-hidden="true" style="cursor:pointer"></span>
+                <span hidden>{{ value }}</span>
+                {% else %}
+                {{ value }}
+                {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
 
-    <dl class="dl-horizontal">
-      <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-      <dt class="small" style="opacity:0.5">Updated at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-    </dl>
+        {% created_updated_at object %}
 
-  </div>
+    </div>
 </div>
 
-{% if not request.realm_authentication_session.is_remote %}
-<form action="{% url 'realms:test' realm.pk %}" method="POST" target="_blank">{% csrf_token %}
-  {% if perms.realms.change_realm %}
-  <a class="btn btn-default" href="{% url 'realms:update' object.uuid %}">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    Update
-  </a>
-  {% endif %}
-  <button class="btn btn-default">
-    <span class="glyphicon glyphicon-sunglasses" aria-hidden="true"></span>
-    Test
-  </button>
-</p>
-{% endif %}
-
 {% if perms.realms.view_realmgroupmapping %}
-<h3>{{ group_mapping_count }} Group mapping{{ group_mapping_count|pluralize }}</h3>
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Group mapping{{ group_mapping_count|pluralize }} ({{ group_mapping_count }})</h2>
 
-{% if not request.realm_authentication_session.is_remote and perms.realms.add_realmgroupmapping %}
-<p>
-  <a class="btn btn-default" href="{% url 'realms:create_group_mapping' object.pk %}">Create</a>
-</p>
-{% endif %}
+    <div class="ms-auto">
+    {% if not request.realm_authentication_session.is_remote and perms.realms.add_realmgroupmapping %}
+        {% url 'realms:create_group_mapping' object.pk as url %}
+        {% button 'CREATE' url "Create new Group Mapping" %}
+    {% endif %}
+    </div>
+</div>
 
 {% if group_mapping_count %}
-<table class="table">
-  <thead>
+<div class="table-responsive mb-3">
+<table class="table table-light table-striped align-middle table-hover">
+<thead>
     <th>Claim</th>
     <th>Separator</th>
     <th>Value</th>
     <th>Group</th>
     <th></th>
-    <th></th>
-  </thead>
-  <tbody>
+</thead>
+<tbody>
     {% for group_mapping in group_mappings %}
     {% with group_mapping.group as group %}
-    <tr id="{{ group_mapping.pk }}">
-      <td>{{ group_mapping.claim }}</td>
-      <td>{{ group_mapping.separator|default:"∅" }}</td>
-      <td>{{ group_mapping.value }}</td>
-      <td>
+    <tr id="{{ group_mapping.pk }}" class="data-row">
+    <td>{{ group_mapping.claim }}</td>
+    <td>{{ group_mapping.separator|default:"∅" }}</td>
+    <td>{{ group_mapping.value }}</td>
+    <td>
         {% if perms.auth.view_group %}
         <a href="{% url 'accounts:group' group.pk %}">{{ group }}</a>
         {% else %}
         {{ group }}
         {% endif %}
-      </td>
-      <td>
+    </td>
+    <td class="text-end py-0">
         {% if not request.realm_authentication_session.is_remote and perms.realms.change_realmgroupmapping %}
-        <a class="btn btn-default" href="{% url 'realms:update_group_mapping' object.pk group_mapping.pk %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-        </a>
+            {% url 'realms:update_group_mapping' object.pk group_mapping.pk as url %}
+            {% button 'UPDATE' url "Edit Group Mapping" %}
         {% endif %}
         {% if not request.realm_authentication_session.is_remote and perms.realms.delete_realmgroupmapping %}
-        <a class="btn btn-danger" href="{% url 'realms:delete_group_mapping' object.pk group_mapping.pk %}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
+            {% url 'realms:delete_group_mapping' object.pk group_mapping.pk as url %}
+            {% button 'DELETE' url "Delete Group Mapping" %}
         {% endif %}
-      </td>
+    </td>
     </tr>
     {% endwith %}
     {% endfor %}
-  </tbody>
+</tbody>
 </table>
 {% endif %}
+</div>
 {% endif %}
 
 {% endblock %}
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  var openEyes = document.querySelectorAll(".glyphicon-eye-open");
-  openEyes.forEach(function(openEye) {
+var openEyes = document.querySelectorAll(".glyphicon-eye-open");
+openEyes.forEach(function(openEye) {
     openEye.addEventListener("click", function(event) {
-      var valueSpan = openEye.nextElementSibling;
-      if (valueSpan.hidden) {
+    var valueSpan = openEye.nextElementSibling;
+    if (valueSpan.hidden) {
         valueSpan.hidden = false;
         openEye.classList.remove("glyphicon-eye-open");
         openEye.classList.add("glyphicon-eye-close");
-      } else {
+    } else {
         valueSpan.hidden = true;
         openEye.classList.remove("glyphicon-eye-close");
         openEye.classList.add("glyphicon-eye-open");
-      }
+    }
     });
-  });
+});
 </script>
 {% endblock %}

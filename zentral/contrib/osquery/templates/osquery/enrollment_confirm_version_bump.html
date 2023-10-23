@@ -1,13 +1,12 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:configurations' %}">Configurations</a></li>
-  <li><a href="{{ enrollment.configuration.get_absolute_url }}">{{ enrollment.configuration }}</a></li>
-  <li class="active">Bump enrollment version</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ enrollment.configuration.get_absolute_url }}">{{ enrollment.configuration }}</a></li>
+  <li class="breadcrumb-item active">Bump enrollment version</li>
 </ol>
 
 <h2>Bump enrollment version</h2>
@@ -15,7 +14,7 @@
 <form method="POST">{% csrf_token %}
   <p>Do you really want to bump this enrollment version?</p>
   <p>
-    <a class="btn btn-default" href="{{ enrollment.get_absolute_url }}">No</a>
+    <a class="btn btn-primary" href="{{ enrollment.get_absolute_url }}">No</a>
     <button class="btn btn-primary" type="submit">Yes</button>
   </p>
 </form>

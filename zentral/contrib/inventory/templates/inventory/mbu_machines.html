@@ -3,15 +3,15 @@
 
 {% block objectextras %}
 <p>
-{% for tag in object.tags %}
-{% inventory_tag tag %}
-{% endfor %}
-{% if object.api_enrollment_enabled %}
-<span class="label label-success">Available for API Enrollment</span>
-{% endif %}
+    {% for tag in object.tags %}
+        {% inventory_tag tag %}
+    {% endfor %}
+    {% if object.api_enrollment_enabled %}
+        <span class="badge text-bg-success">Available for API Enrollment</span>
+    {% endif %}
 </p>
 
-<table class="table">
+<table class="table table-light table-striped align-middle table-hover">
   {% for bu in object.get_current_business_units %}
   <tr>
     <td>{{ bu.source.name }}</td>
@@ -34,20 +34,4 @@
   {% endfor %}
 </table>
 
-<p>
-  {% if perms.inventory.change_metabusinessunit %}
-  <a href="{% url 'inventory:update_mbu' object.id %}" class="btn btn-default">Update</a>
-  {% endif %}
-  {% if perms.inventory.view_metabusinessunittag and perms.inventory.add_metabusinessunittag and perms.inventory.change_metabusinessunittag and perms.inventory.delete_metabusinessunittag and perms.inventory.add_tag %}
-  <a href="{% url 'inventory:mbu_tags' object.id %}" class="btn btn-default">Manage tags</a>
-  {% endif %}
-  {% if not object.api_enrollment_enabled and perms.inventory.change_metabusinessunit %}
-  <a href="{% url 'inventory:mbu_api_enrollment' object.id %}" class="btn btn-default">Enable API enrollment</a>
-  {% endif %}
-  {% if object.can_be_deleted and perms.inventory.delete_metabusinessunit %}
-  <a href="{% url 'inventory:delete_mbu' object.id %}" class="btn btn-danger">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-  </a>
-  {% endif %}
-</p>
 {% endblock %}

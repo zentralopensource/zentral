@@ -26,20 +26,36 @@ from .utils import (AndroidAppFilter,
 
 
 class MachineGroupSearchForm(forms.Form):
-    name = forms.CharField(label="name", max_length=64, required=False)
+    template_name = "django/forms/search.html"
+
+    name = forms.CharField(label="Name", max_length=64, required=False,
+                           widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),)
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_group_sources(),
                                     required=False,
-                                    widget=forms.Select(attrs={'class': 'form-control'}))
+                                    empty_label='...',)
 
 
 class MetaBusinessUnitSearchForm(forms.Form):
-    name = forms.CharField(max_length=64, required=False)
-    source = forms.ModelChoiceField(queryset=Source.objects.current_business_unit_sources(),
-                                    required=False,
-                                    widget=forms.Select(attrs={'class': 'form-control'}))
-    tag = forms.ModelChoiceField(queryset=Tag.objects.distinct().filter(metabusinessunittag__isnull=False),
-                                 required=False,
-                                 widget=forms.Select(attrs={'class': 'form-control'}))
+    template_name = "django/forms/search.html"
+
+    name = forms.CharField(
+        max_length=64,
+        required=False,
+        label='Name',
+        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),
+        )
+    source = forms.ModelChoiceField(
+        queryset=Source.objects.current_business_unit_sources(),
+        required=False,
+        label='Source',
+        empty_label='...',
+        )
+    tag = forms.ModelChoiceField(
+        queryset=Tag.objects.distinct().filter(metabusinessunittag__isnull=False),
+        required=False,
+        label='Tag',
+        empty_label='...',
+        )
 
 
 class MetaBusinessUnitForm(forms.ModelForm):
@@ -108,11 +124,12 @@ class CreateTagForm(forms.ModelForm):
 class UpdateTagForm(forms.ModelForm):
     class Meta:
         model = Tag
-        fields = ("taxonomy", "name", "color")
+        fields = ("meta_business_unit", "taxonomy", "name", "color")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.meta_business_unit:
+            self.fields['meta_business_unit'].disabled = True
             self.fields["taxonomy"].queryset = self.fields["taxonomy"].queryset.filter(
                 meta_business_unit=self.instance.meta_business_unit
             )
@@ -132,9 +149,12 @@ class UpdateTagForm(forms.ModelForm):
 
 
 class AddTagForm(forms.Form):
-    existing_tag = forms.ModelChoiceField(label="existing tag", queryset=Tag.objects.none(), required=False)
-    new_tag_name = forms.CharField(label="new tag name", max_length=50, required=False)
-    new_tag_color = forms.CharField(label="color", max_length=6, required=False)
+    existing_tag = forms.ModelChoiceField(label="Existing tag",
+                                          queryset=Tag.objects.none(),
+                                          required=False,
+                                          empty_label='...')
+    new_tag_name = forms.CharField(label="New tag name", max_length=50, required=False)
+    new_tag_color = forms.CharField(label="Color", max_length=6, required=False)
 
     def clean(self):
         cleaned_data = super(AddTagForm, self).clean()
@@ -168,7 +188,7 @@ class AddTagForm(forms.Form):
 
 
 class AddMBUTagForm(AddTagForm):
-    restrict_new_tag_to_mbu = forms.BooleanField(label="restrict new tag to mbu", required=False)
+    restrict_new_tag_to_mbu = forms.BooleanField(label="Restrict new tag to mbu", required=False)
 
     def __init__(self, *args, **kwargs):
         self.mbu = kwargs.pop('meta_business_unit')
@@ -186,8 +206,9 @@ class AddMBUTagForm(AddTagForm):
 
 
 class AddMachineTagForm(AddTagForm):
-    new_tag_mbu = forms.ModelChoiceField(label="restricted to business unit",
-                                         queryset=MetaBusinessUnit.objects.none(), required=False)
+    new_tag_mbu = forms.ModelChoiceField(label="Restricted to business unit",
+                                         queryset=MetaBusinessUnit.objects.none(),
+                                         required=False, empty_label='...')
 
     def __init__(self, *args, **kwargs):
         self.machine = MetaMachine(kwargs.pop('machine_serial_number'))
@@ -207,21 +228,20 @@ class AddMachineTagForm(AddTagForm):
 
 class BaseAppSearchForm(forms.Form):
     source = forms.ModelChoiceField(queryset=Source.objects.current_machine_snapshot_sources(),
-                                    empty_label="- source -",
-                                    required=False)
+                                    required=False,
+                                    empty_label='...',)
     last_seen = forms.ChoiceField(
-        choices=(("", "- last seen -"),
-                 ("1d", "24 hours"),
+        choices=(("1d", "24 hours"),
                  ("7d", "7 days"),
                  ("14d", "14 days"),
                  ("30d", "30 days"),
                  ("45d", "45 days"),
                  ("90d", "90 days")),
         initial="1d",
-        required=False
+        required=False,
     )
-    order = forms.ChoiceField(choices=[], required=False)
-    action = forms.CharField(required=False)
+    order = forms.ChoiceField(choices=[], required=False, widget=forms.HiddenInput())
+    action = forms.CharField(required=False, widget=forms.HiddenInput())
     order_mapping = {}
     default_order = None
     title = None
@@ -393,8 +413,10 @@ class BaseAppSearchForm(forms.Form):
 
 
 class AndroidAppSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     display_name = forms.CharField(label="Name", max_length=64,
-                                   widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
+                                   widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),
                                    required=False)
     order_mapping = {"dn": "display_name",
                      "mc": "ms_count"}
@@ -409,6 +431,8 @@ class AndroidAppSearchForm(BaseAppSearchForm):
         ("source_name", True, "Source"),
     )
     version_sort_keys = ("version_name", "version_code")
+
+    field_order = ("display_name", "source", "last_seen",)
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
@@ -476,8 +500,10 @@ class AndroidAppSearchForm(BaseAppSearchForm):
 
 
 class DebPackageSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label="Package name", max_length=64,
-                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Package name"}),
+                           widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Package name"}),
                            required=False)
     order_mapping = {"n": "name",
                      "mc": "ms_count"}
@@ -490,6 +516,8 @@ class DebPackageSearchForm(BaseAppSearchForm):
         ("version", False, "Version"),
         ("source_name", True, "Source"),
     )
+
+    field_order = ("name", "source", "last_seen",)
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
@@ -556,8 +584,10 @@ class DebPackageSearchForm(BaseAppSearchForm):
 
 
 class IOSAppSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label="Name", max_length=64,
-                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
+                           widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),
                            required=False)
     order_mapping = {"n": "name",
                      "mc": "ms_count"}
@@ -573,6 +603,8 @@ class IOSAppSearchForm(BaseAppSearchForm):
         ("source_name", True, "Source"),
     )
     version_sort_keys = ("version", "short_version")
+
+    field_order = ("name", "source", "last_seen",)
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
@@ -640,8 +672,10 @@ class IOSAppSearchForm(BaseAppSearchForm):
 
 
 class MacOSAppSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     bundle = forms.CharField(label='Bundle', max_length=64,
-                             widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Bundle"}),
+                             widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Bundle"}),
                              required=False)
     order_mapping = {"bn": "bundle_name",
                      "mc": "ms_count"}
@@ -657,6 +691,8 @@ class MacOSAppSearchForm(BaseAppSearchForm):
         ("source_name", True, "Source"),
     )
     version_sort_keys = ("bundle_version", "bundle_version_str")
+
+    field_order = ("bundle", "source", "last_seen",)
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)
@@ -733,8 +769,10 @@ class MacOSAppSearchForm(BaseAppSearchForm):
 
 
 class ProgramsSearchForm(BaseAppSearchForm):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label='Name', max_length=64,
-                           widget=forms.TextInput(attrs={"autofocus": "true", "placeholder": "Name"}),
+                           widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Name"}),
                            required=False)
     order_mapping = {"n": "name",
                      "mc": "ms_count"}
@@ -748,6 +786,8 @@ class ProgramsSearchForm(BaseAppSearchForm):
         ("version", False, "Version"),
         ("source_name", True, "Source"),
     )
+
+    field_order = ("name", "source", "last_seen",)
 
     def get_ms_query_filters(self, result, version=None):
         filters = super().get_ms_query_filters(result, version)

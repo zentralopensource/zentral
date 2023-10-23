@@ -1,28 +1,27 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:compliance_checks' %}">Compliance checks</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:compliance_checks' %}">Compliance checks</a></li>
   {% if object %}
-  <li><a href="{% url 'inventory:compliance_check' object.pk %}">{{ object.compliance_check.name }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:compliance_check' object.pk %}">{{ object.compliance_check.name }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+  <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 
 <h2>{% if object %}Update{% else %}Create{% endif %} compliance check</h2>
 
-<form method="post" class="form">{% csrf_token %}
-  {{ compliance_check_form|bootstrap }}
-  {{ jmespath_check_form|bootstrap }}
+<form method="post" class="update-form">{% csrf_token %}
+  {{ compliance_check_form }}
+  {{ jmespath_check_form }}
   <p>
     {% if object %}
-    <a class="btn btn-default" href="{% url 'inventory:compliance_check' object.pk %}">
+    <a class="btn btn-outline-secondary" href="{% url 'inventory:compliance_check' object.pk %}">
     {% else %}
-    <a class="btn btn-default" href="{% url 'inventory:compliance_checks' %}">
+    <a class="btn btn-outline-secondary" href="{% url 'inventory:compliance_checks' %}">
     {% endif %}
       Cancel
     </a>

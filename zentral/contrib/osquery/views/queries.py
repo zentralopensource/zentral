@@ -5,20 +5,20 @@ from django.db import models
 from django.db.models import Case, Q, Sum, Value, When
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 from zentral.contrib.osquery.forms import QueryForm, QuerySearchForm
 from zentral.contrib.osquery.models import PackQuery, Query
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
+from zentral.utils.views import UserPaginationListView
 
 
 logger = logging.getLogger('zentral.contrib.osquery.views.queries')
 
 
-class QueryListView(PermissionRequiredMixin, ListView):
+class QueryListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "osquery.view_query"
-    paginate_by = 50
     model = Query
 
     def get(self, request, *args, **kwargs):
@@ -33,14 +33,6 @@ class QueryListView(PermissionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["form"] = self.form
         page = ctx["page_obj"]
-        if page.has_next():
-            qd = self.request.GET.copy()
-            qd['page'] = page.next_page_number()
-            ctx['next_url'] = "?{}".format(qd.urlencode())
-        if page.has_previous():
-            qd = self.request.GET.copy()
-            qd['page'] = page.previous_page_number()
-            ctx['previous_url'] = "?{}".format(qd.urlencode())
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)

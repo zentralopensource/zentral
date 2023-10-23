@@ -2,18 +2,18 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:groups' %}">Groups</a></li>
-  <li><a href="{% url 'accounts:group' object.pk %}">{{ object }}</a></li>
-  <li class="active">Delete</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:groups' %}">Groups</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:group' object.pk %}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Delete</li>
 </ol>
 
-<h3>Delete {{ object }}</h3>
+<h3 class="mb-3">Delete {{ object }}</h3>
 
 <form method="post">{% csrf_token %}
   <p>Do you really want to delete this group?</p>
   <p>
-    <a class="btn btn-default" href="{% url 'accounts:group' object.pk %}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{% url 'accounts:group' object.pk %}">Cancel</a>
     <button class="btn btn-danger">Delete</button>
   </p>
 </form>

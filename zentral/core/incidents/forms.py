@@ -5,21 +5,21 @@ from .utils import update_incident_status, update_machine_incident_status
 
 
 class IncidentSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(label="Query", required=False,
-                        widget=forms.TextInput(attrs={"placeholder": "Keywords…"}))
-    severity = forms.ChoiceField(label="Severity", choices=[], required=False)
-    status = forms.ChoiceField(label="Status", choices=[], required=False)
+                        widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Keywords…"}))
+    severity = forms.ChoiceField(label="Severity", choices=[("", "..."), ] + sorted(Severity.choices()), required=False)
+    status = forms.ChoiceField(label="Status", choices=[("", "..."), ] + sorted(Status.choices()), required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         severity_choices_dict = dict(Severity.choices())
-        self.fields["severity"].choices = [("", "----")]
         for severity in sorted(Incident.objects.values_list("severity", flat=True).distinct().order_by("severity")):
             self.fields["severity"].choices.append(
                 (str(severity), severity_choices_dict.get(severity, str(severity)))
             )
         status_choices_dict = dict(Status.choices())
-        self.fields["status"].choices = [("", "----")]
         for status in Incident.objects.values_list("status", flat=True).distinct().order_by("status"):
             self.fields["status"].choices.append(
                 (status, status_choices_dict.get(status, status))

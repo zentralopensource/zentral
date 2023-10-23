@@ -2,17 +2,17 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:mbu' %}">Inventory business units</a>
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a>
-  <li class="active">Enable API enrollment</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:mbu' %}">Inventory business units</a>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a>
+  <li class="breadcrumb-item active">Enable API enrollment</li>
 </ol>
 
 <h2>{{ object }} - Enable API Enrollment</h2>
 <form method="POST" class="form">{% csrf_token %}
   <p>Do you want to enable the API Enrollment on this business unit?</p>
   <p>
-    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
   </p>
 </form>

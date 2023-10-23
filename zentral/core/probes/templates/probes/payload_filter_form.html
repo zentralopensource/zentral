@@ -3,10 +3,10 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'probes:index' %}">Probes</a></li>
-  <li><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
-  <li class="active">{% if add_filter %}Add{% else %}Update{% endif %} {{ section }} filter</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'probes:index' %}">Probes</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'probes:probe' probe_source.id %}">{{ probe_source.name }}</a></li>
+  <li class="breadcrumb-item active">{% if add_filter %}Add{% else %}Update{% endif %} {{ section }} filter</li>
 </ol>
 
 <h2>{% if add_filter %}Add{% else %}Update{% endif %} {{ section }} filter</h2>
@@ -22,7 +22,7 @@
   </div>
   <input type="hidden" id="id_form-__prefix__-DELETE" name="form-__prefix__-DELETE">
   <a href="#" class="btn btn-danger delete-filter-item">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+    <span class="bi bi-trash" aria-hidden="true"></span>
   </a>
 </div>
 <form method="POST" class="form form-inline">{% csrf_token %}
@@ -41,18 +41,18 @@
       </div>
       <input type="hidden" id="id_{{ itemform.prefix }}-DELETE" name="{{ itemform.prefix }}-DELETE">
       <a href="#" class="btn btn-danger delete-filter-item">
-        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+        <span class="bi bi-trash" aria-hidden="true"></span>
       </a>
     </div>
     {% endfor %}
   </div>
   <p>
     <a class="btn btn-default" href="#" id="add-filter-item">
-      <span class="glyphicon glyphicon-plus" aria-hidden="true"></span> attribute
+      <span class="bi bi-plus" aria-hidden="true"></span> attribute
     </a>
   </p>
   <p>
-    <a class="btn btn-default" href="{{ probe_source.get_filters_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ probe_source.get_filters_absolute_url }}">Cancel</a>
     <button class="btn btn-primary" type="submit">Save</button>
   </p>
 </form>

@@ -309,12 +309,14 @@ urlpatterns = [
          name="terraform_export"),
 ]
 
-setup_menu_cfg = {
+modules_menu_cfg = {
+    'title': 'MDM',
     'items': (
         ('index', 'Overview', False, ('mdm',)),
         ('enrollments', 'Enrollments', False, ('mdm',)),
         ('enrolled_devices', 'Devices', False, ('mdm.view_enrolleddevice',)),
         ('artifacts', 'Artifacts', False, ('mdm.view_artifact',)),
         ('blueprints', 'Blueprints', False, ('mdm.view_blueprint',)),
-    )
+    ),
+    'weight': 10,
 }

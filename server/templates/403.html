@@ -1,7 +1,9 @@
 {% extends 'base_error.html' %}
 
 {% block content %}
-<h2>403 - Forbidden</h2>
+<p class="display-1">403</p>
+<p class="fs-3">Forbidden</p>
+
 {% if exception %}
 <p>{{ exception }}</p>
 {% endif %}

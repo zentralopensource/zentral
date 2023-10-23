@@ -1,65 +1,51 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li><a href="{{ url }}">{{ anchor_text }}</a>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a>
   {% else %}
-  <li class="active">{{ anchor_text }}</li>
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
   {% endfor %}
 </ol>
 
-<h2>{{ paginator.count }} Feed{{ paginator.count|pluralize }}</h2>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="mb-3">Feed{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
 
-<a href="{% url 'probes:create_feed' %}" class="btn btn-default">Create feed</a>
-
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
-
-<div class="table-reponsive">
-  <table class="table">
-    <thead>
-      <th>Name</th>
-      <th>Created at</th>
-      <th>Updated at</th>
-    </thead>
-    <tbody>
-    {% for feed in object_list %}
-    <tr>
-      <td><a href="{% url 'probes:feed' feed.id %}">{{ feed.name }}</a></td>
-      <td>{{ feed.created_at }}</td>
-      <td>{{ feed.updated_at }}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+    <div class="ms-auto">
+            {% url 'probes:create_feed' as url %}
+            {% button 'CREATE' url "Create new Feed" %}
+    </div>
 </div>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
+{% if object_list %}
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle">
+        <thead>
+        <th>Name</th>
+        <th>Created at</th>
+        <th>Updated at</th>
+        </thead>
+        <tbody>
+        {% for feed in object_list %}
+        <tr class="data-row">
+        <td><a href="{% url 'probes:feed' feed.id %}">{{ feed.name }}</a></td>
+        <td>{{ feed.created_at }}</td>
+        <td>{{ feed.updated_at }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+{% else %}
+    {% url 'probes:create_feed' as link %}
+    {% no_entities 'Feeds' link %}
 {% endif %}
 
 {% endblock %}

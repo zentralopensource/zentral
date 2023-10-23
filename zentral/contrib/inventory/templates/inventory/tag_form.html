@@ -1,43 +1,38 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:tags' %}">Inventory tags</a>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:tags' %}">Inventory tags</a>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a>
-  <li class="active">Update</li>
+    <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a>
+    <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+    <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 
-<h2>{% if object %}Update{% else %}Create{% endif %} Tag</h2>
-<form method="POST" class="form">{% csrf_token %}
-  {{ form.taxonomy|bootstrap }}
-  {% if object %}
-  <dl>
-    <dt>Meta business unit</dt>
-    <dd>{{ object.meta_business_unit|default:"-" }}</dd>
-  </dl>
-  {% else %}
-  {{ form.meta_business_unit|bootstrap }}
-  {% endif %}
-  {{ form.name|bootstrap }}
-  <div class="form-group">
-    <label for="id_color">{{ form.color.label|title }}</label>
-    <div>
-      presets:
-      {% for color_name, color_code in color_presets.items %}
-        <span class="label color-preset" data-color="{{ color_code }}" style="background-color:#{{ color_code }};padding: 0 10px;margin:0 0 5px 0;">&nbsp;</span>
-      {% endfor %}
+<div class="d-flex align-items-center mb-3">
+    <h2 class="m-0">{% if object %}Update{% else %}Create{% endif %} Tag</h2>
+</div>
+
+<form method="POST" class="update-form">{% csrf_token %}
+
+    {{ form }}
+
+    <div class="form-group mb-3">
+        <label for="id_color">Color presets:</label>
+        <div>
+            {% for color_name, color_code in color_presets.items %}
+                <span class="label color-preset" data-color="{{ color_code }}" style="background-color:#{{ color_code }};padding: 0 10px;margin:0 0 5px 0;">&nbsp;</span>
+            {% endfor %}
+        </div>
     </div>
-    <input type="text" id="id_color"{% if form.color.value %} value="{{ form.color.value }}"{% endif %} name="color" class="form-control" placeholder="{{ form.color.label }}">
-  </div>
-  <a href="{% url 'inventory:tags' %}" class="btn btn-default">Cancel</a>
-  <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
+
+    <a href="{% url 'inventory:tags' %}" class="btn btn-outline-secondary">Cancel</a>
+    <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
 </form>
+
 {% endblock %}
 
 {% block extrajs %}

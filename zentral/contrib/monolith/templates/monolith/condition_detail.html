@@ -1,46 +1,59 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load ui_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{%  url 'monolith:conditions' %}">Monolith conditions</a></li>
-  <li class="active">{{ object.name }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:conditions' %}">Monolith conditions</a></li>
+  <li class="breadcrumb-item active">{{ object.name }}</li>
 </ol>
 
-<h2>Condition <i>{{ object.name }}</i></h2>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2>{{ object.name }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Condition</h3>
+        <div class="ms-auto">
+        {% if perms.monolith.change_condition %}
+            {% url 'monolith:update_condition' object.pk as url %}
+            {% button 'UPDATE' url "Edit Condition" %}
+        {% endif %}
+        {% if object.can_be_deleted and perms.monolith.delete_condition %}
+            {% url 'monolith:delete_condition' object.pk as url %}
+            {% button 'DELETE' url "Delete Condition" %}
+        {% endif %}
+        </div>
+    </div>
 
-<p>
-    {% if perms.monolith.change_condition %}
-    <a class="btn btn-default" href="{% url 'monolith:update_condition' object.pk %}">
-      <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    </a>
-    {% endif %}
-    {% if object.can_be_deleted and perms.monolith.delete_condition %}
-    <a class="btn btn-danger" href="{% url 'monolith:delete_condition' object.pk %}">
-      <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-    </a>
-    {% endif %}
-</p>
+    <table class="table table-light table-striped align-middle table-object-properties">
+        <thead>
+        <tr>
+            <th scope="col">Attribute</th>
+            <th scope="col">Value</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>Name</td>
+            <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+            <td>Predicate</td>
+            <td><pre>{{ object.predicate }}</pre></td>
+        </tr>
+        </tbody>
+    </table>
 
-<dl class="dl-horizontal">
-  <dt>Name</dt>
-  <dd>{{ object.name }}</dd>
-  <dt>Predicate</dt>
-  <dd><pre>{{ object.predicate }}</pre></dd>
-<dl>
-<dl class="dl-horizontal">
-  <dt class="small" style="opacity:0.5">created at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-  <dt class="small" style="opacity:0.5">last change</dt>
-  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-</dl>
+    {% created_updated_at object %}
+
+</div>
 
 {% if perms.monolith.view_pkginfo %}
-<h3>{{ pkg_infos|length }} package{{ pkg_infos|length|pluralize }}</h3>
+<h3>Package{{ pkg_infos|length|pluralize }} ({{ pkg_infos|length }})</h3>
 
 {% if pkg_infos %}
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th>Sub manifest</th>

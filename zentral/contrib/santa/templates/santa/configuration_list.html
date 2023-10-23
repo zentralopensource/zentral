@@ -1,44 +1,55 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'santa:index' %}">Santa</a></li>
-  <li class="active">Configurations</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item active">Configurations</li>
 </ol>
 
-<h3>{{ configuration_count }} Configuration{{ configuration_count|pluralize }}</h3>
 
-<p>
-  {% if perms.santa.add_configuration %}
-  <a href="{% url 'santa:create_configuration' %}" class="btn btn-default">Create</a>
-  {% endif %}
-  {% if perms.santa.view_enrollment and perms.santa.view_rule %}
-  <a href="{% url 'santa:terraform_export' %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-    Terraform config
-  </a>
-  {% endif %}
-</p>
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+    <div class="ms-auto">
+    {% if perms.santa.add_configuration %}
+        {% url 'santa:create_configuration' as url %}
+        {% button 'CREATE' url "Create new Configuration" %}
+    {% endif %}
+    {% if perms.santa.view_enrollment and perms.santa.view_rule %}
+        {% url 'santa:terraform_export' as url %}
+        {% button 'DOWNLOAD' url "Download Terraform config" %}
+    {% endif %}
+    </div>
+</div>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Rules</th>
-      <th>Enrollments</th>
-      <th>Machines</th>
-  </thead>
-  <tbody>
-    {% for configuration in configurations %}
-    <tr>
-      <td><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration.name }}</a></td>
-      <td>{{ configuration.rule_count }}</td>
-      <td>{{ configuration.enrollment_count }}</td>
-      <td>{{ configuration.machine_count }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% if configurations %}
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>Rules</th>
+        <th>Enrollments</th>
+        <th>Machines</th>
+    </thead>
+    <tbody>
+        {% for configuration in configurations %}
+        <tr>
+        <td><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration.name }}</a></td>
+        <td>{{ configuration.rule_count }}</td>
+        <td>{{ configuration.enrollment_count }}</td>
+        <td>{{ configuration.machine_count }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+{% else %}
+    {% if perms.santa.add_configuration %}
+        {% url 'santa:create_configuration' as link %}
+        {% no_entities 'Configurations' link %}
+    {% else %}
+        {% no_entities 'Configurations' %}
+    {% endif %}
+{% endif %}
+
 {% endblock %}

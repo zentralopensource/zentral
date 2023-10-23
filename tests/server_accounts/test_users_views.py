@@ -188,7 +188,7 @@ class AccountUsersViewsTestCase(TestCase):
         for text in (self.user.username, self.user.email,
                      self.remote_user.username, self.remote_user.email,
                      self.superuser.username, self.superuser.email,
-                     "4 Users"):
+                     "Users (4)"):
             self.assertContains(response, text)
         for text in (reverse("accounts:delete_user", args=(self.user.pk,)),
                      reverse("accounts:update_user", args=(self.user.pk,)),
@@ -265,7 +265,7 @@ class AccountUsersViewsTestCase(TestCase):
                                     {"username": "test",
                                      "email": "test@example.com"},
                                     follow=True)
-        for text in ("5 Users", "test", "test@example.com"):
+        for text in ("Users (5)", "test", "test@example.com"):
             self.assertContains(response, text)
 
     def test_user_invite_allowed_ok(self):
@@ -276,7 +276,7 @@ class AccountUsersViewsTestCase(TestCase):
                                      "email": "test@example.com"},
                                     follow=True)
         del settings._collection["users"]
-        for text in ("5 Users", "test", "test@example.com"):
+        for text in ("Users (5)", "test", "test@example.com"):
             self.assertContains(response, text)
         user = User.objects.get(email="test@example.com")
         self.assertEqual(user.description, "")
@@ -396,6 +396,7 @@ class AccountUsersViewsTestCase(TestCase):
         response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
                                     {"username": "toto",
                                      "email": "tata@example.com",
+                                     "items_per_page": 10,
                                      "is_superuser": self.user.is_superuser},
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/user_detail.html")
@@ -442,7 +443,7 @@ class AccountUsersViewsTestCase(TestCase):
                                     follow=True)
         self.assertContains(response, "User {} deleted".format(user_str))
         self.assertTemplateUsed(response, "accounts/user_list.html")
-        self.assertContains(response, "3 User")
+        self.assertContains(response, "Users (3)")
 
     # create API token
 
@@ -474,7 +475,7 @@ class AccountUsersViewsTestCase(TestCase):
         user = response.context["object"]
         self.assertEqual(user, self.ui_user)
         self.assertContains(response, "Settings")
-        self.assertNotContains(response, "Users")
+        self.assertContains(response, "Users")
         api_key = response.context["api_key"]
         self.assertContains(response, api_key)
         self.assertEqual(APIToken.objects._hash_key(api_key), self.ui_user.api_token.hashed_key)

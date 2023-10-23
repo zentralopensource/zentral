@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'santa:index' %}">Santa</a></li>
-  <li><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
-  <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
-  <li><a href="{% url 'santa:configuration_rules' configuration.pk %}">rules</a></li>
-  <li class="active">{{ title }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_rules' configuration.pk %}">rules</a></li>
+  <li class="breadcrumb-item active">{{ title }}</li>
 </ol>
 
 <h2>{{ title }}</h2>
@@ -29,21 +29,21 @@
         {{ target.identifier }}
         {% if target.type == "BINARY" %}
         {% for file in target.files %}
-        <dl class="dl-horizontal">
-          <dt>name</dt>
-          <dd>{{ file.name }}</dd>
-          <dt>path</dt>
-          <dd>{{ file.path }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">name</dt>
+          <dd class="col-sm-9">{{ file.name }}</dd>
+          <dt class="col-sm-3 text-md-end">path</dt>
+          <dd class="col-sm-9">{{ file.path }}</dd>
           {% if file.bundle %}
-          <dt>bundle id</dd>
-          <dd>{{ file.bundle.bundle_id }}</dd>
-          <dt>bundle name</dt>
-          <dd>{{ file.bundle.bundle_name }}</dd>
-          <dt>bundle version</dt>
-          <dd>{{ file.bundle.bundle_version_str }}</dd>
+          <dt class="col-sm-3 text-md-end">bundle id</dd>
+          <dd class="col-sm-9">{{ file.bundle.bundle_id }}</dd>
+          <dt class="col-sm-3 text-md-end">bundle name</dt>
+          <dd class="col-sm-9">{{ file.bundle.bundle_name }}</dd>
+          <dt class="col-sm-3 text-md-end">bundle version</dt>
+          <dd class="col-sm-9">{{ file.bundle.bundle_version_str }}</dd>
           {% if file.bundle_path %}
-          <dt>bundle path</dt>
-          <dd>{{ file.bundle_path }}</dd>
+          <dt class="col-sm-3 text-md-end">bundle path</dt>
+          <dd class="col-sm-9">{{ file.bundle_path }}</dd>
           {% endif %}
           {% endif %}
         </dl>
@@ -51,29 +51,29 @@
         {% endif %}
         {% if target.type == "BUNDLE" %}
         {% with target.bundle as bundle %}
-        <dl class="dl-horizontal">
-          <dt>id</dd>
-          <dd>{{ bundle.bundle_id }}</dd>
-          <dt>name</dt>
-          <dd>{{ bundle.name }}</dd>
-          <dt>version</dt>
-          <dd>{{ bundle.version_str }}</dd>
-          <dt>binaries</dt>
-          <dd>{{ bundle.binary_targets.count }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">id</dd>
+          <dd class="col-sm-9">{{ bundle.bundle_id }}</dd>
+          <dt class="col-sm-3 text-md-end">name</dt>
+          <dd class="col-sm-9">{{ bundle.name }}</dd>
+          <dt class="col-sm-3 text-md-end">version</dt>
+          <dd class="col-sm-9">{{ bundle.version_str }}</dd>
+          <dt class="col-sm-3 text-md-end">binaries</dt>
+          <dd class="col-sm-9">{{ bundle.binary_targets.count }}</dd>
         </dl>
         {% endwith %}
         {% endif %}
         {% if target.type == "CERTIFICATE" %}
         {% for cert in target.certificates %}
-        <dl class="dl-horizontal">
-          <dt>common name</dt>
-          <dd>{{ cert.common_name|default:"-" }}</dd>
-          <dt>organization</dt>
-          <dd>{{ cert.organization|default:"-" }}</dd>
-          <dt>organizational_unit</dt>
-          <dd>{{ cert.organizational_unit|default:"-" }}</dd>
-          <dt>validity</dt>
-          <dd>{{ cert.valid_from }} - {{ cert.valid_until }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">common name</dt>
+          <dd class="col-sm-9">{{ cert.common_name|default:"-" }}</dd>
+          <dt class="col-sm-3 text-md-end">organization</dt>
+          <dd class="col-sm-9">{{ cert.organization|default:"-" }}</dd>
+          <dt class="col-sm-3 text-md-end">organizational_unit</dt>
+          <dd class="col-sm-9">{{ cert.organizational_unit|default:"-" }}</dd>
+          <dt class="col-sm-3 text-md-end">validity</dt>
+          <dd class="col-sm-9">{{ cert.valid_from }} - {{ cert.valid_until }}</dd>
         </dl>
         {% endfor %}
         {% endif %}
@@ -161,7 +161,7 @@
 <form method="POST">{% csrf_token %}
   <p>Do you really want to delete this rule?</p>
   <p>
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Delete</button>
   </p>
 </form>

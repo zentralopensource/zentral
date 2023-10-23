@@ -1,135 +1,142 @@
 {% extends 'base.html' %}
 {% load inventory_extras %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></li>
-  <li class="active">{{ object.name }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></li>
+  <li class="breadcrumb-item active">{{ object.name }}</li>
 </ol>
 
-<h3>MDM push certificate <i>{{ object.name }}</i></h3>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object.name }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">MDM push certificate</h3>
+        <div class="ms-auto">
+            {% if perms.mdm.change_pushcertificate %}
+                {% url 'mdm:update_push_certificate' object.pk as url %}
+                {% button 'UPDATE' url "Edit Push Certificate" %}
+            {% endif %}
+            {% if object.can_be_deleted and perms.mdm.delete_pushcertificate %}
+                {% url 'mdm:delete_push_certificate' object.pk as url %}
+                {% button 'DELETE' url "Delete Certificate" %}
+            {% endif %}
+        </div>
+    </div>
 
-{% if perms.mdm.change_pushcertificate or perms.mdm.delete_pushcertificate%}
-<p>
-  {% if perms.mdm.change_pushcertificate %}
-  <a href="{% url 'mdm:update_push_certificate' object.pk %}" class="btn btn-default">Update</a>
-  {% endif %}
-  {% if object.can_be_deleted and perms.mdm.delete_pushcertificate %}
-  <a href="{% url 'mdm:delete_push_certificate' object.pk %}" class="btn btn-danger">Delete</a>
-  {% endif %}
-</p>
-{% endif %}
+    <dl class="row">
+    <dt class="col-sm-3 text-md-end">Name</dt>
+    <dd class="col-sm-9"{{ object.name }}</dd>
+    <dt class="col-sm-3 text-md-end">Topic</dt>
+    <dd class="col-sm-9">{{ object.topic }}</dd>
+    <dt class="col-sm-3 text-md-end">Not before</dt>
+    <dd class="col-sm-9">{{ object.not_before }}</dd>
+    <dt class="col-sm-3 text-md-end">Not after</dt>
+    <dd class="col-sm-9">{{ object.not_after }}</dd>
+    </dl>
+</div>
 
-<dl class="dl-horizontal">
-  <dt>Name</dt>
-  <dd>{{ object.name }}</dd>
-  <dt>Topic</dt>
-  <dd>{{ object.topic }}</dd>
-  <dt>Not before</dt>
-  <dd>{{ object.not_before }}</dd>
-  <dt>Not after</dt>
-  <dd>{{ object.not_after }}</dd>
-</dl>
+    {% if perms.mdm.view_depenrollment %}
+    <h3>DEP enrollment{{ dep_enrollments|length|pluralize }} ({{ dep_enrollments|length }})</h3>
 
-{% if perms.mdm.view_depenrollment %}
-<h3>{{ dep_enrollments|length }} DEP enrollment{{ dep_enrollments|length|pluralize }}</h3>
+    {% if dep_enrollments %}
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <thead>
+        <tr>
+        <th class="col-md-4">Name</th>
+        <th class="col-md-4">Enrollment tags</th>
+        <th class="col-md-2">Assigned devices</th>
+        <th class="col-md-2">Created at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for dep_enrollment in dep_enrollments %}
+        {% with dep_profile.enrollment_secret as enrollment_secret %}
+        <tr>
+        <td><a href="{{ dep_enrollment.get_absolute_url }}">{{ dep_enrollment.name }}</a></td>
+        <td>
+            {% for tag in enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}
+        </td>
+        <td>{{ dep_profile.assigned_devices.count }}</td>
+        <td>{{ dep_profile.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+    </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
 
-{% if dep_enrollments %}
-<table class="table">
-  <thead>
-    <tr>
-      <th class="col-md-4">Name</th>
-      <th class="col-md-4">Enrollment tags</th>
-      <th class="col-md-2">Assigned devices</th>
-      <th class="col-md-2">Created at</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for dep_enrollment in dep_enrollments %}
-    {% with dep_profile.enrollment_secret as enrollment_secret %}
-    <tr>
-      <td><a href="{{ dep_enrollment.get_absolute_url }}">{{ dep_enrollment.name }}</a></td>
-      <td>
-        {% for tag in enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}
-      </td>
-      <td>{{ dep_profile.assigned_devices.count }}</td>
-      <td>{{ dep_profile.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-{% endif %}
+    {% if perms.mdm.view_otaenrollment %}
+    <h3>OTA enrollment{{ ota_enrollments|length|pluralize }} ({{ ota_enrollments|length }})</h3>
 
-{% if perms.mdm.view_otaenrollment %}
-<h3>{{ ota_enrollments|length }} OTA enrollment{{ ota_enrollments|length|pluralize }}</h3>
+    {% if ota_enrollments %}
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <thead>
+        <th class="col-md-4">Name</th>
+        <th class="col-md-4">Enrollment tags</th>
+        <th class="col-md-2">Validity</th>
+        <th class="col-md-2">Created at</th>
+    </thead>
+    <tbody>
+        {% for ota_enrollment in ota_enrollments %}
+        {% with ota_enrollment.enrollment_secret as enrollment_secret %}
+        {% with enrollment_secret.is_valid|first as is_valid %}
+        {% with enrollment_secret.is_valid|last as err_msg %}
+        <tr>
+        <td><a href="{{ ota_enrollment.get_absolute_url }}">{{ ota_enrollment.name }}</a></td>
+        <td>
+            {% for tag in enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}
+        </td>
+        <td class="{% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
+        <td>{{ ota_enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        {% endwith %}
+        {% endwith %}
+        {% endwith %}
+        {% endfor %}
+    </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
 
-{% if ota_enrollments %}
-<table class="table">
-  <thead>
-    <th class="col-md-4">Name</th>
-    <th class="col-md-4">Enrollment tags</th>
-    <th class="col-md-2">Validity</th>
-    <th class="col-md-2">Created at</th>
-  </thead>
-  <tbody>
-    {% for ota_enrollment in ota_enrollments %}
-    {% with ota_enrollment.enrollment_secret as enrollment_secret %}
-    {% with enrollment_secret.is_valid|first as is_valid %}
-    {% with enrollment_secret.is_valid|last as err_msg %}
-    <tr>
-      <td><a href="{{ ota_enrollment.get_absolute_url }}">{{ ota_enrollment.name }}</a></td>
-      <td>
-        {% for tag in enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}
-      </td>
-      <td class="{% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
-      <td>{{ ota_enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endwith %}
-    {% endwith %}
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-{% endif %}
+    {% if perms.mdm.view_userenrollment %}
+    <h3>User enrollment{{ user_enrollments|length|pluralize }} ({{ user_enrollments|length }})</h3>
 
-{% if perms.mdm.view_userenrollment %}
-<h3>{{ user_enrollments|length }} User enrollment{{ user_enrollments|length|pluralize }}</h3>
-
-{% if user_enrollments %}
-<table class="table">
-  <thead>
-    <tr>
-      <th class="col-md-4">Name</th>
-      <th class="col-md-4">Enrollment tags</th>
-      <th class="col-md-2">Validity</th>
-      <th class="col-md-2">Created at</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for user_enrollment in user_enrollments %}
-    {% with user_enrollment.enrollment_secret as enrollment_secret %}
-    {% with enrollment_secret.is_valid|first as is_valid %}
-    {% with enrollment_secret.is_valid|last as err_msg %}
-    <tr>
-      <td><a href="{{ user_enrollment.get_absolute_url }}">{{ user_enrollment.name }}</a></td>
-      <td>
-        {% for tag in enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}
-      </td>
-      <td class="{% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
-      <td>{{ ota_enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endwith %}
-    {% endwith %}
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-{% endif %}
+    {% if user_enrollments %}
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <thead>
+        <tr>
+        <th class="col-md-4">Name</th>
+        <th class="col-md-4">Enrollment tags</th>
+        <th class="col-md-2">Validity</th>
+        <th class="col-md-2">Created at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for user_enrollment in user_enrollments %}
+        {% with user_enrollment.enrollment_secret as enrollment_secret %}
+        {% with enrollment_secret.is_valid|first as is_valid %}
+        {% with enrollment_secret.is_valid|last as err_msg %}
+        <tr>
+        <td><a href="{{ user_enrollment.get_absolute_url }}">{{ user_enrollment.name }}</a></td>
+        <td>
+            {% for tag in enrollment_secret.tags.all %}{% inventory_tag tag %}{% empty %}-{% endfor %}
+        </td>
+        <td class="{% if is_valid %}bg-success{% else %}bg-danger{% endif %}">{{ err_msg|default:"OK" }}</td>
+        <td>{{ ota_enrollment.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        {% endwith %}
+        {% endwith %}
+        {% endwith %}
+        {% endfor %}
+    </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
 
 {% endblock %}

@@ -1,83 +1,69 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="active">FileVault configuration{{ page_obj.paginator.count|pluralize }}</li>
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">FileVault configuration{{ page_obj.paginator.count|pluralize }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h3>{{ page_obj.paginator.count }} FileVault configuration{{ page_obj.paginator.count|pluralize }}</h3>
-
-{% if perms.mdm.add_filevaultconfig %}
-<p>
-  <a class="btn btn-default" href="{% url 'mdm:create_filevault_config' %}">
-  Create
-  </a>
-</p>
-{% endif %}
-
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">FileVault configuration{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+    <div class="ms-auto">
+        {% if perms.mdm.add_filevaultconfig %}
+            {% url 'mdm:create_filevault_config' as url %}
+            {% button 'CREATE' url "Create new FileVault Configuration" %}
+        {% endif %}  
+    </div>
+</div>
 
 {% if object_list %}
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>created at</th>
-      <th>updated at</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for filevault_config in object_list %}
-    <tr>
-      <td>
-        <a href="{{ filevault_config.get_absolute_url }}">{{ filevault_config }}</a>
-      </td>
-      <td>{{ filevault_config.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td>{{ filevault_config.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td>
-        {% if perms.mdm.change_filevaultconfig %}
-        <a href="{% url 'mdm:update_filevault_config' filevault_config.pk %}" class="btn btn-xs btn-default">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-        </a>
-        {% endif %}
-        {% if perms.mdm.delete_filevaultconfig and filevault_config.can_be_deleted %}
-        <a href="{% url 'mdm:delete_filevault_config' filevault_config.pk %}" class="btn btn-xs btn-danger">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle table-hover">
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>created at</th>
+        <th>updated at</th>
+        <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for filevault_config in object_list %}
+        <tr class="data-row">
+        <td>
+            <a href="{{ filevault_config.get_absolute_url }}">{{ filevault_config }}</a>
+        </td>
+        <td>{{ filevault_config.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        <td>{{ filevault_config.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        <td class="text-end py-0">
+            {% if perms.mdm.change_filevaultconfig %}
+                {% url 'mdm:update_filevault_config' filevault_config.pk as url %}
+                {% button 'UPDATE' url "Edit FileVault Configuration" %}
+            {% endif %}
+            {% if perms.mdm.delete_filevaultconfig and filevault_config.can_be_deleted %}
+                {% url 'mdm:delete_filevault_config' filevault_config.pk as url %}
+                {% button 'DELETE' url "Delete FileVault Configuration" %}
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+
+{% else %}
+    {% if perms.mdm.add_filevaultconfig %}
+        {% url 'mdm:create_filevault_config' as link %}
+        {% no_entities 'Filevault Configs' link %}
+    {% else %}
+        {% no_entities 'Filevault Configs' %}
+    {% endif %}
 {% endif %}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
 {% endblock %}

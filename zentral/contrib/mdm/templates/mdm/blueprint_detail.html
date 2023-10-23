@@ -1,107 +1,102 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:blueprints' %}">Blueprints</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:blueprints' %}">Blueprints</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h3>MDM blueprint <i>{{ object }}</i></h3>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">MDM blueprint</h3>
+        <div class="ms-auto">
+            {% if perms.mdm.change_blueprint %}
+                {% url 'mdm:update_blueprint' object.pk as url %}
+                {% button 'UPDATE' url "Edit Blueprint" %}
+            {% endif %}
+            {% if perms.mdm.delete_blueprint and object.can_be_deleted %}
+                {% url 'mdm:delete_blueprint' object.pk as url %}
+                {% button 'DELETE' url "Delete Blueprint" %}
+            {% endif %}
+        </div>
+    </div>
 
-
-<div class="row">
-  <div class="col-md-12">
-    <table class="table">
-      <thead>
-        <th width="33%">Attribute</th>
-        <th>Value</th>
-      </thead>
-      <tbody>
-      <tr>
-        <td>Name</td>
-        <td>{{ object.name }}</td>
-      </tr>
-      <tr>
-        <td>Inventory interval</td>
-        <td>{{ object.get_inventory_interval_display }}</td>
-      </tr>
-      <tr>
-        <td>Collect apps</td>
-        <td>{{ object.get_collect_apps_display }}</td>
-      </tr>
-      <tr>
-        <td>Collect certificates</td>
-        <td>{{ object.get_collect_certificates_display }}</td>
-      </tr>
-      <tr>
-        <td>Collect profiles</td>
-        <td>{{ object.get_collect_profiles_display }}</td>
-      </tr>
-      <tr>
-        <td>FileVault configuration</td>
-        <td>
-          {% if object.filevault_config %}
-          {% if perms.mdm.view_filevaultconfig %}
-          <a href="{{ object.filevault_config.get_absolute_url }}">
+    <div class="row">
+    <div class="col-md-12">
+        <table class="table table-light table-striped align-middle table-object-properties">
+        <thead>
+            <th width="33%">Attribute</th>
+            <th>Value</th>
+        </thead>
+        <tbody>
+        <tr>
+            <td>Name</td>
+            <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+            <td>Inventory interval</td>
+            <td>{{ object.get_inventory_interval_display }}</td>
+        </tr>
+        <tr>
+            <td>Collect apps</td>
+            <td>{{ object.get_collect_apps_display }}</td>
+        </tr>
+        <tr>
+            <td>Collect certificates</td>
+            <td>{{ object.get_collect_certificates_display }}</td>
+        </tr>
+        <tr>
+            <td>Collect profiles</td>
+            <td>{{ object.get_collect_profiles_display }}</td>
+        </tr>
+        <tr>
+            <td>FileVault configuration</td>
+            <td>
+            {% if object.filevault_config %}
+            {% if perms.mdm.view_filevaultconfig %}
+            <a href="{{ object.filevault_config.get_absolute_url }}">
+                {{ object.filevault_config }}
+            </a>
+            {% else %}
             {{ object.filevault_config }}
-          </a>
-          {% else %}
-          {{ object.filevault_config }}
-          {% endif %}
-          {% else %}
-          -
-          {% endif %}
-      </tr>
-      <tr>
-        <td>Recovery password configuration</td>
-        <td>
-          {% if object.recovery_password_config %}
-          {% if perms.mdm.view_recoverypasswordconfig %}
-          <a href="{{ object.recovery_password_config.get_absolute_url }}">
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+        </tr>
+        <tr>
+            <td>Recovery password configuration</td>
+            <td>
+            {% if object.recovery_password_config %}
+            {% if perms.mdm.view_recoverypasswordconfig %}
+            <a href="{{ object.recovery_password_config.get_absolute_url }}">
+                {{ object.recovery_password_config }}
+            </a>
+            {% else %}
             {{ object.recovery_password_config }}
-          </a>
-          {% else %}
-          {{ object.recovery_password_config }}
-          {% endif %}
-          {% else %}
-          -
-          {% endif %}
-      </tr>
-      </tbody>
-    </table>
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+        </tr>
+        </tbody>
+        </table>
 
-    <dl class="dl-horizontal">
-      <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-      <dt class="small" style="opacity:0.5">Updated at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-    </dl>
-
-  </div>
+        {% created_updated_at object %}    
+    </div>
+    </div>
 </div>
 
-<div class="btn-group" role="group" style="margin:0 0 10px 0">
-  {% if perms.mdm.change_blueprint %}
-  <a class="btn btn-default" href="{% url 'mdm:update_blueprint' object.pk %}">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    Update
-  </a>
-  {% endif %}
-  {% if perms.mdm.delete_blueprint and object.can_be_deleted %}
-  <a class="btn btn-danger" href="{% url 'mdm:delete_blueprint' object.pk %}">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-    Delete
-  </a>
-  {% endif %}
-</div>
-
-<h4>{{ artifacts_count }} Artifact{{ artifacts_count|pluralize }}</h4>
+<h4>Artifact{{ artifacts_count|pluralize }} ({{ artifacts_count }})</h4>
 
 {% if artifacts_count %}
-<table class="table">
+<table class="table table-light table-striped align-middle ">
   <thead>
     <tr>
       <th>Name</th>

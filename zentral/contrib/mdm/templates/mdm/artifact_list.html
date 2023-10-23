@@ -1,115 +1,93 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
   {% if form.has_changed %}
-  <li><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Search</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Search</a></li>
   {% else %}
-  <li class="active">Search</li>
+  <li class="breadcrumb-item active">Search</li>
   {% endif %}
   {% else %}
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Artifacts</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Artifacts</a></li>
   {% else %}
-  <li class="active">Artifacts</li>
+  <li class="breadcrumb-item active">Artifacts</li>
   {% endif %}
   {% endif %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<h3>{{ page_obj.paginator.count  }} Artifact{{ page_obj.paginator.count|pluralize }}</h3>
-
-{% if perms.mdm.add_artifact %}
-<div class="dropdown">
-  <button class="btn btn-default dropdown-toggle" type="button" id="addArtifact"
-          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-    Add
-    <span class="caret"></span>
-  </button>
-  <ul class="dropdown-menu" aria-labelledby="addArtifact">
-    <li><a href="{% url 'mdm:upload_enterprise_app' %}">Enterprise app</a></li>
-    <li><a href="{% url 'mdm:upload_profile' %}">Profile</a></li>
-  </ul>
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Artifact{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
 </div>
-{% endif %}
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-    <div class="form-group">
-      {{ form.q|bootstrap_inline }}
-    </div>
-    <div class="form-group">
-      {{ form.artifact_type|bootstrap_inline }}
-    </div>
-    <div class="form-group">
-      {{ form.channel|bootstrap_inline }}
-    </div>
-    <div class="form-group">
-      {{ form.platform|bootstrap_inline }}
-    </div>
-    <div class="form-group">
-      {{ form.blueprint|bootstrap_inline }}
-    </div>
-    <button type="submit" class="btn btn-default">
-      Search
-    </button>
-</form>
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
+            
+        {{ form }}
+        
+        <button type="submit" class="btn btn-link text-decoration-none mb-2 text-dark">
+            <i class="bi bi-search"></i>
+        </button>
+    </form>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+    <div class="ms-auto">
+        {% if perms.mdm.add_artifact %}
+        <div class="dropdown">
+          <a class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="addArtifact"
+                data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                <i class="bi bi-plus-circle"></i>
+          </a>
+          <ul class="dropdown-menu" aria-labelledby="addArtifact">
+            <li><a class="dropdown-item" href="{% url 'mdm:upload_enterprise_app' %}">Enterprise app</a></li>
+            <li><a class="dropdown-item" href="{% url 'mdm:upload_profile' %}">Profile</a></li>
+          </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+
 
 {% if page_obj %}
-<table class="table">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Type</th>
-      <th>Platforms</th>
-      <th>Blueprints</th>
-      <th>created at</th>
-      <th>updated at</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for artifact in page_obj %}
-    <tr>
-      <td><a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a></td>
-      <td>{{ artifact.get_type_display }}</td>
-      <td>{{ artifact.platforms|join:", " }}</td>
-      <td>{{ artifact.blueprintartifact__count }}</td>
-      <td>{{ artifact.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-      <td>{{ artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
+    {% pagination next_url previous_url %}
+
+    <table class="table table-light table-striped align-middle">
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Platforms</th>
+        <th>Blueprints</th>
+        <th>created at</th>
+        <th>updated at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for artifact in page_obj %}
+        <tr>
+        <td><a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a></td>
+        <td>{{ artifact.get_type_display }}</td>
+        <td>{{ artifact.platforms|join:", " }}</td>
+        <td>{{ artifact.blueprintartifact__count }}</td>
+        <td>{{ artifact.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        <td>{{ artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+    
+{% elif form.is_bound %}
+    {% url 'mdm:artifacts' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
 
 {% endblock %}

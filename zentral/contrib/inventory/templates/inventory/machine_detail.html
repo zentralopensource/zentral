@@ -2,14 +2,14 @@
 {% load incidents_extras inventory_extras %}
 
 {% block content %}
+<ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Home</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
+    <li class="breadcrumb-item active">{{ serial_number }}</li>
+</ol>
+
 <div class="row">
   <div class="col-md-12">
-    <ol class="breadcrumb">
-      <li><a href="/">Home</a></li>
-      <li><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-      <li class="active">{{ serial_number }}</li>
-    </ol>
-
     <h2>
       {% machine_type_icon machine %}
       {% machine_platform_icon machine %}
@@ -25,64 +25,64 @@
 
     <div class="btn-group" role="group" style="margin:0 0 10px 0">
       {% if show_events_link %}
-      <a class="btn btn-default" href="{% url 'inventory:machine_events' machine.get_urlsafe_serial_number %}">
-        <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
+      <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_events' machine.get_urlsafe_serial_number %}">
+        <span class="bi bi-activity" aria-hidden="true"></span> Events
       </a>
       {% endif %}
       {% for link, anchor_text in store_links  %}
-      <a class="btn btn-default" href="{{ link }}">
-        <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
+      <a class="btn btn-outline-secondary" href="{{ link }}">
+        <span class="bi bi-link" aria-hidden="true"></span> {{ anchor_text }}
       </a>
       {% endfor %}
       {% if perms.incidents.view_incident and perms.incidents.view_machineincident %}
-      <a class="btn btn-default" href="{% url 'inventory:machine_incidents' machine.get_urlsafe_serial_number %}">
-        <span class="glyphicon glyphicon-warning-sign" aria-hidden="true"></span> Incidents
+      <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_incidents' machine.get_urlsafe_serial_number %}">
+        <span class="bi bi-exclamation-triangle" aria-hidden="true"></span> Incidents
       </a>
       {% endif %}
       {% if machine.snapshots_with_osx_app_instances %}
-      <a class="btn btn-default" href="{% url 'inventory:machine_macos_app_instances' machine.get_urlsafe_serial_number %}">
-        <i class="fab fa-apple" aria-hidden="true"></i> apps
+      <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_macos_app_instances' machine.get_urlsafe_serial_number %}">
+        <i class="bi bi-apple" aria-hidden="true"></i> apps
       </a>
       {% endif %}
       {% if machine.snapshots_with_ios_apps %}
-      <a class="btn btn-default" href="{% url 'inventory:machine_ios_apps' machine.get_urlsafe_serial_number %}">
-        <i class="fab fa-apple" aria-hidden="true"></i> apps
+      <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_ios_apps' machine.get_urlsafe_serial_number %}">
+        <i class="bi bi-apple" aria-hidden="true"></i> apps
       </a>
       {% endif %}
       {% if machine.snapshots_with_android_apps %}
-      <a class="btn btn-default" href="{% url 'inventory:machine_android_apps' machine.get_urlsafe_serial_number %}">
+      <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_android_apps' machine.get_urlsafe_serial_number %}">
         <i class="fab fa-android" aria-hidden="true"></i> apps
       </a>
       {% endif %}
       {% if machine.snapshots_with_program_instances %}
-      <a class="btn btn-default" href="{% url 'inventory:machine_program_instances' machine.get_urlsafe_serial_number %}">
+      <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_program_instances' machine.get_urlsafe_serial_number %}">
         <i class="fab fa-windows" aria-hidden="true"></i> programs
       </a>
       {% endif %}
       {% if machine.snapshots_with_deb_packages %}
-      <a class="btn btn-default" href="{% url 'inventory:machine_deb_packages' machine.get_urlsafe_serial_number %}">
+      <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_deb_packages' machine.get_urlsafe_serial_number %}">
         <i class="fab fa-linux" aria-hidden="true"></i> deb packages
       </a>
       {% endif %}
       {% if machine.snapshots_with_profiles %}
-      <a class="btn btn-default" href="{% url 'inventory:machine_profiles' machine.get_urlsafe_serial_number %}">
-        <span class="glyphicon glyphicon-cog" aria-hidden="true"></span> profiles
+      <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_profiles' machine.get_urlsafe_serial_number %}">
+        <span class="bi bi bi-gear" aria-hidden="true"></span> profiles
       </a>
       {% endif %}
       {% if can_manage_tags or can_archive_machine %}
       <div class="btn-group">
-        <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
           Action <span class="caret"></span>
         </button>
         <ul class="dropdown-menu">
           {% if can_manage_tags %}
           <li>
-            <a href="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}">Manage tags</a>
+            <a href="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}" class="dropdown-item">Manage tags</a>
           </li>
           {% endif %}
           {% if can_archive_machine %}
           <li>
-            <a href="{% url 'inventory:archive_machine' machine.get_urlsafe_serial_number %}"><span class="text-danger">Archive</span></a>
+            <a href="{% url 'inventory:archive_machine' machine.get_urlsafe_serial_number %}" class="dropdown-item"><span class="text-danger">Archive</span></a>
           </li>
           {% endif %}
         </ul>
@@ -96,8 +96,9 @@
   <div class="col-md-6">
     <ul class="nav nav-tabs" role="tablist">
       {% for source_display, ms, source_subviews in machine_snapshots %}
-      <li role="presentation"{% if forloop.first %} class="active"{% endif %} style="max-width:{{ max_source_tab_with }}%">
-        <a href="#ms-{{ ms.id }}" data-source="{{ ms.source.name }}" role="tab" data-toggle="tab" style="overflow:hidden;text-overflow: ellipsis">
+      <li role="presentation" class="nav-item">
+        <a href="#ms-{{ ms.id }}" class="nav-link{% if forloop.first %} active{% endif %}"
+            data-source="{{ ms.source.name }}" role="tab" data-bs-toggle="tab">
           {{ source_display }}
         </a>
       </li>
@@ -105,18 +106,18 @@
     </ul>
     <div class="tab-content">
     {% for source_display, ms, source_subviews in machine_snapshots %}
-    <div role="tabpanel" class="tab-pane{% if forloop.first %} active{% endif %}" id="ms-{{ ms.id }}">
+    <div role="tabpanel" class="m-3 tab-pane fade {% if forloop.first %}show active{% endif %}" id="ms-{{ ms.id }}">
       {% if ms.business_unit %}
       <h3>Business unit</h3>
-        <dl class="dl-horizontal">
-          <dt>Name</dt>
-          <dd><a href="{% url 'inventory:mbu_machines' ms.business_unit.meta_business_unit_id %}">{{ ms.business_unit.get_name_display }}</a></dd>
-          <dt>Key</dt>
-          <dd>{{ ms.business_unit.get_short_key }}</dd>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">Name</dt>
+          <dd class="col-sm-9"><a href="{% url 'inventory:mbu_machines' ms.business_unit.meta_business_unit_id %}">{{ ms.business_unit.get_name_display }}</a></dd>
+          <dt class="col-sm-3 text-md-end">Key</dt>
+          <dd class="col-sm-9">{{ ms.business_unit.get_short_key }}</dd>
        </dl>
        <p>
        {% for link in ms.business_unit.links.all %}
-         <a href="{{ link.url }}" class="btn btn-default">
+         <a href="{{ link.url }}" class="btn btn-outline-secondary">
            {{ ms.source.name }} - {{ link.anchor_text }}
         </a>
        {% endfor %}
@@ -126,34 +127,34 @@
       {% with ms.system_info as system_info %}
       {% if system_info.hardware_model or system_info.cpu_type or system_info.cpu_physical_cores or system_info.physical_memory %}
       <h3>System info</h3>
-      <dl class="dl-horizontal">
+      <dl class="row">
         {% if system_info.hardware_model %}
-        <dt>Hardware model</dt>
-        <dd>{{ system_info.hardware_model }}</dd>
+            <dt class="col-sm-3 text-md-end">Hardware model</dt>
+            <dd class="col-sm-9">{{ system_info.hardware_model }}</dd>
         {% endif %}
         {% if system_info.hardware_serial %}
-        <dt>Hardware serial</dt>
-        <dd>{{ system_info.hardware_serial }}</dd>
+        <dt class="col-sm-3 text-md-end">Hardware serial</dt>
+        <dd class="col-sm-9">{{ system_info.hardware_serial }}</dd>
         {% endif %}
         {% if system_info.cpu_brand %}
-        <dt>CPU brand</dt>
-        <dd>{{ system_info.cpu_brand }}</dd>
+        <dt class="col-sm-3 text-md-end">CPU brand</dt>
+        <dd class="col-sm-9">{{ system_info.cpu_brand }}</dd>
         {% endif %}
         {% if system_info.cpu_type %}
-        <dt>CPU type</dt>
-        <dd>{{ system_info.cpu_type }}</dd>
+        <dt class="col-sm-3 text-md-end">CPU type</dt>
+        <dd class="col-sm-9">{{ system_info.cpu_type }}</dd>
         {% endif %}
         {% if system_info.cpu_physical_cores %}
-        <dt>CPU physical cores</dt>
-        <dd>{{ system_info.cpu_physical_cores }}</dd>
+        <dt class="col-sm-3 text-md-end">CPU physical cores</dt>
+        <dd class="col-sm-9">{{ system_info.cpu_physical_cores }}</dd>
         {% endif %}
         {% if system_info.cpu_logical_cores %}
-        <dt>CPU logical cores</dt>
-        <dd>{{ system_info.cpu_logical_cores }}</dd>
+        <dt class="col-sm-3 text-md-end">CPU logical cores</dt>
+        <dd class="col-sm-9">{{ system_info.cpu_logical_cores }}</dd>
         {% endif %}
         {% if ms.system_info.physical_memory %}
-        <dt>Physical memory</dt>
-        <dd>{{ ms.system_info.physical_memory|filesizeformat }}</dd>
+        <dt class="col-sm-3 text-md-end">Physical memory</dt>
+        <dd class="col-sm-9">{{ ms.system_info.physical_memory|filesizeformat }}</dd>
         {% endif %}
       </dl>
       {% endif %}
@@ -161,53 +162,53 @@
 
       {% if ms.os_version %}
       <h3>OS</h3>
-      <dl class="dl-horizontal">
-        <dt>Name</dt>
-        <dd>{{ ms.os_version.name }}</dd>
-        <dt>OS Version</dt>
-        <dd>{{ ms.os_version.get_version_display|default:"-" }}</dd>
-        <dt>OS Build</dt>
-        <dd>{{ ms.os_version.build|default:"-" }}</dd>
+      <dl class="row">
+        <dt class="col-sm-3 text-md-end">Name</dt>
+        <dd class="col-sm-9">{{ ms.os_version.name }}</dd>
+        <dt class="col-sm-3 text-md-end">OS Version</dt>
+        <dd class="col-sm-9">{{ ms.os_version.get_version_display|default:"-" }}</dd>
+        <dt class="col-sm-3 text-md-end">OS Build</dt>
+        <dd class="col-sm-9">{{ ms.os_version.build|default:"-" }}</dd>
       </dl>
       {% endif %}
 
       {% if ms.ec2_instance_metadata %}
       <h3>EC2 instance</h3>
-      <dl class="dl-horizontal">
-        <dt>Instance ID</dt>
-        <dd><a href="{% ec2_instance_link ms %}">{{ ms.ec2_instance_metadata.instance_id }}</a></dd>
-        <dt>Instance type</dt>
-        <dd>{{ ms.ec2_instance_metadata.instance_type }}</dd>
-        <dt>Architecture</dt>
-        <dd>{{ ms.ec2_instance_metadata.architecture }}</dd>
-        <dt>Region</dt>
-        <dd>{{ ms.ec2_instance_metadata.region }}</dd>
-        <dt>Availability zone</dt>
-        <dd>{{ ms.ec2_instance_metadata.availability_zone }}</dd>
-        <dt>Local hostname</dt>
-        <dd>{{ ms.ec2_instance_metadata.local_hostname }}</dd>
-        <dt>Local IPv4</dt>
-        <dd>{{ ms.ec2_instance_metadata.local_ipv4|default:"-" }}</dd>
-        <dt>MAC</dt>
-        <dd>{{ ms.ec2_instance_metadata.mac }}</dd>
-        <dt>Security group{{ ms.ec2_instance_metadata.security_group_list|length|pluralize }}</dt>
-        <dd>{{ ms.ec2_instance_metadata.security_group_list|join:", "|default:"-" }}</dd>
-        <dt>IAM profile ARN</dt>
-        <dd>{{ ms.ec2_instance_metadata.iam_arn|default:"-" }}</dd>
-        <dt>AMI ID</dt>
-        <dd>{{ ms.ec2_instance_metadata.ami_id }}</dd>
-        <dt>Reservation ID</dt>
-        <dd>{{ ms.ec2_instance_metadata.reservation_id }}</dd>
-        <dt>Account ID</dt>
-        <dd>{{ ms.ec2_instance_metadata.account_id }}</dd>
-        <dt>SSH public key</dt>
+      <dl class="row">
+        <dt class="col-sm-3 text-md-end">Instance ID</dt>
+        <dd class="col-sm-9"><a href="{% ec2_instance_link ms %}">{{ ms.ec2_instance_metadata.instance_id }}</a></dd>
+        <dt class="col-sm-3 text-md-end">Instance type</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.instance_type }}</dd>
+        <dt class="col-sm-3 text-md-end">Architecture</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.architecture }}</dd>
+        <dt class="col-sm-3 text-md-end">Region</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.region }}</dd>
+        <dt class="col-sm-3 text-md-end">Availability zone</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.availability_zone }}</dd>
+        <dt class="col-sm-3 text-md-end">Local hostname</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.local_hostname }}</dd>
+        <dt class="col-sm-3 text-md-end">Local IPv4</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.local_ipv4|default:"-" }}</dd>
+        <dt class="col-sm-3 text-md-end">MAC</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.mac }}</dd>
+        <dt class="col-sm-3 text-md-end">Security group{{ ms.ec2_instance_metadata.security_group_list|length|pluralize }}</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.security_group_list|join:", "|default:"-" }}</dd>
+        <dt class="col-sm-3 text-md-end">IAM profile ARN</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.iam_arn|default:"-" }}</dd>
+        <dt class="col-sm-3 text-md-end">AMI ID</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.ami_id }}</dd>
+        <dt class="col-sm-3 text-md-end">Reservation ID</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.reservation_id }}</dd>
+        <dt class="col-sm-3 text-md-end">Account ID</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.account_id }}</dd>
+        <dt class="col-sm-3 text-md-end">SSH public key</dt>
         <dd style="overflow-wrap:break-word">{{ ms.ec2_instance_metadata.ssh_public_key|default:"-" }}</dd>
       </dl>
       {% endif %}
 
       {% if ms.ec2_instance_tag_list %}
       <h3>EC2 instance tag{{ ms.ec2_instance_tag_list|length|pluralize }}</h3>
-      <table class="table table-condensed">
+      <table class="table table-light table-striped align-middle table-hover">
         <thead>
           <tr>
             <th>Key</th>
@@ -227,7 +228,7 @@
       {% with ms.disks.count as disks %}
       {% if disks %}
       <h3>{{ disks }} Disk{{ disks|pluralize }}</h3>
-      <table class="table table-condensed">
+      <table class="table table-light table-striped align-middle table-hover">
         <thead>
           <th>Name</th>
           <th>Size</th>
@@ -246,7 +247,7 @@
       {% with ms.network_interfaces.count as nic %}
       {% if nic %}
       <h3>{{ nic }} Interface{{ nic|pluralize }}</h3>
-      <table class="table table-condensed">
+      <table class="table table-light table-striped align-middle table-hover">
         <thead>
           <th>Name</th>
           <th>MAC</th>
@@ -278,14 +279,14 @@
       <h3>Links</h3>
       <p>
         {% for link in ms.links.all %}
-        <a href="{{ link.url }}" class="btn btn-default">{{ ms.source.name }} - {{ link.anchor_text }}</a>
+        <a href="{{ link.url }}" class="btn btn-outline-secondary">{{ ms.source.name }} - {{ link.anchor_text }}</a>
         {% endfor %}
       </p>
       {% endif %}
 
       {% if ms.groups.count %}
       <h3>Groups</h3>
-      <table class="table table-condensed">
+      <table class="table table-light table-striped align-middle table-hover">
         <thead>
           <th>Name</th>
           {% if perms.inventory.view_link %}
@@ -305,7 +306,7 @@
             {% if perms.inventory.view_link %}
             <td>
               {% for link_url, anchor_text in links %}
-              <a href="{{ link_url }}" class="btn btn-default">
+              <a href="{{ link_url }}" class="btn btn-outline-secondary">
                 {{ ms.source.name }} - {{ anchor_text }}
               </a>
               {% endfor %}
@@ -319,13 +320,13 @@
 
       {% if ms.teamviewer %}
       <h3>TeamViewer</h3>
-      <dl class="dl-horizontal">
-        <dt>ID</dt>
-        <dd><a href="https://start.teamviewer.com/{{ ms.teamviewer.teamviewer_id }}">{{ ms.teamviewer.teamviewer_id }}</a></dd>
-        <dt>Release</dt>
-        <dd>{{ ms.teamviewer.release }}</dd>
-        <dt>Unattended</dt>
-        <dd>{{ ms.teamviewer|yesno }}</dd>
+      <dl class="row">
+        <dt class="col-sm-3 text-md-end">ID</dt>
+        <dd class="col-sm-9"><a href="https://start.teamviewer.com/{{ ms.teamviewer.teamviewer_id }}">{{ ms.teamviewer.teamviewer_id }}</a></dd>
+        <dt class="col-sm-3 text-md-end">Release</dt>
+        <dd class="col-sm-9">{{ ms.teamviewer.release }}</dd>
+        <dt class="col-sm-3 text-md-end">Unattended</dt>
+        <dd class="col-sm-9">{{ ms.teamviewer|yesno }}</dd>
       </dl>
       {% endif %}
 
@@ -336,14 +337,14 @@
       {% with puppet_node.trusted_facts as trusted_facts %}
       {% if trusted_facts %}
       <h4>Trusted facts</h4>
-      <dl class="dl-horizontal">
-        <dt>Certificate Name</dt>
-        <dd>{{ trusted_facts.certname }}</dd>
-        <dt>Authenticated</dt>
-        <dd>{{ trusted_facts.authenticated }}</dd>
+      <dl class="row">
+        <dt class="col-sm-3 text-md-end">Certificate Name</dt>
+        <dd class="col-sm-9">{{ trusted_facts.certname }}</dd>
+        <dt class="col-sm-3 text-md-end">Authenticated</dt>
+        <dd class="col-sm-9">{{ trusted_facts.authenticated }}</dd>
         {% if trusted_facts.extensions %}
-        <dt>Extensions</dt>
-        <dd>
+        <dt class="col-sm-3 text-md-end">Extensions</dt>
+        <dd class="col-sm-9">
           {% for key, val in trusted_facts.extensions.items %}
           <p><em>{{ key }}</em> - {{ val }}</p>
           {% endfor %}
@@ -356,17 +357,17 @@
       {% with puppet_node.core_facts as core_facts %}
       {% if core_facts %}
       <h4>Core facts</h4>
-      <dl class="dl-horizontal">
-        <dt>aio agent version</dt>
-        <dd>{{ core_facts.aio_agent_version }}</dd>
-        <dt>augeas version</dt>
-        <dd>{{ core_facts.augeas_version }}</dd>
-        <dt>client version</dt>
-        <dd>{{ core_facts.client_version }}</dd>
-        <dt>facter version</dt>
-        <dd>{{ core_facts.facter_version }}</dd>
-        <dt>ruby</dt>
-        <dd>
+      <dl class="row">
+        <dt class="col-sm-3 text-md-end">aio agent version</dt>
+        <dd class="col-sm-9">{{ core_facts.aio_agent_version }}</dd>
+        <dt class="col-sm-3 text-md-end">augeas version</dt>
+        <dd class="col-sm-9">{{ core_facts.augeas_version }}</dd>
+        <dt class="col-sm-3 text-md-end">client version</dt>
+        <dd class="col-sm-9">{{ core_facts.client_version }}</dd>
+        <dt class="col-sm-3 text-md-end">facter version</dt>
+        <dd class="col-sm-9">{{ core_facts.facter_version }}</dd>
+        <dt class="col-sm-3 text-md-end">ruby</dt>
+        <dd class="col-sm-9">
           {{ core_facts.ruby_platform }}<br>
           {{ core_facts.ruby_sitedir }}<br>
           {{ core_facts.ruby_version }}
@@ -378,10 +379,10 @@
       {% with puppet_node.extra_facts as extra_facts %}
       {% if extra_facts %}
       <h4>Extra facts</h4>
-      <dl class="dl-horizontal">
+      <dl class="row">
         {% for key, val in extra_facts.items %}
-        <dt>{{ key }}</dt>
-        <dd>{{ val }}</dd>
+        <dt class="col-sm-3 text-md-end">{{ key }}</dt>
+        <dd class="col-sm-9">{{ val }}</dd>
         {% endfor %}
       </dl>
       {% endif %}
@@ -393,16 +394,16 @@
       {% with ms.principal_user as principal_user %}
       {% if principal_user %}
       <h3>Principal user</h3>
-      <dl class="dl-horizontal">
-        <dt>Source</dt>
-        <dd>{{ principal_user.source.get_type_display }}</dd>
-        <dt>Unique ID</dt>
-        <dd>{{ principal_user.unique_id }}</dd>
-        <dt>Principal name</dt>
-        <dd>{{ principal_user.principal_name }}</dd>
+      <dl class="row">
+        <dt class="col-sm-3 text-md-end">Source</dt>
+        <dd class="col-sm-9">{{ principal_user.source.get_type_display }}</dd>
+        <dt class="col-sm-3 text-md-end">Unique ID</dt>
+        <dd class="col-sm-9">{{ principal_user.unique_id }}</dd>
+        <dt class="col-sm-3 text-md-end">Principal name</dt>
+        <dd class="col-sm-9">{{ principal_user.principal_name }}</dd>
         {% if principal_user.display_name %}
-        <dt>Display name</dt>
-        <dd>{{ principal_user.display_name }}</dd>
+        <dt class="col-sm-3 text-md-end">Display name</dt>
+        <dd class="col-sm-9">{{ principal_user.display_name }}</dd>
         {% endif %}
       </dl>
       {% endif %}
@@ -412,13 +413,13 @@
       {% if certificates.count %}
       <h3>Certificate{{ certificates.count|pluralize }}</h3>
       {% for certificate in certificates %}
-      <dl class="dl-horizontal">
-        <dt>Common Name</dt>
+      <dl class="row">
+        <dt class="col-sm-3 text-md-end">Common Name</dt>
         <dd style="overflow:hidden;text-overflow:ellipsis;">{{ certificate.short_repr }}</dd>
-        <dt>Dates</dt>
-        <dd>{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
+        <dt class="col-sm-3 text-md-end">Dates</dt>
+        <dd class="col-sm-9">{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
         {% if certificate.signed_by %}
-        <dt>Issuer</dt>
+        <dt class="col-sm-3 text-md-end">Issuer</dt>
         <dd style="overflow:hidden;text-overflow:ellipsis;">{{ certificate.signed_by.short_repr|default:"?" }}</dd>
         {% endif %}
       </dl>
@@ -428,7 +429,7 @@
 
       {% if ms.extra_facts %}
       <h3>Extra facts</h4>
-      <dl class="dl-horizontal">
+      <dl class="row">
         {{ ms.extra_facts|extra_facts }}
       </dl>
       {% endif %}
@@ -437,7 +438,7 @@
       {{ source_subview.render }}
       {% endfor %}
 
-      <dl class="dl-horizontal">
+      <dl class="row">
         <dt class="small" style="opacity:0.5">last change</dt>
         <dd class="small" style="opacity:0.5">
           {% if ms.public_ip_address %}{{ ms.public_ip_address }} - {% endif %}
@@ -462,9 +463,9 @@
   </div><!-- end col-md-6 -->
   <div class="col-md-6">
     {% if perms.compliance_checks.view_machinestatus %}
-    <h3>{{ compliance_check_statuses|length }} Compliance check{{ compliance_check_statuses|length|pluralize }}</h3>
+    <h3>Compliance check{{ compliance_check_statuses|length|pluralize }} ({{ compliance_check_statuses|length }})</h3>
     {% if compliance_check_statuses %}
-    <table class="table table-condensed">
+    <table class="table table-light table-striped align-middle table-hover">
       <thead>
         <th>Name</th>
         <th>Status</th>
@@ -492,8 +493,8 @@
     {% if perms.incidents.view_machineincident %}
     {% with machine.open_incidents as open_incidents %}
     {% if open_incidents %}
-    <h3>{{ open_incidents|length }} open incident{{ open_incidents|length|pluralize }}</h3>
-    <table class="table table-condensed">
+    <h3>Open incident{{ open_incidents|length|pluralize }} ({{ open_incidents|length }})</h3>
+    <table class="table table-light table-striped align-middle table-hover">
       <thead>
         <th>Name</th>
         <th>Status</th>
@@ -523,7 +524,11 @@
     {% endwith %}
     {% endif %}
     {% if fetch_heartbeats %}
-    <div id="heartbeats" data-url="{% url 'inventory:machine_heartbeats' machine.get_urlsafe_serial_number %}">Loading heartbeats…</div>
+    <div id="heartbeats" data-url="{% url 'inventory:machine_heartbeats' machine.get_urlsafe_serial_number %}">
+        <div class="spinner-border spinner-border-sm" role="status">
+        </div>
+        Loading heartbeats…
+    </div>
     {% endif %}
   </div>
 </div><!-- end row -->

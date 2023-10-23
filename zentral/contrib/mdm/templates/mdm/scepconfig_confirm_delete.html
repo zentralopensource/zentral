@@ -1,13 +1,12 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></li>
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">delete</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">delete</li>
 </ol>
 
 <h3>Delete {{ object }}</h3>
@@ -15,7 +14,7 @@
 <form method="post">{% csrf_token %}
   <p>Do you really want to delete this SCEP configuration?</p>
   <p>
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button type="submit" class="btn btn-danger">Delete</button>
   </p>
 </form>

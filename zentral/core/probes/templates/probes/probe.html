@@ -1,26 +1,25 @@
 {% extends 'base.html' %}
-{% load incidents_extras inventory_extras probe_extras %}
+{% load incidents_extras inventory_extras probe_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'probes:index' %}">Probes</a>
-  <li class="active">{{ probe.name }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'probes:index' %}">Probes</a>
+  <li class="breadcrumb-item active">{{ probe.name }}</li>
 </ol>
 
-<h2>
-  Probe <em>{{ probe.name }}</em>
-</h2>
+<h2 class="m-0">{{ probe.name }}</h2>
+<h3 class="m-0 fs-5 text-secondary mb-3">Probe</h3>
 
-<div class="panel panel-default">
-  <table class="table table-condensed probe-panel">
+<div class="card card-default mb-3">
+  <table class="table table-probe table-light table-striped align-middle table-object-properties">
     <tr>
       <td>status</td>
       <td>
         {% if probe.status == 'ACTIVE' %}
-        <span class="label label-info">Active</span>
+        <span class="badge text-bg-success">Active</span>
         {% else %}
-        <span class="label label-danger">Inactive</span>
+        <span class="badge text-bg-secondary">Inactive</span>
         {% endif %}
       </td>
     </tr>
@@ -63,38 +62,39 @@
       <td>Incident severity</td>
       <td>{% incident_severity probe.incident_severity '-' %}</td>
     </tr>
-    </tr>
   </table>
-  <div class="panel-footer">
+  <div class="card-footer">
     <div class="btn-group" role="group">
       {% if perms.probes.change_probesource %}
-      <a class="btn btn-default" href="{% url 'probes:update' probe.pk %}">
-        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-      </a>
+        {% url 'probes:update' probe.pk as url %}
+        {% button 'UPDATE' url "Edit Probe" %}
       {% endif %}
       {% if perms.probes.add_probesource %}
-      <a class="btn btn-default" href="{% url 'probes:clone' probe.pk %}">
-        <span class="glyphicon glyphicon-duplicate" aria-hidden="true"></span>
+      <a class="btn btn-outline-secondary" href="{% url 'probes:clone' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Clone">
+        <span class="bi bi-layers" aria-hidden="true"></span>
       </a>
       {% endif %}
       {% if perms.probes.delete_probesource %}
-      <a class="btn btn-danger" href="{% url 'probes:delete' probe.pk %}">
-        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-      </a>
+        {% url 'probes:delete' probe.pk as url %}
+        {% button 'DELETE' url "Delete Probe" %}
       {% endif %}
       {% if show_events_link %}
-      <a class="btn btn-default" href="{% url 'probes:probe_events' probe.pk %}">
-        <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
+      <a class="btn btn-outline-secondary" href="{% url 'probes:probe_events' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Events">
+        <span class="bi bi-activity" aria-hidden="true"></span> Events
       </a>
       {% endif %}
       {% if show_dashboard_link %}
-      <a class="btn btn-default" href="{% url 'probes:probe_dashboard' probe.pk %}">
-        <span class="glyphicon glyphicon-stats" aria-hidden="true"></span> Dashboard
+      <a class="btn btn-outline-secondary" href="{% url 'probes:probe_dashboard' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Dashboard">
+        <span class="bi bi-bar-chart-fill" aria-hidden="true"></span> Dashboard
       </a>
       {% endif %}
       {% for link, store_name in store_links %}
-      <a class="btn btn-default" href="{{ link }}">
-        <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ store_name }}
+      <a class="btn btn-outline-secondary" href="{{ link }}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{store_name}}">
+        <span class="bi bi-link" aria-hidden="true"></span> {{ store_name }}
       </a>
       {% endfor %}
     </div>
@@ -102,31 +102,31 @@
 </div>
 
 <a name="filters"></a>
-<h3>Filters</h3>
+<h3 class="mt-4">Filters</h3>
 
 {% if perms.probes.change_probesource %}
 <div class="dropdown">
-  <button class="btn btn-default dropdown-toggle" type="button" id="addFilter"
-          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+  <button id="addFilter" class="btn btn-secondary dropdown-toggle" 
+    type="button" data-bs-toggle="dropdown" aria-expanded="false">
     Add filter
     <span class="caret"></span>
   </button>
   <ul class="dropdown-menu" aria-labelledby="addFilter">
     <li>
-      <a href="{% url 'probes:add_filter' object.id "inventory" %}">
+      <a class="dropdown-item" href="{% url 'probes:add_filter' object.id "inventory" %}">
         Inventory filter
       </a>
     </li>
     {% if probe.can_edit_metadata_filters %}
     <li>
-      <a href="{% url 'probes:add_filter' object.id "metadata" %}">
+      <a class="dropdown-item" href="{% url 'probes:add_filter' object.id "metadata" %}">
         Metadata filter
       </a>
     </li>
     {% endif %}
     {% if probe.can_edit_payload_filters %}
     <li>
-      <a href="{% url 'probes:add_filter' object.id "payload" %}">
+      <a class="dropdown-item" href="{% url 'probes:add_filter' object.id "payload" %}">
         Payload filter
       </a>
     </li>
@@ -138,11 +138,11 @@
 <div class="row">
 {% if probe.inventory_filters %}
 <div class="col-md-4">
-<h4>Inventory</h4>
+<h4 class="mt-4">Inventory</h4>
 
 {% for inventory_filter in probe.inventory_filters %}
-<div class="panel panel-default">
-  <table class="table table-condensed probe-panel">
+<div class="card card-default mb-3">
+  <table class="table table-probe table-light table-striped align-middle table-object-properties">
     {% if inventory_filter.meta_business_units %}
     <tr>
       <td>
@@ -190,14 +190,12 @@
     {% endif %}
    </table>
   {% if perms.probes.change_probesource %}
-  <div class="panel-footer">
+  <div class="card-footer">
     <div class="btn-group" role="group">
-      <a href="{% url 'probes:update_filter' object.id "inventory" forloop.counter0 %}" class="btn btn-default">
-        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-       </a>
-      <a href="{% url 'probes:delete_filter' object.id "inventory" forloop.counter0 %}" class="btn btn-danger">
-        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-      </a>
+        {% url 'probes:update_filter' object.id "inventory" forloop.counter0 as url %}
+        {% button 'UPDATE' url "Edit Filter" %}
+        {% url 'probes:delete_filter' object.id "inventory" forloop.counter0 as url %}
+        {% button 'DELETE' url "Delete Filter" %}
     </div>
   </div>
   {% endif %}
@@ -208,11 +206,11 @@
 
 {% if probe.can_edit_metadata_filters and probe.metadata_filters %}
 <div class="col-md-4">
-<h4>Metadata</h4>
+<h4 class="mt-4">Metadata</h4>
 
 {% for metadata_filter in probe.metadata_filters %}
-<div class="panel panel-default">
-  <table class="table table-condensed probe-panel">
+<div class="card card-default mb-3">
+  <table class="table table-probe table-light table-striped align-middle table-object-properties">
     {% if metadata_filter.event_tags %}
     <tr>
       <td>tags</td>
@@ -231,14 +229,12 @@
     {% endif %}
   </table>
   {% if perms.probes.change_probesource %}
-  <div class="panel-footer">
+  <div class="card-footer">
     <div class="btn-group" role="group">
-      <a href="{% url 'probes:update_filter' object.id "metadata" forloop.counter0 %}" class="btn btn-default">
-        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-       </a>
-      <a href="{% url 'probes:delete_filter' object.id "metadata" forloop.counter0 %}" class="btn btn-danger">
-        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-      </a>
+        {% url 'probes:update_filter' object.id "metadata" forloop.counter0 as url %}
+        {% button 'UPDATE' url "Edit Filter" %}
+        {% url 'probes:delete_filter' object.id "metadata" forloop.counter0 as url %}
+        {% button 'DELETE' url "Delete Filter" %}
     </div>
   </div>
   {% endif %}
@@ -249,11 +245,11 @@
 
 {% if probe.can_edit_payload_filters and probe.payload_filters %}
 <div class="col-md-4">
-<h4>Payload</h4>
+<h4 class="mt-4">Payload</h4>
 
 {% for payload_filter in probe.payload_filters %}
-<div class="panel panel-default">
-  <table class="table table-condensed probe-panel">
+<div class="card card-default mb-3">
+  <table class="table table-probe table-light table-striped align-middle table-object-properties">
     {% for attribute, operator, values in payload_filter.items_display %}
     <tr>
       <td>{{ attribute }}</td>
@@ -265,14 +261,12 @@
     {% endfor %}
   </table>
   {% if perms.probes.change_probesource %}
-  <div class="panel-footer">
+  <div class="card-footer">
     <div class="btn-group" role="group">
-      <a href="{% url 'probes:update_filter' object.id "payload" forloop.counter0 %}" class="btn btn-default">
-        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-       </a>
-      <a href="{% url 'probes:delete_filter' object.id "payload" forloop.counter0 %}" class="btn btn-danger">
-        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-      </a>
+        {% url 'probes:update_filter' object.id "payload" forloop.counter0 as url %}
+        {% button 'UPDATE' url "Edit Filter" %}
+        {% url 'probes:delete_filter' object.id "payload" forloop.counter0 as url %}
+        {% button 'DELETE' url "Delete Filter" %}
     </div>
   </div>
   {% endif %}
@@ -286,25 +280,24 @@
 {% endblock %}
 
 <a name="actions"></a>
-<h3>Actions</h3>
+<h3 class="mt-4">Actions</h3>
 
 {% if perms.probes.change_probesource and add_action_urls %}
 <div class="dropdown">
-  <button class="btn btn-default dropdown-toggle" type="button" id="addAction"
-          data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+  <button id="addAction" class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
     Add action
     <span class="caret"></span>
   </button>
   <ul class="dropdown-menu" aria-labelledby="addAction">
     {% for action_name, edit_action_url in add_action_urls %}
-    <li><a href="{{ edit_action_url }}">{{ action_name }}</a></li>
+        <li><a class="dropdown-item" href="{{ edit_action_url }}">{{ action_name }}</a></li>
     {% endfor %}
   </ul>
 </div>
 {% endif %}
 
 {% if probe.actions %}
-<table class="table">
+<table class="table table-probe table-light table-striped align-middle table-object-properties">
   <thead>
     <th>Name</th>
     <th>Configuration</th>
@@ -319,13 +312,10 @@
       <td>{% if action_probe_config %}{% action_probe_config action action_probe_config %}{% endif %}</td>
       {% if perms.probes.change_probesource %}
       <td>
-          <a href="{% url 'probes:edit_action' object.id action.name %}"
-             class="btn btn-default{% if not action.can_be_updated %} disabled{% endif %}">
-            <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-          </a>
-          <a href="{% url 'probes:delete_action' object.id action.name %}" class="btn btn-danger">
-            <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-          </a>
+            {% url 'probes:edit_action' object.id action.name as url %}
+            {% button 'UPDATE' url "Edit Action" %}
+            {% url 'probes:delete_action' object.id action.name as url %}
+            {% button 'DELETE' url "Delete Action" %}
       </td>
       {% endif %}
     </tr>

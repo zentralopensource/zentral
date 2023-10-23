@@ -1,28 +1,29 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:index' %}">Munki</a></li>
-  <li><a href="{% url 'munki:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:configurations' %}">Configurations</a></li>
   {% if object %}
-  <li><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="active">Update</li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
-  <li class="active">Create</li>
+  <li class="breadcrumb-item active">Create</li>
   {% endif %}
 </ol>
 
 <h2>{% if object %}Update{% else %}Create{% endif %} Munki configuration</h2>
 
-<form method="post" class="form">{% csrf_token %}
-  {{ form|bootstrap }}
+<form method="post" class="update-form">{% csrf_token %}
+
+  {{ form }}
+
   <p>
     {% if object %}
-    <a class="btn btn-default" href="{{ object.get_absolute_url }}">
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">
     {% else %}
-    <a class="btn btn-default" href="{% url 'munki:configurations' %}">
+    <a class="btn btn-outline-secondary" href="{% url 'munki:configurations' %}">
     {% endif %}
       Cancel
     </a>

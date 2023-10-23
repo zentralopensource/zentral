@@ -129,7 +129,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertNotContains(response, "1 open incident")
+        self.assertNotContains(response, "Open incident (1)")
         self.assertNotContains(response, self.probe_source.name)
         self.assertNotContains(response, incident.get_absolute_url())
 
@@ -143,7 +143,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 open incident")
+        self.assertContains(response, "Open incident (1)")
         self.assertContains(response, self.probe_source.name)
         self.assertNotContains(response, incident.get_absolute_url())
 
@@ -158,7 +158,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 open incident")
+        self.assertContains(response, "Open incident (1)")
         self.assertContains(response, self.probe_source.name)
         self.assertContains(response, incident.get_absolute_url())
 
@@ -175,14 +175,14 @@ class InventoryIncidentsViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "2 open incidents")
+        self.assertContains(response, "Open incidents (2)")
         self.assertContains(response, "Unknown probe incident")
         self.assertContains(response, self.probe_source.name)
         self.assertContains(response, incident.get_absolute_url())
         self.assertContains(response, incident2.get_absolute_url())
 
     def test_open_incidents_one_of_two_incidents_with_link(self):
-        incident = self._force_incident(key={"probe_pk": 0})
+        incident = self._force_incident(key={"probe_pk": 0}, status=Status.CLOSED)
         self._force_machine_incident(incident, status=Status.CLOSED)
         incident2 = self._force_incident()
         self._force_machine_incident(incident2)
@@ -194,7 +194,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 open incident")
+        self.assertContains(response, "Open incident (1)")
         self.assertNotContains(response, "Unknown probe incident")
         self.assertContains(response, self.probe_source.name)
         self.assertNotContains(response, incident.get_absolute_url())

@@ -2,23 +2,23 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
-  <li><a href="{{ object.sub_manifest.get_absolute_url }}">{{ object.sub_manifest }}</a></li>
-  <li class="active">Remove repository package {{ object.pkg_info_name }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.sub_manifest.get_absolute_url }}">{{ object.sub_manifest }}</a></li>
+  <li class="breadcrumb-item active">Remove repository package {{ object.pkg_info_name }}</li>
 </ol>
 
 <h2>Remove repository package from sub manifest </h2>
 <form method="POST">{% csrf_token %}
-<dl>
-  <dt>Name</dt>
-  <dd>{{ object.pkg_info_name }}</dd>
-  <dt>Added at</dt>
-  <dd>{{ object.created_at|date:"r" }}</dd>
+<dl class="row">
+  <dt class="col-sm-3 text-md-end">Name</dt>
+  <dd class="col-sm-9">{{ object.pkg_info_name }}</dd>
+  <dt class="col-sm-3 text-md-end">Added at</dt>
+  <dd class="col-sm-9">{{ object.created_at|date:"r" }}</dd>
 </dl>
 <p>Do you really want to remove this package from the sub manifest ?</p>
 <p>
-  <a class="btn btn-default" href="{{ object.get_absolute_url }}">No</a>
+  <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">No</a>
   <button class="btn btn-danger" type="submit">Yes</button>
 </p>
 </form>

@@ -82,7 +82,7 @@ class FeedViewsTestCase(TestCase):
         self._login("probes.view_feed")
         response = self.client.get(reverse("probes:feeds"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "0 Feeds", status_code=200)
+        self.assertContains(response, "Feeds (0)", status_code=200)
 
     # create feed
 
@@ -113,7 +113,7 @@ class FeedViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "probes/feed.html")
         self.assertContains(response, name)
-        self.assertContains(response, "0 Probes")
+        self.assertContains(response, "Probes (0)")
 
     # feed
 
@@ -185,7 +185,7 @@ class FeedViewsTestCase(TestCase):
         feed, _ = self._create_feed()
         self._login("probes.delete_feed", "probes.view_feed")
         response = self.client.post(reverse("probes:delete_feed", args=(feed.id,)), follow=True)
-        self.assertContains(response, "0 Feed", status_code=200)
+        self.assertContains(response, "Feeds (0)", status_code=200)
 
     # feed probe
 
@@ -230,6 +230,7 @@ class FeedViewsTestCase(TestCase):
         self._login("probes.view_feedprobe", "probes.add_probesource", "probes.view_probesource")
         response = self.client.post(url, {"probe_name": probe_name},
                                     follow=True)
-        self.assertContains(response, "Probe <em>{}</em>".format(probe_name), status_code=200)
+        self.assertContains(response, probe_name, status_code=200)
+        self.assertContains(response, "Probe", status_code=200)
         self.assertContains(response, feed.name)
         self.assertContains(response, feed_probe.name)

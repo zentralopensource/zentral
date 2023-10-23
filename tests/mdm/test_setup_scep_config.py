@@ -218,7 +218,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:scep_configs"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/scepconfig_list.html")
-        self.assertContains(response, "1 SCEP configuration")
+        self.assertContains(response, "SCEP configuration (1)")
         self.assertContains(response, scep_config.name)
 
     # delete SCEP config
@@ -247,7 +247,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:delete_scep_config", args=(scep_config.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/scepconfig_list.html")
-        self.assertContains(response, "0 SCEP configurations")
+        self.assertContains(response, "SCEP configurations (0)")
 
     def test_delete_scep_config_bad_request(self):
         enrollment = self._force_user_enrollment()

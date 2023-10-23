@@ -21,7 +21,7 @@ def base_inventory_tag(display_name, color):
     if color.upper() in ["FFFFFF", "FFF"]:
         style['border'] = '1px solid grey'
     style_str = ";".join(["%s:%s" % (key, val) for key, val in style.items()])
-    return mark_safe('<span class="label" style="%s">%s</span>' % (style_str, escape(display_name)))
+    return mark_safe('<span class="badge" style="%s">%s</span>' % (style_str, escape(display_name)))
 
 
 @register.simple_tag
@@ -103,11 +103,11 @@ def extra_facts(extra_facts, autoescape=True):
         return mark_safe("")
     data = ""
     for key in sorted(extra_facts.keys()):
-        data += "<dt>{}</dt>\n".format(esc(key))
+        data += '<dt class="col-sm-3 text-md-end">{}</dt>\n'.format(esc(key))
         val = extra_facts[key]
         if isinstance(val, list):
             val_data = "<ul>\n{}</ul>\n".format(unordered_list(val, autoescape=autoescape))
         else:
             val_data = esc(val)
-        data += "<dd>\n{}\n</dd>\n".format(val_data)
+        data += '<dd class="col-sm-9">\n{}\n</dd>\n'.format(val_data)
     return mark_safe(data)

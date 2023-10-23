@@ -1,254 +1,255 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'osquery:index' %}">Osquery</a></li>
-  <li><a href="{% url 'osquery:configurations' %}">Configurations</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:index' %}">Osquery</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'osquery:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h2>Configuration <i>{{ object.name }}</i></h2>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object.name }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Configuration</h3>
+        <div class="ms-auto">
+            {% if perms.osquery.change_configuration %}
+                {% url 'osquery:update_configuration' object.id as url %}
+                {% button 'UPDATE' url "Edit Configuration" %}
+            {% endif %}
+        </div>
+    </div>
 
-<div class="row">
-  <div class="col-md-12">
-    <table class="table">
-      <thead>
-        <th>Attribute</th>
-        <th>Value</th>
-      </thead>
-      <tbody>
-      <tr>
-        <td>Name</td>
-        <td>{{ object.name }}</td>
-      </tr>
-      <tr>
-        <td>Description</td>
-        <td>{{ object.description|default:"-"|linebreaksbr }}</td>
-      </tr>
-      <tr>
-        <td>Inventory</td>
-        <td>{{ object.inventory|yesno }}</td>
-      </tr>
-      <tr>
-        <td>Inventory apps</td>
-        <td>{{ object.inventory_apps|yesno }}</td>
-      </tr>
-      <tr>
-        <td>Inventory EC2 information</td>
-        <td>{{ object.inventory_ec2|yesno }}</td>
-      </tr>
-      <tr>
-        <td>Inventory interval</td>
-        <td>{{ object.inventory_interval}}s</td>
-      </tr>
-      <tr>
-        <td>Automatic table construction{{ atc_count|pluralize }}</td>
-        <td>
-          {% if atc_count %}
-          <ul class="list-unstyled">
-            {% for atc in atcs %}
-            <li><a href="{{ atc.get_absolute_url }}">{{ atc }}</a></li>
-            {% endfor %}
-          </ul>
-          {% else %}
-          -
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td>File categor{{ file_category_count|pluralize:"y,ies" }}</td>
-        <td>
-          {% if file_categories %}
-          <ul class="list-unstyled">
-            {% for fc in file_categories %}
-            <li><a href="{{ fc.get_absolute_url }}">{{ fc }}</a></li>
-            {% endfor %}
-          </ul>
-          {% else %}
-          -
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td>Flags</td>
-        <td>
-<pre>{% for flag in configuration.get_serialized_flags %}
-{{ flag }}{% endfor %}</pre>
-        </td>
-      </tbody>
-    </table>
+    <div class="table-responsive mb-3">
+        <table class="table table-light table-striped align-middle table-object-properties">   
+        <thead>
+            <th>Attribute</th>
+            <th>Value</th>
+        </thead>
+        <tbody>
+        <tr>
+            <td>Name</td>
+            <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+            <td>Description</td>
+            <td>{{ object.description|default:"-"|linebreaksbr }}</td>
+        </tr>
+        <tr>
+            <td>Inventory</td>
+            <td>{{ object.inventory|yesno }}</td>
+        </tr>
+        <tr>
+            <td>Inventory apps</td>
+            <td>{{ object.inventory_apps|yesno }}</td>
+        </tr>
+        <tr>
+            <td>Inventory EC2 information</td>
+            <td>{{ object.inventory_ec2|yesno }}</td>
+        </tr>
+        <tr>
+            <td>Inventory interval</td>
+            <td>{{ object.inventory_interval}}s</td>
+        </tr>
+        <tr>
+            <td>Automatic table construction{{ atc_count|pluralize }}</td>
+            <td>
+            {% if atc_count %}
+            <ul class="list-unstyled">
+                {% for atc in atcs %}
+                <li><a href="{{ atc.get_absolute_url }}">{{ atc }}</a></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            -
+            {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td>File categor{{ file_category_count|pluralize:"y,ies" }}</td>
+            <td>
+            {% if file_categories %}
+            <ul class="list-unstyled">
+                {% for fc in file_categories %}
+                <li><a href="{{ fc.get_absolute_url }}">{{ fc }}</a></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            -
+            {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td>Flags</td>
+            <td>
+    <pre>{% for flag in configuration.get_serialized_flags %}
+    {{ flag }}{% endfor %}</pre>
+            </td>
+        </tbody>
+        </table>
 
-    <dl class="dl-horizontal">
-      <dt class="small" style="opacity:0.5">Created at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-      <dt class="small" style="opacity:0.5">Updated at</dt>
-      <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-    </dl>
-
-  </div>
+        {% created_updated_at object %}
+        
+    </div>
 </div>
 
-{% if perms.osquery.change_configuration %}
-<p>
-  <a class="btn btn-default" href="{% url 'osquery:update_configuration' object.id %}">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    Update
-  </a>
-</p>
-{% endif %}
-
-<h3 id="packs">{{ configuration_pack_count }} Pack{{ configuration_pack_count|pluralize }}</h3>
-{% if can_add_configuration_pack %}
-<p>
-  <a class="btn btn-default" href="{% url 'osquery:add_configuration_pack' object.id %}">Add</a>
-</p>
-{% endif %}
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0" id="packs">Pack{{ pack_count|pluralize }} ({{configuration_pack_count }})</h3>
+    <div class="ms-auto">
+    {% if perms.can_add_configuration_pack %}
+        {% url 'osquery:add_configuration_pack' object.id as url %}
+        {% button 'CREATE' url "Create new Pack" %}
+    {% endif %}
+    </div>
+</div>
 
 {% if configuration_pack_count %}
-<table class="table">
-  <thead>
-    <th>Name</th>
-    <th>Query count</th>
-    <th>Tags</th>
-    {% if perms.osquery.change_configuration %}
-    <th></th>
-    {% endif %}
-  </thead>
-  <tbody>
-    {% for configuration_pack in configuration_packs %}
-    {% with configuration_pack.pack as pack %}
-    <tr id="cp{{ configuration_pack.pk }}">
-      <td><a href="{{ pack.get_absolute_url }}">{{ pack }}</a></td>
-      <td>{{ configuration_pack.query_count }}</td>
-      <td>
-        {% for tag in configuration_pack.tags.all %}
-        {% inventory_tag tag %}
-        {% empty %}
-        -
+<div class="table-responsive mb-3">
+    <table class="table table-light table-striped align-middle table-hover">
+    <thead>
+        <th>Name</th>
+        <th>Query count</th>
+        <th>Tags</th>
+        {% if perms.osquery.change_configuration %}
+        <th></th>
+        {% endif %}
+    </thead>
+    <tbody>
+        {% for configuration_pack in configuration_packs %}
+        {% with configuration_pack.pack as pack %}
+        <tr id="cp{{ configuration_pack.pk }}" class="data-row">
+        <td><a href="{{ pack.get_absolute_url }}">{{ pack }}</a></td>
+        <td>{{ configuration_pack.query_count }}</td>
+        <td>
+            {% for tag in configuration_pack.tags.all %}
+            {% inventory_tag tag %}
+            {% empty %}
+            -
+            {% endfor %}
+        </td>
+        {% if perms.osquery.change_configuration %}
+        <td class="text-end py-0">
+            {% url 'osquery:update_configuration_pack' configuration.pk configuration_pack.pk as url %}
+            {% button 'UPDATE' url "Edit Configuration Pack" %}
+            {% url 'osquery:remove_configuration_pack' configuration.pk configuration_pack.pk as url %}
+            {% button 'DELETE' url "Delete Configuration Pack" %}
+        </td>
+        {% endif %}
+        </tr>
+        {% endwith %}
         {% endfor %}
-      </td>
-      {% if perms.osquery.change_configuration %}
-      <td>
-        <a class="btn btn-sm btn-default" href="{% url 'osquery:update_configuration_pack' configuration.pk configuration_pack.pk %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-        </a>
-        <a class="btn btn-sm btn-danger" href="{% url 'osquery:remove_configuration_pack' configuration.pk configuration_pack.pk %}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
-      </td>
-      {% endif %}
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
+    </tbody>
+    </table>
+</div>
 {% endif %}
+
 
 {% if perms.osquery.view_enrollment %}
-<h3>{{ enrollments_count }} Enrollment{{ enrollments_count|pluralize }}</h3>
-
-{% if perms.osquery.add_enrollment %}
-<p>
-  <a class="btn btn-default" href="{% url 'osquery:create_enrollment' object.id %}">Create</a>
-</p>
-{% endif %}
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0" id="packs">Enrollment{{ enrollments_count|pluralize }} ({{enrollments_count }})</h3>
+    <div class="ms-auto">
+        {% if perms.osquery.add_enrollment %}
+            {% url 'osquery:create_enrollment' object.id as url %}
+            {% button 'CREATE' url "Create new Enrollment" %}
+    {% endif %}
+    </div>
+</div>
 
 {% if enrollments %}
-<table class="table">
-  <thead>
-    <th>ID</th>
-    <th>Business unit</th>
-    <th>Tags</th>
-    <th>Created at</th>
-    <th>Request count</th>
-    <th>Osquery release</th>
-    <th>Version</th>
-    <th>Distributor</th>
-    <th></th>
-  </thead>
-  <tbody>
-    {% for enrollment in enrollments %}
-    {% with enrollment.secret as secret %}
-    {% with enrollment.distributor as distributor %}
-    <tr>
-      <td>{{ enrollment.pk }}</td>
-      <td>
-        {% if perms.inventory.view_metabusinessunit %}
-        <a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a>
-        {% else %}
-        {{ secret.meta_business_unit|default:"-" }}
-        {% endif %}
-      </td>
-      <td>
-        {% for tag in secret.tags.all %}
-        {% inventory_tag tag %}
-        {% empty %}
-        -
+<div class="table-responsive mb-3">
+    <table class="table table-light table-striped align-middle table-hover">
+    <thead>
+        <th>ID</th>
+        <th>Business unit</th>
+        <th>Tags</th>
+        <th>Created at</th>
+        <th>Request count</th>
+        <th>Osquery release</th>
+        <th>Version</th>
+        <th>Distributor</th>
+        <th></th>
+    </thead>
+    <tbody>
+        {% for enrollment in enrollments %}
+        {% with enrollment.secret as secret %}
+        {% with enrollment.distributor as distributor %}
+        <tr class="data-row">
+        <td>{{ enrollment.pk }}</td>
+        <td>
+            {% if perms.inventory.view_metabusinessunit %}
+            <a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a>
+            {% else %}
+            {{ secret.meta_business_unit|default:"-" }}
+            {% endif %}
+        </td>
+        <td>
+            {% for tag in secret.tags.all %}
+            {% inventory_tag tag %}
+            {% empty %}
+            -
+            {% endfor %}
+        </td>
+        <td>
+            <a name="enrollment_{{ enrollment.pk }}"></a>
+            {{ secret.created_at }}
+        </td>
+        <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
+        <td>{{ enrollment.osquery_release|default:"-" }}</td>
+        <td>{{ enrollment.version }}</td>
+        <td>
+            {% if distributor %}
+            <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        <td>
+            {% if secret.is_used_up %}
+            <span class="text-danger">Enrollment used up.</span>
+            {% else %}
+            {% if not distributor %}
+            {% if perms.osquery.change_enrollment %}
+            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'osquery:bump_enrollment_version' configuration.pk enrollment.pk %}">
+                <span class="bi bi-hand-thumbs-up" aria-hidden="true"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Bump Enrollment"></span>
+            </a>
+            {% endif %}
+            {% if perms.osquery.delete_enrollment %}
+                {% url 'osquery:delete_enrollment' configuration.pk enrollment.pk as url %}
+                {% button 'DELETE' url "Delete Enrollment" %}
+            {% endif %}
+            <a class="btn btn-link text-dark text-decoration-none"
+                aria-label="Download macOS enrollment package"
+                title="macOS enrollment package"
+                href="{% url 'osquery_api:enrollment_package' enrollment.id %}">
+                <span class="bi bi-apple" aria-hidden="true"></span>
+            </a>
+            <a class="btn btn-link text-dark text-decoration-none"
+                aria-label="Download Linux enrollment script"
+                title="Linux enrollment script"
+                href="{% url 'osquery_api:enrollment_script' enrollment.id %}">
+                <span class="bi bi-ubuntu" aria-hidden="true"></span>
+            </a>
+            <a class="btn btn-link text-dark text-decoration-none"
+                aria-label="Download powershell enrollment script"
+                title="Powershell enrollment script"
+                href="{% url 'osquery_api:enrollment_powershell_script' enrollment.id %}">
+                <span class="bi bi-windows" aria-hidden="true"></span>
+            </a>
+            {% endif %}
+            {% endif %}
+        </td>
+        </tr>
+        {% endwith %}
+        {% endwith %}
         {% endfor %}
-      </td>
-      <td>
-        <a name="enrollment_{{ enrollment.pk }}"></a>
-        {{ secret.created_at }}
-      </td>
-      <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
-      <td>{{ enrollment.osquery_release|default:"-" }}</td>
-      <td>{{ enrollment.version }}</td>
-      <td>
-        {% if distributor %}
-        <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
-        {% else %}
-        -
-        {% endif %}
-      </td>
-      <td>
-        {% if secret.is_used_up %}
-        <span class="text-danger">Enrollment used up.</span>
-        {% else %}
-        {% if not distributor %}
-        {% if perms.osquery.change_enrollment %}
-        <a class="btn btn-default"
-           href="{% url 'osquery:bump_enrollment_version' configuration.pk enrollment.pk %}">
-          <span class="glyphicon glyphicon-thumbs-up"></span>
-        </a>
-        {% endif %}
-        {% if perms.osquery.delete_enrollment %}
-        <a class="btn btn-danger"
-           href="{% url 'osquery:delete_enrollment' configuration.pk enrollment.pk %}">
-          <span class="glyphicon glyphicon-trash"></span>
-        </a>
-        {% endif %}
-        <a class="btn btn-default download-tool"
-           aria-label="Download macOS enrollment package"
-           title="macOS enrollment package"
-           href="{% url 'osquery_api:enrollment_package' enrollment.id %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-          <i class="fab fa-apple" aria-hidden="true"></i>
-        </a>
-        <a class="btn btn-default download-tool"
-           aria-label="Download Linux enrollment script"
-           title="Linux enrollment script"
-           href="{% url 'osquery_api:enrollment_script' enrollment.id %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-          <i class="fab fa-linux" aria-hidden="true"></i>
-        </a>
-        <a class="btn btn-default download-tool"
-           aria-label="Download powershell enrollment script"
-           title="Powershell enrollment script"
-           href="{% url 'osquery_api:enrollment_powershell_script' enrollment.id %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-          <i class="fab fa-windows" aria-hidden="true"></i>
-        </a>
-        {% endif %}
-        {% endif %}
-      </td>
-    </tr>
-    {% endwith %}
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
+    </tbody>
+    </table>
+</div>
 {% endif %}
 {% endif %}
 

@@ -144,7 +144,7 @@ class AppsViewsTestCase(TestCase):
             reverse("inventory:android_apps"),
             urlencode({"action": "search"})
         ))
-        self.assertContains(response, "2 results")
+        self.assertContains(response, "Results (2)")
 
     def test_android_apps_bundle_name(self):
         self._login("inventory.view_androidapp")
@@ -153,14 +153,14 @@ class AppsViewsTestCase(TestCase):
             urlencode({"display_name": "AndroidApp1",
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")
         self.assertContains(response, ">AndroidApp1</a>")
         response = self.client.get("{}?{}".format(
             reverse("inventory:android_apps"),
             urlencode({"display_name": "AndroidApp11",
                        "action": "search"})
         ))
-        self.assertContains(response, "0 results")
+        self.assertContains(response, "We didn't find any item related to your search")
 
     def test_android_apps_bundle_name_and_source_search(self):
         self._login("inventory.view_androidapp")
@@ -170,7 +170,7 @@ class AppsViewsTestCase(TestCase):
                        "source": self.ms.source.id,
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")
         self.assertContains(response, ">AndroidApp1</a>")
 
     # Debian packages
@@ -194,7 +194,7 @@ class AppsViewsTestCase(TestCase):
             reverse("inventory:deb_packages"),
             urlencode({"action": "search"})
         ))
-        self.assertContains(response, "2 results")
+        self.assertContains(response, "Results (2)")
 
     def test_deb_packages_name(self):
         self._login("inventory.view_debpackage")
@@ -203,13 +203,13 @@ class AppsViewsTestCase(TestCase):
             urlencode({"name": "deb_package_1",
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")
         response = self.client.get("{}?{}".format(
             reverse("inventory:deb_packages"),
             urlencode({"name": "deb_package_11",
                        "action": "search"})
         ))
-        self.assertContains(response, "0 results")
+        self.assertContains(response, "We didn't find any item related to your search")
 
     def test_deb_packages_name_and_source_search(self):
         self._login("inventory.view_debpackage")
@@ -219,7 +219,7 @@ class AppsViewsTestCase(TestCase):
                        "source": self.ms.source.id,
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")
 
     # iOS apps
 
@@ -242,7 +242,7 @@ class AppsViewsTestCase(TestCase):
             reverse("inventory:ios_apps"),
             urlencode({"action": "search"})
         ))
-        self.assertContains(response, "2 results")
+        self.assertContains(response, "Results (2)")
 
     def test_ios_apps_name(self):
         self._login("inventory.view_iosapp")
@@ -251,13 +251,13 @@ class AppsViewsTestCase(TestCase):
             urlencode({"name": "2Password",
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")
         response = self.client.get("{}?{}".format(
             reverse("inventory:ios_apps"),
             urlencode({"name": "42Password",
                        "action": "search"})
         ))
-        self.assertContains(response, "0 results")
+        self.assertContains(response, "We didn't find any item related to your search")
 
     def test_ios_apps_name_and_source_search(self):
         self._login("inventory.view_iosapp")
@@ -267,7 +267,7 @@ class AppsViewsTestCase(TestCase):
                        "source": self.ms.source.id,
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")
 
     # macOS apps
 
@@ -290,7 +290,7 @@ class AppsViewsTestCase(TestCase):
             reverse("inventory:macos_apps"),
             urlencode({"action": "search"})
         ))
-        self.assertContains(response, "2 results")
+        self.assertContains(response, "Results (2)")
 
     def test_macos_apps_bundle_name(self):
         self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
@@ -299,13 +299,13 @@ class AppsViewsTestCase(TestCase):
             urlencode({"bundle": "baller",
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
             urlencode({"bundle": "yolo",
                        "action": "search"})
         ))
-        self.assertContains(response, "0 results")
+        self.assertContains(response, "We didn't find any item related to your search")
 
     def test_macos_apps_bundle_id_and_source_search(self):
         self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
@@ -315,7 +315,7 @@ class AppsViewsTestCase(TestCase):
                        "source": self.ms.source.id,
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")
 
     # Programs
 
@@ -338,7 +338,7 @@ class AppsViewsTestCase(TestCase):
             reverse("inventory:programs"),
             urlencode({"action": "search"})
         ))
-        self.assertContains(response, "2 results")
+        self.assertContains(response, "Results (2)")
 
     def test_programs_name(self):
         self._login("inventory.view_program", "inventory.view_programinstance")
@@ -347,13 +347,13 @@ class AppsViewsTestCase(TestCase):
             urlencode({"name": "program_1",
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")
         response = self.client.get("{}?{}".format(
             reverse("inventory:programs"),
             urlencode({"name": "program_11",
                        "action": "search"})
         ))
-        self.assertContains(response, "0 results")
+        self.assertContains(response, "We didn't find any item related to your search")
 
     def test_programs_name_and_source_search(self):
         self._login("inventory.view_program", "inventory.view_programinstance")
@@ -363,4 +363,4 @@ class AppsViewsTestCase(TestCase):
                        "source": self.ms.source.id,
                        "action": "search"})
         ))
-        self.assertContains(response, "1 result")
+        self.assertContains(response, "Result (1)")

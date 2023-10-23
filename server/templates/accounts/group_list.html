@@ -1,65 +1,70 @@
 {% extends 'base.html' %}
+{% load ui_extras %}
 
 {% block content %}
-<ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Groups</li>
-</ol>
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item active">Groups</li>
+    </ol>
+</nav>
 
-<h3>{{ object_list|length }} Group{{ object_list|length|pluralize }}</h3>
+<div class="d-flex align-items-center mb-1">
+    <h3>Group{{ object_list|length|pluralize }} ({{ object_list|length }})</h3>
 
-{% if perms.auth.add_group %}
-<a href="{% url 'accounts:create_group' %}" class="btn btn-default">
-  <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-  Create
-</a>
-{% endif %}
-
-<table class="table">
-  <thead>
-    <th>Name</th>
-    {% if perms.accounts.view_user %}
-    <th>Users</th>
-    <th>Service accounts</th>
-    {% endif %}
-    {% if perms.realms.view_realmgroupmapping %}
-    <th>Realm mappings</th>
-    {% endif %}
-    <th style="width:15%"></th>
-  </thead>
-  <tbody>
-    {% for group in object_list %}
-    <tr>
-      <td>
-        <a href="{% url 'accounts:group' group.pk %}">{{ group }}</a>
-      </td>
-      {% if perms.accounts.view_user %}
-      <td>
-        {{ group.user_count }}
-      </td>
-      <td>
-        {{ group.service_account_count }}
-      </td>
-      {% endif %}
-      {% if perms.realms.view_realmgroupmapping %}
-      <td>
-        {{ group.realm_group_mapping_count }}
-      </td>
-      {% endif %}
-      <td>
-        {% if perms.auth.change_group %}
-        <a class="btn btn-default" href="{% url 'accounts:update_group' group.pk %}">
-          <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-        </a>
+    <div class="ms-auto">
+        {% if perms.auth.add_group %}
+            {% url 'accounts:create_group' as url %}
+            {% button 'CREATE' url "Create new Group" %}
         {% endif %}
-        {% if perms.auth.delete_group %}
-        <a class="btn btn-danger" href="{% url 'accounts:delete_group' group.pk %}">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
+    </div>
+</div>
+
+<div class="table-responsive mb-3">
+    <table class="table table-light table-striped align-middle table-hover">
+    <thead>
+        <th>Name</th>
+        {% if perms.accounts.view_user %}
+        <th>Users</th>
+        <th>Service accounts</th>
         {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+        {% if perms.realms.view_realmgroupmapping %}
+        <th>Realm mappings</th>
+        {% endif %}
+        <th style="width:15%"></th>
+    </thead>
+    <tbody>
+        {% for group in object_list %}
+        <tr class="data-row">
+        <td>
+            <a href="{% url 'accounts:group' group.pk %}">{{ group }}</a>
+        </td>
+        {% if perms.accounts.view_user %}
+        <td>
+            {{ group.user_count }}
+        </td>
+        <td>
+            {{ group.service_account_count }}
+        </td>
+        {% endif %}
+        {% if perms.realms.view_realmgroupmapping %}
+        <td>
+            {{ group.realm_group_mapping_count }}
+        </td>
+        {% endif %}
+        <td class="text-end py-0">
+            {% if perms.auth.change_group %}
+                {% url 'accounts:update_group' group.pk as url %}
+                {% button 'UPDATE' url "Edit Group" %}
+            {% endif %}
+            {% if perms.auth.delete_group %}
+                {% url 'accounts:delete_group' group.pk as url %}
+                {% button 'DELETE' url "Delete Group" %}
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
 {% endblock %}

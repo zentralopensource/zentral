@@ -98,13 +98,32 @@ class SigningIDSearchForm(forms.Form):
 
 
 class RuleSearchForm(forms.Form):
-    ruleset = forms.ModelChoiceField(queryset=RuleSet.objects.none(), required=False)
-    target_type = forms.ChoiceField(choices=(("", "----"),) + Target.TYPE_CHOICES, required=False)
-    policy = forms.ChoiceField(choices=(("", "----"),) + Rule.POLICY_CHOICES, required=False)
-    identifier = forms.CharField(required=False,
-                                 widget=forms.TextInput(attrs={"autofocus": "true",
-                                                               "size": 32,
-                                                               "placeholder": "identifier"}))
+    template_name = "django/forms/search.html"
+
+    ruleset = forms.ModelChoiceField(
+        queryset=RuleSet.objects.all(),
+        required=False,
+        empty_label='...',
+    )
+    target_type = forms.ChoiceField(
+        choices=(('', '...'),) + Target.TYPE_CHOICES,
+        required=False,
+    )
+    policy = forms.ChoiceField(
+        choices=(('', '...'),) + Rule.POLICY_CHOICES,
+        required=False,
+    )
+    identifier = forms.CharField(
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "autofocus": True,
+                "size": 32,
+            }
+        ),
+    )
+
+    field_order = ['identifier', 'policy', 'ruleset', 'target_type']
 
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration")
@@ -451,8 +470,18 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
 
 
 class TargetSearchForm(forms.Form):
-    q = forms.CharField(required=False,
-                        widget=forms.TextInput(attrs={"autofocus": "true",
-                                                      "size": 32,
-                                                      "placeholder": "sha256, name, …"}))
-    target_type = forms.ChoiceField(choices=(("", "----"),) + Target.TYPE_CHOICES, required=False)
+    template_name = "django/forms/search.html"
+
+    q = forms.CharField(
+        label='SHA256, Name, …',
+        required=False,
+        widget=forms.TextInput(
+            attrs={"autofocus": True,
+                   "size": 32,
+                   }
+        )
+    )
+    target_type = forms.ChoiceField(
+        choices=(('', '...'),) + Target.TYPE_CHOICES,
+        required=False,
+    )

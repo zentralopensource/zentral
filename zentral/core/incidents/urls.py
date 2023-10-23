@@ -18,8 +18,9 @@ urlpatterns = [
          views.IncidentEventsStoreRedirectView.as_view(), name='incident_events_store_redirect'),
 ]
 
-main_menu_cfg = {
+pinned_menu_cfg = {
     'weight': 2,
+    'icon': 'bi-exclamation-triangle',
     'items': (
         ('index', 'all incidents', False, ("incidents.view_incident",)),
     ),

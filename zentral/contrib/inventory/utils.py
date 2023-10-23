@@ -1438,7 +1438,6 @@ class EC2InstanceTypeFilter(BaseMSFilter):
 
 
 class MSQuery:
-    paginate_by = 50
     itersize = 1000
     default_filters = [
         DateTimeFilter,
@@ -1462,8 +1461,9 @@ class MSQuery:
         EC2InstanceTypeFilter,
     ]
 
-    def __init__(self, query_dict=None):
+    def __init__(self, query_dict=None, paginate_by=50):
         self.query_dict = query_dict or {}
+        self.paginate_by = paginate_by
         try:
             self.page = int(self.query_dict.get("page", 1))
         except ValueError:
@@ -1926,9 +1926,7 @@ class MSQuery:
 
 
 class AndroidAppFilterForm(forms.Form):
-    display_name = forms.CharField(label="Android app name", required=False,
-                                   widget=forms.TextInput(attrs={"class": "form-control",
-                                                                 "placeholder": "Android app name"}))
+    display_name = forms.CharField(label="Android app name", required=False)
 
     def __init__(self, *args, **kwargs):
         self.msquery = kwargs.pop("msquery")
@@ -1945,12 +1943,8 @@ class AndroidAppFilterForm(forms.Form):
 
 
 class BundleFilterForm(forms.Form):
-    bundle_id = forms.CharField(label="Bundle ID", required=False,
-                                widget=forms.TextInput(attrs={"class": "form-control",
-                                                              "placeholder": "Bundle ID"}))
-    bundle_name = forms.CharField(label="Bundle name", required=False,
-                                  widget=forms.TextInput(attrs={"class": "form-control",
-                                                                "placeholder": "Bundle name"}))
+    bundle_id = forms.CharField(label="Bundle ID", required=False)
+    bundle_name = forms.CharField(label="Bundle name", required=False)
 
     def __init__(self, *args, **kwargs):
         self.msquery = kwargs.pop("msquery")
@@ -1975,9 +1969,7 @@ class BundleFilterForm(forms.Form):
 
 
 class DebPackageFilterForm(forms.Form):
-    name = forms.CharField(label="Debian package name", required=False,
-                           widget=forms.TextInput(attrs={"class": "form-control",
-                                                         "placeholder": "Debian package name"}))
+    name = forms.CharField(label="Debian package name", required=False)
 
     def __init__(self, *args, **kwargs):
         self.msquery = kwargs.pop("msquery")
@@ -1994,9 +1986,7 @@ class DebPackageFilterForm(forms.Form):
 
 
 class IOSAppFilterForm(forms.Form):
-    name = forms.CharField(label="iOS app name", required=False,
-                           widget=forms.TextInput(attrs={"class": "form-control",
-                                                         "placeholder": "iOS app name"}))
+    name = forms.CharField(label="iOS app name", required=False)
 
     def __init__(self, *args, **kwargs):
         self.msquery = kwargs.pop("msquery")
@@ -2013,9 +2003,7 @@ class IOSAppFilterForm(forms.Form):
 
 
 class ProgramFilterForm(forms.Form):
-    name = forms.CharField(label="Program name", required=False,
-                           widget=forms.TextInput(attrs={"class": "form-control",
-                                                         "placeholder": "Program name"}))
+    name = forms.CharField(label="Program name", required=False)
 
     def __init__(self, *args, **kwargs):
         self.msquery = kwargs.pop("msquery")
@@ -2033,7 +2021,7 @@ class ProgramFilterForm(forms.Form):
 
 class ComplianceCheckStatusFilterForm(forms.Form):
     compliance_check = forms.ModelChoiceField(queryset=ComplianceCheck.objects.all(),
-                                              widget=forms.Select(attrs={'class': 'form-control'}))
+                                              empty_label='...')
 
     def __init__(self, *args, **kwargs):
         self.msquery = kwargs.pop("msquery")

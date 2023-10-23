@@ -3,20 +3,20 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
-  <li><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
-  <li class="active">Machine info</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li class="breadcrumb-item"><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
+  <li class="breadcrumb-item active">Machine info</li>
 </ol>
 
 {% if machine %}
-<dl>
-  <dt>Name</dt>
-  <dd>{{ machine.computer_name|default:"-" }}</dd>
-  <dt>Serial number</dt>
-  <dd>{{ machine.serial_number }}</dd>
-  <dt>Tags</dt>
-  <dd>
+<dl class="row">
+  <dt class="col-sm-3 text-md-end">Name</dt>
+  <dd class="col-sm-9">{{ machine.computer_name|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Serial number</dt>
+  <dd class="col-sm-9">{{ machine.serial_number }}</dd>
+  <dt class="col-sm-3 text-md-end">Tags</dt>
+  <dd class="col-sm-9">
     {% for tag in machine.tags %}
     {% inventory_tag tag %}
     {% empty %}
@@ -25,10 +25,10 @@
   </dd>
 </dl>
 
-<h3>{{ packages|length }} Package{{ pkgsinfo|length|pluralize }}</h3>
+<h3>Package{{ pkgsinfo|length|pluralize }} ({{ packages|length }})</h3>
 <p><input class="form-control" size="32" id="search-pkg-name" placeholder="Search package name" autofocus style="max-width:20vw"></p>
 
-<table class="table">
+<table class="table table-light table-striped align-middle">
   </thead>
   <tbody>
     {% for package_name, package_data in packages %}

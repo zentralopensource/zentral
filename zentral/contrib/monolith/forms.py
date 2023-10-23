@@ -9,16 +9,21 @@ from .models import (Catalog, Enrollment,
 
 
 class PkgInfoSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label="Name", required=False,
-                           widget=forms.TextInput(attrs={"placeholder": "name"}))
-    catalog = forms.ModelChoiceField(queryset=Catalog.objects.filter(archived_at__isnull=True),
-                                     required=False)
+                           widget=forms.TextInput(attrs={"autofocus": True}))
+    catalog = forms.ModelChoiceField(
+        queryset=Catalog.objects.filter(archived_at__isnull=True),
+        empty_label="...",
+        required=False)
 
     def is_initial(self):
         return not {k: v for k, v in self.cleaned_data.items() if v}
 
 
 class ManifestForm(forms.ModelForm):
+
     class Meta:
         model = Manifest
         fields = ('meta_business_unit', 'name')
@@ -31,8 +36,10 @@ class ManifestForm(forms.ModelForm):
 
 
 class ManifestSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label="Name", required=False,
-                           widget=forms.TextInput(attrs={"autofocus": "true",
+                           widget=forms.TextInput(attrs={"autofocus": True,
                                                          "size": 32,
                                                          "placeholder": "Name or business unit name"}))
 
@@ -45,8 +52,10 @@ class ManifestSearchForm(forms.Form):
 
 
 class SubManifestSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     keywords = forms.CharField(label="Keywords", required=False,
-                               widget=forms.TextInput(attrs={"placeholder": "Keywords…"}))
+                               widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Keywords…"}))
 
     def get_queryset(self):
         qs = SubManifest.objects.select_related("meta_business_unit").all()

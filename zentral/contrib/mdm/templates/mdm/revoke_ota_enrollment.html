@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">MDM</li>
-  <li><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
-  <li><a href="{{ ota_enrollment.get_absolute_url }}">OTA enrollment {{ ota_enrollment }}</a></li>
-  <li class="active">revoke</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">MDM</li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
+  <li class="breadcrumb-item"><a href="{{ ota_enrollment.get_absolute_url }}">OTA enrollment {{ ota_enrollment }}</a></li>
+  <li class="breadcrumb-item active">revoke</li>
 </ol>
 
 <h2>Revoke OTA enrollment <i>{{ ota_enrollment }}</i></h2>
@@ -15,7 +15,7 @@
 <form method="POST">{% csrf_token %}
   <p>Do you really want to revoke this enrollment?</p>
   <p>
-    <a class="btn btn-default" href="{{ ota_enrollment.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{{ ota_enrollment.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Yes</button>
   </p>
 </form>

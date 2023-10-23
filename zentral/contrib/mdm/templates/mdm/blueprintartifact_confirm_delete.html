@@ -1,13 +1,12 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
-  <li><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
-  <li class="active">Remove from blueprint</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"<a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
+  <li class="breadcrumb-item active">Remove from blueprint</li>
 </ol>
 
 <h3>Remove {{ artifact }} from {{ object.blueprint }}</h3>
@@ -15,7 +14,7 @@
 <form class="form" method="post">{% csrf_token %}
   <p>Do you really want to remove this artifact from the blueprint?</p>
   <p>
-    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-danger">Delete</button>
   </p>
 </form>

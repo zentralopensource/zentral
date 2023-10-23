@@ -2,17 +2,17 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li class="active">Monolith catalogs</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Monolith catalogs</li>
 </ol>
 
 <h2>Catalogs</h2>
 
 {% if can_create_catalog %}
-<p><a class="btn btn-default" href="{% url 'monolith:create_catalog' %}">Create</a></p>
+<p><a class="btn btn-primary" href="{% url 'monolith:create_catalog' %}">Create</a></p>
 {% endif %}
 
-<table class="table">
+<table class="table table-light table-striped">
   <thead>
     <th>Name</th>
     <th>Priority</th>

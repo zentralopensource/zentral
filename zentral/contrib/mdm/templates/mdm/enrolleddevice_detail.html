@@ -1,306 +1,312 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Device</h3>
+    </div>
 
-<h3>Device {{ object }}</h3>
-
-<table class="table table-condensed">
-  <tbody>
-    <tr>
-      <th style="width:220px">UDID</th>
-      <td><code>{{ object.udid }}</code></th>
-    </tr>
-    <tr>
-      <th>Serial number</th>
-      <td>
-        {% with object.get_urlsafe_serial_number as urlsafe_serial_number %}
-        {% if urlsafe_serial_number %}
-        {% if perms.inventory.view_machinesnapshot %}
-        <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number }}</a>
-        {% else %}
-        {{ object.serial_number }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-        {% endwith %}
-      </td>
-    </tr>
-    <tr>
-      <th>Model</th>
-      <td>{{ object.model|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Name</th>
-      <td>{{ object.name|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Platform</th>
-      <td>
-        {% with object.get_architecture_for_display as architecture %}
-        {% with object.full_os_version as full_os_version %}
-        {{ object.get_platform_display }}
-        {% if full_os_version %} - {{ full_os_version }}{% endif %}
-        {% if architecture %} - {{ architecture }}{% endif %}
-        {% endwith %}
-        {% endwith %}
-      </td>
-    </tr>
-    <tr>
-      <th>Available update{{ available_software_updates|length|pluralize }}</th>
-      <td>{% if available_software_updates %}{{ available_software_updates|join:", " }}{% else %}-{% endif %}</td>
-    </tr>
-    {% with object.enrolleduser_set.count as users_count %}
-    <tr>
-      <th>MDM user{{ users_count|pluralize }}</th>
-      <td>
-        {% if users_count %}
-        <ul class="list-unstyled">
-          {% for user in object.enrolleduser_set.all %}
-          <li>
-            {% if perms.mdm.view_enrolleduser %}
-            <a href="{{ user.get_absolute_url }}">{{ user.long_name }}</a>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <tbody>
+        <tr>
+        <th style="width:220px">UDID</th>
+        <td><code>{{ object.udid }}</code></th>
+        </tr>
+        <tr>
+        <th>Serial number</th>
+        <td>
+            {% with object.get_urlsafe_serial_number as urlsafe_serial_number %}
+            {% if urlsafe_serial_number %}
+            {% if perms.inventory.view_machinesnapshot %}
+            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number }}</a>
             {% else %}
-            {{ user.long_name }}
+            {{ object.serial_number }}
             {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        -
+            {% else %}
+            -
+            {% endif %}
+            {% endwith %}
+        </td>
+        </tr>
+        <tr>
+        <th>Model</th>
+        <td>{{ object.model|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Name</th>
+        <td>{{ object.name|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Platform</th>
+        <td>
+            {% with object.get_architecture_for_display as architecture %}
+            {% with object.full_os_version as full_os_version %}
+            {{ object.get_platform_display }}
+            {% if full_os_version %} - {{ full_os_version }}{% endif %}
+            {% if architecture %} - {{ architecture }}{% endif %}
+            {% endwith %}
+            {% endwith %}
+        </td>
+        </tr>
+        <tr>
+        <th>Available update{{ available_software_updates|length|pluralize }}</th>
+        <td>{% if available_software_updates %}{{ available_software_updates|join:", " }}{% else %}-{% endif %}</td>
+        </tr>
+        {% with object.enrolleduser_set.count as users_count %}
+        <tr>
+        <th>MDM user{{ users_count|pluralize }}</th>
+        <td>
+            {% if users_count %}
+            <ul class="list-unstyled">
+            {% for user in object.enrolleduser_set.all %}
+            <li>
+                {% if perms.mdm.view_enrolleduser %}
+                <a href="{{ user.get_absolute_url }}">{{ user.long_name }}</a>
+                {% else %}
+                {{ user.long_name }}
+                {% endif %}
+            </li>
+            {% endfor %}
+            </ul>
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        </tr>
+        {% endwith %}
+        <tr>
+        <td colspan="2"><h4>Management status</h4></td>
+        </tr>
+        <tr>
+        <th>Push certificate</th>
+        <td>
+            {% if perms.mdm.view_pushcertificate %}
+            <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
+            {% else %}
+            {{ object.push_certificate }}
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Blueprint</th>
+        <td>
+            {% if object.blueprint %}
+            {% if perms.mdm.view_blueprint %}
+            <a href="{{ object.blueprint.get_absolute_url }}">{{ object.blueprint }}</a>
+            {% else %}
+            {{ object.blueprint }}
+            {% endif %}
+            {% else %}
+            no blueprint
+            {% endif %}
+            {% if perms.mdm.change_enrolleddevice %}
+            <a href="{% url 'mdm:change_enrolled_device_blueprint' object.pk %}" class="btn btn-primary btn-xs" style="margin-left:10px">
+            Change
+            </a>
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Declarative management</th>
+        <td>{{ object.declarative_management|yesno }}</td>
+        </tr>
+        <tr>
+        <th>DEP assignment</th>
+        <td>
+            {% if dep_device %}
+            {% if perms.mdm.view_depvirtualserver %}
+            <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
+            {% else %}
+            {{ dep_device.virtual_server }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Certificate fingerprint</th>
+        <td><code>{{ object.cert_fingerprint.hex }}</code></td>
+        </tr>
+        <tr>
+        <th>Certificate expiry</th>
+        <td>{{ object.cert_not_valid_after|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        <tr>
+        <th>DEP enrollment?</th>
+        <td>{{ object.dep_enrollment|yesno }}</td>
+        </tr>
+        <tr>
+        <th>User enrollment?</th>
+        <td>{{ object.user_enrollment|yesno }}</td>
+        </tr>
+        <tr>
+        <th>User approved?</th>
+        <td>{{ object.user_approved_enrollment|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Activation lock manageable?</th>
+        <td>{{ object.activation_lock_manageable|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Supervised?</th>
+        <td>{{ object.supervised|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Checkout</th>
+        <td>{{ object.checkout_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Blocked?</th>
+        <td>
+            {{ object.blocked_at|date:"SHORT_DATETIME_FORMAT"|default:"No" }}
+            {% if perms.mdm.change_enrolleddevice %}
+            {% if object.blocked_at %}
+            <a href="{% url 'mdm:unblock_enrolled_device' object.pk %}" class="btn btn-success btn-xs" style="margin-left:10px">
+            Unblock
+            </a>
+            {% else %}
+            <a href="{% url 'mdm:block_enrolled_device' object.pk %}" class="btn btn-danger btn-xs" style="margin-left:10px">
+            Block
+            </a>
+            {% endif %}
+            {% endif %}
+        </td>
+        </tr>
+        {% if object.platform == "macOS" %}
+        <tr>
+        <td colspan="2"><h4>Bootstrap token</h4></td>
+        </tr>
+        <tr>
+        <th>Set?</th>
+        <td>{{ object.bootstrap_token|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Allowed for authentication?</th>
+        <td>
+            {% if object.bootstrap_token_allowed_for_authentication is None %}
+            ?
+            {% else %}
+            {{ object.bootstrap_token_allowed_for_authentication|yesno }}
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Required for software update?</th>
+        <td>
+            {% if object.bootstrap_token_required_for_software_update is None %}
+            ?
+            {% else %}
+            {{ object.bootstrap_token_required_for_software_update|yesno }}
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Required for kext approval?</th>
+        <td>
+            {% if object.bootstrap_token_required_for_kext_approval is None %}
+            ?
+            {% else %}
+            {{ object.bootstrap_token_required_for_kext_approval|yesno }}
+            {% endif %}
+        </td>
+        </tr>
+        {% with object.security_info as security_info %}
+        {% if security_info %}
+        <tr>
+        <td colspan="2"><h4>SIP</h4></td>
+        </tr>
+        <tr>
+        <th>Enabled?</th>
+        <td>{{ security_info.SystemIntegrityProtectionEnabled|yesno }}</td>
+        </tr>
+        <tr>
+        <td colspan="2"><h4>FDE</h4></td>
+        </tr>
+        <tr>
+        <th>Enabled?</th>
+        <td>{{ security_info.FDE_Enabled|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Personal recovery key</th>
+        <td>
+            {% if object.filevault_prk and perms.mdm.view_filevault_prk %}
+            <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" data-key="filevault_prk" style="cursor:pointer"></span>
+            <span class="ed-secret" hidden></span>
+            {% else %}
+            {{ security_info.FDE_HasPersonalRecoveryKey|yesno }}
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Institutional recovery key?</th>
+        <td>{{ security_info.FDE_HasInstitutionalRecoveryKey|yesno }}</td>
+        </tr>
         {% endif %}
-      </td>
-    </tr>
-    {% endwith %}
-    <tr>
-      <td colspan="2"><h4>Management status</h4></td>
-    </tr>
-    <tr>
-      <th>Push certificate</th>
-      <td>
-        {% if perms.mdm.view_pushcertificate %}
-        <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
-        {% else %}
-        {{ object.push_certificate }}
+        {% endwith %}
+        {% if object.platform == "macOS" %}
+        <tr>
+        <td colspan="2"><h4>Recovery OS</h4></td>
+        </tr>
+        <tr>
+        <th>{% if object.apple_silicon %}Recovery lock{% else %}Firmware password{% endif %}</th>
+        <td>
+            {% if object.recovery_password %}
+            {% if perms.mdm.view_recovery_password %}
+            <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}" data-key="recovery_password" style="cursor:pointer"></span>
+            <span class="ed-secret" hidden></span>
+            {% else %}
+            Yes
+            {% endif %}
+            {% else %}
+            No
+            {% endif %}
+            {% if  object.pending_firmware_password_created_at %}
+            <br>
+            Pending change, {{ object.pending_firmware_password_created_at }}
+            {% endif %}
+        </td>
+        </tr>
         {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Blueprint</th>
-      <td>
-        {% if object.blueprint %}
-        {% if perms.mdm.view_blueprint %}
-        <a href="{{ object.blueprint.get_absolute_url }}">{{ object.blueprint }}</a>
-        {% else %}
-        {{ object.blueprint }}
+        {% with object.security_info.SecureBoot as secure_boot %}
+        {% if secure_boot %}
+        <tr>
+        <td colspan="2"><h4>Secure boot</h4></td>
+        </tr>
+        <tr>
+        <th>Level</th>
+        <td>{{ secure_boot.SecureBootLevel }}</td>
+        </tr>
+        <tr>
+        <th>Windows boot level</th>
+        <td>{{ secure_boot.WindowsBootLevel }}</td>
+        </tr>
+        <tr>
+        <th>External boot level</th>
+        <td>{{ secure_boot.ExternalBootLevel }}</td>
+        </tr>
         {% endif %}
-        {% else %}
-        no blueprint
+        {% endwith %}
         {% endif %}
-        {% if perms.mdm.change_enrolleddevice %}
-        <a href="{% url 'mdm:change_enrolled_device_blueprint' object.pk %}" class="btn btn-primary btn-xs" style="margin-left:10px">
-          Change
-        </a>
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Declarative management</th>
-      <td>{{ object.declarative_management|yesno }}</td>
-    </tr>
-    <tr>
-      <th>DEP assignment</th>
-      <td>
-        {% if dep_device %}
-        {% if perms.mdm.view_depvirtualserver %}
-        <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
-        {% else %}
-        {{ dep_device.virtual_server }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Certificate fingerprint</th>
-      <td><code>{{ object.cert_fingerprint.hex }}</code></td>
-    </tr>
-    <tr>
-      <th>Certificate expiry</th>
-      <td>{{ object.cert_not_valid_after|date:"SHORT_DATETIME_FORMAT" }}</td>
-    </tr>
-    <tr>
-      <th>DEP enrollment?</th>
-      <td>{{ object.dep_enrollment|yesno }}</td>
-    </tr>
-    <tr>
-      <th>User enrollment?</th>
-      <td>{{ object.user_enrollment|yesno }}</td>
-    </tr>
-    <tr>
-      <th>User approved?</th>
-      <td>{{ object.user_approved_enrollment|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Activation lock manageable?</th>
-      <td>{{ object.activation_lock_manageable|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Supervised?</th>
-      <td>{{ object.supervised|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Checkout</th>
-      <td>{{ object.checkout_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Blocked?</th>
-      <td>
-        {{ object.blocked_at|date:"SHORT_DATETIME_FORMAT"|default:"No" }}
-        {% if perms.mdm.change_enrolleddevice %}
-        {% if object.blocked_at %}
-        <a href="{% url 'mdm:unblock_enrolled_device' object.pk %}" class="btn btn-success btn-xs" style="margin-left:10px">
-          Unblock
-        </a>
-        {% else %}
-        <a href="{% url 'mdm:block_enrolled_device' object.pk %}" class="btn btn-danger btn-xs" style="margin-left:10px">
-          Block
-        </a>
-        {% endif %}
-        {% endif %}
-      </td>
-    </tr>
-    {% if object.platform == "macOS" %}
-    <tr>
-      <td colspan="2"><h4>Bootstrap token</h4></td>
-    </tr>
-    <tr>
-      <th>Set?</th>
-      <td>{{ object.bootstrap_token|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Allowed for authentication?</th>
-      <td>
-        {% if object.bootstrap_token_allowed_for_authentication is None %}
-        ?
-        {% else %}
-        {{ object.bootstrap_token_allowed_for_authentication|yesno }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Required for software update?</th>
-      <td>
-        {% if object.bootstrap_token_required_for_software_update is None %}
-        ?
-        {% else %}
-        {{ object.bootstrap_token_required_for_software_update|yesno }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Required for kext approval?</th>
-      <td>
-        {% if object.bootstrap_token_required_for_kext_approval is None %}
-        ?
-        {% else %}
-        {{ object.bootstrap_token_required_for_kext_approval|yesno }}
-        {% endif %}
-      </td>
-    </tr>
-    {% with object.security_info as security_info %}
-    {% if security_info %}
-    <tr>
-      <td colspan="2"><h4>SIP</h4></td>
-    </tr>
-    <tr>
-      <th>Enabled?</th>
-      <td>{{ security_info.SystemIntegrityProtectionEnabled|yesno }}</td>
-    </tr>
-    <tr>
-      <td colspan="2"><h4>FDE</h4></td>
-    </tr>
-    <tr>
-      <th>Enabled?</th>
-      <td>{{ security_info.FDE_Enabled|yesno }}</td>
-    </tr>
-    <tr>
-      <th>Personal recovery key</th>
-      <td>
-        {% if object.filevault_prk and perms.mdm.view_filevault_prk %}
-        <span class="show-ed-secret glyphicon glyphicon-eye-open" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" data-key="filevault_prk" style="cursor:pointer"></span>
-        <span class="ed-secret" hidden></span>
-        {% else %}
-        {{ security_info.FDE_HasPersonalRecoveryKey|yesno }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Institutional recovery key?</th>
-      <td>{{ security_info.FDE_HasInstitutionalRecoveryKey|yesno }}</td>
-    </tr>
-    {% endif %}
-    {% endwith %}
-    {% if object.platform == "macOS" %}
-    <tr>
-      <td colspan="2"><h4>Recovery OS</h4></td>
-    </tr>
-    <tr>
-      <th>{% if object.apple_silicon %}Recovery lock{% else %}Firmware password{% endif %}</th>
-      <td>
-        {% if object.recovery_password %}
-        {% if perms.mdm.view_recovery_password %}
-        <span class="show-ed-secret glyphicon glyphicon-eye-open" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}" data-key="recovery_password" style="cursor:pointer"></span>
-        <span class="ed-secret" hidden></span>
-        {% else %}
-        Yes
-        {% endif %}
-        {% else %}
-        No
-        {% endif %}
-        {% if  object.pending_firmware_password_created_at %}
-        <br>
-        Pending change, {{ object.pending_firmware_password_created_at }}
-        {% endif %}
-      </td>
-    </tr>
-    {% endif %}
-    {% with object.security_info.SecureBoot as secure_boot %}
-    {% if secure_boot %}
-    <tr>
-      <td colspan="2"><h4>Secure boot</h4></td>
-    </tr>
-    <tr>
-      <th>Level</th>
-      <td>{{ secure_boot.SecureBootLevel }}</td>
-    </tr>
-    <tr>
-      <th>Windows boot level</th>
-      <td>{{ secure_boot.WindowsBootLevel }}</td>
-    </tr>
-    <tr>
-      <th>External boot level</th>
-      <td>{{ secure_boot.ExternalBootLevel }}</td>
-    </tr>
-    {% endif %}
-    {% endwith %}
-    {% endif %}
-  </tbody>
-</table>
+    </tbody>
+    </table>
+</div>
 
-<h3>{{ target_artifacts_count }} Artifact{{ target_artifacts_count|pluralize }}</h3>
+<h3>Artifact{{ target_artifacts_count|pluralize }} ({{ target_artifacts_count }})</h3>
 
 {% if target_artifacts_count %}
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th>Type</th>
@@ -342,32 +348,33 @@
 </table>
 {% endif %}
 
-<h3>Last commands</h3>
-
-<div>
-  <form style="float:left;margin-right:6px" method="POST" action="{% url 'mdm:poke_enrolled_device' object.id %}">{% csrf_token %}
-    {% if perms.mdm.change_enrolleddevice %}
-    <button type="submit" class="btn btn-success" {% if not object.can_be_poked %}disabled="disabled"{% endif %}>Poke!</button>
-    {% endif %}
-  </form>
-  {% if perms.mdm.add_devicecommand and create_command_links %}
-  <div class="btn-group">
-    <button class="btn btn-default dropdown-toggle" type="button" id="createCommand"
-            data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-      Create
-      <span class="caret"></span>
-    </button>
-    <ul class="dropdown-menu" aria-labelledby="createCommand">
-      {% for cc_url, cc_display_name in create_command_links %}
-      <li><a href="{{ cc_url }}">{{ cc_display_name }}</a></li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
+<div class="d-flex align-items-center mb-1">
+    <h3 class="m-0">Last commands</h3>
+    <div class="ms-auto">
+        {% if perms.mdm.change_enrolleddevice %}
+        <button type="submit" class="btn btn-success" {% if not object.can_be_poked %}disabled="disabled"{% endif %}
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Poke!">
+            <i class="bi bi-hand-index"></i>
+        </button>
+        {% endif %}
+        {% if perms.mdm.add_devicecommand and create_command_links %}
+        <div class="btn-group">
+            <button class="btn btn-link text-decoration-none text-dark dropdown-toggle" type="button" id="createCommand"
+                    data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                <i class="bi bi-plus-circle"></i>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="createCommand">
+            {% for cc_url, cc_display_name in create_command_links %}
+            <li><a class="dropdown-item" href="{{ cc_url }}">{{ cc_display_name }}</a></li>
+            {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
 </div>
 
 {% if commands_count %}
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle ">
   <thead>
     <tr>
       <th>Name</th>
@@ -408,9 +415,8 @@
       <td>
         {{ command.get_status_display|default:"-" }}
         {% if command.result %}
-        <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_device_command_result' command.uuid %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-        </a>
+            {% url 'mdm:download_enrolled_device_command_result' command.uuid as url %}
+            {% button 'DOWNLOAD' url "Download Result" %}
         {% endif %}
       </td>
     </tr>
@@ -426,7 +432,7 @@
 {% endif %}
 
 {% if enrollment_session_info_count %}
-<h3>{{ enrollment_session_info_count }} Enrollment session{{ enrollment_session_info_count|pluralize }}</h3>
+<h3>Enrollment session{{ enrollment_session_info_count|pluralize }} ({{ enrollment_session_info_count }})</h3>
 
 {% include "mdm/_enrollment_session_info_list.html" %}
 {% endif %}
@@ -443,19 +449,19 @@
       url: $btn.data("url"),
       success: function ( data ) {
         $btn.next().text(data[key]).show();
-        $btn.removeClass("glyphicon-eye-open").addClass("glyphicon-eye-close");
+        $btn.removeClass("bi-eye").addClass("bi-eye-slash");
       }
     });
   }
 
   function hideEDSecret($btn) {
     $btn.next().text("").hide();
-    $btn.removeClass("glyphicon-eye-close").addClass("glyphicon-eye-open");
+    $btn.removeClass("bi-eye-slash").addClass("bi-eye");
   }
 
   function toggleEDSecret($btn) {
       console.log($btn.data("url"));
-      if ($btn.hasClass("glyphicon-eye-open")) {
+      if ($btn.hasClass("bi-eye-slash")) {
         showEDSecret($btn);
       } else {
         hideEDSecret($btn);

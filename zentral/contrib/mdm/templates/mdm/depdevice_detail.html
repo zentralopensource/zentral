@@ -1,133 +1,139 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:dep_devices' %}">DEP devices</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:dep_devices' %}">DEP devices</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-
-<h3>DEP device {{ object }}</h3>
-
-<table class="table table-condensed">
-  <tbody>
-    <tr>
-      <th>Serial number</th>
-      <td>
-        {% with object.get_urlsafe_serial_number as urlsafe_serial_number %}
-        {% if perms.inventory.view_machinesnapshot %}
-        <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number }}</a>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">DEP device</h3>
+        <div class="ms-auto">
+            {% if not dep_device.is_deleted and perms.mdm.change_depdevice %}
+            <form action="{% url 'mdm:refresh_dep_device' object.pk %}" method="post">{% csrf_token %}
+                {% url 'mdm:assign_dep_device_profile' object.pk as url %}
+                {% button 'UPDATE' url %}
+                <button type="submit" class="btn btn-link text-decoration-none text-dark"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Syncrhonize">
+                    <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <tbody>
+        <tr>
+        <th>Serial number</th>
+        <td>
+            {% with object.get_urlsafe_serial_number as urlsafe_serial_number %}
+            {% if perms.inventory.view_machinesnapshot %}
+            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number }}</a>
+            {% else %}
+            {{ object.serial_number }}
+            {% endif %}
+            {% endwith %}
+        </td>
+        </tr>
+        <tr>
+        <th>Asset tag</th>
+        <td>{{ object.asset_tag|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Color</th>
+        <td>{{ object.color|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Description</th>
+        <td>{{ object.description|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Device family</th>
+        <td>{{ object.device_family|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Model</th>
+        <td>{{ object.model|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>OS</th>
+        <td>{{ object.os|default:"-" }}</td>
+        </tr>
+        <tr>
+        <td colspan="2"><h4>Assignment</h4></td>
+        </tr>
+        <tr>
+        <th>Server</th>
+        <td>
+            {% if perms.mdm.view_depvirtualserver %}
+            <a href="{{ object.virtual_server.get_absolute_url }}">{{ object.virtual_server }}</a>
+            {% else %}
+            {{ object.virtual_server }}
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th>Assigned by</th>
+        <td>{{ object.device_assigned_by|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Assign time</th>
+        <td>{{ object.device_assigned_date|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+        </tr>
+        <tr>
+        <td colspan="2"><h4>Profile</h4></td>
+        </tr>
+        <tr>
+        <th>Status</th>
+        <td>{{ object.get_profile_status_display }}</td>
+        </tr>
+        {% if object.enrollment %}
+        <tr>
+        <th>Enrollment</th>
+        <td>
+            {% if perms.mdm.view_depenrollment %}
+            <a href="{{ object.enrollment.get_absolute_url }}">{{ object.enrollment }}</a>
+            {% else %}
+            {{ object.enrollment }}
+            {% endif %}
+        </td>
+        </tr>
         {% else %}
-        {{ object.serial_number }}
+        <tr>
+        <th>UUID</th>
+        <td>
+            {{ object.profile_uuid|default:"-" }}
+        </td>
+        </tr>
         {% endif %}
-        {% endwith %}
-      </td>
-    </tr>
-    <tr>
-      <th>Asset tag</th>
-      <td>{{ object.asset_tag|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Color</th>
-      <td>{{ object.color|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Description</th>
-      <td>{{ object.description|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Device family</th>
-      <td>{{ object.device_family|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Model</th>
-      <td>{{ object.model|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>OS</th>
-      <td>{{ object.os|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td colspan="2"><h4>Assignment</h4></td>
-    </tr>
-    <tr>
-      <th>Server</th>
-      <td>
-        {% if perms.mdm.view_depvirtualserver %}
-        <a href="{{ object.virtual_server.get_absolute_url }}">{{ object.virtual_server }}</a>
-        {% else %}
-        {{ object.virtual_server }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <th>Assigned by</th>
-      <td>{{ object.device_assigned_by|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Assign time</th>
-      <td>{{ object.device_assigned_date|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td colspan="2"><h4>Profile</h4></td>
-    </tr>
-    <tr>
-      <th>Status</th>
-      <td>{{ object.get_profile_status_display }}</td>
-    </tr>
-    {% if object.enrollment %}
-    <tr>
-      <th>Enrollment</th>
-      <td>
-        {% if perms.mdm.view_depenrollment %}
-        <a href="{{ object.enrollment.get_absolute_url }}">{{ object.enrollment }}</a>
-        {% else %}
-        {{ object.enrollment }}
-        {% endif %}
-      </td>
-    </tr>
-    {% else %}
-    <tr>
-      <th>UUID</th>
-      <td>
-        {{ object.profile_uuid|default:"-" }}
-      </td>
-    </tr>
-    {% endif %}
-    <tr>
-      <th>Assign time</th>
-      <td>{{ object.profile_assign_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
-    </tr>
-    <tr>
-      <th>Push time</th>
-      <td>{{ object.push_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
-    </tr>
-  </tbody>
-</table>
+        <tr>
+        <th>Assign time</th>
+        <td>{{ object.profile_assign_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Push time</th>
+        <td>{{ object.push_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+        </tr>
+    </tbody>
+    </table>
 
-<dl class="dl-horizontal">
-  <dt class="small" style="opacity:0.5">Last OP</dt>
-  <dd class="small" style="opacity:0.5">{{ object.last_op_type|default:"-" }}</dd>
-  <dt class="small" style="opacity:0.5">Last OP time</dt>
-  <dd class="small" style="opacity:0.5">{{ object.last_op_date|date:'SHORT_DATETIME_FORMAT'|default:"-" }}</dd>
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-  <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
-</dl>
-
-{% if not dep_device.is_deleted and perms.mdm.change_depdevice %}
-<form action="{% url 'mdm:refresh_dep_device' object.pk %}" method="post">{% csrf_token %}
-  <a href="{% url 'mdm:assign_dep_device_profile' object.pk %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-  </a>
-  <button type="submit" class="btn btn-default">
-    <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
-  </button>
-</form>
-{% endif %}
+    <dl class="row">
+    <dt class="small" style="opacity:0.5">Last OP</dt>
+    <dd class="small" style="opacity:0.5">{{ object.last_op_type|default:"-" }}</dd>
+    <dt class="small" style="opacity:0.5">Last OP time</dt>
+    <dd class="small" style="opacity:0.5">{{ object.last_op_date|date:'SHORT_DATETIME_FORMAT'|default:"-" }}</dd>
+    <dt class="small" style="opacity:0.5">Created at</dt>
+    <dd class="small" style="opacity:0.5">{{ object.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+    <dt class="small" style="opacity:0.5">Updated at</dt>
+    <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+    </dl>
+</div>
 
 {% endblock %}

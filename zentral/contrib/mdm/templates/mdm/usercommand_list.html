@@ -1,38 +1,27 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
-  <li><a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device }}</a></li>
-  <li><a href="{% url 'mdm:enrolled_user' enrolled_device.pk enrolled_user.pk %}">User {{ enrolled_user }}</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_user' enrolled_device.pk enrolled_user.pk %}">User {{ enrolled_user }}</a></li>
   {% if reset_link %}
-  <li><a href="{{ reset_link }}">Commands</a></li>
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Commands</a></li>
   {% else %}
-  <li class="active">Commands</li>
+  <li class="breadcrumb-item active">Commands</li>
   {% endif %}
-  <li class="active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
 <h3>User command{{ page_obj.paginator.count|pluralize }}</h3>
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% if page_obj %}
-<table class="table table-condensed">
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th>Name</th>
@@ -73,9 +62,9 @@
       <td>
         {{ command.get_status_display|default:"-" }}
         {% if command.result %}
-        <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_user_command_result' command.uuid %}">
-          <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
-        </a>
+            <a class="btn btn-default btn-xs" href="{% url 'mdm:download_enrolled_user_command_result' command.uuid %}">
+                <span class="glyphicon glyphicon-download" aria-hidden="true"></span>
+            </a>
         {% endif %}
       </td>
     </tr>
@@ -85,17 +74,6 @@
 </table>
 {% endif %}
 
-{% if next_url or previous_url %}
-<nav>
-  <ul class="pager">
-    {% if next_url %}
-    <li class="next"><a href="{{ next_url }}">Next <span aria-hidden="true">&rarr;</span></a></li>
-    {% endif %}
-    {% if previous_url %}
-    <li class="previous"><a href="{{ previous_url }}"><span aria-hidden="true">&larr;</span> Previous</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+{% pagination next_url previous_url %}
 
 {% endblock %}

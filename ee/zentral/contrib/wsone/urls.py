@@ -30,7 +30,8 @@ urlpatterns = [
 ]
 
 
-setup_menu_cfg = {
+modules_menu_cfg = {
+    'title': 'WsONE',
     'items': (
         ('index', 'Overview', False, ('wsone',)),
         ('instances', 'Instances', False, ('wsone.view_instance',)),

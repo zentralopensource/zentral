@@ -38,10 +38,10 @@ class Channel(models.TextChoices):
 
 
 class Platform(models.TextChoices):
-    IOS = "iOS"
-    IPADOS = "iPadOS"
-    MACOS = "macOS"
-    TVOS = "tvOS"
+    IOS = ("iOS", "iOS")
+    IPADOS = ("iPadOS", "iPadOS")
+    MACOS = ("macOS", "macOS")
+    TVOS = ("tvOS", "tvOS")
 
 
 # used only for an ArrayField to avoid triggering the warning about shared default objects

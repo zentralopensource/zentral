@@ -76,7 +76,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "0 Compliance checks")  # no status
+        self.assertContains(response, "Compliance checks (0)")  # no status
 
     def test_machine_one_compliance_check_other_machine(self):
         query = self._force_check_query()
@@ -95,7 +95,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "0 Compliance checks")
+        self.assertContains(response, "Compliance checks (0)")
 
     def test_machine_one_compliance_check(self):
         query = self._force_check_query()
@@ -114,7 +114,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 Compliance check")
+        self.assertContains(response, "Compliance check (1)")
         self.assertContains(response, query.name)
         cc_redirect_link = reverse("compliance_checks:redirect", args=(query.compliance_check.pk,))
         self.assertContains(response, cc_redirect_link)
@@ -141,7 +141,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
-        self.assertContains(response, "1 Compliance check")
+        self.assertContains(response, "Compliance check (1)")
         self.assertContains(response, query.name)
         cc_redirect_link = reverse("compliance_checks:redirect", args=(query.compliance_check.pk,))
         self.assertNotContains(response, cc_redirect_link)

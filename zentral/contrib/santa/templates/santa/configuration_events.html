@@ -1,21 +1,23 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
 
 {% block content %}
 
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'santa:index' %}">Santa</a></li>
-  <li><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
-  <li><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
-  <li class="active">Events</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item active">Events</a></li>
 </ol>
 
-<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
-  <h3 style="margin:0 0 20px 0">
-    {{ configuration }} - events
-  </h3>
-  {% include "core/stores/events_form.html" %}
+<h2 class="mb-0">{{ configuration }}</h2>
+<h3 class="m-0 fs-5 text-secondary mb-3">Events</h3>
+<div class="d-flex justify-content-between">
+    <div class="d-flex w-75 me-auto flex-shrink-0">
+
+        {% include "core/stores/events_form.html" %}
+
+    </div>
 </div>
 
 {% include "core/stores/events_table.html" %}

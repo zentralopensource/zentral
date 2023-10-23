@@ -3,14 +3,14 @@
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'incidents:index' %}">Incidents</a></li>
-  <li><a href="{% url 'incidents:incident' incident.pk %}">{{ incident.name }}</a></li>
-  <li class="active">Events</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'incidents:index' %}">Incidents</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'incidents:incident' incident.pk %}">{{ incident.name }}</a></li>
+  <li class="breadcrumb-item active">Events</li>
 </ol>
 
-<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
-  <h3 style="margin:0 0 20px 0">
+<div class="sticky-top bg-body z-1">
+  <h3>
     {{ incident.name }} - events
   </h3>
   {% include "core/stores/events_form.html" %}

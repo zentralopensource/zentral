@@ -1,26 +1,28 @@
 {% extends 'base.html' %}
+{% load ui_extras %}
 {% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="active">Enrollments</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">Enrollments</li>
 </ol>
 
 {% if perms.mdm.view_depenrollment %}
-<h3>{{ dep_enrollments|length }} DEP enrollment{{ dep_enrollments|length|pluralize }}</h3>
+<div class="d-flex align-items-center mb-1">
+    <h3 class="m-0">DEP enrollment{{ dep_enrollments|length|pluralize }} ({{ dep_enrollments|length }})</h3>
+    <div class="ms-auto">
+        {% if perms.mdm.add_depenrollment %}
+            {% url 'mdm:create_dep_enrollment' as url %}
+            {% button 'CREATE' url "Add new DEP Enrollment" %}
+        {% endif %}
+    </div>
+</div>
 
-{% if perms.mdm.add_depenrollment %}
-<p>
-  <a class="btn btn-default" href="{% url 'mdm:create_dep_enrollment' %}">
-    Create
-  </a>
-</p>
-{% endif %}
 
 {% if dep_enrollments %}
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th class="col-md-4">Name</th>
@@ -48,18 +50,18 @@
 {% endif %}
 
 {% if perms.mdm.view_otaenrollment %}
-<h3>{{ ota_enrollments|length }} OTA enrollment{{ ota_enrollments|length|pluralize }}</h3>
-
-{% if perms.mdm.add_otaenrollment %}
-<p>
-  <a class="btn btn-default" href="{% url 'mdm:create_ota_enrollment' %}">
-    Create
-  </a>
-</p>
-{% endif %}
+<div class="d-flex align-items-center mb-1">
+    <h3 class="m-0">OTA enrollment{{ ota_enrollments|length|pluralize }} ({{ ota_enrollments|length }})</h3>
+    <div class="ms-auto">
+        {% if perms.mdm.add_otaenrollment %}
+            {% url 'mdm:create_ota_enrollment' as url %}
+            {% button 'CREATE' url "Add new OTA Enrollment" %}
+        {% endif %}
+    </div>
+</div>
 
 {% if ota_enrollments %}
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th class="col-md-4">Name</th>
@@ -91,18 +93,20 @@
 {% endif %}
 
 {% if perms.mdm.view_userenrollment %}
-<h3>{{ user_enrollments|length }} User enrollment{{ user_enrollments|length|pluralize }}</h3>
+<div class="d-flex align-items-center mb-1">
+    <h3 class="m-0">User enrollment{{ user_enrollments|length|pluralize }} ({{ user_enrollments|length }})</h3>
 
-{% if perms.mdm.add_userenrollment %}
-<p>
-  <a class="btn btn-default" href="{% url 'mdm:create_user_enrollment' %}">
-    Create
-  </a>
-</p>
-{% endif %}
+    <div class="ms-auto">
+        {% if perms.mdm.add_userenrollment %}
+            {% url 'mdm:create_user_enrollment' as url %}
+            {% button 'CREATE' url "Add new User Enrollment" %}
+        {% endif %}
+    </div>
+</div>
+
 
 {% if user_enrollments %}
-<table class="table">
+<table class="table table-light table-striped align-middle">
   <thead>
     <tr>
       <th class="col-md-4">Name</th>

@@ -96,12 +96,14 @@ class PushCertificateForm(forms.ModelForm):
 
 
 class DEPDeviceSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Serial number",
                                                       "autofocus": True}))
-    include_deleted = forms.BooleanField(label="incl. deleted?", required=False)
     enrollment = forms.ModelChoiceField(queryset=DEPEnrollment.objects.all(), required=False, empty_label="Enrollment")
     server = forms.ModelChoiceField(queryset=DEPVirtualServer.objects.all(), required=False, empty_label="Server")
+    include_deleted = forms.BooleanField(label="Incl. deleted?", required=False)
 
     def get_queryset(self):
         qs = DEPDevice.objects.all().order_by("-updated_at")
@@ -128,12 +130,14 @@ class DEPDeviceSearchForm(forms.Form):
 
 
 class EnrolledDeviceSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Serial number, UDID",
                                                       "autofocus": True}))
     platform = forms.ChoiceField(
-        choices=[("", "Platform"),] + [(p.value, p.value) for p in Platform], required=False)
-    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="Blueprint")
+        choices=[("", "..."), ] + [(p.value, p.value) for p in Platform], required=False)
+    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="...")
 
     def get_queryset(self):
         qs = EnrolledDevice.objects.all().order_by("-updated_at")
@@ -156,17 +160,19 @@ class EnrolledDeviceSearchForm(forms.Form):
 
 
 class ArtifactSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     q = forms.CharField(required=False,
                         widget=forms.TextInput(attrs={"placeholder": "Name, Profile ID, Bundle ID",
                                                       "size": 24,
                                                       "autofocus": True}))
     artifact_type = forms.ChoiceField(
-        choices=[("", "Type"),] + Artifact.Type.choices, required=False)
+        choices=[("", "..."), ] + Artifact.Type.choices, required=False)
     channel = forms.ChoiceField(
-        choices=[("", "Channel"),] + Channel.choices, required=False)
+        choices=[("", "..."), ] + Channel.choices, required=False)
     platform = forms.ChoiceField(
-        choices=[("", "Platform"),] + [(p.value, p.value) for p in Platform], required=False)
-    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="Blueprint")
+        choices=[("", "..."), ] + [(p.value, p.value) for p in Platform], required=False)
+    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="...")
 
     def get_queryset(self):
         qs = Artifact.objects.annotate(Count("blueprintartifact", distinct=True)).order_by("name")
@@ -485,6 +491,10 @@ class BaseEnterpriseAppForm(forms.ModelForm, AppConfigurationMixin):
             "install_as_managed",
             "remove_on_unenroll",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['ios_app'].label = "iOS app"
 
     def clean(self):
         super().clean()

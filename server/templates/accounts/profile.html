@@ -1,68 +1,80 @@
 {% extends 'base.html' %}
+{% load ui_extras %}
 
 {% block content %}
-<ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'accounts:profile' %}">Settings</a></li>
-  <li class="active">Profile</li>
-</ol>
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Settings</a></li>
+        <li class="breadcrumb-item active">Profile</li>
+    </ol>
+</nav>
 
 <h3>Profile</h3>
 
-<table class="table">
-  <tbody>
-    <tr>
-      <th style="width:15%">username</th>
-      <td>{{ user.username }}</td>
-    </tr>
-    <tr>
-      <th>email</th>
-      <td>{{ user.email }}</td>
-    </tr>
-    <tr>
-      <th>superuser?</th>
-      <td>{{ user.is_superuser|yesno }}</td>
-    </tr>
-    <tr>
-      <th>remote?</th>
-      <td>{{ user.is_remote|yesno }}</td>
-    </tr>
-    <tr>
-      <th>API Token?</th>
-      <td>
-        {% if user.api_token %}
-        yes
-        <a href="{% url 'accounts:delete_user_api_token' user.pk %}" class="btn btn-sm btn-danger">
-          <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-        </a>
-        {% else %}
-        <form method="post" action="{% url 'accounts:create_user_api_token' user.pk %}">{% csrf_token %}
-          no
-          <button class="btn btn-sm btn-default" type="submit">
-            <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-          </button>
-        </form>
+<div class="object-details">
+    <table class="table table-light table-striped align-middle table-object-properties">
+    <tbody>
+        <tr>
+        <th style="width:15%">username</th>
+        <td>{{ user.username }}</td>
+        </tr>
+        <tr>
+        <th>email</th>
+        <td>{{ user.email }}</td>
+        </tr>
+        <tr>
+        <th>superuser?</th>
+        <td>{{ user.is_superuser|yesno }}</td>
+        </tr>
+        <tr>
+        <th>remote?</th>
+        <td>{{ user.is_remote|yesno }}</td>
+        </tr>
+        <tr>
+        <th>API Token?</th>
+        <td>
+            {% if user.api_token %}
+            yes
+            {% url 'accounts:delete_user_api_token' user.pk as url %}
+            {% button 'DELETE' url "Delete API Token" %}
+            {% else %}
+            <form method="post" action="{% url 'accounts:create_user_api_token' user.pk %}">{% csrf_token %}
+            no
+            <button class="btn btn-link text-dark text-decoration-none" type="submit">
+                <span class="bi bi-plus-circle" aria-hidden="true"></span>
+            </button>
+            </form>
+            {% endif %}
+        </td>
+        </tr>
+        {% if not user.is_remote %}
+        <tr>
+        <th>
+            Password
+        </th>
+        <td>
+            <a href="{% url 'password_change' %}">Change password</a>
+        </td>
+        </tr>
+        <tr>
+        <th>
+            Verification devices
+        </th>
+        <td>
+            <a href="{% url 'accounts:verification_devices' %}">Manage your verification devices</a>
+        </td>
+        </tr>
+        <tr>
+            <th>
+                Global items per page
+            </th>
+            <td>
+                {{ user.items_per_page }}
+            </td>
+        </tr>
         {% endif %}
-      </td>
-    </tr>
-    {% if not user.is_remote %}
-    <tr>
-      <th>
-        Password
-      </th>
-      <td>
-        <a href="{% url 'password_change' %}">Change password</a>
-      </td>
-    </tr>
-    <tr>
-      <th>
-        Verification devices
-      </th>
-      <td>
-        <a href="{% url 'accounts:verification_devices' %}">Manage your verification devices</a>
-      </td>
-    </tr>
-    {% endif %}
-  </tbody>
-</table>
+    </tbody>
+    </table>
+</div>
 {% endblock %}

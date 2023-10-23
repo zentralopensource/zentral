@@ -12,6 +12,7 @@ from pygments import lexers, highlight
 from pygments.formatters import HtmlFormatter
 from django.conf import settings
 from zentral.utils.time import duration_repr as _duration_repr
+from zentral.core.incidents.models import Incident
 
 register = template.Library()
 
@@ -33,12 +34,12 @@ class MenuConfig:
                 logger.debug('App %s w/o %s', app_name, config_attr)
                 continue
             title = menu_cfg.get('title', app_shortname.title())
+            icon = menu_cfg.get('icon', '')
             section_cfg = prepared_sections.setdefault(
                 title,
                 {'title': title,
+                 'icon': icon,
                  'link_list': [],
-                 # TODO Legacy. Only used for the creation links for the probes, set with a context processor
-                 'extra_links_context_keys': menu_cfg.get("extra_context_links", []),
                  'weight': menu_cfg.get('weight', 1000)}
             )
             for item in menu_cfg['items']:
@@ -61,22 +62,6 @@ class MenuConfig:
     @staticmethod
     def _iter_section_links(context, section):
         yield from section["link_list"]
-        # TODO Legacy. Only used for the creation links for the probes, set with a context processor
-        extra_links_context_keys = section['extra_links_context_keys']
-        if extra_links_context_keys:
-            if "_cached_extra_context_links" not in section:
-                cached_extra_context_links = section.setdefault("_cached_extra_context_links", [])
-                for context_key in section.get('extra_links_context_keys', []):
-                    for subsection, subsection_links in context.get(context_key, {}).items():
-                        cached_extra_context_links.append((None, subsection.title(), False, None))
-                        for link_d in subsection_links:
-                            cached_extra_context_links.append((
-                                str(link_d["url"]), link_d["anchor_text"],
-                                link_d.get("local_user", False),
-                                link_d.get("permissions")
-                            ))
-                section["_cached_extra_context_links"] = cached_extra_context_links
-            yield from section["_cached_extra_context_links"]
 
     def get_filtered_sections(self, context):
         request = context.get("request")
@@ -126,21 +111,21 @@ class MenuConfig:
         return active, filtered_sections
 
 
-setup_menu_config = SimpleLazyObject(lambda: MenuConfig("setup_menu_cfg"))
+modules_menu_config = SimpleLazyObject(lambda: MenuConfig("modules_menu_cfg"))
 
 
-@register.inclusion_tag('_setup_dropdown.html', takes_context=True)
-def setup_dropdown(context):
-    context["active"], context["section_list"] = setup_menu_config.get_filtered_sections(context)
+@register.inclusion_tag('_modules_menu.html', takes_context=True)
+def modules_menu(context):
+    context["active"], context["section_list"] = modules_menu_config.get_filtered_sections(context)
     return context
 
 
-main_menu_config = SimpleLazyObject(lambda: MenuConfig("main_menu_cfg"))
+pinned_menu_config = SimpleLazyObject(lambda: MenuConfig("pinned_menu_cfg"))
 
 
-@register.inclusion_tag('_main_menu_app_dropdowns.html', takes_context=True)
-def main_menu_app_dropdowns(context):
-    _, context["dropdown_list"] = main_menu_config.get_filtered_sections(context)
+@register.inclusion_tag('_modules_menu.html', takes_context=True)
+def pinned_menu(context):
+    context["active"], context["section_list"] = pinned_menu_config.get_filtered_sections(context)
     return context
 
 
@@ -185,3 +170,8 @@ def duration_repr(val):
         return _duration_repr(val)
     except Exception:
         return "-"
+
+
+@register.simple_tag
+def get_latest_open_incidents(latest=10):
+    return Incident().get_open(latest=latest)

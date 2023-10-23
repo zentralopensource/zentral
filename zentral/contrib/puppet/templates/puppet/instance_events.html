@@ -4,15 +4,15 @@
 {% block content %}
 
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'puppet:index' %}">Puppet</a></li>
-  <li><a href="{% url 'puppet:instances' %}">Instances</a></li>
-  <li><a href="{% url 'puppet:instance' instance.pk %}">{{ instance }}</a></li>
-  <li class="active">Events</a></li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'puppet:index' %}">Puppet</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'puppet:instances' %}">Instances</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'puppet:instance' instance.pk %}">{{ instance }}</a></li>
+  <li class="breadcrumb-item active">Events</a></li>
 </ol>
 
-<div style="position:sticky;top:0;background-color:#fff;padding:10px 0">
-  <h3 style="margin:0 0 20px 0">
+<div class="sticky-top bg-body z-1">
+  <h3>
     {{ instance }} - events
   </h3>
   {% include "core/stores/events_form.html" %}
