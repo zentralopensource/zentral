@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ui_extras%}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -26,7 +27,15 @@
   </div>
   <div class="col-md-12">
     {% if perms.santa.view_configuration %}
-    <h3>Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+    <div class="d-flex align-items-center mb-1">
+        <h3>Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+        <div class="ms-auto">
+            {% if perms.santa.add_configuration %}
+                {% url 'santa:create_configuration' as url %}
+                {% button 'CREATE' url "Create new Configuration" %}
+            {% endif %}
+        </div>
+    </div>
     <table class="table table-light table-striped align-middle">
       <thead>
         <tr>
@@ -44,15 +53,12 @@
           <td>{{ configuration.machine_count }}</td>
         </tr>
         {% empty %}
-        {% if perms.santa.add_configuration %}
-        <a href="{% url 'santa:create_configuration' %}" class="btn btn-primary" type="button">
-            Create a configuration
-        </a>
-        {% else %}
-        <p class="align-middle">
-            There are no configurations.
-        </p>
-        {% endif %}
+            {% if perms.jamf.add_jamfinstance %}
+                {% url 'jamf:create_jamf_instance' as link %}
+                {% no_entities 'Configurations' link %}
+            {% else %}
+                {% no_entities 'Configurations' %}
+            {% endif %}
         {% endfor %}
       </tbody>
     </table>

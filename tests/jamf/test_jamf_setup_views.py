@@ -102,7 +102,7 @@ class JamfSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("jamf:jamf_instances"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "jamf/jamfinstance_list.html")
-        self.assertContains(response, "Jamf instances (0)")
+        self.assertContains(response, "Instances (0)")
 
     # create jamf instance
 
@@ -119,7 +119,7 @@ class JamfSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("jamf:create_jamf_instance"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "jamf/jamfinstance_form.html")
-        self.assertContains(response, "Create jamf instance")
+        self.assertContains(response, "Create Instance")
 
     def test_create_jamf_instance_post(self):
         self._login("jamf.add_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
@@ -189,7 +189,7 @@ class JamfSetupViewsTestCase(TestCase):
         jamf_instance = self._force_jamf_instance()
         self._login("jamf.delete_jamfinstance")
         response = self.client.get(reverse("jamf:delete_jamf_instance", args=(jamf_instance.pk,)))
-        self.assertContains(response, "Delete jamf instance")
+        self.assertContains(response, "Delete Instance")
 
     @patch("zentral.contrib.jamf.api_client.APIClient.cleanup")
     def test_delete_jamf_instance_post_cleanup_ok(self, cleanup):
@@ -245,7 +245,7 @@ class JamfSetupViewsTestCase(TestCase):
         jamf_instance = self._force_jamf_instance()
         self._login("jamf.change_jamfinstance")
         response = self.client.get(reverse("jamf:update_jamf_instance", args=(jamf_instance.pk,)))
-        self.assertContains(response, "Update jamf instance")
+        self.assertContains(response, "Update Instance")
         self.assertContains(response, jamf_instance.get_password())
 
     def test_update_jamf_instance_post(self):

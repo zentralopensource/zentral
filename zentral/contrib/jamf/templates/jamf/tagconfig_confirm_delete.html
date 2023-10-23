@@ -3,7 +3,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'jamf:jamf_instances' %}">Jamf instances</a></li>
+  <li class="breadcrumb-item"><a href="{% url "jamf:index" %}">Jamf</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'jamf:jamf_instances' %}">Instances</a></li>
   <li class="breadcrumb-item"><a href="{{ jamf_instance.get_absolute_url }}">{{ jamf_instance }}</a></li>
   <li class="breadcrumb-item active">{{ title }}</li>
 </ol>

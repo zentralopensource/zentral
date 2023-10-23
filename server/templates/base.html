@@ -51,10 +51,12 @@
 
             </div>
             {% if request.zentral_deployment.items_for_display %}
-            <div class="mt-auto w-100 bg-light">
-                <small>Deployment</small><br/>
+            <div class="deployment-info bg-light">
                 {% for k, v in request.zentral_deployment.items_for_display %}
-                <small>{{ k }} : {{ v }}</small><br/>
+                    {{ k }}: {{ v }}
+                    {% if not forloop.last %}
+                        <br>
+                    {% endif %}
                 {% endfor %}
             </div>
             {% endif %}
