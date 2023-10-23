@@ -175,3 +175,11 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 .zentral-logo.dark {
     background-image: url(../images/logo-dark.svg);
 }
+
+.deployment-info {
+    @extend .p-2;
+    @extend .w-100;
+    @extend .mt-auto;
+    font-family: var(--bs-font-monospace);
+    font-size: 0.8em;
+}
