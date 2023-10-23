@@ -12,15 +12,15 @@
 <div class="d-flex justify-content-between mb-3">
     <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
     <div class="ms-auto">
-  {% if perms.santa.add_configuration %}
+    {% if perms.santa.add_configuration %}
         {% url 'santa:create_configuration' as url %}
         {% button 'CREATE' url "Create new Configuration" %}
-  {% endif %}
-  {% if perms.santa.view_enrollment and perms.santa.view_rule %}
+    {% endif %}
+    {% if perms.santa.view_enrollment and perms.santa.view_rule %}
         {% url 'santa:terraform_export' as url %}
         {% button 'DOWNLOAD' url "Download Terraform config" %}
+    {% endif %}
     </div>
-  {% endif %}
 </div>
 
 {% if configurations %}
