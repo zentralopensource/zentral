@@ -12,7 +12,7 @@ from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.munki.models import Enrollment
 from accounts.models import User
-from .utils import force_configuration, force_enrollment, force_script_check
+from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -90,6 +90,22 @@ class MunkiSetupViewsTestCase(TestCase):
         self._login("munki.view_configuration")
         response = self.client.get(reverse("munki:configurations"))
         self.assertEqual(response.status_code, 200)
+
+    def test_configuration_enrollment_and_machine_count(self):
+        self._login("munki.view_configuration")
+        configuration = force_configuration()
+        enrollment = force_enrollment(configuration=configuration, meta_business_unit=self.mbu)
+        make_enrolled_machine(enrollment)
+
+        enrollment = force_enrollment(configuration=configuration, meta_business_unit=self.mbu)
+        make_enrolled_machine(enrollment)
+        make_enrolled_machine(enrollment)
+
+        response = self.client.get(reverse("munki:configurations"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['object_list']), 1)
+        self.assertEqual(response.context['object_list'][0].enrollment__count, 2)
+        self.assertEqual(response.context['object_list'][0].enrollment__enrolledmachine__count, 3)
 
     # create configuration
 
