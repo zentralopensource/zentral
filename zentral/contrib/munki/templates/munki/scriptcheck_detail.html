@@ -1,102 +1,102 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load inventory_extras inclusion_tags %}
+
 
 {% block content %}
 <ol class="breadcrumb">
-  <li><a href="/">Home</a></li>
-  <li><a href="{% url 'munki:index' %}">Munki</a></li>
-  <li><a href="{% url 'munki:script_checks' %}">Script checks</a></li>
-  <li class="active">{{ object }}</li>
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:script_checks' %}">Script checks</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
-<h3>Script check <i>{{ object }}</i></h3>
 
-<table class="table">
-  <thead>
-    <th style="width:15%">Attribute</th>
-    <th>Value</th>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Name</td>
-      <td>{{ compliance_check.name }}</td>
-    </tr>
-    <tr>
-      <td>Description</td>
-      <td>{{ compliance_check.description|linebreaks }}</td>
-    </tr>
-    <tr>
-      <td>Type</td>
-      <td>{{ object.get_type_display }}</td>
-    </tr>
-    <tr>
-      <td>Source</td>
-      <td><pre>{{ object.source }}</pre></td>
-    </tr>
-    <tr>
-      <td>Expected result</td>
-      <td><code>{{ object.expected_result }}</code></td>
-    </tr>
-    <tr>
-      <td>Tags</td>
-      <td>
-        {% for tag in object.tags.all %}
-        {% inventory_tag tag %}
-        {% empty %}
-        -
-        {% endfor %}
-      </td>
-    </tr>
-    <tr>
-      <td>Intel?</td>
-      <td>{{ object.arch_amd64|yesno }}</td>
-    </tr>
-    <tr>
-      <td>Apple Silicon?</td>
-      <td>{{ object.arch_arm64|yesno }}</td>
-    </tr>
-    <tr>
-      <td>Min. OS version</td>
-      <td>{{ object.min_os_version|default:"-" }}</td>
-    </tr>
-    <tr>
-      <td>Max. OS version</td>
-      <td>{{ object.max_os_version|default:"-" }}</td>
-    </tr>
-  </tbody>
-</table>
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+        <div class="ms-3">
+            {% if show_events_link %}
+                {% url 'munki:script_check_events' object.pk as url%}
+                {% button 'EVENTS' url %}
+            {% endif %}
+            {% for link, anchor_text in store_links  %}
+                {% button 'LINK' link anchor_text %}
+            {% endfor %}
+        </div>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Script check</h3>
+        <div class="ms-auto">
+            {% if perms.munki.change_scriptcheck %}
+                {% url 'munki:update_script_check' object.pk as url %}
+                {% button 'UPDATE' url "Edit Script Check" %}
+            {% endif %}
+            {% if perms.munki.delete_scriptcheck %}
+                {% url 'munki:delete_script_check' object.pk as url %}
+                {% button 'DELETE' url "Delete Script Check" %}
+            {% endif %}        
+        </div>
+    </div>
 
-<dl class="dl-horizontal">
-  <dt class="small" style="opacity:0.5">Version</dt>
-  <dd class="small" style="opacity:0.5">{{ compliance_check.version }}</dd>
-  <dt class="small" style="opacity:0.5">Created at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.created_at|date:'r' }}</dd>
-  <dt class="small" style="opacity:0.5">Updated at</dt>
-  <dd class="small" style="opacity:0.5">{{ object.updated_at|date:'r' }}</dd>
-</dl>
+    <div class="table-responsive mb-3">
+        <table class="table table-light table-striped align-middle table-object-properties">
+        <thead>
+            <th style="width:15%">Attribute</th>
+            <th>Value</th>
+        </thead>
+        <tbody>
+            <tr>
+            <td>Name</td>
+            <td>{{ compliance_check.name }}</td>
+            </tr>
+            <tr>
+            <td>Description</td>
+            <td>{{ compliance_check.description|linebreaks }}</td>
+            </tr>
+            <tr>
+            <td>Type</td>
+            <td>{{ object.get_type_display }}</td>
+            </tr>
+            <tr>
+            <td>Source</td>
+            <td><pre>{{ object.source }}</pre></td>
+            </tr>
+            <tr>
+            <td>Expected result</td>
+            <td><code>{{ object.expected_result }}</code></td>
+            </tr>
+            <tr>
+            <td>Tags</td>
+            <td>
+                {% for tag in object.tags.all %}
+                {% inventory_tag tag %}
+                {% empty %}
+                -
+                {% endfor %}
+            </td>
+            </tr>
+            <tr>
+            <td>Intel?</td>
+            <td>{{ object.arch_amd64|yesno }}</td>
+            </tr>
+            <tr>
+            <td>Apple Silicon?</td>
+            <td>{{ object.arch_arm64|yesno }}</td>
+            </tr>
+            <tr>
+            <td>Min. OS version</td>
+            <td>{{ object.min_os_version|default:"-" }}</td>
+            </tr>
+            <tr>
+            <td>Max. OS version</td>
+            <td>{{ object.max_os_version|default:"-" }}</td>
+            </tr>
+        </tbody>
+        </table>
+    </div>
 
-<div class="btn-group" role="group" style="margin:0 0 10px 0">
-  {% if perms.munki.change_scriptcheck %}
-  <a href="{% url 'munki:update_script_check' object.pk %}" class="btn btn-default">
-    <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-    Update
-  </a>
-  {% endif %}
-  {% if perms.munki.delete_scriptcheck %}
-  <a href="{% url 'munki:delete_script_check' object.pk %}" class="btn btn-danger">
-    <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-    Delete
-  </a>
-  {% endif %}
-  {% if show_events_link %}
-  <a class="btn btn-default" href="{% url 'munki:script_check_events' object.pk %}">
-    <span class="glyphicon glyphicon-list" aria-hidden="true"></span> Events
-  </a>
-  {% endif %}
-  {% for link, anchor_text in store_links  %}
-  <a class="btn btn-default" href="{{ link }}">
-    <span class="glyphicon glyphicon-link" aria-hidden="true"></span> {{ anchor_text }}
-  </a>
-  {% endfor %}
+    {% created_updated_at object %}
+
 </div>
+
 {% endblock %}
