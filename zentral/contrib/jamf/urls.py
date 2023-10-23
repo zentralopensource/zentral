@@ -4,6 +4,10 @@ from . import views
 
 app_name = "jamf"
 urlpatterns = [
+
+    # index
+    path('', views.IndexView.as_view(), name="index"),
+
     # setup > jamf instances
     path('instances/', views.JamfInstancesView.as_view(), name="jamf_instances"),
     path('instances/create/', views.CreateJamfInstanceView.as_view(), name="create_jamf_instance"),
@@ -27,6 +31,7 @@ urlpatterns = [
 
 modules_menu_cfg = {
     'items': (
+        ('index', 'Overview', False, ('jamf',)),
         ('jamf_instances', 'jamf instances', False, ('jamf.view_jamfinstance',)),
     ),
     'weight': 60,

@@ -61,6 +61,32 @@ class JamfSetupViewsTestCase(TestCase):
                                         regex=r"^YOLOFOMO: (.*)$",
                                         replacement=r"\1")
 
+    # jamf index
+
+    def test_jamf_index_redirect(self):
+        self._login_redirect(reverse("jamf:index"))
+
+    def test_jamf_index_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("jamf:index"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_jamf_index(self):
+        self._login("jamf.view_jamfinstance")
+        jamf_instance = self._force_jamf_instance()
+        response = self.client.get(reverse("jamf:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "jamf/index.html")
+        self.assertContains(response, jamf_instance.host)
+
+    def test_jamf_index_no_list(self):
+        self._login("jamf.view_tagconfig")
+        jamf_instance = self._force_jamf_instance()
+        response = self.client.get(reverse("jamf:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "jamf/index.html")
+        self.assertNotContains(response, jamf_instance.host)
+
     # jamf instances
 
     def test_jamf_instances_redirect(self):

@@ -1,9 +1,10 @@
 import logging
 from django.contrib import messages
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
-from django.views.generic import DetailView, View, ListView
+from django.views.generic import DetailView, TemplateView, ListView, View
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from .api_client import APIClient, APIClientError
@@ -16,6 +17,18 @@ logger = logging.getLogger('zentral.contrib.jamf.views')
 
 
 # setup > jamf instances
+
+class IndexView(LoginRequiredMixin, TemplateView):
+    template_name = "jamf/index.html"
+
+    def get_context_data(self, **kwargs):
+        if not self.request.user.has_module_perms("jamf"):
+            raise PermissionDenied("Not allowed")
+        ctx = super().get_context_data(**kwargs)
+        jamf_instances = JamfInstance.objects.all()
+        ctx["instances"] = jamf_instances
+        ctx["instances_count"] = jamf_instances.count()
+        return ctx
 
 
 class JamfInstancesView(PermissionRequiredMixin, ListView):
