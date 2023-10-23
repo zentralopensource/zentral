@@ -63,7 +63,7 @@ def build_configuration(enrollment):
     # TODO: hardcoded
     config = {
         "ClientIdentifier": "$SERIALNUMBER",
-        "SoftwareRepoURL": "https://{}/monolith/munki_repo".format(get_tls_hostname()),
+        "SoftwareRepoURL": "https://{}/public/monolith/munki_repo".format(get_tls_hostname()),
         "FollowHTTPRedirects": "all",
         # "ManifestURL": None,  # no special Manifest URL with monolith
         # force redirect via monolith for Icon and Client Resource

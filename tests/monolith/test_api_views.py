@@ -1160,6 +1160,18 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response['Content-Disposition'],
                          f'attachment; filename="zentral_monolith_configuration.enrollment_{enrollment.pk}.plist"')
         self.assertEqual(int(response['Content-Length']), len(response.content))
+        response = plistlib.loads(response.content)
+        self.assertEqual(
+            response,
+            {'AdditionalHttpHeaders': [
+                f'Authorization: Bearer {enrollment.secret.secret}',
+                'X-Zentral-Serial-Number: $SERIALNUMBER',
+                'X-Zentral-UUID: $UDID'
+             ],
+             'ClientIdentifier': '$SERIALNUMBER',
+             'FollowHTTPRedirects': 'all',
+             'SoftwareRepoURL': 'https://zentral/public/monolith/munki_repo'}
+        )
 
     def test_get_enrollment_plist_user(self):
         enrollment, _ = self.force_enrollment()
@@ -1203,6 +1215,18 @@ class MonolithAPIViewsTestCase(TestCase):
             f'attachment; filename="zentral_monolith_configuration.enrollment_{enrollment.pk}.mobileconfig"'
         )
         self.assertEqual(int(response['Content-Length']), len(response.content))
+        response = plistlib.loads(response.content)
+        self.assertEqual(
+            response["PayloadContent"][0]["PayloadContent"]["ManagedInstalls"]["Forced"][0]["mcx_preference_settings"],
+            {'AdditionalHttpHeaders': [
+                f'Authorization: Bearer {enrollment.secret.secret}',
+                'X-Zentral-Serial-Number: $SERIALNUMBER',
+                'X-Zentral-UUID: $UDID'
+             ],
+             'ClientIdentifier': '$SERIALNUMBER',
+             'FollowHTTPRedirects': 'all',
+             'SoftwareRepoURL': 'https://zentral/public/monolith/munki_repo'}
+        )
 
     def test_get_enrollment_configuration_profile_user(self):
         enrollment, _ = self.force_enrollment()

@@ -5,8 +5,10 @@ import shutil
 import uuid
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
-from django.urls import reverse
+from django.urls import reverse, NoReverseMatch
 from django.utils.crypto import get_random_string
+from server.urls import build_urlpatterns_for_zentral_apps
+from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.models import (Catalog, Enrollment,
                                              Manifest, ManifestCatalog, ManifestSubManifest,
@@ -158,7 +160,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_get_catalog(self):
         pkg_info, catalog, _ = self._force_smpi()
         response = self._make_munki_request(
-            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),))
+            reverse("monolith_public:repository_catalog", args=(self.manifest.get_catalog_munki_name(),))
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)
@@ -176,7 +178,7 @@ class MonolithAPIViewsTestCase(TestCase):
             sub_manifest=sub_manifest
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            reverse("monolith_public:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
             tags=[get_random_string(12) for _ in range(2)]
         )
         self.assertEqual(response.status_code, 200)
@@ -197,7 +199,7 @@ class MonolithAPIViewsTestCase(TestCase):
             }
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            reverse("monolith_public:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
             serial_number="12345678",
             tags=[get_random_string(12) for _ in range(2)]
         )
@@ -221,7 +223,7 @@ class MonolithAPIViewsTestCase(TestCase):
             }
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            reverse("monolith_public:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
             serial_number="12345678",
             tags=[get_random_string(12) for _ in range(2)]
         )
@@ -242,7 +244,7 @@ class MonolithAPIViewsTestCase(TestCase):
             }
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            reverse("monolith_public:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
             tags=[get_random_string(12) for _ in range(2)]
         )
         self.assertEqual(response.status_code, 200)
@@ -266,7 +268,7 @@ class MonolithAPIViewsTestCase(TestCase):
             }
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            reverse("monolith_public:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
             serial_number="12345678",
             tags=["INCL1", "INCL2"]
         )
@@ -288,7 +290,7 @@ class MonolithAPIViewsTestCase(TestCase):
             }
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            reverse("monolith_public:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
             serial_number="12345678",
             tags=["INCL1", "INCL2"]
         )
@@ -311,7 +313,7 @@ class MonolithAPIViewsTestCase(TestCase):
             }
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
+            reverse("monolith_public:repository_catalog", args=(self.manifest.get_catalog_munki_name(),)),
             serial_number="12345678",
             tags=["EXCL1", "INCL1", "INCL2"]
         )
@@ -328,7 +330,7 @@ class MonolithAPIViewsTestCase(TestCase):
             name="ceci_n_est_pas_un_nom_aussi"
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_manifest", args=("12345678",)),
+            reverse("monolith_public:repository_manifest", args=("12345678",)),
         )
         self.assertEqual(response.status_code, 200)
         serialized_manifest = plistlib.loads(response.content)
@@ -347,7 +349,7 @@ class MonolithAPIViewsTestCase(TestCase):
             name="ceci_n_est_pas_un_nom_aussi"
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
         )
         self.assertEqual(response.status_code, 200)
         sub_manifest = plistlib.loads(response.content)
@@ -362,7 +364,7 @@ class MonolithAPIViewsTestCase(TestCase):
             sub_manifest_key="default_installs"
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
         )
         self.assertEqual(response.status_code, 200)
         sub_manifest = plistlib.loads(response.content)
@@ -379,7 +381,7 @@ class MonolithAPIViewsTestCase(TestCase):
                          "shards": {"default": 100, "tags": {"INCL1": 100, "INCL2": 100}}}
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
         )
         self.assertEqual(response.status_code, 200)
         sub_manifest = plistlib.loads(response.content)
@@ -398,7 +400,7 @@ class MonolithAPIViewsTestCase(TestCase):
                          "shards": {"default": 100, "tags": {"INCL1": 100, "INCL2": 100}}}
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
             serial_number="12345678",
             tags=["EXCL1"]
         )
@@ -419,7 +421,7 @@ class MonolithAPIViewsTestCase(TestCase):
                          "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 76}}}  # NAME + SN → 77
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
             serial_number="12345678",
             tags=["INCL2"]
         )
@@ -437,7 +439,7 @@ class MonolithAPIViewsTestCase(TestCase):
                          "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 78}}}  # NAME + SN → 77
         )
         response = self._make_munki_request(
-            reverse("monolith:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
             serial_number="12345678",
             tags=["INCL2"]
         )
@@ -453,7 +455,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_repository_package_not_found(self):
         pkg_info, _, _ = self._force_smpi()
         api_path = pkg_info.get_pkg_info()["installer_item_location"]
-        response = self._make_munki_request(reverse("monolith:repository_package", args=(api_path,)))
+        response = self._make_munki_request(reverse("monolith_public:repository_package", args=(api_path,)))
         self.assertEqual(response.status_code, 404)
 
     def test_repository_package(self):
@@ -463,7 +465,7 @@ class MonolithAPIViewsTestCase(TestCase):
         with open(local_path, "wb") as f:
             f.write(b"yolo")
         api_path = pkg_info.get_pkg_info()["installer_item_location"]
-        response = self._make_munki_request(reverse("monolith:repository_package", args=(api_path,)))
+        response = self._make_munki_request(reverse("monolith_public:repository_package", args=(api_path,)))
         self.assertEqual(b"".join(response.streaming_content), b"yolo")
         shutil.rmtree("/tmp/pkgs")
 
@@ -471,13 +473,50 @@ class MonolithAPIViewsTestCase(TestCase):
         pkg_info, _, _ = self._force_smpi()
         api_path = pkg_info.get_pkg_info()["installer_item_location"]
         api_path = api_path.replace("." + str(pkg_info.pk) + ".", ".0.")  # no pkg info with pk == 0
-        response = self._make_munki_request(reverse("monolith:repository_package", args=(api_path,)))
+        response = self._make_munki_request(reverse("monolith_public:repository_package", args=(api_path,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.content, b"PkgInfo not found!")
 
     def test_local_repository_package(self):
         pkg_info, _, _ = self._force_smpi(local_pkg_content=b"fomo")
         api_path = pkg_info.get_pkg_info()["installer_item_location"]
-        response = self._make_munki_request(reverse("monolith:repository_package", args=(api_path,)))
+        response = self._make_munki_request(reverse("monolith_public:repository_package", args=(api_path,)))
         self.assertEqual(b"".join(response.streaming_content), b"fomo")
         pkg_info.file.delete(save=False)
+
+    # legacy public endpoints
+
+    def test_legacy_public_urls_are_disabled_on_tests(self):
+        routes = [
+            'repository_catalog',
+            'repository_manifest',
+            'repository_package',
+            'repository_icon',
+            'repository_client_resource',
+        ]
+        for route in routes:
+            with self.assertRaises(NoReverseMatch):
+                reverse(f"monolith_public_legacy:{route}", args=("path",),)
+            self.assertIsNotNone(reverse(f"monolith_public:{route}", args=("path",),))
+
+    def test_mount_legacy_public_endpoints_flag_is_working(self):
+        url_prefix = "/public"
+        routes = [
+            'repository_catalog',
+            'repository_manifest',
+            'repository_package',
+            'repository_icon',
+            'repository_client_resource',
+        ]
+        munki_conf = settings._collection["apps"]._collection["zentral.contrib.monolith"]
+        munki_conf._collection["mount_legacy_public_endpoints"] = True
+        urlpatterns_w_legacy = tuple(build_urlpatterns_for_zentral_apps())
+        munki_conf._collection["mount_legacy_public_endpoints"] = False
+        urlpatterns_wo_legacy = tuple(build_urlpatterns_for_zentral_apps())
+        for route in routes:
+            self.assertEqual(
+                reverse(f"monolith_public:{route}", args=("path",), urlconf=urlpatterns_w_legacy),
+                url_prefix + reverse(f"monolith_public_legacy:{route}", args=("path",), urlconf=urlpatterns_w_legacy)
+            )
+            with self.assertRaises(NoReverseMatch):
+                reverse(f"monolith_public_legacy:{route}", args=("path",), urlconf=urlpatterns_wo_legacy)

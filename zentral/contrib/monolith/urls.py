@@ -94,18 +94,6 @@ urlpatterns = [
     path('manifests/<int:pk>/delete_cache_server/<int:cs_pk>/',
          views.DeleteManifestCacheServerView.as_view(), name='delete_manifest_cache_server'),
 
-    # managedsoftwareupdate API
-    path('munki_repo/catalogs/<path:name>',
-         views.MRCatalogView.as_view(), name='repository_catalog'),
-    path('munki_repo/manifests/<path:name>',
-         views.MRManifestView.as_view(), name='repository_manifest'),
-    path('munki_repo/pkgs/<path:name>',
-         views.MRPackageView.as_view(), name='repository_package'),
-    path('munki_repo/icons/<path:name>',
-         views.MRRedirectView.as_view(section="icons"), name='repository_icon'),
-    path('munki_repo/client_resources/<path:name>',
-         views.MRRedirectView.as_view(section="client_resources"), name='repository_client_resource'),
-
     # terraform
     path('terraform_export/',
          views.TerraformExportView.as_view(),
