@@ -5,7 +5,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'jamf:jamf_instances' %}">Jamf instances</a></li>
+  <li class="breadcrumb-item"><a href="{% url "jamf:index" %}">Jamf</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'jamf:jamf_instances' %}">Instances</a></li>
   <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
@@ -14,7 +15,7 @@
         <h2 class="m-0">{{ title }}</h2>
     </div>
     <div class="d-flex align-items-center mb-3">
-        <h3 class="m-0 fs-5 text-secondary">Jamf Instance</h3>
+        <h3 class="m-0 fs-5 text-secondary">Instance</h3>
         <div class="ms-auto">
             {% url 'jamf:delete_jamf_instance' object.pk as url %}
             {% button 'LINK' object.api_doc_url "API resource documentation" %}

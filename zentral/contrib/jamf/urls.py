@@ -32,7 +32,7 @@ urlpatterns = [
 modules_menu_cfg = {
     'items': (
         ('index', 'Overview', False, ('jamf',)),
-        ('jamf_instances', 'jamf instances', False, ('jamf.view_jamfinstance',)),
+        ('jamf_instances', 'Instances', False, ('jamf.view_jamfinstance',)),
     ),
     'weight': 60,
 }
