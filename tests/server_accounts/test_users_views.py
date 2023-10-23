@@ -396,6 +396,7 @@ class AccountUsersViewsTestCase(TestCase):
         response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
                                     {"username": "toto",
                                      "email": "tata@example.com",
+                                     "items_per_page": 10,
                                      "is_superuser": self.user.is_superuser},
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/user_detail.html")

@@ -182,7 +182,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
         self.assertContains(response, incident2.get_absolute_url())
 
     def test_open_incidents_one_of_two_incidents_with_link(self):
-        incident = self._force_incident(key={"probe_pk": 0})
+        incident = self._force_incident(key={"probe_pk": 0}, status=Status.CLOSED)
         self._force_machine_incident(incident, status=Status.CLOSED)
         incident2 = self._force_incident()
         self._force_machine_incident(incident2)

@@ -153,7 +153,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Machine incidents (23)")
-        self.assertContains(response, "page 1 of 2")
+        self.assertContains(response, "page 1 of 3")
 
     def test_incident_detail_machine_incidents_second_page(self):
         incident = self._force_incident()
@@ -163,7 +163,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)) + "?page=2")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Machine incidents (23)")
-        self.assertContains(response, "page 2 of 2")
+        self.assertContains(response, "page 2 of 3")
 
     def test_incident_detail_no_perm_no_machine_incidents(self):
         incident = self._force_incident()
@@ -173,7 +173,7 @@ class InventoryViewsTestCase(TestCase):
         response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Machine incidents (23)")
-        self.assertNotContains(response, "page 1 of 2")
+        self.assertNotContains(response, "page 1 of 3")
 
     # update incident
 
