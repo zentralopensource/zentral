@@ -48,7 +48,7 @@ class CreateJamfInstanceView(PermissionRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["title"] = "Create jamf instance"
+        ctx["title"] = "Create Instance"
         return ctx
 
 
@@ -91,7 +91,7 @@ class UpdateJamfInstanceView(PermissionRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["title"] = "Update jamf instance"
+        ctx["title"] = "Update Instance"
         return ctx
 
 
@@ -102,7 +102,7 @@ class DeleteJamfInstanceView(PermissionRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["title"] = "Delete jamf instance"
+        ctx["title"] = "Delete Instance"
         return ctx
 
     def form_valid(self, form):

@@ -4,11 +4,12 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item active">Jamf instances</li>
+  <li class="breadcrumb-item"><a href="{% url "jamf:index" %}">Jamf</a></li>
+  <li class="breadcrumb-item active">Instances</li>
 </ol>
 
 <div class="d-flex align-items-center mb-1">
-    <h2 class="m-0">Jamf instance{{ jamf_instances_count|pluralize }} ({{ jamf_instances_count }})</h2>
+    <h2 class="m-0">Instance{{ jamf_instances_count|pluralize }} ({{ jamf_instances_count }})</h2>
     <div class="ms-auto">
         {% if perms.jamf.add_jamfinstance %}
             {% url 'jamf:create_jamf_instance' as url %}
