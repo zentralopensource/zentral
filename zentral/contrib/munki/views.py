@@ -15,7 +15,7 @@ from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
-from zentral.utils.views import DeleteViewWithAudit
+from zentral.utils.views import DeleteViewWithAudit, UserPaginationListView
 from .compliance_checks import MunkiScriptCheck
 from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, ScriptCheckForm, UpdateInstallProbeForm
 from .models import Configuration, Enrollment, PrincipalUserDetectionSource, ScriptCheck
@@ -199,7 +199,7 @@ class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):
 # script check
 
 
-class ScriptCheckListView(PermissionRequiredMixin, ListView):
+class ScriptCheckListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "munki.view_scriptcheck"
     model = ScriptCheck
 
