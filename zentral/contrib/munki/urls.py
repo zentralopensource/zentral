@@ -53,6 +53,7 @@ modules_menu_cfg = {
     'items': (
         ('index', 'Overview', False, ('munki.index',)),
         ('configurations', 'Configurations', False, ('munki.view_configuration',)),
+        ('script_checks', 'Script checks', False, ('munki.view_scriptcheck',)),
     ),
     'weight': 30,
 }
