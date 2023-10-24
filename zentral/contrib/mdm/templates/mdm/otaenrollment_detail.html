@@ -22,10 +22,8 @@
                     {% button 'UPDATE' url "Edit OTA Enrollment" %}
                 {% endif %}
                 {% if not object.realm %}
-                <a href="{% url 'mdm:download_profile_service_payload' object.pk %}" class="btn btn-link text-decoration-none text-dark"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Profile">
-                    <i class="bi bi-person" aria-hidden="true"></i>
-                </a>
+                    {% url 'mdm:download_profile_service_payload' object.pk as url %}
+                    {% button 'DOWNLOAD' url "Download Profile" %}
                 {% endif %}
             {% endif %}
 
