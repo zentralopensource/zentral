@@ -3,7 +3,7 @@ from urllib.parse import urlencode
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Count
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
@@ -57,6 +57,9 @@ class TerraformExportView(PermissionRequiredMixin, View):
 class ConfigurationListView(PermissionRequiredMixin, ListView):
     permission_required = "munki.view_configuration"
     model = Configuration
+
+    def get_queryset(self):
+        return super().get_queryset().annotate(Count("enrollment", distinct=True), Count("enrollment__enrolledmachine"))
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

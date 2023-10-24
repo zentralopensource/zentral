@@ -13,7 +13,7 @@ from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIn
 from zentral.contrib.munki.models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
 from zentral.core.compliance_checks.models import MachineStatus
 from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
-from .utils import force_configuration, force_enrollment, force_script_check
+from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -31,15 +31,6 @@ class MunkiAPIViewsTestCase(TestCase):
         cls.enrollment = force_enrollment(configuration=cls.configuration, enrollment_secret=cls.enrollment_secret)
 
     # utility methods
-
-    def _make_enrolled_machine(self, tag_name=None):
-        em = EnrolledMachine.objects.create(enrollment=self.enrollment,
-                                            serial_number=get_random_string(32),
-                                            token=get_random_string(64))
-        if tag_name:
-            tag = Tag.objects.create(name=tag_name)
-            MachineTag.objects.create(serial_number=em.serial_number, tag=tag)
-        return em
 
     def _post_as_json(self, url, data, **extra):
         return self.client.post(url,
@@ -96,13 +87,13 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_job_details_missing_serial_number_err(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         response = self._post_as_json(reverse("munki_public:job_details"), {},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 403)
 
     def test_job_details_machine_conflict_err(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         data_sn = get_random_string(9)
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": data_sn},
@@ -110,7 +101,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_job_details(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
@@ -123,7 +114,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(expected_response, response.json())
 
     def test_job_details_with_collected_condition_keys(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         self.configuration.collected_condition_keys = ["un"]
         self.configuration.save()
         response = self._post_as_json(reverse("munki_public:job_details"),
@@ -139,7 +130,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(expected_response, response.json())
 
     def test_job_details_with_principal_user_detection(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         self.configuration.principal_user_detection_sources = ["Google Chrome"]
         self.configuration.principal_user_detection_domains = ["zentral.com"]
         self.configuration.save()
@@ -154,7 +145,7 @@ class MunkiAPIViewsTestCase(TestCase):
         )
 
     def test_job_details_with_open_incident(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         # one open, one closed incident
         for status in (Status.OPEN, Status.CLOSED):
             i = Incident.objects.create(
@@ -182,7 +173,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(expected_response, response.json())
 
     def test_job_details_conflict(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": get_random_string(3)},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
@@ -190,7 +181,7 @@ class MunkiAPIViewsTestCase(TestCase):
 
     @patch("zentral.contrib.munki.public_views.logger.error")
     def test_job_details_bad_os_version(self, logger_error):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         force_script_check()
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number,
@@ -203,7 +194,7 @@ class MunkiAPIViewsTestCase(TestCase):
 
     @patch("zentral.contrib.munki.public_views.logger.error")
     def test_job_details_unknown_arch_version(self, logger_error):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         force_script_check()
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number,
@@ -215,7 +206,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertNotIn("script_checks", response.json())
 
     def test_job_details_first_time_script_check(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
         for tag in tags:
             MachineTag.objects.create(serial_number=enrolled_machine.serial_number, tag=tag)
@@ -241,7 +232,7 @@ class MunkiAPIViewsTestCase(TestCase):
         )
 
     def test_job_details_first_time_script_check_amd64(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         sc = force_script_check(
             type=ScriptCheck.Type.ZSH_BOOL,
             source="echo true",
@@ -261,7 +252,7 @@ class MunkiAPIViewsTestCase(TestCase):
         )
 
     def test_job_details_second_time_too_early_no_script_check(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         tag = Tag.objects.create(name=get_random_string(12))
         MachineTag.objects.create(serial_number=enrolled_machine.serial_number, tag=tag)
         force_script_check(
@@ -279,7 +270,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertNotIn("script_checks", response.json())
 
     def test_job_details_second_time_script_check(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         tag = Tag.objects.create(name=get_random_string(12))
         MachineTag.objects.create(serial_number=enrolled_machine.serial_number, tag=tag)
         sc = force_script_check(
@@ -310,7 +301,7 @@ class MunkiAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_job(self, post_event):
         tag_name = get_random_string(12)
-        enrolled_machine = self._make_enrolled_machine(tag_name=tag_name)
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment, tag_name=tag_name)
         computer_name = get_random_string(45)
         report_sha1sum = 40 * "0"
 
@@ -395,7 +386,7 @@ class MunkiAPIViewsTestCase(TestCase):
         )
 
     def test_post_job_duplicated_profile(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         profile = {
             "uuid": "a62a458d-6cdb-4b3c-a440-2ac3129022db",
             "identifier": "un.deux.trois",
@@ -427,7 +418,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(db_profile.uuid, profile["uuid"])
 
     def test_post_job_missing_patch_number(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         response = self._post_as_json(reverse("munki_public:post_job"),
                                       {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
                                                             "system_info": {"computer_name": get_random_string(12)},
@@ -442,7 +433,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(ms.os_version.patch, 0)
 
     def test_post_job_with_patch_number(self):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         response = self._post_as_json(reverse("munki_public:post_job"),
                                       {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
                                                             "system_info": {"computer_name": get_random_string(12)},
@@ -460,7 +451,7 @@ class MunkiAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_job_with_wipe(self, post_event):
         tag_name = get_random_string(12)
-        enrolled_machine = self._make_enrolled_machine(tag_name=tag_name)
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment, tag_name=tag_name)
         computer_name = get_random_string(45)
 
         # no managed installs for the machine
@@ -552,7 +543,7 @@ class MunkiAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_job_script_check_results(self, post_event):
-        enrolled_machine = self._make_enrolled_machine()
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         sc = force_script_check()
         start_dt = datetime.utcnow()
         machine_status_qs = MachineStatus.objects.filter(serial_number=enrolled_machine.serial_number)

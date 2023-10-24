@@ -9,7 +9,7 @@
 </ol>
 
     <div class="d-flex align-items-center mb-1">
-        <h2 class="m-0">Munki configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h2>
+        <h2 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h2>
         <div class="ms-auto">
             {% if perms.munki.add_configuration %}
                 {% url 'munki:create_configuration' as url %}
@@ -26,6 +26,8 @@
     <table class="table table-light table-striped align-middle table-hover">
     <thead>
         <th>Name</th>
+        <th>Enrollments</th>
+        <th>Machines</th>
         {% if perms.munki.change_configuration %}
         <th></th>
         {% endif %}
@@ -35,6 +37,12 @@
         <tr class="data-row">
         <td>
             <a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a>
+        </td>
+        <td>
+            {{ configuration.enrollment__count }}
+        </td>
+        <td>
+            {{ configuration.enrollment__enrolledmachine__count }}
         </td>
         {% if perms.munki.change_configuration %}
         <td class="text-end py-0">

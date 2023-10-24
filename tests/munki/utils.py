@@ -1,7 +1,7 @@
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.munki.compliance_checks import MunkiScriptCheck
-from zentral.contrib.munki.models import Configuration, Enrollment, ScriptCheck
+from zentral.contrib.munki.models import Configuration, Enrollment, EnrolledMachine, ScriptCheck
 from zentral.core.compliance_checks.models import ComplianceCheck
 
 
@@ -63,3 +63,13 @@ def force_script_check(
     if tags is not None:
         sc.tags.set(tags)
     return sc
+
+
+def make_enrolled_machine(enrollment, tag_name=None):
+    em = EnrolledMachine.objects.create(enrollment=enrollment,
+                                        serial_number=get_random_string(32),
+                                        token=get_random_string(64))
+    if tag_name:
+        tag = Tag.objects.create(name=tag_name)
+        MachineTag.objects.create(serial_number=em.serial_number, tag=tag)
+    return em
