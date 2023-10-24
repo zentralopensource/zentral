@@ -352,10 +352,12 @@
     <h3 class="m-0">Last commands</h3>
     <div class="ms-auto">
         {% if perms.mdm.change_enrolleddevice %}
-        <button type="submit" class="btn btn-success" {% if not object.can_be_poked %}disabled="disabled"{% endif %}
-            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Poke!">
-            <i class="bi bi-hand-index"></i>
-        </button>
+        <form style="display:inline-block" method="POST" action="{% url 'mdm:poke_enrolled_device' object.pk %}">{% csrf_token %}
+            <button type="submit" class="btn btn-success" {% if not object.can_be_poked %}disabled="disabled"{% endif %}
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Poke!">
+                <i class="bi bi-hand-index"></i>
+            </button>
+        </form>
         {% endif %}
         {% if perms.mdm.add_devicecommand and create_command_links %}
         <div class="btn-group">
