@@ -28,16 +28,26 @@
         </div>
     </div>
 
-    <dl class="row">
-    <dt class="col-sm-3 text-md-end">Name</dt>
-    <dd class="col-sm-9"{{ object.name }}</dd>
-    <dt class="col-sm-3 text-md-end">Topic</dt>
-    <dd class="col-sm-9">{{ object.topic }}</dd>
-    <dt class="col-sm-3 text-md-end">Not before</dt>
-    <dd class="col-sm-9">{{ object.not_before }}</dd>
-    <dt class="col-sm-3 text-md-end">Not after</dt>
-    <dd class="col-sm-9">{{ object.not_after }}</dd>
-    </dl>
+    <table class="table table-light table-striped align-middle table-object-properties">
+        <tbody>
+        <tr>
+            <th width="160px">Name</th>
+            <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+            <th width="160px">Topic</th>
+            <td>{{ object.topic }}</td>
+        </tr>
+        <tr>
+            <th width="160px">Not before</th>
+            <td>{{ object.not_before }}</td>
+        </tr>
+        <tr>
+            <th width="160px">Not after</th>
+            <td>{{ object.not_after }}</td>
+        </tr>
+        </tbody>
+    </table>
 </div>
 
     {% if perms.mdm.view_depenrollment %}

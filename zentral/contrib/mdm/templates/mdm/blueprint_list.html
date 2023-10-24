@@ -45,7 +45,7 @@
     </table>
 {% else %}
     {% if perms.mdm.add_blueprint %}
-        {% url 'mdm:add_blueprint' as link %}
+        {% url 'mdm:create_blueprint' as link %}
         {% no_entities 'Blueprints' link %}
     {% else %}
         {% no_entities 'Blueprints' %}
