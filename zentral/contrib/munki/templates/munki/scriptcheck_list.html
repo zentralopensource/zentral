@@ -9,7 +9,7 @@
 </ol>
 
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="m-0">Script check{{ object_list.count|pluralize }} ({{ object_list.count }})</h3>
+    <h3 class="m-0">Script check{{ paginator.count|pluralize }} ({{ paginator.count }})</h3>
     <div class="ms-auto">
     {% if perms.munki.add_scriptcheck %}
         {% url 'munki:create_script_check' as url %}
