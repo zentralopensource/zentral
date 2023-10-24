@@ -6,15 +6,15 @@
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:enrollments' %}">Enrollments</a></li>
-  <li class="breadcrumb-item active">[OTA] {{ object.name }}</li>
+  <li class="breadcrumb-item active">{{ object.name }}</li>
 </ol>
 
 <div class="object-details">
     <div class="d-flex align-items-center mb-1">
         <h2 class="m-0">{{ object.name }}</h2>
     </div>
-    <div class="d-flex align-items-center mb-3">
-        <h3 class="m-0 fs-5 text-secondary">[OTA]</h3>
+    <div class="d-flex align-items-center">
+        <h3 class="m-0 fs-5 text-secondary">OTA Enrollment</h3>
         <div class="ms-auto">
             {% if not secret.is_revoked %}
                 {% if perms.mdm.change_otaenrollment %}
@@ -31,7 +31,7 @@
     </div>
 
     {% with object.enrollment_secret as secret %}
-    <h4 style="margin-top:20px">Configuration</h4>
+    <h4>Configuration</h4>
     <table class="table table-light table-striped align-middle table-object-properties">
     <tbody>
         <tr>
