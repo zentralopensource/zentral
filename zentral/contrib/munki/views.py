@@ -17,7 +17,8 @@ from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
 from zentral.utils.views import DeleteViewWithAudit, UserPaginationListView
 from .compliance_checks import MunkiScriptCheck
-from .forms import CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, ScriptCheckForm, UpdateInstallProbeForm
+from .forms import (CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, ScriptCheckForm,
+                    ScriptCheckSearchForm, UpdateInstallProbeForm)
 from .models import Configuration, Enrollment, PrincipalUserDetectionSource, ScriptCheck
 from .terraform import iter_resources
 
@@ -204,7 +205,20 @@ class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):
 
 class ScriptCheckListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "munki.view_scriptcheck"
-    model = ScriptCheck
+    template_name = "munki/scriptcheck_list.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.form = ScriptCheckSearchForm(self.request.GET)
+        self.form.is_valid()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return self.form.get_queryset()
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["form"] = self.form
+        return ctx
 
 
 class CreateScriptCheckView(PermissionRequiredMixin, TemplateView):
