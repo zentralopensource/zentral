@@ -65,13 +65,40 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("munki:create_script_check"))
 
     def test_script_checks_with_create_link(self):
-        sc = force_script_check()
+        sc_one = force_script_check()
+        sc_two = force_script_check()
         self._login("munki.view_scriptcheck", "munki.add_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
-        self.assertContains(response, sc.compliance_check.name)
         self.assertContains(response, reverse("munki:create_script_check"))
+        self.assertContains(response, sc_one.compliance_check.name)
+        self.assertContains(response, sc_two.compliance_check.name)
+        self.assertContains(response, "Script checks (2)")
+
+    def test_script_check_search(self):
+        sc_one = force_script_check()
+        sc_two = force_script_check(type=ScriptCheck.Type.ZSH_BOOL)
+        self._login("munki.view_scriptcheck", "munki.add_scriptcheck")
+
+        response = self.client.get(reverse("munki:script_checks"), {"name": "test"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
+        self.assertContains(response, "Script checks (0)")
+
+        response = self.client.get(reverse("munki:script_checks"),
+                                   {"name": sc_one.compliance_check.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
+        self.assertContains(response, sc_one.compliance_check.name)
+        self.assertContains(response, "Script check (1)")
+
+        response = self.client.get(reverse("munki:script_checks"),
+                                   {"type": ScriptCheck.Type.ZSH_BOOL})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
+        self.assertContains(response, sc_two.compliance_check.name)
+        self.assertContains(response, "Script check (1)")
 
     # create
 

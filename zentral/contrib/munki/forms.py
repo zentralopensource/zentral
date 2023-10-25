@@ -38,6 +38,34 @@ class EnrollmentForm(forms.ModelForm):
             self.fields["configuration"].widget = forms.HiddenInput()
 
 
+class ScriptCheckSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
+    name = forms.CharField(
+        label='Name',
+        required=False,
+        widget=forms.TextInput(
+            attrs={"autofocus": True,
+                   "size": 32,
+                   }
+        )
+    )
+    type = forms.ChoiceField(
+        choices=[('', '...')] + ScriptCheck.Type.choices,
+        required=False,
+    )
+
+    def get_queryset(self):
+        qs = ScriptCheck.objects.all()
+        name = self.cleaned_data.get("name")
+        if name:
+            qs = qs.filter(compliance_check__name__icontains=name)
+        type = self.cleaned_data.get("type")
+        if type:
+            qs = qs.filter(type=type)
+        return qs
+
+
 class ScriptCheckForm(forms.ModelForm):
     class Meta:
         model = ScriptCheck
