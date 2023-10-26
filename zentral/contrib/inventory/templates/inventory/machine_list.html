@@ -242,7 +242,7 @@
 <div class="row g-4">
   {% for f, f_links, f_r_link, f_up_link in grouping_links %}
   <div class="col-md-3">
-    <div class="card mb-3 {% if f_up_link %} panel-info{% endif %}">
+    <div class="inv-filter {% if f_up_link %} panel-info{% endif %}">
         <div class="card-header filter-title d-flex justify-content-between">
             <div class="py-1">
                 {{ f.title }}
@@ -264,7 +264,7 @@
                 {% endif %}
             </div>
         </div>
-        <div class="card-body d-flex container">
+        <div class="inv-filter-choices">
         <div class="col" id="filter-{{ f.get_query_kwarg }}-links" data-sort="az">
           {% for label, count, percentage, down_link, up_link in f_links %}
                 <div data-label="{{ label }}" data-count="{{ count }}">
