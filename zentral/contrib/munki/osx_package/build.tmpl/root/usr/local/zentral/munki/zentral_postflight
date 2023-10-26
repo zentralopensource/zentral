@@ -298,6 +298,34 @@ def build_managed_installs_payload():
 # Script checks
 
 
+def get_current_user_info():
+    current_user = curr_user_id = None
+    try:
+        info = subprocess.check_output(
+          '/usr/sbin/scutil <<< "show State:/Users/ConsoleUser"',
+          shell=True, encoding="utf-8"
+        )
+    except Exception:
+        pass
+    else:
+        for line in info.splitlines():
+            if "SessionUserIDKey" in line:
+                curr_user_id = int(line.rsplit(":")[-1].strip())
+            elif "SessionUserNameKey" in line:
+                current_user = line.rsplit(":")[-1].strip()
+    return current_user, curr_user_id
+
+
+def get_script_check_env():
+    env = os.environ.copy()
+    current_user, curr_user_id = get_current_user_info()
+    if current_user is not None:
+        env["CURRENT_USER"] = current_user
+    if curr_user_id is not None:
+        env["CURR_USER_ID"] = str(curr_user_id)
+    return env
+
+
 def convert_script_check_int_result(result):
     return int(result)
 
@@ -313,7 +341,7 @@ def convert_script_check_bool_result(result):
     return bool(result)
 
 
-def run_script_check(script_check):
+def run_script_check(script_check, env):
     start_time = time.monotonic()
     cp = subprocess.run(
         ["/bin/zsh"],
@@ -321,16 +349,17 @@ def run_script_check(script_check):
         capture_output=True,
         encoding="utf-8",
         timeout=SCRIPT_CHECK_TIMEOUT,
+        env=env,
     )
     time_elapsed = time.monotonic() - start_time
     expected_result = script_check["expected_result"]
-    result = cp.stdout
-    if script_check["type"] == "ZTL_INT":
+    result = cp.stdout.strip()
+    if script_check["type"] == "ZSH_INT":
         try:
             result = convert_script_check_int_result(result)
         except Exception:
             return SCRIPT_CHECK_STATUS_UNKNOWN, time_elapsed
-    elif script_check["type"] == "ZTL_BOOL":
+    elif script_check["type"] == "ZSH_BOOL":
         try:
             result = convert_script_check_bool_result(result)
         except Exception:
@@ -342,9 +371,10 @@ def run_script_check(script_check):
 
 
 def run_script_checks(script_checks):
+    env = get_script_check_env()
     results = []
     for script_check in script_checks:
-        status, time_elapsed = run_script_check(script_check)
+        status, time_elapsed = run_script_check(script_check, env)
         results.append({
             "pk": script_check["pk"],
             "version": script_check["version"],
