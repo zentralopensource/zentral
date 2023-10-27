@@ -9,10 +9,12 @@ from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.text import shard as compute_shard
 from .apns import send_enrolled_device_notification, send_enrolled_user_notification
-from .declarations import (build_target_management_status_subscriptions,
+from .declarations import (build_specific_software_update_enforcement,
+                           build_target_management_status_subscriptions,
                            get_declaration_identifier,
                            get_legacy_profile_identifier,
-                           get_legacy_profile_server_token)
+                           get_legacy_profile_server_token,
+                           get_software_update_enforcement_specific_identifier)
 from .models import (Artifact, ArtifactVersion,
                      Blueprint, BlueprintArtifact,
                      Channel,
@@ -561,6 +563,24 @@ class Target:
 
     # declarations
 
+    @cached_property
+    def software_update_enforcement(self):
+        if not self.is_device:
+            return
+        if not self.blueprint:
+            return
+        matching_tag_count = 0
+        selected_sue = None
+        for sue in self.blueprint.software_update_enforcements.prefetch_related("tags").all().order_by("pk"):
+            sue_tag_ids = set(t.pk for t in sue.tags.all())
+            common_tag_count = len(sue_tag_ids.intersection(self.tag_ids))
+            if common_tag_count > matching_tag_count or (not sue_tag_ids and not selected_sue):
+                matching_tag_count = common_tag_count
+                selected_sue = sue
+            elif sue_tag_ids and common_tag_count == matching_tag_count:
+                logger.warning("Machine %s: software update enforcement conflict", self.serial_number)
+        return selected_sue
+
     # https://developer.apple.com/documentation/devicemanagement/activationsimple
     @cached_property
     def activation(self):
@@ -571,6 +591,8 @@ class Target:
         }
         for artifact, _ in self.all_installed_or_to_install_serialized((Artifact.Type.PROFILE,)):
             payload["StandardConfigurations"].append(get_legacy_profile_identifier(artifact))
+        if self.software_update_enforcement:
+            payload["StandardConfigurations"].append(get_software_update_enforcement_specific_identifier(self))
         payload["StandardConfigurations"].sort()
         h = hashlib.sha1()
         for sc_id in payload["StandardConfigurations"]:
@@ -603,6 +625,12 @@ class Target:
             declarations["Configurations"].append(
                {"Identifier": get_legacy_profile_identifier(artifact),
                 "ServerToken": get_legacy_profile_server_token(self, artifact, artifact_version)}
+            )
+        software_update_enforcement_specific = build_specific_software_update_enforcement(self)
+        if software_update_enforcement_specific:
+            declarations["Configurations"].append(
+                {"Identifier": software_update_enforcement_specific["Identifier"],
+                 "ServerToken": software_update_enforcement_specific["ServerToken"]}
             )
         h = hashlib.sha1()
         for key in sorted(declarations.keys()):

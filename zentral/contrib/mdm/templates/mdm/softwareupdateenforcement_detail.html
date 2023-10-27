@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% load inventory_extras ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:software_update_enforcements' %}">Software update enforcements</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
+</ol>
+
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Software update enforcement</h3>
+        <div class="ms-auto">
+            {% if perms.mdm.change_softwareupdateenforcement %}
+                {% url 'mdm:update_software_update_enforcement' object.pk as url %}
+                {% button 'UPDATE' url "Edit software update enforcement" %}
+            {% endif %}
+            {% if perms.mdm.delete_softwareupdateenforcement and object.can_be_deleted %}
+                {% url 'mdm:delete_software_update_enforcement' object.pk as url %}
+                {% button 'DELETE' url "Delete software update enforcement" %}
+            {% endif %}
+        </div>
+    </div>
+
+    <table class="table table-light table-striped align-middle table-object-properties">
+      <tbody>
+        <tr>
+          <th width="240px">Name</th>
+          <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+          <th>Details URL</th>
+          <td>{{ object.details_url|default:"-" }}</td>
+        </tr>
+        <tr>
+          <th>Tag{{ object.tags.count|pluralize }}</th>
+          <td>
+            {% for tag in object.tags.all %}
+            {% inventory_tag tag %}
+            {% empty %}
+            -
+            {% endfor %}
+          </td>
+        </tr>
+        {% if object.max_os_version %}
+        <tr>
+          <th>Maximum target OS version</th>
+          <td>{{ object.max_os_version }}</td>
+        </tr>
+        <tr>
+          <th>Delay</th>
+          <td>{{ object.delay_days }} day{{ object.delay_days|pluralize }}</td>
+        </tr>
+        <tr>
+          <th>Target local time</th>
+          <td>{{ object.local_time }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <th>Target OS version</th>
+          <td>{{ object.os_version }}</td>
+        </tr>
+        <tr>
+          <th>Target build version</th>
+          <td>{{ object.build_version|default:"-" }}</td>
+        </tr>
+        <tr>
+          <th>Target local date time</th>
+          <td>{{ object.local_datetime }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+          <th>Blueprint{{ blueprints|length|pluralize }} ({{ blueprints|length }})</th>
+          <td>
+            {% if blueprints %}
+            <ul class="list-unstyled mb-0">
+            {% for blueprint in blueprints %}
+            {% if perms.mdm.view_blueprint %}
+            <li><a href="{{ blueprint.get_absolute_url }}">{{ blueprint }}</a></li>
+            {% else %}
+            <li>{{ blueprint }}</li>
+            {% endif %}
+            {% endfor %}
+            </ul>
+            {% else %}
+            -
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    {% created_updated_at object %}
+
+</div>
+
+{% endblock %}

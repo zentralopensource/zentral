@@ -7,6 +7,7 @@ from .api_views import (ArtifactDetail, ArtifactList,
                         FileVaultConfigDetail, FileVaultConfigList,
                         ProfileDetail, ProfileList,
                         RecoveryPasswordConfigList, RecoveryPasswordConfigDetail,
+                        SoftwareUpdateEnforcementList, SoftwareUpdateEnforcementDetail,
                         DEPVirtualServerSyncDevicesView,
                         EnrolledDeviceFileVaultPRK, EnrolledDeviceRecoveryPassword,
                         SyncSoftwareUpdatesView)
@@ -29,6 +30,10 @@ urlpatterns = [
     path('recovery_password_configs/', RecoveryPasswordConfigList.as_view(), name="recovery_password_configs"),
     path('recovery_password_configs/<int:pk>/', RecoveryPasswordConfigDetail.as_view(),
          name="recovery_password_config"),
+    path('software_update_enforcements/', SoftwareUpdateEnforcementList.as_view(),
+         name="software_update_enforcements"),
+    path('software_update_enforcements/<int:pk>/', SoftwareUpdateEnforcementDetail.as_view(),
+         name="software_update_enforcement"),
 
     path('dep/virtual_servers/<int:pk>/sync_devices/',
          DEPVirtualServerSyncDevicesView.as_view(), name="dep_virtual_server_sync_devices"),

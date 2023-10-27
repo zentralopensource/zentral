@@ -7,7 +7,9 @@ from django.http import Http404
 from django.urls import reverse
 from zentral.conf import settings
 from zentral.utils.payloads import get_payload_identifier
-from zentral.contrib.mdm.models import Artifact, ArtifactVersion, EnrolledUser
+from zentral.utils.time import naive_truncated_isoformat
+from .models import Artifact, ArtifactVersion, EnrolledUser
+from .software_updates import iter_available_software_updates
 
 
 logger = logging.getLogger("zentral.contrib.mdm.declarations")
@@ -137,4 +139,53 @@ def build_legacy_profile(enrollment_session, target, declaration_identifier):
                         args=(dump_legacy_profile_token(enrollment_session, target, artifact_version["pk"]),))
             )
         },
+    }
+
+
+def get_software_update_enforcement_specific_identifier(target):
+    return get_declaration_identifier(target.blueprint, "softwareupdate-enforcement-specific")
+
+
+# https://github.com/apple/device-management/blob/release/declarative/declarations/configurations/softwareupdate.enforcement.specific.yaml  # NOQA
+def build_specific_software_update_enforcement(target):
+    software_update_enforcement = target.software_update_enforcement
+    if not software_update_enforcement:
+        return
+    if software_update_enforcement.max_os_version:
+        software_update = None
+        for software_update in iter_available_software_updates(
+            target.enrolled_device,
+            max_os_version=software_update_enforcement.max_os_version
+        ):
+            break
+        if not software_update:
+            logger.warning("Target %s: no software update available", target)
+            return
+        local_datetime = (
+            datetime.combine(software_update.availability.lower, software_update_enforcement.local_time)
+            + timedelta(days=software_update_enforcement.delay_days)
+        )
+        target_os_version = str(software_update)
+        target_build_version = None
+    else:
+        local_datetime = software_update_enforcement.local_datetime
+        target_os_version = software_update_enforcement.os_version
+        target_build_version = software_update_enforcement.build_version
+    payload = {
+        "TargetOSVersion": target_os_version,
+        "TargetLocalDateTime": naive_truncated_isoformat(local_datetime),
+    }
+    if target_build_version:
+        payload["TargetBuildVersion"] = target_build_version
+    if software_update_enforcement.details_url:
+        payload["DetailsURL"] = software_update_enforcement.details_url
+    h = hashlib.sha1()
+    for attr, val in sorted(payload.items()):
+        h.update(attr.encode("utf-8"))
+        h.update(val.encode("utf-8"))
+    return {
+        "Identifier": get_software_update_enforcement_specific_identifier(target),
+        "Type": "com.apple.configuration.softwareupdate.enforcement.specific",
+        "ServerToken": h.hexdigest(),
+        "Payload": payload,
     }

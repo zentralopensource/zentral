@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:software_update_enforcements' %}">Software update enforcements</a></li>
+  {% if object %}
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">update</li>
+  {% else %}
+  <li class="breadcrumb-item active">create</li>
+  {% endif %}
+</ol>
+
+<h3>{% if object %}Update software update enforcement <i>{{ object }}</i>{% else %}Create software update enforcement{% endif %}</h3>
+
+<form method="post" class="update-form">{% csrf_token %}
+  
+  {{ form }}
+  
+  <p>
+    {% if object %}
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    {% else %}
+    <a class="btn btn-outline-secondary" href="{% url 'mdm:software_update_enforcements' %}">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save</button>
+  </p>
+</form>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function toggleEnforcementTypeFields() {
+    var checked = $("#id_enforcement_type_1").prop("checked");
+    if (checked) {
+      $(".one-time-enforcement").parent().toggle(false);
+      $(".latest-enforcement").parent().toggle(true);
+    } else {
+      $(".one-time-enforcement").parent().toggle(true);
+      $(".latest-enforcement").parent().toggle(false);
+    }
+  }
+
+  $(document).ready(function () {
+    $('input[name="enforcement_type"]').change(function () {
+      toggleEnforcementTypeFields();
+    });
+    toggleEnforcementTypeFields();
+  });
+</script>
+{% endblock %}

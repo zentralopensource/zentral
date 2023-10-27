@@ -18,13 +18,13 @@ class OSVersionUtilsTestCase(SimpleTestCase):
     def test_make_comparable_os_version_major_minor_supplemental(self):
         self.assertEqual(
             make_comparable_os_version("12.3 (a)"),
-            (12, 3, 0, "a")
+            (12, 3, 0, "(a)")
         )
 
     def test_make_comparable_os_version_major_minor_patch_supplemental(self):
         self.assertEqual(
             make_comparable_os_version("12.3.1  (a)"),  # double-space OK
-            (12, 3, 1, "a")
+            (12, 3, 1, "(a)")
         )
 
     def test_make_comparable_os_version_error(self):

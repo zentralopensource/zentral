@@ -1,10 +1,12 @@
 import datetime
 import logging
+import math
 import uuid
 from django.db import transaction
 from django.db.models import Q
 import requests
 from zentral.core.events.base import AuditEvent
+from zentral.utils.os_version import make_comparable_os_version
 from .crypto import IPHONE_DEVICE_CA_FULLCHAIN
 from .models import SoftwareUpdate, SoftwareUpdateDeviceID
 
@@ -92,35 +94,51 @@ def sync_software_updates():
     return result
 
 
-def available_software_updates(enrolled_device, date=None):
+def iter_available_software_updates(enrolled_device, date=None, max_os_version=None):
+    try:
+        device_id = enrolled_device.device_information["SoftwareUpdateDeviceID"]
+    except (KeyError, TypeError):
+        logger.debug("Enrolled device %s: no SoftwareUpdateDeviceID found", enrolled_device.udid)
+        return
+    if not isinstance(device_id, str):
+        # should never happen
+        logger.error("Enrolled device %s: SoftwareUpdateDeviceID is not a str", enrolled_device.udid)
+        return
+    if not device_id:
+        # should never happen
+        logger.error("Enrolled device %s: SoftwareUpdateDeviceID is an empty str", enrolled_device.udid)
+        return
+    if date is None:
+        date = datetime.date.today()
+    if max_os_version:
+        max_comparable_os_version = make_comparable_os_version(max_os_version)
+    else:
+        max_comparable_os_version = (math.inf,)
+    for software_update in SoftwareUpdate.objects.filter(
+        Q(public=False) | Q(extra__gt=""),
+        Q(prerequisite_build="") | Q(prerequisite_build=enrolled_device.current_build_version),
+        availability__contains=date,
+        softwareupdatedeviceid__device_id=device_id
+    ).order_by(
+        "-major",
+        "-minor",
+        "-patch",
+        "-extra",
+    ):
+        if software_update.comparable_os_version >= max_comparable_os_version:
+            continue
+        yield software_update
+
+
+def best_available_software_updates(enrolled_device, date=None):
     major_update = minor_update = patch_update = rsr_update = None
     current_comparable_os_version = enrolled_device.comparable_os_version
     if current_comparable_os_version == (0, 0, 0, ""):
         logger.debug("Enrolled device %s: no comparable OS version", enrolled_device.udid)
         return major_update, minor_update, patch_update, rsr_update
     current_major, current_minor, current_patch, current_extra = current_comparable_os_version
-    try:
-        device_id = enrolled_device.device_information["SoftwareUpdateDeviceID"]
-    except (KeyError, TypeError):
-        logger.debug("Enrolled device %s: no SoftwareUpdateDeviceID found", enrolled_device.udid)
-        return major_update, minor_update, patch_update, rsr_update
-    if not isinstance(device_id, str):
-        # should never happen
-        logger.error("Enrolled device %s: SoftwareUpdateDeviceID is not a str", enrolled_device.udid)
-        return major_update, minor_update, patch_update, rsr_update
-    if not device_id:
-        # should never happen
-        logger.error("Enrolled device %s: SoftwareUpdateDeviceID is an empty str", enrolled_device.udid)
-        return major_update, minor_update, patch_update, rsr_update
     # filter the choices
-    if date is None:
-        date = datetime.date.today()
-    for software_update in SoftwareUpdate.objects.filter(
-        Q(public=False) | Q(extra__gt=""),
-        Q(prerequisite_build="") | Q(prerequisite_build=enrolled_device.current_build_version),
-        availability__contains=date,
-        softwareupdatedeviceid__device_id=device_id
-    ):
+    for software_update in iter_available_software_updates(enrolled_device, date=date):
         if software_update.comparable_os_version <= current_comparable_os_version:
             # not an update for the device
             continue
@@ -137,9 +155,3 @@ def available_software_updates(enrolled_device, date=None):
             if rsr_update is None or (rsr_update.comparable_os_version < software_update.comparable_os_version):
                 rsr_update = software_update
     return major_update, minor_update, patch_update, rsr_update
-
-
-def iter_available_software_updates(enrolled_device, date=None):
-    for software_update in available_software_updates(enrolled_device, date):
-        if software_update:
-            yield software_update

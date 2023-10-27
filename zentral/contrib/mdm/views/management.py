@@ -25,6 +25,7 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        OTAEnrollmentForm,
                                        RecoveryPasswordConfigForm,
                                        SCEPConfigForm,
+                                       SoftwareUpdateEnforcementForm,
                                        UpdateArtifactForm,
                                        UserEnrollmentForm,
                                        UpgradeEnterpriseAppForm, UpgradeProfileForm, UpgradeStoreAppForm,
@@ -39,6 +40,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         OTAEnrollment,
                                         RecoveryPasswordConfig,
                                         SCEPConfig,
+                                        SoftwareUpdateEnforcement,
                                         UserEnrollment,
                                         Profile, StoreApp)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
@@ -47,7 +49,7 @@ from zentral.contrib.mdm.scep import SCEPChallengeType
 from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
 from zentral.contrib.mdm.scep.static import StaticChallengeForm
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
-from zentral.contrib.mdm.software_updates import iter_available_software_updates
+from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 
 
@@ -926,7 +928,8 @@ class CreateBlueprintView(PermissionRequiredMixin, CreateViewWithAudit):
               "collect_certificates",
               "collect_profiles",
               "filevault_config",
-              "recovery_password_config",)
+              "recovery_password_config",
+              "software_update_enforcements",)
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -940,6 +943,7 @@ class BlueprintView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["sue_list"] = list(self.object.software_update_enforcements.order_by("name"))
         ctx["artifacts"] = (self.object.blueprintartifact_set.select_related("artifact")
                                                              .annotate(Max("artifact__artifactversion__version"))
                                                              .order_by("artifact__name"))
@@ -960,7 +964,8 @@ class UpdateBlueprintView(PermissionRequiredMixin, UpdateViewWithAudit):
               "collect_certificates",
               "collect_profiles",
               "filevault_config",
-              "recovery_password_config",)
+              "recovery_password_config",
+              "software_update_enforcements",)
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -1052,6 +1057,44 @@ class DeleteRecoveryPasswordConfigView(PermissionRequiredMixin, DeleteViewWithAu
 
     def get_queryset(self):
         return RecoveryPasswordConfig.objects.can_be_deleted()
+
+
+# Software update enforcements
+
+
+class SoftwareUpdateEnforcementListView(PermissionRequiredMixin, UserPaginationListView):
+    permission_required = "mdm.view_softwareupdateenforcement"
+    model = SoftwareUpdateEnforcement
+
+
+class CreateSoftwareUpdateEnforcementView(PermissionRequiredMixin, CreateViewWithAudit):
+    permission_required = "mdm.add_softwareupdateenforcement"
+    model = SoftwareUpdateEnforcement
+    form_class = SoftwareUpdateEnforcementForm
+
+
+class SoftwareUpdateEnforcementView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_softwareupdateenforcement"
+    model = SoftwareUpdateEnforcement
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["blueprints"] = list(self.object.blueprint_set.order_by("name"))
+        return ctx
+
+
+class UpdateSoftwareUpdateEnforcementView(PermissionRequiredMixin, UpdateViewWithAudit):
+    permission_required = "mdm.change_softwareupdateenforcement"
+    model = SoftwareUpdateEnforcement
+    form_class = SoftwareUpdateEnforcementForm
+
+
+class DeleteSoftwareUpdateEnforcementView(PermissionRequiredMixin, DeleteViewWithAudit):
+    permission_required = "mdm.delete_softwareupdateenforcement"
+    success_url = reverse_lazy("mdm:software_update_enforcements")
+
+    def get_queryset(self):
+        return SoftwareUpdateEnforcement.objects.can_be_deleted()
 
 
 # SCEP Configurations
@@ -1253,7 +1296,10 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["available_software_updates"] = list(iter_available_software_updates(self.object))
+        ctx["available_software_updates"] = [
+            software_update for software_update in best_available_software_updates(self.object)
+            if software_update
+        ]
         try:
             ctx["dep_device"] = (DEPDevice.objects.select_related("virtual_server", "enrollment")
                                                   .get(serial_number=self.object.serial_number))

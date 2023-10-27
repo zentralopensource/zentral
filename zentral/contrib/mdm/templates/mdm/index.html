@@ -35,6 +35,9 @@
 {% if perms.mdm.view_recoverypasswordconfig %}
 <p><a href="{% url 'mdm:recovery_password_configs' %}">Recovery password configurations</a></p>
 {% endif %}
+{% if perms.mdm.view_softwareupdateenforcement %}
+<p><a href="{% url 'mdm:software_update_enforcements' %}">Software update enforcements</a></p>
+{% endif %}
 {% if perms.mdm.view_scepconfig %}
 <p><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></p>
 {% endif %}

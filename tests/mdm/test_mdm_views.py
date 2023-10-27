@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 import json
 import plistlib
 from unittest.mock import patch
@@ -26,6 +26,8 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Blueprint, Bl
 from .utils import (force_dep_enrollment_session,
                     force_enrolled_user,
                     force_ota_enrollment_session,
+                    force_software_update,
+                    force_software_update_enforcement,
                     force_user_enrollment_session)
 
 
@@ -725,6 +727,97 @@ class MDMViewsTestCase(TestCase):
              'Payload': {'StatusItems': [{'Name': 'fomo'}, {'Name': 'yolo'}]},
              'ServerToken': '3b6c1269e23df247f53e2da7a7ebb127110ee2cc',
              'Type': 'com.apple.configuration.management.status-subscriptions'}
+        )
+
+    def test_declarative_management_softwareupdate_enforcement_specific_latest(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        device_id = get_random_string(8)
+        session.enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
+        session.enrolled_device.save()
+        force_software_update(device_id=device_id, version="14.1.0", posting_date=date(2023, 10, 25))
+        sue = force_software_update_enforcement(
+            details_url="https://www.example.com",
+            max_os_version="15", local_time=time(9, 30), delay_days=15
+        )
+        blueprint = self._add_blueprint(session)
+        blueprint.software_update_enforcements.add(sue)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}."
+                        "softwareupdate-enforcement-specific"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'Identifier': f'zentral.blueprint.{blueprint.pk}.softwareupdate-enforcement-specific',
+             'Payload': {
+                 'DetailsURL': 'https://www.example.com',
+                 'TargetOSVersion': '14.1',
+                 'TargetLocalDateTime': '2023-11-09T09:30:00'
+              },
+             'ServerToken': '46e9bd884ed69f3596a19af1c3dd7debad77e998',
+             'Type': 'com.apple.configuration.softwareupdate.enforcement.specific'}
+        )
+
+    def test_declarative_management_softwareupdate_enforcement_specific_latest_not_found(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        device_id = get_random_string(8)
+        session.enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
+        session.enrolled_device.save()
+        sue = force_software_update_enforcement(
+            details_url="https://www.example.com",
+            max_os_version="15", local_time=time(9, 30), delay_days=15
+        )  # but no software update known for this device ID !!!
+        blueprint = self._add_blueprint(session)
+        blueprint.software_update_enforcements.add(sue)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}."
+                        "softwareupdate-enforcement-specific"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(post_event, "Could not build specific software update enforcement",
+                          udid=udid, serial_number=serial_number)
+
+    def test_declarative_management_softwareupdate_enforcement_specific_one_time(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        device_id = get_random_string(8)
+        session.enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
+        session.enrolled_device.save()
+        sue = force_software_update_enforcement(
+            details_url="https://www.example.com",
+            os_version="14.1",
+            build_version="23B74",
+            local_datetime=datetime(2023, 10, 31, 9, 30),
+        )
+        blueprint = self._add_blueprint(session)
+        blueprint.software_update_enforcements.add(sue)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}."
+                        "softwareupdate-enforcement-specific"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'Identifier': f'zentral.blueprint.{blueprint.pk}.softwareupdate-enforcement-specific',
+             'Payload': {
+                 'DetailsURL': 'https://www.example.com',
+                 'TargetOSVersion': '14.1',
+                 'TargetBuildVersion': '23B74',
+                 'TargetLocalDateTime': '2023-10-31T09:30:00'
+              },
+             'ServerToken': 'fe4df212271a9ca8f01cad718031d531c181cd78',
+             'Type': 'com.apple.configuration.softwareupdate.enforcement.specific'}
         )
 
     # checking - checkout

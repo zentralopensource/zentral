@@ -36,27 +36,27 @@
         </thead>
         <tbody>
         <tr>
-            <td>Name</td>
+            <th>Name</th>
             <td>{{ object.name }}</td>
         </tr>
         <tr>
-            <td>Inventory interval</td>
+            <th>Inventory interval</th>
             <td>{{ object.get_inventory_interval_display }}</td>
         </tr>
         <tr>
-            <td>Collect apps</td>
+            <th>Collect apps</th>
             <td>{{ object.get_collect_apps_display }}</td>
         </tr>
         <tr>
-            <td>Collect certificates</td>
+            <th>Collect certificates</th>
             <td>{{ object.get_collect_certificates_display }}</td>
         </tr>
         <tr>
-            <td>Collect profiles</td>
+            <th>Collect profiles</th>
             <td>{{ object.get_collect_profiles_display }}</td>
         </tr>
         <tr>
-            <td>FileVault configuration</td>
+            <th>FileVault configuration</th>
             <td>
             {% if object.filevault_config %}
             {% if perms.mdm.view_filevaultconfig %}
@@ -71,7 +71,7 @@
             {% endif %}
         </tr>
         <tr>
-            <td>Recovery password configuration</td>
+            <th>Recovery password configuration</th>
             <td>
             {% if object.recovery_password_config %}
             {% if perms.mdm.view_recoverypasswordconfig %}
@@ -85,6 +85,25 @@
             -
             {% endif %}
         </tr>
+        <tr>
+          <th>Software update enforcement{{ sue_list|pluralize }} ({{ sue_list|length }})</th>
+          <td>
+            {% if sue_list %}
+            <ul class="list-unstyled mb-0">
+              {% for sue in sue_list %}
+              <li>
+                {% if perms.mdm.view_softwareupdateconfig %}
+                <a href="{{ sue.get_absolute_url }}">{{ sue }}</a>
+                {% else %}
+                {{ sue }}
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            -
+            {% endif %}
+          </td>
         </tbody>
         </table>
 

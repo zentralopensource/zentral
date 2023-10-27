@@ -4,7 +4,7 @@ import os.path
 import plistlib
 from unittest.mock import patch
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, time
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
@@ -17,6 +17,7 @@ from zentral.contrib.mdm.models import (Asset, Artifact, ArtifactVersion, Artifa
                                         Platform, Profile, PushCertificate,
                                         StoreApp, TargetArtifact,
                                         UserArtifact)
+from .utils import force_software_update, force_software_update_enforcement
 
 
 PROFILE_TEMPLATE = {
@@ -75,6 +76,7 @@ class TestMDMArtifacts(TestCase):
             push_certificate=push_certificate,
             serial_number=get_random_string(64),
             platform="macOS",
+            device_information={"SoftwareUpdateDeviceID": get_random_string(8)},
             udid=get_random_string(36),
             token=get_random_string(32).encode("utf-8"),
             push_magic=get_random_string(73),
@@ -84,6 +86,7 @@ class TestMDMArtifacts(TestCase):
             push_certificate=push_certificate,
             serial_number=get_random_string(64),
             platform="macOS",
+            device_information={"SoftwareUpdateDeviceID": get_random_string(8)},
             blueprint=cls.blueprint1,
             udid=get_random_string(36),
             token=get_random_string(32).encode("utf-8"),
@@ -786,6 +789,33 @@ class TestMDMArtifacts(TestCase):
         self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
         self.assertIn(f"zentral.legacy-profile.{profile_a.pk}", scs)
 
+    def test_device_activation_software_update_enforcement_latest_included(self):
+        target = Target(self.enrolled_device)
+        force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
+                              version="14.1.0",
+                              posting_date=date(2023, 10, 25))
+        sue = force_software_update_enforcement(max_os_version="15", local_time=time(9, 30), delay_days=15)
+        self.blueprint1.software_update_enforcements.add(sue)
+        activation = target.activation
+        self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
+        self.assertEqual(sorted(activation["Payload"].keys()), ["StandardConfigurations"])
+        scs = activation["Payload"]["StandardConfigurations"]
+        self.assertEqual(len(scs), 2)
+        self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
+        self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific", scs)
+
+    def test_device_activation_software_update_enforcement_one_time_included(self):
+        target = Target(self.enrolled_device)
+        sue = force_software_update_enforcement(os_version="15", local_datetime=datetime.utcnow())
+        self.blueprint1.software_update_enforcements.add(sue)
+        activation = target.activation
+        self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
+        self.assertEqual(sorted(activation["Payload"].keys()), ["StandardConfigurations"])
+        scs = activation["Payload"]["StandardConfigurations"]
+        self.assertEqual(len(scs), 2)
+        self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
+        self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific", scs)
+
     def test_user_declaration_items_enterprise_app_not_included(self):
         _, profile_a, (profile_av,) = self._force_blueprint_artifact(channel=Channel.USER)
         profile_a.reinstall_on_os_update = Artifact.ReinstallOnOSUpdate.PATCH
@@ -838,6 +868,33 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(configurations[0]["ServerToken"], "0ed215547af3061ce18ea6cf7a69dac4a3d52f3f")
         self.assertEqual(configurations[1]["Identifier"], f"zentral.legacy-profile.{profile_a.pk}")
         self.assertEqual(configurations[1]["ServerToken"], f"{profile_av.pk}")
+
+    def test_device_declaration_items_software_update_enforcement_latest_included(self):
+        force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
+                              version="14.1.0",
+                              posting_date=date(2023, 10, 25))
+        sue = force_software_update_enforcement(max_os_version="15", local_time=time(9, 30), delay_days=15)
+        self.blueprint1.software_update_enforcements.add(sue)
+        target = Target(self.enrolled_device)
+        declaration_items = target.declaration_items
+        self.assertEqual(sorted(declaration_items.keys()), ["Declarations", "DeclarationsToken"])
+        declarations = declaration_items["Declarations"]
+        self.assertEqual(sorted(declarations.keys()), ["Activations", "Assets", "Configurations", "Management"])
+        self.assertEqual(len(declarations["Assets"]), 0)
+        self.assertEqual(len(declarations["Management"]), 0)
+        self.assertEqual(
+            declarations["Activations"],
+            [{"Identifier": target.activation["Identifier"],
+              "ServerToken": target.activation["ServerToken"]}],
+        )
+        configurations = declarations["Configurations"]
+        self.assertEqual(len(configurations), 2)
+        self.assertEqual(configurations[0]["Identifier"],
+                         f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions")
+        self.assertEqual(configurations[0]["ServerToken"], "0ed215547af3061ce18ea6cf7a69dac4a3d52f3f")
+        self.assertEqual(configurations[1]["Identifier"],
+                         f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific")
+        self.assertEqual(configurations[1]["ServerToken"], "3aa402ccdcc30fbe9fc24a437da2fac09f709243")
 
     # update_target_artifact
 
@@ -1281,3 +1338,47 @@ class TestMDMArtifacts(TestCase):
             target.update_target_with_status_report(status_report)
         self.assertEqual(len(callbacks), 0)
         send_enrolled_user_notification.assert_called_once_with(self.enrolled_user)
+
+    # software update enforcement
+
+    def test_software_update_enforcement_not_a_device(self):
+        target = Target(self.enrolled_device, self.enrolled_user)
+        self.assertFalse(target.is_device)
+        self.assertIsNone(target.software_update_enforcement)
+
+    def test_software_update_enforcement_no_blueprint(self):
+        target = Target(self.enrolled_device_no_blueprint)
+        self.assertIsNone(target.blueprint)
+        self.assertIsNone(target.software_update_enforcement)
+
+    def test_software_update_enforcement_no_sue(self):
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.blueprint.software_update_enforcements.count(), 0)
+        self.assertIsNone(target.software_update_enforcement)
+
+    def test_software_update_enforcement_tags(self):
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
+        sue = force_software_update_enforcement()
+        sue1 = force_software_update_enforcement(tags=tags[:1])
+        sue2 = force_software_update_enforcement(tags=tags[:2])  # more matching tags
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue, sue1, sue2])
+        for tag in tags:
+            MachineTag.objects.create(serial_number=self.enrolled_device.serial_number, tag=tag)
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.software_update_enforcement, sue2)
+
+    @patch("zentral.contrib.mdm.artifacts.logger.warning")
+    def test_software_update_enforcement_tag_conflict(self, logger_warning):
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
+        sue = force_software_update_enforcement(tags=tags[:2])
+        sue2 = force_software_update_enforcement(tags=tags[-2:])  # same matching tags number
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue, sue2])
+        for tag in tags:
+            MachineTag.objects.create(serial_number=self.enrolled_device.serial_number, tag=tag)
+        self.assertTrue(sue.pk < sue2.pk)
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.software_update_enforcement, sue)
+        logger_warning.assert_called_once_with(
+            "Machine %s: software update enforcement conflict",
+            target.serial_number
+        )

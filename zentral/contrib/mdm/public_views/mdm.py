@@ -20,6 +20,7 @@ from zentral.contrib.mdm.commands.base import get_command
 from zentral.contrib.mdm.commands.scheduling import get_next_command_response
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.declarations import (build_legacy_profile,
+                                              build_specific_software_update_enforcement,
                                               build_target_management_status_subscriptions,
                                               load_legacy_profile_token)
 from zentral.contrib.mdm.events import MDMRequestEvent
@@ -382,6 +383,10 @@ class CheckinView(MDMView):
                 response = build_target_management_status_subscriptions(self.target)
             elif declaration_identifier.endswith("activation"):
                 response = self.target.activation
+            elif declaration_identifier.endswith("softwareupdate-enforcement-specific"):
+                response = build_specific_software_update_enforcement(self.target)
+                if not response:
+                    self.abort("Could not build specific software update enforcement", **event_payload)
             elif "legacy-profile" in declaration_identifier:
                 response = build_legacy_profile(self.enrollment_session, self.target, declaration_identifier)
             else:

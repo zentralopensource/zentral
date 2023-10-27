@@ -9,7 +9,9 @@ from django.test import TestCase, override_settings
 from accounts.models import APIToken, User
 from zentral.contrib.mdm.models import Blueprint
 from zentral.core.events.base import AuditEvent
-from .utils import force_blueprint, force_blueprint_artifact, force_filevault_config, force_recovery_password_config
+from .utils import (force_blueprint, force_blueprint_artifact,
+                    force_filevault_config, force_recovery_password_config,
+                    force_software_update_enforcement)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -84,8 +86,8 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_list_blueprints(self):
-        blueprint = force_blueprint()
         self.set_permissions("mdm.view_blueprint")
+        blueprint = force_blueprint()
         response = self.get(reverse("mdm_api:blueprints"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -98,6 +100,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
               'collect_profiles': 0,
               'filevault_config': None,
               'recovery_password_config': None,
+              'software_update_enforcements': [],
               'created_at': blueprint.created_at.isoformat(),
               'updated_at': blueprint.updated_at.isoformat()}]
         )
@@ -106,8 +109,10 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
         force_blueprint()
         filevault_config = force_filevault_config()
         recovery_password_config = force_recovery_password_config()
+        sue = force_software_update_enforcement()
         blueprint = force_blueprint(filevault_config=filevault_config,
-                                    recovery_password_config=recovery_password_config)
+                                    recovery_password_config=recovery_password_config,
+                                    software_update_enforcement=sue)
         self.set_permissions("mdm.view_blueprint")
         response = self.get(reverse("mdm_api:blueprints"), data={"name": blueprint.name})
         self.assertEqual(response.status_code, 200)
@@ -121,6 +126,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
               'collect_profiles': 0,
               'filevault_config': filevault_config.pk,
               'recovery_password_config': recovery_password_config.pk,
+              'software_update_enforcements': [sue.pk],
               'created_at': blueprint.created_at.isoformat(),
               'updated_at': blueprint.updated_at.isoformat()}]
         )
@@ -153,6 +159,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
              'collect_profiles': 0,
              'filevault_config': None,
              'recovery_password_config': None,
+             'software_update_enforcements': [],
              'created_at': blueprint.created_at.isoformat(),
              'updated_at': blueprint.updated_at.isoformat()}
         )
@@ -190,6 +197,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
              'collect_profiles': 0,
              'filevault_config': None,
              'recovery_password_config': None,
+             'software_update_enforcements': [],
              'created_at': blueprint.created_at.isoformat(),
              'updated_at': blueprint.updated_at.isoformat()}
         )
@@ -236,6 +244,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
     def test_update_blueprint(self, post_event):
         blueprint = force_blueprint()
         filevault_config = force_filevault_config()
+        sue = force_software_update_enforcement()
         recovery_password_config = force_recovery_password_config()
         prev_value = blueprint.serialize_for_event()
         self.set_permissions("mdm.change_blueprint")
@@ -248,7 +257,8 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
                                  "collect_certificates": 2,
                                  "collect_profiles": 2,
                                  "filevault_config": filevault_config.pk,
-                                 "recovery_password_config": recovery_password_config.pk})
+                                 "recovery_password_config": recovery_password_config.pk,
+                                 "software_update_enforcements": [sue.pk]})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         blueprint.refresh_from_db()
@@ -259,6 +269,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
         self.assertEqual(blueprint.collect_profiles, 2)
         self.assertEqual(blueprint.filevault_config, filevault_config)
         self.assertEqual(blueprint.recovery_password_config, recovery_password_config)
+        self.assertEqual(list(blueprint.software_update_enforcements.all()), [sue])
         self.assertEqual(
             response.json(),
             {'id': blueprint.pk,
@@ -269,6 +280,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
              'collect_profiles': 2,
              'filevault_config': filevault_config.pk,
              'recovery_password_config': recovery_password_config.pk,
+             'software_update_enforcements': [sue.pk,],
              'created_at': blueprint.created_at.isoformat(),
              'updated_at': blueprint.updated_at.isoformat()}
         )
@@ -290,6 +302,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
                      "filevault_config": {"name": filevault_config.name, "pk": filevault_config.pk},
                      "recovery_password_config": {"name": recovery_password_config.name,
                                                   "pk": recovery_password_config.pk},
+                     "software_update_enforcements": [{"pk": sue.pk, "name": sue.name}],
                      "created_at": blueprint.created_at,
                      "updated_at": blueprint.updated_at
                  },

@@ -9,13 +9,9 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import Platform, SoftwareUpdate, SoftwareUpdateDeviceID
-from zentral.contrib.mdm.software_updates import (
-    available_software_updates,
-    iter_available_software_updates,
-    sync_software_updates,
-)
+from zentral.contrib.mdm.software_updates import best_available_software_updates, sync_software_updates
 from zentral.core.events.base import AuditEvent
-from .utils import force_ota_enrollment_session
+from .utils import force_ota_enrollment_session, force_software_update
 
 
 class MDMSoftwareUpdateTestCase(TestCase):
@@ -82,7 +78,7 @@ class MDMSoftwareUpdateTestCase(TestCase):
     # software_update __str__ and summary
 
     def test_software_update_representations(self):
-        su = self._force_software_update(
+        su = force_software_update(
             device_id="J413AP",
             version="12.6.2",
             posting_date=datetime.date(2022, 12, 13)
@@ -91,7 +87,7 @@ class MDMSoftwareUpdateTestCase(TestCase):
         self.assertEqual(su.summary(), "macOS 12.6.2")
 
     def test_software_update_rsr_representations(self):
-        su = self._force_software_update(
+        su = force_software_update(
             device_id="J413AP",
             version="13.3.1",
             posting_date=datetime.date(2023, 5, 2),
@@ -222,18 +218,19 @@ class MDMSoftwareUpdateTestCase(TestCase):
             event_count += 1
         self.assertEqual(event_count, 2)
 
-    # available_software_updates
+    # best_available_software_updates
 
     def test_available_software_updates_no_updates_today_no_updates(self):
         enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="13.1")
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(enrolled_device)
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(enrolled_device)
         self.assertIsNone(major_update)
         self.assertIsNone(minor_update)
         self.assertIsNone(patch_update)
+        self.assertIsNone(rsr_update)
 
     def test_available_software_updates_no_updates_no_updates(self):
         enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="13.1")
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 1, 21)
         )
@@ -244,32 +241,28 @@ class MDMSoftwareUpdateTestCase(TestCase):
 
     def test_available_software_updates_one_patch_update(self):
         enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="12.6.1")
-        self._force_software_update(
+        force_software_update(
             device_id="J413AP",
             version="12.6.0",
             posting_date=datetime.date(2022, 12, 1)
         )
-        su = self._force_software_update(
+        su = force_software_update(
             device_id="J413AP",
             version="12.6.2",
             posting_date=datetime.date(2022, 12, 13)
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 1, 21)
         )
         self.assertIsNone(major_update)
         self.assertIsNone(minor_update)
         self.assertEqual(patch_update, su)
-        self.assertEqual(
-            list(iter_available_software_updates(enrolled_device, datetime.date(2023, 1, 11))),
-            [su]
-        )
         self.assertIsNone(rsr_update)
 
     def test_available_software_updates_one_rsr_update_bad_prerequisite_build(self):
         enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="13.3.1", build_version="YOLO")
-        self._force_software_update(
+        force_software_update(
             device_id="J413AP",
             version="13.3.1",
             posting_date=datetime.date(2023, 5, 2),
@@ -277,7 +270,7 @@ class MDMSoftwareUpdateTestCase(TestCase):
             public=True,
             prerequisite_build="22E261",
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 5, 2)
         )
@@ -288,14 +281,14 @@ class MDMSoftwareUpdateTestCase(TestCase):
 
     def test_available_software_updates_one_rsr_update(self):
         enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="13.3.1", build_version="22E261")
-        su = self._force_software_update(
+        su = force_software_update(
             device_id="J413AP",
             version="13.3.1",
             posting_date=datetime.date(2023, 5, 2),
             version_extra="(a)",
             prerequisite_build="22E261"
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 5, 2)
         )
@@ -303,10 +296,6 @@ class MDMSoftwareUpdateTestCase(TestCase):
         self.assertIsNone(minor_update)
         self.assertIsNone(patch_update)
         self.assertEqual(rsr_update, su)
-        self.assertEqual(
-            list(iter_available_software_updates(enrolled_device, datetime.date(2023, 5, 2))),
-            [su]
-        )
 
     def test_available_software_updates_one_rsr_update_up_to_date(self):
         enrolled_device = self._force_enrolled_device(
@@ -317,14 +306,14 @@ class MDMSoftwareUpdateTestCase(TestCase):
             build_version_extra="22E772610a"
         )
         self.assertEqual(enrolled_device.current_build_version, "22E772610a")
-        self._force_software_update(
+        force_software_update(
             device_id="J413AP",
             version="13.3.1",
             posting_date=datetime.date(2023, 5, 2),
             version_extra="(a)",
             prerequisite_build="22E261"
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 5, 2)
         )
@@ -335,12 +324,12 @@ class MDMSoftwareUpdateTestCase(TestCase):
 
     def test_available_software_updates_empty_device_id_no_update(self):
         enrolled_device = self._force_enrolled_device(device_id="", os_version="12.6.1")
-        self._force_software_update(
+        force_software_update(
             device_id="J413AP",
             version="12.6.2",
             posting_date=datetime.date(2022, 12, 13)
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 1, 21)
         )
@@ -351,12 +340,12 @@ class MDMSoftwareUpdateTestCase(TestCase):
 
     def test_available_software_updates_device_id_not_str_no_update(self):
         enrolled_device = self._force_enrolled_device(device_id=123, os_version="12.6.1")
-        self._force_software_update(
+        force_software_update(
             device_id="J413AP",
             version="12.6.2",
             posting_date=datetime.date(2022, 12, 13)
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 1, 21)
         )
@@ -367,12 +356,12 @@ class MDMSoftwareUpdateTestCase(TestCase):
 
     def test_available_software_updates_device_id_not_found_no_update(self):
         enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="12.6")
-        su = self._force_software_update(
+        su = force_software_update(
             device_id="J413AP",
             version="12.6.2",
             posting_date=datetime.date(2022, 12, 13)
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 1, 21)
         )
@@ -383,79 +372,91 @@ class MDMSoftwareUpdateTestCase(TestCase):
 
     def test_available_software_updates_no_os_version_no_update(self):
         enrolled_device = self._force_enrolled_device(device_id="J413AP")
-        self._force_software_update(
+        force_software_update(
             device_id="J413AP",
             version="12.6.2",
             posting_date=datetime.date(2022, 12, 13)
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 1, 21)
         )
         self.assertIsNone(major_update)
         self.assertIsNone(minor_update)
         self.assertIsNone(patch_update)
+        self.assertIsNone(rsr_update)
 
     def test_available_software_updates_one_expired_patch_update(self):
         enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="12.6.1")
-        self._force_software_update(
+        force_software_update(
             device_id="J413AP",
             version="12.6.2",
             posting_date=datetime.date(2022, 12, 13),
             expiration_date=datetime.date(2023, 4, 28),
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 5, 21)
         )
         self.assertIsNone(major_update)
         self.assertIsNone(minor_update)
         self.assertIsNone(patch_update)
-        self.assertEqual(len(list(iter_available_software_updates(enrolled_device, datetime.date(2023, 5, 21)))), 0)
+        self.assertIsNone(rsr_update)
 
     def test_available_software_updates_all_updates(self):
-        enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="12.6.1")
-        self._force_software_update(
+        enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="12.6.1", os_version_extra="(a)")
+        force_software_update(
+            device_id="J413AP",
+            version="12.6.1",
+            version_extra="(b)",
+            posting_date=datetime.date(2022, 12, 13),
+            expiration_date=datetime.date(2023, 4, 28),
+        )
+        su_e = force_software_update(
+            device_id="J413AP",
+            version="12.6.1",
+            version_extra="(c)",
+            posting_date=datetime.date(2022, 12, 13),
+            expiration_date=datetime.date(2023, 4, 28),
+        )
+        force_software_update(
             device_id="J413AP",
             version="12.6.2",
             posting_date=datetime.date(2022, 12, 13),
             expiration_date=datetime.date(2023, 4, 28),
         )
-        su_p = self._force_software_update(
+        su_p = force_software_update(
             device_id="J413AP",
             version="12.6.3",
             posting_date=datetime.date(2022, 12, 13),
             expiration_date=datetime.date(2023, 5, 28),
         )
-        su_mi = self._force_software_update(
+        su_mi = force_software_update(
             device_id="J413AP",
             version="12.7.0",
             posting_date=datetime.date(2022, 12, 31),
             expiration_date=datetime.date(2023, 6, 28),
         )
-        self._force_software_update(
+        force_software_update(
             device_id="J413AP",
             version="13.0.0",
             posting_date=datetime.date(2022, 12, 31),
             expiration_date=datetime.date(2023, 6, 28),
         )
-        su_ma = self._force_software_update(
+        su_ma = force_software_update(
             device_id="J413AP",
             version="13.1.0",
             posting_date=datetime.date(2022, 12, 31),
             expiration_date=datetime.date(2023, 6, 28),
         )
-        major_update, minor_update, patch_update, rsr_update = available_software_updates(
+        major_update, minor_update, patch_update, rsr_update = best_available_software_updates(
             enrolled_device,
             date=datetime.date(2023, 1, 11)
         )
         self.assertEqual(major_update, su_ma)
         self.assertEqual(minor_update, su_mi)
         self.assertEqual(patch_update, su_p)
-        self.assertEqual(
-            list(iter_available_software_updates(enrolled_device, datetime.date(2023, 1, 11))),
-            [su_ma, su_mi, su_p]
-        )
+        self.assertEqual(rsr_update, su_e)
 
     # management command
 

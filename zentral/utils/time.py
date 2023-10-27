@@ -5,3 +5,7 @@ def duration_repr(seconds):
         if n:
             result.append(f"{n}{unit}")
     return " ".join(result)
+
+
+def naive_truncated_isoformat(t, timespec="seconds"):
+    return t.isoformat(timespec=timespec).split("+")[0]

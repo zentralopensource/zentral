@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+import datetime
 import hashlib
 import logging
 import plistlib
@@ -25,6 +25,7 @@ from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
 from zentral.utils.iso_639_1 import ISO_639_1_CHOICES
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.payloads import get_payload_identifier
+from zentral.utils.time import naive_truncated_isoformat
 from .exceptions import EnrollmentSessionStatusError
 from .scep import SCEPChallengeType, get_scep_challenge, load_scep_challenge
 
@@ -248,6 +249,95 @@ class RecoveryPasswordConfig(models.Model):
         return d
 
 
+# Software update enforcement
+
+
+class SoftwareUpdateEnforcementManager(models.Manager):
+    def can_be_deleted(self):
+        return self.annotate(bp_count=Count("blueprint")).filter(bp_count=0)
+
+
+class SoftwareUpdateEnforcement(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    details_url = models.URLField(
+        verbose_name="Details URL",
+        help_text="The URL of a web page that shows details that the organization provides about the enforced update.",
+        blank=True
+    )
+    tags = models.ManyToManyField(Tag, blank=True)
+    # static enforcement
+    os_version = models.CharField(
+        verbose_name="Target OS version",
+        help_text="The target OS version to update the device to by the appropriate time.",
+        max_length=32,
+        blank=True,
+    )
+    build_version = models.CharField(
+        verbose_name="Target build version",
+        help_text="The target build version to update the device to by the appropriate time, for example, 20A242.",
+        max_length=32,
+        blank=True,
+    )
+    local_datetime = models.DateTimeField(
+        verbose_name="Target local date time",
+        help_text="If the user doesn’t trigger the software update before this time, the device force installs it.",
+        null=True, blank=True
+    )
+    # or sliding enforcement window …
+    max_os_version = models.CharField(
+        verbose_name="Maximum target OS version",
+        help_text="The maximum target OS version to update the device to by the appropriate time.",
+        max_length=32,
+        blank=True,
+    )
+    delay_days = models.IntegerField(
+        verbose_name="Delay in days",
+        help_text="Number of days after a software update release before the device force installs it.",
+        default=14,
+        validators=[MinValueValidator(0), MaxValueValidator(120)],
+        null=True, blank=True,
+    )
+    local_time = models.TimeField(
+        verbose_name="Target local time",
+        help_text="The local time value that specifies when to force install the software update.",
+        default=datetime.time(9, 30),
+        null=True, blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = SoftwareUpdateEnforcementManager()
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("mdm:software_update_enforcement", args=(self.pk,))
+
+    def can_be_deleted(self):
+        return SoftwareUpdateEnforcement.objects.can_be_deleted().filter(pk=self.pk).exists()
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "tags": [t.serialize_for_event(keys_only=True)
+                     for t in self.tags.select_related("taxonomy", "meta_business_unit").all().order_by("pk")],
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        for attr in ("details_url",
+                     "os_version", "build_version", "local_datetime",
+                     "max_os_version", "delay_days", "local_time",):
+            val = getattr(self, attr)
+            if val is not None and val != "":
+                if "time" in attr:
+                    val = naive_truncated_isoformat(val)
+                d[attr] = val
+        return d
+
+
 # Blueprint
 
 
@@ -305,6 +395,9 @@ class Blueprint(models.Model):
     recovery_password_config = models.ForeignKey(RecoveryPasswordConfig, null=True, blank=True,
                                                  on_delete=models.SET_NULL)
 
+    # Software update enforcements
+    software_update_enforcements = models.ManyToManyField(SoftwareUpdateEnforcement, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -320,8 +413,8 @@ class Blueprint(models.Model):
         return reverse("mdm:blueprint", args=(self.pk,))
 
     def get_inventory_interval_display(self):
-        now = datetime.utcnow()
-        return timesince(now - timedelta(seconds=self.inventory_interval), now=now)
+        now = datetime.datetime.utcnow()
+        return timesince(now - datetime.timedelta(seconds=self.inventory_interval), now=now)
 
     def _get_inventory_item_collection_option_display(self, attr):
         return self.InventoryItemCollectionOption(getattr(self, attr)).name
@@ -351,6 +444,10 @@ class Blueprint(models.Model):
             d["filevault_config"] = self.filevault_config.serialize_for_event(keys_only=True)
         if self.recovery_password_config:
             d["recovery_password_config"] = self.recovery_password_config.serialize_for_event(keys_only=True)
+        sues = [sue.serialize_for_event(keys_only=True)
+                for sue in self.software_update_enforcements.order_by("name")]
+        if sues:
+            d["software_update_enforcements"] = sues
         return d
 
     def can_be_deleted(self):
@@ -475,7 +572,7 @@ class Location(models.Model):
 
     def server_token_expires_soon(self):
         # TODO: hard coded 15 days
-        return self.server_token_expiration_date <= timezone.now() + timedelta(days=15)
+        return self.server_token_expiration_date <= timezone.now() + datetime.timedelta(days=15)
 
     def can_be_deleted(self):
         # TODO: optmize?
@@ -835,7 +932,7 @@ class EnrolledDevice(models.Model):
             self.filevault_prk = None
             return
         self.filevault_prk = encrypt_str(filevault_prk, **self._get_secret_engine_kwargs("filevault_prk"))
-        self.filevault_prk_updated_at = datetime.utcnow()
+        self.filevault_prk_updated_at = datetime.datetime.utcnow()
 
     def get_recovery_password(self):
         if not self.recovery_password:
@@ -847,7 +944,7 @@ class EnrolledDevice(models.Model):
             self.recovery_password = None
             return
         self.recovery_password = encrypt_str(recovery_password, **self._get_secret_engine_kwargs("recovery_password"))
-        self.recovery_password_updated_at = datetime.utcnow()
+        self.recovery_password_updated_at = datetime.datetime.utcnow()
 
     def get_pending_firmware_password(self):
         if not self.pending_firmware_password:
@@ -864,7 +961,7 @@ class EnrolledDevice(models.Model):
             pending_firmware_password,
             **self._get_secret_engine_kwargs("pending_firmware_password")
         )
-        self.pending_firmware_password_created_at = datetime.utcnow()
+        self.pending_firmware_password_created_at = datetime.datetime.utcnow()
 
     def rewrap_secrets(self):
         if self.bootstrap_token:
@@ -889,7 +986,7 @@ class EnrolledDevice(models.Model):
 
     def block(self):
         if not self.blocked_at:
-            self.blocked_at = datetime.utcnow()
+            self.blocked_at = datetime.datetime.utcnow()
             self.save()
 
     def unblock(self):
@@ -1401,7 +1498,7 @@ class DEPToken(models.Model):
 
     def expires_soon(self):
         # TODO: hard coded 7 days
-        return self.access_token_expiry and self.access_token_expiry <= timezone.now() + timedelta(days=7)
+        return self.access_token_expiry and self.access_token_expiry <= timezone.now() + datetime.timedelta(days=7)
 
     # secret
 
@@ -1885,7 +1982,7 @@ class ReEnrollmentSessionManager(models.Manager):
         quota = 1
 
         # expires 60 minutes from now, plenty enough for the device to contact the SCEP server
-        expired_at = timezone.now() + timedelta(hours=1)
+        expired_at = timezone.now() + datetime.timedelta(hours=1)
 
         enrolled_device = enrollment_session.enrolled_device
         new_es = EnrollmentSecret(

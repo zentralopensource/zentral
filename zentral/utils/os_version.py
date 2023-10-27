@@ -14,7 +14,7 @@ def make_comparable_os_version(os_version):
     except ValueError:
         pass
     else:
-        supplemental_os_version_extra = supplemental_os_version_extra.strip("()")
+        supplemental_os_version_extra = supplemental_os_version_extra.strip()
         if supplemental_os_version_extra:
             default = (0, 0, 0, supplemental_os_version_extra)
     try:

@@ -26,6 +26,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "recoverypasswordconfig",
         "scepconfig",
         "softwareupdate",
+        "softwareupdateenforcement",
         "userartifact",
         "usercommand",
         "userenrollment",

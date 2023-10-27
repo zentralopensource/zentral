@@ -4,13 +4,15 @@ from django.core.files import File
 from django.db import transaction
 from rest_framework import serializers
 from zentral.contrib.inventory.models import Tag
+from zentral.utils.os_version import make_comparable_os_version
 from .app_manifest import download_package, read_package_info, validate_configuration
 from .artifacts import update_blueprint_serialized_artifacts
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
                      EnterpriseApp, FileVaultConfig,
                      Platform, Profile,
-                     RecoveryPasswordConfig)
+                     RecoveryPasswordConfig,
+                     SoftwareUpdateEnforcement)
 from .payloads import get_configuration_profile_info
 
 
@@ -90,6 +92,55 @@ class RecoveryPasswordConfigSerializer(serializers.ModelSerializer):
         instance.set_static_password(static_password)
         instance.save()
         return instance
+
+
+class SoftwareUpdateEnforcementSerializer(serializers.ModelSerializer):
+    latest_fields = ("max_os_version", "delay_days", "local_time")
+    one_time_fields = ("os_version", "build_version", "local_datetime")
+
+    class Meta:
+        model = SoftwareUpdateEnforcement
+        fields = "__all__"
+
+    def _validate_os_version(self, value):
+        if value and make_comparable_os_version(value) == (0, 0, 0):
+            raise serializers.ValidationError("Not a valid OS version")
+        return value
+
+    def validate_max_os_version(self, value):
+        return self._validate_os_version(value)
+
+    def validate_os_version(self, value):
+        return self._validate_os_version(value)
+
+    def validate(self, data):
+        max_os_version = data.get("max_os_version")
+        os_version = data.get("os_version")
+        if max_os_version and os_version:
+            raise serializers.ValidationError("os_version and max_os_version cannot be both set")
+        if max_os_version:
+            mode = "max_os_version"
+            required_fields = (f for f in self.latest_fields if f not in ("delay_days", "local_time"))
+            other_fields = self.one_time_fields
+        elif os_version:
+            mode = "os_version"
+            required_fields = (f for f in self.one_time_fields if f != "build_version")
+            other_fields = self.latest_fields
+        else:
+            raise serializers.ValidationError("os_version or max_os_version are required")
+        errors = {}
+        for field in required_fields:
+            value = data.get(field)
+            if value is None or value == "":
+                errors[field] = f"This field is required if {mode} is used"
+        for field in other_fields:
+            if data.get(field):
+                errors[field] = f"This field cannot be set if {mode} is used"
+            else:
+                data[field] = "" if field not in ("delay_days", "local_time", "local_datetime") else None
+        if errors:
+            raise serializers.ValidationError(errors)
+        return data
 
 
 class BlueprintSerializer(serializers.ModelSerializer):

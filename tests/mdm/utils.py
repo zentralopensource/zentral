@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 import hashlib
 import os.path
 import plistlib
@@ -20,6 +20,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         EnterpriseApp, FileVaultConfig, Location, LocationAsset,
                                         OTAEnrollment, OTAEnrollmentSession,
                                         Profile, PushCertificate, RecoveryPasswordConfig, SCEPConfig,
+                                        SoftwareUpdate, SoftwareUpdateDeviceID, SoftwareUpdateEnforcement,
                                         StoreApp,
                                         UserEnrollment, UserEnrollmentSession)
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
@@ -440,12 +441,73 @@ def force_recovery_password_config(rotation_interval_days=0, static_password=Non
     return cfg
 
 
-def force_blueprint(filevault_config=None, recovery_password_config=None):
-    return Blueprint.objects.create(
+def force_software_update_enforcement(
+    name=None,
+    details_url="",
+    os_version="",
+    build_version="",
+    local_datetime=None,
+    max_os_version="",
+    local_time=None,
+    delay_days=None,
+    tags=None,
+):
+    name = name or get_random_string(12)
+    if not os_version:
+        max_os_version = max_os_version or "17.1.2"
+        local_time = local_time or time(9, 30)
+        delay_days = delay_days or 14
+    else:
+        local_datetime = local_datetime or datetime.utcnow() + timedelta(days=30)
+    sue = SoftwareUpdateEnforcement.objects.create(
+        name=name,
+        details_url=details_url,
+        os_version=os_version,
+        build_version=build_version,
+        local_datetime=local_datetime,
+        max_os_version=max_os_version,
+        local_time=local_time,
+        delay_days=delay_days,
+    )
+    if tags:
+        sue.tags.set(tags)
+    return sue
+
+
+def force_software_update(
+    device_id,
+    version,
+    posting_date,
+    expiration_date=None,
+    public=False,
+    version_extra="",
+    prerequisite_build="",
+    platform=Platform.MACOS,
+):
+    major, minor, patch = (int(i) for i in version.split("."))
+    su = SoftwareUpdate.objects.create(
+        platform=platform,
+        public=public,
+        major=major,
+        minor=minor,
+        patch=patch,
+        availability=(posting_date, expiration_date),
+        extra=version_extra,
+        prerequisite_build=prerequisite_build,
+    )
+    SoftwareUpdateDeviceID.objects.create(software_update=su, device_id=device_id)
+    return su
+
+
+def force_blueprint(filevault_config=None, recovery_password_config=None, software_update_enforcement=None):
+    bp = Blueprint.objects.create(
         name=get_random_string(12),
         filevault_config=filevault_config,
         recovery_password_config=recovery_password_config,
     )
+    if software_update_enforcement:
+        bp.software_update_enforcements.add(software_update_enforcement)
+    return bp
 
 
 def force_artifact(

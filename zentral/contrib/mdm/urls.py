@@ -225,6 +225,23 @@ urlpatterns = [
          views.DeleteRecoveryPasswordConfigView.as_view(),
          name="delete_recovery_password_config"),
 
+    # Software update enforcements
+    path('software_update_enforcements/',
+         views.SoftwareUpdateEnforcementListView.as_view(),
+         name="software_update_enforcements"),
+    path('software_update_enforcements/create/',
+         views.CreateSoftwareUpdateEnforcementView.as_view(),
+         name="create_software_update_enforcement"),
+    path('software_update_enforcements/<int:pk>/',
+         views.SoftwareUpdateEnforcementView.as_view(),
+         name="software_update_enforcement"),
+    path('software_update_enforcements/<int:pk>/update/',
+         views.UpdateSoftwareUpdateEnforcementView.as_view(),
+         name="update_software_update_enforcement"),
+    path('software_update_enforcements/<int:pk>/delete/',
+         views.DeleteSoftwareUpdateEnforcementView.as_view(),
+         name="delete_software_update_enforcement"),
+
     # SCEP configurations
     path('scep_configurations/',
          views.SCEPConfigListView.as_view(),

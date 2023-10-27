@@ -23,7 +23,8 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      EnrolledDevice, EnterpriseApp, Platform,
                      FileVaultConfig, RecoveryPasswordConfig, SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
-                     Profile, Location, LocationAsset, StoreApp)
+                     Profile, Location, LocationAsset, StoreApp,
+                     SoftwareUpdateEnforcement)
 from .skip_keys import skippable_setup_panes
 
 
@@ -924,6 +925,67 @@ class RecoveryPasswordConfigForm(forms.ModelForm):
             obj.set_static_password(self.cleaned_data["static_password"])
             obj.save()
         return obj
+
+
+class SoftwareUpdateEnforcementForm(forms.ModelForm):
+    enforcement_type = forms.ChoiceField(
+        label="Type",
+        required=True,
+        widget=forms.RadioSelect,
+        choices=(("ONE_TIME", "One time"),
+                 ("LATEST", "Latest")),
+        initial="LATEST",
+    )
+    field_order = (
+        "name",
+        "details_url",
+        "tags",
+        "enforcement_type",
+        "os_version", "build_version", "local_datetime",
+        "max_os_version", "delay_days", "local_time",
+    )
+    latest_fields = ("max_os_version", "delay_days", "local_time")
+    one_time_fields = ("os_version", "build_version", "local_datetime")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for widget_class, fields in (("one-time-enforcement", self.one_time_fields),
+                                     ("latest-enforcement", self.latest_fields),):
+            for field in fields:
+                self.fields[field].widget.attrs["class"] = widget_class
+        if self.instance.pk:
+            self.fields["enforcement_type"].initial = "ONE_TIME" if self.instance.os_version else "LATEST"
+
+    class Meta:
+        model = SoftwareUpdateEnforcement
+        fields = "__all__"
+
+    def _clean_os_version(self, os_version):
+        if os_version and make_comparable_os_version(os_version) == (0, 0, 0):
+            raise forms.ValidationError("Not a valid OS version")
+        return os_version
+
+    def clean_max_os_version(self):
+        return self._clean_os_version(self.cleaned_data.get("max_os_version"))
+
+    def clean_os_version(self):
+        return self._clean_os_version(self.cleaned_data.get("os_version"))
+
+    def clean(self):
+        super().clean()
+        enforcement_type = self.cleaned_data.get("enforcement_type")
+        if enforcement_type == "ONE_TIME":
+            required_fields = (f for f in self.one_time_fields if f != "build_version")
+            other_fields = self.latest_fields
+        else:
+            required_fields = self.latest_fields
+            other_fields = self.one_time_fields
+        for field in required_fields:
+            value = self.cleaned_data.get(field)
+            if not self.has_error(field) and (value is None or value == ""):
+                self.add_error(field, "This field is required")
+        for field in other_fields:
+            setattr(self.instance, field, "" if field not in ("delay_days", "local_time", "local_datetime") else None)
 
 
 class SCEPConfigForm(forms.ModelForm):
