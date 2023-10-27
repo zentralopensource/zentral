@@ -243,11 +243,11 @@
         <div class="btn-group" role="group">
         {% if perms.santa.change_rule %}
             {% url 'santa:update_configuration_rule' configuration.pk rule.pk as url %}
-            {% button 'UPDATE' url "Edit Configuration" %}
+            {% button 'UPDATE' url "Edit rule" %}
         {% endif %}
         {% if perms.santa.delete_rule %}
             {% url 'santa:delete_configuration_rule' configuration.pk rule.pk as url %}
-            {% button 'DELETE' url "Delete Rule" %}
+            {% button 'DELETE' url "Delete rule" %}
         {% endif %}
         </div>
     </div>
