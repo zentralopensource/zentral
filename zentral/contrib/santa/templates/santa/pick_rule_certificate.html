@@ -16,7 +16,7 @@
   <div class="form-group">
     {{ form.query }}
   </div>
-  <button type="submit" class="btn btn-default">Search</button>
+  <button type="submit" class="btn btn-outline-secondary">Search</button>
 </form>
 
 {% if certificates %}
@@ -40,7 +40,7 @@
       <td>
         {% if rule %}
         {% if not rule.ruleset %}
-        <a class="btn btn-default" href="{% url 'santa:update_configuration_rule' configuration.pk rule.pk %}">
+        <a class="btn btn-outline-secondary" href="{% url 'santa:update_configuration_rule' configuration.pk rule.pk %}">
           Update rule
         </a>
         {% else %}

@@ -25,7 +25,7 @@
         <td class="text-end py-0">
           {% if type == "machine" %}
           <form action="{% url 'inventory:remove_machine_tag' machine.get_urlsafe_serial_number tag.id %}" method="POST">{% csrf_token %}
-            <button class="btn btn-default">
+            <button class="btn btn-outline-secondary">
                 <span class="bi bi-trash" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Tag"></span>
             </button>
           </form>

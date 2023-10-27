@@ -31,7 +31,7 @@
 <h3>{{ probe_sources|length }} Probe{{ probe_sources|length|pluralize }}</h3>
 
 {% if perms.probes.add_probesource %}
-<a href="{% url 'probes:import_feed_probe' object.feed_id object.id %}" class="btn btn-default">Import probe</a>
+<a href="{% url 'probes:import_feed_probe' object.feed_id object.id %}" class="btn btn-outline-secondary">Import probe</a>
 {% endif %}
 
 <table class="table">

@@ -13,7 +13,7 @@
 <p>Please confirm you want to delete the {{ user_to_delete.get_type_display }}: {{ user_to_delete }}.</p>
 <form class="form" method="POST">{% csrf_token %}
   <p>
-    <a href="{% url 'accounts:users' %}" class="btn btn-default">Cancel</a>
+    <a href="{% url 'accounts:users' %}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-danger">Delete {{ user_to_delete.get_type_display }}</button>
   </p>
 </form>

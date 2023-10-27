@@ -42,7 +42,7 @@
       </td>
       <td>
         {% for link in group.links.all %}
-        <a href="{{ link.url }}" class="btn btn-default">
+        <a href="{{ link.url }}" class="btn btn-outline-secondary">
           {{ group.source.name }} - {{ link.anchor_text }}
         </a>
         {% endfor %}

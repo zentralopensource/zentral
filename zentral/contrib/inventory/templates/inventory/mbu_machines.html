@@ -18,14 +18,14 @@
     <td>{{ bu.name }}</td>
     <td>
       {% for link in bu.links.all %}
-      <a href="{{ link.url }}" class="btn btn-default">
+      <a href="{{ link.url }}" class="btn btn-outline-secondary">
         {{ bu.source.name }} - {{ link.anchor_text }}
       </a>
       {% endfor %}
     </td>
     <td>
       {% if bu.can_be_detached %}
-      <a href="{% url 'inventory:detach_bu' object.id bu.id %}" class="btn btn-default">
+      <a href="{% url 'inventory:detach_bu' object.id bu.id %}" class="btn btn-outline-secondary">
         Detach
       </a>
       {% endif %}

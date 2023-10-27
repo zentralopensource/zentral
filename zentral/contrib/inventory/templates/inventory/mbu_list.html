@@ -112,7 +112,7 @@
             <td>{{ bu.name }}</td>
             <td>
                 {% for link in bu.links.all %}
-                <a href="{{ link.url }}" class="btn btn-default">
+                <a href="{{ link.url }}" class="btn btn-outline-secondary">
                 {{ bu.source.name }} - {{ link.anchor_text }}
                 </a>
                 {% endfor %}

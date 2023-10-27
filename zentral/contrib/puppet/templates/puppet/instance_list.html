@@ -11,7 +11,7 @@
 
 {% if perms.puppet.add_instance %}
 <p>
-  <a href="{% url 'puppet:create_instance' %}" class="btn btn-default">Create</a>
+  <a href="{% url 'puppet:create_instance' %}" class="btn btn-outline-secondary">Create</a>
 </p>
 {% endif %}
 
@@ -34,7 +34,7 @@
       </td>
       {% if perms.puppet.change_instance %}
       <td>
-        <a href="{% url 'puppet:update_instance' instance.pk %}" class="btn btn-default">
+        <a href="{% url 'puppet:update_instance' instance.pk %}" class="btn btn-outline-secondary">
           <span class="glyphicon glyphicon-edit" aria-hidden="true"></span> Update
         </a>
       </td>

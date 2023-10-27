@@ -106,7 +106,7 @@
     <td>
       {% if pkg_info.local %}
       {% if perms.monolith.change_pkginfo %}
-      <a class="btn btn-default" href="{% url 'monolith:update_package' pkg_info.pk %}">
+      <a class="btn btn-outline-secondary" href="{% url 'monolith:update_package' pkg_info.pk %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>
       {% endif %}
@@ -117,7 +117,7 @@
       {% endif %}
       {% else %}
       {% if perms.monolith.change_pkginfo and manual_catalog_management %}
-      <a class="btn btn-default" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.pk %}">
+      <a class="btn btn-outline-secondary" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.pk %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>
       {% endif %}

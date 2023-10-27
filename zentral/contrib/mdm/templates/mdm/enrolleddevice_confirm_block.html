@@ -14,7 +14,7 @@
 <form method="post">{% csrf_token %}
   <p>Do you really want to block this device?</p>
   <p>
-    <a href="{{ object.get_absolute_url }}" class="btn btn-default">Cancel</a>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-danger">Yes</button>
   </p>
 </form>

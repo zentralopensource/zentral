@@ -24,7 +24,7 @@
         <td>{% inventory_tag tag %}</td>
         <td class="text-end py-0">
           <form action="{% url 'inventory:remove_mbu_tag' meta_business_unit.id tag.id %}" method="POST">{% csrf_token %}
-            <button class="btn btn-default">
+            <button class="btn btn-outline-secondary">
                 <span class="bi bi-trash" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Tag"></span>
             </button>
           </form>
