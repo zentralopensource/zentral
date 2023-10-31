@@ -3,21 +3,20 @@
   <div>{% for field in hidden_fields %}{{ field }}{% endfor %}</div>
 {% endif %}
 {% for field, errors in fields %}
-  <div class="mb-3{% with classes=field.css_classes %}{% if classes %} {{ classes }}"{% endif %}{% endwith %}">
     {% if field.use_fieldset %}
-      <fieldset>
+      <fieldset class="mb-3">
       {% if field.label %}{{ field.legend_tag }}{% endif %}
     {% else %}
+      <div class="mb-3{% with classes=field.css_classes %}{% if classes %} {{ classes }}"{% endif %}{% endwith %}">
       {% if field.label %}{{ field.label_tag }}{% endif %}
     {% endif %}
     {{ errors }}
     {{ field }}
     {% if field.help_text %}<div class="form-text">{{ field.help_text|safe }}</div>{% endif %}
-    {% if field.use_fieldset %}</fieldset>{% endif %}
+    {% if field.use_fieldset %}</fieldset>{% else %}</div>{% endif %}
     {% if forloop.last %}
       {% for field in hidden_fields %}{{ field }}{% endfor %}
     {% endif %}
-</div>
 {% endfor %}
 {% if not fields and not errors %}
   {% for field in hidden_fields %}{{ field }}{% endfor %}

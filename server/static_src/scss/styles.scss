@@ -69,9 +69,14 @@ pre, ol, ul, dl {
     margin-bottom: 0px;
 }
 
+// Forms
 .errorlist {
     color: $ztl-red;
     font-weight: bold;
+}
+
+legend {
+    font-size: var(--bs-body-font-size);
 }
 
 // Side menu
