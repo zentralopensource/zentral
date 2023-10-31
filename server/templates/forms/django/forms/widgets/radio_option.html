@@ -1,1 +1,4 @@
-{% include "django/forms/widgets/input_option.html" %}
+<div class="form-check{% if option.attrs.disabled %} disabled{% endif %}">
+  {% include "django/forms/widgets/input.html" with widget=option %}
+  <label class="form-check-label" for="{{ option.attrs.id }}">{{ option.label }}</label>
+</div>
