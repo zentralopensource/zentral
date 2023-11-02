@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item active">Events</a></li>
+</ol>
+
+<h2 class="mb-0">{{ configuration }}</h2>
+<h3 class="m-0 fs-5 text-secondary mb-3">Events</h3>
+<div class="d-flex justify-content-between">
+    <div class="d-flex w-75 me-auto flex-shrink-0">
+
+        {% include "core/stores/events_form.html" %}
+
+    </div>
+</div>
+
+{% include "core/stores/events_table.html" %}
+
+{% endblock %}
+
+{% block extrajs %}
+{% include "core/stores/events_script.html" %}
+{% endblock %}

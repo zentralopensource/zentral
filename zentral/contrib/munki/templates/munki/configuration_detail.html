@@ -13,10 +13,17 @@
 <div class="object-details">
     <div class="d-flex align-items-center mb-1">
         <h2 class="m-0">{{ configuration }}</h2>
+        <div class="ms-3">
+            {% if show_events_link %}
+                {% url 'munki:configuration_events' object.pk as url %}
+                {% button 'EVENTS' url %}
+            {% endif %}
+        </div>
     </div>
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Configuration</h3>
         <div class="ms-auto">
+
             {% if perms.munki.change_configuration %}
                 {% url 'munki:update_configuration' object.pk as url %}
                 {% button 'UPDATE' url "Edit Configuration" %}

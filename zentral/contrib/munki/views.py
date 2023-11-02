@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import F, Count
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
+from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
 from zentral.core.events.base import AuditEvent
@@ -15,7 +15,7 @@ from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
-from zentral.utils.views import DeleteViewWithAudit, UserPaginationListView
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 from .compliance_checks import MunkiScriptCheck
 from .forms import (CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, ScriptCheckForm,
                     ScriptCheckSearchForm, UpdateInstallProbeForm)
@@ -68,7 +68,7 @@ class ConfigurationListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreateConfigurationView(PermissionRequiredMixin, CreateView):
+class CreateConfigurationView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "munki.add_configuration"
     model = Configuration
     form_class = ConfigurationForm
@@ -99,13 +99,59 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
             enrollments.append((enrollment, distributor, distributor_link))
         ctx["enrollments"] = enrollments
         ctx["enrollment_count"] = enrollment_count
+
+        # events
+        if self.request.user.has_perms(ConfigurationEventsView.permission_required):
+            ctx["show_events_link"] = frontend_store.object_events
         return ctx
 
 
-class UpdateConfigurationView(PermissionRequiredMixin, UpdateView):
+class UpdateConfigurationView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "munki.change_configuration"
     model = Configuration
     form_class = ConfigurationForm
+
+
+# events
+
+class EventsMixin:
+    store_method_scope = "object"
+
+    def get_object(self, **kwargs):
+        return get_object_or_404(Configuration, pk=kwargs["pk"])
+
+    def get_fetch_kwargs_extra(self):
+        return {"key": "munki_configuration", "val": encode_args((self.object.pk,))}
+
+    def get_fetch_url(self):
+        return reverse("munki:fetch_configuration_events", args=(self.object.pk,))
+
+    def get_redirect_url(self):
+        return reverse("munki:configuration_events", args=(self.object.pk,))
+
+    def get_store_redirect_url(self):
+        return reverse("munki:configuration_events_store_redirect", args=(self.object.pk,))
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["configuration"] = self.object
+        return ctx
+
+
+class ConfigurationEventsView(EventsMixin, EventsView):
+    permission_required = ("munki.view_configuration",
+                           "munki.view_enrollment")
+    template_name = "munki/configuration_events.html"
+
+
+class FetchConfigurationEventsView(EventsMixin, FetchEventsView):
+    permission_required = ("munki.view_configuration",
+                           "munki.view_enrollment")
+
+
+class ConfigurationEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    permission_required = ("munki.view_configuration",
+                           "munki.view_enrollment")
 
 
 # enrollment
