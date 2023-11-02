@@ -10,6 +10,14 @@ urlpatterns = [
     path('configurations/', views.ConfigurationListView.as_view(), name='configurations'),
     path('configurations/create/', views.CreateConfigurationView.as_view(), name='create_configuration'),
     path('configurations/<int:pk>/', views.ConfigurationView.as_view(), name='configuration'),
+    path('configurations/<int:pk>/events/', views.ConfigurationEventsView.as_view(), name='configuration_events'),
+    path('configurations/<int:pk>/events/fetch/', 
+         views.FetchConfigurationEventsView.as_view(),
+         name='fetch_configuration_events'),
+    path('configurations/<int:pk>/events/store_redirect/',
+         views.ConfigurationEventsStoreRedirectView.as_view(),
+         name='configuration_events_store_redirect'),
+
     path('configurations/<int:pk>/update/', views.UpdateConfigurationView.as_view(), name='update_configuration'),
 
     # enrollment

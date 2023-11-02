@@ -12,7 +12,7 @@ from .serializers import ConfigurationSerializer, EnrollmentSerializer, ScriptCh
 # configurations
 
 
-class ConfigurationList(generics.ListCreateAPIView):
+class ConfigurationList(ListCreateAPIViewWithAudit):
     queryset = Configuration.objects.all()
     serializer_class = ConfigurationSerializer
     permission_classes = [DefaultDjangoModelPermissions]
@@ -20,7 +20,7 @@ class ConfigurationList(generics.ListCreateAPIView):
     filterset_fields = ("name",)
 
 
-class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
+class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = Configuration.objects.all()
     serializer_class = ConfigurationSerializer
     permission_classes = [DefaultDjangoModelPermissions]

@@ -9,6 +9,7 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
+from unittest.mock import patch
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.munki.models import Enrollment
 from accounts.models import User
@@ -106,6 +107,46 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(len(response.context['object_list']), 1)
         self.assertEqual(response.context['object_list'][0].enrollment__count, 2)
         self.assertEqual(response.context['object_list'][0].enrollment__enrolledmachine__count, 3)
+
+    def test_configuration_without_event_links(self):
+        configuration = force_configuration()
+        self._login("munki.view_configuration")
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/configuration_detail.html")
+        self.assertNotContains(response, reverse("munki:configuration_events",
+                                                 args=(configuration.pk,)))
+
+    def test_configuration_with_event_links(self):
+        configuration = force_configuration()
+        self._login("munki.view_configuration",
+                    "munki.view_enrollment")
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/configuration_detail.html")
+        self.assertContains(response, reverse("munki:configuration_events",
+                                              args=(configuration.pk,)))
+
+    def test_configuration_events_redirect(self):
+        configuration = force_configuration()
+        self._login_redirect(reverse("munki:configuration_events", args=(configuration.pk,)))
+
+    def test_configuration_events_permission_denied(self):
+        configuration = force_configuration()
+        self._login("munki.view_configuration")
+        response = self.client.get(reverse("munki:configuration_events", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    def test_configuration_events_ok(self, get_aggregated_object_event_counts):
+        get_aggregated_object_event_counts.return_value = {}
+        configuration = force_configuration()
+        self._login("munki.view_configuration",
+                    "munki.view_enrollment")
+        response = self.client.get(reverse("munki:configuration_events", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/configuration_events.html")
+
 
     # create configuration
 

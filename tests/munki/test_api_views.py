@@ -189,52 +189,59 @@ class APIViewsTestCase(TestCase):
         self.assertFalse(configuration.auto_failed_install_incidents)
         self.assertEqual(configuration.version, 0)
 
-    def test_create_configuration(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_configuration(self, post_event):
         self.set_permissions("munki.add_configuration")
         name = get_random_string(12)
-        response = self.post(
-            reverse("munki_api:configurations"),
-            {"name": name,
-             "description": "Description",
-             "inventory_apps_full_info_shard": 50,
-             "principal_user_detection_sources": ["google_chrome", "company_portal"],
-             "principal_user_detection_domains": ["zentral.io"],
-             "collected_condition_keys": ["yolo"],
-             "managed_installs_sync_interval_days": 1,
-             "script_checks_run_interval_seconds": 86400,
-             "auto_reinstall_incidents": True,
-             "auto_failed_install_incidents": True}
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(
+                reverse("munki_api:configurations"),
+                {"name": name,
+                 "description": "Description",
+                 "inventory_apps_full_info_shard": 50,
+                 "principal_user_detection_sources": ["google_chrome", "company_portal"],
+                 "principal_user_detection_domains": ["zentral.io"],
+                 "collected_condition_keys": ["yolo"],
+                 "managed_installs_sync_interval_days": 1,
+                 "script_checks_run_interval_seconds": 86400,
+                 "auto_reinstall_incidents": True,
+                 "auto_failed_install_incidents": True}
+            )
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
         configuration = Configuration.objects.get(name=name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
-            response.json(),
-            {'id': configuration.pk,
-             'name': name,
-             'description': 'Description',
-             'inventory_apps_full_info_shard': 50,
-             'principal_user_detection_sources': ["google_chrome", "company_portal"],
-             'principal_user_detection_domains': ["zentral.io"],
-             'collected_condition_keys': ["yolo"],
-             'managed_installs_sync_interval_days': 1,
-             'script_checks_run_interval_seconds': 86400,
-             'auto_reinstall_incidents': True,
-             'auto_failed_install_incidents': True,
-             'version': 0,
-             'created_at': configuration.created_at.isoformat(),
-             'updated_at': configuration.updated_at.isoformat()}
+            event.payload,
+            {
+                "action": "created",
+                "object": {
+                    "model": "munki.configuration",
+                    "pk": str(configuration.pk),
+                    "new_value": {
+                        'pk': configuration.pk,
+                        'name': name,
+                        'description': 'Description',
+                        'inventory_apps_full_info_shard': 50,
+                        'principal_user_detection_sources': ["google_chrome", "company_portal"],
+                        'principal_user_detection_domains': ["zentral.io"],
+                        'collected_condition_keys': ["yolo"],
+                        'managed_installs_sync_interval_days': 1,
+                        'script_checks_run_interval_seconds': 86400,
+                        'auto_reinstall_incidents': True,
+                        'auto_failed_install_incidents': True,
+                        'created_at': configuration.created_at,
+                        'updated_at': configuration.updated_at,
+                        'version': 0,
+                    }
+                }
+            }
         )
-        self.assertEqual(configuration.name, name)
-        self.assertEqual(configuration.description, "Description")
-        self.assertEqual(configuration.inventory_apps_full_info_shard, 50)
-        self.assertEqual(configuration.principal_user_detection_sources, ["google_chrome", "company_portal"])
-        self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
-        self.assertEqual(configuration.collected_condition_keys, ["yolo"])
-        self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
-        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
-        self.assertTrue(configuration.auto_reinstall_incidents)
-        self.assertTrue(configuration.auto_failed_install_incidents)
-        self.assertEqual(configuration.version, 0)
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_configuration": [str(configuration.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
 
     # get configuration
 
@@ -282,53 +289,80 @@ class APIViewsTestCase(TestCase):
         response = self.put(reverse("munki_api:configuration", args=(configuration.pk,)), {})
         self.assertEqual(response.status_code, 403)
 
-    def test_update_configuration(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_configuration(self, post_event):
         configuration = self.force_configuration()
         self.set_permissions("munki.change_configuration")
+        prev_name = configuration.name
+        prev_updated_at = configuration.updated_at
         name = get_random_string(12)
-        response = self.put(
-            reverse("munki_api:configuration", args=(configuration.pk,)),
-            {"name": name,
-             "description": "Description",
-             "inventory_apps_full_info_shard": 50,
-             "principal_user_detection_sources": ["google_chrome", "company_portal"],
-             "principal_user_detection_domains": ["zentral.io"],
-             "collected_condition_keys": ["yolo"],
-             "managed_installs_sync_interval_days": 1,
-             "script_checks_run_interval_seconds": 86400,
-             "auto_reinstall_incidents": True,
-             "auto_failed_install_incidents": True}
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(
+                reverse("munki_api:configuration", args=(configuration.pk,)),
+                {
+                    "name": name,
+                    "description": "Description",
+                    "inventory_apps_full_info_shard": 50,
+                    "principal_user_detection_sources": ["google_chrome", "company_portal"],
+                    "principal_user_detection_domains": ["zentral.io"],
+                    "collected_condition_keys": ["yolo"],
+                    "managed_installs_sync_interval_days": 1,
+                    "script_checks_run_interval_seconds": 86400,
+                    "auto_reinstall_incidents": True,
+                    "auto_failed_install_incidents": True}
+            )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         configuration.refresh_from_db()
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
-            response.json(),
-            {'id': configuration.pk,
-             'name': name,
-             'description': 'Description',
-             'inventory_apps_full_info_shard': 50,
-             'principal_user_detection_sources': ["google_chrome", "company_portal"],
-             'principal_user_detection_domains': ["zentral.io"],
-             'collected_condition_keys': ["yolo"],
-             'managed_installs_sync_interval_days': 1,
-             'script_checks_run_interval_seconds': 86400,
-             'auto_reinstall_incidents': True,
-             'auto_failed_install_incidents': True,
-             'version': 1,
-             'created_at': configuration.created_at.isoformat(),
-             'updated_at': configuration.updated_at.isoformat()}
+            event.payload,
+            {
+                "action": "updated",
+                "object":
+                {
+                    "model": "munki.configuration",
+                    "pk": str(configuration.pk),
+                    "prev_value": {
+                        'pk': configuration.pk,
+                        'name': prev_name,
+                        'description': '',
+                        'inventory_apps_full_info_shard': 100,
+                        'principal_user_detection_sources': [],
+                        'principal_user_detection_domains': [],
+                        'collected_condition_keys': [],
+                        'managed_installs_sync_interval_days': 7,
+                        'script_checks_run_interval_seconds': 86400,
+                        'auto_reinstall_incidents': False,
+                        'auto_failed_install_incidents': False,
+                        'version': 0,
+                        'created_at': configuration.created_at,
+                        'updated_at': prev_updated_at
+                    },
+                    "new_value": {
+                        'pk': configuration.pk,
+                        'name': name,
+                        'description': 'Description',
+                        'inventory_apps_full_info_shard': 50,
+                        'principal_user_detection_sources': ["google_chrome", "company_portal"],
+                        'principal_user_detection_domains': ["zentral.io"],
+                        'collected_condition_keys': ["yolo"],
+                        'managed_installs_sync_interval_days': 1,
+                        'script_checks_run_interval_seconds': 86400,
+                        'auto_reinstall_incidents': True,
+                        'auto_failed_install_incidents': True,
+                        'version': 1,
+                        'created_at': configuration.created_at,
+                        'updated_at': configuration.updated_at
+                    }
+                }
+            }
         )
-        self.assertEqual(configuration.name, name)
-        self.assertEqual(configuration.description, "Description")
-        self.assertEqual(configuration.inventory_apps_full_info_shard, 50)
-        self.assertEqual(configuration.principal_user_detection_sources, ["google_chrome", "company_portal"])
-        self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
-        self.assertEqual(configuration.collected_condition_keys, ["yolo"])
-        self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
-        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
-        self.assertTrue(configuration.auto_reinstall_incidents)
-        self.assertTrue(configuration.auto_failed_install_incidents)
-        self.assertEqual(configuration.version, 1)
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_configuration": [str(configuration.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
 
     # delete configuration
 
@@ -342,12 +376,47 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse("munki_api:configuration", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_configuration(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_configuration(self, post_event):
         configuration = self.force_configuration()
+        prev_pk = configuration.pk
         self.set_permissions("munki.delete_configuration")
-        response = self.delete(reverse("munki_api:configuration", args=(configuration.pk,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("munki_api:configuration", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 204)
+        self.assertEqual(len(callbacks), 1)
         self.assertEqual(Configuration.objects.filter(pk=configuration.pk).count(), 0)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {
+                "action": "deleted",
+                "object": {
+                    "model": "munki.configuration",
+                    "pk": str(prev_pk),
+                    "prev_value": {
+                        'pk': prev_pk,
+                        'name': configuration.name,
+                        'description': '',
+                        'inventory_apps_full_info_shard': 100,
+                        'principal_user_detection_sources': [],
+                        'principal_user_detection_domains': [],
+                        'collected_condition_keys': [],
+                        'managed_installs_sync_interval_days': 7,
+                        'script_checks_run_interval_seconds': 86400,
+                        'auto_reinstall_incidents': False,
+                        'auto_failed_install_incidents': False,
+                        'version': 0,
+                        'created_at': configuration.created_at,
+                        'updated_at': configuration.updated_at
+                    }
+                }
+            }
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_configuration": [str(prev_pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
 
     # list enrollments
 

@@ -87,6 +87,25 @@ class Configuration(models.Model):
             self.version = F("version") + 1
         super().save(*args, **kwargs)
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if not keys_only:
+            d.update({
+                "description": self.description,
+                "inventory_apps_full_info_shard": self.inventory_apps_full_info_shard,
+                "principal_user_detection_sources": self.principal_user_detection_sources,
+                "principal_user_detection_domains": self.principal_user_detection_domains,
+                "collected_condition_keys": self.collected_condition_keys,
+                "managed_installs_sync_interval_days": self.managed_installs_sync_interval_days,
+                "script_checks_run_interval_seconds": self.script_checks_run_interval_seconds,
+                "auto_reinstall_incidents": self.auto_reinstall_incidents,
+                "auto_failed_install_incidents": self.auto_failed_install_incidents,
+                "created_at": self.created_at,
+                "updated_at": self.updated_at,
+                "version": self.version,
+            })
+        return d
+
 
 # enrollment
 
@@ -99,6 +118,11 @@ class Enrollment(BaseEnrollment):
 
     def get_description_for_distributor(self):
         return "Zentral pre/postflight"
+
+    def serialize_for_event(self):
+        enrollment_dict = super().serialize_for_event()
+        enrollment_dict["configuration"] = self.configuration.serialize_for_event(keys_only=True)
+        return enrollment_dict
 
 
 class EnrolledMachine(models.Model):
