@@ -13,11 +13,14 @@ from unittest.mock import patch
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.munki.models import Enrollment
 from accounts.models import User
+from zentral.core.events.base import AuditEvent
 from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class MunkiSetupViewsTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         # user
@@ -147,6 +150,15 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_events.html")
 
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    def test_fetch_configuration_events_ok(self, fetch_object_events):
+        fetch_object_events.return_value = {}
+        configuration = force_configuration()
+        self._login("munki.view_configuration",
+                    "munki.view_enrollment")
+        response = self.client.get(reverse("munki:configuration_events", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/configuration_events.html")
 
     # create configuration
 
@@ -164,23 +176,26 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_form.html")
 
-    def test_create_configuration_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_configuration_post(self, post_event):
         self._login("munki.add_configuration", "munki.view_configuration")
         name = get_random_string(12)
         description = get_random_string(12)
         collected_condition_keys = sorted(get_random_string(12) for _ in range(3))
-        response = self.client.post(reverse("munki:create_configuration"),
-                                    {"name": name,
-                                     "description": description,
-                                     "inventory_apps_full_info_shard": 17,
-                                     "principal_user_detection_sources": "logged_in_user",
-                                     "principal_user_detection_domains": "yolo.fr",
-                                     "collected_condition_keys": " ,  ".join(collected_condition_keys),
-                                     "managed_installs_sync_interval_days": 1,
-                                     "script_checks_run_interval_seconds": 7231,
-                                     "auto_reinstall_incidents": "on"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("munki:create_configuration"),
+                                        {"name": name,
+                                         "description": description,
+                                         "inventory_apps_full_info_shard": 17,
+                                         "principal_user_detection_sources": "logged_in_user",
+                                         "principal_user_detection_domains": "yolo.fr",
+                                         "collected_condition_keys": " ,  ".join(collected_condition_keys),
+                                         "managed_installs_sync_interval_days": 1,
+                                         "script_checks_run_interval_seconds": 7231,
+                                         "auto_reinstall_incidents": "on"},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
         self.assertContains(response, name)
         self.assertContains(response, description)
@@ -194,6 +209,38 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(sorted(configuration.collected_condition_keys), collected_condition_keys)
         for condition_key in collected_condition_keys:
             self.assertContains(response, condition_key)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {
+                "action": "created",
+                "object":
+                {
+                 "model": "munki.configuration",
+                 "pk": str(configuration.pk),
+                 "new_value": {
+                     "pk": configuration.pk,
+                     "name": name,
+                     "description": description,
+                     "inventory_apps_full_info_shard": 17,
+                     "principal_user_detection_sources": ["logged_in_user"],
+                     "principal_user_detection_domains": ["yolo.fr"],
+                     "collected_condition_keys": sorted(collected_condition_keys),
+                     "managed_installs_sync_interval_days": 1,
+                     "script_checks_run_interval_seconds": 7231,
+                     "auto_reinstall_incidents": True,
+                     "auto_failed_install_incidents": False,
+                     "created_at": configuration.created_at,
+                     "updated_at": configuration.updated_at,
+                     "version": 0,
+                 }
+                }
+            }
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_configuration": [str(configuration.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
 
     # update configuration
 
@@ -214,21 +261,27 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_form.html")
 
-    def test_update_configuration_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_configuration_post(self, post_event):
         configuration = force_configuration()
+        prev_updated_at = configuration.updated_at
         self._login("munki.change_configuration", "munki.view_configuration")
         collected_condition_keys = sorted(get_random_string(12) for _ in range(3))
-        response = self.client.post(reverse("munki:update_configuration", args=(configuration.pk,)),
-                                    {"name": configuration.name,
-                                     "inventory_apps_full_info_shard": 17,
-                                     "principal_user_detection_sources": "logged_in_user",
-                                     "principal_user_detection_domains": "yolo.fr",
-                                     "collected_condition_keys": ",".join(collected_condition_keys),
-                                     "managed_installs_sync_interval_days": 2,
-                                     "script_checks_run_interval_seconds": 3600,
-                                     "auto_failed_install_incidents": "on"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("munki:update_configuration", args=(configuration.pk,)),
+                                        {
+                                            "name": configuration.name,
+                                            "inventory_apps_full_info_shard": 17,
+                                            "principal_user_detection_sources": "logged_in_user",
+                                            "principal_user_detection_domains": "yolo.fr",
+                                            "collected_condition_keys": ",".join(collected_condition_keys),
+                                            "managed_installs_sync_interval_days": 2,
+                                            "script_checks_run_interval_seconds": 3600,
+                                            "auto_failed_install_incidents": "on"},
+                                        follow=True
+                                        )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
         configuration2 = response.context["object"]
         self.assertEqual(configuration2, configuration)
@@ -241,6 +294,54 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(sorted(configuration2.collected_condition_keys), collected_condition_keys)
         for condition_key in collected_condition_keys:
             self.assertContains(response, condition_key)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {
+                "action": "updated",
+                "object":
+                {
+                 "model": "munki.configuration",
+                 "pk": str(configuration.pk),
+                 "prev_value": {
+                    "pk": configuration.pk,
+                    "name": configuration.name,
+                    "description": "",
+                    "inventory_apps_full_info_shard": 100,
+                    "principal_user_detection_sources": [],
+                    "principal_user_detection_domains": [],
+                    "collected_condition_keys": [],
+                    "managed_installs_sync_interval_days": 7,
+                    "script_checks_run_interval_seconds": 86400,
+                    "auto_failed_install_incidents": False,
+                    "auto_reinstall_incidents": False,
+                    "created_at": configuration.created_at,
+                    "updated_at": prev_updated_at,
+                    "version": 0,
+                 },
+                 "new_value": {
+                    "pk": configuration2.pk,
+                    "description": "",
+                    "name": configuration2.name,
+                    "inventory_apps_full_info_shard": 17,
+                    "principal_user_detection_sources": ["logged_in_user"],
+                    "principal_user_detection_domains": ["yolo.fr"],
+                    "collected_condition_keys": sorted(collected_condition_keys),
+                    "managed_installs_sync_interval_days": 2,
+                    "script_checks_run_interval_seconds": 3600,
+                    "auto_failed_install_incidents": True,
+                    "auto_reinstall_incidents": False,
+                    "created_at": configuration2.created_at,
+                    "updated_at": configuration2.updated_at,
+                    "version": configuration2.version,
+                 }
+                }
+            }
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"munki_configuration": [str(configuration.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
 
     # create enrollment
 
