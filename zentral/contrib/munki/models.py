@@ -86,14 +86,11 @@ class Configuration(models.Model):
         else:
             self.version = F("version") + 1
         super().save(*args, **kwargs)
+        self.refresh_from_db()
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "name": self.name}
         if not keys_only:
-            if not isinstance(self.version, int):
-                # version was updated with a CombinedExpression
-                # it needs to be fetched from the DB for the JSON serialization
-                self.refresh_from_db()
             d.update({
                 "description": self.description,
                 "inventory_apps_full_info_shard": self.inventory_apps_full_info_shard,
