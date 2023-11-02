@@ -242,6 +242,36 @@ class APIViewsTestCase(TestCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"munki_configuration": [str(configuration.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
+        self.assertEqual(
+            response.json(),
+            {
+                'id': configuration.pk,
+                'name': name,
+                'description': 'Description',
+                'inventory_apps_full_info_shard': 50,
+                'principal_user_detection_sources': ["google_chrome", "company_portal"],
+                'principal_user_detection_domains': ["zentral.io"],
+                'collected_condition_keys': ["yolo"],
+                'managed_installs_sync_interval_days': 1,
+                'script_checks_run_interval_seconds': 86400,
+                'auto_reinstall_incidents': True,
+                'auto_failed_install_incidents': True,
+                'version': 0,
+                'created_at': configuration.created_at.isoformat(),
+                'updated_at': configuration.updated_at.isoformat()
+             }
+        )
+        self.assertEqual(configuration.name, name)
+        self.assertEqual(configuration.description, "Description")
+        self.assertEqual(configuration.inventory_apps_full_info_shard, 50)
+        self.assertEqual(configuration.principal_user_detection_sources, ["google_chrome", "company_portal"])
+        self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
+        self.assertEqual(configuration.collected_condition_keys, ["yolo"])
+        self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
+        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
+        self.assertTrue(configuration.auto_reinstall_incidents)
+        self.assertTrue(configuration.auto_failed_install_incidents)
+        self.assertEqual(configuration.version, 0)
 
     # get configuration
 
@@ -363,6 +393,36 @@ class APIViewsTestCase(TestCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"munki_configuration": [str(configuration.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
+        self.assertEqual(
+            response.json(),
+            {
+                'id': configuration.pk,
+                'name': name,
+                'description': 'Description',
+                'inventory_apps_full_info_shard': 50,
+                'principal_user_detection_sources': ["google_chrome", "company_portal"],
+                'principal_user_detection_domains': ["zentral.io"],
+                'collected_condition_keys': ["yolo"],
+                'managed_installs_sync_interval_days': 1,
+                'script_checks_run_interval_seconds': 86400,
+                'auto_reinstall_incidents': True,
+                'auto_failed_install_incidents': True,
+                'version': 1,
+                'created_at': configuration.created_at.isoformat(),
+                'updated_at': configuration.updated_at.isoformat()
+            }
+        )
+        self.assertEqual(configuration.name, name)
+        self.assertEqual(configuration.description, "Description")
+        self.assertEqual(configuration.inventory_apps_full_info_shard, 50)
+        self.assertEqual(configuration.principal_user_detection_sources, ["google_chrome", "company_portal"])
+        self.assertEqual(configuration.principal_user_detection_domains, ["zentral.io"])
+        self.assertEqual(configuration.collected_condition_keys, ["yolo"])
+        self.assertEqual(configuration.managed_installs_sync_interval_days, 1)
+        self.assertEqual(configuration.script_checks_run_interval_seconds, 86400)
+        self.assertTrue(configuration.auto_reinstall_incidents)
+        self.assertTrue(configuration.auto_failed_install_incidents)
+        self.assertEqual(configuration.version, 1)
 
     # delete configuration
 
