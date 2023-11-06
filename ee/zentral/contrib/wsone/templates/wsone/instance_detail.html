@@ -63,7 +63,7 @@
         <tr>
         <td colspan="2"><h5>API authentication</h5></td>
         </tr>
-        <tr>
+        <tr class="table-group-divider">
         <td>API key</td>
         <td>
             <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
@@ -88,7 +88,7 @@
         <tr>
         <td colspan="2"><h5>Event notifications</h5></td>
         </tr>
-        <tr>
+        <tr class="table-group-divider">
         <td>URL</td>
         <td>{{ object.get_event_notifications_full_url }}</td>
         </tr>
@@ -106,7 +106,7 @@
         <tr>
         <td colspan="2"><h5>Options</h5></td>
         </tr>
-        <tr>
+        <tr class="table-group-divider">
         <td>Excluded groups</td>
         <td>{{ object.excluded_groups|join:", "|default:"-" }}</td>
         </tr>
