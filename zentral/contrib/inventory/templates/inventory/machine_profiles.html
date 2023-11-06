@@ -22,8 +22,8 @@
 {% if machine.snapshots_with_profiles %}
 <ul class="nav nav-tabs">
   {% for ms in machine.snapshots_with_profiles %}
-  <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
-    <a href="#" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}">
+  <li role="presentation" class="nav-item">
+    <a href="#" class="nav-link{% if forloop.first %} active{% endif %}" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}" data-bs-toggle="tab">
       {{ ms.source.name }} (<span id="profile-count-{{ ms.id }}">{{ ms.ordered_profiles.count }}</span>)
     </a>
   </li>

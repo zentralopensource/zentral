@@ -22,8 +22,8 @@
 {% if tabs %}
 <ul class="nav nav-tabs">
   {% for ms, rows in tabs %}
-  <li role="presentation"{% if forloop.first %} class="active"{% endif %}>
-    <a href="#" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}">
+  <li role="presentation" class="nav-item">
+    <a href="#" class="nav-link{% if forloop.first %} active{% endif %}" data-tabclass="mstab" data-tabid="ms-{{ ms.id }}" data-bs-toggle="tab">
       {{ ms.source.name }}
     </a>
   </li>
