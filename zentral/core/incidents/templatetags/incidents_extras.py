@@ -18,7 +18,8 @@ def incident_severity(severity, default=""):
         100: "DDDD00",
     }
     color = color_dict.get(severity, "000000")
-    style = {'background-color': "#" + color,
+    style = {'white-space: nowrap'
+             'background-color': "#" + color,
              'color': "#" + text_color_for_background_color(color)}
     if color.upper() in ["FFFFFF", "FFF"]:
         style['border'] = '1px solid grey'
