@@ -415,12 +415,12 @@
       {% for certificate in certificates %}
       <dl class="row">
         <dt class="col-sm-3 text-md-end">Common Name</dt>
-        <dd style="overflow:hidden;text-overflow:ellipsis;">{{ certificate.short_repr }}</dd>
+        <dd style="col-sm-9">{{ certificate.short_repr }}</dd>
         <dt class="col-sm-3 text-md-end">Dates</dt>
         <dd class="col-sm-9">{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
         {% if certificate.signed_by %}
         <dt class="col-sm-3 text-md-end">Issuer</dt>
-        <dd style="overflow:hidden;text-overflow:ellipsis;">{{ certificate.signed_by.short_repr|default:"?" }}</dd>
+        <dd style="col-sm-9">{{ certificate.signed_by.short_repr|default:"?" }}</dd>
         {% endif %}
       </dl>
       {% endfor %}

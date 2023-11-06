@@ -23,7 +23,7 @@
 <ul class="nav nav-tabs">
   {% for ms, rows in tabs %}
   <li role="presentation" class="nav-item">
-    <a href="#" class="nav-link{% if forloop.first %} active{% endif %}" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}">
+    <a href="#" class="nav-link{% if forloop.first %} active{% endif %}" data-tabclass="appstab" data-tabid="apps-{{ ms.id }}" data-bs-toggle="tab">
       {{ ms.source.name }}
     </a>
   </li>
