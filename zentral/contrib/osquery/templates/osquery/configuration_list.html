@@ -49,9 +49,9 @@
 {% else %}
     {% if perms.osquery.add_configuration %}
         {% url 'osquery:create_configuration' as link %}
-        {% no_entities 'Feeds' link %}
+        {% no_entities 'Configurations' link %}
     {% else %}
-        {% no_entities 'Feeds' %}
+        {% no_entities 'Configurations' %}
     {% endif %}
 {% endif %}
 
