@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from zentral.contrib.mdm.models import Artifact, Platform
+from zentral.contrib.mdm.models import Artifact, ArtifactVersion, Platform
 from .utils import force_artifact, force_blueprint_artifact
 
 
@@ -137,6 +137,31 @@ class ArtifactManagementViewsTestCase(TestCase):
         self.assertContains(response, artifact.name)
         self.assertContains(response, blueprint_artifact.blueprint.name)
         self.assertNotContains(response, reverse("mdm:delete_artifact", args=(artifact.pk,)))
+
+    def test_artifact_download_profile(self):
+        artifact_one, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP,)
+        artifact_two, _ = force_artifact()
+        self._login("mdm.view_artifact", "mdm.view_artifactversion")
+        for artifact in [artifact_one, artifact_two]:
+            response = self.client.get(reverse("mdm:artifact", args=(artifact.pk,)))
+            self.assertEqual(response.status_code, 200)
+            self.assertTemplateUsed(response, "mdm/artifact_detail.html")
+            self.assertContains(response, artifact.name)
+            av = ArtifactVersion.objects.filter(artifact=artifact).order_by("-version").first().pk
+            if artifact.type == Artifact.Type.PROFILE:
+                self.assertContains(response, reverse("mdm:download_profile", args=(av,)))
+            else:
+                self.assertNotContains(response, reverse("mdm:download_profile", args=(av,)))
+
+    def test_artifact_cannot_download_profile(self):
+        artifact, _ = force_artifact()
+        self._login("mdm.view_artifact",)
+        response = self.client.get(reverse("mdm:artifact", args=(artifact.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_detail.html")
+        self.assertContains(response, artifact.name)
+        av = ArtifactVersion.objects.filter(artifact=artifact).order_by("-version").first().pk
+        self.assertNotContains(response, reverse("mdm:download_profile", args=(av,)))
 
     def test_artifact_get_enterprise_app_upgrade_link(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)

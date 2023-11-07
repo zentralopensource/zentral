@@ -163,6 +163,10 @@
         {% endif %}
       </td>
       <td class="text-end py-0">
+        {% if artifact.type == "Profile" and perms.mdm.view_artifactversion %}
+            {% url 'mdm:download_profile' av.pk as url %}
+            {% button 'DOWNLOAD' url "Download Profile" %}
+        {% endif %}
         {% if perms.mdm.change_artifactversion %}
             {% url 'mdm:update_artifact_version' object.pk av.pk as url %}
             {% button 'UPDATE' url "Edit Version" %}

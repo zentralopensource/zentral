@@ -18,13 +18,13 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Artifact version</h3>
         <div class="ms-auto">
-            {% if perms.mdm.change_artifactversion %}
-                {% url 'mdm:update_artifact_version' artifact.pk object.pk as url %}
-                {% button 'UPDATE' url "Edit Scope" %}
-            {% endif %}
             {% if artifact.type == "Profile" %}
                 {% url 'mdm:download_profile' object.pk as url %}
                 {% button 'DOWNLOAD' url "Download Profile" %}
+            {% endif %}
+            {% if perms.mdm.change_artifactversion %}
+                {% url 'mdm:update_artifact_version' artifact.pk object.pk as url %}
+                {% button 'UPDATE' url "Edit Scope" %}
             {% endif %}
             {% if perms.mdm.delete_artifactversion and object.can_be_deleted %}
                 {% url 'mdm:delete_artifact_version' artifact.pk object.pk as url %}
