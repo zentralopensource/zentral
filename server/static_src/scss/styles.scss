@@ -39,7 +39,7 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 @import "~bootstrap/scss/bootstrap";
 @import "~bootstrap-icons/font/bootstrap-icons";
 
-pre {
+pre, ol, ul, dl {
     margin-bottom: 0px;
 }
 
