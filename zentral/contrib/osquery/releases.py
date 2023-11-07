@@ -4,7 +4,6 @@ import shutil
 import tempfile
 import requests
 from urllib.parse import urlparse
-from requests.exceptions import ConnectionError, HTTPError
 from zentral.utils.local_dir import get_and_create_local_dir
 
 
@@ -25,13 +24,13 @@ SUFFIXES = (
 
 
 def get_osquery_versions(ignore_draft_release=True, check_urls=True, last=3):
+    versions = []
     try:
         resp = requests.get(GITHUB_API_URL, timeout=2)
         resp.raise_for_status()
-    except (ConnectionError, HTTPError):
+    except Exception:
         logger.exception("Could not get versions from Github.")
-        return
-    versions = []
+        return versions
     releases = resp.json()
     if last:
         # limit releases to check

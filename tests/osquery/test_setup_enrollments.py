@@ -64,7 +64,7 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase):
 
     @patch("zentral.contrib.osquery.forms.get_osquery_versions")
     def test_create_enrollment_view_get(self, get_osquery_versions):
-        get_osquery_versions.returns = {}
+        get_osquery_versions.returns = []
         self._login("osquery.add_enrollment")
         configuration = self._force_configuration()
         response = self.client.get(reverse("osquery:create_enrollment", args=(configuration.pk,)))
@@ -76,7 +76,7 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase):
 
     @patch("zentral.contrib.osquery.forms.get_osquery_versions")
     def test_create_enrollment_view_post(self, get_osquery_versions):
-        get_osquery_versions.returns = {}
+        get_osquery_versions.returns = []
         self._login("osquery.add_enrollment", "osquery.view_configuration", "osquery.view_enrollment")
         configuration = self._force_configuration()
         response = self.client.post(reverse("osquery:create_enrollment", args=(configuration.pk,)),
@@ -92,6 +92,25 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase):
         for view_name in ("enrollment_package", "enrollment_script", "enrollment_powershell_script"):
             self.assertContains(response, reverse(f"osquery_api:{view_name}", args=(enrollment.pk,)))
         get_osquery_versions.assert_called_once_with()
+
+    @patch("zentral.contrib.osquery.releases.requests.get")
+    def test_create_enrollment_view_get_osquery_versions_error_post(self, requests_get):
+        requests_get.side_effect = RuntimeError("YOLO")
+        self._login("osquery.add_enrollment", "osquery.view_configuration", "osquery.view_enrollment")
+        configuration = self._force_configuration()
+        response = self.client.post(reverse("osquery:create_enrollment", args=(configuration.pk,)),
+                                    {"secret-meta_business_unit": self.mbu.pk,
+                                     "configuration": configuration.pk,
+                                     "osquery_release": ""}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/configuration_detail.html")
+        self.assertEqual(response.context["object"], configuration)
+        enrollment = response.context["enrollments"][0]
+        self.assertEqual(enrollment.version, 1)
+        self.assertContains(response, enrollment.secret.meta_business_unit.name)
+        for view_name in ("enrollment_package", "enrollment_script", "enrollment_powershell_script"):
+            self.assertContains(response, reverse(f"osquery_api:{view_name}", args=(enrollment.pk,)))
+        requests_get.assert_called_once()
 
     # bump enrollment version
 
