@@ -43,6 +43,8 @@ pre, ol, ul, dl {
     margin-bottom: 0px;
 }
 
+table .w-3 { width:3%; }
+
 .errorlist {
     color: $zred;
     font-weight: bold;
@@ -138,8 +140,7 @@ pre, ol, ul, dl {
 .data-row {
   &:not(&:hover) {
     .btn {
-      opacity: 0;
-      visibility: hidden;
+      opacity: 0.2;
       pointer-events: none;
     }
   }
