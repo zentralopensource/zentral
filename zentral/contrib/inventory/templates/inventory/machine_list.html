@@ -301,9 +301,11 @@
       <td rowspan="{{ machine_snapshots|length }}">
         {% base_machine_type_icon machine_snapshot.type %}
         {% base_machine_platform_icon machine_snapshot.platform %}
-	<a href="{% url 'inventory:machine' machine_snapshot.urlsafe_serial_number %}">
+	    <a href="{% url 'inventory:machine' machine_snapshot.urlsafe_serial_number %}">
           {{ serial_number }}
         </a>
+        </td>
+        <td rowspan="{{ machine_snapshots|length }}">
         {% if machine_snapshot.max_incident_severity.value %}
         {% incident_severity machine_snapshot.max_incident_severity.value %}
         {% endif %}
