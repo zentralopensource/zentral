@@ -59,10 +59,26 @@ class MetaBusinessUnitSearchForm(forms.Form):
 
 
 class MetaBusinessUnitForm(forms.ModelForm):
+
+    api_enrollment = forms.BooleanField(label="API Enrollment", required=False,)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and self.instance.api_enrollment_enabled():
+            self.fields['api_enrollment'].initial = True
+            self.fields['api_enrollment'].disabled = True
+
     class Meta:
         model = MetaBusinessUnit
         fields = ("name",)
         widgets = {"name": forms.TextInput}
+
+    def save(self):
+        self.instance.save()
+        if self.cleaned_data.get("api_enrollment"):
+            if not self.instance.api_enrollment_business_units().count():
+                self.instance.create_enrollment_business_unit()
+        return self.instance
 
 
 class MergeMBUForm(forms.Form):
@@ -83,17 +99,6 @@ class MergeMBUForm(forms.Form):
             MetaBusinessUnitTag.objects.get_or_create(meta_business_unit=dest_mbu,
                                                       tag=tag)
         return dest_mbu
-
-
-class MBUAPIEnrollmentForm(forms.ModelForm):
-    class Meta:
-        model = MetaBusinessUnit
-        fields = []
-
-    def save(self):
-        if not self.instance.api_enrollment_business_units().count():
-            self.instance.create_enrollment_business_unit()
-        return self.instance
 
 
 class CreateTagForm(forms.ModelForm):

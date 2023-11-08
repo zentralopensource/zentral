@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -13,6 +14,12 @@
 </ol>
 
 <h2>{% if object %}Update{% else %}Create{% endif %} Business Unit</h2>
+<p>
+{% for tag in object.tags %}
+    {% inventory_tag tag %}
+{% endfor %}
+</p>
+
 <form method="POST" class="update-form">{% csrf_token %}
 
     {{ form }}
