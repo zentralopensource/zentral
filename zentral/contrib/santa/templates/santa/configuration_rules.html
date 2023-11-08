@@ -71,13 +71,31 @@
     {% for rule in page_obj %}
     {% with rule.target as target %}
     <div class="panel panel-default px-2 py-3" id="rule-{{ rule.pk }}">
-    <table class="table table-light table-striped align-middle table-hover">
+    <table class="table table-light table-striped align-middle table-hover w-50">
         <tr>
-            <td>Policy</td>
-            <td>
-                <span class="badge text-bg-{% if rule.is_blocking_rule %}danger{% else %}success{% endif %}">
-                {{ rule.get_policy_display }}
-                </span>
+            <td class="col-2">Policy</td>
+            <td class="d-flex align-items-center">
+                <div class="w-100">
+                    <span class="badge text-bg-{% if rule.is_blocking_rule %}danger{% else %}success{% endif %}">
+                    {{ rule.get_policy_display }}
+                    </span>
+                </div>
+                <div class="flex-shrink-1">
+                {% if not rule.ruleset %}
+                {% if perms.santa.change_rule or perms.santa.delete_rule %}
+                    <div class="btn-group" role="group">
+                    {% if perms.santa.change_rule %}
+                        {% url 'santa:update_configuration_rule' configuration.pk rule.pk as url %}
+                        {% button 'UPDATE' url "Edit rule" %}
+                    {% endif %}
+                    {% if perms.santa.delete_rule %}
+                        {% url 'santa:delete_configuration_rule' configuration.pk rule.pk as url %}
+                        {% button 'DELETE' url "Delete rule" %}
+                    {% endif %}
+                    </div>
+                {% endif %}
+                {% endif %}
+                </div>
             </td>
         </tr>
         <tr>
@@ -237,22 +255,6 @@
         </tr>
         {% endif %}
     </table>
-    {% if not rule.ruleset %}
-    {% if perms.santa.change_rule or perms.santa.delete_rule %}
-    <div class="panel-footer">
-        <div class="btn-group" role="group">
-        {% if perms.santa.change_rule %}
-            {% url 'santa:update_configuration_rule' configuration.pk rule.pk as url %}
-            {% button 'UPDATE' url "Edit rule" %}
-        {% endif %}
-        {% if perms.santa.delete_rule %}
-            {% url 'santa:delete_configuration_rule' configuration.pk rule.pk as url %}
-            {% button 'DELETE' url "Delete rule" %}
-        {% endif %}
-        </div>
-    </div>
-    {% endif %}
-    {% endif %}
     </div>
     {% endwith %}
     {% endfor %}
