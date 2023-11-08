@@ -221,87 +221,23 @@ class InventorySetupViewsTestCase(TestCase):
              'type': 'zentral_audit'}
         )
 
-    # meta business unit api enrollment
-
-    def test_meta_business_unit_api_enrollment_redirect(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self._login_redirect(reverse("inventory:mbu_api_enrollment", args=(meta_business_unit.pk,)))
-
-    def test_meta_business_unit_api_enrollment_permission_denied(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self._login()
-        response = self.client.get(reverse("inventory:mbu_api_enrollment", args=(meta_business_unit.pk,)))
-        self.assertEqual(response.status_code, 403)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_meta_business_unit_api_enrollment(self, post_event):
+    def test_update_meta_business_unit_api_enrollment_update(self):
         self._login(
             "inventory.change_metabusinessunit",
             "inventory.view_machinesnapshot",
             "inventory.view_metabusinessunit",
         )
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        prev_updated_at = meta_business_unit.updated_at
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("inventory:mbu_api_enrollment", args=(meta_business_unit.pk,)),
-                follow=True
-            )
+        name = get_random_string(12)
+        meta_business_unit = MetaBusinessUnit.objects.create(name=name)
+        response = self.client.get(reverse("inventory:update_mbu", args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(callbacks), 1)
-        self.assertTemplateUsed(response, "inventory/mbu_machines.html")
-        meta_business_unit = response.context["object"]
-        self.assertTrue(meta_business_unit.api_enrollment_enabled())
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, AuditEvent)
-        self.assertEqual(
-            event.payload,
-            {"action": "updated",
-             "object": {
-                 "model": "inventory.metabusinessunit",
-                 "pk": str(meta_business_unit.pk),
-                 "prev_value": {
-                     "pk": meta_business_unit.pk,
-                     "name": meta_business_unit.name,
-                     "api_enrollment_enabled": False,
-                     "created_at": meta_business_unit.created_at,
-                     "updated_at": prev_updated_at,
-                 },
-                 "new_value": {
-                     "pk": meta_business_unit.pk,
-                     "name": meta_business_unit.name,
-                     "api_enrollment_enabled": True,
-                     "created_at": meta_business_unit.created_at,
-                     "updated_at": meta_business_unit.updated_at
-                 }
-              }}
-        )
-        metadata = event.metadata.serialize()
-        metadata["tags"].sort()
-        self.assertEqual(
-            metadata,
-            {'created_at': event.metadata.created_at.isoformat(),
-             'id': str(event.metadata.uuid),
-             'index': 0,
-             'namespace': 'zentral_audit',
-             'objects': {'meta_business_unit': [str(meta_business_unit.pk)]},
-             'request': {'ip': '127.0.0.1',
-                         'method': 'POST',
-                         'path': f'/inventory/business_units/{meta_business_unit.pk}/api_enrollment/',
-                         'user': {'email': self.user.email,
-                                  'id': self.user.pk,
-                                  'is_remote': False,
-                                  'is_service_account': False,
-                                  'is_superuser': False,
-                                  'session': {'is_remote': False,
-                                              'mfa_authenticated': False,
-                                              'token_authenticated': False,
-                                              'expire_at_browser_close': False,
-                                              'expiry_age': 1209600},
-                                  'username': self.user.username}},
-             'tags': ['inventory', 'zentral'],
-             'type': 'zentral_audit'}
-        )
+        self.assertTemplateUsed(response, "inventory/edit_mbu.html")
+        self.assertNotContains(response, 'disabled id="id_api_enrollment" checked')
+        meta_business_unit.create_enrollment_business_unit()
+        response = self.client.get(reverse("inventory:update_mbu", args=(meta_business_unit.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/edit_mbu.html")
+        self.assertContains(response, 'disabled id="id_api_enrollment" checked')
 
     # delete meta business unit
 

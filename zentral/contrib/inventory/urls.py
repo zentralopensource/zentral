@@ -23,9 +23,6 @@ urlpatterns = [
          name='remove_mbu_tag'),
     path('business_units/<int:pk>/machines/', views.MBUMachinesView.as_view(), name='mbu_machines'),
     path('business_units/<int:pk>/detach_bu/<int:bu_id>/', views.DetachBUView.as_view(), name='detach_bu'),
-    path('business_units/<int:pk>/api_enrollment/',
-         views.MBUAPIEnrollmentView.as_view(),
-         name='mbu_api_enrollment'),
 
     # machines
     path('machine/<str:urlsafe_serial_number>/events/',

@@ -27,7 +27,7 @@ from .compliance_checks import InventoryJMESPathCheck
 from .events import JMESPathCheckCreated, JMESPathCheckUpdated, JMESPathCheckDeleted
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm,
-                    MergeMBUForm, MBUAPIEnrollmentForm, AddMBUTagForm, AddMachineTagForm,
+                    MergeMBUForm, AddMBUTagForm, AddMachineTagForm,
                     CreateTagForm, UpdateTagForm,
                     AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm,
                     MacOSAppSearchForm, ProgramsSearchForm,
@@ -434,13 +434,6 @@ class DetachBUView(PermissionRequiredMixin, TemplateView):
     def post(self, *args, **kwargs):
         mbu = self.bu.detach()
         return HttpResponseRedirect(mbu.get_absolute_url())
-
-
-class MBUAPIEnrollmentView(PermissionRequiredMixin, UpdateViewWithAudit):
-    permission_required = "inventory.change_metabusinessunit"
-    template_name = "inventory/mbu_api_enrollment.html"
-    model = MetaBusinessUnit
-    form_class = MBUAPIEnrollmentForm
 
 
 class MBUMachinesView(MachineListView):

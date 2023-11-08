@@ -84,12 +84,6 @@
                     {% endif %}
                 </td>
                 <td class="text-end py-0">
-                    {% if not mbu.api_enrollment_enabled and perms.inventory.change_metabusinessunit %}
-                        <a href="{% url 'inventory:mbu_api_enrollment' mbu.id %}" class="btn btn-link text-decoration-none text-dark"
-                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Enable API enrollment">
-                            <i class="bi bi-person"></i>
-                        </a>
-                    {% endif %}
                     {% if perms.inventory.view_metabusinessunittag and perms.inventory.add_metabusinessunittag and perms.inventory.change_metabusinessunittag and perms.inventory.delete_metabusinessunittag and perms.inventory.add_tag %}
                         <a href="{% url 'inventory:mbu_tags' mbu.id %}" class="btn btn-link text-decoration-none text-dark"
                             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Manage Tags">
