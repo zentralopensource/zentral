@@ -126,7 +126,7 @@
         <div class="ms-auto">
             {% if perms.mdm.change_depvirtualserver %}
             <a id="devices-sync-btn" href="{% url 'mdm_api:dep_virtual_server_sync_devices' object.id %}" class="btn btn-link text-decoration-none text-dark task"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Syncrhonize">
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Synchronize">
                 <i class="bi bi-arrow-repeat"></i>
             </a>
             {% endif %}
@@ -179,7 +179,7 @@
                 {% url 'mdm:assign_dep_device_profile' device.pk as url %}
                 {% button 'UPDATE' url "Edit DEP Device Profile" %}
                 <button type="submit" class="btn btn-link text-decoration-none text-dark"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Syncrhonize">
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Synchronize">
                   <span class="bi bi-arrow-repeat" aria-hidden="true"></span>
                 </button>
             </form>
