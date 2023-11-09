@@ -229,11 +229,19 @@ class InventorySetupViewsTestCase(TestCase):
         )
         name = get_random_string(12)
         meta_business_unit = MetaBusinessUnit.objects.create(name=name)
+        self.assertFalse(meta_business_unit.api_enrollment_enabled())
         response = self.client.get(reverse("inventory:update_mbu", args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/edit_mbu.html")
         self.assertNotContains(response, 'disabled id="id_api_enrollment" checked')
-        meta_business_unit.create_enrollment_business_unit()
+        response = self.client.post(
+                        reverse("inventory:update_mbu", args=(meta_business_unit.pk,)),
+                        {"name": name, "api_enrollment": True},
+                        follow=True,
+                    )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/mbu_machines.html")
+        self.assertTrue(meta_business_unit.api_enrollment_enabled())
         response = self.client.get(reverse("inventory:update_mbu", args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/edit_mbu.html")
