@@ -43,11 +43,21 @@ pre, ol, ul, dl {
     margin-bottom: 0px;
 }
 
-table .w-3 { width:3%; }
-
 .errorlist {
     color: $zred;
     font-weight: bold;
+}
+
+// Table styling
+table .w-3 { width:3%; }
+
+table.table-fixed-scrolleable {
+    table-layout: fixed;
+}
+
+pre.scrolleable {
+    overflow-x: scroll;
+    padding-bottom: 2em;
 }
 
 // Side menu

@@ -39,7 +39,7 @@
     </div>
 
     <div class="table-responsive mb-3">
-        <table class="table table-light table-striped align-middle table-object-properties">
+        <table class="table table-light table-striped align-middle table-object-properties table-fixed-scrolleable">
         <thead>
             <th style="width:15%">Attribute</th>
             <th>Value</th>
@@ -59,7 +59,9 @@
             </tr>
             <tr>
             <td>Source</td>
-            <td><pre>{{ object.source }}</pre></td>
+                <td>
+                    <pre class="scrolleable">{{ object.source }}</pre>
+                </td>
             </tr>
             <tr>
             <td>Expected result</td>
