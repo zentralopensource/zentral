@@ -243,7 +243,7 @@
         <td>
             {% if object.filevault_prk and perms.mdm.view_filevault_prk %}
             <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" data-key="filevault_prk" style="cursor:pointer"></span>
-            <span class="ed-secret" hidden></span>
+            <span class="ed-secret"></span>
             {% else %}
             {{ security_info.FDE_HasPersonalRecoveryKey|yesno }}
             {% endif %}
@@ -265,7 +265,7 @@
             {% if object.recovery_password %}
             {% if perms.mdm.view_recovery_password %}
             <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}" data-key="recovery_password" style="cursor:pointer"></span>
-            <span class="ed-secret" hidden></span>
+            <span class="ed-secret"></span>
             {% else %}
             Yes
             {% endif %}
