@@ -2,63 +2,66 @@
 {% load inventory_extras ui_extras %}
 
 {% block content %}
-<ol class="breadcrumb">
-  <li class="breadcrumb-item"><a href="/">Home</a></li>
-  {% for url, anchor_text in breadcrumbs %}
-  {% if url %}
-  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
-  {% else %}
-  <li class="breadcrumb-item active">{{ anchor_text }}</li>
-  {% endif %}
-  {% endfor %}
-</ol>
+<div class="sticky-top bg-body z-1">
+    <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Home</a></li>
+    {% for url, anchor_text in breadcrumbs %}
+    {% if url %}
+    <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
+    {% else %}
+    <li class="breadcrumb-item active">{{ anchor_text }}</li>
+    {% endif %}
+    {% endfor %}
+    </ol>
 
-<div class="d-flex align-items-center mb-1">
-    <h2>Package name{{ name_number|pluralize }} ({{ name_number }}) / Package{{ info_number|pluralize }} ({{ info_number }})</h2>
-</div>
-
-<div class="d-flex flex-wrap align-items-center mb-1">
-    <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
-
-        {{ form }}
-
-        <button type="submit" class="btn btn-link text-decoration-none mb-2 text-dark">
-            <i class="bi bi-search"></i>
-        </button>
-    </form>
-    <div class="ms-auto">
-        {% if perms.add_pkginfoname or perms.add_pkginfo %}
-        <div class="dropdown">
-            <button class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="pkgInfoAdd"
-                    data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-                <i class="bi bi-plus-circle"></i>
-            </button>
-            <ul class="dropdown-menu" aria-labelledby="pkgInfoAdd">
-            {% if perms.add_pkginfoname %}
-                <li><a class="dropdown-item" href="{% url 'monolith:create_pkg_info_name' %}">Package info name</a></li>
-            {% endif %}
-            {% if perms.add_pkginfo %}
-                <li><a class="dropdown-item" href="{% url 'monolith:upload_package' %}">Package</a></li>
-            {% endif %}
-            </ul>
-        </div>
-        {% endif %}
+    <div class="d-flex align-items-center mb-1">
+        <h2>Package name{{ name_number|pluralize }} ({{ name_number }}) / Package{{ info_number|pluralize }} ({{ info_number }})</h2>
     </div>
+
+    <div class="d-flex flex-wrap align-items-center mb-1">
+        <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
+
+            {{ form }}
+
+            <button type="submit" class="btn btn-link text-decoration-none mb-2 text-dark flex-shrink-1">
+                <i class="bi bi-search"></i>
+            </button>
+        </form>
+        <div class="ms-auto">
+            {% if perms.add_pkginfoname or perms.add_pkginfo %}
+            <div class="dropdown">
+                <button class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="pkgInfoAdd"
+                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    <i class="bi bi-plus-circle"></i>
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="pkgInfoAdd">
+                {% if perms.add_pkginfoname %}
+                    <li><a class="dropdown-item" href="{% url 'monolith:create_pkg_info_name' %}">Package info name</a></li>
+                {% endif %}
+                {% if perms.add_pkginfo %}
+                    <li><a class="dropdown-item" href="{% url 'monolith:upload_package' %}">Package</a></li>
+                {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
 </div>
 
 {% if pkg_names %}
 <table class="table table-light table-striped align-middle">
-  <thead>
-    <th>Package</th>
-    <th>Catalogs</th>
-    <th>Excl. tags</th>
-    <th>Def. shard</th>
-    <th>Tag shards</th>
-    <th>Installs</th>
-    {% if perms.monolith.delete_pkginfo or perms.monolith.change_pkginfo %}
-    <th></th>
-    {% endif %}
-  </thead>
+    <thead class="sticky-header">
+        <th>Package</th>
+        <th>Catalogs</th>
+        <th>Excl. tags</th>
+        <th>Def. shard</th>
+        <th>Tag shards</th>
+        <th>Installs</th>
+        {% if perms.monolith.delete_pkginfo or perms.monolith.change_pkginfo %}
+        <th></th>
+        {% endif %}
+    </thead>
   <tbody>
   {% for pkg_info_name in pkg_names %}
   <tr>
