@@ -51,6 +51,15 @@ pre, ol, ul, dl {
 // Table styling
 table .w-3 { width:3%; }
 
+thead.sticky-header tr > th {
+    @media screen and (max-width: 992px) {
+        top: 18.5rem;
+    }
+    position: sticky;
+    z-index:0;
+    top: 9.5rem;
+}
+
 table.table-fixed-scrolleable {
     table-layout: fixed;
 }
