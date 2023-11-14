@@ -221,8 +221,8 @@ class RuleForm(RuleFormMixin, forms.Form):
     target_identifier = forms.CharField()
     policy = forms.ChoiceField(choices=Rule.POLICY_CHOICES)
     custom_msg = forms.CharField(label="Custom message", required=False,
-                                 widget=forms.Textarea(attrs={"cols": "40", "rows": "10"}))
-    description = forms.CharField(required=False, widget=forms.Textarea(attrs={"cols": "40", "rows": "10"}))
+                                 widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
+    description = forms.CharField(required=False, widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
     serial_numbers = SimpleArrayField(forms.CharField(), required=False)
     excluded_serial_numbers = SimpleArrayField(forms.CharField(), required=False)
     primary_users = SimpleArrayField(forms.CharField(), required=False)
@@ -349,6 +349,10 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
                   "serial_numbers", "excluded_serial_numbers",
                   "primary_users", "excluded_primary_users",
                   "tags", "excluded_tags")
+        widgets = {
+            "custom_msg": forms.Textarea(attrs={"cols": "40", "rows": "2"}),
+            "description": forms.Textarea(attrs={"cols": "40", "rows": "2"})
+        }
 
     def clean(self):
         cleaned_data = super().clean()
