@@ -12,11 +12,13 @@
 
 <h2>Pick Santa rule team ID</h2>
 
-<form method="GET" class="form-inline" style="margin:1em 0 2em 0">
-  <div class="form-group">
-    {{ form.query }}
-  </div>
-  <button type="submit" class="btn btn-outline-secondary">Search</button>
+<form method="GET" class="search-form d-flex flex-row flex-wrap w-25">
+
+    {{ form }}
+
+    <button type="submit" name="action" value="search" class="btn btn-link text-dark text-decoration-none mb-2">
+        <i class="bi bi-search"></i>
+    </button>
 </form>
 
 {% if team_ids %}
@@ -52,6 +54,10 @@
     {% endfor %}
   </tbody>
 </table>
+{% elif form.has_changed %}
+<div class="text-center py-5">
+    <h5>We didn't find any item related to your search</h5>
+</div>
 {% endif %}
 
 {% endblock %}
