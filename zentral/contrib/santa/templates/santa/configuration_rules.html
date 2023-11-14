@@ -71,7 +71,7 @@
     {% for rule in page_obj %}
     {% with rule.target as target %}
     <div class="panel panel-default px-2 py-3" id="rule-{{ rule.pk }}">
-    <table class="table table-light table-striped align-middle table-hover w-50">
+    <table class="table table-light table-striped align-middle table-hover">
         <tr>
             <td class="col-2">Policy</td>
             <td class="d-flex align-items-center">
@@ -109,20 +109,31 @@
             {% if target.type == "BINARY" %}
             {% for file in target.files %}
             <dl class="row">
-            <dt class="col-sm-3 text-md-end">name</dt>
-            <dd class="col-sm-9">{{ file.name }}</dd>
-            <dt class="col-sm-3 text-md-end">path</dt>
-            <dd class="col-sm-9">{{ file.path }}</dd>
+                <dt class="col-2 text-md-end">name</dt>
+                <dd class="col-6">{{ file.name }}</dd>
+            </dl>
+            <dl class="row">
+                <dt class="col-2 text-md-end">path</dt>
+                <dd class="col-6">{{ file.path }}</dd>
+            </dl>
             {% if file.bundle %}
-            <dt class="col-sm-3 text-md-end">bundle id</dd>
-            <dd class="col-sm-9">{{ file.bundle.bundle_id }}</dd>
-            <dt class="col-sm-3 text-md-end">bundle name</dt>
-            <dd class="col-sm-9">{{ file.bundle.bundle_name }}</dd>
-            <dt class="col-sm-3 text-md-end">bundle version</dt>
-            <dd class="col-sm-9">{{ file.bundle.bundle_version_str }}</dd>
+            <dl class="row">
+                <dt class="col-2 text-md-end">bundle id</dd>
+                <dd class="col-6">{{ file.bundle.bundle_id }}</dd>
+            </dl>
+            <dl class="row">
+                <dt class="col-2 text-md-end">bundle name</dt>
+                <dd class="col-6">{{ file.bundle.bundle_name }}</dd>
+            </dl>
+            <dl class="row">
+                <dt class="col-2 text-md-end">bundle version</dt>
+                <dd class="col-6">{{ file.bundle.bundle_version_str }}</dd>
+            </dl>
             {% if file.bundle_path %}
-            <dt class="col-sm-3 text-md-end">bundle path</dt>
-            <dd class="col-sm-9">{{ file.bundle_path }}</dd>
+            <dl class="row">
+                <dt class="col-2 text-md-end">bundle path</dt>
+                <dd class="col-6">{{ file.bundle_path }}</dd>
+            </dl>
             {% endif %}
             {% endif %}
             </dl>
@@ -131,36 +142,48 @@
             {% if target.type == "BUNDLE" %}
             {% with target.bundle as bundle %}
             <dl class="row">
-            <dt class="col-sm-3 text-md-end">id</dd>
-            <dd class="col-sm-9">{{ bundle.bundle_id }}</dd>
-            <dt class="col-sm-3 text-md-end">name</dt>
-            <dd class="col-sm-9">{{ bundle.name }}</dd>
-            <dt class="col-sm-3 text-md-end">version</dt>
-            <dd class="col-sm-9">{{ bundle.version_str }}</dd>
-            <dt class="col-sm-3 text-md-end">binaries</dt>
-            <dd class="col-sm-9">{{ bundle.binary_targets.count }}</dd>
+                <dt class="col-2 text-md-end">id</dd>
+                <dd class="col-6">{{ bundle.bundle_id }}</dd>
+            </dl>
+            <dl class="row">
+                <dt class="col-2 text-md-end">name</dt>
+                <dd class="col-6">{{ bundle.name }}</dd>
+            </dl>
+            <dl class="row">
+                <dt class="col-2 text-md-end">version</dt>
+                <dd class="col-6">{{ bundle.version_str }}</dd>
+            </dl>
+            <dl class="row">
+                <dt class="col-2 text-md-end">binaries</dt>
+                <dd class="col-6">{{ bundle.binary_targets.count }}</dd>
             </dl>
             {% endwith %}
             {% endif %}
             {% if target.type == "CERTIFICATE" %}
             {% for cert in target.certificates %}
             <dl class="row">
-            <dt class="col-sm-3 text-md-end">common name</dt>
-            <dd class="col-sm-9">{{ cert.common_name|default:"-" }}</dd>
-            <dt class="col-sm-3 text-md-end">organization</dt>
-            <dd class="col-sm-9">{{ cert.organization|default:"-" }}</dd>
-            <dt class="col-sm-3 text-md-end">organizational_unit</dt>
-            <dd class="col-sm-9">{{ cert.organizational_unit|default:"-" }}</dd>
-            <dt class="col-sm-3 text-md-end">validity</dt>
-            <dd class="col-sm-9">{{ cert.valid_from }} - {{ cert.valid_until }}</dd>
+                <dt class="col-2 text-md-end">common name</dt>
+                <dd class="col-6">{{ cert.common_name|default:"-" }}</dd>
+            </dl>
+            <dl class="row">
+                <dt class="col-2 text-md-end">organization</dt>
+                <dd class="col-6">{{ cert.organization|default:"-" }}</dd>
+            </dl>
+            <dl class="row">
+                <dt class="col-2 text-md-end">organizational_unit</dt>
+                <dd class="col-6">{{ cert.organizational_unit|default:"-" }}</dd>
+            </dl>
+            <dl class="row">
+                <dt class="col-2 text-md-end">validity</dt>
+                <dd class="col-6">{{ cert.valid_from }} - {{ cert.valid_until }}</dd>
             </dl>
             {% endfor %}
             {% endif %}
             {% if target.type == "TEAMID" or target.type == "SIGNINGID" %}
             {% for team_id in target.team_ids %}
             <dl class="row">
-            <dt class="col-sm-3 text-md-end">organization</dt>
-            <dd class="col-sm-9">{{ team_id.organization|default:"-" }}</dd>
+                <dt class="col-2 text-md-end">organization</dt>
+                <dd class="col-6">{{ team_id.organization|default:"-" }}</dd>
             </dl>
             {% endfor %}
             {% endif %}
