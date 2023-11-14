@@ -68,30 +68,40 @@ class EnrollmentForm(forms.ModelForm):
 
 
 class BinarySearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label="Name", required=False,
                            widget=forms.TextInput(attrs={"placeholder": "name",
                                                          "size": 50}))
 
 
 class BundleSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     name = forms.CharField(label="Name", required=False,
                            widget=forms.TextInput(attrs={"placeholder": "bundle name, ID",
                                                          "size": 50}))
 
 
 class CertificateSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     query = forms.CharField(required=False,
                             widget=forms.TextInput(attrs={"placeholder": "common name, organization",
                                                           "size": 50}))
 
 
 class TeamIDSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     query = forms.CharField(required=False,
                             widget=forms.TextInput(attrs={"placeholder": "team ID, organization",
                                                           "size": 50}))
 
 
 class SigningIDSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
     query = forms.CharField(required=False,
                             widget=forms.TextInput(attrs={"placeholder": "signing ID",
                                                           "size": 50}))
