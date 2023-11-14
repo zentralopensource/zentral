@@ -395,7 +395,7 @@ class Configuration(models.Model):
         default=86400,  # 1d
         validators=[MinValueValidator(300),  # 5m
                     MaxValueValidator(172800)],  # 2d
-        help_text="Inventory refresh interval in seconds"
+        help_text="Inventory refresh interval in seconds (Minimum: 300s)"
     )
 
     options = models.JSONField(default=dict, blank=True, help_text="Osquery options")
