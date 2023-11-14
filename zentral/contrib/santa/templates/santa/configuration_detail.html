@@ -188,15 +188,15 @@
                 {% if not distributor and not secret.is_used_up %}
                     <a type="button" class="btn btn-link text-dark text-decoration-none"
                     aria-label="Download Santa configuration plist"
-                    title="Download santa configuration plist"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download santa configuration plist"
+                    title="Download Santa configuration plist"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download Santa configuration plist"
                     href="{% url 'santa_api:enrollment_plist' enrollment.id %}">
                         <i class="bi bi-arrow-down-circle"> plist</i>
                     </a>
                     <a type="button" class="btn btn-link text-dark text-decoration-none"
                     aria-label="Download Santa configuration profile"
-                    title="Download santa configuration profile"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download santa configuration profile"
+                    title="Download Santa configuration profile"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download Santa configuration profile"
                     href="{% url 'santa_api:enrollment_configuration_profile' enrollment.id %}">
                         <i class="bi bi-arrow-down-circle"> configuration profile</i>
                     </a>
