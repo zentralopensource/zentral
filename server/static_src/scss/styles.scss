@@ -60,6 +60,10 @@ pre.scrolleable {
     padding-bottom: 2em;
 }
 
+td > p:last-child {
+    margin-bottom: 0px;
+}
+
 // Side menu
 .list-group-item {
     border-color: transparent;
