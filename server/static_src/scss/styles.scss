@@ -186,12 +186,12 @@ td > p:last-child {
     display: block;
 }
 
-.zentral-logo.light {
-    background-image: url(../images/logo-light.svg);
+[data-bs-theme=light] .zentral-logo {
+        background-image: url(../images/logo-light.svg);
 }
 
-.zentral-logo.dark {
-    background-image: url(../images/logo-dark.svg);
+[data-bs-theme=dark] .zentral-logo {
+        background-image: url(../images/logo-dark.svg);
 }
 
 // Deployment info
