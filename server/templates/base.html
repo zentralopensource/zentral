@@ -12,7 +12,7 @@
     <script src="{% static 'dist/theme.js' %}"></script>
 </head>
 <body class="d-flex flex-column h-100">
-    <nav class="navbar navbar-expand-lg sticky-top" data-bs-theme="light">
+    <nav class="navbar navbar-expand-lg sticky-top">
         <div class="d-flex flex-row flex-wrap w-100 align-items-center px-3">
             <a class="navbar-brand" href="/">
                 <i class="zentral-logo" alt="Zentral"></i>
@@ -31,7 +31,7 @@
     </nav>
     <div class="d-flex h-100 overflow-auto">
         {% if user.is_authenticated %}
-        <div class="offcanvas offcanvas-start sidebar sticky-lg-top flex-lg-shrink-0 d-flex flex-column" data-bs-theme="light" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
+        <div class="offcanvas offcanvas-start sidebar sticky-lg-top flex-lg-shrink-0 d-flex flex-column" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
             <div class="offcanvas-header d-lg-none">
                 <h5 class="offcanvas-title" id="offcanvasNavbarLabel">
 
