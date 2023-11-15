@@ -228,6 +228,9 @@ class UpdateProbeForm(forms.ModelForm):
     class Meta:
         model = ProbeSource
         fields = ["name", "description", "status"]
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": "2"})
+        }
 
     def clean_incident_severity(self):
         incident_severity = self.cleaned_data.get("incident_severity")
@@ -247,6 +250,10 @@ class FeedForm(forms.ModelForm):
     class Meta:
         model = Feed
         fields = ("name", "description")
+        widgets = {
+            "name": forms.TextInput,
+            "description": forms.Textarea(attrs={"rows": "2"})
+        }
 
 
 class ImportFeedProbeForm(forms.Form):

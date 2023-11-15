@@ -31,7 +31,10 @@ class ATCForm(forms.ModelForm):
     class Meta:
         model = AutomaticTableConstruction
         fields = "__all__"
-        widgets = {"platforms": PlatformsWidget}
+        widgets = {
+            "platforms": PlatformsWidget,
+            "description": forms.Textarea(attrs={"rows": "2"})
+        }
 
 
 # Configuration
@@ -196,6 +199,9 @@ class FileCategoryForm(forms.ModelForm):
     class Meta:
         model = FileCategory
         fields = "__all__"
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": "2"})
+        }
 
     def clean(self):
         super().clean()
@@ -217,6 +223,9 @@ class PackForm(forms.ModelForm):
     class Meta:
         model = Pack
         fields = "__all__"
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": "2"})
+        }
 
     def clean(self):
         super().clean()
