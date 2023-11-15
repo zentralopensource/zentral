@@ -12,7 +12,7 @@
 <h3 class="m-0 fs-5 text-secondary mb-3">Probe</h3>
 
 <div class="card card-default mb-3">
-  <table class="table table-probe table-light table-striped align-middle table-object-properties">
+  <table class="table table-probe table-striped align-middle table-object-properties">
     <tr>
       <td>status</td>
       <td>
@@ -142,7 +142,7 @@
 
 {% for inventory_filter in probe.inventory_filters %}
 <div class="card card-default mb-3">
-  <table class="table table-probe table-light table-striped align-middle table-object-properties">
+  <table class="table table-probe table-striped align-middle table-object-properties">
     {% if inventory_filter.meta_business_units %}
     <tr>
       <td>
@@ -210,7 +210,7 @@
 
 {% for metadata_filter in probe.metadata_filters %}
 <div class="card card-default mb-3">
-  <table class="table table-probe table-light table-striped align-middle table-object-properties">
+  <table class="table table-probe table-striped align-middle table-object-properties">
     {% if metadata_filter.event_tags %}
     <tr>
       <td>tags</td>
@@ -249,7 +249,7 @@
 
 {% for payload_filter in probe.payload_filters %}
 <div class="card card-default mb-3">
-  <table class="table table-probe table-light table-striped align-middle table-object-properties">
+  <table class="table table-probe table-striped align-middle table-object-properties">
     {% for attribute, operator, values in payload_filter.items_display %}
     <tr>
       <td>{{ attribute }}</td>
@@ -297,7 +297,7 @@
 {% endif %}
 
 {% if probe.actions %}
-<table class="table table-probe table-light table-striped align-middle table-object-properties">
+<table class="table table-probe table-striped align-middle table-object-properties">
   <thead>
     <th>Name</th>
     <th>Configuration</th>

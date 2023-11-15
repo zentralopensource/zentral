@@ -30,7 +30,7 @@
 <h4>Permission{{ permission_count|pluralize }} ({{ permission_count }})</h4>
 
 {% if permission_count %}
-<table class="table table-light table-striped align-middle object-details">
+<table class="table table-striped align-middle object-details">
   <thead>
     <th>App</th>
     <th>Model</th>
@@ -51,7 +51,7 @@
 {% if perms.accounts.view_user %}
 <h4>User{{ user_count|pluralize }} ({{ user_count }})</h4>
 {% if user_count %}
-<table class="table table-light table-striped align-middle table-hover">
+<table class="table table-striped align-middle table-hover">
   <thead>
     <th>Username</th>
     <th>Email</th>
@@ -73,7 +73,7 @@
 {% if perms.accounts.view_user %}
 <h4>Service account{{ service_account_count|pluralize }} ({{ service_account_count }})</h4>
 {% if service_account_count %}
-<table class="table table-light table-striped align-middle table-hover">
+<table class="table table-striped align-middle table-hover">
   <thead>
     <th>Name</th>
   </thead>
@@ -91,7 +91,7 @@
 {% if perms.realms.view_realmgroupmapping %}
 <h4>Realm mapping{{ realm_group_mapping_count|pluralize }} ({{ realm_group_mapping_count }})</h4>
 {% if realm_group_mapping_count %}
-<table class="table table-light table-striped align-middle table-hover">
+<table class="table table-striped align-middle table-hover">
   <thead>
     {% if perms.realms.view_realm %}
     <th>Realm</th>

@@ -28,7 +28,7 @@
         </div>
     </div>
     <h4>Configuration</h4>
-    <table class="table table-light table-striped align-middle table-object-properties">
+    <table class="table table-striped align-middle table-object-properties">
     <tbody>
         <tr>
         <th width="200px">Push certificate</th>
@@ -89,7 +89,7 @@
     </table>
 
     <h4>Authentication</h4>
-    <table class="table table-light table-striped align-middle table-object-properties">
+    <table class="table table-striped align-middle table-object-properties">
     <tbody>
         <tr>
         <th width="200px">Realm</th>
@@ -130,7 +130,7 @@
 
     <h4>DEP Profile</h4>
 
-    <table class="table table-light table-striped align-middle table-object-properties">
+    <table class="table table-striped align-middle table-object-properties">
     <tbody>
         {% with object.virtual_server as virtual_server %}
         <tr>
@@ -233,7 +233,7 @@
 <h3 style="margin-top:40px">Assigned to {{ assigned_device_count }} device{{ assigned_device_count|pluralize }} ({{ device_count }} total)</h3>
 
 {% if device_count %}
-<table class="table table-light table-striped align-middle">
+<table class="table table-striped align-middle">
   <thead>
     <th class="col-md-4">Serial number</th>
     <th class="col-md-4">Profile status</th>
@@ -263,7 +263,7 @@
 
 <h3>Session{{ dep_enrollment_sessions_count|pluralize }} ({{ dep_enrollment_sessions_count }})</h3>
 
-<table class="table table-light table-striped align-middle">
+<table class="table table-striped align-middle">
   <thead>
     <th>Serial number</th>
     {% if object.realm %}

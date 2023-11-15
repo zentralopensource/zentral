@@ -27,7 +27,7 @@
         </div>
     </div>
 
-    <table class="table table-light table-striped align-middle table-object-properties">
+    <table class="table table-striped align-middle table-object-properties">
         <thead>
             <tr><th style="width:30vw">Attribute</th>
             <th>Value</th>
@@ -69,7 +69,7 @@
 </div>
 
 {% if keys %}
-    <table class="table table-light table-striped align-middle table-hover">
+    <table class="table table-striped align-middle table-hover">
     <thead>
         <th>Name</th>
         <th>Feat.</th>
@@ -154,7 +154,7 @@
     <h3>Included in {{ manifests|length }} manifest{{ manifests|length|pluralize }}</h3>
 
     {%if manifests %}
-        <table class="table table-light table-striped align-middle table-hover">
+        <table class="table table-striped align-middle table-hover">
         {% for tags, manifest in manifests %}
         <tr>
             <td><a href="{{ manifest.get_absolute_url }}#sm_{{ object.id }}">{{ manifest }}</a></td>

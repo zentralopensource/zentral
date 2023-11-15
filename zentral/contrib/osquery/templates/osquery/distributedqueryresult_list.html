@@ -69,7 +69,7 @@
 
     {% if rows %}
     <div class="table-responsive">
-      <table class="table table-light table-striped align-middle">
+      <table class="table table-striped align-middle">
         <thead>
           <tr>
             {% for header in headers %}
@@ -93,7 +93,7 @@
     </div>
     {% else %}
     {% for object in page_obj %}
-    <table class="table table-light table-striped align-middle">
+    <table class="table table-striped align-middle">
       <thead>
         <tr>
           <th colspan="2"><a href="{% machine_url object.serial_number %}">{{ object.serial_number }}</a></th>
