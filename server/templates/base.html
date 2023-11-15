@@ -51,7 +51,7 @@
 
             </div>
             {% if request.zentral_deployment.items_for_display %}
-            <div class="deployment-info bg-light">
+            <div class="deployment-info">
                 {% for k, v in request.zentral_deployment.items_for_display %}
                     {{ k }}: {{ v }}
                     {% if not forloop.last %}
