@@ -249,16 +249,16 @@
             </div>
             <div class="{% if not f_up_link %} panel-heading-btns{% endif %}"{% if not f_up_link %} style="display:none"{% endif %}>
                 {% if not f_up_link %}
-                <a href="#filter-{{ f.get_query_kwarg }}-links" class="btn btn-outline-secondary btn-sm reorder-filter text-light">
+                <a href="#filter-{{ f.get_query_kwarg }}-links" class="btn btn-outline-secondary btn-sm reorder-filter">
                     <span class="bi bi-sort-alpha-down-alt" aria-hidden="true"></span>
                 </a>
                 {% if f_r_link %}
-                <a href="{{ f_r_link }}" class="btn btn-danger btn-sm text-light">
+                <a href="{{ f_r_link }}" class="btn btn-danger btn-sm">
                     <span class="bi bi-trash" aria-hidden="true"></span>
                 </a>
                 {% endif %}
                 {% else %}
-                <a href="{{ f_up_link }}" class="btn btn-outline-secondary btn-sm text-light">
+                <a href="{{ f_up_link }}" class="btn btn-outline-secondary btn-sm">
                     <span class="bi bi-x" aria-hidden="true"></span>
                 </a>
                 {% endif %}
