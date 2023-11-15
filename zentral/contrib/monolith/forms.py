@@ -72,6 +72,9 @@ class SubManifestForm(forms.ModelForm):
     class Meta:
         model = SubManifest
         fields = ('meta_business_unit', 'name', 'description')
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": "2"})
+        }
 
     def clean_meta_business_unit(self):
         mbu = self.cleaned_data.get("meta_business_unit")
@@ -184,7 +187,7 @@ class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
 class PackageForm(forms.ModelForm):
     file = forms.FileField(required=True)
     display_name = forms.CharField(required=False)
-    description = forms.CharField(widget=forms.Textarea(attrs={"rows": 10}), required=False)
+    description = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False)
     excluded_tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(), required=False)
     shard_modulo = forms.IntegerField(min_value=1, max_value=1000, required=False, initial=100)
     default_shard = forms.IntegerField(min_value=0, max_value=1000, required=False, initial=100)

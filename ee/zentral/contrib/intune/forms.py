@@ -14,6 +14,7 @@ class TenantForm(forms.ModelForm):
             "client_id": forms.TextInput,
             "name": forms.TextInput,
             "tenant_id": forms.TextInput,
+            "description": forms.Textarea(attrs={"rows": "2"}),
         }
 
     def __init__(self, *args, **kwargs):

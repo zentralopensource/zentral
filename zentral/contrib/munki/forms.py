@@ -21,7 +21,10 @@ class ConfigurationForm(forms.ModelForm):
     class Meta:
         model = Configuration
         fields = "__all__"
-        widgets = {"principal_user_detection_sources": PrincipalUserDetectionSourceWidget}
+        widgets = {
+            "principal_user_detection_sources": PrincipalUserDetectionSourceWidget,
+            "description": forms.Textarea(attrs={"rows": "2"})
+        }
 
 
 class EnrollmentForm(forms.ModelForm):
