@@ -11,21 +11,29 @@ This is a simple way of testing Zentral. Everything will run on the docker host.
 ## Setup
 
 Download the source:
- 
+
 ```bash
 git clone https://github.com/zentralopensource/zentral
 ```
 
+Build the `css` and `js` bundles. You need to have [`npm`](https://nodejs.org/en/download/) installed on your machine.
+
+```bash
+npm install && npm run build
+```
+
+_The step above is only required because the default docker deployment is configured for development. The bundles are mounted from the local disk, masking the ones pre-built in the container)_
+
 Build and launch all the containers in the background:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Wait until all the containers are created and started. You watch the `web` container logs with the following command:
 
 ```bash
-docker-compose logs -f --tail=100 web
+docker compose logs -f --tail=100 web
 ```
 
 You should see something like:
@@ -51,7 +59,7 @@ Note: It is normal to see database migration errors. All the zentral containers 
 Create a Zentral superuser:
 
 ```bash
-docker-compose run --rm web createuser --superuser henry henry@zentral.pro
+docker compose run --rm web createuser --superuser henry henry@zentral.pro
 ```
 
 You should see something like that:
@@ -69,47 +77,47 @@ Open the password reset link in a browser, set a password, and log in.
 Start everything:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Create (or promote) a superuser:
 
 ```bash
-docker-compose run --rm web createuser --superuser henry henry@zentral.pro                               
-```                                                       
+docker compose run --rm web createuser --superuser henry henry@zentral.com
+```
 
 Restart all the Zentral app containers (not the DB, Elasticsearch, …):
 
 ```bash
-docker-compose restart web workers celery
+docker compose restart web workers celery
 ```
 
 Update Zentral:
 
 ```bash
-git pull && docker-compose up -d web workers celery
+git pull && docker compose up -d web workers celery
 ```
 
 List containers:
 
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 Follow web logs:
 
 ```bash
-docker-compose logs -f web
+docker compose logs -f web
 ```
 
 Follow nginx logs:
 
 ```bash
-docker-compose logs -f nginx
+docker compose logs -f nginx
 ```
 
 Follow workers logs:
 
 ```
-docker-compose logs -f workers
+docker compose logs -f workers
 ```
