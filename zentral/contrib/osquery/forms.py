@@ -270,6 +270,7 @@ class UploadPackForm(forms.ModelForm):
                     break
             else:
                 self.add_error("file", "Could not parse pack file.")
+                return
             serializer = OsqueryPackSerializer(data=data)
             if not serializer.is_valid():
                 self.add_error(

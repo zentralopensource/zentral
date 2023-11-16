@@ -176,7 +176,23 @@ class OsquerySetupPacksViewsTestCase(TestCase):
     def test_upload_bad_file(self):
         pack = self._force_pack()
         self._login("osquery.change_pack", "osquery.view_pack")
-        pack_file = BytesIO(b"-####")
+        pack_file = BytesIO(b"""{"queries": {}""")  # bad JSON, cannot be parsed
+        pack_file.name = get_random_string(12)
+        response = self.client.post(reverse("osquery:upload_pack", args=(pack.pk,)),
+                                    {"file": pack_file,
+                                     "update_and_create_only": "on"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/pack_upload.html")
+        self.assertFormError(
+            response.context["form"], "file",
+            "Could not parse pack file."
+        )
+
+    def test_upload_bad_data(self):
+        pack = self._force_pack()
+        self._login("osquery.change_pack", "osquery.view_pack")
+        pack_file = BytesIO(b"-####")  # can be parsed but bad structure
         pack_file.name = get_random_string(12)
         response = self.client.post(reverse("osquery:upload_pack", args=(pack.pk,)),
                                     {"file": pack_file,
