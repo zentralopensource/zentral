@@ -42,10 +42,7 @@
     </div>
 </div>
 
-{% if not page_obj %}
-    {% url 'osquery:queries' as empty_results_url %}
-    {% empty_results empty_results_url %}
-{% else %}
+{% if page_obj%}
 
 {% pagination next_url previous_url %}
 
@@ -91,7 +88,11 @@
 
 {% pagination next_url previous_url %}
 
+{% elif form.has_changed %}
+    {% url 'osquery:queries' as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
+
 {% endblock %}
 
 {% block extrajs %}

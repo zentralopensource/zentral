@@ -77,9 +77,14 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertContains(response, "Script checks (2)")
 
     def test_script_check_search(self):
+        self._login("munki.view_scriptcheck", "munki.add_scriptcheck")
+        response = self.client.get(reverse("munki:script_checks"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+
         sc_one = force_script_check()
         sc_two = force_script_check(type=ScriptCheck.Type.ZSH_BOOL)
-        self._login("munki.view_scriptcheck", "munki.add_scriptcheck")
 
         response = self.client.get(reverse("munki:script_checks"), {"name": "test"})
         self.assertEqual(response.status_code, 200)
@@ -99,6 +104,12 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
         self.assertContains(response, sc_two.compliance_check.name)
         self.assertContains(response, "Script check (1)")
+
+        response = self.client.get(reverse("munki:script_checks"), {"name": "does not exists"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("munki:script_checks") + '">all the items')
 
     # create
 

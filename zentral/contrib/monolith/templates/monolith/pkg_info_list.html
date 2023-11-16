@@ -129,7 +129,7 @@
   {% endfor %}
   </tbody>
 </table>
-{% elif form.is_bound %}
+{% elif form.has_changed %}
     {% url 'monolith:pkg_infos' as empty_results_url %}
     {% empty_results empty_results_url %}
 {% endif %}

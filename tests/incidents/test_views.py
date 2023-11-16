@@ -93,13 +93,22 @@ class InventoryViewsTestCase(TestCase):
         self.assertContains(response, self.probe_source.name)
 
     def test_index_search(self):
-        self._force_incident()
         self._login('incidents.view_incident')
-        response = self.client.get(reverse("incidents:index") + "?q=" + self.probe_source.name)
+        response = self.client.get(reverse("incidents:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "incidents/index.html")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+        self._force_incident()
+        response = self.client.get(reverse("incidents:index"), {"q": self.probe_source.name})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/index.html")
         self.assertContains(response, "Incident (1)")
         self.assertContains(response, self.probe_source.name)
+        response = self.client.get(reverse("incidents:index"), {"q": "does not exists"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "incidents/index.html")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("incidents:index") + '">all the items')
 
     # detail
 

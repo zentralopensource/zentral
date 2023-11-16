@@ -173,6 +173,14 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, self.file_team_id)
         self.assertContains(response, self.file_signing_id)
 
+    def test_search_targets_empty_results(self):
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:targets"), {"q": "does not exists"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/targets.html")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("santa:targets") + '">all the items')
+
     # binary target
 
     def test_binary_target_redirect(self):

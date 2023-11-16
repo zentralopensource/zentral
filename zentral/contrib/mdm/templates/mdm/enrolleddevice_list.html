@@ -74,8 +74,8 @@
 
     {% pagination next_url previous_url %}
 
-{% elif form.is_bound %}
-    {% url 'inventory:enrolled_device' as empty_results_url %}
+{% elif form.has_changed %}
+    {% url 'mdm:enrolled_devices' as empty_results_url %}
     {% empty_results empty_results_url %}
 {% endif %}
 
