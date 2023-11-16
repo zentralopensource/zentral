@@ -66,8 +66,10 @@
   <div class="card-footer">
     <div class="btn-group" role="group">
       {% if perms.probes.change_probesource %}
-        {% url 'probes:update' probe.pk as url %}
-        {% button 'UPDATE' url "Edit Probe" %}
+      <a class="btn btn-outline-secondary" href="{% url 'probes:update' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Edit">
+        <span class="bi bi-pencil-square" aria-hidden="true"></span>
+      </a>
       {% endif %}
       {% if perms.probes.add_probesource %}
       <a class="btn btn-outline-secondary" href="{% url 'probes:clone' probe.pk %}"
@@ -76,8 +78,10 @@
       </a>
       {% endif %}
       {% if perms.probes.delete_probesource %}
-        {% url 'probes:delete' probe.pk as url %}
-        {% button 'DELETE' url "Delete Probe" %}
+      <a class="btn btn-outline-secondary" href="{% url 'probes:delete' probe.pk %}"
+        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete">
+        <span class="bi bi-trash" aria-hidden="true"></span>
+      </a>
       {% endif %}
       {% if show_events_link %}
       <a class="btn btn-outline-secondary" href="{% url 'probes:probe_events' probe.pk %}"
