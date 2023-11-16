@@ -60,7 +60,7 @@ pre.scrolleable {
     padding-bottom: 2em;
 }
 
-td > p:last-child {
+td > p:last-child, td > table:last-child {
     margin-bottom: 0px;
 }
 
