@@ -98,10 +98,15 @@ class DEPDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, device3.serial_number)
 
     def test_dep_devices_enrollment_search(self):
+        self._login("mdm.view_depdevice")
+        response = self.client.get(reverse("mdm:dep_devices"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depdevice_list.html")
+        self.assertContains(response, "Devices (0)")
+        self.assertNotContains(response, "We didn't find any item related to your search")
         device1 = force_dep_device()
         device2 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, mbu=self.mbu)
         device3 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=device2.enrollment)
-        self._login("mdm.view_depdevice")
         response = self.client.get(reverse("mdm:dep_devices"), {"enrollment": device2.enrollment.pk})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '<li class="breadcrumb-item active">Search</li>')
@@ -111,6 +116,12 @@ class DEPDeviceManagementViewsTestCase(TestCase):
         self.assertNotContains(response, device1.serial_number)
         self.assertContains(response, device2.serial_number)
         self.assertContains(response, device3.serial_number)
+        response = self.client.get(reverse("mdm:dep_devices"), {"q": "does not exists"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depdevice_list.html")
+        self.assertContains(response, "Devices (0)")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("mdm:dep_devices") + '">all the items')
 
     def test_dep_devices_deleted_not_included_search(self):
         device1 = force_dep_device(

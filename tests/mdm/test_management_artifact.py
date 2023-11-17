@@ -64,11 +64,16 @@ class ArtifactManagementViewsTestCase(TestCase):
         self.assertContains(response, "page 2 of 3")
 
     def test_artifacts_search(self):
+        self._login("mdm.view_artifact")
+        response = self.client.get(reverse("mdm:artifacts"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_list.html")
+        self.assertContains(response, "Artifacts (0)")
+        self.assertNotContains(response, "We didn't find any item related to your search")
         blueprint_artifact, artifact, _ = force_blueprint_artifact()
         blueprint = blueprint_artifact.blueprint
         _, artifact2, _ = force_blueprint_artifact(blueprint=blueprint)
         artifact3, _ = force_artifact()
-        self._login("mdm.view_artifact")
         response = self.client.get(
             reverse("mdm:artifacts"),
             {"blueprint": blueprint.pk},
@@ -80,6 +85,15 @@ class ArtifactManagementViewsTestCase(TestCase):
         self.assertContains(response, artifact2.name)
         self.assertNotContains(response, artifact3.name)
         self.assertContains(response, "page 1 of 1")
+        response = self.client.get(
+            reverse("mdm:artifacts"),
+            {"q": "does not exists"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_list.html")
+        self.assertContains(response, "Artifacts (0)")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("mdm:artifacts") + '">all the items')
 
     def test_artifacts_search_redirect(self):
         blueprint_artifact, artifact, _ = force_blueprint_artifact()

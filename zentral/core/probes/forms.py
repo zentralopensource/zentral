@@ -50,9 +50,6 @@ class ProbeSearchForm(forms.Form):
             qs = qs.filter(status=status)
         return qs
 
-    def is_initial(self):
-        return {k: v for k, v in self.cleaned_data.items() if v} == {'status': 'ACTIVE'}
-
 
 class InventoryFilterForm(forms.Form):
     meta_business_units = forms.ModelMultipleChoiceField(queryset=MetaBusinessUnit.objects.all(),

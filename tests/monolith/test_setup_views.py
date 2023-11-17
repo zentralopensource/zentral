@@ -172,6 +172,18 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "monolith/pkg_info_list.html")
         self.assertContains(response, self.pkginfo_name_1.name)
 
+    def test_pkg_infos_search(self):
+        self._login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_infos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/pkg_info_list.html")
+        self.assertContains(response, self.pkginfo_name_1.name)
+        response = self.client.get(reverse("monolith:pkg_infos"), {"name": "does not exists"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/pkg_info_list.html")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("monolith:pkg_infos") + '">all the items')
+
     # pkg info name
 
     def test_pkg_info_name_login_redirect(self):
@@ -1191,6 +1203,23 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, submanifest.name)
 
+    def test_sub_manifests_search(self):
+        self._login("monolith.view_submanifest")
+        response = self.client.get(reverse("monolith:sub_manifests"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest_list.html")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+        submanifest, _ = self._force_sub_manifest()
+        response = self.client.get(reverse("monolith:sub_manifests"), {"keywords": "does not exists"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest_list.html")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("monolith:sub_manifests") + '">all the items')
+        response = self.client.get(reverse("monolith:sub_manifests"), {"keywords": submanifest.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest_list.html")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+
     # sub manifest
 
     def test_sub_manifest_login_redirect(self):
@@ -1445,6 +1474,24 @@ class MonolithSetupViewsTestCase(TestCase):
             response, reverse("monolith_api:enrollment_plist", args=(self.enrollment.pk,)))
         self.assertContains(
             response, reverse("monolith_api:enrollment_configuration_profile", args=(self.enrollment.pk,)))
+
+    def test_manifest_search(self):
+        self._login("monolith.view_manifest")
+        response = self.client.get(reverse("monolith:manifests"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/manifest_list.html")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+        manifest = self._force_manifest()
+        response = self.client.get(reverse("monolith:manifests"), {"name": manifest.name}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/manifest.html")
+        self.assertContains(response, manifest.name)
+        self.assertNotContains(response, "We didn't find any item related to your search")
+        response = self.client.get(reverse("monolith:manifests"), {"name": "does not exists"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/manifest_list.html")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("monolith:manifests") + '">all the items')
 
     # create manifest
 

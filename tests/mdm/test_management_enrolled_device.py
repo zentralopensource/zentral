@@ -75,6 +75,21 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
                 self.assertContains(response, udid)
                 self.assertContains(response, serial_number)
 
+    def test_enrolled_devices_search(self):
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_devices"),)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+        session, _, serial_number = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        blueprint = force_blueprint()
+        enrolled_device.blueprint = blueprint
+        enrolled_device.save()
+        response = self.client.get(reverse("mdm:enrolled_devices"), {"q": "does not exists"})
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("mdm:enrolled_devices") + '">all the items')
+
     def test_enrolled_devices_serial_number_search_redirect(self):
         session, _, serial_number = force_dep_enrollment_session(self.mbu, completed=True)
         enrolled_device = session.enrolled_device

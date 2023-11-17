@@ -513,6 +513,34 @@ class SantaSetupViewsTestCase(TestCase):
             response = self.client.get(reverse(f"santa:{view_name}", args=(configuration.pk,)))
             self.assertEqual(response.status_code, 403)
 
+    def test_configuration_rules_search(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_configuration", "santa.view_configuration",
+                    "santa.add_rule", "santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+        binary_hash = get_random_sha256()
+        description = get_random_string(12)
+        self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                         {"target_type": Target.BINARY,
+                          "target_identifier": binary_hash,
+                          "policy": Rule.ALLOWLIST,
+                          "description": description})
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)),
+                                   {"identifier": binary_hash})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)),
+                                   {"identifier": "does not exists"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("santa:configuration_rules",
+                                              args=(configuration.pk,)) + '">all the items')
+
     # create configuration rule
 
     def test_create_configuration_rule_permission_denied(self):

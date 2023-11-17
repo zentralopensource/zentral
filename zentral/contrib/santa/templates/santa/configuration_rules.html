@@ -61,10 +61,7 @@
 </div>
 
 
-{% if not page_obj %}
-    {% url 'santa:configuration_rules' configuration.id as empty_results_url %}
-    {% empty_results empty_results_url %}
-{% else %}
+{% if page_obj %}
 
     {% pagination next_url previous_url %}
 
@@ -284,6 +281,9 @@
 
     {% pagination next_url previous_url %}
 
+{% elif form.has_changed %}
+    {% url 'santa:configuration_rules' configuration.id as empty_results_url %}
+    {% empty_results empty_results_url %}
 {% endif %}
 
 {% endblock %}

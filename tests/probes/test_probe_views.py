@@ -254,14 +254,31 @@ class ProbeViewsTestCase(TestCase):
         response = self.client.get(reverse("probes:index"))
         self.assertEqual(response.status_code, 403)
 
-    def test_index_no_inactive(self):
-        probe_source = self._force_probe(active=False)
-        probe_source2 = self._force_probe()
+    def test_index_search(self):
         self._login("probes.view_probesource")
         response = self.client.get(reverse("probes:index"))
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, probe_source.name)
+        self.assertNotContains(response, "We didn't find any item related to your search")
+        probe_source = self._force_probe(active=False)
+        probe_source2 = self._force_probe()
+        response = self.client.get(reverse("probes:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, probe_source.name)
         self.assertContains(response, probe_source2.name)
+        response = self.client.get(reverse("probes:index"), {"status": probe_source.status})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, probe_source.name)
+        self.assertNotContains(response, probe_source2.name)
+        response = self.client.get(reverse("probes:index"), {"q": probe_source.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, probe_source.name)
+        self.assertNotContains(response, probe_source2.name)
+        response = self.client.get(reverse("probes:index"), {"q": "does not exists"})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, probe_source.name)
+        self.assertNotContains(response, probe_source2.name)
+        self.assertContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("probes:index") + '">all the items')
 
     # dashboard
 

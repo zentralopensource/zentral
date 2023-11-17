@@ -53,7 +53,7 @@
     </div>
 
     {% pagination next_url previous_url %}
-{% else %}
+{% elif form.has_changed %}
     {% url 'incidents:index' as empty_results_url %}
     {% empty_results empty_results_url %}
 {% endif %}

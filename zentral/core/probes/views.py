@@ -30,8 +30,6 @@ class IndexView(PermissionRequiredMixin, UserPaginationListView):
 
     def get(self, request, *args, **kwargs):
         qd = self.request.GET.copy()
-        if 'status' not in qd:
-            qd['status'] = 'ACTIVE'
         self.form = ProbeSearchForm(qd)
         self.form.is_valid()
         return super().get(request, *args, **kwargs)
@@ -50,7 +48,7 @@ class IndexView(PermissionRequiredMixin, UserPaginationListView):
             reset_link = "?{}".format(qd.urlencode())
         else:
             reset_link = None
-        if not self.form.is_initial():
+        if self.form.has_changed():
             bc.append((reverse("probes:index"), "Probes"))
             bc.append((reset_link, "Search"))
         else:

@@ -106,7 +106,7 @@
     </table>
 
     {% pagination next_url previous_url %}
-{% elif form.is_bound %}
+{% elif form.has_changed %}
     {% url 'santa:targets' as empty_results_url %}
     {% empty_results empty_results_url %}
 {% endif %}
