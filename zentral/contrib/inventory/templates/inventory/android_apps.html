@@ -25,16 +25,14 @@
         <button type="submit" name="action" value="search" class="btn btn-link mb-2">
             <i class="bi bi-search"></i>
         </button>
-        <div class="dropdown mb-2 btn btn-link">
-            <button type="button" class="btn btn-link dropdown-toggle"
+        <button type="button" class="btn btn-link dropdown-toggle mb-2"
                 data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
-                <i class="bi bi-download"></i>
-            </button>
-            <ul class="dropdown-menu" aria-labelledby="downloadTargets">
-                <li><a class="dropdown-item task" href="{% url 'inventory_api:android_apps_export' %}" data-format="csv" class="task">CSV</a></li>
-                <li><a class="dropdown-item task" href="{% url 'inventory_api:android_apps_export' %}" data-format="xlsx" class="task">XLSX</a></li>
-            </ul>
-        </div>
+            <i class="bi bi-download"></i>
+        </button>
+        <ul class="dropdown-menu" aria-labelledby="downloadTargets">
+            <li><a class="dropdown-item task" href="{% url 'inventory_api:android_apps_export' %}" data-format="csv" class="task">CSV</a></li>
+            <li><a class="dropdown-item task" href="{% url 'inventory_api:android_apps_export' %}" data-format="xlsx" class="task">XLSX</a></li>
+        </ul>
     </form>
 </div>
 
