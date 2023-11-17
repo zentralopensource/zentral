@@ -17,7 +17,7 @@
                 {% button 'EVENTS' url %}
             {% endif %}
             {% for link, anchor_text in store_links  %}
-            <a href="{{ link }}" class="btn btn-link text-dark text-decoration-none"
+            <a href="{{ link }}" class="btn btn-link"
                 data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{ anchor_text }}">
                 <i class="bi bi-link"></i>
             </a>
@@ -32,7 +32,7 @@
                 {% button 'UPDATE' url "Edit Compliance Check" %}
             {% endif %}
             {% if devtool_link %}
-            <a href="{{ devtool_link }}" class="btn btn-link text-dark text-decoration-none"
+            <a href="{{ devtool_link }}" class="btn btn-link"
                 data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Developer Tool">
                 <i class="bi bi-tools"></i>
             </a>

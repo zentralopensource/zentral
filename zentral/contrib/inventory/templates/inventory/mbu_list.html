@@ -23,7 +23,7 @@
 
         {{ form }}
 
-        <button type="submit" class="btn btn-link text-dark text-decoration-none mb-2">
+        <button type="submit" class="btn btn-link mb-2">
             <i class="bi bi-search"></i>
         </button>
     </form>
@@ -33,9 +33,9 @@
         {% button 'CREATE' url "Create new Business Unit" %}
     {% endif %}
     {% if perms.inventory.change_metabusinessunit %}
-        <button form="merge_form" type="submit" disabled id="merge-btn-container" class="btn btn-link text-dark text-decoration-none"
+        <button form="merge_form" type="submit" disabled id="merge-btn-container" class="btn btn-link"
             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Merge Business Units">
-            <i class="bi text-dark bi-sign-merge-left"></i>
+            <i class="bi bi-sign-merge-left"></i>
         </button>
     </div>
     {% endif %}
@@ -85,7 +85,7 @@
                 </td>
                 <td class="text-end py-0">
                     {% if perms.inventory.view_metabusinessunittag and perms.inventory.add_metabusinessunittag and perms.inventory.change_metabusinessunittag and perms.inventory.delete_metabusinessunittag and perms.inventory.add_tag %}
-                        <a href="{% url 'inventory:mbu_tags' mbu.id %}" class="btn btn-link text-decoration-none text-dark"
+                        <a href="{% url 'inventory:mbu_tags' mbu.id %}" class="btn btn-link"
                             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Manage Tags">
                             <i class="bi bi-tags"></i>
                         </a>

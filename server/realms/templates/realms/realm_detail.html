@@ -14,7 +14,7 @@
         <div class="ms-3">
             {% if not request.realm_authentication_session.is_remote %}
                 <form action="{% url 'realms:test' realm.pk %}" method="POST" target="_blank">{% csrf_token %}
-                    <button class="btn btn-link text-dark text-decoration-none">
+                    <button class="btn btn-link">
                         <span class="bi bi-card-checklist" aria-hidden="true"
                             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Test"></span>
                     </button>

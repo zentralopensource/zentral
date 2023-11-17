@@ -15,7 +15,7 @@
             {% button 'CREATE' url "Create new Compliance Check" %}
         {% endif %}
         {% if perms.inventory.view_machinesnapshot %}
-            <a href="{% url 'inventory:compliance_check_devtool' %}" class="btn btn-link text-dark text-decoration-none"
+            <a href="{% url 'inventory:compliance_check_devtool' %}" class="btn btn-link"
             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Developer Tool">
                 <i class="bi bi-tools"></i>
             </a>

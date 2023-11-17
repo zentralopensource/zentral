@@ -1,42 +1,64 @@
-$zzzgreen: rgb(92, 132, 124);
-$zzgreen: rgb(107, 189, 177);
-$zgreen: rgb(121, 198, 188);
-$ygreen: rgb(154, 210, 201);
-$xgreen: rgb(224, 240, 237);
+// Zentral colors
+$ztl-green: rgb(121, 198, 188);  // Logo green
+$ztl-red: rgb(234, 81, 101); // Logo red
+$ztl-border-color: $ztl-green;
+$ztl-bg: rgb($ztl-green, 0.1);
+$ztl-bg-dark: rgba($ztl-green, 0.3);
 
-$zzred: rgb(210, 72, 90);
-$zred: rgb(234, 81, 101);
-$yred: rgb(255, 93, 114);
-$xred: rgb(255, 123, 150);
+// Other custom Zentral variables
+$box-max-width: 1304px;
+$custom-table-padding: 0.375rem;
 
-$primary: $zzgreen;
-$light: white;
+// import and customize bootstrap
+@import "~bootstrap/scss/functions";
+
+$primary: $ztl-green;
 
 $font-size-root: 14px;
 
-$list-group-bg: transparent;
-$list-group-hover-bg: $xgreen;
-$list-group-hover-bg-dark: $xgreen;
-$list-group-active-bg-dark: $xgreen;
-$list-group-active-bg-light: $xgreen;
-$list-group-hover-border-color-dark: $xgreen;
-$list-group-border-width: 1px;
+$list-group-border-color: transparent;
 
-$dropdown-link-hover-bg: $list-group-hover-bg;
-$dropdown-link-active-bg: $zgreen;
+$dropdown-link-active-bg: $ztl-green;
 
 $offcanvas-border-color: transparent;
 $offcanvas-horizontal-width: 186px;
 
-$box-max-width: 1304px;
+@import "~bootstrap/scss/variables";
+@import "~bootstrap/scss/variables-dark";
+@import "~bootstrap/scss/maps";
+@import "~bootstrap/scss/mixins";
+@import "~bootstrap/scss/root";
 
-$collapse-toggler-color-light: #212529;
-$collapse-toggler-color-dark: #fff;
-$custom-table-padding: 0.375rem;
+@import "~bootstrap/scss/utilities";
+@import "~bootstrap/scss/reboot";
+@import "~bootstrap/scss/type";
+@import "~bootstrap/scss/images";
+@import "~bootstrap/scss/containers";
+@import "~bootstrap/scss/grid";
+@import "~bootstrap/scss/tables";
+@import "~bootstrap/scss/forms";
+@import "~bootstrap/scss/buttons";
+@import "~bootstrap/scss/transitions";
+@import "~bootstrap/scss/dropdown";
+@import "~bootstrap/scss/button-group";
+@import "~bootstrap/scss/nav";
+@import "~bootstrap/scss/navbar";
+@import "~bootstrap/scss/card";
+@import "~bootstrap/scss/breadcrumb";
+@import "~bootstrap/scss/pagination";
+@import "~bootstrap/scss/badge";
+@import "~bootstrap/scss/alert";
+@import "~bootstrap/scss/list-group";
+@import "~bootstrap/scss/modal";
+@import "~bootstrap/scss/tooltip";
+@import "~bootstrap/scss/popover";
+@import "~bootstrap/scss/offcanvas";
+@import "~bootstrap/scss/placeholders";
+@import "~bootstrap/scss/helpers";
+@import "~bootstrap/scss/utilities/api";
 
+// bootstrap icons
 $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
-
-@import "~bootstrap/scss/bootstrap";
 @import "~bootstrap-icons/font/bootstrap-icons";
 
 pre, ol, ul, dl {
@@ -44,8 +66,60 @@ pre, ol, ul, dl {
 }
 
 .errorlist {
-    color: $zred;
+    color: $ztl-red;
     font-weight: bold;
+}
+
+// Side menu
+.list-group-item:hover,
+.list-group-item.active,
+.list-group-item:focus {
+    border-color: $ztl-border-color;
+}
+
+[data-bs-theme=light] .list-group-item:hover,
+[data-bs-theme=light] .list-group-item.active {
+    background-color: $ztl-bg;
+    color: $body-color;
+}
+
+[data-bs-theme=dark] .list-group-item:hover,
+[data-bs-theme=dark] .list-group-item.active {
+    background-color: $ztl-bg-dark;
+    color: $white;
+}
+
+// Custom buttons or dropdowns without borders
+.btn-link {
+    text-decoration: none;
+    border: 1px solid transparent;
+}
+
+[data-bs-theme=dark] .btn-link {
+    color: rgba(var(--bs-light-rgb), var(--bs-text-opacity));
+}
+
+[data-bs-theme=dark] .btn-link:hover {
+    background: $ztl-bg-dark;
+    border: 1px solid $ztl-border-color;
+}
+
+[data-bs-theme=light] .btn-link {
+    color: rgba(var(--bs-dark-rgb), var(--bs-text-opacity));
+}
+
+[data-bs-theme=light] .btn-link:hover {
+    background: $ztl-bg;
+    border: 1px solid $ztl-border-color;
+}
+
+// Dropdowns background color
+[data-bs-theme=dark] .dropdown-item:hover:not(.active) {
+    background: $ztl-bg-dark;
+}
+
+[data-bs-theme=light] .dropdown-item:hover:not(.active) {
+    background: $ztl-bg;
 }
 
 // Table styling
@@ -63,24 +137,6 @@ pre.scrolleable {
 td > p:last-child, td > table:last-child {
     margin-bottom: 0px;
 }
-
-// Side menu
-.list-group-item {
-    border-color: transparent;
-    border-width: $list-group-border-width;
-}
-
-.list-group-item:hover,
-.list-group-item:active,
-.list-group-item:focus {
-    border-color: $zgreen;
-    color: black !important;
-}
-.list-group-item.active {
-    background: $list-group-active-bg-light;
-    color: black !important;
-}
-
 
 .table-probe  {
     margin-bottom: -1px;
@@ -133,18 +189,18 @@ td > p:last-child, td > table:last-child {
   margin-right: 5px;
 }
 
-.collapse-toggler:not(.collapsed)::before {
-  transform: rotate(45deg);
-}
-
 [data-bs-theme=dark] .collapse-toggler::before {
-  border-bottom: 2px solid $collapse-toggler-color-dark;
-  border-right: 2px solid $collapse-toggler-color-dark;
+  border-bottom: 2px solid $white;
+  border-right: 2px solid $white;
 }
 
 [data-bs-theme=light] .collapse-toggler::before {
-  border-bottom: 2px solid $collapse-toggler-color-light;
-  border-right: 2px solid $collapse-toggler-color-light;
+  border-bottom: 2px solid $body-color;
+  border-right: 2px solid $body-color;
+}
+
+.collapse-toggler:not(.collapsed)::before {
+  transform: rotate(45deg);
 }
 
 .data-row {
@@ -159,20 +215,6 @@ td > p:last-child, td > table:last-child {
 .table-object-properties > :not(caption) > * > * {
   padding: $custom-table-padding;
 }
-
-.btn-link.text-dark:hover {
-  background: #f8f9fa;
-}
-
-.btn-link.text-light:hover {
-    background: #393939;
-}
-
-.btn-link.nav-link:hover {
-    background: $list-group-hover-bg;
-    color: black !important;
-}
-
 
 // Zentral logo
 .zentral-logo {

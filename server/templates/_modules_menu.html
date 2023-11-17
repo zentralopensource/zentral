@@ -1,6 +1,6 @@
 {% for section in section_list %}
     <div class="d-flex justify-content-start">
-        <a class="list-group-item list-group-item-action rounded m-1 p-1 w-100 px-2 text-dark"
+        <a class="list-group-item list-group-item-action rounded m-1 p-1 w-100 px-2"
             data-bs-toggle="collapse"
             href="#offcanvas{{ section.title|cut:" " }}Submenu"
             role="button"
@@ -21,7 +21,7 @@
         <div class="list-group rounded-0 small">
                 {% for link, anchor_text, active in section.link_list %}
                 <div class="d-flex justify-content-start px-2">
-                    <a class="list-group-item list-group-item-action rounded m-1 p-1 w-auto px-2 ms-2 text-dark{%if active %} active{% endif %}" href="{{ link }}">{{ anchor_text }}</a>
+                    <a class="list-group-item list-group-item-action rounded m-1 p-1 w-auto px-2 ms-2{%if active %} active{% endif %}" href="{{ link }}">{{ anchor_text }}</a>
                 </div>
                 {% endfor %}
         </div>

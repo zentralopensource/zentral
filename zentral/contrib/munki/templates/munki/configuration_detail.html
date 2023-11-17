@@ -151,7 +151,7 @@
             {% else %}
             {% if not distributor %}
             {% if perms.munki.change_enrollment %}
-            <a class="btn btn-link text-dark text-decoration-none" href="{% url 'munki:bump_enrollment_version' configuration.pk enrollment.pk %}">
+            <a class="btn btn-link" href="{% url 'munki:bump_enrollment_version' configuration.pk enrollment.pk %}">
                 <span class="bi bi-hand-thumbs-up" aria-hidden="true"
                     data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Bump Enrollment"></span>
             </a>
@@ -160,7 +160,7 @@
                 {% url 'munki:delete_enrollment' configuration.pk enrollment.pk as url %}
                 {% button 'DELETE' url "Delete Enrollment" %}
             {% endif %}
-            <a class="btn btn-link text-dark text-decoration-none"
+            <a class="btn btn-link"
                 aria-label="Download macOS enrollment package"
                 title="macOS enrollment package"
                 href="{% url 'munki_api:enrollment_package' enrollment.pk %}">

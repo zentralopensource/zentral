@@ -2,7 +2,7 @@
 
 <ul class="nav z-3">
     <li class="nav-item dropdown">
-        <button id="bd-theme" type="button" class="nav-link btn btn-link text-dark" href="#" role="button" aria-expanded="false"  data-bs-toggle="dropdown" data-bs-display="static" aria-label="Toggle theme">
+        <button id="bd-theme" type="button" class="nav-link btn btn-link" href="#" role="button" aria-expanded="false"  data-bs-toggle="dropdown" data-bs-display="static" aria-label="Toggle theme">
             <i class="bi bi-moon-stars" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Toggle theme"></i>
         </button>
         <ul class="dropdown-menu dropdown-menu-lg-end" aria-labelledby="bd-theme-text">
@@ -19,7 +19,7 @@
     {% if user.is_authenticated %}
     {% if zentral_extra_links %}
     <li class="nav-item dropdown">
-        <a class="nav-link btn btn-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <a class="nav-link btn btn-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-display" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Extra links"></i>
         </a>
         <ul class="dropdown-menu dropdown-menu-end">
@@ -36,7 +36,7 @@
     {% endif %}
     {% if perms.incidents.view_incident %}
         <li class="nav-item dropdown">
-            <a class="nav-link btn btn-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <a class="nav-link btn btn-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                 <i class="bi bi-exclamation-triangle" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Major Open Incidents"></i>
             </a>
             <ul class="dropdown-menu dropdown-menu-end px-2" style="width: auto;">
@@ -52,7 +52,7 @@
         </li>
     {% endif %}
     <li class="nav-item dropdown">
-        <a class="nav-link btn btn-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <a class="nav-link btn btn-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-three-dots-vertical" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Platform settings"></i>
         </a>
         <ul class="dropdown-menu dropdown-menu-end">
@@ -62,7 +62,7 @@
         </ul>
     </li>
     <li class="nav-item dropdown">
-        <a class="nav-link btn btn-link text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <a class="nav-link btn btn-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-person-circle" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="User settings"></i>
         </a>
         <ul class="dropdown-menu dropdown-menu-end">

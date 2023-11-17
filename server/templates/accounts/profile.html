@@ -41,7 +41,7 @@
             {% else %}
             <form method="post" action="{% url 'accounts:create_user_api_token' user.pk %}">{% csrf_token %}
             no
-            <button class="btn btn-link text-dark text-decoration-none" type="submit">
+            <button class="btn btn-link" type="submit">
                 <span class="bi bi-plus-circle" aria-hidden="true"></span>
             </button>
             </form>

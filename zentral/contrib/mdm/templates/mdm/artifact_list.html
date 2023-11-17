@@ -31,7 +31,7 @@
             
         {{ form }}
         
-        <button type="submit" class="btn btn-link text-decoration-none mb-2 text-dark">
+        <button type="submit" class="btn btn-link mb-2">
             <i class="bi bi-search"></i>
         </button>
     </form>
@@ -39,7 +39,7 @@
     <div class="ms-auto">
         {% if perms.mdm.add_artifact %}
         <div class="dropdown">
-          <a class="btn btn-link text-decoration-none dropdown-toggle text-dark" type="button" id="addArtifact"
+          <a class="btn btn-link dropdown-toggle" type="button" id="addArtifact"
                 data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
                 <i class="bi bi-plus-circle"></i>
           </a>

@@ -18,7 +18,7 @@
                 {% button 'EVENTS' events_url %}
             {% endif %}
             {% for link, anchor_text in store_links  %}
-                <a class="btn btn-link text-dark text-decoration-none" href="{{ link }}">
+                <a class="btn btn-link" href="{{ link }}">
                     <span class="bi bi-link" aria-hidden="true"></span> {{ anchor_text }}
                 </a>
             {% endfor %}

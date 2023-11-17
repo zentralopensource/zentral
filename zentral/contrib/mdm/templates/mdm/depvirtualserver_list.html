@@ -13,7 +13,7 @@
     <div class="ms-auto">
         {% if perms.mdm.add_depvirtualserver %}
         <form action="{% url 'mdm:connect_dep_virtual_server' %}" method="post">{% csrf_token %}
-            <button class="btn btn-link text-decoration-none text-dark" name="action" value="start">
+            <button class="btn btn-link" name="action" value="start">
                 <i class="bi bi-plug"></i>
             </button>
         {% endif %}  

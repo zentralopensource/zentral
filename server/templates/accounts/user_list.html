@@ -14,7 +14,7 @@
 
     <div class="ms-auto">
         {% if perms.accounts.add_user %}
-        <a href="{% url 'accounts:invite_user' %}" class="btn btn-link text-dark text-decoration-none" type="button"
+        <a href="{% url 'accounts:invite_user' %}" class="btn btn-link" type="button"
             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Send an email invitation">
             <span class="bi bi-envelope-plus" aria-hidden="true"></span>
         </a>

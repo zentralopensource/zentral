@@ -169,7 +169,7 @@
     <div class="ms-auto">
         {% if perms.monolith.add_manifestenrollmentpackage %}
             <div class="dropdown">
-            <button class="btn btn-link text-decoration-none text-dark dropdown-toggle" type="button" id="addEnrollmentPackage"
+            <button class="btn btn-link dropdown-toggle" type="button" id="addEnrollmentPackage"
                     data-bs-toggle="dropdown" aria-expanded="false">
                 <i class="bi bi-plus-circle"></i>
             </button>
@@ -322,7 +322,7 @@
       {% if perms.monolith.delete_cacheserver %}
       <td class="text-end py-0">
         <form method="POST" action="{% url 'monolith:delete_manifest_cache_server' object.id manifest_cache_server.id %}">{% csrf_token %}
-          <button class="btn btn-link text-decoration-none text-dark">
+          <button class="btn btn-link">
             <i class="bi bi-trash"></i>
           </button>
         </form>

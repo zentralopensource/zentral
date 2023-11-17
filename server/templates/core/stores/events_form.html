@@ -22,11 +22,11 @@
     </div>
 
     <div class="col-sm">
-        <button type="submit" class="btn btn-link text-dark text-decoration-none">
+        <button type="submit" class="btn btn-link">
             <i class="bi bi-arrow-clockwise"></i>
         </button>
         {% for link, store_name in store_links %}
-            <button type="submit" name="es" value="{{ store_name }}" formaction="{{ link }}" class="btn btn-link text-decoration-none text-dark"
+            <button type="submit" name="es" value="{{ store_name }}" formaction="{{ link }}" class="btn btn-link"
                 data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{ store_name }}">
                 <i class="bi bi-link-45deg"></i>
             </button>

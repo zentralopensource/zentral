@@ -1,9 +1,5 @@
 {% if url %}
-<a href="{{ url }}" type="button" class="btn btn-link text-decoration-none text-dark{% if classes %} {{ classes }}{% endif %}"
-        {% if tooltip %}
-            data-bs-toggle="tooltip" data-bs-placement="{{ placement }}" data-bs-title="{{ tooltip }}"
-        {% endif %}
-        >
-            <i class="{{ icon }}"></i>
-    </a>
+<a href="{{ url }}" type="button" class="btn btn-link{% if classes %} {{ classes }}{% endif %}"{% if tooltip %} data-bs-toggle="tooltip" data-bs-placement="{{ placement }}" data-bs-title="{{ tooltip }}"{% endif %}>
+  <i class="{{ icon }}"></i>
+</a>
 {% endif %}

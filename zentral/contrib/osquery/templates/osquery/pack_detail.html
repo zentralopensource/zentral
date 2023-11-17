@@ -20,7 +20,7 @@
             {% if perms.osquery.change_pack %}
                 {% url 'osquery:update_pack' object.id as url %}
                 {% button 'UPDATE' url "Edit Pack" %}
-            <a href="{% url 'osquery:upload_pack' object.id %}" class="btn btn-link text-dark text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Upload Pack">
+            <a href="{% url 'osquery:upload_pack' object.id %}" class="btn btn-link" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Upload Pack">
                 <i class="bi bi-upload"></i>
             </a>
             {% endif %}

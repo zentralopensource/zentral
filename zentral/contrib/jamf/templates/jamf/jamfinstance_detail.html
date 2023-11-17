@@ -21,7 +21,7 @@
             {% button 'LINK' object.api_doc_url "API resource documentation" %}
 
             {% if perms.jamf.change_jamfinstance %}
-            <a href="{% url 'jamf:setup_jamf_instance' object.pk %}" class="btn btn-link text-dark text-decoration-none"
+            <a href="{% url 'jamf:setup_jamf_instance' object.pk %}" class="btn btn-link"
                 data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Setup webhooks">
                 <i class="bi bi-arrow-left-right"></i>
             </a>
