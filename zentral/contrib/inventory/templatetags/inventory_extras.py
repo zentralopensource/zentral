@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils.html import escape, conditional_escape
 from django.utils.safestring import mark_safe
 from zentral.contrib.inventory.conf import (ANDROID, IOS, IPADOS, LINUX, MACOS, TVOS, WINDOWS,
-                                            EC2, VM, TYPE_CHOICES_DICT)
+                                            DESKTOP, EC2, MOBILE, SERVER, TABLET, VM, TYPE_CHOICES_DICT)
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.color import text_color_for_background_color
 
@@ -33,17 +33,23 @@ def inventory_tag(tag):
 def base_machine_type_icon(machine_type):
     if machine_type not in TYPE_CHOICES_DICT:
         return ""
-    icon_class = "fas"
     icon = None
-    if machine_type == EC2:
-        icon_class = "fab"
-        icon = "aws"
+    if machine_type == DESKTOP:
+        icon = "pc-display"
+    elif machine_type == EC2:
+        icon = "amazon"
+    elif machine_type == MOBILE:
+        icon = "phone-fill"
+    elif machine_type == SERVER:
+        icon = "hdd-stack-fill"
+    elif machine_type == TABLET:
+        icon = "tablet-fill"
     elif machine_type == VM:
-        icon = "cube"
+        icon = "box"
     elif machine_type:
         icon = machine_type.lower()
     if icon:
-        return mark_safe(f'<i class="{icon_class} fa-{icon}"></i>')
+        return mark_safe(f'<i class="bi bi-{icon}"></i>')
     return ""
 
 
@@ -59,13 +65,13 @@ def base_machine_platform_icon(machine_platform):
     if machine_platform in {IOS, IPADOS, MACOS, TVOS}:
         icon = "apple"
     elif machine_platform == LINUX:
-        icon = "linux"
+        icon = "ubuntu"
     elif machine_platform == WINDOWS:
         icon = "windows"
     elif machine_platform == ANDROID:
         icon = "android"
     if icon:
-        return mark_safe('<i class="fab fa-{}" aria-hidden="true"></i>'.format(icon))
+        return mark_safe('<i class="bi bi-{}" aria-hidden="true"></i>'.format(icon))
     return ""
 
 
