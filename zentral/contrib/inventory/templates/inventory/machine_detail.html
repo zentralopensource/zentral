@@ -51,17 +51,17 @@
       {% endif %}
       {% if machine.snapshots_with_android_apps %}
       <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_android_apps' machine.get_urlsafe_serial_number %}">
-        <i class="fab fa-android" aria-hidden="true"></i> apps
+        <i class="bi bi-android" aria-hidden="true"></i> apps
       </a>
       {% endif %}
       {% if machine.snapshots_with_program_instances %}
       <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_program_instances' machine.get_urlsafe_serial_number %}">
-        <i class="fab fa-windows" aria-hidden="true"></i> programs
+        <i class="bi bi-windows" aria-hidden="true"></i> programs
       </a>
       {% endif %}
       {% if machine.snapshots_with_deb_packages %}
       <a class="btn btn-outline-secondary" href="{% url 'inventory:machine_deb_packages' machine.get_urlsafe_serial_number %}">
-        <i class="fab fa-linux" aria-hidden="true"></i> deb packages
+        <i class="bi bi-ubuntu" aria-hidden="true"></i> deb packages
       </a>
       {% endif %}
       {% if machine.snapshots_with_profiles %}
