@@ -1058,6 +1058,10 @@ class EnrolledDevice(models.Model):
         return " ".join(items)
 
     @property
+    def current_os_version(self):
+        return " ".join(s for s in (self.os_version, self.os_version_extra) if s)
+
+    @property
     def current_build_version(self):
         return self.build_version_extra or self.build_version or ""
 

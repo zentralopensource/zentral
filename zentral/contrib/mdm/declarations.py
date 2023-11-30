@@ -166,7 +166,10 @@ def build_specific_software_update_enforcement(target):
             + timedelta(days=software_update_enforcement.delay_days)
         )
         target_os_version = str(software_update)
-        target_build_version = None
+        if target_os_version == target.enrolled_device.current_os_version:
+            target_build_version = target.enrolled_device.current_build_version
+        else:
+            target_build_version = None
     else:
         local_datetime = software_update_enforcement.local_datetime
         target_os_version = software_update_enforcement.os_version
