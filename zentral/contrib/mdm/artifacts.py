@@ -666,21 +666,53 @@ class Target:
         if target_updated:
             self.target.save()
 
-    def update_client_capabilities(self, status_report):
+    # status report updates
+
+    def update_os_info_with_status_report(self, status_report):
+        target_updated = False
+        if not self.is_device:
+            return target_updated
+        try:
+            operating_system = status_report["StatusItems"]["device"]["operating-system"]
+        except KeyError:
+            logger.warning("Enrolled device %s: Missing operating system info in status report", self.udid)
+            return target_updated
+        supplemental = operating_system.get("supplemental", {})
+        os_version = operating_system.get("version")
+        if os_version and self.target.os_version != os_version:
+            self.target.os_version = os_version
+            target_updated = True
+        os_version_extra = supplemental.get("extra-version", "")
+        if os_version and self.target.os_version_extra != os_version_extra:
+            self.target.os_version_extra = os_version_extra
+            target_updated = True
+        build_version = operating_system.get("build-version")
+        if build_version and self.target.build_version != build_version:
+            self.target.build_version = build_version
+            target_updated = True
+        build_version_extra = supplemental.get("build-version", "")
+        if build_version and self.target.build_version_extra != build_version_extra:
+            self.target.build_version_extra = build_version_extra
+            target_updated = True
+        return target_updated
+
+    def update_client_capabilities_with_status_report(self, status_report):
         target_updated = False
         try:
             client_capabilities = status_report["StatusItems"]["management"]["client-capabilities"]
         except KeyError:
-            logger.warning("Could not find client capabilities in status report")
+            logger.warning("Enrolled device %s: Could not find client capabilities in status report", self.udid)
         else:
             if client_capabilities != self.client_capabilities:
                 self.target.client_capabilities = client_capabilities
-                self.target.save()
                 target_updated = True
         return target_updated
 
     def update_target_with_status_report(self, status_report):
-        target_updated = self.update_client_capabilities(status_report)
+        target_updated = self.update_os_info_with_status_report(status_report)
+        target_updated |= self.update_client_capabilities_with_status_report(status_report)
+        if target_updated:
+            self.target.save()
         target_updated |= self.update_target_artifacts_with_status_report(status_report)
         if target_updated:
             func = send_enrolled_device_notification if self.is_device else send_enrolled_user_notification

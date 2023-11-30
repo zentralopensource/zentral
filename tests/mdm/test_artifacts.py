@@ -1303,7 +1303,65 @@ class TestMDMArtifacts(TestCase):
         self.assertTrue(target.update_target_artifacts_with_status_report({}) is False)
         self.assertEqual(da_qs.count(), 1)
 
-    # test update client capabilities
+    # test update os info
+
+    def test_update_os_info_user_channel(self):
+        status_report = self._build_status_report([])
+        target = Target(self.enrolled_device, self.enrolled_user)
+        self.assertTrue(target.update_os_info_with_status_report(status_report) is False)
+
+    @patch("zentral.contrib.mdm.artifacts.logger.warning")
+    def test_update_os_info_missing_operating_sytem(self, logger_warning):
+        status_report = self._build_status_report([])
+        status_report["StatusItems"]["device"].pop("operating-system")
+        target = Target(self.enrolled_device)
+        self.assertTrue(target.update_os_info_with_status_report(status_report) is False)
+        logger_warning.assert_called_once_with(
+            "Enrolled device %s: Missing operating system info in status report",
+            self.enrolled_device.udid
+        )
+
+    def test_update_os_info_extra_to_standard(self):
+        self.enrolled_device.os_version = "13.2.1"
+        self.enrolled_device.os_version_extra = "(a)"
+        self.enrolled_device.build_version = "22D261"
+        self.enrolled_device.build_version_extra = "22D772610a"
+        status_report = self._build_status_report([])
+        status_report["StatusItems"]["device"]["operating-system"].pop("supplemental")
+        target = Target(self.enrolled_device)
+        self.assertTrue(target.update_os_info_with_status_report(status_report) is True)
+        self.assertEqual(self.enrolled_device.os_version, "13.3.1")
+        self.assertEqual(self.enrolled_device.os_version_extra, "")
+        self.assertEqual(self.enrolled_device.build_version, "22E261")
+        self.assertEqual(self.enrolled_device.build_version_extra, "")
+
+    def test_update_os_info_standard_to_extra(self):
+        self.enrolled_device.os_version = "13.2.1"
+        self.enrolled_device.os_version_extra = ""
+        self.enrolled_device.build_version = "22D261"
+        self.enrolled_device.build_version_extra = ""
+        status_report = self._build_status_report([])
+        target = Target(self.enrolled_device)
+        self.assertTrue(target.update_os_info_with_status_report(status_report) is True)
+        self.assertEqual(self.enrolled_device.os_version, "13.3.1")
+        self.assertEqual(self.enrolled_device.os_version_extra, "(a)")
+        self.assertEqual(self.enrolled_device.build_version, "22E261")
+        self.assertEqual(self.enrolled_device.build_version_extra, "22E772610a")
+
+    def test_update_os_info_standard_no_changes(self):
+        status_report = self._build_status_report([])
+        self.enrolled_device.os_version = "13.3.1"
+        self.enrolled_device.os_version_extra = "(a)"
+        self.enrolled_device.build_version = "22E261"
+        self.enrolled_device.build_version_extra = "22E772610a"
+        target = Target(self.enrolled_device)
+        self.assertTrue(target.update_os_info_with_status_report(status_report) is False)
+        self.assertEqual(self.enrolled_device.os_version, "13.3.1")
+        self.assertEqual(self.enrolled_device.os_version_extra, "(a)")
+        self.assertEqual(self.enrolled_device.build_version, "22E261")
+        self.assertEqual(self.enrolled_device.build_version_extra, "22E772610a")
+
+    # test update target with status report
 
     @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
     def test_update_device_target_with_status_report(self, send_enrolled_device_notification):
@@ -1316,6 +1374,10 @@ class TestMDMArtifacts(TestCase):
         send_enrolled_device_notification.assert_called_once_with(self.enrolled_device)
         self.assertEqual(target.client_capabilities,
                          status_report["StatusItems"]["management"]["client-capabilities"])
+        self.assertEqual(self.enrolled_device.os_version, "13.3.1")
+        self.assertEqual(self.enrolled_device.os_version_extra, "(a)")
+        self.assertEqual(self.enrolled_device.build_version, "22E261")
+        self.assertEqual(self.enrolled_device.build_version_extra, "22E772610a")
         # second time, no changes, device not notified
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             target.update_target_with_status_report(status_report)
