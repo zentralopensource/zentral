@@ -248,7 +248,7 @@ def macos_version_from_build(build):
                          "22A400", "22D68", "22E261", "22E772610a", "22F82", "22F770820b", "22F770820d", "22G90",
                          "23B81", "23B2082"):
                 patch = 1
-            elif build in ("21G309", "21G320", "22G91"):
+            elif build in ("21G309", "21G320", "22G91", "23B2091", "23B92"):
                 patch = 2
             elif build in ("21G417", "21G419"):
                 patch = 3
