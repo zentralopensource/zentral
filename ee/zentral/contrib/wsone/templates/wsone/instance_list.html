@@ -9,7 +9,7 @@
 </ol>
 
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="m-0">Workspace ONE instance{{ instance_count|pluralize }} ({{ instance_count }})</h3>
+    <h2 class="m-0">Workspace ONE instance{{ instance_count|pluralize }} ({{ instance_count }})</h2>
     <div class="ms-auto">
         {% if perms.wsone.add_instance %}
             {% url 'wsone:create_instance' as url %}

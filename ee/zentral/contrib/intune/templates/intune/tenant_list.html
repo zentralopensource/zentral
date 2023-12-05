@@ -9,7 +9,7 @@
 </ol>
 
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="m-0">Microsoft Intune Inventory Tenant{{ tenant_count|pluralize }} ({{ tenant_count }})</h3>
+    <h2 class="m-0">Microsoft Intune Inventory Tenant{{ tenant_count|pluralize }} ({{ tenant_count }})</h2>
     <div class="ms-auto">
         {% if perms.intune.add_tenant %}
             {% url 'intune:create_tenant' as url %}

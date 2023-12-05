@@ -10,7 +10,7 @@
 {% if perms.inventory.view_tag %}
 
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="mb-0">Tag{{ tag_list|length|pluralize }} ({{ tag_list|length }})</h3>
+    <h2 class="mb-0">Tag{{ tag_list|length|pluralize }} ({{ tag_list|length }})</h2>
 
     {% if perms.inventory.add_tag %}
     <div class="ms-auto">
@@ -59,7 +59,7 @@
 
 {% if perms.inventory.view_taxonomy %}
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="mb-0">Taxonom{{ taxonomy_list|length|pluralize:"y,ies" }} ({{ taxonomy_list|length }})</h3>
+    <h2 class="mb-0">Taxonom{{ taxonomy_list|length|pluralize:"y,ies" }} ({{ taxonomy_list|length }})</h2>
 
     {% if perms.inventory.add_taxonomy %}
     <div class="ms-auto">

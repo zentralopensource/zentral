@@ -10,7 +10,7 @@
 
 
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+    <h2 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h2>
     <div class="ms-auto">
     {% if perms.santa.add_configuration %}
         {% url 'santa:create_configuration' as url %}

@@ -11,7 +11,7 @@
 
 
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="m-0">Automatic Table Construction{{ atc_count|pluralize }} ({{ atc_count }})</h3>
+    <h2 class="m-0">Automatic Table Construction{{ atc_count|pluralize }} ({{ atc_count }})</h2>
     <div class="ms-auto">
     {% if perms.osquery.add_automatictableconstruction %}
         {% url 'osquery:create_atc' as url %}

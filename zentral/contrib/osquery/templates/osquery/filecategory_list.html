@@ -10,7 +10,7 @@
 </ol>
 
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="m-0">File categor{{ file_category_count|pluralize:"y,ies" }} ({{ file_category_count }})</h3>
+    <h2 class="m-0">File categor{{ file_category_count|pluralize:"y,ies" }} ({{ file_category_count }})</h2>
     <div class="ms-auto">
     {% if perms.osquery.add_filecategory %}
         {% url 'osquery:create_file_category' as url %}

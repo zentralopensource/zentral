@@ -10,7 +10,7 @@
 </ol>
 
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="m-0">Pack{{ pack_count|pluralize }} ({{ pack_count }})</h3>
+    <h2 class="m-0">Pack{{ pack_count|pluralize }} ({{ pack_count }})</h2>
     <div class="ms-auto">
     {% if perms.osquery.add_pack %}
         {% url 'osquery:create_pack' as url %}
