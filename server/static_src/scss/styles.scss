@@ -4,6 +4,7 @@ $ztl-red: rgb(234, 81, 101); // Logo red
 $ztl-border-color: $ztl-green;
 $ztl-bg: rgb($ztl-green, 0.1);
 $ztl-bg-dark: rgba($ztl-green, 0.3);
+$ztl-active-opacity: 0.7;
 
 // Other custom Zentral variables
 $box-max-width: 1304px;
@@ -94,11 +95,17 @@ legend {
     background-color: $ztl-bg;
     color: $body-color;
 }
+[data-bs-theme=light] .list-group-item:active {
+    background-color: rgb($ztl-bg, $ztl-active-opacity);
+}
 
 [data-bs-theme=dark] .list-group-item:hover,
 [data-bs-theme=dark] .list-group-item.active {
     background-color: $ztl-bg-dark;
     color: $white;
+}
+[data-bs-theme=dark] .list-group-item:active {
+    background-color: rgb($ztl-bg-dark, $ztl-active-opacity);
 }
 
 // Custom buttons or dropdowns without borders
