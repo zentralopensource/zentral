@@ -74,12 +74,15 @@ pre, ol, ul, dl {
     margin-bottom: 0px;
 }
 
-// Forms
+// Forms and Alert errors
 .errorlist {
     color: $ztl-red;
     font-weight: bold;
     padding-left: 1em;
     padding-bottom: 1em;
+}
+.alert .errorlist:last-child {
+    padding-bottom: 0px;
 }
 
 legend {

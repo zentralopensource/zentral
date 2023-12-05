@@ -2,18 +2,14 @@
 
 {% block content %}
 
-{% if form.non_field_errors %}
-<div class="form-signin d-flex justify-content-center w-100 m-auto px-4 pt-4">
-    {% for message in form.non_field_errors %}
-        <div class="alert alert-danger" role="alert">
-            {{ message }}
-        </div>
-    {% endfor %}
-</div>
-<div class="form-signin d-flex flex-column align-items-center w-100 m-auto px-4 py-3 my-0">
-{% else %}
-<div class="form-signin d-flex flex-column align-items-center w-100 m-auto px-4 py-5 my-5">
-{% endif %}
+<div class="d-flex flex-column justify-content-center align-items-center px-4 py-5 my-5 text-center">
+    {% if form.non_field_errors %}
+        {% for message in form.non_field_errors %}
+            <div class="alert alert-danger" role="alert">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
     {% for realm, login_link in login_realms %}
         <form action="{{ login_link }}" method="POST">{% csrf_token %}
             <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_to }}" required>
@@ -25,27 +21,29 @@
     {% endfor %}
     {% if form %}
         <form action="{{ login_link }}" method="POST">{% csrf_token %}
-            <h1 class="h3 mb-3 fw-normal">
+            <h3 class="mt-5">
                 {% if login_realms %}
                     Use local credentials
                 {% else %}
                     Sign in
                 {% endif %}
-            </h1>
-            <div class="col-md">
+            </h3>
+            <div class="mb-4">
                 {% for ff in form %}
-                    <div class="form-floating me-2 mb-2">
+                    <div class="form-floating">
                         {{ ff }}
                         <label for="floatingInput">{{ ff.label }}</label>
                     </div>
                 {% endfor %}
             </div>
-            <div class="text-start my-3">
-                <p><a href="{% url 'password_reset' %}">Password forgotten?</a></p>
+            <div class="my-3">
+                <p class="mb-4"><a href="{% url 'password_reset' %}">Password forgotten?</a></p>
             </div>
-            <button class="btn btn-primary w-100 py-2" type="submit">
-                Sign in{% if login_realms %} with local credentials{% endif %}
-            </button>
+            <p class="mb-4">
+                <button class="btn btn-primary px-5 py-2" type="submit">
+                    Sign in{% if login_realms %} with local credentials{% endif %}
+                </button>
+            </p>
         </form>
     {% endif %}
 </div>
