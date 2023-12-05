@@ -223,36 +223,16 @@ else:
     else:
         STATIC_URL = '/static/'
 STATIC_ROOT = django_zentral_settings.get("STATIC_ROOT", "/zentral_static")
-if STATIC_WHITENOISE:
-    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-else:
-    STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
 
-
-# File storage override
-if "DEFAULT_FILE_STORAGE" in django_zentral_settings:
-    DEFAULT_FILE_STORAGE = django_zentral_settings["DEFAULT_FILE_STORAGE"]
 # Directory that will hold the files if the default file storage is used
 MEDIA_ROOT = django_zentral_settings.get("MEDIA_ROOT", "")
-# Google cloud storage options
-# https://django-storages.readthedocs.io/en/latest/backends/gcloud.html
-# credentials file necessary to sign the file download URLs
-if "GS_BUCKET_NAME" in django_zentral_settings:
-    GS_BUCKET_NAME = django_zentral_settings["GS_BUCKET_NAME"]
-if "GS_CREDENTIALS" in django_zentral_settings:
-    from google.oauth2 import service_account
-    GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
-        django_zentral_settings["GS_CREDENTIALS"]
-    )
-# AWS S3 storage options
-# https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
-AWS_S3_SIGNATURE_VERSION = "s3v4"
-if "AWS_S3_REGION_NAME" in django_zentral_settings:
-    AWS_S3_REGION_NAME = django_zentral_settings["AWS_S3_REGION_NAME"]
-if "AWS_S3_ENDPOINT_URL" in django_zentral_settings:
-    AWS_S3_ENDPOINT_URL = django_zentral_settings["AWS_S3_ENDPOINT_URL"]
-if "AWS_STORAGE_BUCKET_NAME" in django_zentral_settings:
-    AWS_STORAGE_BUCKET_NAME = django_zentral_settings["AWS_STORAGE_BUCKET_NAME"]
+
+# Storages
+STORAGES = django_zentral_settings.get("STORAGES", {})
+if "default" not in STORAGES:
+    STORAGES["default"] = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+if "staticfiles" not in STORAGES:
+    STORAGES["staticfiles"] = {"BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"}
 
 
 # LOGGING

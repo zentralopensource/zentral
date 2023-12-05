@@ -134,59 +134,41 @@ A dict of additional options passed to the underlying Celery transport. Please r
 
 ## File storage
 
-### `django.DEFAULT_FILE_STORAGE`
+### `django.STORAGES`
 
-Default: [`django.core.files.storage.FileSystemStorage`](https://docs.djangoproject.com/en/2.2/ref/files/storage/#django.core.files.storage.FileSystemStorage)
+By default, Zentral will use the following settings:
 
-Default file storage class to be used for any file-related operations.
+```python
+{
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+    },
+}
+```
 
-Supported alternatives:
+The `default` storage backend is [`django.core.files.storage.FileSystemStorage`](https://docs.djangoproject.com/en/4.2/ref/files/storage/#django.core.files.storage.FileSystemStorage). Supported alternatives:
 
- * [`storages.backends.gcloud.GoogleCloudStorage`](https://django-storages.readthedocs.io/en/latest/backends/gcloud.html)
+ * [`zentral.utils.gcs_storage.ZentralGoogleCloudStorage`](https://github.com/zentralopensource/zentral/blob/main/zentral/utils/gcs_storage.py) a subclass of [`storages.backends.gcloud.GoogleCloudStorage`](https://django-storages.readthedocs.io/en/latest/backends/gcloud.html) that enables URL signatures without extra credentials file.
  * [`storages.backends.s3boto3.S3Boto3Storages`](https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html)
+
+The `staticfiles` storage backend is [`ManifestStaticFilesStorage`](https://docs.djangoproject.com/en/4.2/ref/contrib/staticfiles/#manifeststaticfilesstorage). The [`collectstatic`](https://docs.djangoproject.com/en/4.2/ref/contrib/staticfiles/#collectstatic) command needs to be run to collect and prepare all the files, when [`django.DEBUG`](#djangodebug) is false.
+
+Alternatively, [whitenoise](https://whitenoise.readthedocs.io/en/latest/) can be used to serve the static files directly from the web application. This is useful when Zentral is deployed behind a load balancer without `nginx` as reverse proxy.
 
 ### `django.MEDIA_ROOT`
 
 Default: `""`
 
-When using the [default file storage](https://docs.djangoproject.com/en/2.2/ref/files/storage/#django.core.files.storage.FileSystemStorage), this is a path to the directory that will hold the files.
-
-### `django.GS_*`
-
- * `GS_BUCKET_NAME`
- * `GS_CREDENTIALS`
-
-Keys used to configure the [gcloud file storage backend](https://django-storages.readthedocs.io/en/latest/backends/gcloud.html).
-
-You will also need to install [extra python requirements](https://github.com/zentralopensource/zentral/blob/6fd36f51610a339a771ef97e316d5a880de5b817/requirements_gcp.txt#L1) to be able to use a google bucket as file storage.
-
-`GS_CREDENTIALS` is needed for Zentral to be able to presign URLs to give access to the private files. You can [generate a private key](https://cloud.google.com/iam/docs/creating-managing-service-account-keys) for the service account used by the google instance for example, and give this service account the [`roles/storage.admin`](https://cloud.google.com/storage/docs/access-control/iam-roles#standard-roles) role on the bucket.
-
-### `django.AWS_*`
-
- * `AWS_S3_REGION_NAME`
- * `AWS_S3_ENDPOINT_URL`
- * `AWS_STORAGE_BUCKET_NAME`
-
-Keys used to configure the [S3 file storage backend](https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html).
-
-## Static files
-
-See [Static Files](https://docs.djangoproject.com/en/2.2/howto/static-files/)
-
-By default, Zentral uses the [`ManifestStaticFilesStorage`](https://docs.djangoproject.com/en/2.2/ref/contrib/staticfiles/#manifeststaticfilesstorage). The [`collectstatic`](https://docs.djangoproject.com/en/2.2/ref/contrib/staticfiles/#collectstatic) command needs to be run to collect and prepare all the files, when [`django.DEBUG`](#djangodebug) is false.
-
-### `django.STATIC_WHITENOISE`
-
-Default: `False`
-
-Alternatively, [whitenoise](https://whitenoise.readthedocs.io/en/latest/) can be used to serve the static files directly from the web application. This is useful when Zentral is deployed behind a load balancer without `nginx` as reverse proxy.
+When using the [default file storage](https://docs.djangoproject.com/en/4.2/ref/files/storage/#django.core.files.storage.FileSystemStorage), this is a path to the directory that will hold the files.
 
 ### `django.STATIC_ROOT`
 
 Default: `/zentral_static`
 
-The absolute path to the directory where [collectstatic](https://docs.djangoproject.com/en/2.2/ref/contrib/staticfiles/#django-admin-collectstatic) will collect static files for deployment.
+The absolute path to the directory where [collectstatic](https://docs.djangoproject.com/en/4.2/ref/contrib/staticfiles/#django-admin-collectstatic) will collect static files for deployment.
 
 ## Internationalization
 
