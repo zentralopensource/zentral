@@ -24,6 +24,9 @@ $dropdown-link-active-bg: $ztl-green;
 $offcanvas-border-color: transparent;
 $offcanvas-horizontal-width: 186px;
 
+$link-hover-color: $ztl-green;
+$link-color: shift-color($link-hover-color, 20%);
+
 @import "~bootstrap/scss/variables";
 @import "~bootstrap/scss/variables-dark";
 @import "~bootstrap/scss/maps";
