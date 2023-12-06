@@ -939,6 +939,7 @@ class SoftwareUpdateEnforcementForm(forms.ModelForm):
     field_order = (
         "name",
         "details_url",
+        "platforms",
         "tags",
         "enforcement_type",
         "os_version", "build_version", "local_datetime",
@@ -959,6 +960,7 @@ class SoftwareUpdateEnforcementForm(forms.ModelForm):
     class Meta:
         model = SoftwareUpdateEnforcement
         fields = "__all__"
+        widgets = {"platforms": PlatformsWidget}
 
     def _clean_os_version(self, os_version):
         if os_version and make_comparable_os_version(os_version) == (0, 0, 0):

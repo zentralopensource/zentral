@@ -571,7 +571,10 @@ class Target:
             return
         matching_tag_count = 0
         selected_sue = None
-        for sue in self.blueprint.software_update_enforcements.prefetch_related("tags").all().order_by("pk"):
+        for sue in (self.blueprint.software_update_enforcements
+                                  .filter(platforms__contains=[self.platform])
+                                  .prefetch_related("tags")
+                                  .order_by("pk")):
             sue_tag_ids = set(t.pk for t in sue.tags.all())
             common_tag_count = len(sue_tag_ids.intersection(self.tag_ids))
             if common_tag_count > matching_tag_count or (not sue_tag_ids and not selected_sue):

@@ -169,6 +169,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
             response = self.client.post(reverse("mdm:create_software_update_enforcement"),
                                         {"name": name,
                                          "details_url": "https://www.example.com",
+                                         "platforms": ["iOS"],
                                          "enforcement_type": "LATEST",
                                          "max_os_version": "19.0",
                                          "delay_days": 12,
@@ -181,6 +182,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         self.assertEqual(sue.name, name)
         self.assertEqual(sue.tags.count(), 0)
         self.assertEqual(sue.details_url, "https://www.example.com")
+        self.assertEqual(sue.platforms, ["iOS"])
         self.assertEqual(sue.max_os_version, "19.0")
         self.assertEqual(sue.delay_days, 12)
         self.assertEqual(sue.local_time, time(9, 30))
@@ -198,6 +200,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
                  "new_value": {
                      "pk": sue.pk,
                      "name": name,
+                     "platforms": ["iOS"],
                      "tags": [],
                      "details_url": "https://www.example.com",
                      "max_os_version": "19.0",
@@ -221,6 +224,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
             response = self.client.post(reverse("mdm:create_software_update_enforcement"),
                                         {"name": name,
                                          "details_url": "https://www.example.com",
+                                         "platforms": ["macOS"],
                                          "tags": [t.pk for t in tags],
                                          "enforcement_type": "ONE_TIME",
                                          "os_version": "14.1",
@@ -233,6 +237,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         sue = response.context["object"]
         self.assertEqual(sue.name, name)
         self.assertEqual(sue.details_url, "https://www.example.com")
+        self.assertEqual(sue.platforms, ["macOS"])
         self.assertEqual(set(sue.tags.all()), set(tags))
         self.assertEqual(sue.os_version, "14.1")
         self.assertEqual(sue.build_version, "23B74")
@@ -251,6 +256,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
                  "new_value": {
                      "pk": sue.pk,
                      "name": name,
+                     "platforms": ["macOS"],
                      "tags": [{"pk": t.pk, "name": t.name} for t in tags],
                      "details_url": "https://www.example.com",
                      "os_version": "14.1",
@@ -341,6 +347,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:update_software_update_enforcement", args=(sue.pk,)),
                                         {"name": new_name,
+                                         "platforms": ["macOS"],
                                          "tags": [t.pk for t in tags],
                                          "details_url": "https://www.example.com",
                                          "enforcement_type": "ONE_TIME",
@@ -355,6 +362,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         self.assertEqual(sue2, sue)
         self.assertEqual(sue2.name, new_name)
         self.assertEqual(sue2.details_url, "https://www.example.com")
+        self.assertEqual(sue2.platforms, ["macOS"])
         self.assertEqual(sue2.os_version, "14.1")
         self.assertEqual(sue2.build_version, "23B74")
         self.assertEqual(sue2.local_datetime, datetime(2023, 11, 10, 9, 30))
@@ -372,6 +380,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
                  "new_value": {
                      "pk": sue2.pk,
                      "name": new_name,
+                     "platforms": ["macOS"],
                      "tags": [{"pk": t.pk, "name": t.name} for t in tags],
                      "details_url": "https://www.example.com",
                      "os_version": "14.1",

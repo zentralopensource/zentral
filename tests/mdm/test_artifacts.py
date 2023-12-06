@@ -789,6 +789,23 @@ class TestMDMArtifacts(TestCase):
         self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
         self.assertIn(f"zentral.legacy-profile.{profile_a.pk}", scs)
 
+    def test_device_activation_software_update_enforcement_latest_wrong_platform_not_included(self):
+        target = Target(self.enrolled_device)
+        force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
+                              version="17.1.2",
+                              posting_date=date(2023, 11, 30))
+        sue = force_software_update_enforcement(
+            platforms=["iOS"],
+            max_os_version="18", local_time=time(9, 30), delay_days=15
+        )
+        self.blueprint1.software_update_enforcements.add(sue)
+        activation = target.activation
+        self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
+        self.assertEqual(sorted(activation["Payload"].keys()), ["StandardConfigurations"])
+        scs = activation["Payload"]["StandardConfigurations"]
+        self.assertEqual(len(scs), 1)
+        self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
+
     def test_device_activation_software_update_enforcement_latest_included(self):
         target = Target(self.enrolled_device)
         force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],

@@ -264,6 +264,7 @@ class SoftwareUpdateEnforcement(models.Model):
         help_text="The URL of a web page that shows details that the organization provides about the enforced update.",
         blank=True
     )
+    platforms = ArrayField(models.CharField(max_length=64, choices=Platform.choices))
     tags = models.ManyToManyField(Tag, blank=True)
     # static enforcement
     os_version = models.CharField(
@@ -322,6 +323,7 @@ class SoftwareUpdateEnforcement(models.Model):
         if keys_only:
             return d
         d.update({
+            "platforms": self.platforms,
             "tags": [t.serialize_for_event(keys_only=True)
                      for t in self.tags.select_related("taxonomy", "meta_business_unit").all().order_by("pk")],
             "created_at": self.created_at,

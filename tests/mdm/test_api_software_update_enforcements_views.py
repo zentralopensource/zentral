@@ -95,6 +95,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
             [{'id': sue.pk,
               'name': sue.name,
               'details_url': '',
+              'platforms': ['macOS'],
               'tags': [],
               'max_os_version': '17.1.2',
               'delay_days': 14,
@@ -117,6 +118,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
             [{'id': sue.pk,
               'name': sue.name,
               'details_url': '',
+              'platforms': ['macOS'],
               'tags': [],
               'max_os_version': '17.1.2',
               'delay_days': 14,
@@ -151,6 +153,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
             {'id': sue.pk,
              'name': sue.name,
              'details_url': '',
+             'platforms': ['macOS'],
              'tags': [],
              'max_os_version': '17.1.2',
              'delay_days': 14,
@@ -180,6 +183,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         name = get_random_string(12)
         response = self.post(reverse("mdm_api:software_update_enforcements"),
                              {"name": name,
+                              "platforms": ["iOS", "tvOS"],
                               "max_os_version": "ABC"})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -192,6 +196,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         name = get_random_string(12)
         response = self.post(reverse("mdm_api:software_update_enforcements"),
                              {"name": name,
+                              "platforms": ["macOS"],
                               "os_version": "ABC",
                               "local_datetime": "2023-11-28T09:30"})
         self.assertEqual(response.status_code, 400)
@@ -205,6 +210,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         name = get_random_string(12)
         response = self.post(reverse("mdm_api:software_update_enforcements"),
                              {"name": name,
+                              "platforms": ["macOS"],
                               "max_os_version": "15",
                               "os_version": "14.1"})
         self.assertEqual(response.status_code, 400)
@@ -218,6 +224,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         name = get_random_string(12)
         response = self.post(reverse("mdm_api:software_update_enforcements"),
                              {"name": name,
+                              "platforms": ["macOS"],
                               "local_datetime": "2023-11-28T09:30"})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -230,6 +237,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         name = get_random_string(12)
         response = self.post(reverse("mdm_api:software_update_enforcements"),
                              {"name": name,
+                              "platforms": ["macOS"],
                               "os_version": "14.1"})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -244,11 +252,13 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:software_update_enforcements"),
                                  {"name": name,
+                                  "platforms": ["macOS"],
                                   "max_os_version": "15"})
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(callbacks), 1)
         sue = SoftwareUpdateEnforcement.objects.get(name=name)
         self.assertEqual(sue.name, name)
+        self.assertEqual(sue.platforms, ["macOS"])
         self.assertEqual(sue.max_os_version, "15")
         self.assertEqual(sue.local_time, time(9, 30))
         self.assertEqual(sue.delay_days, 14)
@@ -261,6 +271,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
             {'id': sue.pk,
              'name': name,
              'details_url': '',
+             'platforms': ['macOS'],
              'tags': [],
              'max_os_version': '15',
              'delay_days': 14,
@@ -282,6 +293,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
                  "new_value": {
                      "pk": sue.pk,
                      "name": name,
+                     "platforms": ["macOS"],
                      "tags": [],
                      "max_os_version": "15",
                      "delay_days": 14,
@@ -302,6 +314,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:software_update_enforcements"),
                                  {"name": name,
+                                  "platforms": ["macOS"],
                                   "os_version": "14.1.1",
                                   "local_datetime": "2023-11-28T09:30"})
         self.assertEqual(response.status_code, 201)
@@ -309,6 +322,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         sue = SoftwareUpdateEnforcement.objects.get(name=name)
         self.assertEqual(sue.name, name)
         self.assertEqual(sue.details_url, "")
+        self.assertEqual(sue.platforms, ["macOS"])
         self.assertEqual(sue.os_version, "14.1.1")
         self.assertEqual(sue.build_version, "")
         self.assertEqual(sue.local_datetime, datetime(2023, 11, 28, 9, 30))
@@ -320,6 +334,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
             {'id': sue.pk,
              'name': name,
              'details_url': '',
+             'platforms': ["macOS"],
              'tags': [],
              'max_os_version': '',
              'delay_days': None,
@@ -341,6 +356,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
                  "new_value": {
                      "pk": sue.pk,
                      "name": name,
+                     "platforms": ["macOS"],
                      "tags": [],
                      "os_version": "14.1.1",
                      "local_datetime": "2023-11-28T09:30:00",
@@ -381,6 +397,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
             response = self.put(reverse("mdm_api:software_update_enforcement", args=(sue.pk,)),
                                 {"name": new_name,
                                  "details_url": "https://www.example.com",
+                                 "platforms": ["macOS"],
                                  "tags": [t.pk for t in tags],
                                  "max_os_version": "18.1.2",
                                  "delay_days": 3,
@@ -390,6 +407,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         sue.refresh_from_db()
         self.assertEqual(sue.name, new_name)
         self.assertEqual(sue.details_url, "https://www.example.com")
+        self.assertEqual(sue.platforms, ["macOS"])
         self.assertEqual(list(sue.tags.all()), tags)
         self.assertEqual(sue.max_os_version, "18.1.2")
         self.assertEqual(sue.delay_days, 3)
@@ -402,6 +420,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
             {'id': sue.pk,
              'name': new_name,
              'details_url': 'https://www.example.com',
+             'platforms': ['macOS'],
              'tags': [t.pk for t in tags],
              'max_os_version': '18.1.2',
              'delay_days': 3,
@@ -424,6 +443,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
                      "pk": sue.pk,
                      "name": new_name,
                      "details_url": "https://www.example.com",
+                     "platforms": ["macOS"],
                      "tags": [{"pk": t.pk, "name": t.name} for t in tags],
                      "max_os_version": "18.1.2",
                      "delay_days": 3,
@@ -449,6 +469,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
             response = self.put(reverse("mdm_api:software_update_enforcement", args=(sue.pk,)),
                                 {"name": new_name,
                                  "details_url": "",
+                                 "platforms": ["iOS"],
                                  "tags": [],
                                  "os_version": "18.1.2",
                                  "build_version": "29B12",
@@ -458,6 +479,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
         sue.refresh_from_db()
         self.assertEqual(sue.name, new_name)
         self.assertEqual(sue.details_url, "")
+        self.assertEqual(sue.platforms, ["iOS"])
         self.assertEqual(sue.tags.count(), 0)
         self.assertEqual(sue.os_version, "18.1.2")
         self.assertEqual(sue.build_version, "29B12")
@@ -470,6 +492,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
             {'id': sue.pk,
              'name': new_name,
              'details_url': '',
+             'platforms': ['iOS'],
              'tags': [],
              'max_os_version': '',
              'delay_days': None,
@@ -491,6 +514,7 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase):
                  "new_value": {
                      "pk": sue.pk,
                      "name": new_name,
+                     "platforms": ["iOS"],
                      "tags": [],
                      "os_version": "18.1.2",
                      "build_version": "29B12",

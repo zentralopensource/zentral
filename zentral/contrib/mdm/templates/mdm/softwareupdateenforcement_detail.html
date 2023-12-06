@@ -39,6 +39,10 @@
           <td>{{ object.details_url|default:"-" }}</td>
         </tr>
         <tr>
+          <th>Platform{{ object.platforms|length|pluralize }}</th>
+          <td>{{ object.platforms|join:", " }}</td>
+        </tr>
+        <tr>
           <th>Tag{{ object.tags.count|pluralize }}</th>
           <td>
             {% for tag in object.tags.all %}

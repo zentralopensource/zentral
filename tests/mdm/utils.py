@@ -444,6 +444,7 @@ def force_recovery_password_config(rotation_interval_days=0, static_password=Non
 def force_software_update_enforcement(
     name=None,
     details_url="",
+    platforms=["macOS"],
     os_version="",
     build_version="",
     local_datetime=None,
@@ -462,6 +463,7 @@ def force_software_update_enforcement(
     sue = SoftwareUpdateEnforcement.objects.create(
         name=name,
         details_url=details_url,
+        platforms=platforms,
         os_version=os_version,
         build_version=build_version,
         local_datetime=local_datetime,
