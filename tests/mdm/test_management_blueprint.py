@@ -8,7 +8,8 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.core.events.base import AuditEvent
-from .utils import force_blueprint, force_blueprint_artifact
+from .utils import (force_blueprint, force_blueprint_artifact,
+                    force_filevault_config, force_recovery_password_config, force_software_update_enforcement)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -161,18 +162,39 @@ class BlueprintManagementViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_blueprint_get(self):
-        blueprint = force_blueprint()
+    def test_blueprint_get_all_links(self):
+        fv_config = force_filevault_config()
+        rp_config = force_recovery_password_config()
+        sue = force_software_update_enforcement()
+        blueprint = force_blueprint(
+            filevault_config=fv_config,
+            recovery_password_config=rp_config,
+            software_update_enforcement=sue,
+        )
         self.assertTrue(blueprint.can_be_deleted())
-        self._login("mdm.view_blueprint", "mdm.delete_blueprint")
+        self._login("mdm.view_blueprint",
+                    "mdm.delete_blueprint",
+                    "mdm.view_filevaultconfig",
+                    "mdm.view_recoverypasswordconfig",
+                    "mdm.view_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_detail.html")
         self.assertContains(response, blueprint.name)
         self.assertContains(response, reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
+        self.assertContains(response, fv_config.get_absolute_url())
+        self.assertContains(response, rp_config.get_absolute_url())
+        self.assertContains(response, sue.get_absolute_url())
 
-    def test_blueprint_get_no_perm_no_delete_link(self):
-        blueprint = force_blueprint()
+    def test_blueprint_get_no_perms_no_links(self):
+        fv_config = force_filevault_config()
+        rp_config = force_recovery_password_config()
+        sue = force_software_update_enforcement()
+        blueprint = force_blueprint(
+            filevault_config=fv_config,
+            recovery_password_config=rp_config,
+            software_update_enforcement=sue,
+        )
         self.assertTrue(blueprint.can_be_deleted())
         self._login("mdm.view_blueprint")
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
@@ -180,6 +202,9 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/blueprint_detail.html")
         self.assertContains(response, blueprint.name)
         self.assertNotContains(response, reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
+        self.assertNotContains(response, fv_config.get_absolute_url())
+        self.assertNotContains(response, rp_config.get_absolute_url())
+        self.assertNotContains(response, sue.get_absolute_url())
 
     def test_blueprint_get_cannot_be_deleted_no_delete_link(self):
         blueprint = force_blueprint()

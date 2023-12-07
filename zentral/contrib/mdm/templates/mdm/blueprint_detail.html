@@ -92,7 +92,7 @@
             <ul class="list-unstyled mb-0">
               {% for sue in sue_list %}
               <li>
-                {% if perms.mdm.view_softwareupdateconfig %}
+                {% if perms.mdm.view_softwareupdateenforcement %}
                 <a href="{{ sue.get_absolute_url }}">{{ sue }}</a>
                 {% else %}
                 {{ sue }}
