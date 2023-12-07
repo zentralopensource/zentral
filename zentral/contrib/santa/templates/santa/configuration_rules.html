@@ -25,12 +25,12 @@
   <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
-<div class="d-flex justify-content-between">
+<div class="d-flex justify-content-between mb-1">
     <h2 class="m-0">Rule{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
     <div class="ms-auto">
         {% if perms.santa.add_rule %}
-        <div class="dropdown mb-2 btn btn-link">
-            <button class="btn btn-link dropdown-toggle" type="button" id="createRule"
+        <div class="dropdown mb-2">
+            <button class="btn btn-link h-100 dropdown-toggle" type="button" id="createRule"
                     data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
                 <i class="bi bi-plus-circle"></i>
             </button>
