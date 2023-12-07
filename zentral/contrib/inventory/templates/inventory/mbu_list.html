@@ -134,7 +134,12 @@
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
 function test_checkbox() {
-    return $('input[type=checkbox]:checked').length > 1;
+    if ($('input[type=checkbox]:checked').length > 1) {
+        $('#merge-btn-container').tooltip('show')
+        return true;
+    }
+    $('#merge-btn-container').tooltip('hide')
+    return false;
 }
 $('input[type=checkbox]').change(function() {
     $('#merge-btn-container').prop( "disabled", !test_checkbox());
