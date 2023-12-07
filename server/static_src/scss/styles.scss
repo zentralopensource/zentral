@@ -140,6 +140,10 @@ legend {
     background: $ztl-bg-dark;
 }
 
+[data-bs-theme=light] .dropdown-item:active {
+    color: rgba(var(--bs-dark-rgb), .7);
+}
+
 [data-bs-theme=light] .dropdown-item:hover:not(.active) {
     background: $ztl-bg;
 }
