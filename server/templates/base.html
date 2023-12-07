@@ -25,6 +25,10 @@
                     <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
                         <span class="navbar-toggler-icon"></span>
                     </button>
+                {% else %}
+                    <ul class="nav navbar-toggler">
+                        {% include "toggle_theme.html" with placement_class="dropdown-menu-end"%}
+                    </ul>
                 {% endif %}
             </div>
         </div>
