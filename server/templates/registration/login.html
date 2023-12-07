@@ -3,13 +3,6 @@
 {% block content %}
 
 <div class="d-flex flex-column justify-content-center align-items-center px-4 py-5 my-5 text-center">
-    {% if form.non_field_errors %}
-        {% for message in form.non_field_errors %}
-            <div class="alert alert-danger" role="alert">
-                {{ message }}
-            </div>
-        {% endfor %}
-    {% endif %}
     {% for realm, login_link in login_realms %}
         <form action="{{ login_link }}" method="POST">{% csrf_token %}
             <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_to }}" required>
@@ -20,6 +13,13 @@
         {% endif %}
     {% endfor %}
     {% if form %}
+        {% if form.non_field_errors %}
+            {% for message in form.non_field_errors %}
+                <div class="alert alert-danger" role="alert">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
         <form action="{{ login_link }}" method="POST">{% csrf_token %}
             <h3 class="mt-5">
                 {% if login_realms %}
