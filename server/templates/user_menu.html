@@ -1,22 +1,8 @@
 {% load base_extras incidents_extras %}
 
 <ul class="nav z-3">
-    <li class="nav-item dropdown">
-        <button id="bd-theme" type="button" class="nav-link btn btn-link" href="#" role="button" aria-expanded="false"  data-bs-toggle="dropdown" data-bs-display="static" aria-label="Toggle theme">
-            <i class="bi bi-moon-stars" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Toggle theme"></i>
-        </button>
-        <ul class="dropdown-menu dropdown-menu-lg-end" aria-labelledby="bd-theme-text">
-            <li>
-                <button type="button" id="bd-theme-dark" class="dropdown-item bi bi-moon" aria-pressed="true" data-bs-theme-value="dark"> Dark Mode</button>
-            </li>
-            <li>
-                <button type="button" id="bd-theme-light" class="dropdown-item bi bi-sun" aria-pressed="true" data-bs-theme-value="light"> Light Mode</button>
-            <li>
-                <button type="button" id="bd-theme-auto" class="dropdown-item bi bi-circle-half" aria-pressed="true" data-bs-theme-value="auto"> Auto</button>
-            </li>
-        </ul>
-    </li>
     {% if user.is_authenticated %}
+    {% include "toggle_theme.html" with placement_class="dropdown-menu-lg-end"%}
     {% if zentral_extra_links %}
     <li class="nav-item dropdown">
         <a class="nav-link btn btn-link" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">

@@ -17,13 +17,17 @@
             </a>
             <div class="ms-auto">
                 <div class="user-menu">
-
-                    {% include "user_menu.html" %}
-
+                  {% include "user_menu.html" %}
                 </div>
+                {% if user.is_authenticated %}
                 <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
-                    <span class="navbar-toggler-icon"></span>
+                  <span class="navbar-toggler-icon"></span>
                 </button>
+                {% else %}
+                <ul class="nav">
+                  {% include "toggle_theme.html" with placement_class="dropdown-menu-end"%}
+                </ul>
+                {% endif %}
             </div>
         </div>
     </nav>
@@ -31,11 +35,9 @@
         {% if user.is_authenticated %}
         <div class="offcanvas offcanvas-start sidebar sticky-lg-top flex-lg-shrink-0 d-flex flex-column" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
             <div class="offcanvas-header d-lg-none">
-                <h5 class="offcanvas-title" id="offcanvasNavbarLabel">
-
+                <div class="offcanvas-title" id="offcanvasNavbarLabel">
                     {% include "user_menu.html" %}
-
-                </h5>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
             </div>
 
