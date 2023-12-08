@@ -6,7 +6,7 @@
   {% for realm, login_link in login_realms %}
   <form action="{{ login_link }}" method="POST">{% csrf_token %}
       <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_to }}" required>
-      <button href="{{ login_link }}" class="btn btn-primary w-100 py-2">Sign in with {{ realm }}</button>
+      <button href="{{ login_link }}" class="reg-btn-primary">Sign in with {{ realm }}</button>
   </form>
   {% if not forloop.last or form %}
   <h3 class="text-center {% if not forloop.last %}my-4{% else %}mt-4{% endif %}">or</h3>
