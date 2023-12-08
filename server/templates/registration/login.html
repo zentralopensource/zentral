@@ -2,51 +2,44 @@
 
 {% block content %}
 
-{% if form.non_field_errors %}
-<div class="form-signin d-flex justify-content-center w-100 m-auto px-4 pt-4">
-    {% for message in form.non_field_errors %}
-        <div class="alert alert-danger" role="alert">
-            {{ message }}
-        </div>
+<div class="reg-container">
+  {% for realm, login_link in login_realms %}
+  <form action="{{ login_link }}" method="POST">{% csrf_token %}
+      <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_to }}" required>
+      <button href="{{ login_link }}" class="btn btn-primary w-100 py-2">Sign in with {{ realm }}</button>
+  </form>
+  {% if not forloop.last or form %}
+  <h3 class="text-center {% if not forloop.last %}my-4{% else %}mt-4{% endif %}">or</h3>
+  {% endif %}
+  {% endfor %}
+  {% if form %}
+  <form action="{{ login_link }}" method="POST" class="my-4">{% csrf_token %}
+    <h1 class="reg-title">
+      {% if login_realms %}
+      Use local credentials
+      {% else %}
+      Sign in
+      {% endif %}
+    </h1>
+    {% for error in form.non_field_errors %}
+    <div class="alert alert-danger" role="alert">
+      {{ error }}
+    </div>
     {% endfor %}
-</div>
-<div class="form-signin d-flex flex-column align-items-center w-100 m-auto px-4 py-3 my-0">
-{% else %}
-<div class="form-signin d-flex flex-column align-items-center w-100 m-auto px-4 py-5 my-5">
-{% endif %}
-    {% for realm, login_link in login_realms %}
-        <form action="{{ login_link }}" method="POST">{% csrf_token %}
-            <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_to }}" required>
-            <button href="{{ login_link }}" class="btn btn-primary w-100 py-2">Sign in with {{ realm }}</button>
-        </form>
-        {% if not forloop.last or form %}
-            <h3 class="text-center">or</h3>
-        {% endif %}
+    {% for ff in form %}
+    <div class="form-floating my-3">
+      {{ ff }}
+      <label for="{{ ff.id_for_label }}">{{ ff.label }}</label>
+    </div>
     {% endfor %}
-    {% if form %}
-        <form action="{{ login_link }}" method="POST">{% csrf_token %}
-            <h1 class="h3 mb-3 fw-normal">
-                {% if login_realms %}
-                    Use local credentials
-                {% else %}
-                    Sign in
-                {% endif %}
-            </h1>
-            <div class="col-md">
-                {% for ff in form %}
-                    <div class="form-floating me-2 mb-2">
-                        {{ ff }}
-                        <label for="floatingInput">{{ ff.label }}</label>
-                    </div>
-                {% endfor %}
-            </div>
-            <div class="text-start my-3">
-                <p><a href="{% url 'password_reset' %}">Password forgotten?</a></p>
-            </div>
-            <button class="btn btn-primary w-100 py-2" type="submit">
-                Sign in{% if login_realms %} with local credentials{% endif %}
-            </button>
-        </form>
-    {% endif %}
+    <div class="text-start my-3">
+      <p><a href="{% url 'password_reset' %}">Password forgotten?</a></p>
+    </div>
+    <button class="reg-btn-primary" type="submit">
+      Sign in{% if login_realms %} with local credentials{% endif %}
+    </button>
+  </form>
+  {% endif %}
 </div>
+
 {% endblock %}

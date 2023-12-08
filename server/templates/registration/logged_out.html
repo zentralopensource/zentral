@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="px-4 py-5 my-5 text-center w-50 m-auto">
-        <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
-            <h3 class="mt-5">Signed out</h3>
-        </div>
-        <div class="col-lg-6 mx-auto">
-            <p class="mb-4">You have been signed out.</p>
-            <a href="{% url 'login' %}" class="btn btn-primary w-50 py-2" role="button">Sign in</a>
-        </div>
-    </div>
+
+<div class="reg-container">
+  <h1 class="reg-title">Signed out</h1>
+  <p>You have been signed out.</p>
+  <p>
+    <a class="reg-btn-primary" href="{% url 'login' %}" role="button">Sign in</a>
+  </p>
+</div>
+
 {% endblock %}

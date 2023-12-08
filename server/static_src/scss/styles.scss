@@ -282,3 +282,26 @@ td > p:last-child, td > table:last-child {
     @extend .container;
     overflow-y: auto;
 }
+
+// Registration views
+
+.reg-container {
+    @extend .d-flex;
+    @extend .flex-column;
+    @extend .mt-5;
+    @extend .mx-auto;
+    max-width: 400px;
+}
+
+.reg-title {
+    @extend .h3;
+    @extend .mb-3;
+    @extend .fw-normal;
+}
+
+.reg-btn-primary {
+    @extend .btn;
+    @extend .btn-primary;
+    @extend .w-100;
+    @extend .py-2;
+}
