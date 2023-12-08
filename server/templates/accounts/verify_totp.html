@@ -1,31 +1,36 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="px-4 py-5 my-5 text-center w-100 m-auto">
-    <form class="panel panel-default" method="POST">{% csrf_token %}
-    <div class="panel-heading">
-        <h3 class="panel-title">
-        Two-factor authentication - TOTP code
-        </h3>
+<div class="reg-container">
+  <form method="POST">{% csrf_token %}
+    <h1 class="reg-title">MFA - TOTP code</h1>
+    {% for error in form.non_field_errors %}
+    <div class="alert alert-danger" role="alert">
+      {{ error }}
     </div>
-    <div class="panel-body">
-        {% for ff in form %}
-            <div class="form-floating d-flex justify-content-center w-25 m-auto p-1 my-2" style="max-width:150px; min-width:150px;">
-                {{ ff }}
-                <label for="floatingInput">{{ ff.label }}</label>
-            </div>
-        {% endfor %}
-    </div>
-    <div class="panel-footer btn-group btn-group-justified" role="group" aria-label="sign in">
-        <div class="btn-group" role="group">
-        <button type="submit" class="btn btn-primary">
-            Sign in
-        </button>
-        </div>
-    </div>
-    </form>
-    {% for link, anchor_text in form.get_alternative_verification_links %}
-    <p class="mt-2"><a href="{{ link }}"><u>{{ anchor_text }}</u></a></p>
     {% endfor %}
+    {% comment %}
+    We merge the field errors as alerts, it should always work for this form
+    {% endcomment %}
+    {% for ff in form %}
+    {% for error in ff.errors %}
+    <div class="alert alert-danger" role="alert">
+      {{ error }}
+    </div>
+    {% endfor %}
+    {% endfor %}
+    {% for ff in form %}
+    <div class="form-floating my-3">
+      {{ ff }}
+      <label for="{{ ff.id_for_label }}">{{ ff.label }}</label>
+    </div>
+    {% endfor %}
+    <button class="reg-btn-primary" type="submit" class="btn btn-primary">
+      Sign in
+    </button>
+  </form>
+  {% for link, anchor_text in form.get_alternative_verification_links %}
+  <p class="my-3"><a href="{{ link }}">{{ anchor_text }}</a></p>
+  {% endfor %}
 </div>
 {% endblock %}
