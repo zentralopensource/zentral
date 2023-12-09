@@ -5,7 +5,7 @@ from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
 from django.core import signing
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import resolve_url
+from django.shortcuts import redirect, resolve_url
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -90,6 +90,13 @@ def login(request):
 
 
 class BaseVerify2FView(FormView):
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            return redirect("accounts:profile")
+        if "verification_token" not in self.request.session:
+            return redirect("login")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         request = self.request

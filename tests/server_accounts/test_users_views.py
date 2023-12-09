@@ -92,6 +92,15 @@ class AccountUsersViewsTestCase(TestCase):
 
     # login + totp
 
+    def test_totp_user_logged_in(self):
+        self.login()
+        response = self.client.get(reverse("accounts:verify_totp"))
+        self.assertRedirects(response, reverse("accounts:profile"))
+
+    def test_totp_no_token(self):
+        response = self.client.get(reverse("accounts:verify_totp"))
+        self.assertRedirects(response, reverse("login"))
+
     def test_login_totp_not_ok(self):
         UserTOTP.objects.create(
             user=self.ui_user,
@@ -147,6 +156,15 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "verification_code", 'This field is required.')
 
     # login + webauthn
+
+    def test_webauthn_user_logged_in(self):
+        self.login()
+        response = self.client.get(reverse("accounts:verify_webauthn"))
+        self.assertRedirects(response, reverse("accounts:profile"))
+
+    def test_webauthn_no_token(self):
+        response = self.client.get(reverse("accounts:verify_webauthn"))
+        self.assertRedirects(response, reverse("login"))
 
     def test_login_webauthn_not_ok(self):
         UserWebAuthn.objects.create(
