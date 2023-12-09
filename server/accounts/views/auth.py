@@ -32,6 +32,15 @@ def login(request):
     """
     redirect_to = request.POST.get(REDIRECT_FIELD_NAME,
                                    request.GET.get(REDIRECT_FIELD_NAME, ''))
+    # Ensure the user-originating redirection url is safe.
+    if not url_has_allowed_host_and_scheme(url=redirect_to,
+                                           allowed_hosts={request.get_host()},
+                                           require_https=request.is_secure()):
+        redirect_to = resolve_url(settings.LOGIN_REDIRECT_URL)
+
+    # Redirects if the user is already authenticated
+    if request.user.is_authenticated:
+        return HttpResponseRedirect(redirect_to)
 
     form = realm = None
 
@@ -39,13 +48,6 @@ def login(request):
         form = ZentralAuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
-
-            # Ensure the user-originating redirection url is safe.
-            if not url_has_allowed_host_and_scheme(url=redirect_to,
-                                                   allowed_hosts={request.get_host()},
-                                                   require_https=request.is_secure()):
-                redirect_to = resolve_url(settings.LOGIN_REDIRECT_URL)
-
             if user.has_verification_device:
                 # Redirect to verification page
                 token = signing.dumps({"auth_backend": user.backend,
@@ -64,7 +66,6 @@ def login(request):
             else:
                 # Okay, security check complete. Log the user in.
                 auth_login(request, form.get_user())
-
                 return HttpResponseRedirect(redirect_to)
     else:
         try:

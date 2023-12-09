@@ -90,6 +90,21 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertFalse(response.context["request"].user.is_authenticated)
         self.assertContains(response, "Please enter a correct username and password.")
 
+    def test_simple_login_already_logged_in(self):
+        self.login()
+        response = self.client.get(reverse("login"))
+        self.assertRedirects(response, reverse("base:index"))
+
+    def test_simple_login_already_logged_in_unsafe_redirect(self):
+        self.login()
+        response = self.client.get(reverse("login"), {"next": "https://www.example.com"})
+        self.assertRedirects(response, reverse("base:index"))
+
+    def test_simple_login_already_logged_ok_redirect(self):
+        self.login()
+        response = self.client.get(reverse("login"), {"next": reverse("accounts:profile")})
+        self.assertRedirects(response, reverse("accounts:profile"))
+
     # login + totp
 
     def test_totp_user_logged_in(self):
