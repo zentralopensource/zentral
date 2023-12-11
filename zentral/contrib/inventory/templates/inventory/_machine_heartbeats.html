@@ -10,11 +10,11 @@
     {% for event_class_display, inventory_source_name, ua_max_dates, cell_class in heartbeats %}
     {% for ua, ua_max_date in ua_max_dates %}
     <tr>
-      {% if forloop.counter == 1 %}
-      <td rowspan="{{ ua_max_dates|length }}">
+      <td>
+        {% if forloop.counter == 1 %}
         {{ event_class_display }}{% if inventory_source_name %} - {{ inventory_source_name }}{% endif %}
+        {% endif %}
       </td>
-      {% endif %}
       <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua_max_date }}</td>
       <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua|default:"-" }}</td>
     </tr>
