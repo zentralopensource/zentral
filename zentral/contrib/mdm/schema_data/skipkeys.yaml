@@ -27,8 +27,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the Accessibility pane, only if the Mac is connected to Ethernet
-    and the cloud config is downloaded. Availability: macOS 11+.'
+  content: The key to skip the Accessibility pane, when creating additional users.
+    This key is available in macOS 11 and later.
 - key: Android
   title: Prevents migration from Android device
   supportedOS:
@@ -40,8 +40,9 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'If the Restore pane is not skipped, removes the Move from Android option
-    in the Restore pane on iOS. Availability: iOS 9+.'
+  content: If the Restore pane isn't skipped, this is the key to remove the Move from
+    Android option in the Restore pane on iOS. This key is available in iOS 9 and
+    later.
 - key: Appearance
   title: Skip Choose your Look setup pane
   supportedOS:
@@ -53,12 +54,14 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the Choose Your Look screen. Availability: iOS 13+ and macOS 10.14+.'
+  content: The key to skip the Choose Your Look screen. This key is available in iOS
+    13+ and macOS 10.14 and later.
 - key: AppleID
   title: Disables signing in to Apple ID and iCloud
   type: <string>
   presence: optional
-  content: 'Skips Apple ID setup. Availability: iOS 7.0+, tvOS 10.2+, and macOS 10.9+.'
+  content: The key to skip Apple ID setup. This key is available in iOS 7.0+, tvOS
+    10.2 and later, and macOS 10.9 and later.
 - key: AppStore
   title: Skips AppStore information pane
   supportedOS:
@@ -70,7 +73,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the App Store pane. Availability: iOS 14.3+ and macOS 11.1+.'
+  content: The key to skip the App Store pane. This key is available in iOS 14.3 and
+    later, and macOS 11.1 and later.
 - key: Biometric
   title: Skips Touch ID/Face ID setup
   supportedOS:
@@ -82,7 +86,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips biometric setup. Availability: iOS 8.1+ and macOS 10.12.4+.'
+  content: The key to skip biometric setup. This key is available in iOS 8.1 and later,
+    and macOS 10.12.4 and later.
 - key: DeviceToDeviceMigration
   title: Skip Device To Device Migration pane
   supportedOS:
@@ -94,13 +99,14 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips Device to Device Migration pane. Availability: iOS 13+.'
+  content: The key to skip Device to Device Migration pane. This key is available
+    in iOS 13 and later.
 - key: Diagnostics
   title: Disables automatically sending diagnostic information
   type: <string>
   presence: optional
-  content: 'Skips the App Analytics pane. Availability: iOS 7+, tvOS 10.2+, and macOS
-    10.9+.'
+  content: The key to skip the App Analytics pane. This key is available in iOS 7
+    and later, tvOS 10.2 and later, and macOS 10.9 and later.
 - key: DisplayTone
   title: Disables True Tone
   supportedOS:
@@ -114,7 +120,21 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips DisplayTone setup. Availability: iOS 9.3.2+ and macOS 10.13.6+.'
+  content: The key to skip DisplayTone setup. This key is available in iOS 9.3.2 and
+    later, and macOS 10.13.6 and later, and deprecated in iOS 15 and macOS 12.
+- key: EnableLockdownMode
+  title: Skips Enable Lockdown Mode
+  supportedOS:
+    iOS:
+      introduced: '17.1'
+    macOS:
+      introduced: '14.0'
+    tvOS:
+      introduced: n/a
+  type: <string>
+  presence: optional
+  content: The key to skip the Lockdown Mode pane if an Apple ID is set up. Available
+    in macOS 14 and later, and iOS 17.1 and later.
 - key: FileVault
   title: Skip configuration of FileVault
   supportedOS:
@@ -126,8 +146,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Disables FileVault Setup Assistant screen in macOS. Availability: macOS
-    10.10+.'
+  content: The key to disable the FileVault Setup Assistant screen in macOS. This
+    key is available in macOS 10.10 and later.
 - key: HomeButtonSensitivity
   title: Skips Home Button sensitivity setup
   supportedOS:
@@ -140,8 +160,9 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the Meet the New Home Button screen on iPhone 7, iPhone 7 Plus,
-    iPhone 8, iPhone 8 Plus and iPhone SE. Availability: iOS 10+.'
+  content: The key to skip the Meet the New Home Button screen on iPhone 7, iPhone
+    7 Plus, iPhone 8, iPhone 8 Plus, and iPhone SE. This key is available in iOS 10
+    and later, and deprecated in iOS 15.
 - key: iCloudDiagnostics
   title: Skip iCloud Analytics pane
   supportedOS:
@@ -153,7 +174,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips iCloud Analytics screen. Availability: macOS 10.12.4+.'
+  content: The key to skip the iCloud Analytics screen. This key is available in macOS
+    10.12.4 and later.
 - key: iCloudStorage
   title: Skip iCloud Documents and Desktop pane
   supportedOS:
@@ -165,8 +187,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips iCloud Documents and Desktop screen in macOS. Availability: macOS
-    10.13.4+.'
+  content: The key to skip the iCloud Documents and Desktop screen in macOS. This
+    key is available in macOS 10.13.4 and later.
 - key: iMessageAndFaceTime
   title: Skip iMessage and FaceTime set up pane
   supportedOS:
@@ -178,21 +200,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the iMessage and FaceTime screen in iOS. Availability: iOS 12+.'
-- key: IntendedUser
-  title: Skip Intended User setup pane
-  supportedOS:
-    iOS:
-      introduced: '17.0'
-    macOS:
-      introduced: n/a
-    tvOS:
-      introduced: n/a
-  type: <string>
-  presence: optional
-  content: |-
-    Skips the Intended User pane (the one that allows picking between self or children).
-    Availability: iOS 17+.
+  content: The key to skip the iMessage and FaceTime screen in iOS. This key is available
+    in iOS 12 and later.
 - key: Location
   title: Disables Location Services
   supportedOS:
@@ -200,7 +209,8 @@ payloadkeys:
       introduced: '10.11'
   type: <string>
   presence: optional
-  content: 'Disables Location Services. Availability: iOS 7+ and macOS 10.11+.'
+  content: The key to disable Location Services. This key is available in iOS 7 and
+    later, and macOS 10.11 and later.
 - key: MessagingActivationUsingPhoneNumber
   title: Disables iMessage activation using a phone number in select regions
   supportedOS:
@@ -212,7 +222,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the iMessage pane. Availability: iOS 10+.'
+  content: The key to skip the iMessage pane. This key is available in iOS 10 and
+    later.
 - key: OnBoarding
   title: Skip on-boarding informational panes
   supportedOS:
@@ -225,9 +236,9 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips on-boarding informational screens for user education (Go Home, Cover
-    Sheet, Multitasking & Control Center, for example) in iOS. Availability: iOS 11
-    - 13.6.'
+  content: The key to skip the on-boarding informational screens for user education
+    (Go Home, Cover Sheet, Multitasking & Control Center, for example) in iOS. This
+    key is available in iOS 11 and later, and deprecated in iOS 14.
 - key: Passcode
   title: Skips prompting the user to set a passcode
   supportedOS:
@@ -235,7 +246,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Hides and disables the passcode pane. Availability: iOS 7+.'
+  content: The key to hide and disable the passcode pane. This key is available in
+    iOS 7 and later.
 - key: Payment
   title: Skips Apple Pay setup
   supportedOS:
@@ -247,7 +259,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips Apple Pay setup. Availability: iOS 8.1+ and macOS 10.12.4+.'
+  content: The key to skip Apple Pay setup. This key is available in iOS 8.1 and later,
+    and macOS 10.12.4 and later.
 - key: Privacy
   title: Skip Privacy pane
   supportedOS:
@@ -259,8 +272,8 @@ payloadkeys:
       introduced: '11.3'
   type: <string>
   presence: optional
-  content: 'Skips the privacy pane. Availability: iOS 11.13+, tvOS 11.13+, and macOS
-    10.13.4+.'
+  content: The key to skip the privacy pane. This key is available in iOS 11.13 and
+    later, tvOS 11.13 and later, and macOS 10.13.4 and later.
 - key: Restore
   title: Disables restoring from backup
   supportedOS:
@@ -268,7 +281,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Disables restoring from backup. Availability: iOS 7+ and macOS 10.9+.'
+  content: The key to disable restoring from backup. This key is available in iOS
+    7 and later, and macOS 10.9 and later.
 - key: RestoreCompleted
   title: Skips Restore Completed pane
   supportedOS:
@@ -280,7 +294,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the Restore Completed pane. Availability: iOS 14+.'
+  content: The key to skip the Restore Completed pane. This key is available in iOS
+    14 and later.
 - key: ScreenSaver
   title: Skips screen saver setup
   supportedOS:
@@ -290,8 +305,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the tvOS screen about using aerial screensavers in ATV. Availability:
-    tvOS 10.2+.'
+  content: The key to skip the tvOS screen about using aerial screensavers in ATV.
+    This key is available in tvOS 10.2 and later.
 - key: Safety
   title: Skips Safety pane
   supportedOS:
@@ -303,7 +318,7 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the Safety pane. Availability: iOS 16+.'
+  content: The key to skip the Safety pane. This key is available in iOS 16 and later.
 - key: ScreenTime
   title: Skip Screen Time pane
   supportedOS:
@@ -315,7 +330,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the Screen Time pane. Availability: iOS 12+ and macOS 10.15+.'
+  content: The key to skip the Screen Time pane. This key is available in iOS 12 and
+    later, and macOS 10.15 and later.
 - key: SIMSetup
   title: Skip SIM-related setup
   supportedOS:
@@ -327,7 +343,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the add cellular plan pane. Availability: iOS 12+.'
+  content: The key to skip the add cellular plan pane. This key is available in iOS
+    12 and later.
 - key: Siri
   title: Disables Siri
   supportedOS:
@@ -335,7 +352,8 @@ payloadkeys:
       introduced: '10.12'
   type: <string>
   presence: optional
-  content: 'Disables Siri. Availability: iOS 7+, tvOS 10.2+, and macOS 10.12+.'
+  content: The key to disable Siri. This key is available in iOS 7 and later, tvOS
+    10.2 and later, and macOS 10.12 and later.
 - key: SoftwareUpdate
   title: Skip automatic software update configuration pane
   supportedOS:
@@ -347,7 +365,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the mandatory software update screen in iOS. Availability: iOS 12+.'
+  content: The key to skip the mandatory software update screen in iOS. This key is
+    available in iOS 12 and later.
 - key: TapToSetup
   title: Skips simplified tap setup
   supportedOS:
@@ -359,8 +378,8 @@ payloadkeys:
       always-skippable: false
   type: <string>
   presence: optional
-  content: 'Skips the Tap To Set Up option in AppleTV about using an iOS device to
-    set up your AppleTV. Availability: tvOS 10.2+.'
+  content: The key to skip the Tap To Set Up option in AppleTV about using an iOS
+    device to set up your AppleTV. This key is available in tvOS 10.2 and later.
 - key: TermsOfAddress
   title: Skips Terms of Address
   supportedOS:
@@ -374,15 +393,15 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the Terms of Address pane. This key isn''t always skippable because
-    this pane appears before the device retrieves the Cloud Configuration from the
-    server. Availability: iOS 16+, and macOS 13+.'
+  content: The key to skip the Terms of Address pane. This key isn't always skippable
+    because this pane appears before the device retrieves the Cloud Configuration
+    from the server. This key is available in iOS 16 and later, and macOS 13 and later.
 - key: TOS
   title: Skips Terms and Conditions
   type: <string>
   presence: optional
-  content: 'Skips Terms and Conditions. Availability: iOS 7+, tvOS 10.2+, and macOS
-    10.9+.'
+  content: The key to skip Terms and Conditions. This key is available in iOS 7 and
+    later, tvOS 10.2 and later, and macOS 10.9 and later.
 - key: TVHomeScreenSync
   title: Skip TV Home Screen
   supportedOS:
@@ -394,7 +413,8 @@ payloadkeys:
       introduced: '11.0'
   type: <string>
   presence: optional
-  content: 'Skips TV home screen layout sync screen. Availability: tvOS 11+.'
+  content: The key to skip TV home screen layout sync screen. This key is available
+    in tvOS 11 and later.
 - key: TVProviderSignIn
   title: Skip TV provider sign in
   supportedOS:
@@ -406,7 +426,8 @@ payloadkeys:
       introduced: '11.0'
   type: <string>
   presence: optional
-  content: 'Skips the TV provider sign in screen. Availability: tvOS 11+.'
+  content: The key to skip the TV provider sign in screen. This key is available in
+    tvOS 11 and later.
 - key: TVRoom
   title: Skip Where is this Apple TV pane
   supportedOS:
@@ -418,8 +439,8 @@ payloadkeys:
       introduced: '11.4'
   type: <string>
   presence: optional
-  content: 'Skips the “Where is this Apple TV?” screen in tvOS. Availability: tvOS
-    11.4+.'
+  content: The key to skip the “Where is this Apple TV?” screen in tvOS. This key
+    is available in tvOS 11.4 and later.
 - key: UpdateCompleted
   title: Skips Software Update Complete pane
   supportedOS:
@@ -431,7 +452,21 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the Software Update Complete pane. Availability: iOS 14+.'
+  content: The key to skip the Software Update Complete pane. This field is available
+    in iOS 14 and later.
+- key: Wallpaper
+  title: Skips Wallpaper selection
+  supportedOS:
+    iOS:
+      introduced: n/a
+    macOS:
+      introduced: '14.1'
+    tvOS:
+      introduced: n/a
+  type: <string>
+  presence: optional
+  content: If the key is included in the SkipSetup array the Wallpaper pane will be
+    skipped.
 - key: WatchMigration
   title: Skip watch migration
   supportedOS:
@@ -443,7 +478,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the screen for watch migration. Availability: iOS 11+.'
+  content: The key to skip the screen for watch migration. This key is available in
+    iOS 11 and later.
 - key: Welcome
   title: Skip Get Started pane
   supportedOS:
@@ -455,7 +491,8 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips the Get Started pane. Availability: iOS 13+.'
+  content: The key to skip the Get Started pane. This key is available in iOS 13 and
+    later.
 - key: Zoom
   title: Skips setting zoom configuration
   supportedOS:
@@ -468,4 +505,5 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: 'Skips zoom setup. Availability: iOS 8.3+.'
+  content: The key to skip zoom setup. This key is available in iOS 8.3 and later,
+    and deprecated in iOS 17.
