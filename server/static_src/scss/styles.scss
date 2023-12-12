@@ -164,6 +164,21 @@ td > p:last-child, td > table:last-child {
     margin-bottom: 0px;
 }
 
+.table-object-properties {
+  @extend .table;
+  @extend .table-striped;
+  @extend .align-middle;
+}
+
+.table-object-properties td:first-child {
+  width: 250px;
+  vertical-align: top;
+}
+
+.table-object-properties > :not(caption) > * > * {
+  padding: $custom-table-padding;
+}
+
 .table-probe  {
     margin-bottom: -1px;
 }
@@ -236,10 +251,6 @@ td > p:last-child, td > table:last-child {
       pointer-events: none;
     }
   }
-}
-
-.table-object-properties > :not(caption) > * > * {
-  padding: $custom-table-padding;
 }
 
 // Zentral logo

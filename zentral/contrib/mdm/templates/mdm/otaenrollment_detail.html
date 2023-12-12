@@ -32,7 +32,7 @@
 
     {% with object.enrollment_secret as secret %}
     <h4>Configuration</h4>
-    <table class="table table-striped align-middle table-object-properties">
+    <table class="table-object-properties">
     <tbody>
         <tr>
         <th width="160px">Push certificate</th>
@@ -85,7 +85,7 @@
     </table>
 
     <h4>Authentication</h4>
-    <table class="table table-striped align-middle table-object-properties">
+    <table class="table-object-properties">
     <tbody>
         <tr>
         <th width="160px">Realm</th>
@@ -115,7 +115,7 @@
     </table>
 
     <h4>Restrictions</h4>
-    <table class="table table-striped align-middle table-object-properties">
+    <table class="table-object-properties">
     <tbody>
         <tr>
         <th style="width:160px">Serial number{{ secret.serial_numbers|length|pluralize }}</th>
@@ -133,7 +133,7 @@
     </table>
 
     <h4>Status</h4>
-    <table class="table table-striped align-middle table-object-properties">
+    <table class="table-object-properties">
     <tbody>
         <tr>
         <th style="width:160px">Request count</td>
