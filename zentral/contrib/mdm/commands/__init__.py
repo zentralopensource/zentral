@@ -5,6 +5,7 @@ from .declarative_management import DeclarativeManagement  # NOQA
 from .device_configured import DeviceConfigured  # NOQA
 from .device_information import DeviceInformation  # NOQA
 from .device_lock import DeviceLock  # NOQA
+from .erase_device import EraseDevice  # NOQA
 from .install_application import InstallApplication  # NOQA
 from .install_enterprise_application import InstallEnterpriseApplication  # NOQA
 from .installed_application_list import InstalledApplicationList  # NOQA
