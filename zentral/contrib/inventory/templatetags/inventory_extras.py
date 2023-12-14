@@ -109,11 +109,11 @@ def extra_facts(extra_facts, autoescape=True):
         return mark_safe("")
     data = ""
     for key in sorted(extra_facts.keys()):
-        data += '<dt class="col-sm-3 text-md-end">{}</dt>\n'.format(esc(key))
+        data += '<dt>{}</dt>\n'.format(esc(key))
         val = extra_facts[key]
         if isinstance(val, list):
             val_data = "<ul>\n{}</ul>\n".format(unordered_list(val, autoescape=autoescape))
         else:
             val_data = esc(val)
-        data += '<dd class="col-sm-9">\n{}\n</dd>\n'.format(val_data)
+        data += '<dd>\n{}\n</dd>\n'.format(val_data)
     return mark_safe(data)

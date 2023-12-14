@@ -337,14 +337,14 @@
       {% with puppet_node.trusted_facts as trusted_facts %}
       {% if trusted_facts %}
       <h4>Trusted facts</h4>
-      <dl class="row">
-        <dt class="col-sm-3 text-md-end">Certificate Name</dt>
-        <dd class="col-sm-9">{{ trusted_facts.certname }}</dd>
-        <dt class="col-sm-3 text-md-end">Authenticated</dt>
-        <dd class="col-sm-9">{{ trusted_facts.authenticated }}</dd>
+      <dl>
+        <dt>Certificate Name</dt>
+        <dd>{{ trusted_facts.certname }}</dd>
+        <dt>Authenticated</dt>
+        <dd>{{ trusted_facts.authenticated }}</dd>
         {% if trusted_facts.extensions %}
-        <dt class="col-sm-3 text-md-end">Extensions</dt>
-        <dd class="col-sm-9">
+        <dt>Extensions</dt>
+        <dd>
           {% for key, val in trusted_facts.extensions.items %}
           <p><em>{{ key }}</em> - {{ val }}</p>
           {% endfor %}
@@ -357,17 +357,17 @@
       {% with puppet_node.core_facts as core_facts %}
       {% if core_facts %}
       <h4>Core facts</h4>
-      <dl class="row">
-        <dt class="col-sm-3 text-md-end">aio agent version</dt>
-        <dd class="col-sm-9">{{ core_facts.aio_agent_version }}</dd>
-        <dt class="col-sm-3 text-md-end">augeas version</dt>
-        <dd class="col-sm-9">{{ core_facts.augeas_version }}</dd>
-        <dt class="col-sm-3 text-md-end">client version</dt>
-        <dd class="col-sm-9">{{ core_facts.client_version }}</dd>
-        <dt class="col-sm-3 text-md-end">facter version</dt>
-        <dd class="col-sm-9">{{ core_facts.facter_version }}</dd>
-        <dt class="col-sm-3 text-md-end">ruby</dt>
-        <dd class="col-sm-9">
+      <dl>
+        <dt>aio agent version</dt>
+        <dd>{{ core_facts.aio_agent_version }}</dd>
+        <dt>augeas version</dt>
+        <dd>{{ core_facts.augeas_version }}</dd>
+        <dt>client version</dt>
+        <dd>{{ core_facts.client_version }}</dd>
+        <dt>facter version</dt>
+        <dd>{{ core_facts.facter_version }}</dd>
+        <dt>ruby</dt>
+        <dd>
           {{ core_facts.ruby_platform }}<br>
           {{ core_facts.ruby_sitedir }}<br>
           {{ core_facts.ruby_version }}
@@ -379,10 +379,10 @@
       {% with puppet_node.extra_facts as extra_facts %}
       {% if extra_facts %}
       <h4>Extra facts</h4>
-      <dl class="row">
+      <dl>
         {% for key, val in extra_facts.items %}
-        <dt class="col-sm-3 text-md-end">{{ key }}</dt>
-        <dd class="col-sm-9">{{ val }}</dd>
+        <dt>{{ key }}</dt>
+        <dd>{{ val }}</dd>
         {% endfor %}
       </dl>
       {% endif %}
@@ -394,16 +394,16 @@
       {% with ms.principal_user as principal_user %}
       {% if principal_user %}
       <h3>Principal user</h3>
-      <dl class="row">
-        <dt class="col-sm-3 text-md-end">Source</dt>
-        <dd class="col-sm-9">{{ principal_user.source.get_type_display }}</dd>
-        <dt class="col-sm-3 text-md-end">Unique ID</dt>
-        <dd class="col-sm-9">{{ principal_user.unique_id }}</dd>
-        <dt class="col-sm-3 text-md-end">Principal name</dt>
-        <dd class="col-sm-9">{{ principal_user.principal_name }}</dd>
+      <dl>
+        <dt>Source</dt>
+        <dd>{{ principal_user.source.get_type_display }}</dd>
+        <dt>Unique ID</dt>
+        <dd>{{ principal_user.unique_id }}</dd>
+        <dt>Principal name</dt>
+        <dd>{{ principal_user.principal_name }}</dd>
         {% if principal_user.display_name %}
-        <dt class="col-sm-3 text-md-end">Display name</dt>
-        <dd class="col-sm-9">{{ principal_user.display_name }}</dd>
+        <dt>Display name</dt>
+        <dd>{{ principal_user.display_name }}</dd>
         {% endif %}
       </dl>
       {% endif %}
@@ -413,14 +413,14 @@
       {% if certificates.count %}
       <h3>Certificate{{ certificates.count|pluralize }}</h3>
       {% for certificate in certificates %}
-      <dl class="row">
-        <dt class="col-sm-3 text-md-end">Common Name</dt>
-        <dd style="col-sm-9">{{ certificate.short_repr }}</dd>
-        <dt class="col-sm-3 text-md-end">Dates</dt>
-        <dd class="col-sm-9">{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
+      <dl>
+        <dt>Common Name</dt>
+        <dd>{{ certificate.short_repr }}</dd>
+        <dt>Dates</dt>
+        <dd>{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
         {% if certificate.signed_by %}
-        <dt class="col-sm-3 text-md-end">Issuer</dt>
-        <dd style="col-sm-9">{{ certificate.signed_by.short_repr|default:"?" }}</dd>
+        <dt>Issuer</dt>
+        <dd>{{ certificate.signed_by.short_repr|default:"?" }}</dd>
         {% endif %}
       </dl>
       {% endfor %}
@@ -429,7 +429,7 @@
 
       {% if ms.extra_facts %}
       <h3>Extra facts</h4>
-      <dl class="row">
+      <dl>
         {{ ms.extra_facts|extra_facts }}
       </dl>
       {% endif %}
