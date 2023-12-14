@@ -362,6 +362,92 @@ class SecurityInfoCommandTestCase(TestCase):
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 0)
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_no_firmware_password_anymore(self, post_event):
+        self.enrolled_device.set_recovery_password("123")
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FirmwarePasswordStatus"] = {
+            "PasswordExists": False,  # the problem
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertIsNone(self.enrolled_device.recovery_password)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, RecoveryPasswordClearedEvent)
+        self.assertEqual(
+            event.payload,
+            {'command': {'request_type': 'SecurityInfo',
+                         'uuid': str(cmd.uuid)},
+             'password_type': 'firmware_password'}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_firmware_password_still_there(self, post_event):
+        self.enrolled_device.set_recovery_password("123")
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["FirmwarePasswordStatus"] = {
+            "PasswordExists": True,  # OK
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.get_recovery_password(), "123")
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_no_recovery_lock_anymore(self, post_event):
+        self.enrolled_device.set_recovery_password("123")
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["IsRecoveryLockEnabled"] = False  # the problem
+        security_info["SecurityInfo"].pop("FirmwarePasswordStatus", None)
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertIsNone(self.enrolled_device.recovery_password)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, RecoveryPasswordClearedEvent)
+        self.assertEqual(
+            event.payload,
+            {'command': {'request_type': 'SecurityInfo',
+                         'uuid': str(cmd.uuid)},
+             'password_type': 'recovery_lock'}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_recovery_lock_still_there(self, post_event):
+        self.enrolled_device.set_recovery_password("123")
+        self.enrolled_device.save()
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"]["IsRecoveryLockEnabled"] = True  # OK
+        security_info["SecurityInfo"].pop("FirmwarePasswordStatus", None)
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.get_recovery_password(), "123")
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 0)
+
     def test_process_acknowledged_ios_response(self):
         start = datetime.utcnow()
         self.assertIsNone(self.enrolled_device.security_info)

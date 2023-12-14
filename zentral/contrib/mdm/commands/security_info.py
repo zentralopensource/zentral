@@ -55,9 +55,10 @@ class SecurityInfo(Command):
                         self.enrolled_device.set_filevault_prk(prk)
                         transaction.on_commit(lambda: post_filevault_prk_updated_event(self))
 
-        # Firmware password
+        # Recovery password
+        firmware_password_status = security_info.get("FirmwarePasswordStatus", {})
+        # Pending firmware password
         if self.enrolled_device.pending_firmware_password:
-            firmware_password_status = security_info.get("FirmwarePasswordStatus", {})
             if firmware_password_status.get("ChangePending"):
                 # schedule a reboot notification for the pending firmware password to be applied
                 RestartDevice.create_for_target(self.target, kwargs={"NotifyUser": True}, queue=True, delay=0)
@@ -87,6 +88,16 @@ class SecurityInfo(Command):
                     transaction.on_commit(lambda: post_recovery_password_event(
                         self, password_type="firmware_password", operation=operation
                     ))
+        # Clear recovery password if it is not set anymore
+        has_firmware_password = firmware_password_status.get("PasswordExists")
+        has_recovery_lock = security_info.get("IsRecoveryLockEnabled")
+        if not has_firmware_password and not has_recovery_lock and self.enrolled_device.recovery_password:
+            self.enrolled_device.set_recovery_password(None)
+            self.enrolled_device.save()
+            password_type = "firmware_password" if firmware_password_status else "recovery_lock"
+            transaction.on_commit(lambda: post_recovery_password_event(
+                self, password_type=password_type, operation="clear"
+            ))
 
         self.enrolled_device.security_info = prepare_loaded_plist(security_info)
         self.enrolled_device.security_info_updated_at = datetime.utcnow()
