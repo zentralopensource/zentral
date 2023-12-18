@@ -71,6 +71,9 @@ class BaseAPNSWorker:
         # set the APNS expiration delay to the retry delay
         self.apns_expiration_seconds = self.kwargs["retry_delay"]
 
+        # optional metrics exporter
+        self.metrics_exporter = None
+
     def inc_counter(self, status):
         if self.metrics_exporter:
             self.metrics_exporter.inc(self.counter_name, self.target_type, status)
@@ -86,46 +89,52 @@ class BaseAPNSWorker:
         with connection.cursor() as cursor:
             psycopg2.extras.execute_values(
                 cursor, self.update_query,
-                ((pk, last_notified_at) for pk, _, _, last_notified_at in updates)
+                ((pk, last_notified_at) for pk, _, _, _, last_notified_at in updates),
+                template='(%s, %s::timestamp with time zone)'
             )
 
         # post the notification events
-        for pk, serial_number, udid, last_notified_at in updates:
+        for _, a_id, serial_number, udid, last_notified_at in updates:
             post_mdm_device_notification_event(
                 serial_number, udid, self.apns_priority, self.apns_expiration_seconds,
                 True if last_notified_at is not None else False,
-                pk if self.target_type == "user" else None,
+                a_id if self.target_type == "user" else None,
             )
 
-    def run(self, metrics_exporter=None):
+    def run_once(self):
+        updates = []
+        for pk, a_id, serial_number, udid, token, push_magic, topic, not_after in self.acquire_next_targets():
+            client = apns_client_cache.get_or_create(topic, not_after)
+            if not client:
+                self.inc_counter("no_client")
+                updates.append((pk, a_id, serial_number, udid, None))
+            else:
+                # rate limit the notifications
+                self.notification_leaky_bucket.consume()
+                success = client.send_notification(
+                    token, push_magic,
+                    priority=self.apns_priority,
+                    expiration_seconds=self.apns_expiration_seconds
+                )
+                if success:
+                    self.inc_counter("success")
+                    updates.append((pk, a_id, serial_number, udid, datetime.utcnow()))
+                else:
+                    self.inc_counter("failure")
+                    updates.append((pk, a_id, serial_number, udid, None))
+        self.process_target_updates(updates)
+
+    def run(self, metrics_exporter=None, only_once=False):
         self.metrics_exporter = metrics_exporter
         if self.metrics_exporter:
             self.metrics_exporter.start()
             self.metrics_exporter.add_counter(self.counter_name, ["target", "status"])
         while True:
-            updates = []
             # rate limit the DB queries
             self.db_query_leaky_bucket.consume()
-            for pk, serial_number, udid, token, push_magic, topic, not_after in self.acquire_next_targets():
-                client = apns_client_cache.get_or_create(topic, not_after)
-                if not client:
-                    self.inc_counter("no_client")
-                    updates.append((pk, serial_number, udid, None))
-                else:
-                    # rate limit the notifications
-                    self.notification_leaky_bucket.consume()
-                    success = client.send_notification(
-                        token, push_magic,
-                        priority=self.apns_priority,
-                        expiration_seconds=self.apns_expiration_seconds
-                    )
-                    if success:
-                        self.inc_counter("success")
-                        updates.append((pk, serial_number, udid, datetime.utcnow()))
-                    else:
-                        self.inc_counter("failure")
-                        updates.append((pk, serial_number, udid, None))
-            self.process_target_updates(updates)
+            self.run_once()
+            if only_once:
+                break
 
 
 class DevicesAPNSWorker(BaseAPNSWorker):
@@ -135,7 +144,7 @@ class DevicesAPNSWorker(BaseAPNSWorker):
         "UPDATE mdm_enrolleddevice "
         "SET notification_queued_at = NOW() "
         "FROM ("
-        "  SELECT ed.id, ed.serial_number, ed.udid, ed.token, ed.push_magic, pc.topic, pc.not_after "
+        "  SELECT ed.id, ed.udid AS a_id, ed.serial_number, ed.udid, ed.token, ed.push_magic, pc.topic, pc.not_after "
         "  FROM mdm_enrolleddevice AS ed"
         "  JOIN mdm_pushcertificate AS pc ON (ed.push_certificate_id = pc.id)"
         "  WHERE"
@@ -204,7 +213,8 @@ class UsersAPNSWorker(BaseAPNSWorker):
         "UPDATE mdm_enrolleduser "
         "SET notification_queued_at = NOW() "
         "FROM ("
-        "  SELECT eu.id, ed.serial_number, ed.udid, eu.token, ed.push_magic, pc.topic, pc.not_after "
+        "  SELECT eu.id, eu.user_id AS a_id,"
+        "  ed.serial_number, ed.udid, eu.token, ed.push_magic, pc.topic, pc.not_after "
         "  FROM mdm_enrolleduser AS eu"
         "  JOIN mdm_enrolleddevice AS ed ON (eu.enrolled_device_id = ed.id)"
         "  JOIN mdm_pushcertificate AS pc ON (ed.push_certificate_id = pc.id)"
