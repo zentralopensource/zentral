@@ -60,7 +60,8 @@ class ConfigurationListView(PermissionRequiredMixin, ListView):
     model = Configuration
 
     def get_queryset(self):
-        return super().get_queryset().annotate(Count("enrollment", distinct=True), Count("enrollment__enrolledmachine"))
+        return super().get_queryset().annotate(Count("enrollment", distinct=True),
+                                               Count("enrollment__enrolledmachine"))
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -264,6 +265,22 @@ class ScriptCheckListView(PermissionRequiredMixin, UserPaginationListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["form"] = self.form
+        page = ctx["page_obj"]
+        bc = []
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            ctx['reset_link'] = "?{}".format(qd.urlencode())
+            reset_link = "?{}".format(qd.urlencode())
+        else:
+            reset_link = None
+        if self.form.has_changed():
+            bc.append((reverse("munki:script_checks"), "Script checks"))
+            bc.append((reset_link, "Search"))
+        else:
+            bc.append((reset_link, "Script checks"))
+        bc.append((None, f"page {page.number} of {page.paginator.num_pages}"))
+        ctx["breadcrumbs"] = bc
         return ctx
 
 

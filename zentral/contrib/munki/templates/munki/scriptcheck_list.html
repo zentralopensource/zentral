@@ -5,7 +5,13 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
-  <li class="breadcrumb-item active">Script checks</li>
+  {% for link, anchor_text in breadcrumbs %}
+  {% if link %}
+  <li class="breadcrumb-item"><a href="{{ link }}">{{ anchor_text }}</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
 </ol>
 
 <div class="d-flex justify-content-between mb-3">

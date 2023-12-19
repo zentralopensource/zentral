@@ -76,40 +76,40 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertContains(response, sc_two.compliance_check.name)
         self.assertContains(response, "Script checks (2)")
 
-    def test_script_check_search(self):
-        self._login("munki.view_scriptcheck", "munki.add_scriptcheck")
+    def test_script_check_no_search_no_script_checks(self):
+        self._login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
         self.assertNotContains(response, "We didn't find any item related to your search")
 
-        sc_one = force_script_check()
-        sc_two = force_script_check(type=ScriptCheck.Type.ZSH_BOOL)
-
-        response = self.client.get(reverse("munki:script_checks"), {"name": "test"})
+    def test_script_check_search_no_match(self):
+        self._login("munki.view_scriptcheck")
+        response = self.client.get(reverse("munki:script_checks"), {"name": get_random_string(12)})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
         self.assertContains(response, "Script checks (0)")
-
-        response = self.client.get(reverse("munki:script_checks"),
-                                   {"name": sc_one.compliance_check.name})
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
-        self.assertContains(response, sc_one.compliance_check.name)
-        self.assertContains(response, "Script check (1)")
-
-        response = self.client.get(reverse("munki:script_checks"),
-                                   {"type": ScriptCheck.Type.ZSH_BOOL})
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
-        self.assertContains(response, sc_two.compliance_check.name)
-        self.assertContains(response, "Script check (1)")
-
-        response = self.client.get(reverse("munki:script_checks"), {"name": "does not exists"})
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
         self.assertContains(response, "We didn't find any item related to your search")
-        self.assertContains(response, reverse("munki:script_checks") + '">all the items')
+
+    def test_script_check_search_two_matches(self):
+        self.user.items_per_page = 1
+        self.user.save()
+        sc_a = force_script_check()
+        sc_b = force_script_check()
+        sc_b.compliance_check.name = sc_a.compliance_check.name + " " + sc_b.compliance_check.name
+        sc_b.compliance_check.save()
+        force_script_check()
+        self._login("munki.view_scriptcheck")
+        response = self.client.get(reverse("munki:script_checks"), {"name": sc_a.compliance_check.name,
+                                                                    "type": sc_a.type,
+                                                                    "page": 2})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
+        self.assertContains(response, "Script checks (2)")
+        self.assertContains(response, "page 2 of 2")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+        self.assertContains(response, reverse("munki:script_checks"))
+        self.assertContains(response, sc_b.compliance_check.name)
 
     # create
 

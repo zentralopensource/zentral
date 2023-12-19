@@ -66,7 +66,7 @@ class ScriptCheckSearchForm(forms.Form):
         type = self.cleaned_data.get("type")
         if type:
             qs = qs.filter(type=type)
-        return qs
+        return qs.order_by("compliance_check__name")
 
 
 class ScriptCheckForm(forms.ModelForm):
