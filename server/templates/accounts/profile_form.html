@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Settings</a></li>
+        <li class="breadcrumb-item active">Update profile</li>
+    </ol>
+</nav>
+
+<h3 class="fs-5 text-secondary py-2">Update profile</h3>
+
+<form method="post">{% csrf_token %}
+  {{ form }}
+  <p>
+    <a class="btn btn-outline-secondary" href="{% url 'accounts:profile' %}">
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+
+{% endblock %}

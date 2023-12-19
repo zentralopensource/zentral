@@ -34,6 +34,7 @@ urlpatterns = [
 
     # user views
     path('settings/profile/', views.ProfileView.as_view(), name="profile"),
+    path('settings/profile/update/', views.UpdateProfileView.as_view(), name="update_profile"),
     path('settings/verification_devices/', views.UserVerificationDevicesView.as_view(),
          name="verification_devices"),
     path('settings/verification_devices/add_totp/', views.AddTOTPView.as_view(),

@@ -9,7 +9,7 @@ from django.views.generic import DetailView, FormView, TemplateView
 from webauthn import generate_registration_options, options_to_json, verify_registration_response
 from webauthn.helpers.structs import PublicKeyCredentialDescriptor, RegistrationCredential
 from accounts.events import post_verification_device_event
-from accounts.forms import AddTOTPForm, CheckPasswordForm, RegisterWebAuthnDeviceForm
+from accounts.forms import AddTOTPForm, CheckPasswordForm, RegisterWebAuthnDeviceForm, UpdateProfileForm
 from accounts.models import UserTOTP, UserWebAuthn
 from zentral.conf import settings as zentral_settings
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
@@ -20,6 +20,21 @@ logger = logging.getLogger("zentral.accounts.views.user")
 
 class ProfileView(LoginRequiredMixin, TemplateView):
     template_name = "accounts/profile.html"
+
+
+class UpdateProfileView(LoginRequiredMixin, FormView):
+    template_name = "accounts/profile_form.html"
+    form_class = UpdateProfileForm
+    success_url = reverse_lazy("accounts:profile")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        return super().form_valid(form)
 
 
 class UserVerificationDevicesView(LoginRequiredMixin, DetailView):

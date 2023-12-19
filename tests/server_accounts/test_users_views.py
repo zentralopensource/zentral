@@ -252,6 +252,22 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertNotContains(response, self.user.username)
         self.assertContains(response, self.ui_user.username)
 
+    def test_update_profile_login_redirect(self):
+        self.login_redirect("update_profile")
+
+    def test_update_profile_get(self):
+        self.login()
+        response = self.client.get(reverse("accounts:update_profile"))
+        self.assertTemplateUsed(response, "accounts/profile_form.html")
+
+    def test_update_profile_post(self):
+        self.login()
+        self.assertEqual(self.ui_user.items_per_page, 10)
+        response = self.client.post(reverse("accounts:update_profile"), {"items_per_page": 42}, follow=True)
+        self.assertTemplateUsed(response, "accounts/profile.html")
+        self.ui_user.refresh_from_db()
+        self.assertEqual(self.ui_user.items_per_page, 42)
+
     # invite
 
     def test_user_invite_login_redirect(self):

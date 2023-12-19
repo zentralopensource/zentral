@@ -10,7 +10,13 @@
     </ol>
 </nav>
 
-<h3>Profile</h3>
+<div class="d-flex align-items-center mb-3">
+  <h3 class="m-0 fs-5 text-secondary">Profile</h3>
+  <div class="ms-auto">
+    {% url 'accounts:update_profile' as url %}
+    {% button 'UPDATE' url "Update profile" %}
+  </div>
+</div>
 
 <div class="object-details">
     <table class="table-object-properties">

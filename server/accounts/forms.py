@@ -6,7 +6,9 @@ from urllib.parse import urlparse
 from django import forms
 from django.apps import apps
 from django.conf import settings as django_settings
-from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, PasswordChangeForm, UsernameField, SetPasswordForm
+from django.contrib.auth.forms import (AuthenticationForm,
+                                       PasswordResetForm, PasswordChangeForm,
+                                       UsernameField, SetPasswordForm)
 from django.contrib.auth.models import Group
 from django.core import signing, validators
 from django.db.models import Q
@@ -188,6 +190,23 @@ class UpdateUserForm(forms.ModelForm):
             del self.fields["is_superuser"]
         if self.instance.is_remote:
             del self.fields["groups"]
+
+
+class UpdateProfileForm(forms.Form):
+    items_per_page = forms.IntegerField(
+        min_value=1, max_value=500,
+        help_text="Number of items per page in lists"
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop("user")
+        super().__init__(*args, **kwargs)
+        self.fields["items_per_page"].initial = self.user.items_per_page
+
+    def save(self, *args, **kwargs):
+        self.user.items_per_page = self.cleaned_data["items_per_page"]
+        self.user.save()
+        return self.user
 
 
 class AddTOTPForm(forms.Form):
