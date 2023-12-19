@@ -24,8 +24,11 @@ class EventStore(BaseEventStore):
     def __init__(self, config_d):
         super().__init__(config_d)
         self.hec_url = urljoin(config_d["hec_url"], "/services/collector/event")
+        logger.info("HEC URL: %s", self.hec_url)
         self.hec_extra_headers = config_d.get("hec_extra_headers")
         self.hec_token = config_d["hec_token"]
+        self.hec_request_timeout = int(config_d.get("hec_request_timeout", 300))
+        logger.info("HEC request timeout: %ds", self.hec_request_timeout)
         self.search_app_url = config_d.get("search_app_url")
         # If set, the computer name of the machine snapshots of these sources will be used
         # as host field value. First source with a non-empty value will be picked.
@@ -66,7 +69,7 @@ class EventStore(BaseEventStore):
                 if k.lower() in ('authorization', 'content-type'):
                     logger.error("Skip '%s' HEC extra header", k)
                 else:
-                    logger.debug("Set '%s' HEC extra header", k)
+                    logger.info("HEC extra header: %s", k)
                     session.headers[k] = v
         return session
 
@@ -150,7 +153,7 @@ class EventStore(BaseEventStore):
     def store(self, event):
         payload = self._serialize_event(event)
         for i in range(self.max_retries):
-            r = self.hec_session.post(self.hec_url, json=payload)
+            r = self.hec_session.post(self.hec_url, json=payload, timeout=self.hec_request_timeout)
             if r.ok:
                 return
             if r.status_code > 500:
@@ -175,7 +178,7 @@ class EventStore(BaseEventStore):
                 data += b"\n"
             data += json.dumps(payload).encode("utf-8")
         for i in range(self.max_retries):
-            r = self.hec_session.post(self.hec_url, data=data)
+            r = self.hec_session.post(self.hec_url, data=data, timeout=self.hec_request_timeout)
             if r.ok:
                 return event_keys
             if r.status_code > 500:

@@ -379,6 +379,12 @@ A String/String dictionary of extra headers to use for the Splunk HEC requests. 
 
 The HEC token. It is recommended to use the common Zentral configuration options to read the value from an environment variable `"{{ env:ENV_VAR_NAME }}"`, a file `"{{ file:FILE_PATH }}"`, or a GCP or AWS secret `"{{ secret:NAME_OF_THE_SECRET }}"`.
 
+### `hec_request_timeout`
+
+**OPTIONAL**
+
+In seconds. Defaults to 300s. The connection timeout for the HEC HTTP requests.
+
 ### `verify_tls`
 
 **OPTIONAL**
@@ -469,6 +475,7 @@ In seconds. Defaults to 300s. The number of seconds to keep a search after proce
       "CF-Access-Client-Secret": "{{ env:SPLUNK_HEC_CF_ACCESS_CLIENT_SECRET }}"
     },
     "hec_token": "{{ env:HEC_TOKEN }}",
+    "hec_request_timeout": 30,
     "verify_tls": true,
     "batch_size": 100,
     "source": "zentral.example.com",

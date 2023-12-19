@@ -1,4 +1,4 @@
-from unittest.mock import patch, Mock
+from unittest.mock import call, patch, Mock
 import uuid
 from django.test import SimpleTestCase
 from django.utils.crypto import get_random_string
@@ -18,6 +18,60 @@ class TestSplunkStore(SimpleTestCase):
     @staticmethod
     def build_login_event():
         return LoginEvent(EventMetadata(), {"user": {"username": get_random_string(12)}})
+
+    def test_search_app_url_absent(self):
+        for attr in ("machine_events_url", "object_events_url", "probe_events_url"):
+            self.assertFalse(getattr(self.store, attr))
+
+    def test_search_app_url_present(self):
+        store = EventStore({"store_name": get_random_string(12),
+                            "hec_url": "https://splunk.example.com:8088",
+                            "hec_token": get_random_string(12),
+                            "batch_size": 2,
+                            "search_app_url": "https://splunk.example.com/en-US/app/search/search"})
+        for attr in ("machine_events_url", "object_events_url", "probe_events_url"):
+            self.assertTrue(getattr(store, attr))
+
+    def test_search_url_authentication_token_absent(self):
+        for attr in ("last_machine_heartbeats", "machine_events", "object_events", "probe_events"):
+            self.assertFalse(getattr(self.store, attr))
+
+    def test_search_url_authentication_token_present(self):
+        store = EventStore({"store_name": get_random_string(12),
+                            "hec_url": "https://splunk.example.com:8088",
+                            "hec_token": get_random_string(12),
+                            "batch_size": 2,
+                            "search_url": "https://splunk.example.com/en-US/app/search/search",
+                            "authentication_token": "yolo"})
+        for attr in ("last_machine_heartbeats", "machine_events", "object_events", "probe_events"):
+            self.assertTrue(getattr(store, attr))
+
+    @patch("zentral.core.stores.backends.splunk.logger")
+    def test_hec_session(self, logger):
+        store = EventStore({
+            "store_name": get_random_string(12),
+            "hec_url": "https://splunk.example.com:8088",
+            "hec_token": get_random_string(12),
+            "hec_request_timeout": 17,
+            "hec_extra_headers": {
+                "X-YOLO": "FOMO",  # OK header
+                "Authorization": "yolo",  # Must be skipped
+                "Content-Type": "fomo"  # Must be skipped
+            }
+        })
+        session = store.hec_session
+        logger.info.assert_has_calls(
+            [call("HEC URL: %s", "https://splunk.example.com:8088/services/collector/event"),
+             call("HEC request timeout: %ds", 17),
+             call("HEC extra header: %s", "X-YOLO")]
+        )
+        logger.error.assert_has_calls(
+            [call("Skip '%s' HEC extra header", "Authorization"),
+             call("Skip '%s' HEC extra header", "Content-Type")],
+            any_order=True,
+        )
+        self.assertEqual(session.headers["X-YOLO"], "FOMO")
+        self.assertTrue(session is store.hec_session)  # cached property
 
     def test_event_id_serialization(self):
         event = self.build_login_event()
@@ -110,6 +164,7 @@ class TestSplunkStore(SimpleTestCase):
             self.store.store(event)
         self.assertEqual(cm.exception.args[0], "BOOM!")
         self.assertEqual(len(hec_session.post.call_args_list), 1)
+        self.assertEqual(hec_session.post.call_args_list[0].kwargs["timeout"], 300)
         self.assertEqual(len(sleep.call_args_list), 0)
 
     @patch("zentral.core.stores.backends.splunk.EventStore.hec_session")
@@ -140,4 +195,5 @@ class TestSplunkStore(SimpleTestCase):
             self.store.bulk_store(events)
         self.assertEqual(cm.exception.args[0], "BOOM!")
         self.assertEqual(len(hec_session.post.call_args_list), 1)
+        self.assertEqual(hec_session.post.call_args_list[0].kwargs["timeout"], 300)
         self.assertEqual(len(sleep.call_args_list), 0)
