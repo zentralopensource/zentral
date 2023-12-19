@@ -221,23 +221,23 @@ td > p:last-child, td > table:last-child {
 .collapse-toggler::before {
   display: inline-block;
   content: "";
-  height: 9px;
+  height: 6px;
   transform: rotate(-45deg);
-  width: 9px;
+  width: 6px;
   transition: transform .35s ease;
   position: relative;
-  top: -3px;
+  top: -2px;
   margin-right: 5px;
 }
 
 [data-bs-theme=dark] .collapse-toggler::before {
-  border-bottom: 2px solid $white;
-  border-right: 2px solid $white;
+  border-bottom: 1px solid $white;
+  border-right: 1px solid $white;
 }
 
 [data-bs-theme=light] .collapse-toggler::before {
-  border-bottom: 2px solid $body-color;
-  border-right: 2px solid $body-color;
+  border-bottom: 1px solid $body-color;
+  border-right: 1px solid $body-color;
 }
 
 .collapse-toggler:not(.collapsed)::before {
