@@ -6,9 +6,6 @@
             role="button"
             aria-expanded="{% if section.is_active %}false{% else %}true{% endif %}"
             aria-controls="offcanvas{{ section.title|cut:" " }}Submenu">
-            {% if section.icon %}
-                <i class="bi {{ section.icon }}"></i>
-            {% endif %}
             {{ section.title }}
             <i class="collapse-toggler float-end{% if not section.is_active %} collapsed{% endif %}"
                 data-bs-toggle="collapse"

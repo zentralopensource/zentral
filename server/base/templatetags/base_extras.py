@@ -34,11 +34,9 @@ class MenuConfig:
                 logger.debug('App %s w/o %s', app_name, config_attr)
                 continue
             title = menu_cfg.get('title', app_shortname.title())
-            icon = menu_cfg.get('icon', '')
             section_cfg = prepared_sections.setdefault(
                 title,
                 {'title': title,
-                 'icon': icon,
                  'link_list': [],
                  'weight': menu_cfg.get('weight', 1000)}
             )
