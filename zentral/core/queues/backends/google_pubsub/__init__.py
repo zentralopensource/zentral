@@ -5,7 +5,6 @@ import queue
 import random
 import threading
 import time
-from django.db import DatabaseError, InterfaceError
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from kombu.utils import json
@@ -80,13 +79,10 @@ class EnrichWorker(ConsumerProducer):
             for event in self.enrich_event(event_dict):
                 self.publish_event(event, machine_metadata=True)
                 self.inc_counter("produced_events", event.event_type)
-        except (DatabaseError, InterfaceError):
-            self.log_exception("DB exception. Shutdown")
+        except Exception:
+            self.log_exception("Exception. NACK and shutdown")
             message.nack()
             self.shutdown(error=True)
-        except Exception:
-            self.log_exception("Other exception. NACK")
-            message.nack()
         else:
             message.ack()
             self.inc_counter("enriched_events", event_type)
@@ -134,13 +130,10 @@ class StoreWorker(Consumer):
             return
         try:
             self.event_store.store(event_dict)
-        except (DatabaseError, InterfaceError):
-            self.log_exception("DB exception. Shutdown")
+        except Exception:
+            self.log_exception("Exception. NACK and shutdown")
             message.nack()
             self.shutdown(error=True)
-        except Exception:
-            self.log_exception("Other exception. NACK")
-            message.nack()
         else:
             message.ack()
             self.inc_counter("stored_events", event_type)
