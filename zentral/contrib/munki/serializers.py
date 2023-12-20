@@ -64,7 +64,8 @@ class ScriptCheckSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScriptCheck
         fields = ("name", "description", "version",
-                  "id", "tags", "arch_amd64", "arch_arm64",
+                  "id", "tags", "excluded_tags",
+                  "arch_amd64", "arch_arm64",
                   "min_os_version", "max_os_version",
                   "type", "source", "expected_result",
                   "created_at", "updated_at")
@@ -94,6 +95,11 @@ class ScriptCheckSerializer(serializers.ModelSerializer):
             msg = "This check has to run on at least one architecture"
             raise serializers.ValidationError({"arch_amd64": msg,
                                                "arch_arm64": msg})
+        # disjoint tag sets
+        tags = set(data.get("tags", []))
+        excluded_tags = set(data.get("excluded_tags", []))
+        if tags & excluded_tags:
+            raise serializers.ValidationError("tags and excluded tags must be disjoint")
         # min / max OS versions
         min_os_version = data.get("min_os_version")
         comparable_min_os_version = None
@@ -124,11 +130,13 @@ class ScriptCheckSerializer(serializers.ModelSerializer):
             description=cc_data.get("description") or "",
         )
         tags = validated_data.pop("tags", [])
+        excluded_tags = validated_data.pop("excluded_tags", [])
         script_check = ScriptCheck.objects.create(
             compliance_check=compliance_check,
             **validated_data,
         )
         script_check.tags.set(tags)
+        script_check.excluded_tags.set(excluded_tags)
         return script_check
 
     def update(self, instance, validated_data):
@@ -140,12 +148,15 @@ class ScriptCheckSerializer(serializers.ModelSerializer):
         # script check
         script_check_updated = False
         tags = sorted(validated_data.pop("tags", []), key=lambda t: t.pk)
+        excluded_tags = sorted(validated_data.pop("excluded_tags", []), key=lambda t: t.pk)
         for key, value in validated_data.items():
             old_value = getattr(instance, key)
             if value != old_value:
                 script_check_updated = True
             setattr(instance, key, value)
         if sorted(instance.tags.all(), key=lambda t: t.pk) != tags:
+            script_check_updated = True
+        if sorted(instance.excluded_tags.all(), key=lambda t: t.pk) != tags:
             script_check_updated = True
         if script_check_updated:
             compliance_check.version = F("version") + 1
@@ -155,4 +166,5 @@ class ScriptCheckSerializer(serializers.ModelSerializer):
             compliance_check.refresh_from_db()
         instance.save()
         instance.tags.set(tags)
+        instance.excluded_tags.set(excluded_tags)
         return instance

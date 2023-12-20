@@ -55,7 +55,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         response = self.client.get(reverse("munki:script_checks"))
         self.assertEqual(response.status_code, 403)
 
-    def test_script_checks_no_create_link(self):
+    def test_script_checks_no_links(self):
         sc = force_script_check()
         self._login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"))
@@ -63,11 +63,14 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
         self.assertContains(response, sc.compliance_check.name)
         self.assertNotContains(response, reverse("munki:create_script_check"))
+        self.assertNotContains(response, reverse("munki:delete_script_check", args=(sc.pk,)))
+        self.assertNotContains(response, reverse("munki:update_script_check", args=(sc.pk,)))
 
     def test_script_checks_with_create_link(self):
         sc_one = force_script_check()
         sc_two = force_script_check()
-        self._login("munki.view_scriptcheck", "munki.add_scriptcheck")
+        self._login("munki.view_scriptcheck", "munki.add_scriptcheck",
+                    "munki.change_scriptcheck", "munki.delete_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
@@ -75,6 +78,8 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertContains(response, sc_one.compliance_check.name)
         self.assertContains(response, sc_two.compliance_check.name)
         self.assertContains(response, "Script checks (2)")
+        self.assertContains(response, reverse("munki:delete_script_check", args=(sc_one.pk,)))
+        self.assertContains(response, reverse("munki:update_script_check", args=(sc_one.pk,)))
 
     def test_script_check_no_search_no_script_checks(self):
         self._login("munki.view_scriptcheck")
@@ -210,6 +215,26 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "munki/scriptcheck_form.html")
         self.assertFormError(response.context["script_check_form"], "expected_result", "Invalid boolean")
 
+    def test_create_script_check_post_tag_sets_not_disjoint_err(self):
+        self._login("munki.add_scriptcheck")
+        name = get_random_string(12)
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
+        response = self.client.post(
+            reverse("munki:create_script_check"),
+            {"ccf-name": name,
+             "scf-type": "ZSH_STR",
+             "scf-source": "echo yolo",
+             "scf-expected_result": "yolo",
+             "scf-arch_arm64": True,
+             "scf-tags": [t.pk for t in tags[:-1]],
+             "scf-excluded_tags": [t.pk for t in tags[1:]]},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_form.html")
+        self.assertFormError(response.context["script_check_form"],
+                             "excluded_tags", "tags and excluded tags must be disjoint")
+
     def test_create_script_check_post_min_os_version_err(self):
         self._login("munki.add_scriptcheck")
         name = get_random_string(12)
@@ -238,6 +263,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         name = get_random_string(12)
         description = get_random_string(12)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
+        excluded_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 reverse("munki:create_script_check"),
@@ -247,6 +273,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
                  "scf-source": "echo true",
                  "scf-expected_result": "True",
                  "scf-tags": [t.pk for t in tags],
+                 "scf-excluded_tags": [t.pk for t in excluded_tags],
                  "scf-arch_amd64": False,
                  "scf-arch_arm64": True,
                  "scf-min_os_version": "14",
@@ -265,6 +292,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertEqual(script_check.source, "echo true")
         self.assertEqual(script_check.expected_result, "True")
         self.assertEqual(set(script_check.tags.all()), set(tags))
+        self.assertEqual(set(script_check.excluded_tags.all()), set(excluded_tags))
         self.assertFalse(script_check.arch_amd64)
         self.assertTrue(script_check.arch_arm64)
         self.assertEqual(script_check.min_os_version, "14")
@@ -290,7 +318,10 @@ class MunkiScriptCheckViewsTestCase(TestCase):
                      "type": "ZSH_BOOL",
                      "source": "echo true",
                      "expected_result": "True",
-                     "tags": [{"pk": t.pk, "name": t.name} for t in sorted(tags, key=lambda t: t.pk)],
+                     "tags": [{"pk": t.pk, "name": t.name}
+                              for t in sorted(tags, key=lambda t: t.pk)],
+                     "excluded_tags": [{"pk": t.pk, "name": t.name}
+                                       for t in sorted(excluded_tags, key=lambda t: t.pk)],
                      "arch_amd64": False,
                      "arch_arm64": True,
                      "min_os_version": "14",
@@ -392,6 +423,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         name = get_random_string(12)
         description = get_random_string(12)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
+        excluded_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 reverse("munki:update_script_check", args=(sc.pk,)),
@@ -401,6 +433,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
                  "scf-source": "echo true",
                  "scf-expected_result": "True",
                  "scf-tags": [t.pk for t in tags],
+                 "scf-excluded_tags": [t.pk for t in excluded_tags],
                  "scf-arch_amd64": False,
                  "scf-arch_arm64": True,
                  "scf-min_os_version": "14",
@@ -419,6 +452,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertEqual(script_check.source, "echo true")
         self.assertEqual(script_check.expected_result, "True")
         self.assertEqual(set(script_check.tags.all()), set(tags))
+        self.assertEqual(set(script_check.excluded_tags.all()), set(excluded_tags))
         self.assertFalse(script_check.arch_amd64)
         self.assertTrue(script_check.arch_arm64)
         self.assertEqual(script_check.min_os_version, "14")
@@ -445,7 +479,10 @@ class MunkiScriptCheckViewsTestCase(TestCase):
                      "type": "ZSH_BOOL",
                      "source": "echo true",
                      "expected_result": "True",
-                     "tags": [{"pk": t.pk, "name": t.name} for t in sorted(tags, key=lambda t: t.pk)],
+                     "tags": [{"pk": t.pk, "name": t.name}
+                              for t in sorted(tags, key=lambda t: t.pk)],
+                     "excluded_tags": [{"pk": t.pk, "name": t.name}
+                                       for t in sorted(excluded_tags, key=lambda t: t.pk)],
                      "arch_amd64": False,
                      "arch_arm64": True,
                      "min_os_version": "14",

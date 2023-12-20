@@ -73,7 +73,8 @@ class ScriptCheckForm(forms.ModelForm):
     class Meta:
         model = ScriptCheck
         fields = ("type", "source", "expected_result",
-                  "tags", "arch_amd64", "arch_arm64",
+                  "tags", "excluded_tags",
+                  "arch_amd64", "arch_arm64",
                   "min_os_version", "max_os_version")
         widgets = {
             "expected_result": forms.TextInput
@@ -95,6 +96,11 @@ class ScriptCheckForm(forms.ModelForm):
             msg = "This check has to run on at least one architecture"
             self.add_error("arch_amd64", msg)
             self.add_error("arch_arm64", msg)
+        # disjoint tag sets
+        tags = set(self.cleaned_data.get("tags", []))
+        excluded_tags = set(self.cleaned_data.get("excluded_tags", []))
+        if tags & excluded_tags:
+            self.add_error("excluded_tags", "tags and excluded tags must be disjoint")
         # min / max OS versions
         min_os_version = self.cleaned_data.get("min_os_version")
         comparable_min_os_version = None

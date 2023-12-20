@@ -78,6 +78,16 @@
             </td>
             </tr>
             <tr>
+            <td>Excluded tags</td>
+            <td>
+                {% for tag in object.excluded_tags.all %}
+                {% inventory_tag tag %}
+                {% empty %}
+                -
+                {% endfor %}
+            </td>
+            </tr>
+            <tr>
             <td>Intel?</td>
             <td>{{ object.arch_amd64|yesno }}</td>
             </tr>

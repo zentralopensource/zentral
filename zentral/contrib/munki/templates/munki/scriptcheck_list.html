@@ -43,11 +43,12 @@
         <th>Name</th>
         <th>Type</th>
         <th>Tags</th>
+        <th>Excluded tags</th>
     </thead>
     <tbody>
         {% for obj in object_list %}
         {% with obj.compliance_check as cc %}
-        <tr>
+        <tr class="data-row">
         <td>
             <a href="{{ obj.get_absolute_url }}">{{ cc.name }}</a>
         </td>
@@ -59,8 +60,27 @@
             -
             {% endfor %}
         </td>
-        </tr>
+        <td>
+            {% for tag in obj.excluded_tags.all %}
+            {% inventory_tag tag %}
+            {% empty %}
+            -
+            {% endfor %}
+        </td>
         {% endwith %}
+        {% if perms.munki.change_scriptcheck or perms.munki.delete_script_check %}
+        <td class="text-end">
+            {% if perms.munki.change_scriptcheck %}
+            {% url 'munki:update_script_check' obj.pk as url %}
+            {% button 'UPDATE' url "Edit script check" %}
+            {% endif %}
+            {% if perms.munki.delete_scriptcheck %}
+            {% url 'munki:delete_script_check' obj.pk as url %}
+            {% button 'DELETE' url "Delete script check" %}
+            {% endif %}
+        </td>
+        {% endif %}
+        </tr>
         {% endfor %}
     </tbody>
     </table>

@@ -846,6 +846,7 @@ class APIViewsTestCase(TestCase):
               'name': sc.compliance_check.name,
               'source': sc.source,
               'tags': [t.pk for t in sc.tags.all()],
+              'excluded_tags': [t.pk for t in sc.excluded_tags.all()],
               'type': str(sc.type),
               'created_at': sc.created_at.isoformat(),
               'updated_at': sc.updated_at.isoformat(),
@@ -855,7 +856,8 @@ class APIViewsTestCase(TestCase):
     def test_get_script_checks_by_name(self):
         sc = force_script_check()
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
-        sc2 = force_script_check(tags=tags)
+        excluded_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
+        sc2 = force_script_check(tags=tags, excluded_tags=excluded_tags)
         self.set_permissions("munki.view_scriptcheck")
         response = self.get(reverse('munki_api:script_checks'))
         self.assertEqual(response.status_code, 200)
@@ -871,6 +873,7 @@ class APIViewsTestCase(TestCase):
               'name': sc.compliance_check.name,
               'source': sc.source,
               'tags': [t.pk for t in sc.tags.all()],
+              'excluded_tags': [t.pk for t in sc.excluded_tags.all()],
               'type': str(sc.type),
               'created_at': sc.created_at.isoformat(),
               'updated_at': sc.updated_at.isoformat(),
@@ -885,6 +888,7 @@ class APIViewsTestCase(TestCase):
               'name': sc2.compliance_check.name,
               'source': sc.source,
               'tags': [tags[0].pk],
+              'excluded_tags': [excluded_tags[0].pk],
               'type': str(sc2.type),
               'created_at': sc2.created_at.isoformat(),
               'updated_at': sc2.updated_at.isoformat(),
@@ -943,6 +947,21 @@ class APIViewsTestCase(TestCase):
             response.json(),
             {"arch_amd64": [err_msg],
              "arch_arm64": [err_msg]}
+        )
+
+    def test_create_script_check_same_tag_included_excluded_error(self):
+        self.set_permissions("munki.add_scriptcheck")
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
+        response = self.post(reverse("munki_api:script_checks"),
+                             {"name": get_random_string(12),
+                              "source": "echo yolo",
+                              "expected_result": "yolo",
+                              "tags": [t.pk for t in tags[:-1]],
+                              "excluded_tags": [t.pk for t in tags[1:]]})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'non_field_errors': ['tags and excluded tags must be disjoint']}
         )
 
     def test_create_script_check_invalid_min_os_version(self):
@@ -1021,6 +1040,7 @@ class APIViewsTestCase(TestCase):
              'name': name,
              'source': "echo yolo",
              'tags': [],
+             'excluded_tags': [],
              'type': "ZSH_STR",
              'created_at': script_check.created_at.isoformat(),
              'updated_at': script_check.updated_at.isoformat(),
@@ -1047,6 +1067,7 @@ class APIViewsTestCase(TestCase):
                      "source": "echo yolo",
                      "expected_result": "yolo",
                      "tags": [],
+                     "excluded_tags": [],
                      "arch_amd64": True,
                      "arch_arm64": True,
                      "created_at": script_check.created_at,
@@ -1088,6 +1109,7 @@ class APIViewsTestCase(TestCase):
              'name': sc.compliance_check.name,
              'source': sc.source,
              'tags': [t.pk for t in sc.tags.all()],
+             'excluded_tags': [t.pk for t in sc.excluded_tags.all()],
              'type': str(sc.type),
              'created_at': sc.created_at.isoformat(),
              'updated_at': sc.updated_at.isoformat(),
@@ -1128,6 +1150,7 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("munki.change_scriptcheck")
         name = get_random_string(12)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
+        excluded_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(reverse("munki_api:script_check", args=(script_check.pk,)),
                                 {"name": name,
@@ -1140,6 +1163,7 @@ class APIViewsTestCase(TestCase):
                                  "min_os_version": "14",
                                  "max_os_version": "15",
                                  "tags": [t.pk for t in tags],
+                                 "excluded_tags": [t.pk for t in excluded_tags],
                                  })
         self.assertEqual(response.status_code, 200)
         script_check2 = ScriptCheck.objects.get(compliance_check__name=name)
@@ -1169,6 +1193,7 @@ class APIViewsTestCase(TestCase):
              'name': name,
              'source': "echo true",
              'tags': [tag.pk for tag in tags],
+             'excluded_tags': [tag.pk for tag in excluded_tags],
              'type': "ZSH_BOOL",
              'created_at': script_check.created_at.isoformat(),
              'updated_at': script_check.updated_at.isoformat(),
@@ -1198,6 +1223,7 @@ class APIViewsTestCase(TestCase):
                      "min_os_version": "14",
                      "max_os_version": "15",
                      "tags": [{"pk": tag.pk, "name": tag.name} for tag in tags],
+                     "excluded_tags": [{"pk": tag.pk, "name": tag.name} for tag in excluded_tags],
                      "arch_amd64": False,
                      "arch_arm64": True,
                      "created_at": script_check.created_at,

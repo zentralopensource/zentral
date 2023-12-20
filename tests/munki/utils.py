@@ -41,6 +41,7 @@ def force_script_check(
     source="echo yolo",
     expected_result="yolo",
     tags=None,
+    excluded_tags=None,
     arch_arm64=True,
     arch_amd64=True,
     min_os_version="",
@@ -62,6 +63,8 @@ def force_script_check(
     )
     if tags is not None:
         sc.tags.set(tags)
+    if excluded_tags is not None:
+        sc.excluded_tags.set(excluded_tags)
     return sc
 
 

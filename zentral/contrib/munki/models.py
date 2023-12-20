@@ -176,20 +176,25 @@ class ManagedInstall(models.Model):
 
 class ScriptCheckManager(models.Manager):
     def iter_in_scope(self, comparable_os_version, arch_amd64, arch_arm64, tag_pks):
-        qs = self.select_related("compliance_check")
+        qs = self.distinct().select_related("compliance_check")
         if arch_arm64:
             qs = qs.filter(arch_arm64=True)
         elif arch_amd64:
             qs = qs.filter(arch_amd64=True)
+        tags_filter = Q(tags__isnull=True) & Q(excluded_tags__isnull=True)
         if tag_pks:
-            qs = qs.distinct().filter(Q(tags__isnull=True) | Q(tags__pk__in=tag_pks))
+            qs = qs.exclude(excluded_tags__pk__in=tag_pks)
+            tags_filter |= Q(tags__pk__in=tag_pks) | Q(tags__isnull=True)
+        qs = qs.filter(tags_filter)
         for script_check in qs:
-            comparable_min_os_version = make_comparable_os_version(script_check.min_os_version)
-            if comparable_os_version < comparable_min_os_version:
-                continue
-            comparable_max_os_version = make_comparable_os_version(script_check.max_os_version)
-            if comparable_max_os_version > (0, 0, 0) and comparable_os_version >= comparable_max_os_version:
-                continue
+            if script_check.min_os_version:
+                comparable_min_os_version = make_comparable_os_version(script_check.min_os_version)
+                if comparable_os_version < comparable_min_os_version:
+                    continue
+            if script_check.max_os_version:
+                comparable_max_os_version = make_comparable_os_version(script_check.max_os_version)
+                if comparable_max_os_version > (0, 0, 0) and comparable_os_version >= comparable_max_os_version:
+                    continue
             yield script_check
 
 
@@ -205,7 +210,8 @@ class ScriptCheck(models.Model):
         related_name="script_check",
         editable=False,
     )
-    tags = models.ManyToManyField(Tag, blank=True)
+    tags = models.ManyToManyField(Tag, blank=True, related_name="+")
+    excluded_tags = models.ManyToManyField(Tag, blank=True, related_name="+")
     arch_amd64 = models.BooleanField(verbose_name="Run on Intel architecture", default=True)
     arch_arm64 = models.BooleanField(verbose_name="Run on Apple Silicon architecture", default=True)
     min_os_version = models.CharField(max_length=32, blank=True)
@@ -228,8 +234,14 @@ class ScriptCheck(models.Model):
         d = {
             "pk": self.pk,
             "compliance_check": self.compliance_check.serialize_for_event(),
-            "tags": [t.serialize_for_event(keys_only=True)
-                     for t in self.tags.select_related("taxonomy", "meta_business_unit").all().order_by("pk")],
+            "tags": [
+                t.serialize_for_event(keys_only=True)
+                for t in self.tags.select_related("taxonomy", "meta_business_unit").all().order_by("pk")
+            ],
+            "excluded_tags": [
+                t.serialize_for_event(keys_only=True)
+                for t in self.excluded_tags.select_related("taxonomy", "meta_business_unit").all().order_by("pk")
+            ],
             "arch_amd64": self.arch_amd64,
             "arch_arm64": self.arch_arm64,
             "type": str(self.type),

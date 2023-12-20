@@ -151,7 +151,6 @@ class JobDetailsView(BaseView):
         # script checks
         os_version = data.get("os_version")
         arch = data.get("arch")
-        print("ARCH", arch)
         if (
             os_version
             and arch

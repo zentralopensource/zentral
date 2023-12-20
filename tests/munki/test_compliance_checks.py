@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.core.compliance_checks.models import MachineStatus, Status
+from zentral.contrib.inventory.models import Tag
 from zentral.contrib.munki.compliance_checks import (convert_bool_expected_result,
                                                      serialize_script_check_for_job,
                                                      update_machine_munki_script_check_statuses,
@@ -90,6 +91,37 @@ class MunkiComplianceChecksTestCase(TestCase):
              "version": sc.compliance_check.version,
              "source": "echo un",
              "expected_result": "un"}
+        )
+
+    # ScriptCheck
+
+    def test_iter_in_scope_no_tags(self):
+        sc = force_script_check()
+        force_script_check(tags=[Tag.objects.create(name=get_random_string(12))])
+        self.assertEqual(
+            list(ScriptCheck.objects.iter_in_scope((14, 2, 1), False, True, [])),
+            [sc]
+        )
+
+    def test_iter_in_scope_two_matching_tags(self):
+        sc = force_script_check(excluded_tags=[Tag.objects.create(name=get_random_string(12))])
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
+        sc2 = force_script_check(tags=tags[:-1])
+        self.assertEqual(
+            sorted(ScriptCheck.objects.iter_in_scope((14, 2, 1), False, True, [t.pk for t in tags]),
+                   key=lambda sc: sc.pk),
+            [sc, sc2]
+        )
+
+    def test_iter_in_scope_one_matching_tag_two_matching_excluded_tags(self):
+        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
+        sc = force_script_check(tags=tags[1:], excluded_tags=[Tag.objects.create(name=get_random_string(12))])
+        sc2 = force_script_check(tags=tags[2:])
+        force_script_check(tags=tags[:-1], excluded_tags=tags[1:])
+        self.assertEqual(
+            sorted(ScriptCheck.objects.iter_in_scope((14, 2, 1), False, True, [t.pk for t in tags]),
+                   key=lambda sc: sc.pk),
+            [sc, sc2]
         )
 
     # MunkiScriptCheck
