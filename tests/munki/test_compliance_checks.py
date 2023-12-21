@@ -106,6 +106,13 @@ class MunkiComplianceChecksTestCase(TestCase):
             [sc]
         )
 
+    def test_iter_in_scope_no_excluded_tags(self):
+        sc = force_script_check(excluded_tags=[Tag.objects.create(name=get_random_string(12))])
+        self.assertEqual(
+            list(ScriptCheck.objects.iter_in_scope((14, 2, 1), False, True, [])),
+            [sc]
+        )
+
     def test_iter_in_scope_two_matching_tags(self):
         sc = force_script_check(excluded_tags=[Tag.objects.create(name=get_random_string(12))])
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]

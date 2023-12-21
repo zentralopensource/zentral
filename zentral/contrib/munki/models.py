@@ -181,10 +181,10 @@ class ScriptCheckManager(models.Manager):
             qs = qs.filter(arch_arm64=True)
         elif arch_amd64:
             qs = qs.filter(arch_amd64=True)
-        tags_filter = Q(tags__isnull=True) & Q(excluded_tags__isnull=True)
+        tags_filter = Q(tags__isnull=True)
         if tag_pks:
             qs = qs.exclude(excluded_tags__pk__in=tag_pks)
-            tags_filter |= Q(tags__pk__in=tag_pks) | Q(tags__isnull=True)
+            tags_filter |= Q(tags__pk__in=tag_pks)
         qs = qs.filter(tags_filter)
         for script_check in qs:
             if script_check.min_os_version:
