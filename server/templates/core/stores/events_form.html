@@ -26,9 +26,9 @@
             <i class="bi bi-arrow-clockwise"></i>
         </button>
         {% for link, store_name in store_links %}
-            <button type="submit" name="es" value="{{ store_name }}" formaction="{{ link }}" class="btn btn-link"
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{ store_name }}">
+            <button type="submit" name="es" value="{{ store_name }}" formaction="{{ link }}" class="btn btn-link">
                 <i class="bi bi-link-45deg"></i>
+                {{ store_name }}
             </button>
         {% endfor %}
     </div>
