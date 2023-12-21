@@ -51,6 +51,7 @@ class MunkiTerraformTestCase(TestCase):
 
     def test_full_script_check(self):
         tag = Tag.objects.create(name=get_random_string(12))
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
         sc = force_script_check(
             type=ScriptCheck.Type.ZSH_BOOL,
             source="echo true",
@@ -60,6 +61,7 @@ class MunkiTerraformTestCase(TestCase):
             min_os_version="14",
             max_os_version="15",
             tags=[tag],
+            excluded_tags=[excluded_tag],
         )
         description = get_random_string(12)
         sc.description = description
@@ -68,13 +70,14 @@ class MunkiTerraformTestCase(TestCase):
         self.assertEqual(
             resource.to_representation(),
             (f'resource "zentral_munki_script_check" "scriptcheck{sc.pk}" {{\n'
-             f'  name            = "{sc.compliance_check.name}"\n'
-             '  type            = "ZSH_BOOL"\n'
-             '  source          = "echo true"\n'
-             '  expected_result = "true"\n'
-             '  arch_amd64      = false\n'
-             '  min_os_version  = "14"\n'
-             '  max_os_version  = "15"\n'
-             f'  tag_ids         = [zentral_tag.tag{tag.pk}.id]\n'
+             f'  name             = "{sc.compliance_check.name}"\n'
+             '  type             = "ZSH_BOOL"\n'
+             '  source           = "echo true"\n'
+             '  expected_result  = "true"\n'
+             '  arch_amd64       = false\n'
+             '  min_os_version   = "14"\n'
+             '  max_os_version   = "15"\n'
+             f'  tag_ids          = [zentral_tag.tag{tag.pk}.id]\n'
+             f'  excluded_tag_ids = [zentral_tag.tag{excluded_tag.pk}.id]\n'
              '}')
         )

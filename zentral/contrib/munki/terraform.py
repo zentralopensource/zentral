@@ -45,6 +45,7 @@ class ScriptCheckResource(Resource):
     min_os_version = StringAttr(default="")
     max_os_version = StringAttr(default="")
     tag_ids = RefAttr(TagResource, many=True)
+    excluded_tag_ids = RefAttr(TagResource, many=True)
 
 
 def iter_resources():
