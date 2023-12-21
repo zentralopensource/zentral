@@ -160,8 +160,10 @@ class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         if not instance.can_be_deleted():
             raise ValidationError('This enrollment cannot be deleted')
-        else:
-            return super().perform_destroy(instance)
+        manifest = instance.manifest
+        response = super().perform_destroy(instance)
+        manifest.bump_version()
+        return response
 
 
 class EnrollmentConfiguration(APIView):
@@ -236,6 +238,12 @@ class ManifestCatalogDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ManifestCatalogSerializer
     permission_classes = [DefaultDjangoModelPermissions]
 
+    def perform_destroy(self, instance):
+        manifest = instance.manifest
+        response = super().perform_destroy(instance)
+        manifest.bump_version()
+        return response
+
 
 # manifest sub manifests
 
@@ -252,6 +260,12 @@ class ManifestSubManifestDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = ManifestSubManifest.objects.all()
     serializer_class = ManifestSubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
+
+    def perform_destroy(self, instance):
+        manifest = instance.manifest
+        response = super().perform_destroy(instance)
+        manifest.bump_version()
+        return response
 
 
 # sub manifests
@@ -286,3 +300,10 @@ class SubManifestPkgInfoDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = SubManifestPkgInfo.objects.all()
     serializer_class = SubManifestPkgInfoSerializer
     permission_classes = [DefaultDjangoModelPermissions]
+
+    def perform_destroy(self, instance):
+        sub_manifest = instance.sub_manifest
+        response = super().perform_destroy(instance)
+        for _, manifest in sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return response

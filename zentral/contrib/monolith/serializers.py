@@ -19,6 +19,12 @@ class ConditionSerializer(serializers.ModelSerializer):
         model = Condition
         fields = '__all__'
 
+    def save(self, *args, **kwargs):
+        condition = super().save(*args, **kwargs)
+        for manifest in condition.manifests():
+            manifest.bump_version()
+        return condition
+
 
 class EnrollmentSerializer(serializers.ModelSerializer):
     secret = EnrollmentSecretSerializer(many=False)
@@ -64,13 +70,16 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         if secret_tags:
             secret.tags.set(secret_tags)
         enrollment = Enrollment.objects.create(secret=secret, **validated_data)
+        enrollment.manifest.bump_version()
         return enrollment
 
     def update(self, instance, validated_data):
         secret_serializer = self.fields["secret"]
         secret_data = validated_data.pop('secret')
         secret_serializer.update(instance.secret, secret_data)
-        return super().update(instance, validated_data)
+        enrollment = super().update(instance, validated_data)
+        enrollment.manifest.bump_version()
+        return enrollment
 
 
 class ManifestSerializer(serializers.ModelSerializer):
@@ -88,6 +97,11 @@ class ManifestCatalogSerializer(serializers.ModelSerializer):
             "tags": {"allow_empty": True}
         }
 
+    def save(self, *args, **kwargs):
+        mc = super().save(*args, **kwargs)
+        mc.manifest.bump_version()
+        return mc
+
 
 class ManifestSubManifestSerializer(serializers.ModelSerializer):
     class Meta:
@@ -97,6 +111,11 @@ class ManifestSubManifestSerializer(serializers.ModelSerializer):
             # the tags field is required, but allowed to be empty
             "tags": {"allow_empty": True}
         }
+
+    def save(self, *args, **kwargs):
+        msm = super().save(*args, **kwargs)
+        msm.manifest.bump_version()
+        return msm
 
 
 class SubManifestSerializer(serializers.ModelSerializer):
@@ -184,3 +203,9 @@ class SubManifestPkgInfoSerializer(serializers.ModelSerializer):
         data["options"] = options
 
         return data
+
+    def save(self, *args, **kwargs):
+        smpi = super().save(*args, **kwargs)
+        for _, manifest in smpi.sub_manifest.manifests_with_tags():
+            manifest.bump_version()
+        return smpi

@@ -794,6 +794,14 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_update_condition(self):
         condition = self.force_condition()
+        msm = self.force_manifest_sub_manifest()
+        manifest = msm.manifest
+        self.assertEqual(manifest.version, 1)
+        SubManifestPkgInfo.objects.create(
+            sub_manifest=msm.sub_manifest,
+            pkg_info_name=self.force_pkg_info_name(),
+            condition=condition
+        )
         self._set_permissions("monolith.change_condition")
         new_name = get_random_string(12)
         new_predicate = get_random_string(12)
@@ -812,6 +820,8 @@ class MonolithAPIViewsTestCase(TestCase):
         })
         self.assertEqual(condition.name, new_name)
         self.assertEqual(condition.predicate, new_predicate)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     def test_update_condition_name_conflict(self):
         condition1 = self.force_condition()
@@ -1016,6 +1026,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_create_enrollment(self):
         self._set_permissions("monolith.add_enrollment")
         manifest = self.force_manifest()
+        self.assertEqual(manifest.version, 1)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         response = self._post_json_data(reverse("monolith_api:enrollments"), data={
             'manifest': manifest.pk,
@@ -1052,6 +1063,8 @@ class MonolithAPIViewsTestCase(TestCase):
             'created_at': enrollment.created_at.isoformat(),
             'updated_at': enrollment.updated_at.isoformat(),
         })
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     def test_create_enrollment_mbu_conflict(self):
         self._set_permissions("monolith.add_enrollment")
@@ -1088,6 +1101,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(enrollment.secret.quota, None)
         self.assertEqual(enrollment.secret.serial_numbers, None)
         self.assertEqual(enrollment.secret.tags.count(), 2)
+        manifest = enrollment.manifest
+        self.assertEqual(manifest.version, 1)
         secret_data = EnrollmentSecretSerializer(enrollment_secret).data
         secret_data["id"] = 233333  # to check that there is no enrollment secret creation
         secret_data["quota"] = 23
@@ -1111,6 +1126,8 @@ class MonolithAPIViewsTestCase(TestCase):
             set(enrollment.secret.tags.all()),
             set(tags)
         )
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     # delete enrollment
 
@@ -1129,9 +1146,13 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_delete_enrollment(self):
         enrollment, _ = self.force_enrollment()
+        manifest = enrollment.manifest
+        self.assertEqual(manifest.version, 1)
         self._set_permissions("monolith.delete_enrollment")
         response = self.delete(reverse("monolith_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     # enrollment plist
 
@@ -1348,6 +1369,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_create_manifest_catalog(self):
         self._set_permissions("monolith.add_manifestcatalog")
         manifest = self.force_manifest()
+        self.assertEqual(manifest.version, 1)
         catalog = self.force_catalog()
         tag = Tag.objects.create(name=get_random_string(12))
         response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), data={
@@ -1364,6 +1386,8 @@ class MonolithAPIViewsTestCase(TestCase):
             'tags': [tag.pk]
         })
         self.assertEqual(list(t.pk for t in manifest_catalog.tags.all()), [tag.pk])
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     # update manifest catalog
 
@@ -1387,6 +1411,7 @@ class MonolithAPIViewsTestCase(TestCase):
         )
         self.assertEqual(manifest_catalog.tags.count(), 1)
         manifest = self.force_manifest()
+        self.assertEqual(manifest.version, 1)
         catalog = self.force_catalog()
         self._set_permissions("monolith.change_manifestcatalog")
         response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)), data={
@@ -1404,6 +1429,8 @@ class MonolithAPIViewsTestCase(TestCase):
             'tags': []
         })
         self.assertEqual(test_manifest_catalog.tags.count(), 0)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     # delete manifest catalog
 
@@ -1422,9 +1449,13 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_delete_manifest_catalog(self):
         manifest_catalog = self.force_manifest_catalog()
+        manifest = manifest_catalog.manifest
+        self.assertEqual(manifest.version, 1)
         self._set_permissions("monolith.delete_manifestcatalog")
         response = self.delete(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)))
         self.assertEqual(response.status_code, 204)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     # list manifest sub manifests
 
@@ -1533,6 +1564,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_create_manifest_sub_manifest(self):
         self._set_permissions("monolith.add_manifestsubmanifest")
         manifest = self.force_manifest()
+        self.assertEqual(manifest.version, 1)
         sub_manifest = self.force_sub_manifest()
         tag = Tag.objects.create(name=get_random_string(12))
         response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), data={
@@ -1549,6 +1581,8 @@ class MonolithAPIViewsTestCase(TestCase):
             'tags': [tag.pk]
         })
         self.assertEqual(list(t.pk for t in manifest_sub_manifest.tags.all()), [tag.pk])
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     # update manifest sub manifest
 
@@ -1570,6 +1604,8 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest_sub_manifest = self.force_manifest_sub_manifest(
             tag=Tag.objects.create(name=get_random_string(12))
         )
+        manifest = manifest_sub_manifest.manifest
+        self.assertEqual(manifest.version, 1)
         self.assertEqual(manifest_sub_manifest.tags.count(), 1)
         manifest = self.force_manifest()
         sub_manifest = self.force_sub_manifest()
@@ -1592,6 +1628,8 @@ class MonolithAPIViewsTestCase(TestCase):
             'tags': []
         })
         self.assertEqual(test_manifest_sub_manifest.tags.count(), 0)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     # delete manifest sub manifest
 
@@ -1610,9 +1648,13 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_delete_manifest_sub_manifest(self):
         manifest_sub_manifest = self.force_manifest_sub_manifest()
+        manifest = manifest_sub_manifest.manifest
+        self.assertEqual(manifest.version, 1)
         self._set_permissions("monolith.delete_manifestsubmanifest")
         response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)))
         self.assertEqual(response.status_code, 204)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     # list sub manifests
 
@@ -1947,7 +1989,10 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_create_sub_manifest_pkg_info(self):
         self._set_permissions("monolith.add_submanifestpkginfo")
-        sub_manifest = self.force_sub_manifest()
+        msm = self.force_manifest_sub_manifest()
+        manifest = msm.manifest
+        sub_manifest = msm.sub_manifest
+        self.assertEqual(manifest.version, 1)
         pkg_info_name = self.force_pkg_info_name()
         response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={
             'sub_manifest': sub_manifest.pk,
@@ -1978,6 +2023,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertTrue(sub_manifest_pkg_info.featured_item)
         self.assertEqual(sub_manifest_pkg_info.options,
                          {"shards": {"modulo": 100, "default": 100}})
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
 
     # update sub manifest pkg info
 
@@ -1998,7 +2045,10 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_update_sub_manifest_pkg_info(self):
         sub_manifest_pkg_info = self.force_sub_manifest_pkg_info()
         self._set_permissions("monolith.change_submanifestpkginfo")
-        new_sub_manifest = self.force_sub_manifest()
+        msm = self.force_manifest_sub_manifest()
+        new_manifest = msm.manifest
+        new_sub_manifest = msm.sub_manifest
+        self.assertEqual(new_manifest.version, 1)
         new_pkg_info_name = self.force_pkg_info_name()
         new_condition = self.force_condition()
         excluded_tag = Tag.objects.create(name=get_random_string(12))
@@ -2044,6 +2094,8 @@ class MonolithAPIViewsTestCase(TestCase):
             {"shards": {"modulo": 42, "default": 0, "tags": {shard_tag.name: 17}},
              "excluded_tags": [excluded_tag.name]}
         )
+        new_manifest.refresh_from_db()
+        self.assertEqual(new_manifest.version, 2)
 
     # delete sub manifest pkg info
 
@@ -2061,7 +2113,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_delete_sub_manifest_pkg_info(self):
-        sub_manifest_pkg_info = self.force_sub_manifest_pkg_info()
+        msm = self.force_manifest_sub_manifest()
+        manifest = msm.manifest
+        sub_manifest = msm.sub_manifest
+        self.assertEqual(manifest.version, 1)
+        sub_manifest_pkg_info = self.force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
         self._set_permissions("monolith.delete_submanifestpkginfo")
         response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)))
         self.assertEqual(response.status_code, 204)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)
