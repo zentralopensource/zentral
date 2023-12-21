@@ -5,11 +5,14 @@ from django.utils.crypto import get_random_string
 from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.munki.compliance_checks import (convert_bool_expected_result,
+                                                     prune_out_of_scope_machine_statuses,
                                                      serialize_script_check_for_job,
                                                      update_machine_munki_script_check_statuses,
                                                      validate_expected_result,
                                                      MunkiScriptCheck)
+from zentral.contrib.munki.events import MunkiScriptCheckStatusUpdated
 from zentral.contrib.munki.models import ScriptCheck
+from inventory.utils import force_jmespath_check
 from .utils import force_script_check
 
 
@@ -178,9 +181,11 @@ class MunkiComplianceChecksTestCase(TestCase):
             status=0,
             status_time=datetime(2000, 1, 1)
         )
-        update_machine_munki_script_check_statuses(
-            serial_number, [{"pk": sc.pk, "status": Status.OK.value, "version": 1}], datetime.utcnow()
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            update_machine_munki_script_check_statuses(
+                serial_number, [{"pk": sc.pk, "status": Status.OK.value, "version": 1}], datetime.utcnow()
+            )
+        self.assertEqual(len(callbacks), 0)
         ms_qs = MachineStatus.objects.filter(serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         self.assertEqual(ms_qs.first(), ms)
@@ -198,9 +203,11 @@ class MunkiComplianceChecksTestCase(TestCase):
             status_time=datetime(2000, 1, 1)
         )
         status_time = datetime.utcnow()
-        update_machine_munki_script_check_statuses(
-            serial_number, [{"pk": sc.pk, "status": Status.FAILED.value, "version": 1}], status_time
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            update_machine_munki_script_check_statuses(
+                serial_number, [{"pk": sc.pk, "status": Status.FAILED.value, "version": 1}], status_time
+            )
+        self.assertEqual(len(callbacks), 1)
         ms_qs = MachineStatus.objects.filter(serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         self.assertEqual(ms_qs.first(), ms)
@@ -209,6 +216,7 @@ class MunkiComplianceChecksTestCase(TestCase):
         self.assertEqual(ms.status_time, status_time)
         self.assertEqual(len(post_event.call_args_list), 1)
         event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, MunkiScriptCheckStatusUpdated)
         self.assertEqual(
             event.payload,
             {"pk": sc.compliance_check.pk,
@@ -218,5 +226,75 @@ class MunkiComplianceChecksTestCase(TestCase):
              "version": 1,
              "munki_script_check": {"pk": sc.pk},
              "status": "FAILED",
+             "previous_status": "OK"}
+        )
+
+    # update_machine_munki_script_check_statuses
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_prune_out_of_scope_machine_statuses_noop(self, post_event):
+        jpc = force_jmespath_check()
+        serial_number = get_random_string(12)
+        MachineStatus.objects.create(
+            compliance_check=jpc.compliance_check,
+            compliance_check_version=jpc.compliance_check.version,
+            serial_number=serial_number,
+            status=0,
+            status_time=datetime(2000, 1, 1)
+        )
+        self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 1)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            prune_out_of_scope_machine_statuses(serial_number, [])
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 1)
+        post_event.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_prune_out_of_scope_machine_statuses_one_deleted_machine_status(self, post_event):
+        jpc = force_jmespath_check()
+        serial_number = get_random_string(12)
+        ms = MachineStatus.objects.create(
+            compliance_check=jpc.compliance_check,
+            compliance_check_version=jpc.compliance_check.version,
+            serial_number=serial_number,
+            status=0,
+            status_time=datetime(2000, 1, 1)
+        )
+        oos_sc = force_script_check()
+        MachineStatus.objects.create(
+            compliance_check=oos_sc.compliance_check,
+            compliance_check_version=oos_sc.compliance_check.version,
+            serial_number=serial_number,
+            status=Status.OK.value,
+            status_time=datetime(2000, 1, 1)
+        )
+        is_sc = force_script_check()
+        ms2 = MachineStatus.objects.create(
+            compliance_check=is_sc.compliance_check,
+            compliance_check_version=is_sc.compliance_check.version,
+            serial_number=serial_number,
+            status=Status.OK.value,
+            status_time=datetime(2000, 1, 1)
+        )
+        self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 3)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            prune_out_of_scope_machine_statuses(serial_number, [is_sc.compliance_check.pk])
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(
+            list(MachineStatus.objects.filter(serial_number=serial_number).order_by("pk")),
+            [ms, ms2]
+        )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, MunkiScriptCheckStatusUpdated)
+        self.assertEqual(
+            event.payload,
+            {"pk": oos_sc.compliance_check.pk,
+             "model": "MunkiScriptCheck",
+             "name": oos_sc.compliance_check.name,
+             "description": "",
+             "version": 1,
+             "munki_script_check": {"pk": oos_sc.pk},
+             "status": "OUT_OF_SCOPE",
              "previous_status": "OK"}
         )

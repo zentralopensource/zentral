@@ -44,12 +44,13 @@ class Status(Enum):
     PENDING = 100
     UNKNOWN = 200
     FAILED = 300
+    OUT_OF_SCOPE = 400
 
     def __str__(self):
         if self.name == "OK":
             return self.name
         else:
-            return self.name.title()
+            return self.name.replace("_", " ").title()
 
     def __lt__(self, other):
         if self.__class__ is other.__class__:
@@ -68,7 +69,7 @@ class Status(Enum):
 
     @classmethod
     def choices(cls):
-        return tuple((i.value, str(i)) for i in cls if i != cls.PENDING)
+        return tuple((i.value, str(i)) for i in cls if i not in (cls.PENDING, cls.OUT_OF_SCOPE))
 
 
 class MachineStatus(models.Model):

@@ -66,7 +66,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("munki:delete_script_check", args=(sc.pk,)))
         self.assertNotContains(response, reverse("munki:update_script_check", args=(sc.pk,)))
 
-    def test_script_checks_with_create_link(self):
+    def test_script_checks_all_link(self):
         sc_one = force_script_check()
         sc_two = force_script_check()
         self._login("munki.view_scriptcheck", "munki.add_scriptcheck",

@@ -16,7 +16,9 @@ from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from zentral.utils.os_version import make_comparable_os_version
-from .compliance_checks import serialize_script_check_for_job, update_machine_munki_script_check_statuses
+from .compliance_checks import (prune_out_of_scope_machine_statuses,
+                                serialize_script_check_for_job,
+                                update_machine_munki_script_check_statuses)
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
@@ -177,14 +179,20 @@ class JobDetailsView(BaseView):
                 data_err = True
                 logger.error("Machine %s: unknown arch", m.serial_number)
             if not data_err:
+                # add in scope script checks to response
                 response_d['script_checks'] = []
+                in_scope_cc_ids = []
                 for script_check in ScriptCheck.objects.iter_in_scope(
                     comparable_os_version,
                     arch_amd64,
                     arch_arm64,
                     [t[0] for t in m.tag_pks_and_names]
                 ):
+                    in_scope_cc_ids.append(script_check.compliance_check.pk)
                     response_d['script_checks'].append(serialize_script_check_for_job(script_check))
+
+                # delete machine status for compliance checks not in scope
+                prune_out_of_scope_machine_statuses(self.machine_serial_number, in_scope_cc_ids)
 
         return response_d
 

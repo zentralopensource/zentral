@@ -8,7 +8,8 @@ from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
-from zentral.contrib.munki.events import MunkiInstallEvent, MunkiInstallFailedEvent, MunkiScriptCheckStatusUpdated
+from zentral.contrib.munki.events import (MunkiInstallEvent, MunkiInstallFailedEvent,
+                                          MunkiRequestEvent, MunkiScriptCheckStatusUpdated)
 from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
 from zentral.contrib.munki.models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
 from zentral.core.compliance_checks.models import MachineStatus
@@ -269,15 +270,29 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertNotIn("script_checks", response.json())
 
-    def test_job_details_second_time_script_check(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_job_details_second_time_script_check(self, post_event):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         tag = Tag.objects.create(name=get_random_string(12))
         MachineTag.objects.create(serial_number=enrolled_machine.serial_number, tag=tag)
+        # first script check in scope
         sc = force_script_check(
             type=ScriptCheck.Type.ZSH_INT,
             source="echo 10",
             expected_result="10",
         )
+        # second script check out of scope, but with an existing machine status
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number=enrolled_machine.serial_number, tag=excluded_tag)
+        oos_sc = force_script_check(excluded_tags=[excluded_tag])
+        MachineStatus.objects.create(
+            compliance_check=oos_sc.compliance_check,
+            compliance_check_version=oos_sc.compliance_check.version,
+            serial_number=enrolled_machine.serial_number,
+            status=0,
+            status_time=datetime(2000, 1, 1)
+        )
+        self.assertEqual(MachineStatus.objects.filter(serial_number=enrolled_machine.serial_number).count(), 1)
         configuration = enrolled_machine.enrollment.configuration
         last_script_checks_run = (
             datetime.utcnow()
@@ -286,14 +301,31 @@ class MunkiAPIViewsTestCase(TestCase):
         )
         MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
                                   last_script_checks_run=last_script_checks_run)
-        response = self._post_as_json(reverse("munki_public:job_details"),
-                                      {"machine_serial_number": enrolled_machine.serial_number,
-                                       "os_version": "14.1",
-                                       "arch": "arm64"},
-                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_as_json(reverse("munki_public:job_details"),
+                                          {"machine_serial_number": enrolled_machine.serial_number,
+                                           "os_version": "14.1",
+                                           "arch": "arm64"},
+                                          HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(len(callbacks), 1)
         self.assertEqual(
             response.json()["script_checks"],
             [{'pk': sc.pk, 'version': 1, 'type': 'ZSH_INT', 'source': 'echo 10', 'expected_result': 10}]
+        )
+        self.assertEqual(MachineStatus.objects.filter(serial_number=enrolled_machine.serial_number).count(), 0)
+        event1, event2 = [cal.args[0] for cal in post_event.call_args_list]
+        self.assertIsInstance(event1, MunkiRequestEvent)
+        self.assertIsInstance(event2, MunkiScriptCheckStatusUpdated)
+        self.assertEqual(
+            event2.payload,
+            {"pk": oos_sc.compliance_check.pk,
+             "model": "MunkiScriptCheck",
+             "name": oos_sc.compliance_check.name,
+             "description": "",
+             "version": 1,
+             "munki_script_check": {"pk": oos_sc.pk},
+             "status": "OUT_OF_SCOPE",
+             "previous_status": "OK"}
         )
 
     # post job
@@ -551,18 +583,21 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(machine_status_qs.count(), 0)
 
         # post job with 1 script check result
-        response = self._post_as_json(reverse("munki_public:post_job"),
-                                      {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
-                                                            "system_info": {"computer_name": get_random_string(12)}},
-                                       "reports": [],
-                                       "script_check_results": [{
-                                           "pk": sc.pk,
-                                           "version": sc.compliance_check.version,
-                                           "status": 0,
-                                           "time": 0.1
-                                        }]},
-                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_as_json(reverse("munki_public:post_job"),
+                                          {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                                                "system_info": {
+                                                                    "computer_name": get_random_string(12)}},
+                                           "reports": [],
+                                           "script_check_results": [{
+                                               "pk": sc.pk,
+                                               "version": sc.compliance_check.version,
+                                               "status": 0,
+                                               "time": 0.1
+                                            }]},
+                                          HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
 
         # check all events
         status_updated_event = None

@@ -2,32 +2,14 @@ from datetime import datetime
 import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.core.compliance_checks.models import ComplianceCheck, MachineStatus, Status
+from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.contrib.inventory.events import JMESPathCheckStatusUpdated
-from zentral.contrib.inventory.models import JMESPathCheck, MachineTag, Tag
-from zentral.contrib.inventory.compliance_checks import InventoryJMESPathCheck, jmespath_checks_cache
+from zentral.contrib.inventory.models import MachineTag, Tag
+from zentral.contrib.inventory.compliance_checks import jmespath_checks_cache
+from .utils import force_jmespath_check
 
 
 class InventoryComplianceChecksTestCase(TestCase):
-    def _force_compliance_check(self, source_name, profile_uuid, jmespath_expression=None, tags=None, platforms=None):
-        if jmespath_expression is None:
-            jmespath_expression = f"contains(profiles[*].uuid, `{profile_uuid}`)"
-        cc = ComplianceCheck.objects.create(
-            name=get_random_string(12),
-            model=InventoryJMESPathCheck.get_model(),
-        )
-        if platforms is None:
-            platforms = ["MACOS"]
-        jmespath_check = JMESPathCheck.objects.create(
-            compliance_check=cc,
-            source_name=source_name,
-            platforms=platforms,
-            jmespath_expression=jmespath_expression
-        )
-        if tags is not None:
-            jmespath_check.tags.set(tags)
-        return jmespath_check
-
     def _build_tree(self, source_name, profile_uuid, serial_number=None, platform="MACOS"):
         return {"serial_number": serial_number or get_random_string(12),
                 "platform": platform,
@@ -42,7 +24,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         profile_uuid = str(uuid.uuid4())
         source_name = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid)
-        jmespath_check = self._force_compliance_check(get_random_string(12), profile_uuid)
+        jmespath_check = force_jmespath_check(get_random_string(12), profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 0)
@@ -53,7 +35,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         source_name = get_random_string(12)
         serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number, platform="IPADOS")
-        jmespath_check = self._force_compliance_check(source_name, profile_uuid, platforms=["IPADOS", "MACOS"])
+        jmespath_check = force_jmespath_check(source_name, profile_uuid, platforms=["IPADOS", "MACOS"])
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 1)
@@ -71,7 +53,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         source_name = get_random_string(12)
         serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number, platform="IPADOS")
-        self._force_compliance_check(source_name, profile_uuid, platforms=["IOS", "MACOS"])
+        force_jmespath_check(source_name, profile_uuid, platforms=["IOS", "MACOS"])
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 0)
@@ -81,7 +63,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         source_name = get_random_string(12)
         serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number)
-        jmespath_check = self._force_compliance_check(source_name, str(uuid.uuid4()))
+        jmespath_check = force_jmespath_check(source_name, str(uuid.uuid4()))
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 1)
@@ -100,7 +82,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number)
         # the following jmespath_expression does not return a boolean, but a list → UNKNOWN
-        jmespath_check = self._force_compliance_check(source_name, profile_uuid, jmespath_expression="profiles")
+        jmespath_check = force_jmespath_check(source_name, profile_uuid, jmespath_expression="profiles")
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 1)
@@ -121,7 +103,7 @@ class InventoryComplianceChecksTestCase(TestCase):
                 "platform": "MACOS",
                 "source": {"module": get_random_string(12), "name": source_name},
                 "profiles": 12345}  # will trigger a jmespath error
-        jmespath_check = self._force_compliance_check(source_name, profile_uuid)
+        jmespath_check = force_jmespath_check(source_name, profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events), 1)
@@ -139,7 +121,7 @@ class InventoryComplianceChecksTestCase(TestCase):
         source_name = get_random_string(12)
         serial_number = get_random_string(12)
         tree = self._build_tree(source_name, profile_uuid, serial_number)
-        jmespath_check = self._force_compliance_check(source_name, profile_uuid)
+        jmespath_check = force_jmespath_check(source_name, profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events0 = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         self.assertEqual(len(events0), 1)
@@ -164,11 +146,9 @@ class InventoryComplianceChecksTestCase(TestCase):
         for tag in matching_tags:
             MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
         tree = self._build_tree(source_name, profile_uuid, serial_number)
-        jmespath_check_failed_no_tags = self._force_compliance_check(source_name, str(uuid.uuid4()))
-        jmespath_check_ok_tags = self._force_compliance_check(source_name, profile_uuid,
-                                                              tags=matching_tags)
-        jmespath_check_non_matching_tags = self._force_compliance_check(source_name, profile_uuid,
-                                                                        tags=non_matching_tags)
+        jmespath_check_failed_no_tags = force_jmespath_check(source_name, str(uuid.uuid4()))
+        jmespath_check_ok_tags = force_jmespath_check(source_name, profile_uuid, tags=matching_tags)
+        jmespath_check_non_matching_tags = force_jmespath_check(source_name, profile_uuid, tags=non_matching_tags)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         # two status update events for the 2 matching checks

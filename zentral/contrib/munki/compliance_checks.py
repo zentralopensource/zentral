@@ -1,8 +1,10 @@
+from datetime import datetime
 import logging
+from django.db import transaction
 from django.utils.functional import cached_property
 from zentral.core.compliance_checks import register_compliance_check_class
 from zentral.core.compliance_checks.compliance_checks import BaseComplianceCheck
-from zentral.core.compliance_checks.models import Status
+from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.core.compliance_checks.utils import update_machine_statuses
 from .events import MunkiScriptCheckStatusUpdated
 from .models import ScriptCheck
@@ -106,15 +108,44 @@ def update_machine_munki_script_check_statuses(serial_number, results, status_ti
         cc_d[script_check.compliance_check.pk] = script_check
         compliance_check_statuses.append((script_check.compliance_check, status, status_time))
     status_updates = update_machine_statuses(serial_number, compliance_check_statuses)
+    events = []
     for compliance_check_pk, status_value, previous_status_value in status_updates:
         if status_value == previous_status_value:
             # status not updated, no event
             continue
         script_check = cc_d[compliance_check_pk]
-        event = MunkiScriptCheckStatusUpdated.build_update(
+        events.append(MunkiScriptCheckStatusUpdated.build_update(
             script_check,
             serial_number,
             Status(status_value), status_time,
             Status(previous_status_value) if previous_status_value is not None else None
-        )
-        event.post()
+        ))
+    if events:
+
+        def post_events():
+            for event in events:
+                event.post()
+
+        transaction.on_commit(lambda: post_events())
+
+
+def prune_out_of_scope_machine_statuses(serial_number, in_scope_cc_ids):
+    events = []
+    for machine_status in (MachineStatus.objects.select_related("compliance_check__script_check")
+                                                .filter(serial_number=serial_number,
+                                                        compliance_check__script_check__isnull=False)
+                                                .exclude(compliance_check__pk__in=in_scope_cc_ids)):
+        events.append(MunkiScriptCheckStatusUpdated.build_update(
+            machine_status.compliance_check.script_check,
+            serial_number,
+            Status.OUT_OF_SCOPE, datetime.utcnow(),
+            Status(machine_status.status)
+        ))
+        machine_status.delete()
+    if events:
+
+        def post_events():
+            for event in events:
+                event.post()
+
+        transaction.on_commit(lambda: post_events())
