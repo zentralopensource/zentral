@@ -69,10 +69,9 @@ class InstalledApplicationList(Command):
                 extra_info[attr] = app.get(attr)
             if any(app.get(attr) for attr in ("DownloadWaiting", "DownloadPaused", "Installing")):
                 installed = False
-            elif any(app.get(attr) for attr in ("DownloadCancelled", "DownloadFailed")):
+            if any(app.get(attr) for attr in ("DownloadCancelled", "DownloadFailed")):
                 error = True
-                break
-        if found and installed:
+        if not error and found and installed:
             self.target.update_target_artifact(
                 self.artifact_version,
                 TargetArtifact.Status.INSTALLED,
@@ -80,7 +79,6 @@ class InstalledApplicationList(Command):
             )
         elif error:
             self.target.update_target_artifact(
-                self.enrolled_device,
                 self.artifact_version,
                 TargetArtifact.Status.FAILED,
                 extra_info=extra_info
@@ -96,10 +94,11 @@ class InstalledApplicationList(Command):
             # queue a new installed application list command
             first_delay_seconds = 15  # TODO hardcoded
             self.create_for_target(
+                self.target,
                 self.artifact_version,
                 kwargs={"apps_to_check": self.apps_to_check,
                         "retries": self.retries + 1},
-                queue=True, delay=first_delay_seconds
+                queue=True, delay=first_delay_seconds * (self.retries + 1)
             )
 
     def get_inventory_partial_tree(self):

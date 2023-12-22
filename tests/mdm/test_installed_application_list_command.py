@@ -1,14 +1,17 @@
 from datetime import datetime
 import os.path
 import plistlib
+from unittest.mock import call, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import InstalledApplicationList
-from zentral.contrib.mdm.commands.scheduling import _update_extra_inventory
-from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
-from .utils import force_dep_enrollment_session
+from zentral.contrib.mdm.commands.scheduling import _update_extra_inventory, load_command
+from zentral.contrib.mdm.models import (Artifact, Blueprint, Channel,
+                                        DeviceArtifact, DeviceCommand, Platform,
+                                        RequestStatus, TargetArtifact)
+from .utils import force_blueprint_artifact, force_dep_enrollment_session
 
 
 class InstalledApplicationListCommandTestCase(TestCase):
@@ -93,8 +96,59 @@ class InstalledApplicationListCommandTestCase(TestCase):
         )
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {'Items': ['AdHocCodeSigned',
+                       'AppStoreVendable',
+                       'BetaApp',
+                       'BundleSize',
+                       'DeviceBasedVPP',
+                       'DynamicSize',
+                       'ExternalVersionIdentifier',
+                       'HasUpdateAvailable',
+                       'Identifier',
+                       'Installing',
+                       'IsAppClip',
+                       'IsValidated',
+                       'Name',
+                       'ShortVersion',
+                       'Version'],
+             'ManagedAppsOnly': False,
+             'RequestType': 'InstalledApplicationList'}
+        )
+
+    def test_build_command_apps_to_check(self):
+        _, _, [artifact_version] = force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP,
+                                                            blueprint=self.blueprint)
+        cmd = InstalledApplicationList.create_for_target(
+            Target(self.enrolled_device),
+            artifact_version,
+            kwargs={"apps_to_check": [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}]}
+        )
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
         self.assertEqual(payload["RequestType"], "InstalledApplicationList")
-        self.assertFalse(payload["ManagedAppsOnly"])
+        self.assertEqual(
+            payload,
+            {'Identifiers': ['yolo.fomo'],
+             'Items': ['AdHocCodeSigned',
+                       'AppStoreVendable',
+                       'BetaApp',
+                       'BundleSize',
+                       'DeviceBasedVPP',
+                       'DynamicSize',
+                       'ExternalVersionIdentifier',
+                       'HasUpdateAvailable',
+                       'Identifier',
+                       'Installing',
+                       'IsAppClip',
+                       'IsValidated',
+                       'Name',
+                       'ShortVersion',
+                       'Version'],
+             'ManagedAppsOnly': False,
+             'RequestType': 'InstalledApplicationList'}
+        )
 
     # process_response
 
@@ -198,3 +252,179 @@ class InstalledApplicationListCommandTestCase(TestCase):
             self.dep_enrollment_session,
             RequestStatus.IDLE,
         ))
+
+    # _update_device_artifact
+
+    @patch("zentral.contrib.mdm.commands.installed_application_list.logger")
+    def test_update_device_artifact_not_found_new_command(self, logger):
+        _, artifact, [artifact_version] = force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP,
+                                                                   blueprint=self.blueprint)
+        target = Target(self.enrolled_device)
+        target.update_target_artifact(
+            artifact_version,
+            TargetArtifact.Status.AWAITING_CONFIRMATION
+        )
+        cmd = InstalledApplicationList.create_for_target(
+            target,
+            artifact_version,
+            kwargs={"apps_to_check": [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}]},
+            queue=False,
+        )
+        cmd.process_response(
+            {"Status": "Acknowledged",
+             "InstalledApplicationList": []},
+            self.dep_enrollment_session,
+            self.mbu
+        )
+        qs = DeviceCommand.objects.filter(
+            enrolled_device=self.enrolled_device,
+            time__isnull=True
+        )
+        self.assertEqual(qs.count(), 1)
+        new_cmd = load_command(qs.first())
+        self.assertIsInstance(new_cmd, InstalledApplicationList)
+        self.assertEqual(new_cmd.artifact_version, artifact_version)
+        self.assertEqual(new_cmd.retries, 1)
+        self.assertEqual(new_cmd.apps_to_check, [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}])
+        logger.warning.assert_called_once_with("Artifact version %s was not found.", artifact_version.pk)
+
+    @patch("zentral.contrib.mdm.commands.installed_application_list.logger")
+    def test_update_device_artifact_not_found_too_many_retries(self, logger):
+        _, artifact, [artifact_version] = force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP,
+                                                                   blueprint=self.blueprint)
+        target = Target(self.enrolled_device)
+        target.update_target_artifact(
+            artifact_version,
+            TargetArtifact.Status.AWAITING_CONFIRMATION
+        )
+        cmd = InstalledApplicationList.create_for_target(
+            target,
+            artifact_version,
+            kwargs={"apps_to_check": [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}],
+                    "retries": 10},
+            queue=False,
+        )
+        cmd.process_response(
+            {"Status": "Acknowledged",
+             "InstalledApplicationList": []},
+            self.dep_enrollment_session,
+            self.mbu
+        )
+        qs = DeviceCommand.objects.filter(
+            enrolled_device=self.enrolled_device,
+            time__isnull=True
+        )
+        self.assertEqual(qs.count(), 0)
+        logger.warning.assert_has_calls(
+            [call("Artifact version %s was not found.", artifact_version.pk),
+             call("Stop rescheduling %s command for artifact version %s", cmd.request_type, artifact_version.pk)]
+        )
+
+    def test_update_device_artifact_installing_new_command(self):
+        _, artifact, [artifact_version] = force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP,
+                                                                   blueprint=self.blueprint)
+        target = Target(self.enrolled_device)
+        target.update_target_artifact(
+            artifact_version,
+            TargetArtifact.Status.AWAITING_CONFIRMATION
+        )
+        cmd = InstalledApplicationList.create_for_target(
+            target,
+            artifact_version,
+            kwargs={"apps_to_check": [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}],
+                    "retries": 1},
+            queue=False,
+        )
+        cmd.process_response(
+            {"Status": "Acknowledged",
+             "InstalledApplicationList": [
+                 {"Identifier": "yolo.fomo",
+                  "ShortVersion": "1.0",
+                  "Installing": True}
+             ]},
+            self.dep_enrollment_session,
+            self.mbu
+        )
+        qs = DeviceCommand.objects.filter(
+            enrolled_device=self.enrolled_device,
+            time__isnull=True
+        )
+        self.assertEqual(qs.count(), 1)
+        new_cmd = load_command(qs.first())
+        self.assertIsInstance(new_cmd, InstalledApplicationList)
+        self.assertEqual(new_cmd.artifact_version, artifact_version)
+        self.assertEqual(new_cmd.retries, 2)
+        self.assertEqual(new_cmd.apps_to_check, [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}])
+        da = DeviceArtifact.objects.get(enrolled_device=self.enrolled_device, artifact_version=artifact_version)
+        self.assertEqual(da.status, TargetArtifact.Status.AWAITING_CONFIRMATION)
+
+    def test_update_device_artifact_failed(self):
+        _, artifact, [artifact_version] = force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP,
+                                                                   blueprint=self.blueprint)
+        target = Target(self.enrolled_device)
+        target.update_target_artifact(
+            artifact_version,
+            TargetArtifact.Status.AWAITING_CONFIRMATION
+        )
+        cmd = InstalledApplicationList.create_for_target(
+            target,
+            artifact_version,
+            kwargs={"apps_to_check": [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}]},
+            queue=False,
+        )
+        cmd.process_response(
+            {"Status": "Acknowledged",
+             "InstalledApplicationList": [
+                {"Identifier": "not.a.match",
+                 "ShortVersion": "1.0",
+                 "Installing": False},
+                {"Identifier": "yolo.fomo",
+                 "ShortVersion": "1.0",
+                 "Installing": True,
+                 "DownloadFailed": True}
+             ]},
+            self.dep_enrollment_session,
+            self.mbu
+        )
+        qs = DeviceCommand.objects.filter(
+            enrolled_device=self.enrolled_device,
+            time__isnull=True
+        )
+        self.assertEqual(qs.count(), 0)
+        da = DeviceArtifact.objects.get(enrolled_device=self.enrolled_device, artifact_version=artifact_version)
+        self.assertEqual(da.status, TargetArtifact.Status.FAILED)
+
+    def test_update_device_artifact_installed(self):
+        _, artifact, [artifact_version] = force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP,
+                                                                   blueprint=self.blueprint)
+        target = Target(self.enrolled_device)
+        target.update_target_artifact(
+            artifact_version,
+            TargetArtifact.Status.AWAITING_CONFIRMATION
+        )
+        cmd = InstalledApplicationList.create_for_target(
+            target,
+            artifact_version,
+            kwargs={"apps_to_check": [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}]},
+            queue=False,
+        )
+        cmd.process_response(
+            {"Status": "Acknowledged",
+             "InstalledApplicationList": [
+                {"Identifier": "not.a.match",
+                 "ShortVersion": "1.0",
+                 "Installing": False},
+                {"Identifier": "yolo.fomo",
+                 "ShortVersion": "1.0",
+                 "Installing": False}
+             ]},
+            self.dep_enrollment_session,
+            self.mbu
+        )
+        qs = DeviceCommand.objects.filter(
+            enrolled_device=self.enrolled_device,
+            time__isnull=True
+        )
+        self.assertEqual(qs.count(), 0)
+        da = DeviceArtifact.objects.get(enrolled_device=self.enrolled_device, artifact_version=artifact_version)
+        self.assertEqual(da.status, TargetArtifact.Status.INSTALLED)
