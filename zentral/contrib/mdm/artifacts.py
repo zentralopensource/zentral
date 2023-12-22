@@ -563,12 +563,33 @@ class Target:
 
     # declarations
 
+    def supports_software_update_enforcement_specific(self):
+        if not self.is_device:
+            return False
+
+        if not self.blueprint:
+            return False
+
+        client_capabilities = self.enrolled_device.client_capabilities
+        if not isinstance(client_capabilities, dict):
+            return
+        supported_configurations = client_capabilities.get(
+            "supported-payloads", {}
+        ).get(
+            "declarations", {}
+        ).get(
+            "configurations", []
+        )
+        if "com.apple.configuration.softwareupdate.enforcement.specific" not in supported_configurations:
+            return False
+
+        return True
+
     @cached_property
     def software_update_enforcement(self):
-        if not self.is_device:
+        if not self.supports_software_update_enforcement_specific():
             return
-        if not self.blueprint:
-            return
+
         matching_tag_count = 0
         selected_sue = None
         for sue in (self.blueprint.software_update_enforcements
@@ -582,6 +603,7 @@ class Target:
                 selected_sue = sue
             elif sue_tag_ids and common_tag_count == matching_tag_count:
                 logger.warning("Machine %s: software update enforcement conflict", self.serial_number)
+
         return selected_sue
 
     # https://developer.apple.com/documentation/devicemanagement/activationsimple

@@ -17,7 +17,8 @@ from zentral.contrib.mdm.models import (Asset, Artifact, ArtifactVersion, Artifa
                                         Platform, Profile, PushCertificate,
                                         StoreApp, TargetArtifact,
                                         UserArtifact)
-from .utils import force_software_update, force_software_update_enforcement
+from .utils import (force_software_update, force_software_update_enforcement,
+                    MACOS_13_CLIENT_CAPABILITIES, MACOS_14_CLIENT_CAPABILITIES)
 
 
 PROFILE_TEMPLATE = {
@@ -80,7 +81,7 @@ class TestMDMArtifacts(TestCase):
             udid=get_random_string(36),
             token=get_random_string(32).encode("utf-8"),
             push_magic=get_random_string(73),
-            unlock_token=get_random_string(32).encode("utf-8")
+            unlock_token=get_random_string(32).encode("utf-8"),
         )
         cls.enrolled_device = EnrolledDevice.objects.create(
             push_certificate=push_certificate,
@@ -91,7 +92,7 @@ class TestMDMArtifacts(TestCase):
             udid=get_random_string(36),
             token=get_random_string(32).encode("utf-8"),
             push_magic=get_random_string(73),
-            unlock_token=get_random_string(32).encode("utf-8")
+            unlock_token=get_random_string(32).encode("utf-8"),
         )
         cls.enrolled_user = EnrolledUser.objects.create(
             enrolled_device=cls.enrolled_device,
@@ -807,6 +808,7 @@ class TestMDMArtifacts(TestCase):
         self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
 
     def test_device_activation_software_update_enforcement_latest_included(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         target = Target(self.enrolled_device)
         force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
                               version="14.1.0",
@@ -822,6 +824,7 @@ class TestMDMArtifacts(TestCase):
         self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific", scs)
 
     def test_device_activation_software_update_enforcement_one_time_included(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         target = Target(self.enrolled_device)
         sue = force_software_update_enforcement(os_version="15", local_datetime=datetime.utcnow())
         self.blueprint1.software_update_enforcements.add(sue)
@@ -892,6 +895,7 @@ class TestMDMArtifacts(TestCase):
                               posting_date=date(2023, 10, 25))
         sue = force_software_update_enforcement(max_os_version="15", local_time=time(9, 30), delay_days=15)
         self.blueprint1.software_update_enforcements.add(sue)
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         target = Target(self.enrolled_device)
         declaration_items = target.declaration_items
         self.assertEqual(sorted(declaration_items.keys()), ["Declarations", "DeclarationsToken"])
@@ -908,7 +912,7 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(len(configurations), 2)
         self.assertEqual(configurations[0]["Identifier"],
                          f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions")
-        self.assertEqual(configurations[0]["ServerToken"], "0ed215547af3061ce18ea6cf7a69dac4a3d52f3f")
+        self.assertEqual(configurations[0]["ServerToken"], "d012ad4032e941a8c1f4a61dc6691372d946a4d2")
         self.assertEqual(configurations[1]["Identifier"],
                          f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific")
         self.assertEqual(configurations[1]["ServerToken"], "3aa402ccdcc30fbe9fc24a437da2fac09f709243")
@@ -1420,22 +1424,35 @@ class TestMDMArtifacts(TestCase):
 
     # software update enforcement
 
-    def test_software_update_enforcement_not_a_device(self):
+    def test_supports_software_update_enforcement_specific_not_a_device(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         target = Target(self.enrolled_device, self.enrolled_user)
-        self.assertFalse(target.is_device)
-        self.assertIsNone(target.software_update_enforcement)
+        self.assertFalse(target.supports_software_update_enforcement_specific())
 
-    def test_software_update_enforcement_no_blueprint(self):
+    def test_supports_update_enforcement_specific_no_blueprint(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         target = Target(self.enrolled_device_no_blueprint)
         self.assertIsNone(target.blueprint)
-        self.assertIsNone(target.software_update_enforcement)
+        self.assertFalse(target.supports_software_update_enforcement_specific())
+
+    def test_supports_update_enforcement_specific_missing_capabilities(self):
+        self.assertIsNone(self.enrolled_device.client_capabilities)
+        target = Target(self.enrolled_device)
+        self.assertFalse(target.supports_software_update_enforcement_specific())
+
+    def test_supports_update_enforcement_specific_missing_capability(self):
+        self.enrolled_device.client_capabilities = MACOS_13_CLIENT_CAPABILITIES
+        target = Target(self.enrolled_device)
+        self.assertFalse(target.supports_software_update_enforcement_specific())
 
     def test_software_update_enforcement_no_sue(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         target = Target(self.enrolled_device)
         self.assertEqual(target.blueprint.software_update_enforcements.count(), 0)
         self.assertIsNone(target.software_update_enforcement)
 
     def test_software_update_enforcement_tags(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
         sue = force_software_update_enforcement()
         sue1 = force_software_update_enforcement(tags=tags[:1])
@@ -1448,6 +1465,7 @@ class TestMDMArtifacts(TestCase):
 
     @patch("zentral.contrib.mdm.artifacts.logger.warning")
     def test_software_update_enforcement_tag_conflict(self, logger_warning):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
         sue = force_software_update_enforcement(tags=tags[:2])
         sue2 = force_software_update_enforcement(tags=tags[-2:])  # same matching tags number

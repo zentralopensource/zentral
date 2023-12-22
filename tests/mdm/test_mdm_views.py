@@ -28,7 +28,8 @@ from .utils import (force_dep_enrollment_session,
                     force_ota_enrollment_session,
                     force_software_update,
                     force_software_update_enforcement,
-                    force_user_enrollment_session)
+                    force_user_enrollment_session,
+                    MACOS_14_CLIENT_CAPABILITIES)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -729,9 +730,33 @@ class MDMViewsTestCase(TestCase):
              'Type': 'com.apple.configuration.management.status-subscriptions'}
         )
 
+    def test_declarative_management_softwareupdate_enforcement_specific_err(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        device_id = get_random_string(8)
+        session.enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
+        session.enrolled_device.save()
+        force_software_update(device_id=device_id, version="14.1.0", posting_date=date(2023, 10, 25))
+        sue = force_software_update_enforcement(
+            details_url="https://www.example.com",
+            max_os_version="15", local_time=time(9, 30), delay_days=15
+        )
+        blueprint = self._add_blueprint(session)
+        blueprint.software_update_enforcements.add(sue)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}."
+                        "softwareupdate-enforcement-specific"
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, "Could not build specific software update enforcement",
+                          udid=udid, serial_number=serial_number)
+
     def test_declarative_management_softwareupdate_enforcement_specific_latest(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         device_id = get_random_string(8)
+        session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         session.enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
         session.enrolled_device.save()
         force_software_update(device_id=device_id, version="14.1.0", posting_date=date(2023, 10, 25))
@@ -765,6 +790,7 @@ class MDMViewsTestCase(TestCase):
     def test_declarative_management_softwareupdate_enforcement_specific_latest_same(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         device_id = get_random_string(8)
+        session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         session.enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
         session.enrolled_device.os_version = "14.1"
         session.enrolled_device.build_version = "23B74"
@@ -801,6 +827,7 @@ class MDMViewsTestCase(TestCase):
     def test_declarative_management_softwareupdate_enforcement_specific_latest_not_found(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         device_id = get_random_string(8)
+        session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         session.enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
         session.enrolled_device.save()
         sue = force_software_update_enforcement(
@@ -824,6 +851,7 @@ class MDMViewsTestCase(TestCase):
     def test_declarative_management_softwareupdate_enforcement_specific_one_time(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         device_id = get_random_string(8)
+        session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         session.enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
         session.enrolled_device.save()
         sue = force_software_update_enforcement(

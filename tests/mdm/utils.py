@@ -643,3 +643,103 @@ def force_blueprint_artifact(
     )
     update_blueprint_serialized_artifacts(blueprint)
     return blueprint_artifact, artifact, artifact_versions
+
+
+MACOS_14_CLIENT_CAPABILITIES = {
+    'supported-features': {},
+    'supported-payloads': {
+        'declarations': {
+            'activations': [
+                'com.apple.activation.simple'
+            ],
+            'assets': ['com.apple.asset.credential.acme',
+                       'com.apple.asset.credential.certificate',
+                       'com.apple.asset.credential.identity',
+                       'com.apple.asset.credential.scep',
+                       'com.apple.asset.credential.userpassword',
+                       'com.apple.asset.data',
+                       'com.apple.asset.useridentity'],
+            'configurations': ['com.apple.configuration.legacy',
+                               'com.apple.configuration.legacy.interactive',
+                               'com.apple.configuration.management.status-subscriptions',
+                               'com.apple.configuration.management.test',
+                               'com.apple.configuration.passcode.settings',
+                               'com.apple.configuration.screensharing.connection',
+                               'com.apple.configuration.screensharing.connection.group',
+                               'com.apple.configuration.screensharing.host.settings',
+                               'com.apple.configuration.security.certificate',
+                               'com.apple.configuration.security.identity',
+                               'com.apple.configuration.services.configuration-files',
+                               'com.apple.configuration.softwareupdate.enforcement.specific'],
+            'management': ['com.apple.management.organization-info',
+                           'com.apple.management.properties',
+                           'com.apple.management.server-capabilities']},
+            'status-items': ['device.identifier.serial-number',
+                             'device.identifier.udid',
+                             'device.model.family',
+                             'device.model.identifier',
+                             'device.model.marketing-name',
+                             'device.model.number',
+                             'device.operating-system.build-version',
+                             'device.operating-system.family',
+                             'device.operating-system.marketing-name',
+                             'device.operating-system.supplemental.build-version',
+                             'device.operating-system.supplemental.extra-version',
+                             'device.operating-system.version',
+                             'diskmanagement.filevault.enabled',
+                             'management.client-capabilities',
+                             'management.declarations',
+                             'screensharing.connection.group.unresolved-connection',
+                             'security.certificate.list',
+                             'services.background-task',
+                             'softwareupdate.failure-reason',
+                             'softwareupdate.install-reason',
+                             'softwareupdate.install-state',
+                             'softwareupdate.pending-version',
+                             'test.array-value',
+                             'test.boolean-value',
+                             'test.dictionary-value',
+                             'test.error-value',
+                             'test.integer-value',
+                             'test.real-value',
+                             'test.string-value']},
+    'supported-versions': ['1.0.0']
+}
+
+
+MACOS_13_CLIENT_CAPABILITIES = {
+    'supported-features': {},
+    'supported-payloads': {
+        'declarations': {
+            'activations': ['com.apple.activation.simple'],
+            'assets': [],
+            'configurations': ['com.apple.configuration.legacy',
+                               'com.apple.configuration.legacy.interactive',
+                               'com.apple.configuration.management.status-subscriptions',
+                               'com.apple.configuration.management.test',
+                               'com.apple.configuration.passcode.settings'],
+            'management': ['com.apple.management.organization-info',
+                           'com.apple.management.properties',
+                           'com.apple.management.server-capabilities']},
+            'status-items': ['device.identifier.serial-number',
+                             'device.identifier.udid',
+                             'device.model.family',
+                             'device.model.identifier',
+                             'device.model.marketing-name',
+                             'device.operating-system.build-version',
+                             'device.operating-system.family',
+                             'device.operating-system.marketing-name',
+                             'device.operating-system.supplemental.build-version',
+                             'device.operating-system.supplemental.extra-version',
+                             'device.operating-system.version',
+                             'management.client-capabilities',
+                             'management.declarations',
+                             'test.array-value',
+                             'test.boolean-value',
+                             'test.dictionary-value',
+                             'test.error-value',
+                             'test.integer-value',
+                             'test.real-value',
+                             'test.string-value']},
+            'supported-versions': ['1.0.0']
+}
