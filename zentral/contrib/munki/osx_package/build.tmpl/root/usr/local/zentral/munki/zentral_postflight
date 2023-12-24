@@ -18,7 +18,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.16"
+USER_AGENT = "Zentral/munkipostflight 0.17"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/public/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -309,10 +309,15 @@ def get_current_user_info():
         pass
     else:
         for line in info.splitlines():
-            if "SessionUserIDKey" in line:
-                curr_user_id = int(line.rsplit(":")[-1].strip())
-            elif "SessionUserNameKey" in line:
-                current_user = line.rsplit(":")[-1].strip()
+            line = line.strip()
+            if line.startswith("Name : "):
+                found_user = line[7:]
+                if "loginwindow" in found_user.lower():
+                    current_user = current_user = None
+                    break
+                current_user = found_user
+            elif line.startswith("UID : "):
+                curr_user_id = int(line[6:])
     return current_user, curr_user_id
 
 
