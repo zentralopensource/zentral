@@ -1,20 +1,20 @@
-{% load static base_extras %}
+{% load static %}
 <!doctype html>
 <html lang="en" data-bs-theme="light">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Zentral</title>
-    <link rel="shortcut icon" href="{% static 'favicon.ico' %}">
-    <link href="{% static 'dist/main.css' %}" rel="stylesheet">
-    <script src="{% static 'dist/theme.js' %}"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zentral</title>
+  <link rel="shortcut icon" href="{% if fqdn %}https://{{ fqdn }}{% endif %}{% static 'favicon.ico' %}">
+  <link href="{% if fqdn %}https://{{ fqdn }}{% endif %}{% static 'dist/main.css' %}" rel="stylesheet">
+  <script src="{% if fqdn %}https://{{ fqdn }}{% endif %}{% static 'dist/theme.js' %}"></script>
 </head>
-    <body class="d-flex flex-column min-vh-100 justify-content-center align-items-center">
-        <div class="navbar-header">
-          <a class="navbar-brand" href="{% url 'base:index' %}">
-            <i class="zentral-logo" alt="Zentral"></i>
-          </a>
-        </div>
+  <body class="d-flex flex-column min-vh-100 justify-content-center align-items-center">
+    <div class="navbar-header">
+      <a class="navbar-brand" href="{% if fqdn %}https://{{ fqdn }}{% endif %}">
+        <i class="zentral-logo" alt="Zentral"></i>
+      </a>
+    </div>
     <div class="d-flex flex-column justify-content-center align-items-center">
       {% block content %}
       {% endblock %}
