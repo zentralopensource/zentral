@@ -75,12 +75,6 @@ ORPHANS = (
     # OSXAppInstance
     ("inventory_osxappinstance", "id",
      (("osxappinstance_id", "inventory_machinesnapshot_osx_app_instances"),)),
-    # Certificate
-    ("inventory_certificate", "id",
-     (("signed_by_id", "inventory_osxappinstance"),
-      ("signed_by_id", "inventory_certificate"),
-      ("signed_by_id", "inventory_file"),
-      ("certificate_id", "inventory_machinesnapshot_certificates"))),
     # OSXApp
     ("inventory_osxapp", "id",
      (("app_id", "inventory_osxappinstance"),
@@ -94,6 +88,13 @@ ORPHANS = (
     # Profile not linked to machine snapshots
     ("inventory_profile", "id",
      (("profile_id", "inventory_machinesnapshot_profiles"),)),
+    # Certificate
+    ("inventory_certificate", "id",
+     (("signed_by_id", "inventory_osxappinstance"),
+      ("signed_by_id", "inventory_certificate"),
+      ("signed_by_id", "inventory_file"),
+      ("signed_by_id", "inventory_profile"),
+      ("certificate_id", "inventory_machinesnapshot_certificates"))),
     # EC2
     ("inventory_ec2instancemetadata", "id",
      (("ec2_instance_metadata_id", "inventory_machinesnapshot"),)),
