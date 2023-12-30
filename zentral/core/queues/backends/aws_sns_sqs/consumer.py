@@ -28,13 +28,9 @@ class BaseConsumer:
         ]
 
     def _handle_signal(self, signum, frame):
-        if signum == signal.SIGTERM:
-            signum = "SIGTERM"
-        elif signum == signal.SIGINT:
-            signum = "SIGINT"
-        logger.debug("received signal %s", signum)
+        logger.info("Received signal %s.", signal.Signals(signum).name)
         if not self.stop_receiving_event.is_set():
-            logger.error("signal %s - stop receiving events", signum)
+            logger.info("Stop receiving events.")
             self.stop_receiving_event.set()
 
     def run(self, *args, **kwargs):
@@ -47,17 +43,17 @@ class BaseConsumer:
             self.start_run_loop()
         except Exception:
             exit_status = 1
-            logger.exception("%s: run loop exception", self.name)
+            logger.exception("%s: run loop exception.", self.name)
             if not self.stop_receiving_event.is_set():
-                logger.error("%s: stop receiving", self.name)
+                logger.info("%s: stop receiving.", self.name)
                 self.stop_receiving_event.set()
         # graceful stop
         if not self.stop_event.is_set():
-            logger.error("Set stop event")
+            logger.info("Set stop event.")
             self.stop_event.set()
             for thread in self._threads:
                 thread.join()
-            logger.error("All threads stopped.")
+            logger.info("All threads stopped.")
         return exit_status
 
     def start_run_loop(self):

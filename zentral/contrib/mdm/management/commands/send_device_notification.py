@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from zentral.contrib.mdm.models import EnrolledDevice
 from zentral.contrib.mdm.apns import send_enrolled_device_notification
+from zentral.core.queues import queues
 
 
 class Command(BaseCommand):
@@ -24,3 +25,4 @@ class Command(BaseCommand):
                 self.stdout.write("OK")
             else:
                 self.stdout.write("Failure")
+        queues.stop()

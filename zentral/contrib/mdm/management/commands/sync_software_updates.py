@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from zentral.contrib.mdm.software_updates import sync_software_updates
+from zentral.core.queues import queues
 
 
 class Command(BaseCommand):
@@ -7,3 +8,4 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         sync_software_updates()
+        queues.stop()

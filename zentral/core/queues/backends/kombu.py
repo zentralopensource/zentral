@@ -5,6 +5,7 @@ from zentral.conf import settings
 from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
+from zentral.core.queues.backends.base import BaseEventQueues
 from zentral.core.queues.exceptions import RetryLater
 from zentral.utils.json import save_dead_letter
 
@@ -229,8 +230,9 @@ class StoreWorker(ConsumerMixin, BaseWorker):
             self.inc_counter("stored_events", event_type)
 
 
-class EventQueues(object):
+class EventQueues(BaseEventQueues):
     def __init__(self, config_d):
+        super().__init__(config_d)
         self.backend_url = config_d['backend_url']
         self.transport_options = config_d.get('transport_options')
         self.connection = self._get_connection()

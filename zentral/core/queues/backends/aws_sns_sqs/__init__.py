@@ -3,7 +3,6 @@ import json
 import logging
 import queue
 import signal
-import sys
 import threading
 import time
 import boto3
@@ -11,6 +10,7 @@ from botocore.config import Config
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.conf import settings
+from zentral.core.queues.backends.base import BaseEventQueues
 from .consumer import BatchConsumer, ConcurrentConsumer, Consumer, ConsumerProducer
 from .sns import SNSPublishThread
 from .sqs import SQSSendThread
@@ -356,8 +356,9 @@ class BulkStoreWorker(WorkerMixin, BatchConsumer):
             self.log_debug("%s/%s events stored", stored_event_count, batch_size)
 
 
-class EventQueues(object):
+class EventQueues(BaseEventQueues):
     def __init__(self, config_d):
+        super().__init__(config_d)
         self._prefix = config_d.get("prefix", "ztl-")
         self._tags = config_d.get("tags", {"Product": "Zentral"})
         self.client_kwargs = {
@@ -387,6 +388,7 @@ class EventQueues(object):
         self._stop_event = None
         self._threads = []
         self._use_filter_policies = config_d.get("use_filter_policies", False)
+        self._previous_signal_handlers = {}
 
     @cached_property
     def sns_client(self):
@@ -510,28 +512,22 @@ class EventQueues(object):
             signal.signal(signum, self._handle_sigterm)
 
     def _graceful_stop(self, signum, frame):
-        if signum == signal.SIGTERM:
-            signum = "SIGTERM"
-        elif signum == signal.SIGINT:
-            signum = "SIGINT"
-        logger.debug("Received signal %s", signum)
-        if not self._stop_event.is_set():
-            logger.error("Signal %s. Initiate graceful stop.", signum)
-            self._stop_event.set()
-            for thread in self._threads:
-                thread.join()
-            logger.error("All threads stopped. Exit 0.")
-            sys.exit(0)
+        logger.info("Received signal %s.", signal.Signals(signum).name)
+        self.stop()
+        previous_handler = self._previous_signal_handlers.get(signum)
+        if callable(previous_handler):
+            # This is necessary to correctly stop the gunicorn worker
+            previous_handler(signum, frame)
 
     def _setup_graceful_stop(self):
         if self._stop_event is None:
             self._stop_event = threading.Event()
             if threading.current_thread() is threading.main_thread():
-                logger.debug("setup graceful stop")
+                logger.debug("Setup graceful stop.")
                 for signum in (signal.SIGINT, signal.SIGTERM):
-                    signal.signal(signum, self._graceful_stop)
+                    self._previous_signal_handlers[signum] = signal.signal(signum, self._graceful_stop)
             else:
-                logger.warning("could not setup graceful stop: not running on main thread")
+                logger.warning("Could not setup graceful stop: not running on main thread.")
 
     def post_raw_event(self, routing_key, raw_event):
         self._setup_graceful_stop()
@@ -562,3 +558,13 @@ class EventQueues(object):
             thread.start()
             self._threads.append(thread)
         self._events_queue.put((None, None, event.serialize(machine_metadata=False), time.monotonic()))
+
+    def stop(self):
+        if self._stop_event is None:
+            return
+        if not self._stop_event.is_set():
+            logger.info("Initiate graceful stop.")
+            self._stop_event.set()
+            for thread in self._threads:
+                thread.join()
+            logger.info("All threads stopped.")
