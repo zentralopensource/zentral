@@ -116,7 +116,7 @@ class GCPPubSubPasswordResetHandler(BasePasswordResetHandler):
 def get_password_reset_handler():
     config = settings.get("password_reset_handler", {})
     backend = config.get("backend", "accounts.password_reset.EmailPasswordResetHandler")
-    logger.debug("Load password reset handler %s", backend)
+    logger.debug("Load password reset handler %s", backend)  # lgtm[py/clear-text-logging-sensitive-data]
     module, class_name = backend.rsplit(".", 1)
     handler_class = getattr(import_module(module), class_name)
     return handler_class(config)
