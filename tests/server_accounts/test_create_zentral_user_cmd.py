@@ -1,6 +1,5 @@
 from io import StringIO
 import json
-from unittest.mock import patch
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase
@@ -112,15 +111,7 @@ class CreateZentralUserTestCase(TestCase):
         self.assertFalse(result["api_token_created"])
 
     def test_create_user_send_email(self):
-        result = self.call_command("yolo", "fomo@example.com", "--send-email")
-        self.assertIn("Invitation email sent", result)
+        self.call_command("yolo", "fomo@example.com", "--send-reset")
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].subject, "Password reset on zentral")
-        self.assertIn("Your username, in case you've forgotten: yolo", mail.outbox[0].body)
-
-    @patch("accounts.management.commands.create_zentral_user.send_mail")
-    def test_create_user_send_email_error(self, send_mail):
-        send_mail.return_value = 0
-        with self.assertRaises(SystemExit) as cm:
-            self.call_command("yolo", "fomo@example.com", "--send-email")
-        self.assertEqual(cm.exception.code, 15)
+        self.assertEqual(mail.outbox[0].subject, "Invitation to Zentral")
+        self.assertIn("Your username: yolo", mail.outbox[0].body)

@@ -17,6 +17,7 @@ nav:
   - API: configuration/api.md
   - Django: configuration/django.md
   - Event stores: configuration/stores.md
+  - Password reset handler: configuration/password_reset_handler.md
   - Secret engines: configuration/secret_engines.md
   - Users: configuration/users.md
   - "Azure AD - SAML": configuration/azure_ad_saml.md

@@ -3,6 +3,7 @@ from django.urls import include, path
 from django.contrib.auth import views as auth_views
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from accounts.views import login
+from accounts.forms import PasswordResetForm
 from zentral.conf import settings as zentral_settings
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ urlpatterns = [
          auth_views.PasswordChangeDoneView.as_view(),
          name='password_change_done'),
     path('accounts/password_reset/',
-         auth_views.PasswordResetView.as_view(),
+         auth_views.PasswordResetView.as_view(form_class=PasswordResetForm),
          name='password_reset'),
     path('accounts/password_reset/done/',
          auth_views.PasswordResetDoneView.as_view(),

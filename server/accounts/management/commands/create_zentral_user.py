@@ -1,16 +1,10 @@
 import json
 import sys
-from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 from django.core.validators import EmailValidator, ValidationError
-from django.template import loader
-from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
 from accounts.models import APIToken, User
-from zentral.conf import settings
+from accounts.password_reset import handler as password_reset_handler
 
 
 class Command(BaseCommand):
@@ -26,8 +20,8 @@ class Command(BaseCommand):
                             help="Generate an API token for the user")
         parser.add_argument('--json', action='store_true',
                             help="Set output mode to 'json'")
-        parser.add_argument('--send-email', action='store_true',
-                            help="Send email")
+        parser.add_argument('--send-reset', action='store_true',
+                            help="Send password reset")
 
     def exit_with_error(self, message, exit_code=1):
         if self.json:
@@ -108,33 +102,10 @@ class Command(BaseCommand):
             api_key = None
             api_token_created = False
 
-        # generate password reset URL
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
-        if isinstance(uid, bytes):
-            uid = uid.decode("ascii")
-        token = default_token_generator.make_token(user)
-        password_reset_url = "{}{}".format(
-            settings["api"]["tls_hostname"],
-            reverse('password_reset_confirm', args=(uid, token))
-        )
-
-        if kwargs.get("send_email", False):
-            context = {
-                'email': user.email,
-                'domain': settings["api"]["fqdn"],
-                'site_name': settings["api"]["fqdn"],
-                'uid': uid,
-                'user': user,
-                'token': token,
-                'protocol': 'https',
-            }
-            subject = loader.render_to_string("registration/password_reset_subject.txt", context)
-            subject = ''.join(subject.splitlines())
-            body = loader.render_to_string("registration/password_reset_email.html", context)
-            if not send_mail(subject, body, None, [user.email]):
-                self.exit_with_error("Could not send invitation email", 15)
-            elif not self.json:
-                self.print("Invitation email sent")
+        if kwargs.get("send_reset", False):
+            pr_context = password_reset_handler.send_password_reset(user, invitation=created)
+        else:
+            pr_context = password_reset_handler.get_password_reset_context(user, invitation=created)
 
         if self.json:
             self.stdout.write(json.dumps({
@@ -145,7 +116,7 @@ class Command(BaseCommand):
                 "updated": updated,
                 "api_token": api_key,
                 "api_token_created": api_token_created,
-                "password_reset_url": password_reset_url,
+                "password_reset_url": pr_context["reset_url"]
             }, indent=2))  # lgtm[py/clear-text-logging-sensitive-data]
         else:
-            self.print("Password reset:", password_reset_url)  # lgtm[py/clear-text-logging-sensitive-data]
+            self.print("Password reset:", pr_context["reset_url"])  # lgtm[py/clear-text-logging-sensitive-data]
