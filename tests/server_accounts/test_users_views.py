@@ -3,6 +3,7 @@ from functools import reduce
 import json
 import operator
 from django.contrib.auth.models import Group, Permission
+from django.core import mail
 from django.db.models import Q
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -314,6 +315,10 @@ class AccountUsersViewsTestCase(TestCase):
                                     {"username": "test",
                                      "email": "test@example.com"},
                                     follow=True)
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.subject, "Invitation to Zentral")
+        self.assertIn("Your username: test", email.body)
         for text in ("Users (5)", "test", "test@example.com"):
             self.assertContains(response, text)
 
@@ -792,3 +797,19 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "accounts/user_verification_devices.html")
         self.assertEqual(UserWebAuthn.objects.filter(pk=user_webauthn.pk).count(), 0)
         self.assertNotContains(response, user_webauthn.name)
+
+    # password reset
+
+    def test_password_reset_get(self):
+        response = self.client.get(reverse("password_reset"))
+        self.assertTemplateUsed(response, "registration/password_reset_form.html")
+
+    def test_password_reset_post(self):
+        self.assertEqual(len(mail.outbox), 0)
+        response = self.client.post(reverse("password_reset"), {"email": self.ui_user.email}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "registration/password_reset_done.html")
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.subject, "Password reset on Zentral")
+        self.assertIn(f"Your username, in case you've forgotten: {self.ui_user.username}", email.body)

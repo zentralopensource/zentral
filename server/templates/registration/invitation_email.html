@@ -3,9 +3,9 @@
 
 {% trans "Please go to the following page and choose a new password:" %}
 {% block reset_link %}
-{{ protocol }}://{{ domain }}{% url 'password_reset_confirm' uidb64=uid token=token %}
+{{ reset_url }}
 {% endblock %}
-{% trans "Your username:" %} {{ user.get_username }}
+{% trans "Your username:" %} {{ username }}
 
 {% trans "Thanks!" %}
 

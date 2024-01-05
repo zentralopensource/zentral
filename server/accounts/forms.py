@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from django import forms
 from django.apps import apps
 from django.conf import settings as django_settings
-from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, UsernameField
+from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm as DjangoPasswordResetForm,  UsernameField
 from django.contrib.auth.models import Group
 from django.core import signing, validators
 from django.db.models import Q
@@ -15,10 +15,11 @@ from django.utils.translation import gettext_lazy as _
 import pyotp
 from webauthn import generate_authentication_options, options_to_json, verify_authentication_response
 from webauthn.helpers.structs import AuthenticationCredential, PublicKeyCredentialDescriptor
-from .models import User, UserTOTP, UserWebAuthn
 from zentral.conf import settings as zentral_settings
 from zentral.conf.config import ConfigList
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
+from .models import User, UserTOTP, UserWebAuthn
+from .password_reset import handler as password_reset_handler
 
 
 logger = logging.getLogger("zentral.accounts.forms")
@@ -96,11 +97,7 @@ class InviteUserForm(forms.ModelForm):
         user = super(InviteUserForm, self).save(commit=False)
         user.set_password(get_random_string(1024))
         user.save()
-        prf = PasswordResetForm({"email": user.email})
-        if prf.is_valid():
-            prf.save(request=request, use_https=True,
-                     email_template_name='registration/invitation_email.html',
-                     subject_template_name='registration/invitation_subject.txt')
+        password_reset_handler.send_password_reset(user, invitation=True)
         return user
 
 
@@ -371,3 +368,10 @@ class RegisterWebAuthnDeviceForm(forms.Form):
         if name and UserWebAuthn.objects.filter(user=self.user, name=name).count():
             raise forms.ValidationError("A security key with this name is already registered with your account")
         return name
+
+
+class PasswordResetForm(DjangoPasswordResetForm):
+    def save(self, *args, **kwargs):
+        email = self.cleaned_data["email"]
+        for user in self.get_users(email):
+            password_reset_handler.send_password_reset(user, invitation=False)

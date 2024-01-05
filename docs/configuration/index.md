@@ -29,6 +29,7 @@ The configuration can be loaded from a file or an environment variable. To load 
  * [`api`](api/)
  * [`django`](django/)
  * `queues`
+ * [`password_reset_handler`](password_reset_handler/)
  * [`stores`](stores/)
  * [`secret_engines`](secret_engines/)
  * `actions`
