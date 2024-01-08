@@ -275,7 +275,7 @@ Example payload to tag machines using their principal users:
     {"kind": "SET", "taxonomy": "Department", "names": ["IT"]},
     {"kind": "REMOVE", "names": ["Orange", "Red"]},
     {"kind": "ADD", "taxonomy": "Branch", "names": ["Hamburg"]},
-    {"kind": "ADD", "names": ["Blue"]},
+    {"kind": "ADD", "names": ["Blue"]}
   ]
 }
 ```
@@ -293,7 +293,7 @@ Example payload to tag machines using their serial numbers:
 {
   "principal_users": ["123456789", "987654321"],
   "operations": [
-    {"kind": "SET", "taxonomy": "Department", "names": ["HR"]},
+    {"kind": "SET", "taxonomy": "Department", "names": ["HR"]}
   ]
 }
 ```
