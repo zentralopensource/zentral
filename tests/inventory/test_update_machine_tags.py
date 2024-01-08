@@ -89,19 +89,79 @@ class InventoryAPITests(TestCase):
 
     def test_post_empty_tags(self):
         self._set_required_permission()
-        response = self._post_json_data({"principal_users": {"unique_ids": ["yolo"]}})
+        response = self._post_json_data({
+            "principal_users": {"unique_ids": ["yolo"]}
+        })
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'tags': ['This field is required.']})
+        self.assertEqual(response.json(), {'operations': ['This field is required.']})
 
-    def test_post_empty_principal_users(self):
+    def test_post_principal_users_or_serial_numbers(self):
         self._set_required_permission()
-        response = self._post_json_data({"tags": {"yol": None, "lo": "1"}})
+        response = self._post_json_data({
+            "operations": [{"kind": "SET", "taxonomy": "yol", "names": []},
+                           {"kind": "SET", "taxonomy": "lo", "names": ["1"]}]
+        })
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'principal_users': ['This field is required.']})
+        self.assertEqual(
+            response.json(),
+            {'non_field_errors': ['principal_users and serial_numbers cannot be both empty.']}
+        )
+
+    def test_post_add_operation_empty_names(self):
+        self._set_required_permission()
+        response = self._post_json_data({
+            "operations": [{"kind": "ADD", "taxonomy": "yol", "names": []}],
+            "serial_numbers": ["un"]
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'operations': {'0': {'names': ['This list may not be empty for ADD operations']}}}
+        )
+
+    def test_post_remove_operation_empty_names(self):
+        self._set_required_permission()
+        response = self._post_json_data({
+            "operations": [{"kind": "REMOVE", "names": []}],
+            "serial_numbers": ["un"]
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'operations': {'0': {'names': ['This list may not be empty for REMOVE operations']}}}
+        )
+
+    def test_post_set_operation_empty_taxonomy(self):
+        self._set_required_permission()
+        response = self._post_json_data({
+            "operations": [{"kind": "SET", "taxonomy": None, "names": ["yolo"]}],
+            "serial_numbers": ["un"]
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'operations': {'0': {'taxonomy': ['This field is required for SET operations']}}}
+        )
+
+    def test_post_remove_operation_non_empty_taxonomy(self):
+        self._set_required_permission()
+        response = self._post_json_data({
+            "operations": [{"kind": "REMOVE", "taxonomy": "fomo", "names": ["yolo"]}],
+            "serial_numbers": ["un"]
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'operations': {'0': {'taxonomy': ['This field may not be set for REMOVE operations']}}}
+        )
 
     def test_post_empty_unique_ids_and_principal_names(self):
         self._set_required_permission()
-        response = self._post_json_data({"tags": {"yol": None, "lo": "1"}, "principal_users": {}})
+        response = self._post_json_data({
+            "operations": [{"kind": "SET", "taxonomy": "yol", "names": []},
+                           {"kind": "SET", "taxonomy": "lo", "names": ["1"]}],
+            "principal_users": {}
+        })
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -110,15 +170,30 @@ class InventoryAPITests(TestCase):
              }}
         )
 
-    def test_post_no_change(self):
+    def test_post_empty_serial_numbers(self):
+        self._set_required_permission()
+        response = self._post_json_data({
+            "operations": [{"kind": "SET", "taxonomy": "yol", "names": []},
+                           {"kind": "SET", "taxonomy": "lo", "names": ["1"]}],
+            "serial_numbers": []
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'serial_numbers': ['This list may not be empty.']}
+        )
+
+    def test_post_set_no_change(self):
         self._set_required_permission()
         # non matching machine
         serial_number, _, _ = self._force_machine()
         principal_name = get_random_string(12)
         taxonomy_name = get_random_string(12)
         tag_name = get_random_string(12)
-        response = self._post_json_data({"tags": {taxonomy_name: tag_name},
-                                         "principal_users": {"principal_names": [principal_name]}})
+        response = self._post_json_data({
+            "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
+            "principal_users": {"principal_names": [principal_name]}
+        })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -131,7 +206,7 @@ class InventoryAPITests(TestCase):
             0
         )
 
-    def test_post_add_one_tag(self):
+    def test_post_set_add_one_tag(self):
         self._set_required_permission()
         # non matching machine
         self._force_machine()
@@ -139,8 +214,10 @@ class InventoryAPITests(TestCase):
         serial_number, _, principal_name = self._force_machine()
         taxonomy_name = get_random_string(12)
         tag_name = get_random_string(12)
-        response = self._post_json_data({"tags": {taxonomy_name: tag_name},
-                                         "principal_users": {"principal_names": [principal_name]}})
+        response = self._post_json_data({
+            "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
+            "principal_users": {"principal_names": [principal_name]}
+        })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -153,7 +230,7 @@ class InventoryAPITests(TestCase):
             1
         )
 
-    def test_post_add_one_remove_three(self):
+    def test_post_set_add_one_remove_three(self):
         self._set_required_permission()
         # non matching machine
         self._force_machine()
@@ -166,10 +243,14 @@ class InventoryAPITests(TestCase):
         new_taxonomy_tag_name1 = get_random_string(12)
         # 1 taxonomy with 1 tag
         taxonomy_name2, _ = self._force_machine_tags(serial_number, 1)
-        response = self._post_json_data({"tags": {taxonomy_name0: tag_names0[0],
-                                                  taxonomy_name1: new_taxonomy_tag_name1,
-                                                  taxonomy_name2: None},
-                                         "principal_users": {"unique_ids": [unique_id]}})
+        response = self._post_json_data({
+            "operations": [
+                {"kind": "SET", "taxonomy": taxonomy_name0, "names": [tag_names0[0]]},
+                {"kind": "SET", "taxonomy": taxonomy_name1, "names": [new_taxonomy_tag_name1]},
+                {"kind": "SET", "taxonomy": taxonomy_name2, "names": []}
+            ],
+            "principal_users": {"unique_ids": [unique_id]}
+        })
         self.assertEqual(
             response.json(),
             {'machines': {'found': 1}, 'tags': {'added': 1, 'removed': 3}}
@@ -190,7 +271,7 @@ class InventoryAPITests(TestCase):
             0
         )
 
-    def test_multiple_add_one(self):
+    def test_post_set_multiple_add_one(self):
         self._set_required_permission()
         # 3 matching machines
         serial_number0, _, principal_name0 = self._force_machine()
@@ -198,9 +279,11 @@ class InventoryAPITests(TestCase):
         serial_number2, unique_id2, _ = self._force_machine()
         taxonomy_name = get_random_string(12)
         tag_name = get_random_string(12)
-        response = self._post_json_data({"tags": {taxonomy_name: tag_name},
-                                         "principal_users": {"unique_ids": [unique_id1, unique_id2],
-                                                             "principal_names": [principal_name0, principal_name1]}})
+        response = self._post_json_data({
+            "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
+            "principal_users": {"unique_ids": [unique_id1, unique_id2],
+                                "principal_names": [principal_name0, principal_name1]}
+        })
         self.assertEqual(
             response.json(),
             {'machines': {'found': 3}, 'tags': {'added': 3, 'removed': 0}}
@@ -210,3 +293,46 @@ class InventoryAPITests(TestCase):
                                   .values_list("serial_number", flat=True)),
             {serial_number0, serial_number1, serial_number2}
         )
+
+    def test_post_add_three_tags(self):
+        self._set_required_permission()
+        serial_number, _, principal_name = self._force_machine()
+        self.assertEqual(MachineTag.objects.filter(serial_number=serial_number).count(), 0)
+        tag_name_1 = get_random_string(12)
+        tag_name_2 = get_random_string(12)
+        taxonomy_name_3 = get_random_string(12)
+        tag_name_3 = get_random_string(12)
+        response = self._post_json_data({
+            "operations": [{"kind": "ADD", "names": [tag_name_1, tag_name_2]},
+                           {"kind": "ADD", "taxonomy": taxonomy_name_3, "names": [tag_name_3]}],
+            "principal_users": {"principal_names": [principal_name]}
+        })
+        self.assertEqual(
+            response.json(),
+            {"machines": {"found": 1}, "tags": {"added": 3, "removed": 0}}
+        )
+        self.assertEqual(
+            set(mt.tag for mt in MachineTag.objects.select_related("tag").filter(tag__taxonomy__isnull=True,
+                                                                                 serial_number=serial_number)),
+            set(Tag.objects.get(taxonomy__isnull=True, name=name) for name in (tag_name_1, tag_name_2))
+        )
+        self.assertEqual(
+            set(mt.tag for mt in MachineTag.objects.select_related("tag").filter(tag__taxonomy__isnull=False,
+                                                                                 serial_number=serial_number)),
+            set(Tag.objects.get(taxonomy__name=taxonomy_name_3, name=name) for name in (tag_name_3,))
+        )
+
+    def test_post_remove_one_tag(self):
+        self._set_required_permission()
+        serial_number, _, _ = self._force_machine()
+        taxonomy_name, (tag_name_1, tag_name_2) = self._force_machine_tags(serial_number, 2)
+        response = self._post_json_data({
+            "operations": [{"kind": "REMOVE", "names": [tag_name_1]}],
+            "serial_numbers": [serial_number],
+        })
+        self.assertEqual(
+            response.json(),
+            {"machines": {"found": 1}, "tags": {"added": 0, "removed": 1}}
+        )
+        self.assertEqual(MachineTag.objects.filter(serial_number=serial_number, tag__name=tag_name_1).count(), 0)
+        self.assertEqual(MachineTag.objects.filter(serial_number=serial_number, tag__name=tag_name_2).count(), 1)

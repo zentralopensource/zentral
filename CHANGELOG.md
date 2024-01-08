@@ -1,10 +1,14 @@
-## 2023.1 (TBD)
+## 2024.1 (TBD)
 
 ### Features (some, not all…)
 
 New `zentral.core.stores.backends.snowflake` store backend.
 
 ### Backward incompatibilities
+
+#### 🧨 updated `/api/inventory/machines/tags/` API endpoint
+
+To add more flexibility, the payload for this API endpoint has changed. Please refer to [the documentation](https://docs.zentral.io/en/latest/apps/inventory/#apiinventorymachinestags).
 
 #### 🧨 new URLs for Monolith
 

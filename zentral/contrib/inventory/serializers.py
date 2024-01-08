@@ -25,9 +25,43 @@ class MachineTagsUpdatePrincipalUsers(serializers.Serializer):
         return data
 
 
+class MachineTagOperation(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=(("SET", "Set"), ("ADD", "Add"), ("REMOVE", "Remove")), required=True)
+    taxonomy = serializers.CharField(max_length=256, allow_blank=False, allow_null=True, required=False)
+    names = serializers.ListField(child=serializers.CharField(max_length=50),
+                                  allow_empty=True, required=True)
+
+    def validate(self, data):
+        data = super().validate(data)
+        kind = data["kind"]
+        taxonomy = data.get("taxonomy")
+        names = data.get("names")
+        if kind == "SET":
+            if not taxonomy:
+                raise serializers.ValidationError({"taxonomy": "This field is required for SET operations"})
+        elif kind == "REMOVE":
+            if taxonomy:
+                raise serializers.ValidationError({"taxonomy": "This field may not be set for REMOVE operations"})
+            if not names:
+                raise serializers.ValidationError({"names": "This list may not be empty for REMOVE operations"})
+        elif kind == "ADD":
+            if not names:
+                raise serializers.ValidationError({"names": "This list may not be empty for ADD operations"})
+        return data
+
+
 class MachineTagsUpdateSerializer(serializers.Serializer):
-    tags = serializers.DictField(child=serializers.CharField(allow_null=True), allow_empty=False)
-    principal_users = MachineTagsUpdatePrincipalUsers()
+    principal_users = MachineTagsUpdatePrincipalUsers(required=False)
+    serial_numbers = serializers.ListField(child=serializers.CharField(min_length=1),
+                                           allow_empty=False, required=False)
+    operations = serializers.ListField(child=MachineTagOperation(),
+                                       allow_empty=False, required=True)
+
+    def validate(self, data):
+        data = super().validate(data)
+        if not data.get("principal_users") and not data.get("serial_numbers"):
+            raise serializers.ValidationError("principal_users and serial_numbers cannot be both empty.")
+        return data
 
 
 # Archive or prune machines

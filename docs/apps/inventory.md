@@ -261,9 +261,9 @@ This boolean is used to toggle the inclusion of the principal user in the event 
     * `inventory.add_machinetag`
     * `inventory.delete_machinetag`
 
-Use this endpoint to tag machines using principal user information (unique IDs or principal names).
+Use this endpoint to tag machines using serial numbers or principal user information (unique IDs or principal names). Three different operations are possible: `ADD`, `REMOVE`, `SET`. For the `SET` operation, the `taxonomy` attribute is required. For the `REMOVE` operation, the `taxonomy` attribute must not be used. For the `ADD` operation and `REMOVE` operation, the `names` attribute must not be empty. To scope the machines, use either `serial_numbers` or `principal_users`.
 
-Example payload:
+Example payload to tag machines using their principal users:
 
 ```json
 {
@@ -271,21 +271,43 @@ Example payload:
     "principal_names": ["janeDoe", "johnSmith"],
     "unique_ids": ["max.mustermann@example.com"]
   },
-  "tags": {
-    "taxonomy 1": "tag1",
-    "taxonomy 2": null
-  }
+  "operations": [
+    {"kind": "SET", "taxonomy": "Department", "names": ["IT"]},
+    {"kind": "REMOVE", "names": ["Orange", "Red"]},
+    {"kind": "ADD", "taxonomy": "Branch", "names": ["Hamburg"]},
+    {"kind": "ADD", "names": ["Blue"]},
+  ]
 }
 ```
 
-When posting this payload, Zentral will look for all the machines having matching principal users. For those machines, it will ensure that their are tagged with `tag1` from the taxonomy `taxonomy 1`, and will remove any other tag from the taxonomy `taxonomy 1` and any tag from the taxonomy `taxonomy 2` (idempotent operation). The required taxonomies and tags are automatically created.
+When this payload is posted, Zentral looks for all the machines having matching principal users. For each machine, four operations are applied:
+
+ 1. make sure that a `IT` tag exists from the `Department` taxonomy, and remove any other tag from this taxonomy.
+ 2. remove any `Orange` or `Red` tags.
+ 3. add a `Hamburg` tag in the `Branch` taxonomy.
+ 4. add a `Blue` tag without taxonomy.
+
+Example payload to tag machines using their serial numbers:
+
+```json
+{
+  "principal_users": ["123456789", "987654321"],
+  "operations": [
+    {"kind": "SET", "taxonomy": "Department", "names": ["HR"]},
+  ]
+}
+```
+
+When this payload is posted, Zentral looks for all the machines having matching serial numbers. For each machine, one operations is applied:
+
+ 1. make sure that a `HR` tag exists from the `Department` taxonomy, and remove any other tag from this taxonomy.
 
 The response format is:
 
 ```json
 {
-  "machines": {"found": 3},
-  "tags": {"added": 3,
+  "machines": {"found": 2},
+  "tags": {"added": 2,
            "removed": 1}
 }
 ```

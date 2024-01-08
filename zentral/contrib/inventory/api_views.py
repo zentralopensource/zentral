@@ -45,19 +45,40 @@ class UpdateMachineTags(APIView):
     permission_classes = [DjangoPermissionRequired]
 
     def _prepare_taxonomies_and_tags(self):
-        self.tags_to_set = []
+        self.tags_to_set = {}
+        self.tags_to_add = []
+        self.tags_to_remove = []
         self.taxonomies_to_clear = []
-        for taxonomy_name, tag_name in self.data["tags"].items():
-            if tag_name:
+        for operation in self.data["operations"]:
+            kind = operation["kind"]
+            taxonomy_name = operation.get("taxonomy")
+            names = operation["names"]
+            taxonomy = None
+            if taxonomy_name and (kind == "ADD" or (kind == "SET" and names)):
                 taxonomy, _ = Taxonomy.objects.get_or_create(name=taxonomy_name)
-                self.tags_to_set.append(Tag.objects.get_or_create(taxonomy=taxonomy, name=tag_name)[0])
-            else:
-                try:
-                    self.taxonomies_to_clear.append(Taxonomy.objects.get(name=taxonomy_name))
-                except Taxonomy.DoesNotExist:
-                    pass
+            if kind == "SET":
+                if names:
+                    self.tags_to_set.setdefault(taxonomy, []).extend(
+                        Tag.objects.get_or_create(taxonomy=taxonomy, name=name)[0]
+                        for name in names
+                    )
+                else:
+                    self.taxonomies_to_clear.append(taxonomy_name)
+            elif kind == "ADD":
+                self.tags_to_add.extend(
+                    Tag.objects.get_or_create(taxonomy=taxonomy, name=name)[0]
+                    for name in names
+                )
+            elif kind == "REMOVE":
+                self.tags_to_remove.extend(names)
 
     def _iter_serial_numbers(self):
+        # serial numbers
+        serial_numbers = self.data.get("serial_numbers")
+        if serial_numbers:
+            yield from serial_numbers
+            return
+        # principal users
         args = []
         wheres = []
         principal_names = self.data["principal_users"].get("principal_names", [])
@@ -85,16 +106,25 @@ class UpdateMachineTags(APIView):
         total_added = 0
         if self.taxonomies_to_clear:
             removed, _ = MachineTag.objects.filter(serial_number=serial_number,
-                                                   tag__taxonomy__in=self.taxonomies_to_clear).delete()
+                                                   tag__taxonomy__name__in=self.taxonomies_to_clear).delete()
             total_removed += removed
-        for tag in self.tags_to_set:
+        for taxonomy, tags in self.tags_to_set.items():
             removed, _ = (MachineTag.objects.filter(serial_number=serial_number,
-                                                    tag__taxonomy=tag.taxonomy)
-                                            .exclude(tag__name=tag.name)).delete()
+                                                    tag__taxonomy=taxonomy)
+                                            .exclude(tag__in=tags)).delete()
             total_removed += removed
+            for tag in tags:
+                _, created = MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
+                if created:
+                    total_added += 1
+        for tag in self.tags_to_add:
             _, created = MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
             if created:
                 total_added += 1
+        if self.tags_to_remove:
+            removed, _ = MachineTag.objects.filter(serial_number=serial_number,
+                                                   tag__name__in=self.tags_to_remove).delete()
+            total_removed += removed
         return total_removed, total_added
 
     def post(self, request, *args, **kwargs):
