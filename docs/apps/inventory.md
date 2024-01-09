@@ -291,7 +291,7 @@ Example payload to tag machines using their serial numbers:
 
 ```json
 {
-  "principal_users": ["123456789", "987654321"],
+  "serial_numbers": ["123456789", "987654321"],
   "operations": [
     {"kind": "SET", "taxonomy": "Department", "names": ["HR"]}
   ]
