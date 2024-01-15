@@ -8,9 +8,6 @@ class MonolithConf(object):
     def app_config(self):
         return settings['apps']['zentral.contrib.monolith'].copy()
 
-    def get_default_managed_installs(self):
-        return list(self.app_config().get("default_managed_installs", []))
-
     @cached_property
     def repository(self):
         repository_cfg = self.app_config()['munki_repository']

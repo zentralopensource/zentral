@@ -338,8 +338,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(
             serialized_manifest,
             {'catalogs': [f"manifest-catalog.{manifest.pk}.{manifest.name}"],
-             'included_manifests': [sub_manifest.get_munki_name()],
-             'managed_installs': []}
+             'included_manifests': [sub_manifest.get_munki_name()]}
         )
 
     # sub manifests

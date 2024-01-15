@@ -763,10 +763,6 @@ class Manifest(models.Model):
                                                      for ep in self.enrollment_packages(tags).values())
         return self._pkginfo_deps_and_updates(required_packages_iter, tags)
 
-    def default_managed_installs_deps(self, tags=None):
-        """PkgInfos installed per default, with their dependencies"""
-        return self._pkginfo_deps_and_updates(monolith_conf.get_default_managed_installs(), tags)
-
     # the manifest catalog - for a given set of tags
 
     def get_catalog_munki_name(self):
@@ -809,16 +805,14 @@ class Manifest(models.Model):
         for sm in self.sub_manifests(tags):
             data['included_manifests'].append(sm.get_munki_name())
 
-        # add default managed installs
-        data['managed_installs'] = monolith_conf.get_default_managed_installs()
-
         # loop on the configured enrollment package builders
         enrollment_packages = self.enrollment_packages(tags)
         for mep in self.manifestenrollmentpackage_set.all():
             mep_name = mep.get_name()
             if mep.builder in enrollment_packages:
-                if mep_name not in data['managed_installs']:
-                    data['managed_installs'].append(mep_name)
+                managed_installs = data.setdefault('managed_installs', [])
+                if mep_name not in managed_installs:
+                    managed_installs.append(mep_name)
             else:
                 managed_uninstalls = data.setdefault('managed_uninstalls', [])
                 if mep_name not in managed_uninstalls:
