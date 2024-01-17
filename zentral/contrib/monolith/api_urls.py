@@ -7,12 +7,15 @@ from .api_views import (SyncRepository, UpdateCacheServer,
                         ManifestList, ManifestDetail,
                         ManifestCatalogList, ManifestCatalogDetail,
                         ManifestSubManifestList, ManifestSubManifestDetail,
+                        RepositoryList, RepositoryDetail,
                         SubManifestList, SubManifestDetail,
                         SubManifestPkgInfoList, SubManifestPkgInfoDetail)
 
 app_name = "monolith_api"
 urlpatterns = [
-    path('repository/sync/', SyncRepository.as_view(), name="sync_repository"),
+    path('repositories/', RepositoryList.as_view(), name="repositories"),
+    path('repositories/<int:pk>/', RepositoryDetail.as_view(), name="repository"),
+    path('repositories/<int:pk>/sync/', SyncRepository.as_view(), name="sync_repository"),
     path('catalogs/', CatalogList.as_view(), name="catalogs"),
     path('catalogs/<int:pk>/', CatalogDetail.as_view(), name="catalog"),
     path('conditions/', ConditionList.as_view(), name="conditions"),

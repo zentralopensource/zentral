@@ -1,36 +1,58 @@
 {% extends 'base.html' %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item active">Monolith catalogs</li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item active">Catalogs</li>
 </ol>
 
-<h2>Catalogs</h2>
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Catalogs ({{ object_list|length }})</h2>
+    <div class="ms-auto">
+        {% if perms.monolith.add_catalog %}
+            {% url 'monolith:create_catalog' as url %}
+            {% button 'CREATE' url "Create new Monolith catalog" %}
+        {% endif %}
+    </div>
+</div>
 
-{% if can_create_catalog %}
-<p><a class="btn btn-primary" href="{% url 'monolith:create_catalog' %}">Create</a></p>
-{% endif %}
-
-<table class="table table-striped">
+<table class="table table-striped table-hover">
   <thead>
+    <th>Repository</th>
     <th>Name</th>
-    <th>Priority</th>
     <th>Created at</th>
-    {% if manual_catalog_management %}
     <th>Archived at</th>
+    {% if perms.monolith.change_catalog or perms.monolith.delete_catalog %}
+    <th></th>
     {% endif %}
   </thead>
   <tbody>
     {% for catalog in object_list %}
-    <tr>
+    <tr class="data-row">
       <td>
-        <a href="{% url 'monolith:catalog' catalog.id %}">{{ catalog.name }}</a>
+        {% if perms.monolith.view_repository %}
+        <a href="{{ catalog.repository.get_absolute_url }}">{{ catalog.repository }}</a>
+        {% else %}
+        {{ catalog.repository }}
+        {% endif %}
+      <td>
+        <a href="{{ catalog.get_absolute_url }}">{{ catalog.name }}</a>
       </td>
-      <td>{{ catalog.priority }}</td>
       <td>{{ catalog.created_at }}</td>
-      {% if manual_catalog_management %}
       <td>{{ catalog.archived_at|default:"-" }}</td>
+      {% if perms.monolith.change_catalog or perms.monolith.delete_catalog %}
+      <td class="text-end py-0">
+        {% if perms.monolith.change_catalog and catalog.can_be_updated %}
+        {% url 'monolith:update_catalog' catalog.id as url %}
+        {% button 'UPDATE' url "Edit catalog" %}
+        {% endif %}
+        {% if perms.monolith.delete_catalog and catalog.can_be_deleted %}
+        {% url 'monolith:delete_catalog' catalog.id as url %}
+        {% button 'DELETE' url "Delete catalog" %}
+        {% endif %}
+      </td>
       {% endif %}
     </tr>
     {% endfor %}

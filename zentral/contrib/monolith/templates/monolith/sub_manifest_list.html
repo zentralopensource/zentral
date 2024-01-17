@@ -4,7 +4,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item active">Monolith sub manifests</li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item active">Sub manifests</li>
 </ol>
 
 <div class="d-flex align-items-center mb-3">
@@ -13,9 +14,7 @@
 
 <div class="d-flex flex-wrap align-items-center mb-1">
     <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
-        
-          {{ form }}
-        
+        {{ form }}
         <button type="submit" class="btn btn-link mb-2">
             <i class="bi bi-search"></i>
         </button>

@@ -4,7 +4,73 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .models import (Catalog, Condition, Enrollment, Manifest, ManifestCatalog, ManifestSubManifest,
-                     PkgInfoName, SubManifest, SubManifestPkgInfo)
+                     PkgInfoName, Repository, RepositoryBackend, SubManifest, SubManifestPkgInfo)
+from .repository_backends.s3 import S3RepositorySerializer
+
+
+class RepositorySerializer(serializers.ModelSerializer):
+    backend_kwargs = serializers.JSONField(source="get_backend_kwargs", required=False)
+
+    class Meta:
+        model = Repository
+        fields = (
+            "id",
+            "backend",
+            "backend_kwargs",
+            "name",
+            "meta_business_unit",
+            "icon_hashes",
+            "client_resources",
+            "created_at",
+            "updated_at",
+            "last_synced_at",
+        )
+
+    def validate_meta_business_unit(self, value):
+        if self.instance:
+            for manifest in self.instance.manifests():
+                if manifest.meta_business_unit != value:
+                    raise serializers.ValidationError(
+                        f"Repository linked to manifest '{manifest}' which has a different business unit."
+                    )
+        return value
+
+    def validate(self, data):
+        backend_kwargs = data.pop("get_backend_kwargs", {})
+        data = super().validate(data)
+        backend = data.get("backend")
+        if backend:
+            if backend == RepositoryBackend.S3:
+                backend_serializer = S3RepositorySerializer(data=backend_kwargs)
+                if backend_serializer.is_valid():
+                    data["backend_kwargs"] = backend_serializer.data
+                else:
+                    raise serializers.ValidationError({"backend_kwargs": backend_serializer.errors})
+            elif backend == RepositoryBackend.VIRTUAL:
+                if backend_kwargs and backend_kwargs != {}:
+                    raise serializers.ValidationError({
+                        "backend_kwargs": {
+                            "non_field_errors": ["Must be an empty dict for a virtual repository."]
+                        }
+                    })
+        return data
+
+    def create(self, validated_data):
+        backend_kwargs = validated_data.pop("backend_kwargs", {})
+        validated_data["backend_kwargs"] = {}
+        repository = super().create(validated_data)
+        repository.set_backend_kwargs(backend_kwargs)
+        repository.save()
+        return repository
+
+    def update(self, instance, validated_data):
+        backend_kwargs = validated_data.pop("backend_kwargs", {})
+        repository = super().update(instance, validated_data)
+        repository.set_backend_kwargs(backend_kwargs)
+        repository.save()
+        for manifest in repository.manifests():
+            manifest.bump_version()
+        return repository
 
 
 class CatalogSerializer(serializers.ModelSerializer):
@@ -12,6 +78,20 @@ class CatalogSerializer(serializers.ModelSerializer):
         model = Catalog
         fields = '__all__'
         read_only_fields = ['archived_at']
+
+    def validate_repository(self, value):
+        if value.backend != RepositoryBackend.VIRTUAL:
+            raise serializers.ValidationError("Not a virtual repository.")
+        if value.meta_business_unit and self.instance:
+            if (
+                Manifest.objects.filter(manifestcatalog__catalog=self.instance)
+                                .exclude(meta_business_unit=value.meta_business_unit)
+                                .count()
+            ):
+                raise serializers.ValidationError(
+                    "This catalog is included in manifests linked to different business units than this repository."
+                )
+        return value
 
 
 class ConditionSerializer(serializers.ModelSerializer):

@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:repositories' %}">Repositories</a></li>
+  {% if object %}
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">update</li>
+  {% else %}
+  <li class="breadcrumb-item active">create</li>
+  {% endif %}
+</ol>
+
+<h3>{% if object %}Update {{ object }}{% else %}Create repository{% endif %}</h3>
+
+<form method="post" class="update-form">{% csrf_token %}
+  {{ form }}
+  <div class="backend" id="S3" style="display:none">
+    {{ s3_form }}
+  </div>
+  <p>
+    {% if object %}
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    {% else %}
+    <a class="btn btn-outline-secondary" href="{% url 'monolith:repositories' %}">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save</button>
+  </p>
+</form>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  const backendForms = document.querySelectorAll('.backend');
+
+  function updateBackendForms() {
+    const backendType = $("#id_r-backend").val();
+    backendForms.forEach(function(backendForm){
+        if (backendType === backendForm.id) {
+          backendForm.style.display = "";
+          backendForm.querySelectorAll("[data-required='1']").forEach(function(requiredFormElm) {
+            requiredFormElm.setAttribute('required', '');
+          });
+        } else {
+          backendForm.style.display = "none";
+          backendForm.querySelectorAll("[required]").forEach(function(requiredFormElm) {
+            requiredFormElm.dataset.required = '1';
+            requiredFormElm.removeAttribute('required');
+          });
+        }
+    });
+  }
+
+  $(document).ready(function () {
+    $("#id_r-backend").change(function () {
+      updateBackendForms();
+    });
+    updateBackendForms();
+  });
+</script>
+{% endblock %}

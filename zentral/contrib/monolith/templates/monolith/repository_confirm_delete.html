@@ -4,15 +4,15 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
-  <li class="breadcrumb-item"><a href="{%  url 'monolith:conditions' %}">Conditions</a></li>
-  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:repositories' %}">Repositories</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
   <li class="breadcrumb-item active">Delete</li>
 </ol>
 
-<h2>Delete condition <i>{{ object }}</i></h2>
+<h2>Delete repository {{ object }}</h2>
 
 <form method="POST">{% csrf_token %}
-  <p>Do you really want to delete this condition?</p>
+  <p>Do you really want to delete this repository?</p>
   <p>
     <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Yes</button>

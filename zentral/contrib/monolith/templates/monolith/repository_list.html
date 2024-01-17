@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item active">Repositories</li>
+</ol>
+
+<div class="d-flex justify-content-between mb-3">
+  <h2>Repositories ({{ object_list|length }})</h2>
+  <div class="ms-auto">
+      {% if perms.monolith.add_repository %}
+          {% url 'monolith:create_repository' as url %}
+          {% button 'CREATE' url "Create new Monolith repository" %}
+      {% endif %}
+  </div>
+</div>
+
+<table class="table table-striped table-hover">
+  <thead>
+    <th>Name</th>
+    <th>Backend</th>
+    <th>Business unit</th>
+    <th>Last synced at</th>
+    {% if perms.monolith.change_repository or perms.monolith.delete_repository %}
+    <th></th>
+    {% endif %}
+  </thead>
+  <tbody>
+    {% for repository in object_list %}
+    <tr class="data-row">
+      <td>
+        <a href="{% url 'monolith:repository' repository.id %}">{{ repository }}</a>
+      </td>
+      <td>
+        {{ repository.get_backend_display }}
+      </td>
+      <td>
+        {% with repository.meta_business_unit as mbu %}
+        {% if mbu %}
+        {% if perms.inventory.view_metabusinessunit %}
+        <a href="{{ mbu.get_absolute_url }}">{{ mbu }}</a>
+        {% else %}
+        {{ mbu }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+        {% endwith %}
+      </td>
+      <td>{{ repository.last_synced_at|default:"-" }}</td>
+      {% if perms.monolith.change_repository or perms.monolith.delete_repository %}
+      <td class="text-end py-0">
+        {% if perms.monolith.change_repository %}
+        {% url 'monolith:update_repository' repository.id as url %}
+        {% button 'UPDATE' url "Edit repository" %}
+        {% endif %}
+        {% if perms.monolith.delete_repository and repository.can_be_deleted %}
+        {% url 'monolith:delete_repository' repository.id as url %}
+        {% button 'DELETE' url "Delete repository" %}
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

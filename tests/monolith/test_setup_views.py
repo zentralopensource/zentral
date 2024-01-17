@@ -13,12 +13,19 @@ from django.utils.text import slugify
 from accounts.models import User
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, EnrolledMachine,
-                                             Manifest, ManifestCatalog, ManifestSubManifest,
-                                             PkgInfo, PkgInfoCategory, PkgInfoName,
-                                             SubManifest, SubManifestPkgInfo)
+                                             PkgInfo, PkgInfoName)
+from zentral.contrib.monolith.repository_backends import load_repository_backend
+from zentral.contrib.monolith.repository_backends.s3 import S3Repository
+from zentral.contrib.monolith.repository_backends.virtual import VirtualRepository
 from zentral.contrib.munki.models import ManagedInstall
 from zentral.core.events.base import AuditEvent
 from utils.packages import build_dummy_package
+from .utils import (CLOUDFRONT_PRIVKEY_PEM,
+                    force_catalog, force_category, force_condition,
+                    force_manifest, force_name,
+                    force_pkg_info,
+                    force_sub_manifest, force_sub_manifest_pkg_info,
+                    force_repository)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -34,16 +41,17 @@ class MonolithSetupViewsTestCase(TestCase):
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
+        # repository
+        cls.repository = force_repository()
         # manifest
-        cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string(12))
+        cls.manifest = force_manifest(mbu=cls.mbu)
         # catalog
-        cls.catalog_1 = Catalog.objects.create(name=get_random_string(13), priority=10)
-        # manifest catalog
-        ManifestCatalog.objects.create(manifest=cls.manifest, catalog=cls.catalog_1)
+        cls.catalog_1 = force_catalog(repository=cls.repository, manifest=cls.manifest)
         # pkginfo name
         cls.pkginfo_name_1 = PkgInfoName.objects.create(name="aaaa first name")
         # pkginfo
-        cls.pkginfo_1_1 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="1.0",
+        cls.pkginfo_1_1 = PkgInfo.objects.create(repository=cls.repository,
+                                                 name=cls.pkginfo_name_1, version="1.0",
                                                  data={"name": cls.pkginfo_name_1.name,
                                                        "version": "1.0"})
         cls.pkginfo_1_1.catalogs.set([cls.catalog_1])
@@ -82,78 +90,417 @@ class MonolithSetupViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_catalog(self):
-        return Catalog.objects.create(name=get_random_string(12))
+    # index
 
-    def _force_condition(self, submanifest=False):
-        return Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
+    def test_index_redirect(self):
+        self._login_redirect(reverse("monolith:index"))
 
-    def _force_manifest(self):
-        return Manifest.objects.create(name=get_random_string(12), meta_business_unit=self.mbu)
+    def test_index_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("monolith:index"))
+        self.assertEqual(response.status_code, 403)
 
-    def _force_sub_manifest(self, condition=None):
-        submanifest = SubManifest.objects.create(name=get_random_string(12))
-        submanifest_pkginfo = SubManifestPkgInfo.objects.create(
-            sub_manifest=submanifest,
-            key="managed_installs",
-            pkg_info_name=self.pkginfo_name_1,
-            condition=condition
+    def test_index(self):
+        self._login("monolith.view_manifest")
+        response = self.client.get(reverse("monolith:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/index.html")
+
+    # repositories
+
+    def test_repositories_redirect(self):
+        self._login_redirect(reverse("monolith:repositories"))
+
+    def test_repositories_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("monolith:repositories"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_repositories(self):
+        repository = force_repository()
+        self._login("monolith.view_repository")
+        response = self.client.get(reverse("monolith:repositories"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_list.html")
+        self.assertContains(response, repository.get_absolute_url())
+        self.assertContains(response, repository.name)
+
+    # create repository
+
+    def test_create_repository_redirect(self):
+        self._login_redirect(reverse("monolith:create_repository"))
+
+    def test_create_repository_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("monolith:create_repository"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_repository_get(self):
+        self._login("monolith.add_repository")
+        response = self.client.get(reverse("monolith:create_repository"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_form.html")
+
+    def test_create_s3_repository_invalid_private_key(self):
+        self._login("monolith.add_repository", "monolith.view_repository")
+        name = get_random_string(12)
+        bucket = get_random_string(12)
+        response = self.client.post(reverse("monolith:create_repository"),
+                                    {"r-name": name,
+                                     "r-backend": "S3",
+                                     "s3-bucket": bucket,
+                                     "s3-cloudfront_domain": "yada.cloudfront.net",
+                                     "s3-cloudfront_key_id": "YADA",
+                                     "s3-cloudfront_privkey_pem": "YADA"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_form.html")
+        self.assertFormError(
+            response.context["s3_form"], "cloudfront_privkey_pem",
+            "Invalid private key."
         )
-        return submanifest, submanifest_pkginfo
 
-    def _force_pkg_info_name(self):
-        return PkgInfoName.objects.create(name=get_random_string(12))
-
-    def _force_pkg_info(self, local=True, version="1.0", archived=False, alles=False):
-        pkg_info_name = self._force_pkg_info_name()
-        data = {"name": pkg_info_name.name,
-                "version": version}
-        pi = PkgInfo.objects.create(
-            name=pkg_info_name, version=version, local=local,
-            archived_at=datetime.utcnow() if archived else None,
-            data=data
+    def test_create_s3_repository_missing_cf_domain_key_id(self):
+        self._login("monolith.add_repository", "monolith.view_repository")
+        name = get_random_string(12)
+        bucket = get_random_string(12)
+        response = self.client.post(reverse("monolith:create_repository"),
+                                    {"r-name": name,
+                                     "r-backend": "S3",
+                                     "s3-bucket": bucket,
+                                     "s3-cloudfront_privkey_pem": CLOUDFRONT_PRIVKEY_PEM},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_form.html")
+        self.assertFormError(
+            response.context["s3_form"], "cloudfront_domain",
+            "This field is required when configuring Cloudfront."
         )
-        if alles:
-            pkg_info_category = PkgInfoCategory.objects.create(name=get_random_string(12))
-            pi.catalogs.add(Catalog.objects.create(name=get_random_string(12)))
-            pi.category = pkg_info_category
-            data["category"] = pkg_info_category.name
-            pkg_info_name_required = self._force_pkg_info_name()
-            pi.requires.add(pkg_info_name_required)
-            data["requires"] = [pkg_info_name_required.name]
-            pkg_info_name_update_for = self._force_pkg_info_name()
-            pi.update_for.add(pkg_info_name_update_for)
-            data["update_for"] = [pkg_info_name_update_for.name]
-            data.update({
-                'display_name': get_random_string(12),
-                'description': get_random_string(12),
-                'autoremove': False,
-                'installed_size': 111,
-                'installer_item_hash': get_random_string(64, allowed_chars="0123456789abcdef"),
-                'installer_item_location': get_random_string(12),
-                'installer_item_size': 55,
-                'minimum_os_version': '10.11.0',
-                'receipts': [{
-                    'installed_size': 111,
-                    'packageid': 'io.zentral.{}'.format(slugify(pkg_info_name.name)),
-                    'version': version
-                }],
-                'unattended_install': True,
-                'unattended_uninstall': True,
-                'uninstall_method': 'removepackages',
-                'uninstallable': True,
-                'version': version,
-                'zentral_monolith': {
-                    "excluded_tag": [Tag.objects.create(name=get_random_string(12)).name],
-                    "shards": {
-                        "modulo": 5,
-                        "default": 2,
-                        "tags": {Tag.objects.create(name=get_random_string(12)).name: 5}
-                    }
-                }
-            })
-            pi.save()
-        return pi
+        self.assertFormError(
+            response.context["s3_form"], "cloudfront_key_id",
+            "This field is required when configuring Cloudfront."
+        )
+
+    def test_create_s3_repository_missing_cf_privkey(self):
+        self._login("monolith.add_repository", "monolith.view_repository")
+        name = get_random_string(12)
+        bucket = get_random_string(12)
+        response = self.client.post(reverse("monolith:create_repository"),
+                                    {"r-name": name,
+                                     "r-backend": "S3",
+                                     "s3-bucket": bucket,
+                                     "s3-cloudfront_domain": "yada.cloudfront.net",
+                                     "s3-cloudfront_key_id": "YADA"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_form.html")
+        self.assertFormError(
+            response.context["s3_form"], "cloudfront_privkey_pem",
+            "This field is required when configuring Cloudfront."
+        )
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_s3_repository(self, post_event, send_notification):
+        self._login("monolith.add_repository", "monolith.view_repository")
+        name = get_random_string(12)
+        bucket = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:create_repository"),
+                                        {"r-name": name,
+                                         "r-backend": "S3",
+                                         "s3-bucket": bucket},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, name)
+        repository = response.context["object"]
+        self.assertEqual(repository.name, name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "monolith.repository",
+                 "pk": str(repository.pk),
+                 "new_value": {
+                     "pk": repository.pk,
+                     "name": name,
+                     "backend": "S3",
+                     "backend_kwargs": {"bucket": bucket},
+                     "created_at": repository.created_at,
+                     "updated_at": repository.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+        repository_backend = load_repository_backend(repository)
+        self.assertIsInstance(repository_backend, S3Repository)
+        self.assertEqual(repository_backend.signature_version, "s3v4")
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_virtual_repository(self, post_event, send_notification):
+        self._login("monolith.add_repository", "monolith.view_repository")
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:create_repository"),
+                                        {"r-name": name,
+                                         "r-backend": "VIRTUAL"},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, name)
+        repository = response.context["object"]
+        self.assertEqual(repository.name, name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "monolith.repository",
+                 "pk": str(repository.pk),
+                 "new_value": {
+                     "pk": repository.pk,
+                     "name": name,
+                     "backend": "VIRTUAL",
+                     "backend_kwargs": {},
+                     "created_at": repository.created_at,
+                     "updated_at": repository.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+        repository_backend = load_repository_backend(repository)
+        self.assertIsInstance(repository_backend, VirtualRepository)
+
+    # repository
+
+    def test_repository_redirect(self):
+        repository = force_repository()
+        self._login_redirect(reverse("monolith:repository", args=(repository.pk,)))
+
+    def test_repository_permission_denied(self):
+        repository = force_repository()
+        self._login()
+        response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_repository_get_no_edit_link(self):
+        repository = force_repository()
+        self._login("monolith.view_repository")
+        response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, repository.name)
+        self.assertNotContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
+
+    def test_repository_get_edit_link(self):
+        repository = force_repository()
+        self._login("monolith.view_repository", "monolith.change_repository")
+        response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, repository.name)
+        self.assertContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
+
+    # update repository
+
+    def test_update_repository_redirect(self):
+        repository = force_repository()
+        self._login_redirect(reverse("monolith:update_repository", args=(repository.pk,)))
+
+    def test_update_repository_permission_denied(self):
+        repository = force_repository()
+        self._login()
+        response = self.client.get(reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_repository_get(self):
+        repository = force_repository()
+        self._login("monolith.change_repository")
+        response = self.client.get(reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_form.html")
+
+    def test_update_s3_repository_bad_mbu(self):
+        repository = force_repository()
+        manifest = force_manifest()
+        self.assertIsNone(repository.meta_business_unit)
+        self.assertNotEqual(manifest.meta_business_unit, self.mbu)
+        force_catalog(repository=repository, manifest=manifest)
+        self._login("monolith.change_repository")
+        response = self.client.post(reverse("monolith:update_repository", args=(repository.pk,)),
+                                    {"r-name": get_random_string(12),
+                                     "r-meta_business_unit": self.mbu.pk,
+                                     "r-backend": "S3",
+                                     "s3-bucket": get_random_string(12)})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_form.html")
+        self.assertFormError(
+            response.context["form"], "meta_business_unit",
+            f"Repository linked to manifest '{manifest}' which has a different business unit."
+        )
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_s3_repository(self, post_event, send_notification):
+        repository = force_repository()
+        manifest = force_manifest(mbu=self.mbu)
+        self.assertEqual(manifest.version, 1)
+        # two catalogs, only one manifest version bump!
+        force_catalog(repository=repository, manifest=manifest)
+        force_catalog(repository=repository, manifest=manifest)
+        prev_value = repository.serialize_for_event()
+        new_name = get_random_string(12)
+        new_bucket = get_random_string(12)
+        self._login("monolith.change_repository", "monolith.view_repository")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:update_repository", args=(repository.pk,)),
+                                        {"r-name": new_name,
+                                         "r-meta_business_unit": self.mbu.pk,
+                                         "r-backend": "S3",
+                                         "s3-bucket": new_bucket,
+                                         "s3-region_name": "us-east2",
+                                         "s3-prefix": "prefix",
+                                         "s3-access_key_id": "11111111111111111111",
+                                         "s3-secret_access_key": "22222222222222222222",
+                                         "s3-assume_role_arn": "arn:aws:iam::123456789012:role/S3Access",
+                                         "s3-signature_version": "s3v2",
+                                         "s3-endpoint_url": "https://endpoint.example.com",
+                                         "s3-cloudfront_domain": "yada.cloudfront.net",
+                                         "s3-cloudfront_key_id": "YADA",
+                                         "s3-cloudfront_privkey_pem": CLOUDFRONT_PRIVKEY_PEM},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, new_name)
+        repository = response.context["object"]
+        self.assertEqual(repository.name, new_name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.repository",
+                 "pk": str(repository.pk),
+                 "prev_value": prev_value,
+                 "new_value": {
+                     "pk": repository.pk,
+                     "name": new_name,
+                     "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
+                     "backend": "S3",
+                     "backend_kwargs": {
+                         "access_key_id": "11111111111111111111",
+                         "assume_role_arn": "arn:aws:iam::123456789012:role/S3Access",
+                         "bucket": new_bucket,
+                         "cloudfront_domain": "yada.cloudfront.net",
+                         "cloudfront_key_id": "YADA",
+                         "cloudfront_privkey_pem_hash": "f42f0756e0d05ae8e6e63581e615d2d8"
+                                                        "04c0f79b9f6bfb3cb7cfc5e9b6fc6a8f",
+                         "endpoint_url": "https://endpoint.example.com",
+                         "prefix": "prefix",
+                         "region_name": "us-east2",
+                         "secret_access_key_hash": "d70d4cbd04b6a3140c2ee642a40820abeacef01117ea9ce209de7c72452abe21",
+                         "signature_version": "s3v2",
+                     },
+                     "created_at": repository.created_at,
+                     "updated_at": repository.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+        repository_backend = load_repository_backend(repository)
+        self.assertEqual(repository_backend.name, new_name)
+        self.assertEqual(repository_backend.bucket, new_bucket)
+        self.assertEqual(repository_backend.region_name, "us-east2")
+        self.assertEqual(repository_backend.prefix, "prefix")
+        self.assertEqual(
+            repository_backend.credentials,
+            {'aws_access_key_id': '11111111111111111111',
+             'aws_secret_access_key': '22222222222222222222'}
+        )
+        self.assertEqual(
+            repository_backend.assume_role_arn,
+            "arn:aws:iam::123456789012:role/S3Access",
+        )
+        self.assertEqual(repository_backend.signature_version, "s3v2")
+        self.assertEqual(repository_backend.endpoint_url, "https://endpoint.example.com")
+        self.assertEqual(repository_backend.cloudfront_domain, "yada.cloudfront.net")
+        self.assertEqual(repository_backend.cloudfront_key_id, "YADA")
+        self.assertEqual(repository_backend.cloudfront_privkey_pem, CLOUDFRONT_PRIVKEY_PEM)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)  # only one bump
+
+    # delete repository
+
+    def test_delete_repository_redirect(self):
+        repository = force_repository()
+        self._login_redirect(reverse("monolith:delete_repository", args=(repository.pk,)))
+
+    def test_delete_repository_permission_denied(self):
+        repository = force_repository()
+        self._login()
+        response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_repository_get_not_found(self):
+        repository = force_repository()
+        manifest = force_manifest()
+        force_catalog(repository=repository, manifest=manifest)
+        self._login("monolith.delete_repository")
+        response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_repository_get(self):
+        repository = force_repository()
+        self._login("monolith.delete_repository")
+        response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_confirm_delete.html")
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_repository(self, post_event, send_notification):
+        repository = force_repository()
+        prev_value = repository.serialize_for_event()
+        self._login("monolith.delete_repository", "monolith.view_repository")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:delete_repository", args=(repository.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/repository_list.html")
+        self.assertNotContains(response, repository.name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "monolith.repository",
+                 "pk": str(repository.pk),
+                 "prev_value": prev_value,
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
 
     # pkg infos
 
@@ -169,18 +516,18 @@ class MonolithSetupViewsTestCase(TestCase):
         self._login("monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:pkg_infos"))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/pkg_info_list.html")
+        self.assertTemplateUsed(response, "monolith/pkginfo_list.html")
         self.assertContains(response, self.pkginfo_name_1.name)
 
     def test_pkg_infos_search(self):
         self._login("monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:pkg_infos"))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/pkg_info_list.html")
+        self.assertTemplateUsed(response, "monolith/pkginfo_list.html")
         self.assertContains(response, self.pkginfo_name_1.name)
         response = self.client.get(reverse("monolith:pkg_infos"), {"name": "does not exists"})
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "monolith/pkg_info_list.html")
+        self.assertTemplateUsed(response, "monolith/pkginfo_list.html")
         self.assertContains(response, "We didn't find any item related to your search")
         self.assertContains(response, reverse("monolith:pkg_infos") + '">all the items')
 
@@ -312,14 +659,14 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_pkg_info_name(self, post_event):
         self._login("monolith.delete_pkginfoname", "monolith.view_pkginfo")
-        pkg_info_name = self._force_pkg_info_name()
+        pkg_info_name = force_name()
         prev_pk = pkg_info_name.pk
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:delete_pkg_info_name", args=(pkg_info_name.pk,)),
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
-        self.assertTemplateUsed(response, "monolith/pkg_info_list.html")
+        self.assertTemplateUsed(response, "monolith/pkginfo_list.html")
         self.assertNotContains(response, pkg_info_name.name)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
@@ -352,7 +699,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_upload_package_get_no_name(self):
         self._login("monolith.add_pkginfo")
-        pkg_info_name = self._force_pkg_info_name()
+        pkg_info_name = force_name()
         response = self.client.get(reverse("monolith:upload_package"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/package_form.html")
@@ -362,25 +709,99 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_upload_package_get_name(self):
         self._login("monolith.add_pkginfo")
-        pkg_info_name = self._force_pkg_info_name()
+        pkg_info_name = force_name()
         response = self.client.get(reverse("monolith:upload_package"), {"pin_id": pkg_info_name.pk})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/package_form.html")
         self.assertContains(response, "Upload package")
         self.assertNotIn("name", response.context["form"].fields)
 
+    def test_upload_package_catalog_different_repository(self):
+        self._login("monolith.add_pkginfo")
+        pkg_info_name = force_name()
+        file = BytesIO(build_dummy_package())
+        file.name = "test123.pkg"
+        catalog = force_catalog(repository=force_repository(virtual=True))
+        catalog2 = force_catalog(repository=force_repository(virtual=True))
+        response = self.client.post(
+            reverse("monolith:upload_package"),
+            {"file": file,
+             "name": pkg_info_name.pk,
+             "catalogs": [catalog.pk, catalog2.pk]},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/package_form.html")
+        self.assertFormError(
+            response.context["form"], "catalogs",
+            "The catalogs must be from the same repository."
+        )
+
+    def test_upload_package_catalog_category_different_repository(self):
+        self._login("monolith.add_pkginfo")
+        pkg_info_name = force_name()
+        file = BytesIO(build_dummy_package())
+        file.name = "test123.pkg"
+        catalog = force_catalog(repository=force_repository(virtual=True))
+        category = force_category(repository=force_repository(virtual=True))
+        response = self.client.post(
+            reverse("monolith:upload_package"),
+            {"file": file,
+             "name": pkg_info_name.pk,
+             "category": category.pk,
+             "catalogs": [catalog.pk]},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/package_form.html")
+        self.assertFormError(
+            response.context["form"], "category",
+            "The category must be from the same repository as the catalogs."
+        )
+
+    def test_upload_package_catalog_category_wrong_choices(self):
+        self._login("monolith.add_pkginfo")
+        pkg_info_name = force_name()
+        file = BytesIO(build_dummy_package())
+        file.name = "test123.pkg"
+        repository = force_repository(virtual=False)
+        catalog = force_catalog(repository=repository)
+        category = force_category(repository=repository)
+        response = self.client.post(
+            reverse("monolith:upload_package"),
+            {"file": file,
+             "name": pkg_info_name.pk,
+             "category": category.pk,
+             "catalogs": [catalog.pk]},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/package_form.html")
+        self.assertFormError(
+            response.context["form"], "catalogs",
+            f"Select a valid choice. {catalog.pk} is not one of the available choices."
+        )
+        self.assertFormError(
+            response.context["form"], "category",
+            "Select a valid choice. That choice is not one of the available choices."
+        )
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_upload_package(self, post_event):
         self._login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
-        pkg_info_name = self._force_pkg_info_name()
+        pkg_info_name = force_name()
         file = BytesIO(build_dummy_package())
         file.name = "test123.pkg"
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
+        category = force_category(repository=repository)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 reverse("monolith:upload_package"),
                 {"file": file,
                  "name": pkg_info_name.pk,
-                 "catalogs": [self.catalog_1.pk]},
+                 "category": category.pk,
+                 "catalogs": [catalog.pk]},
                 follow=True
             )
         self.assertEqual(response.status_code, 200)
@@ -412,7 +833,10 @@ class MonolithSetupViewsTestCase(TestCase):
                      "pk": pkg_info.pk,
                      "local": True,
                      "name": pkg_info_name.name,
-                     "catalogs":  [{"pk": self.catalog_1.pk, "name": self.catalog_1.name}],
+                     "category": {"pk": category.pk, "name": category.name,
+                                  "repository": {"pk": repository.pk, "name": repository.name}},
+                     "catalogs":  [{"pk": catalog.pk, "name": catalog.name,
+                                    "repository": {"pk": repository.pk, "name": repository.name}}],
                      "requires": [],
                      "update_for": [],
                      "version": "1.0",
@@ -434,10 +858,12 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_upload_package_from_pkg_info_name(self, post_event):
         self._login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
-        pkg_info_category = PkgInfoCategory.objects.create(name=get_random_string(12))
-        pkg_info_name = self._force_pkg_info_name()
-        pkg_info_name_required = self._force_pkg_info_name()
-        pkg_info_name_update_for = self._force_pkg_info_name()
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
+        pkg_info_category = force_category(repository=repository)
+        pkg_info_name = force_name()
+        pkg_info_name_required = force_name()
+        pkg_info_name_update_for = force_name()
         excluded_tag = Tag.objects.create(name=get_random_string(12))
         shard_tag = Tag.objects.create(name=get_random_string(12))
         file = BytesIO(build_dummy_package())
@@ -448,7 +874,7 @@ class MonolithSetupViewsTestCase(TestCase):
                 {"file": file,
                  "display_name": "Yolo",
                  "description": "Fomo",
-                 "catalogs": [self.catalog_1.pk],
+                 "catalogs": [catalog.pk],
                  "category": pkg_info_category.pk,
                  "requires": [pkg_info_name_required.pk],
                  "update_for": [pkg_info_name_update_for.pk],
@@ -510,8 +936,12 @@ class MonolithSetupViewsTestCase(TestCase):
                      "pk": pkg_info.pk,
                      "local": True,
                      "name": pkg_info_name.name,
-                     "category": {"name": pkg_info_category.name, "pk": pkg_info_category.pk},
-                     "catalogs":  [{"pk": self.catalog_1.pk, "name": self.catalog_1.name}],
+                     "category": {"name": pkg_info_category.name, "pk": pkg_info_category.pk,
+                                  "repository": {"pk": repository.pk,
+                                                 "name": repository.name}},
+                     "catalogs":  [{"pk": catalog.pk, "name": catalog.name,
+                                    "repository": {"pk": repository.pk,
+                                                   "name": repository.name}}],
                      "data": data,
                      "requires": [pkg_info_name_required.name],
                      "update_for": [pkg_info_name_update_for.name],
@@ -532,7 +962,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_upload_package_conflict(self):
         self._login("monolith.add_pkginfo")
-        pkg_info = self._force_pkg_info()
+        pkg_info = force_pkg_info()
         file = BytesIO(build_dummy_package(name=pkg_info.name.name, version=pkg_info.version))
         file.name = "{}.pkg".format(get_random_string(12))
         response = self.client.post(
@@ -552,16 +982,18 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_upload_package_existing_archived_package(self, post_event):
         self._login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
-        pkg_info = self._force_pkg_info(archived=True)
+        pkg_info = force_pkg_info(archived=True)
         pkg_info_name = pkg_info.name
         file = BytesIO(build_dummy_package(pkg_info_name.name, pkg_info.version))
         file.name = "{}.pkg".format(get_random_string(12))
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 reverse("monolith:upload_package"),
                 {"file": file,
                  "name": pkg_info_name.pk,
-                 "catalogs": [self.catalog_1.pk]},
+                 "catalogs": [catalog.pk]},
                 follow=True
             )
         self.assertEqual(response.status_code, 200)
@@ -594,7 +1026,9 @@ class MonolithSetupViewsTestCase(TestCase):
                      "pk": pkg_info.pk,
                      "local": True,
                      "name": pkg_info_name.name,
-                     "catalogs":  [{"pk": self.catalog_1.pk, "name": self.catalog_1.name}],
+                     "catalogs":  [{"pk": catalog.pk, "name": catalog.name,
+                                    "repository": {"pk": catalog.repository.pk,
+                                                   "name": catalog.repository.name}}],
                      "requires": [],
                      "update_for": [],
                      "version": "1.0",
@@ -616,17 +1050,17 @@ class MonolithSetupViewsTestCase(TestCase):
     # update package
 
     def test_update_package_login_redirect(self):
-        pkg_info = self._force_pkg_info()
+        pkg_info = force_pkg_info()
         self._login_redirect(reverse("monolith:update_package", args=(pkg_info.pk,)))
 
     def test_update_package_permission_denied(self):
-        pkg_info = self._force_pkg_info()
+        pkg_info = force_pkg_info()
         self._login()
         response = self.client.get(reverse("monolith:update_package", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_package_get_no_name(self):
-        pkg_info = self._force_pkg_info()
+        pkg_info = force_pkg_info()
         self._login("monolith.change_pkginfo")
         response = self.client.get(reverse("monolith:update_package", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -636,13 +1070,15 @@ class MonolithSetupViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_package(self, post_event):
-        pkg_info = self._force_pkg_info(alles=True)
+        pkg_info = force_pkg_info()
         prev_value = pkg_info.serialize_for_event()
         self._login("monolith.change_pkginfo", "monolith.view_pkginfo", "monolith.view_pkginfoname")
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 reverse("monolith:update_package", args=(pkg_info.pk,)),
-                {"catalogs": [self.catalog_1.pk]},
+                {"catalogs": [catalog.pk]},
                 follow=True
             )
         self.assertEqual(response.status_code, 200)
@@ -653,13 +1089,12 @@ class MonolithSetupViewsTestCase(TestCase):
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         new_value = copy.deepcopy(prev_value)
-        del new_value["category"]
         new_value["updated_at"] = pkg_info.updated_at
-        new_value["catalogs"] = [{"pk": self.catalog_1.pk, "name": self.catalog_1.name}]
+        new_value["catalogs"] = [{"pk": catalog.pk, "name": catalog.name,
+                                  "repository": {"pk": repository.pk,
+                                                 "name": repository.name}}]
         new_value["requires"] = []
         new_value["update_for"] = []
-        for key in ("zentral_monolith", "category", "display_name", "description", "requires", "update_for"):
-            del new_value["data"][key]
         self.assertEqual(
             event.payload,
             {"action": "updated",
@@ -681,17 +1116,17 @@ class MonolithSetupViewsTestCase(TestCase):
     # delete pkg info
 
     def test_delete_pkg_info_login_redirect(self):
-        pkg_info = self._force_pkg_info()
+        pkg_info = force_pkg_info()
         self._login_redirect(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)))
 
     def test_delete_pkg_info_permission_denied(self):
-        pkg_info = self._force_pkg_info()
+        pkg_info = force_pkg_info()
         self._login()
         response = self.client.get(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_pkg_info_404(self):
-        pkg_info = self._force_pkg_info(local=False)
+        pkg_info = force_pkg_info(local=False)
         self._login("monolith.delete_pkginfo")
         response = self.client.post(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 404)
@@ -699,7 +1134,7 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_pkg_info(self, post_event):
         self._login("monolith.delete_pkginfo", "monolith.view_pkginfo", "monolith.view_pkginfoname")
-        pkg_info = self._force_pkg_info()
+        pkg_info = force_pkg_info()
         prev_value = pkg_info.serialize_for_event()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)),
@@ -746,17 +1181,17 @@ class MonolithSetupViewsTestCase(TestCase):
     # catalog
 
     def test_catalog_login_redirect(self):
-        catalog = self._force_catalog()
+        catalog = force_catalog()
         self._login_redirect(reverse("monolith:catalog", args=(catalog.pk,)))
 
     def test_catalog_permission_denied(self):
-        catalog = self._force_catalog()
+        catalog = force_catalog()
         self._login()
         response = self.client.get(reverse("monolith:catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_catalog(self):
-        catalog = self._force_catalog()
+        catalog = force_catalog()
         self._login("monolith.view_catalog")
         response = self.client.get(reverse("monolith:catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -765,38 +1200,43 @@ class MonolithSetupViewsTestCase(TestCase):
 
     # create catalog
 
-    def test_create_catalog_auto_permission_denied(self):
-        response = self.client.get(reverse("monolith:create_catalog"))
-        self.assertContains(response, "Automatic catalog management", status_code=403)
-
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
-    def test_create_catalog_login_redirect(self, repository):
-        repository.manual_catalog_management = True
+    def test_create_catalog_login_redirect(self):
         self._login_redirect(reverse("monolith:create_catalog"))
 
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
-    def test_create_catalog_permission_denied(self, repository):
-        repository.manual_catalog_management = True
+    def test_create_catalog_permission_denied(self):
         self._login()
         response = self.client.get(reverse("monolith:create_catalog"))
         self.assertContains(response, "Forbidden", status_code=403)
 
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    def test_create_catalog_not_virtual_repository(self):
+        repository = force_repository(virtual=False)
+        self._login("monolith.add_catalog")
+        response = self.client.post(reverse("monolith:create_catalog"),
+                                    {"repository": repository.pk,
+                                     "name": get_random_string(12)},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/catalog_form.html")
+        self.assertFormError(
+            response.context["form"], "repository",
+            "Select a valid choice. That choice is not one of the available choices."
+        )
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_create_catalog(self, post_event, repository):
-        repository.manual_catalog_management = True
+    def test_create_catalog(self, post_event):
+        repository = force_repository(virtual=True)
         self._login("monolith.add_catalog", "monolith.view_catalog")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:create_catalog"),
-                                        {"name": name, "priority": 17},
+                                        {"repository": repository.pk,
+                                         "name": name},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "monolith/catalog_detail.html")
         catalog = response.context["object"]
         self.assertEqual(catalog.name, name)
-        self.assertEqual(catalog.priority, 17)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
@@ -814,36 +1254,53 @@ class MonolithSetupViewsTestCase(TestCase):
 
     # update catalog
 
-    def test_update_catalog_auto_permission_denied(self):
-        catalog = self._force_catalog()
-        response = self.client.get(reverse("monolith:update_catalog", args=(catalog.pk,)))
-        self.assertContains(response, "Automatic catalog management", status_code=403)
-
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
-    def test_update_catalog_login_redirect(self, repository):
-        repository.manual_catalog_management = True
-        catalog = self._force_catalog()
+    def test_update_catalog_login_redirect(self):
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
         self._login_redirect(reverse("monolith:update_catalog", args=(catalog.pk,)))
 
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
-    def test_update_catalog_permission_denied(self, repository):
-        repository.manual_catalog_management = True
-        catalog = self._force_catalog()
+    def test_update_catalog_permission_denied(self):
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
         self._login()
         response = self.client.get(reverse("monolith:update_catalog", args=(catalog.pk,)))
         self.assertContains(response, "Forbidden", status_code=403)
 
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
+    def test_update_catalog_not_virtual(self):
+        repository = force_repository(virtual=False)
+        catalog = force_catalog(repository=repository)
+        self._login("monolith.change_catalog")
+        response = self.client.get(reverse("monolith:update_catalog", args=(catalog.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_catalog_bad_mbu(self):
+        manifest = force_manifest()
+        repository = force_repository(mbu=manifest.meta_business_unit, virtual=True)
+        catalog = force_catalog(repository=repository, manifest=manifest)
+        new_repository = force_repository(mbu=MetaBusinessUnit.objects.create(name=get_random_string(12)),
+                                          virtual=True)
+        self._login("monolith.change_catalog")
+        response = self.client.post(reverse("monolith:update_catalog", args=(catalog.pk,)),
+                                    {"repository": new_repository.pk,
+                                     "name": catalog.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/catalog_form.html")
+        self.assertFormError(
+            response.context["form"], "repository",
+            "This catalog is included in manifests linked to different business units than this repository."
+        )
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_update_catalog(self, post_event, repository):
-        repository.manual_catalog_management = True
-        catalog = self._force_catalog()
+    def test_update_catalog(self, post_event):
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
         prev_value = catalog.serialize_for_event()
         self._login("monolith.change_catalog", "monolith.view_catalog")
         new_name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:update_catalog", args=(catalog.pk,)),
-                                        {"name": new_name, "priority": 42},
+                                        {"repository": repository.pk,
+                                         "name": new_name},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
@@ -851,52 +1308,6 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(catalog, response.context["object"])
         catalog.refresh_from_db()
         self.assertEqual(catalog.name, new_name)
-        self.assertEqual(catalog.priority, 42)
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, AuditEvent)
-        self.assertEqual(
-            event.payload,
-            {"action": "updated",
-             "object": {
-                 "model": "monolith.catalog",
-                 "pk": str(catalog.pk),
-                 "prev_value": prev_value,
-                 "new_value": catalog.serialize_for_event(),
-              }}
-        )
-        metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"monolith_catalog": [str(catalog.pk)]})
-        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
-
-    # update catalog priority
-
-    def test_update_catalog_priority_login_redirect(self):
-        catalog = self._force_catalog()
-        self._login_redirect(reverse("monolith:update_catalog_priority", args=(catalog.pk,)))
-
-    def test_update_catalog_priority_permission_denied(self):
-        catalog = self._force_catalog()
-        self._login()
-        response = self.client.get(reverse("monolith:update_catalog_priority", args=(catalog.pk,)))
-        self.assertContains(response, "Forbidden", status_code=403)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_update_catalog_priority(self, post_event):
-        catalog = self._force_catalog()
-        prev_value = catalog.serialize_for_event()
-        self._login("monolith.change_catalog", "monolith.view_catalog")
-        new_name = get_random_string(12)
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(reverse("monolith:update_catalog_priority", args=(catalog.pk,)),
-                                        {"name": new_name, "priority": 43},
-                                        follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(callbacks), 1)
-        self.assertTemplateUsed(response, "monolith/catalog_detail.html")
-        self.assertEqual(catalog, response.context["object"])
-        catalog.refresh_from_db()
-        self.assertEqual(catalog.name, prev_value["name"])  # not updated
-        self.assertEqual(catalog.priority, 43)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
@@ -915,37 +1326,27 @@ class MonolithSetupViewsTestCase(TestCase):
 
     # delete catalog
 
-    def test_delete_catalog_auto_permission_denied(self):
-        catalog = self._force_catalog()
-        response = self.client.get(reverse("monolith:delete_catalog", args=(catalog.pk,)))
-        self.assertContains(response, "Automatic catalog management", status_code=403)
-
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
-    def test_delete_catalog_login_redirect(self, repository):
-        repository.manual_catalog_management = True
-        catalog = self._force_catalog()
+    def test_delete_catalog_login_redirect(self):
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
         self._login_redirect(reverse("monolith:delete_catalog", args=(catalog.pk,)))
 
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
-    def test_delete_catalog_permission_denied(self, repository):
-        repository.manual_catalog_management = True
-        catalog = self._force_catalog()
+    def test_delete_catalog_permission_denied(self):
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
         self._login()
         response = self.client.get(reverse("monolith:delete_catalog", args=(catalog.pk,)))
         self.assertContains(response, "Forbidden", status_code=403)
 
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
-    def test_delete_catalog_cannot_be_deleted(self, repository):
-        repository.manual_catalog_management = True
+    def test_delete_catalog_cannot_be_deleted(self):
         self._login("monolith.delete_catalog")
         response = self.client.get(reverse("monolith:delete_catalog", args=(self.catalog_1.pk,)))
         self.assertEqual(response.status_code, 404)
 
-    @patch("zentral.contrib.monolith.views.monolith_conf.repository")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_delete_catalog(self, post_event, repository):
-        repository.manual_catalog_management = True
-        catalog = self._force_catalog()
+    def test_delete_catalog(self, post_event):
+        repository = force_repository(virtual=True)
+        catalog = force_catalog(repository=repository)
         prev_pk = catalog.pk
         prev_value = catalog.serialize_for_event()
         self._login("monolith.delete_catalog", "monolith.view_catalog")
@@ -1018,8 +1419,8 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertContains(response, reverse("monolith:delete_condition", args=(condition.pk,)))
 
     def test_condition_cannot_delete(self):
-        condition = self._force_condition()
-        submanifest, _ = self._force_sub_manifest(condition=condition)
+        condition = force_condition()
+        force_sub_manifest_pkg_info(condition=condition)
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1070,11 +1471,11 @@ class MonolithSetupViewsTestCase(TestCase):
     # update condition
 
     def test_update_condition_login_redirect(self):
-        condition = self._force_condition()
+        condition = force_condition()
         self._login_redirect(reverse("monolith:update_condition", args=(condition.pk,)))
 
     def test_update_condition_permission_denied(self):
-        condition = self._force_condition()
+        condition = force_condition()
         self._login()
         response = self.client.get(reverse("monolith:update_condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 403)
@@ -1083,10 +1484,10 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_update_condition(self, post_event):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         prev_value = condition.serialize_for_event()
-        sub_manifest, _ = self._force_sub_manifest(condition=condition)
-        manifest = self._force_manifest()
+        manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
-        ManifestSubManifest.objects.create(manifest=manifest, sub_manifest=sub_manifest)
+        sub_manifest = force_sub_manifest(manifest=manifest)
+        force_sub_manifest_pkg_info(sub_manifest=sub_manifest, condition=condition)
         self._login("monolith.change_condition", "monolith.view_condition")
         new_name = get_random_string(12)
         new_predicate = 'machine_type == "desktop"'
@@ -1139,8 +1540,8 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "monolith/condition_confirm_delete.html")
 
     def test_delete_condition_cannot_delete(self):
-        condition = self._force_condition()
-        submanifest, _ = self._force_sub_manifest(condition=condition)
+        condition = force_condition()
+        force_sub_manifest_pkg_info(condition=condition)
         self._login("monolith.delete_condition")
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 404)
@@ -1174,14 +1575,14 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_delete_condition_get_blocked(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        submanifest, _ = self._force_sub_manifest(condition=condition)
+        force_sub_manifest_pkg_info(condition=condition)
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
         self.assertEqual(response.status_code, 404)
 
     def test_delete_condition_post_blocked(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        submanifest, _ = self._force_sub_manifest(condition=condition)
+        force_sub_manifest_pkg_info(condition=condition)
         self._login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
         self.assertEqual(response.status_code, 404)
@@ -1198,10 +1599,10 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_sub_manifests(self):
         self._login("monolith.view_submanifest")
-        submanifest, _ = self._force_sub_manifest()
+        sub_manifest = force_sub_manifest()
         response = self.client.get(reverse("monolith:sub_manifests"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, submanifest.name)
+        self.assertContains(response, sub_manifest.name)
 
     def test_sub_manifests_search(self):
         self._login("monolith.view_submanifest")
@@ -1209,13 +1610,13 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/sub_manifest_list.html")
         self.assertNotContains(response, "We didn't find any item related to your search")
-        submanifest, _ = self._force_sub_manifest()
+        sub_manifest = force_sub_manifest()
         response = self.client.get(reverse("monolith:sub_manifests"), {"keywords": "does not exists"})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/sub_manifest_list.html")
         self.assertContains(response, "We didn't find any item related to your search")
         self.assertContains(response, reverse("monolith:sub_manifests") + '">all the items')
-        response = self.client.get(reverse("monolith:sub_manifests"), {"keywords": submanifest.name})
+        response = self.client.get(reverse("monolith:sub_manifests"), {"keywords": sub_manifest.name})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/sub_manifest_list.html")
         self.assertNotContains(response, "We didn't find any item related to your search")
@@ -1223,51 +1624,49 @@ class MonolithSetupViewsTestCase(TestCase):
     # sub manifest
 
     def test_sub_manifest_login_redirect(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login_redirect(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+        sub_manifest = force_sub_manifest()
+        self._login_redirect(reverse("monolith:sub_manifest", args=(sub_manifest.pk,)))
 
     def test_sub_manifest_permission_denied(self):
-        submanifest, _ = self._force_sub_manifest()
+        sub_manifest = force_sub_manifest()
         self._login()
-        response = self.client.get(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+        response = self.client.get(reverse("monolith:sub_manifest", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_sub_manifest_no_pkginfo_edit_link(self):
-        submanifest, submanifest_pkginfo = self._force_sub_manifest()
+        smpi = force_sub_manifest_pkg_info()
         self._login("monolith.view_submanifest")
-        response = self.client.get(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+        response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertNotContains(response, 'class="danger"')
         self.assertNotContains(
             response,
             reverse("monolith:update_sub_manifest_pkg_info",
-                    args=(submanifest.pk, submanifest_pkginfo.pk))
+                    args=(smpi.sub_manifest.pk, smpi.pk))
         )
 
     def test_sub_manifest_pkginfo_edit_link(self):
-        submanifest, submanifest_pkginfo = self._force_sub_manifest()
+        smpi = force_sub_manifest_pkg_info()
         self._login("monolith.view_submanifest", "monolith.change_submanifestpkginfo")
-        response = self.client.get(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+        response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertNotContains(response, 'class="danger"')
         self.assertContains(
             response,
             reverse("monolith:update_sub_manifest_pkg_info",
-                    args=(submanifest.pk, submanifest_pkginfo.pk))
+                    args=(smpi.sub_manifest.pk, smpi.pk))
         )
 
     def test_sub_manifest_pkginfo_archived_no_edit_link(self):
-        submanifest, submanifest_pkginfo = self._force_sub_manifest()
-        self.pkginfo_1_1.archived_at = datetime.utcnow()
-        self.pkginfo_1_1.save()
+        smpi = force_sub_manifest_pkg_info(archived=True)
         self._login("monolith.view_submanifest", "monolith.change_submanifestpkginfo")
-        response = self.client.get(reverse("monolith:sub_manifest", args=(submanifest.pk,)))
+        response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertContains(response, 'class="data-row danger"')
         self.assertNotContains(
             response,
             reverse("monolith:update_sub_manifest_pkg_info",
-                    args=(submanifest.pk, submanifest_pkginfo.pk))
+                    args=(smpi.sub_manifest.pk, smpi.pk))
         )
 
     # create submanifest
@@ -1299,28 +1698,28 @@ class MonolithSetupViewsTestCase(TestCase):
     # add submanifest pkginfo
 
     def test_add_sub_manifest_pkg_info_redirect(self):
-        submanifest, _ = self._force_sub_manifest()
-        self._login_redirect(reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)))
+        sub_manifest = force_sub_manifest()
+        self._login_redirect(reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)))
 
     def test_add_sub_manifest_pkg_info_permission_denied(self):
-        submanifest, _ = self._force_sub_manifest()
+        sub_manifest = force_sub_manifest()
         self._login()
-        response = self.client.get(reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)))
+        response = self.client.get(reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_add_sub_manifest_pkg_info_get(self):
-        submanifest, _ = self._force_sub_manifest()
+        sub_manifest = force_sub_manifest()
         self._login("monolith.add_submanifestpkginfo")
-        response = self.client.get(reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)))
+        response = self.client.get(reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
 
     def test_add_sub_manifest_pkg_info_post_pkg_info_name_already_included(self):
-        submanifest, _ = self._force_sub_manifest()
+        smpi = force_sub_manifest_pkg_info()
         self._login("monolith.add_submanifestpkginfo")
         response = self.client.post(
-            reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)),
-            {"pkg_info_name": self.pkginfo_name_1.pk,
+            reverse("monolith:sub_manifest_add_pkg_info", args=(smpi.sub_manifest.pk,)),
+            {"pkg_info_name": smpi.pkg_info_name,
              "key": "managed_installs"},
             follow=True,
         )
@@ -1332,14 +1731,15 @@ class MonolithSetupViewsTestCase(TestCase):
         )
 
     def test_add_sub_manifest_pkg_info_post_featured_item_error(self):
-        submanifest, _ = self._force_sub_manifest()
+        sub_manifest = force_sub_manifest()
         self._login("monolith.add_submanifestpkginfo")
         pkginfo_name = PkgInfoName.objects.create(name=get_random_string(12))
-        PkgInfo.objects.create(name=pkginfo_name, version="1.0",
+        PkgInfo.objects.create(repository=force_repository(),
+                               name=pkginfo_name, version="1.0",
                                data={"name": pkginfo_name.name,
                                      "version": "1.0"})
         response = self.client.post(
-            reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)),
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
             {"pkg_info_name": pkginfo_name.pk,
              "key": "managed_installs",
              "featured_item": "on"},
@@ -1350,14 +1750,15 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "featured_item", "Only optional install items can be featured")
 
     def test_add_sub_manifest_pkg_info_post(self):
-        submanifest, _ = self._force_sub_manifest()
+        sub_manifest = force_sub_manifest()
         self._login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
-        pkginfo_name = PkgInfoName.objects.create(name=get_random_string(12))
-        PkgInfo.objects.create(name=pkginfo_name, version="1.0",
+        pkginfo_name = force_name()
+        PkgInfo.objects.create(repository=force_repository(),
+                               name=pkginfo_name, version="1.0",
                                data={"name": pkginfo_name.name,
                                      "version": "1.0"})
         response = self.client.post(
-            reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)),
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
             {"pkg_info_name": pkginfo_name.pk,
              "key": "optional_installs",
              "featured_item": "on"},
@@ -1368,14 +1769,15 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertContains(response, pkginfo_name.name)
 
     def test_add_default_install_sub_manifest_pkg_info_shard(self):
-        submanifest, _ = self._force_sub_manifest()
+        sub_manifest = force_sub_manifest()
         self._login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
-        pkginfo_name = PkgInfoName.objects.create(name=get_random_string(12))
-        PkgInfo.objects.create(name=pkginfo_name, version="1.0",
+        pkginfo_name = force_name()
+        PkgInfo.objects.create(repository=force_repository(),
+                               name=pkginfo_name, version="1.0",
                                data={"name": pkginfo_name.name,
                                      "version": "1.0"})
         response = self.client.post(
-            reverse("monolith:sub_manifest_add_pkg_info", args=(submanifest.pk,)),
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
             {"pkg_info_name": pkginfo_name.pk,
              "key": "default_installs",
              "featured_item": "on",
@@ -1386,43 +1788,44 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertContains(response, pkginfo_name.name)
-        smpi = submanifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
+        smpi = sub_manifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
         self.assertEqual(smpi.options, {"shards": {"default": 90, "modulo": 100}})
 
     # delete submanifest pkginfo
 
     def test_delete_sub_manifest_pkg_info_redirect(self):
-        submanifest, pkginfo = self._force_sub_manifest()
-        self._login_redirect(reverse("monolith:delete_sub_manifest_pkg_info", args=(submanifest.pk, pkginfo.pk)))
+        smpi = force_sub_manifest_pkg_info()
+        self._login_redirect(reverse("monolith:delete_sub_manifest_pkg_info",
+                                     args=(smpi.sub_manifest.pk, smpi.pk)))
 
     def test_delete_sub_manifest_pkg_info_permission_denied(self):
-        submanifest, pkginfo = self._force_sub_manifest()
+        smpi = force_sub_manifest_pkg_info()
         self._login()
         response = self.client.get(reverse("monolith:delete_sub_manifest_pkg_info",
-                                           args=(submanifest.pk, pkginfo.pk)))
+                                           args=(smpi.sub_manifest.pk, smpi.pk)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_sub_manifest_pkg_info_get(self):
-        submanifest, pkginfo = self._force_sub_manifest()
+        smpi = force_sub_manifest_pkg_info()
         self._login("monolith.delete_submanifestpkginfo", "monolith.view_submanifest")
         response = self.client.get(reverse("monolith:delete_sub_manifest_pkg_info",
-                                           args=(submanifest.pk, pkginfo.pk)))
+                                           args=(smpi.sub_manifest.pk, smpi.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/delete_sub_manifest_pkg_info.html")
 
     def test_delete_sub_manifest_pkg_info_post(self):
-        submanifest, pkginfo = self._force_sub_manifest()
-        manifest = self._force_manifest()
+        manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
-        ManifestSubManifest.objects.create(manifest=manifest, sub_manifest=submanifest)
+        sub_manifest = force_sub_manifest(manifest=manifest)
+        smpi = force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
         self._login("monolith.delete_submanifestpkginfo", "monolith.view_submanifest")
         response = self.client.post(reverse("monolith:delete_sub_manifest_pkg_info",
-                                            args=(submanifest.pk, pkginfo.pk)),
+                                            args=(sub_manifest.pk, smpi.pk)),
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
-        self.assertEqual(response.context["object"], submanifest)
-        self.assertEqual(submanifest.submanifestpkginfo_set.count(), 0)
+        self.assertEqual(response.context["object"], sub_manifest)
+        self.assertEqual(sub_manifest.submanifestpkginfo_set.count(), 0)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
 
@@ -1481,7 +1884,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest_list.html")
         self.assertNotContains(response, "We didn't find any item related to your search")
-        manifest = self._force_manifest()
+        manifest = force_manifest()
         response = self.client.get(reverse("monolith:manifests"), {"name": manifest.name}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest.html")
@@ -1543,18 +1946,18 @@ class MonolithSetupViewsTestCase(TestCase):
     # update manifest
 
     def test_update_manifest_login_redirect(self):
-        manifest = self._force_manifest()
+        manifest = force_manifest()
         self._login_redirect(reverse("monolith:update_manifest", args=(manifest.pk,)))
 
     def test_update_manifest_permission_denied(self):
-        manifest = self._force_manifest()
+        manifest = force_manifest()
         self._login()
         response = self.client.get(reverse("monolith:update_manifest", args=(manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_manifest(self, post_event):
-        manifest = self._force_manifest()
+        manifest = force_manifest()
         prev_value = manifest.serialize_for_event()
         self._login("monolith.change_manifest", "monolith.view_manifest")
         new_name = get_random_string(12)
@@ -1619,7 +2022,9 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(
             response.context["packages"],
             [('aaaa first name',
-              {'pkgsinfo': [({'name': 'aaaa first name', 'version': '1.0'},
+              {'pkgsinfo': [({'name': 'aaaa first name',
+                              'version': '1.0',
+                              'icon_name': f'icon.{self.pkginfo_1_1.pk}.aaaa-first-name.png'},
                              'installed',
                              [],
                              None,
@@ -1646,9 +2051,9 @@ class MonolithSetupViewsTestCase(TestCase):
             "monolith.view_manifest",
             "monolith.view_submanifest",
         )
-        self._force_catalog()
-        condition = self._force_condition()
-        self._force_manifest()
-        self._force_sub_manifest(condition)
+        force_catalog()
+        condition = force_condition()
+        force_manifest()
+        force_sub_manifest_pkg_info(condition=condition)
         response = self.client.get(reverse("monolith:terraform_export"))
         self.assertEqual(response.status_code, 200)

@@ -4,8 +4,9 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{%  url 'monolith:conditions' %}">Monolith conditions</a></li>
-  <li class="breadcrumb-item active">{{ object.name }}</li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:conditions' %}">Conditions</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
 <div class="object-details">

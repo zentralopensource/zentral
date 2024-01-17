@@ -168,11 +168,6 @@
           ],
           "optional": true
         }
-      },
-      "munki_repository": {
-        "manual_catalog_management": false,
-        "backend": "zentral.contrib.monolith.repository_backends.local",
-        "root": "/tmp"
       }
     },
     "zentral.contrib.okta": {},

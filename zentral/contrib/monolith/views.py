@@ -1,7 +1,8 @@
 import logging
 from urllib.parse import urlencode
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.urls import reverse_lazy
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
@@ -9,8 +10,10 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
+from base.notifier import notifier
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaMachine, Tag
+from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
@@ -20,16 +23,21 @@ from .conf import monolith_conf
 from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
+                    CatalogForm,
                     EnrollmentForm,
                     ManifestForm, ManifestSearchForm,
                     PackageForm, PkgInfoSearchForm,
+                    RepositoryForm,
                     SubManifestForm, SubManifestSearchForm,
                     SubManifestPkgInfoForm)
 from .models import (Catalog, CacheServer,
                      EnrolledMachine,
                      Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
                      Condition,
+                     Repository,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestPkgInfo)
+from .repository_backends import RepositoryBackend
+from .repository_backends.s3 import S3RepositoryForm
 from .terraform import iter_resources
 from .utils import test_monolith_object_inclusion, test_pkginfo_catalog_inclusion
 
@@ -68,12 +76,189 @@ class InventoryMachineSubview:
         return render_to_string(self.template_name, ctx)
 
 
+# index
+
+
+class IndexView(LoginRequiredMixin, TemplateView):
+    template_name = "monolith/index.html"
+
+    def get_context_data(self, **kwargs):
+        if not self.request.user.has_module_perms("monolith"):
+            raise PermissionDenied("Not allowed")
+        ctx = super().get_context_data(**kwargs)
+        ctx["show_terraform_export"] = all(
+            self.request.user.has_perm(perm)
+            for perm in TerraformExportView.permission_required
+        )
+        return ctx
+
+
+# repositories
+
+
+class RepositoriesView(PermissionRequiredMixin, ListView):
+    permission_required = "monolith.view_repository"
+    model = Repository
+
+
+class CreateRepositoryView(PermissionRequiredMixin, TemplateView):
+    template_name = "monolith/repository_form.html"
+    permission_required = "monolith.add_repository"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form = kwargs.get("form")
+        if not form:
+            form = RepositoryForm(prefix="r")
+        context["form"] = form
+        s3_form = kwargs.get("s3_form")
+        if not s3_form:
+            s3_form = S3RepositoryForm(prefix="s3")
+        context["s3_form"] = s3_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = RepositoryForm(request.POST, prefix="r")
+        s3_form = S3RepositoryForm(request.POST, prefix="s3")
+        if form.is_valid():
+            backend = RepositoryBackend(form.cleaned_data["backend"])
+            backend_form = None
+            if backend == RepositoryBackend.S3:
+                backend_form = s3_form
+            if backend_form is None or backend_form.is_valid():
+                repository = form.save(commit=False)
+                repository.set_backend_kwargs({} if backend_form is None else backend_form.get_backend_kwargs())
+                repository.save()
+
+                def post_event_and_notify():
+                    event = AuditEvent.build_from_request_and_instance(
+                        self.request, repository,
+                        action=AuditEvent.Action.CREATED,
+                    )
+                    event.post()
+                    notifier.send_notification("monolith.repository", str(repository.pk))
+
+                transaction.on_commit(post_event_and_notify)
+                return redirect(repository)
+        return self.render_to_response(
+            self.get_context_data(form=form, s3_form=s3_form)
+        )
+
+
+class RepositoryView(PermissionRequiredMixin, DetailView):
+    permission_required = "monolith.view_repository"
+    model = Repository
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["catalogs"] = list(self.object.catalog_set.all())
+        return ctx
+
+
+class UpdateRepositoryView(PermissionRequiredMixin, TemplateView):
+    template_name = "monolith/repository_form.html"
+    permission_required = "monolith.change_repository"
+
+    def dispatch(self, request, *args, **kwargs):
+        self.repository = get_object_or_404(Repository, pk=kwargs["pk"])
+        self.backend = RepositoryBackend(self.repository.backend)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["object"] = self.repository
+        form = kwargs.get("form")
+        if not form:
+            form = RepositoryForm(prefix="r", instance=self.repository)
+        context["form"] = form
+        s3_form = kwargs.get("s3_form")
+        if not s3_form:
+            s3_form = S3RepositoryForm(
+                prefix="s3",
+                initial=(
+                    self.repository.get_backend_kwargs()
+                    if self.backend == RepositoryBackend.S3
+                    else None
+                )
+            )
+        context["s3_form"] = s3_form
+        return context
+
+    def post(self, request, *args, **kwargs):
+        prev_value = self.repository.serialize_for_event()  # before it is updated by the form
+        form = RepositoryForm(
+            request.POST,
+            prefix="r",
+            instance=self.repository
+        )
+        s3_form = S3RepositoryForm(
+            request.POST,
+            prefix="s3",
+            initial=(
+                self.repository.get_backend_kwargs()
+                if self.backend == RepositoryBackend.S3
+                else None
+            )
+        )
+        if form.is_valid():
+            backend = RepositoryBackend(form.cleaned_data["backend"])
+            backend_form = None
+            if backend == RepositoryBackend.S3:
+                backend_form = s3_form
+            if backend_form is None or backend_form.is_valid():
+                repository = form.save(commit=False)
+                repository.set_backend_kwargs({} if backend_form is None else backend_form.get_backend_kwargs())
+                repository.save()
+                for manifest in repository.manifests():
+                    manifest.bump_version()
+
+                def post_event_and_notify():
+                    event = AuditEvent.build_from_request_and_instance(
+                        self.request, repository,
+                        action=AuditEvent.Action.UPDATED,
+                        prev_value=prev_value
+                    )
+                    event.post()
+                    notifier.send_notification("monolith.repository", str(repository.pk))
+
+                transaction.on_commit(post_event_and_notify)
+                return redirect(repository)
+        return self.render_to_response(
+            self.get_context_data(form=form, s3_form=s3_form)
+        )
+
+
+class DeleteRepositoryView(PermissionRequiredMixin, DeleteView):
+    permission_required = "monolith.delete_repository"
+    success_url = reverse_lazy("monolith:repositories")
+
+    def get_queryset(self):
+        return Repository.objects.for_deletion()
+
+    def form_valid(self, form):
+        self.object = self.get_object()
+        # build the event before the object is deleted
+        event = AuditEvent.build_from_request_and_instance(
+            self.request, self.object,
+            action=AuditEvent.Action.DELETED,
+            prev_value=self.object.serialize_for_event()
+        )
+        object_pk = str(self.object.pk)
+
+        def post_event_and_notify():
+            event.post()
+            notifier.send_notification("monolith.repository", object_pk)
+
+        transaction.on_commit(post_event_and_notify)
+        return super().form_valid(form)
+
+
 # pkg infos
 
 
 class PkgInfosView(PermissionRequiredMixin, TemplateView):
     permission_required = "monolith.view_pkginfo"
-    template_name = "monolith/pkg_info_list.html"
+    template_name = "monolith/pkginfo_list.html"
 
     def get_context_data(self, **kwargs):
         ctx = super(PkgInfosView, self).get_context_data(**kwargs)
@@ -85,11 +270,10 @@ class PkgInfosView(PermissionRequiredMixin, TemplateView):
             **form.cleaned_data
         )
         if not form.is_initial():
-            bc = [(reverse("monolith:pkg_infos"), "Monolith pkg infos"),
+            bc = [(reverse("monolith:pkg_infos"), "PkgInfos"),
                   (None, "Search")]
         else:
-            bc = [(None, "Monolith pkg infos")]
-        ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
+            bc = [(None, "PkgInfos")]
         ctx["breadcrumbs"] = bc
         return ctx
 
@@ -180,7 +364,6 @@ class PkgInfoNameView(PermissionRequiredMixin, DetailView):
             # should never happen
             logger.error("Could not get pkg infos for name ID %d", pkg_info_name.pk)
             ctx["pkg_infos"] = []
-        ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
         return ctx
 
 
@@ -235,21 +418,6 @@ class CatalogsView(PermissionRequiredMixin, ListView):
     permission_required = "monolith.view_catalog"
     model = Catalog
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if not monolith_conf.repository.manual_catalog_management:
-            qs = qs.filter(archived_at__isnull=True)
-        return qs
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["manual_catalog_management"] = monolith_conf.repository.manual_catalog_management
-        if monolith_conf.repository.manual_catalog_management:
-            ctx["can_create_catalog"] = self.request.user.has_perm("monolith.add_catalog")
-        else:
-            ctx["can_create_catalog"] = False
-        return ctx
-
 
 class CatalogView(PermissionRequiredMixin, DetailView):
     permission_required = "monolith.view_catalog"
@@ -258,11 +426,6 @@ class CatalogView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         catalog = ctx["object"]
-        # edit view
-        if monolith_conf.repository.manual_catalog_management:
-            ctx["edit_catalog_view"] = "monolith:update_catalog"
-        else:
-            ctx["edit_catalog_view"] = "monolith:update_catalog_priority"
         # manifests
         manifests = []
         for mc in (catalog.manifestcatalog_set.select_related("manifest__meta_business_unit")
@@ -276,50 +439,21 @@ class CatalogView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class ManualCatalogManagementRequiredMixin(PermissionRequiredMixin):
-    def dispatch(self, request, *args, **kwargs):
-        self.manual_catalog_management = monolith_conf.repository.manual_catalog_management
-        if not self.manual_catalog_management:
-            raise PermissionDenied("Automatic catalog management. "
-                                   "See configuration. "
-                                   "You can't create catalogs.")
-        return super().dispatch(request, *args, **kwargs)
-
-
-class CreateCatalogView(ManualCatalogManagementRequiredMixin, CreateViewWithAudit):
+class CreateCatalogView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "monolith.add_catalog"
     model = Catalog
-    fields = ['name', 'priority']
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['title'] = "Create catalog"
-        return ctx
+    form_class = CatalogForm
 
 
-class UpdateCatalogView(ManualCatalogManagementRequiredMixin, UpdateViewWithAudit):
+class UpdateCatalogView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "monolith.change_catalog"
-    model = Catalog
-    fields = ['name', 'priority']
+    form_class = CatalogForm
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['title'] = f"Update catalog {self.object}"
-        return ctx
+    def get_queryset(self):
+        return Catalog.objects.for_update()
 
 
-class UpdateCatalogPriorityView(PermissionRequiredMixin, UpdateViewWithAudit):
-    permission_required = "monolith.change_catalog"
-    model = Catalog
-    fields = ['priority']
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['title'] = f"Update catalog {self.object} priority"
-        return ctx
-
-
-class DeleteCatalogView(ManualCatalogManagementRequiredMixin, DeleteViewWithAudit):
+class DeleteCatalogView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "monolith.delete_catalog"
     queryset = Catalog.objects.for_deletion()
     success_url = reverse_lazy("monolith:catalogs")
@@ -530,10 +664,6 @@ class ManifestsView(PermissionRequiredMixin, UserPaginationListView):
     def get_context_data(self, **kwargs):
         context = super(ManifestsView, self).get_context_data(**kwargs)
         context['form'] = self.form
-        context["show_terraform_export"] = all(
-            self.request.user.has_perm(perm)
-            for perm in TerraformExportView.permission_required
-        )
         return context
 
 
@@ -570,7 +700,9 @@ class ManifestView(PermissionRequiredMixin, DetailView):
         context['manifest_cache_servers'] = list(manifest.cacheserver_set.all().order_by("name"))
         context['manifest_catalogs'] = list(manifest.manifestcatalog_set
                                                     .prefetch_related("tags")
-                                                    .select_related("catalog").all())
+                                                    .select_related("catalog")
+                                                    .order_by("catalog__repository__name", "catalog__name")
+                                                    .all())
         context['manifest_sub_manifests'] = list(manifest.manifestsubmanifest_set
                                                          .prefetch_related("tags")
                                                          .select_related("sub_manifest").all())

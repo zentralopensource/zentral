@@ -8,7 +8,6 @@ class CatalogResource(Resource):
     tf_grouping_key = "monolith_catalogs"
 
     name = StringAttr(required=True)
-    priority = IntAttr(default=0)
 
 
 class ConditionResource(Resource):

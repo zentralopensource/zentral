@@ -3,7 +3,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'monolith:catalogs' %}">Monolith catalogs</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:catalogs' %}">Catalogs</a></li>
   {% if object %}
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
   <li class="breadcrumb-item active">Update</li>
@@ -12,7 +13,7 @@
   {% endif %}
 </ol>
 
-<h2>{{ title }}</h2>
+<h2>{% if object %}Update {{ object.name }} catalog{% else %}Create catalog{% endif %}</h2>
 
 <form method="POST" class="update-form">{% csrf_token %}
   {{ form }}

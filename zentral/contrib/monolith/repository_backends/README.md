@@ -22,22 +22,23 @@ IAM policy example:
 ```json
 {
   "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Sid": "GetBucketInfo",
-        "Effect": "Allow",
-        "Action": [
-          "s3:ListBucket",
-          "s3:GetBucketLocation"
-        ],
-        "Resource": "arn:aws:s3:::BUCKET_NAME"
+  "Statement": [
+    {
+      "Sid": "ZentralMonolithRO",
+      "Effect": "Allow",
+      "Principal": {
+          "AWS": "arn:aws:iam::123456789012:user/Dave"
       },
-      {
-        "Sid": "GetAllBucketObjects",
-        "Effect": "Allow",
-        "Action": "s3:GetObject",
-        "Resource": "arn:aws:s3:::BUCKET_NAME/*"
-      }
-    ]
+      "Action": [
+        "s3:GetObject",
+        "s3:GetBucketLocation",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::BUCKET_NAME/*",
+        "arn:aws:s3:::BUCKET_NAME"
+      ]
+    }
+  ]
 }
 ```

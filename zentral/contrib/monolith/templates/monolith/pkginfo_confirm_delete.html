@@ -3,15 +3,16 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{%  url 'monolith:pkg_infos' %}">Monolith pkg infos</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:pkg_infos' %}">PkgInfos</a></li>
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
   <li class="breadcrumb-item active">Delete version {{ object.version }}</li>
 </ol>
 
-<h2>Delete pkg info <i>{{ object }}</i></h2>
+<h2>Delete PkgInfo <i>{{ object }}</i></h2>
 
 <form method="POST">{% csrf_token %}
-  <p>Do you really want to delete this pkg info?</p>
+  <p>Do you really want to delete this PkgInfo?</p>
   <p>
     <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
     <button class="btn btn-danger" type="submit">Yes</button>

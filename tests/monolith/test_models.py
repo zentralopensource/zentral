@@ -4,9 +4,10 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.monolith.conf import monolith_conf
-from zentral.contrib.monolith.models import (Catalog, Manifest, ManifestCatalog, ManifestEnrollmentPackage,
+from zentral.contrib.monolith.models import (Manifest, ManifestCatalog, ManifestEnrollmentPackage,
                                              ManifestSubManifest, PkgInfo, PkgInfoName, SubManifest)
 from zentral.contrib.munki.models import ManagedInstall
+from .utils import force_catalog
 
 
 def sorted_objects(object_list):
@@ -18,8 +19,8 @@ class MonolithModelsTestCase(TestCase):
     def setUpTestData(cls):
         cls.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(13))
         cls.manifest = Manifest.objects.create(meta_business_unit=cls.meta_business_unit, name=get_random_string(13))
-        cls.catalog_1 = Catalog.objects.create(name=get_random_string(13), priority=10)
-        cls.catalog_2 = Catalog.objects.create(name=get_random_string(13), priority=20)
+        cls.catalog_1 = force_catalog()
+        cls.catalog_2 = force_catalog(repository=cls.catalog_1.repository)
         cls.sub_manifest_1 = SubManifest.objects.create(
             meta_business_unit=cls.meta_business_unit, name=get_random_string(13))
         cls.sub_manifest_2 = SubManifest.objects.create(
@@ -38,14 +39,16 @@ class MonolithModelsTestCase(TestCase):
         cls.mep_2 = ManifestEnrollmentPackage.objects.create(manifest=cls.manifest, builder=cls.builder)
         cls.mep_2.tags.set([cls.tag_1, cls.tag_2])
         cls.pkginfo_name_1 = PkgInfoName.objects.create(name="aaaa first name")
-        cls.pkginfo_1_1 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="1.0",
+        cls.pkginfo_1_1 = PkgInfo.objects.create(repository=cls.catalog_1.repository,
+                                                 name=cls.pkginfo_name_1, version="1.0",
                                                  data={"name": cls.pkginfo_name_1.name,
                                                        "version": "1.0",
                                                        "zentral_monolith": {
                                                            "shards": {"modulo": 17}
                                                         }})
         cls.pkginfo_1_1.catalogs.set([cls.catalog_1, cls.catalog_2])
-        cls.pkginfo_1_2 = PkgInfo.objects.create(name=cls.pkginfo_name_1, version="2.0",
+        cls.pkginfo_1_2 = PkgInfo.objects.create(repository=cls.catalog_2.repository,
+                                                 name=cls.pkginfo_name_1, version="2.0",
                                                  data={"name": cls.pkginfo_name_1.name,
                                                        "version": "2.0",
                                                        "zentral_monolith": {
@@ -58,7 +61,8 @@ class MonolithModelsTestCase(TestCase):
                                                         }})
         cls.pkginfo_1_2.catalogs.set([cls.catalog_2])
         cls.pkginfo_name_2 = PkgInfoName.objects.create(name="bbbb second name")
-        cls.pkginfo_2_1 = PkgInfo.objects.create(name=cls.pkginfo_name_2, version="1.0",
+        cls.pkginfo_2_1 = PkgInfo.objects.create(repository=cls.catalog_1.repository,
+                                                 name=cls.pkginfo_name_2, version="1.0",
                                                  data={"name": cls.pkginfo_name_2.name,
                                                        "version": "1.0"})
         cls.pkginfo_2_1.catalogs.set([cls.catalog_1, cls.catalog_2])

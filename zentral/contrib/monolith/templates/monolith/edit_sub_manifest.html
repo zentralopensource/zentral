@@ -3,7 +3,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:sub_manifests' %}">Sub manifests</a></li>
   {% if object %}
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
   <li class="breadcrumb-item active">Update</li>

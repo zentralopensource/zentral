@@ -6,6 +6,10 @@ New `zentral.core.stores.backends.snowflake` store backend.
 
 ### Backward incompatibilities
 
+#### 🧨 updated monolith configuration
+
+The Monolith repository is not configured in `base.json` anymore. Multiple Monolith repositories can be managed using the API or the GUI.
+
 #### 🧨 updated `/api/inventory/machines/tags/` API endpoint
 
 To add more flexibility, the payload for this API endpoint has changed. Please refer to [the documentation](https://docs.zentral.io/en/latest/apps/inventory/#apiinventorymachinestags).

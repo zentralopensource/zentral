@@ -5,7 +5,48 @@ from .attachments import PackageFile
 from .exceptions import AttachmentError
 from .models import (Catalog, Enrollment,
                      Manifest, ManifestCatalog, ManifestSubManifest,
-                     PkgInfo, PkgInfoName, SubManifest, SubManifestPkgInfo)
+                     PkgInfo, PkgInfoCategory, PkgInfoName,
+                     Repository,
+                     SubManifest, SubManifestPkgInfo)
+
+
+class RepositoryForm(forms.ModelForm):
+    class Meta:
+        model = Repository
+        fields = "__all__"
+
+    def clean_meta_business_unit(self):
+        mbu = self.cleaned_data.get("meta_business_unit")
+        if mbu and self.instance.pk:
+            for manifest in self.instance.manifests():
+                if manifest.meta_business_unit != mbu:
+                    raise forms.ValidationError(
+                        f"Repository linked to manifest '{manifest}' which has a different business unit."
+                    )
+        return mbu
+
+
+class CatalogForm(forms.ModelForm):
+    class Meta:
+        model = Catalog
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["repository"].queryset = Repository.objects.for_manual_catalogs()
+
+    def clean_repository(self):
+        repository = self.cleaned_data.get("repository")
+        if repository and repository.meta_business_unit and self.instance.pk:
+            if (
+                Manifest.objects.filter(manifestcatalog__catalog=self.instance)
+                                .exclude(meta_business_unit=repository.meta_business_unit)
+                                .count()
+            ):
+                raise forms.ValidationError(
+                    "This catalog is included in manifests linked to different business units than this repository."
+                )
+        return repository
 
 
 class PkgInfoSearchForm(forms.Form):
@@ -222,6 +263,10 @@ class PackageForm(forms.ModelForm):
             self.fields["excluded_tags"].initial = [tag.pk for tag in self.instance.excluded_tags]
             self.fields["default_shard"].initial = self.instance.default_shard
             self.fields["shard_modulo"].initial = self.instance.shard_modulo
+        # catalogs
+        self.fields["catalogs"].queryset = Catalog.objects.for_upload()
+        # categories
+        self.fields["category"].queryset = PkgInfoCategory.objects.for_upload()
         # hide name field if necessary
         if self.pkg_info_name:
             del self.fields["name"]
@@ -255,12 +300,25 @@ class PackageForm(forms.ModelForm):
             raise forms.ValidationError(e.message)
         return None
 
+    def clean_catalogs(self):
+        catalogs = self.cleaned_data.get("catalogs")
+        if catalogs and len(set(c.repository for c in catalogs)) > 1:
+            raise forms.ValidationError("The catalogs must be from the same repository.")
+        return catalogs
+
     def clean(self):
         self.instance.local = True
         if self.instance.data is None:
             self.instance.data = {}
         data = self.instance.data
         pin = self.cleaned_data.get("name", self.pkg_info_name)
+        # repository
+        catalogs = self.cleaned_data.get("catalogs")
+        if catalogs:
+            self.instance.repository = catalogs[0].repository
+            category = self.cleaned_data.get("category")
+            if category and category.repository != self.instance.repository:
+                self.add_error("category", "The category must be from the same repository as the catalogs.")
         # file
         pf = self.cleaned_data.get("package_file")
         if pf:
@@ -329,7 +387,7 @@ class PackageForm(forms.ModelForm):
         elif "description" in data:
             del data["description"]
         # category → data
-        category = self.cleaned_data["category"]
+        category = self.cleaned_data.get("category")
         if category:
             data["category"] = category.name
         elif "category" in data:
@@ -365,11 +423,8 @@ class AddManifestCatalogForm(forms.Form):
     def __init__(self, *args, **kwargs):
         self.manifest = kwargs.pop('manifest')
         super().__init__(*args, **kwargs)
-        field = self.fields['catalog']
-        field.queryset = field.queryset.exclude(id__in=[mc.catalog_id
-                                                        for mc in self.manifest.manifestcatalog_set.all()])
-        field = self.fields['tags']
-        field.queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
+        self.fields['catalog'].queryset = Catalog.objects.available_for_manifest(self.manifest, add_only=True)
+        self.fields['tags'].queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
 
     def save(self):
         mc = ManifestCatalog(manifest=self.manifest,

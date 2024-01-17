@@ -3,36 +3,45 @@ from . import views
 
 app_name = "monolith"
 urlpatterns = [
+    # index
+    path('', views.IndexView.as_view(), name='index'),
+
+    # repositories
+    path('repositories/', views.RepositoriesView.as_view(), name='repositories'),
+    path('repositories/create/', views.CreateRepositoryView.as_view(), name='create_repository'),
+    path('repositories/<int:pk>/', views.RepositoryView.as_view(), name='repository'),
+    path('repositories/<int:pk>/update/', views.UpdateRepositoryView.as_view(), name='update_repository'),
+    path('repositories/<int:pk>/delete/', views.DeleteRepositoryView.as_view(), name='delete_repository'),
+
     # pkg infos
-    path('pkg_infos/', views.PkgInfosView.as_view(), name='pkg_infos'),
-    path('pkg_infos/<int:pk>/', views.PkgInfoNameView.as_view(), name='pkg_info'),
-    path('pkg_infos/upload_package/', views.UploadPackageView.as_view(), name='upload_package'),
-    path('pkg_infos/<int:pk>/update_package/', views.UpdatePackageView.as_view(), name='update_package'),
-    path('pkg_infos/<int:pk>/update_catalog/',
+    path('pkginfos/', views.PkgInfosView.as_view(), name='pkg_infos'),
+    path('pkginfos/<int:pk>/', views.PkgInfoNameView.as_view(), name='pkg_info'),
+    path('pkginfos/upload_package/', views.UploadPackageView.as_view(), name='upload_package'),
+    path('pkginfos/<int:pk>/update_package/', views.UpdatePackageView.as_view(), name='update_package'),
+    path('pkginfos/<int:pk>/update_catalog/',
          views.UpdatePkgInfoCatalogView.as_view(),
          name='update_pkg_info_catalog'),
-    path('pkg_infos/<int:pk>/delete/', views.DeletePkgInfoView.as_view(), name='delete_pkg_info'),
-    path('pkg_info_names/create/', views.CreatePkgInfoNameView.as_view(), name='create_pkg_info_name'),
-    path('pkg_info_names/<int:pk>/', views.PkgInfoNameView.as_view(), name='pkg_info_name'),
-    path('pkg_info_names/<int:pk>/events/',
+    path('pkginfos/<int:pk>/delete/', views.DeletePkgInfoView.as_view(), name='delete_pkg_info'),
+
+    # pkg info names
+    path('pkginfo_names/create/', views.CreatePkgInfoNameView.as_view(), name='create_pkg_info_name'),
+    path('pkginfo_names/<int:pk>/', views.PkgInfoNameView.as_view(), name='pkg_info_name'),
+    path('pkginfo_names/<int:pk>/events/',
          views.PkgInfoNameEventsView.as_view(),
          name='pkg_info_name_events'),
-    path('pkg_info_names/<int:pk>/events/fetch/',
+    path('pkginfo_names/<int:pk>/events/fetch/',
          views.FetchPkgInfoNameEventsView.as_view(),
          name='fetch_pkg_info_name_events'),
-    path('pkg_info_names/<int:pk>/events/store_redirect/',
+    path('pkginfo_names/<int:pk>/events/store_redirect/',
          views.PkgInfoNameEventsStoreRedirectView.as_view(),
          name='pkg_info_name_events_store_redirect'),
-    path('pkg_info_names/<int:pk>/delete/', views.DeletePkgInfoNameView.as_view(), name='delete_pkg_info_name'),
+    path('pkginfo_names/<int:pk>/delete/', views.DeletePkgInfoNameView.as_view(), name='delete_pkg_info_name'),
 
     # catalogs
     path('catalogs/', views.CatalogsView.as_view(), name='catalogs'),
     path('catalogs/create/', views.CreateCatalogView.as_view(), name='create_catalog'),
     path('catalogs/<int:pk>/', views.CatalogView.as_view(), name='catalog'),
     path('catalogs/<int:pk>/update/', views.UpdateCatalogView.as_view(), name='update_catalog'),
-    path('catalogs/<int:pk>/update_priority/',
-         views.UpdateCatalogPriorityView.as_view(),
-         name='update_catalog_priority'),
     path('catalogs/<int:pk>/delete/', views.DeleteCatalogView.as_view(), name='delete_catalog'),
 
     # conditions
@@ -104,6 +113,8 @@ urlpatterns = [
 
 modules_menu_cfg = {
     'items': (
+        ('index', 'Overview', False, ("monolith",)),
+        ('repositories', 'Repositories', False, ("monolith.view_repository",)),
         ('catalogs', 'Catalogs', False, ("monolith.view_catalog",)),
         ('pkg_infos', 'PkgInfos', False, ("monolith.view_pkginfo",)),
         ('conditions', 'Conditions', False, ("monolith.view_condition",)),

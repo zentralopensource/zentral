@@ -3,21 +3,20 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{%  url 'monolith:pkg_infos' %}">Monolith pkg infos</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:pkg_infos' %}">PkgInfos</a></li>
   {% if object %}
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="breadcrumb-item active">Update package info name</li>
+  <li class="breadcrumb-item active">Update PkgInfo name</li>
   {% else %}
-  <li class="breadcrumb-item active">Create package info name</li>
+  <li class="breadcrumb-item active">Create PkgInfo name</li>
   {% endif %}
 </ol>
 
-<h2>{% if object %}Update{% else %}Create{% endif %} package info name</h2>
+<h2>{% if object %}Update{% else %}Create{% endif %} PkgInfo name</h2>
 
 <form method="POST" class="update-form">{% csrf_token %}
-
     {{ form }}
-
     <p>
         {% if object %}
         <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>

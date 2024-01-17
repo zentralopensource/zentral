@@ -24,39 +24,50 @@ class UserPaginationListView(UserPaginationMixin, ListView):
 
 
 class CreateViewWithAudit(CreateView):
+    def on_commit_callback_extra(self):
+        pass
+
     def form_valid(self, form):
         response = super().form_valid(form)
 
-        def post_event():
+        def on_commit_callback():
             event = AuditEvent.build_from_request_and_instance(
                 self.request, self.object,
                 action=AuditEvent.Action.CREATED,
             )
             event.post()
+            self.on_commit_callback_extra()
 
-        transaction.on_commit(lambda: post_event())
+        transaction.on_commit(on_commit_callback)
         return response
 
 
 class UpdateViewWithAudit(UpdateView):
+    def on_commit_callback_extra(self):
+        pass
+
     def form_valid(self, form):
         obj = self.get_object()  # self.object is already updated
         prev_value = obj.serialize_for_event()
         response = super().form_valid(form)
 
-        def post_event():
+        def on_commit_callback():
             event = AuditEvent.build_from_request_and_instance(
                 self.request, self.object,
                 action=AuditEvent.Action.UPDATED,
                 prev_value=prev_value
             )
             event.post()
+            self.on_commit_callback_extra()
 
-        transaction.on_commit(lambda: post_event())
+        transaction.on_commit(on_commit_callback)
         return response
 
 
 class DeleteViewWithAudit(DeleteView):
+    def on_commit_callback_extra(self):
+        pass
+
     def form_valid(self, form):
         self.object = self.get_object()
         # build the event before the object is deleted
@@ -65,5 +76,10 @@ class DeleteViewWithAudit(DeleteView):
             action=AuditEvent.Action.DELETED,
             prev_value=self.object.serialize_for_event()
         )
-        transaction.on_commit(lambda: event.post())
+
+        def on_commit_callback():
+            event.post()
+            self.on_commit_callback_extra()
+
+        transaction.on_commit(on_commit_callback)
         return super().form_valid(form)

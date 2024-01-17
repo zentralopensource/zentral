@@ -43,36 +43,59 @@ class ListCreateAPIViewWithAudit(generics.ListCreateAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
 
+    def on_commit_callback_extra(self, instance):
+        pass
+
     def perform_create(self, serializer):
         super().perform_create(serializer)
-        event = AuditEvent.build_from_request_and_instance(
-            self.request, serializer.instance,
-            action=AuditEvent.Action.CREATED,
-        )
-        transaction.on_commit(lambda: event.post())
+
+        def on_commit_callback():
+            instance = serializer.instance
+            event = AuditEvent.build_from_request_and_instance(
+                self.request, instance,
+                action=AuditEvent.Action.CREATED,
+            )
+            event.post()
+            self.on_commit_callback_extra(instance)
+
+        transaction.on_commit(on_commit_callback)
 
 
 class RetrieveUpdateDestroyAPIViewWithAudit(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
 
+    def on_commit_callback_extra(self, instance):
+        pass
+
     def perform_update(self, serializer):
         prev_value = serializer.instance.serialize_for_event()
         super().perform_update(serializer)
-        event = AuditEvent.build_from_request_and_instance(
-            self.request, serializer.instance,
-            action=AuditEvent.Action.UPDATED,
-            prev_value=prev_value,
-        )
-        transaction.on_commit(lambda: event.post())
+
+        def on_commit_callback():
+            instance = serializer.instance
+            event = AuditEvent.build_from_request_and_instance(
+                self.request, instance,
+                action=AuditEvent.Action.UPDATED,
+                prev_value=prev_value,
+            )
+            event.post()
+            self.on_commit_callback_extra(instance)
+
+        transaction.on_commit(on_commit_callback)
 
     def perform_destroy(self, instance):
         prev_pk = instance.pk
         prev_value = instance.serialize_for_event()
         super().perform_destroy(instance)
-        instance.pk = prev_pk  # re-hydrate the primary key
-        event = AuditEvent.build_from_request_and_instance(
-            self.request, instance,
-            action=AuditEvent.Action.DELETED,
-            prev_value=prev_value,
-        )
-        transaction.on_commit(lambda: event.post())
+
+        def on_commit_callback():
+            instance.pk = prev_pk  # re-hydrate the primary key
+            event = AuditEvent.build_from_request_and_instance(
+                self.request, instance,
+                action=AuditEvent.Action.DELETED,
+                prev_value=prev_value,
+            )
+            event.post()
+            self.on_commit_callback_extra(instance)
+
+        transaction.on_commit(on_commit_callback)

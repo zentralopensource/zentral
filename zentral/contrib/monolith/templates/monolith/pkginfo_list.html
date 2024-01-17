@@ -4,6 +4,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
   <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
@@ -116,7 +117,7 @@
       </a>
       {% endif %}
       {% else %}
-      {% if perms.monolith.change_pkginfo and manual_catalog_management %}
+      {% if perms.monolith.change_pkginfo and pkg_info.local %}
       <a class="btn btn-outline-secondary" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.pk %}">
         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
       </a>

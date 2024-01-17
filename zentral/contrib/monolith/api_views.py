@@ -9,54 +9,23 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer
 from rest_framework.views import APIView
+from base.notifier import notifier
 from zentral.core.events.base import AuditEvent, EventRequest
-from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermissions
+from zentral.utils.drf import (DjangoPermissionRequired, DefaultDjangoModelPermissions,
+                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.utils.http import user_agent_and_ip_address_from_request
-from .conf import monolith_conf
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
 from .models import (CacheServer, Catalog, Condition, Enrollment,
-                     Manifest, ManifestCatalog, ManifestSubManifest, SubManifest, SubManifestPkgInfo)
-from .serializers import (CatalogSerializer, ConditionSerializer, EnrollmentSerializer,
+                     Manifest, ManifestCatalog, ManifestSubManifest,
+                     Repository,
+                     SubManifest, SubManifestPkgInfo)
+from .repository_backends import load_repository_backend
+from .serializers import (CatalogSerializer, ConditionSerializer,
+                          EnrollmentSerializer,
                           ManifestSerializer, ManifestCatalogSerializer, ManifestSubManifestSerializer,
+                          RepositorySerializer,
                           SubManifestSerializer, SubManifestPkgInfoSerializer)
 from .utils import build_configuration_plist, build_configuration_profile
-
-
-class SyncRepository(APIView):
-    permission_required = (
-        "monolith.view_catalog", "monolith.add_catalog", "monolith.change_catalog",
-        "monolith.view_pkginfoname", "monolith.add_pkginfoname", "monolith.change_pkginfoname",
-        "monolith.view_pkginfo", "monolith.add_pkginfo", "monolith.change_pkginfo",
-        "monolith.change_manifest"
-    )
-    permission_classes = [DjangoPermissionRequired]
-
-    def initialize_events(self, request):
-        self.events = []
-        self.event_uuid = uuid.uuid4()
-        self.event_index = 0
-        self.event_request = EventRequest.build_from_request(request)
-
-    def audit_callback(self, instance, action, prev_value=None):
-        self.events.append(
-            AuditEvent.build(
-                instance, action, prev_value=prev_value,
-                event_uuid=self.event_uuid, event_index=self.event_index,
-                event_request=self.event_request
-            )
-        )
-        self.event_index += 1
-
-    def post_events(self):
-        for event in self.events:
-            event.post()
-
-    def post(self, request, *args, **kwargs):
-        post_monolith_sync_catalogs_request(request)
-        self.initialize_events(request)
-        monolith_conf.repository.sync_catalogs(self.audit_callback)
-        transaction.on_commit(lambda: self.post_events())
-        return Response({"status": 0})
 
 
 class CacheServerSerializer(ModelSerializer):
@@ -91,6 +60,65 @@ class UpdateCacheServer(APIView):
         return Response({"status": 0})
 
 
+# repositories
+
+
+class SyncRepository(APIView):
+    permission_required = "monolith.sync_repository"
+    permission_classes = [DjangoPermissionRequired]
+
+    def initialize_events(self, request):
+        self.events = []
+        self.event_uuid = uuid.uuid4()
+        self.event_index = 0
+        self.event_request = EventRequest.build_from_request(request)
+
+    def audit_callback(self, instance, action, prev_value=None):
+        event = AuditEvent.build(
+            instance, action, prev_value=prev_value,
+            event_uuid=self.event_uuid, event_index=self.event_index,
+            event_request=self.event_request
+        )
+        event.metadata.add_objects({"monolith_repository": ((self.db_repository.pk,),)})
+        self.events.append(event)
+        self.event_index += 1
+
+    def post_events(self):
+        for event in self.events:
+            event.post()
+
+    def post(self, request, *args, **kwargs):
+        self.db_repository = get_object_or_404(Repository, pk=kwargs["pk"])
+        post_monolith_sync_catalogs_request(request, self.db_repository)
+        repository = load_repository_backend(self.db_repository)
+        self.initialize_events(request)
+        repository.sync_catalogs(self.audit_callback)
+        transaction.on_commit(lambda: self.post_events())
+        return Response({"status": 0})
+
+
+class RepositoryList(ListCreateAPIViewWithAudit):
+    queryset = Repository.objects.all()
+    serializer_class = RepositorySerializer
+    filterset_fields = ('name',)
+
+    def on_commit_callback_extra(self, instance):
+        notifier.send_notification("monolith.repository", str(instance.pk))
+
+
+class RepositoryDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+    queryset = Repository.objects.all()
+    serializer_class = RepositorySerializer
+
+    def on_commit_callback_extra(self, instance):
+        notifier.send_notification("monolith.repository", str(instance.pk))
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted():
+            raise ValidationError('This repository cannot be deleted')
+        return super().perform_destroy(instance)
+
+
 # catalogs
 
 
@@ -108,7 +136,7 @@ class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (DefaultDjangoModelPermissions,)
 
     def perform_destroy(self, instance):
-        if not instance.can_be_deleted(override_manual_management=True):
+        if not instance.can_be_deleted():
             raise ValidationError('This catalog cannot be deleted')
         return super().perform_destroy(instance)
 

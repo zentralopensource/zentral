@@ -1,4 +1,3 @@
-from itertools import chain
 import logging
 import plistlib
 import random
@@ -97,9 +96,12 @@ class MRBaseView(View):
 
 
 class MRNameView(MRBaseView):
-    def get_request_args(self, name):
+    def get_name(self, kwargs):
+        return kwargs["name"]
+
+    def get_request_args(self):
         try:
-            model, key = parse_munki_name(name)
+            model, key = parse_munki_name(self.name)
         except MunkiNameError:
             model = key = None
         return model, key
@@ -116,10 +118,10 @@ class MRNameView(MRBaseView):
         return ".".join(str(i) for i in items)
 
     def get(self, request, *args, **kwargs):
-        name = kwargs["name"]
+        self.name = self.get_name(kwargs)
         event_payload = {"type": self.event_payload_type,
-                         "name": name}
-        model, key = self.get_request_args(name)
+                         "name": self.name}
+        model, key = self.get_request_args()
         if model is None or key is None:
             error = True
             response = HttpResponseForbidden("No no no!")
@@ -169,13 +171,13 @@ class MRCatalogView(MRNameView):
 class MRManifestView(MRNameView):
     event_payload_type = "manifest"
 
-    def get_request_args(self, name):
-        model, key = super().get_request_args(name)
+    def get_request_args(self):
+        model, key = super().get_request_args()
         if model is None or key is None:
             # Not a valid munki name.
             # It is the first request for the main manifest.
             model = "manifest"
-            key = self.manifest.id
+            key = self.manifest.pk
         return model, key
 
     def do_get(self, model, key, cache_key, event_payload):
@@ -263,49 +265,67 @@ class MRPackageView(MRNameView):
                     return HttpResponseRedirect(default_storage.url(filename))
                 else:
                     return FileResponse(default_storage.open(filename))
-        elif model == "repository_package":
-            pk = key
-            event_payload["repository_package"] = {"id": pk}
-            pkginfo_name = pkginfo_version = pkginfo_iil = pkginfo_fn = None
-            try:
-                pkginfo_name, pkginfo_version, pkginfo_iil, pkginfo_fn = cache.get(cache_key)
-            except TypeError:
-                for pkginfo in chain(self.manifest.pkginfos_with_deps_and_updates(self.tags),
-                                     self.manifest.enrollment_packages_pkginfo_deps(self.tags)):
-                    if pkginfo.pk == pk:
-                        pkginfo_name = pkginfo.name.name
-                        pkginfo_version = pkginfo.version
-                        if pkginfo.file:
-                            pkginfo_fn = pkginfo.file.name
-                        else:
-                            pkginfo_iil = pkginfo.data.get("installer_item_location")
-                        break
-                # set the cache value, even if pkginfo_name, pkginfo_version and pkginfo_iil are None
-                cache.set(cache_key, (pkginfo_name, pkginfo_version, pkginfo_iil, pkginfo_fn), timeout=None)
-            else:
-                event_payload["cache"]["hit"] = True
-            if pkginfo_name is not None:
-                event_payload["repository_package"]["name"] = pkginfo_name
-            if pkginfo_version is not None:
-                event_payload["repository_package"]["version"] = pkginfo_version
-            if pkginfo_iil:
-                return monolith_conf.repository.make_munki_repository_response(
-                    "pkgs", pkginfo_iil, cache_server=self._get_cache_server()
-                )
-            elif pkginfo_fn:
-                if self._redirect_to_files:
-                    return HttpResponseRedirect(default_storage.url(pkginfo_fn))
-                else:
-                    return FileResponse(default_storage.open(pkginfo_fn))
-            else:
-                # should never happen
-                return HttpResponseNotFound("PkgInfo not found!")
+        elif model == "enrollment_pkg_icon":
+            return HttpResponseNotFound("No icon available for this package!")
+        elif model in ("icon", "installer_item", "uninstaller_item"):
+            event_payload["package_info"] = {"id": key}
+            sentinel = object()
+            cached_pkginfo = cache.get(cache_key, sentinel)
+            if cached_pkginfo is sentinel:
+                cached_pkginfo = self.manifest.get_pkginfo_for_cache(self.tags, key)
+                # set the cache value, even if None
+                cache.set(cache_key, cached_pkginfo, timeout=604800)  # 7 days
+            if cached_pkginfo:
+                event_payload["package_info"].update({
+                    "name": cached_pkginfo.name,
+                    "version": cached_pkginfo.version
+                })
+                event_payload["repository"] = {"pk": cached_pkginfo.repository_pk}
+                repository = monolith_conf.get_repository(cached_pkginfo.repository_pk)
+                if repository:
+                    event_payload["repository"]["name"] = repository.name
+                    section, name = cached_pkginfo.get_repository_section_and_name(model)
+                    if section and name:
+                        return repository.make_munki_repository_response(
+                            section, name, self._get_cache_server()
+                        )
+            return HttpResponseNotFound("Not found!")
 
 
-class MRRedirectView(MRBaseView):
-    section = None
+class MRIconHashesView(MRNameView):
+    event_payload_type = "icons"
 
-    def get(self, request, *args, **kwargs):
-        name = kwargs["name"]
-        self.post_monolith_munki_request(type=self.section, name=name)
-        return monolith_conf.repository.make_munki_repository_response(self.section, name)
+    def get_name(self, kwargs):
+        return "_icon_hashes.plist"
+
+    def get_request_args(self):
+        return "icon_hashes", self.manifest.pk
+
+    def do_get(self, model, key, cache_key, event_payload):
+        icon_hashes = cache.get(cache_key)
+        if not icon_hashes:
+            icon_hashes = self.manifest.serialize_icon_hashes(self.tags)
+            cache.set(cache_key, icon_hashes, timeout=604800)  # 7 days
+        else:
+            event_payload["cache"]["hit"] = True
+        return HttpResponse(icon_hashes, content_type="application/xml")
+
+
+class MRClientResourceView(MRNameView):
+    event_payload_type = "client_resources"
+
+    def get_request_args(self):
+        return "client_resources", self.manifest.pk
+
+    def do_get(self, model, key, cache_key, event_payload):
+        client_resources = cache.get(cache_key)
+        if client_resources is None:
+            client_resources = self.manifest.serialize_client_resources(self.tags)
+            cache.set(cache_key, client_resources, timeout=604800)  # 7 days
+        else:
+            event_payload["cache"]["hit"] = True
+        repository_pk = client_resources.get(self.name)
+        if repository_pk:
+            return monolith_conf.get_repository(repository_pk).make_munki_repository_response("client_resources",
+                                                                                              self.name)
+        return HttpResponseNotFound("Not found!")

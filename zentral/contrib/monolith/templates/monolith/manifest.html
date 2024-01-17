@@ -4,7 +4,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Manifests</a></li>
   <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
@@ -124,8 +125,8 @@
     <table class="table table-striped align-middle table-hover">
     <thead>
         <tr>
+        <th>repository</th>
         <th>name</th>
-        <th>priority</th>
         <th>tags</th>
         {% if perms.monolith.change_manifestcatalog or perms.monolith.delete_manifestcatalog %}
         <th></th>
@@ -134,17 +135,28 @@
     </thead>
     <tbody>
         {% for manifest_catalog in manifest_catalogs %}
+        {% with manifest_catalog.catalog as catalog %}
         <tr class="data-row">
-        <td><a href="{% url 'monolith:catalog' manifest_catalog.catalog.id %}">{{ manifest_catalog.catalog }}</a></td>
-        <td>{{ manifest_catalog.catalog.priority }}</td>
         <td>
-            {% for tag in manifest_catalog.tags.all %}
-            {% inventory_tag tag %}
-            {% empty %}
-            -
-            {% endfor %}
+          {% if perms.monolith.view_repository %}
+          <a href="{{ catalog.repository.get_absolute_url }}">{{ catalog.repository }}</a>
+          {% else %}
+          {{ catalog.repository }}
+          {% endif %}
         </td>
-
+        <td>
+          {% if perms.monolith.view_catalog %}
+          <a href="{{ catalog.get_absolute_url }}">{{ catalog.name }}</a></td>
+          {% else %}
+          {{ catalog.name }}
+          {% endif %}
+        <td>
+          {% for tag in manifest_catalog.tags.all %}
+          {% inventory_tag tag %}
+          {% empty %}
+          -
+          {% endfor %}
+        </td>
         {% if perms.monolith.change_manifestcatalog or perms.monolith.delete_manifestcatalog %}
         <td class="text-end py-0">
             {% if perms.monolith.change_manifestcatalog %}
@@ -158,6 +170,7 @@
         </td>
         {% endif %}
         </tr>
+        {% endwith %}
         {% endfor %}
     </tbody>
     </table>

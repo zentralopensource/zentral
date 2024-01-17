@@ -4,7 +4,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item active">Monolith conditions</li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item active">Condition{{ object_list|length|pluralize }}</li>
 </ol>
 
 <div class="d-flex justify-content-between mb-3">

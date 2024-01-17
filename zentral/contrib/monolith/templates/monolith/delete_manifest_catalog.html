@@ -3,12 +3,13 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Manifests</a></li>
   <li class="breadcrumb-item"><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
-  <li class="breadcrumb-item active">Delete {{ m2m_object }} catalog</li>
+  <li class="breadcrumb-item active">Remove {{ m2m_object }} catalog</li>
 </ol>
 
-<h2>Delete catalog</h2>
+<h2>Remove catalog from manifest</h2>
 
 <p>Do you really want to remove the {{ m2m_object }} catalog from the {{ manifest }} manifest?</p>
 

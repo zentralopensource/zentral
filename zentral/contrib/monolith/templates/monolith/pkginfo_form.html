@@ -3,7 +3,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{%  url 'monolith:pkg_infos' %}">Monolith pkg infos</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:pkg_infos' %}">PkgInfos</a></li>
   <li class="breadcrumb-item"><a href="{% url 'monolith:pkg_info_name' object.name.id %}">{{ object.name }}</a></li>
   <li class="breadcrumb-item active">
     Update version {{ object.version}} catalog

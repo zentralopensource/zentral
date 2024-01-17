@@ -9,8 +9,10 @@ urlpatterns = [
          public_views.MRManifestView.as_view(), name='repository_manifest'),
     path('munki_repo/pkgs/<path:name>',
          public_views.MRPackageView.as_view(), name='repository_package'),
+    path('munki_repo/icons/_icon_hashes.plist',
+         public_views.MRIconHashesView.as_view(), name='repository_icon_hashes'),
     path('munki_repo/icons/<path:name>',
-         public_views.MRRedirectView.as_view(section="icons"), name='repository_icon'),
+         public_views.MRPackageView.as_view(), name='repository_icon'),
     path('munki_repo/client_resources/<path:name>',
-         public_views.MRRedirectView.as_view(section="client_resources"), name='repository_client_resource'),
+         public_views.MRClientResourceView.as_view(), name='repository_client_resource'),
 ]

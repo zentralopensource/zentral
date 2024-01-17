@@ -3,17 +3,16 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Monolith manifests</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:manifests' %}">Manifests</a></li>
   <li class="breadcrumb-item"><a href="{{ manifest.get_absolute_url }}">{{ manifest }}</a></li>
   <li class="breadcrumb-item active">{{ title }}</li>
 </ol>
 
 <h2>{{ title }}</h2>
 <form method="POST" class="update-form">{% csrf_token %}
-
-    {{ form }}
-
-    <a href="{{ manifest.get_absolute_url }}#submanifests" class="btn btn-outline-secondary">Cancel</a>
+  {{ form }}
+  <a href="{{ manifest.get_absolute_url }}#submanifests" class="btn btn-outline-secondary">Cancel</a>
   <button type="submit" class="btn btn-primary">Add</button>
 </form>
 {% endblock %}

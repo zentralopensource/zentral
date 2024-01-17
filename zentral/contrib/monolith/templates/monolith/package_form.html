@@ -4,7 +4,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{%  url 'monolith:pkg_infos' %}">Monolith pkg infos</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{%  url 'monolith:pkg_infos' %}">PkgInfos</a></li>
   {% if object %}
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object.name }}</a></li>
   <li class="breadcrumb-item active">Update version {{ object.version }}</li>

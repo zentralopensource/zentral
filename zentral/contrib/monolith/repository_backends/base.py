@@ -1,24 +1,77 @@
 from datetime import datetime
+import hashlib
 import logging
 import plistlib
 from django.db.models import Count, Q
 from zentral.contrib.monolith.models import Catalog, Manifest, PkgInfo, PkgInfoCategory, PkgInfoName
 from zentral.core.events.base import AuditEvent
+from zentral.core.secret_engines import decrypt, decrypt_str, encrypt_str, rewrap
 
 
 logger = logging.getLogger('zentral.contrib.monolith.repository_backends.base')
 
 
 class BaseRepository:
-    def __init__(self, config):
-        self.manual_catalog_management = config.get("manual_catalog_management", False)
-        if self.manual_catalog_management:
-            self.default_catalog_name = config.get("default_catalog", "Not assigned").strip()
-        else:
-            self.default_catalog_name = None
+    kwargs_keys = ()
+    encrypted_kwargs_keys = ()
+    form_class = None
+
+    def __init__(self, repository, load=True):
+        self.repository = repository
+        self.name = repository.name
+        if load:
+            self.load()
+
+    def load(self):
+        backend_kwargs = self.get_kwargs()
+        for key in self.kwargs_keys:
+            setattr(self, key, backend_kwargs.get(key))
+
+    # secrets
+
+    def _get_secret_engine_kwargs(self, subfield):
+        if not self.name:
+            raise ValueError("Repository must have a name")
+        return {"field": f"backend_kwargs.{subfield}",
+                "model": "monolith.repository",
+                "name": self.name}
+
+    def get_kwargs(self):
+        if not isinstance(self.repository.backend_kwargs, dict):
+            raise ValueError("Repository hasn't been initialized")
+        return {
+            k: decrypt_str(v, **self._get_secret_engine_kwargs(k)) if k in self.encrypted_kwargs_keys else v
+            for k, v in self.repository.backend_kwargs.items()
+        }
+
+    def get_kwargs_for_event(self):
+        if not isinstance(self.repository.backend_kwargs, dict):
+            raise ValueError("Repository hasn't been initialized")
+        return {
+            k if k not in self.encrypted_kwargs_keys else f"{k}_hash":
+            hashlib.sha256(decrypt(v, **self._get_secret_engine_kwargs(k))).hexdigest()
+            if k in self.encrypted_kwargs_keys else v
+            for k, v in self.repository.backend_kwargs.items()
+            if v is not None
+        }
+
+    def set_kwargs(self, kwargs):
+        self.repository.backend_kwargs = {
+            k: encrypt_str(v, **self._get_secret_engine_kwargs(k)) if k in self.encrypted_kwargs_keys else v
+            for k, v in kwargs.items()
+            if v
+        }
+
+    def rewrap_kwargs(self):
+        self.repository.backend_kwargs = {
+            k: rewrap(v, **self._secret_engine_kwargs(k)) if k in self.encrypted_kwargs_keys else v
+            for k, v in self.repository.backend_kwargs.items()
+        }
+
+    # sync
 
     def _import_category(self, name, audit_callback):
-        pic, created = PkgInfoCategory.objects.get_or_create(name=name)
+        pic, created = PkgInfoCategory.objects.get_or_create(repository=self.repository, name=name)
         if created and audit_callback:
             audit_callback(pic, AuditEvent.Action.CREATED)
         return pic
@@ -31,18 +84,13 @@ class BaseRepository:
 
     def _import_catalogs(self, pkg_info_data, audit_callback):
         catalogs = []
-        if self.default_catalog_name:
-            # force the catalog to the default catalog
-            pkg_info_catalogs = [self.default_catalog_name]
-        else:
-            # take the catalogs from the pkg info data
-            pkg_info_catalogs = pkg_info_data.get("catalogs", [])
+        pkg_info_catalogs = pkg_info_data.get("catalogs", [])
         for catalog_name in pkg_info_catalogs:
             catalog_name = catalog_name.strip()
             try:
-                catalog = Catalog.objects.get(name=catalog_name)
+                catalog = Catalog.objects.get(repository=self.repository, name=catalog_name)
             except Catalog.DoesNotExist:
-                catalog = Catalog.objects.create(name=catalog_name)
+                catalog = Catalog.objects.create(repository=self.repository, name=catalog_name)
                 if audit_callback:
                     audit_callback(catalog, AuditEvent.Action.CREATED)
             else:
@@ -84,10 +132,13 @@ class BaseRepository:
         # save PkgInfo in db
         try:
             pkg_info = (PkgInfo.objects.prefetch_related("catalogs", "requires", "update_for")
-                                       .select_related("category", "name")
-                                       .get(name=pkg_info_name, version=version))
+                                       .select_related("repository", "name", "category")
+                                       .get(repository=self.repository,
+                                            name=pkg_info_name,
+                                            version=version))
         except PkgInfo.DoesNotExist:
-            pkg_info = PkgInfo.objects.create(name=pkg_info_name,
+            pkg_info = PkgInfo.objects.create(repository=self.repository,
+                                              name=pkg_info_name,
                                               version=version,
                                               category=pkg_info_category,
                                               data=pkg_info_data)
@@ -119,12 +170,11 @@ class BaseRepository:
                 pkg_info.data = pkg_info_data
                 updated = True
             # update m2m attributes
-            pkg_info_m2m_updates = [("requires", requires),
-                                    ("update_for", update_for)]
-            if not self.manual_catalog_management:
-                # need to update the pkg info catalogs too
-                pkg_info_m2m_updates.append(("catalogs", catalogs))
-            for pkg_info_attr, pkg_info_values in pkg_info_m2m_updates:
+            for pkg_info_attr, pkg_info_values in (
+                ("requires", requires),
+                ("update_for", update_for),
+                ("catalogs", catalogs)
+            ):
                 pkg_info_old_values = set(getattr(pkg_info, pkg_info_attr).all())
                 pkg_info_values = set(pkg_info_values)
                 if pkg_info_old_values != pkg_info_values:
@@ -164,25 +214,50 @@ class BaseRepository:
     def sync_catalogs(self, audit_callback=None):
         found_pkg_info_pks = set([])
         found_catalog_pks = set([])
+        # initialize repository icon hashes
+        repo_icon_hashes = {}
+        icon_hashes_content = self.get_icon_hashes_content()
+        if icon_hashes_content:
+            icon_hashes = plistlib.loads(icon_hashes_content)
+        else:
+            icon_hashes = {}
         # update or create current pkg_infos
         for pkg_info_data in plistlib.loads(self.get_all_catalog_content()):
             catalogs, pkg_info = self._import_pkg_info(pkg_info_data, audit_callback)
             found_catalog_pks.update(c.pk for c in catalogs)
             if pkg_info:
                 found_pkg_info_pks.add(pkg_info.pk)
+                icon_hash = icon_hashes.get(pkg_info.get_original_icon_name())
+                if icon_hash:
+                    repo_icon_hashes[pkg_info.get_monolith_icon_name()] = icon_hash
         # archive unknown non-local pkg_infos
         for pkg_info in (PkgInfo.objects.prefetch_related("catalogs", "requires", "update_for")
                                         .select_related("category", "name")
                                         .filter(archived_at__isnull=True)
                                         .exclude(Q(local=True) | Q(pk__in=found_pkg_info_pks))):
             self._archive_pkg_info(pkg_info, audit_callback)
-        # archive old catalogs if auto catalog management
-        if not self.manual_catalog_management:
-            for c in (Catalog.objects.annotate(pkginfo_count=Count("pkginfo",
-                                                                   filter=Q(pkginfo__archived_at__isnull=True)))
-                                     .filter(archived_at__isnull=True, pkginfo_count=0)
-                                     .exclude(pk__in=found_catalog_pks)):
-                self._archive_catalog(c, audit_callback)
+        # archive old catalogs
+        for c in (Catalog.objects.annotate(pkginfo_count=Count("pkginfo",
+                                                               filter=Q(pkginfo__archived_at__isnull=True)))
+                                 .filter(archived_at__isnull=True, pkginfo_count=0)
+                                 .exclude(pk__in=found_catalog_pks)):
+            self._archive_catalog(c, audit_callback)
+        # update repository
+        self.repository.icon_hashes = repo_icon_hashes
+        self.repository.client_resources = list(self.iter_client_resources())
+        self.repository.last_synced_at = datetime.utcnow()
+        self.repository.save()
         # bump versions of manifests connected to found catalogs
         for manifest in Manifest.objects.distinct().filter(manifestcatalog__catalog__pk__in=found_catalog_pks):
             self._bump_manifest(manifest, audit_callback)
+
+    # to implement in the subclasses
+
+    def get_all_catalog_content(self):
+        raise NotImplementedError
+
+    def get_icon_hashes_content(self):
+        raise NotImplementedError
+
+    def iter_client_resources(self):
+        raise NotImplementedError

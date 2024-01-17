@@ -4,74 +4,42 @@ Monolith is a Munki server that adds dynamic manifests, catalogs, with progressi
 
 ## Zentral configuration
 
-To activate monolith, you need to add a `zentral.contrib.monolith` section to the `apps` section in `base.json`.
+To activate monolith, you need to add a `zentral.contrib.monolith` section to the `apps` section in `base.json`:
 
-### Local repository with osquery optional enrollment
+```json
+{
+  "zentral.contrib.monolith": {}
+}
+```
 
-The Munki repository is on the same server as Zentral. Only osquery is proposed for enrollment. The Munki enrollment is always enabled. `munkitools_core` and `osquery` must be present in your repository.
+You can also configure enrollment packages. In the following example, two enrollment packages are configured: one for the Zentral Munki module, with `munkitools_core` as required PkgInfo, and one for the Zentral Osquery module, with `osquery` as required PkgInfo.
 
 ```json
 {
   "zentral.contrib.monolith": {
     "enrollment_package_builders": {
       "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
-        "requires": ["munkitools_core"],
-        "optional": false
+        "requires": ["munkitools_core"]
       },
       "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
-        "requires": ["osquery"],
-        "optional": true
+        "requires": ["osquery"]
       }
-    },
-    "munki_repository": {
-      "backend": "zentral.contrib.monolith.repository_backends.local",
-      "root": "/var/lib/munki/repo"
     }
   }
 }
 ```
 
-### S3 repository with osquery optional enrollment
+### Repositories
 
-The Munki repository is in a S3 bucket. Only osquery is proposed for enrollment. The Munki enrollment is always enabled. `munkitools_core` and `osquery` must be present in your repository.
+Multiple repositories can be used. There are two kinds of repositories. `S3` and `Virtual`. Use a `S3` repository when you have a Munki repository published in a AWS S3 bucket. Use a `Virtual` repository to upload packages directly in Zentral.
 
-```json
-{
-  "zentral.contrib.monolith": {
-    "enrollment_package_builders": {
-      "zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder": {
-        "requires": ["munkitools_core"],
-        "optional": false
-      },
-      "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder": {
-        "requires": ["osquery"],
-        "optional": true
-      }
-    },
-    "munki_repository": {
-      "backend": "zentral.contrib.monolith.repository_backends.s3",
-      "aws_access_key_id": "AAAAAAAAAAAAAAAAAAAA",
-      "aws_secret_access_key": "SECRET",
-      "bucket": "monolith-acme",
-      "signature_version": "s3v4",
-      "region_name": "eu-central-1",
-      "prefix": "path_to_repo_root_in_bucket"
-    }
-  }
-}
-```
-
-**IMPORTANT** When running in AWS, it is recommended to use [AWS instance profiles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html), [task IAM roles](https://docs.aws.amazon.com/AmazonECS/latest/userguide/task-iam-roles.html), or any other integrated authentication mechanism to authenticate with the bucket. If this is not possible, the AWS credentials can be passed as environment variables, using the `{{ env:NAME_OF_THE_VARIABLE }}` substitution in the Zentral configuration.
+**IMPORTANT** When using AWS S3 buckets, it is recommended to use [AWS instance profiles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html), [task IAM roles](https://docs.aws.amazon.com/AmazonECS/latest/userguide/task-iam-roles.html), or any other integrated authentication mechanism to authenticate with the bucket.
 
 ### Catalogs
 
 Monolith works better – and is easier to reason about – when all the needed base versions of all pkginfo files are present in at least one catalog, and when more recent pkginfo files are made available in extra catalogs that can be activated for some machines. You could have for example a `production` catalog with the base versions of all the softwares you want to distribute across your fleet, and a `testing` catalog for the more recent versions.
 
-Monolith can run in one of two modes. By default, the catalogs from the pkginfo files are **automatically imported and used** in Monolith. If you want to promote a pkginfo file from `testing` to `production`, you would do it in the repository, and trigger a sync (it could be from `bleeding-edge` to `standard`, names are not important as long as they are used consistently). This mode would be the one to pick if you already have a pkginfo file auto-promotion setup.
-
-Monolith can also run in **manual mode**. To use this mode, set the `manual_catalog_management` to `true` in the `munki_repository` repository configuration of the `zentral.contrib.monolith` app configuration. In this mode, you can also choose the default name of the catalog that the new pkginfo files will be attached to in Zentral, by setting the `default_catalog` key (default to `Not assigned`). To promote a pkginfo file from one catalog to the other one, you would then have to do it in Zentral.
-
-In either mode, you need to set the catalogs priorities in Zentral. Munki cannot understand that `bleeding-edge` has more recent versions than `standard` (or `testing` > `production`). That's why you need to give the catalogs where the most recent versions of the pkginfo files are, higher priorities (bigger numbers). This way we can make sure that if for example there is firefox 123 in `bleeding-edge`, and 122 in `production`, and that munki gets those two catalogs, that firefox 123 will be installed.
+By default, the catalogs from the pkginfo files are **automatically imported and used** in Monolith. If you want to promote a pkginfo file from `testing` to `production`, you would do it in the repository, and trigger a sync (it could be from `bleeding-edge` to `standard`, names are not important as long as they are used consistently).
 
 ## Build a manifest
 
@@ -126,32 +94,23 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 * `Content-Type: application/json`
 
-### /api/monolith/repository/sync/
+### /api/monolith/repository/`<int:pk>`/sync/
 
-#### Fetch the package infos from the repository
+#### Fetch the package infos, the icons, the client resources from the repository
 
-During a sync, monolith will import all the available [pkginfo files](https://github.com/munki/munki/wiki/Glossary#info-file-or-pkginfo-file), their [catalogs](https://github.com/munki/munki/wiki/Glossary#catalog), categories, and make them available to the app.
+During a sync, monolith will import all the available [pkginfo files](https://github.com/munki/munki/wiki/Glossary#info-file-or-pkginfo-file), their [catalogs](https://github.com/munki/munki/wiki/Glossary#catalog), categories, and make them available to the app. It will also import the icon hashes, and get a list of the client resources.
 
 * method: POST
 * Content-Type: application/json
-* Required permissions:
-    * `monolith.view_catalog`
-    * `monolith.add_catalog`
-    * `monolith.change_catalog`,
-    * `monolith.view_pkginfoname`
-    * `monolith.add_pkginfoname`
-    * `monolith.change_pkginfoname`,
-    * `monolith.view_pkginfo`
-    * `monolith.add_pkginfo`
-    * `monolith.change_pkginfo`,
-    * `monolith.change_manifest`
+* Required permission:
+    * `monolith.sync_repository`
 
 Example:
 
 ```
 curl -X POST \
      -H "Authorization: Token $TOKEN" \
-     https://$FQDN/api/monolith/repository/sync/
+     https://$FQDN/api/monolith/repository/1/sync/
 ```
 
 Response:

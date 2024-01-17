@@ -3,7 +3,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'monolith:sub_manifests' %}">Monolith sub manifests</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:sub_manifests' %}">Sub manifests</a></li>
   <li class="breadcrumb-item"><a href="{{ object.sub_manifest.get_absolute_url }}">{{ object.sub_manifest }}</a></li>
   <li class="breadcrumb-item active">Remove repository package {{ object.pkg_info_name }}</li>
 </ol>

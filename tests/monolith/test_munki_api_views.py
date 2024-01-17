@@ -1,7 +1,7 @@
 import copy
 import os.path
 import plistlib
-import shutil
+from urllib.parse import urlparse
 import uuid
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -10,10 +10,11 @@ from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaBusinessUnit, Tag
-from zentral.contrib.monolith.models import (Catalog, Enrollment,
-                                             Manifest, ManifestCatalog, ManifestSubManifest,
+from zentral.contrib.monolith.models import (Enrollment,
+                                             ManifestCatalog, ManifestSubManifest,
                                              PkgInfo, PkgInfoName,
                                              SubManifest, SubManifestPkgInfo)
+from .utils import force_catalog, force_manifest, force_repository
 
 
 pkginfo_src = """<?xml version="1.0" encoding="UTF-8"?>
@@ -72,8 +73,11 @@ class MonolithAPIViewsTestCase(TestCase):
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
+        # repository
+        cls.virtual_repository = force_repository(virtual=True)
+        cls.s3_repository = force_repository(virtual=False)
         # manifest
-        cls.manifest = Manifest.objects.create(meta_business_unit=cls.mbu, name=get_random_string(12))
+        cls.manifest = force_manifest(mbu=cls.mbu)
         # pkginfos
         cls.pkginfo_data = plistlib.loads(pkginfo_src.encode("utf-8"))
         # enrollment
@@ -113,7 +117,7 @@ class MonolithAPIViewsTestCase(TestCase):
         local_pkg_content=None
     ):
         if catalog is None:
-            catalog = Catalog.objects.create(name=get_random_string(12))
+            catalog = force_catalog(repository=self.virtual_repository if local_pkg_content else self.s3_repository)
         ManifestCatalog.objects.get_or_create(manifest=self.manifest, catalog=catalog)
         if sub_manifest is None:
             sub_manifest, _ = SubManifest.objects.get_or_create(name=get_random_string(12))
@@ -137,6 +141,7 @@ class MonolithAPIViewsTestCase(TestCase):
             data["zentral_monolith"] = zentral_monolith
         pkg_info_name, _ = PkgInfoName.objects.get_or_create(name=name)
         pkg_info = PkgInfo.objects.create(
+            repository=catalog.repository,
             name=pkg_info_name,
             version=version,
             data=data
@@ -451,22 +456,25 @@ class MonolithAPIViewsTestCase(TestCase):
 
     # repository package
 
-    def test_repository_package_not_found(self):
-        pkg_info, _, _ = self._force_smpi()
-        api_path = pkg_info.get_pkg_info()["installer_item_location"]
-        response = self._make_munki_request(reverse("monolith_public:repository_package", args=(api_path,)))
-        self.assertEqual(response.status_code, 404)
-
     def test_repository_package(self):
         pkg_info, _, _ = self._force_smpi()
-        local_path = os.path.join("/tmp/pkgs", pkg_info.data["installer_item_location"])
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        with open(local_path, "wb") as f:
-            f.write(b"yolo")
         api_path = pkg_info.get_pkg_info()["installer_item_location"]
         response = self._make_munki_request(reverse("monolith_public:repository_package", args=(api_path,)))
-        self.assertEqual(b"".join(response.streaming_content), b"yolo")
-        shutil.rmtree("/tmp/pkgs")
+        self.assertEqual(response.status_code, 302)
+        p = urlparse(response.url)
+        self.assertEqual(p.scheme, "https")
+        self.assertEqual(p.netloc, "s3.us-east1.amazonaws.com")
+        s3_repo_kwargs = self.s3_repository.get_backend_kwargs()
+        self.assertEqual(
+            p.path,
+            os.path.join(
+                "/",
+                s3_repo_kwargs["bucket"],
+                s3_repo_kwargs["prefix"],
+                "pkgs",
+                pkg_info.data["installer_item_location"]
+            )
+        )
 
     def test_unknown_repository_package(self):
         pkg_info, _, _ = self._force_smpi()
@@ -474,7 +482,14 @@ class MonolithAPIViewsTestCase(TestCase):
         api_path = api_path.replace("." + str(pkg_info.pk) + ".", ".0.")  # no pkg info with pk == 0
         response = self._make_munki_request(reverse("monolith_public:repository_package", args=(api_path,)))
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.content, b"PkgInfo not found!")
+        self.assertEqual(response.content, b"Not found!")
+
+    def test_local_repository_package_not_found(self):
+        pkg_info, _, _ = self._force_smpi(local_pkg_content=b"fomo")
+        api_path = pkg_info.get_pkg_info()["installer_item_location"]
+        pkg_info.file.delete()
+        response = self._make_munki_request(reverse("monolith_public:repository_package", args=(api_path,)))
+        self.assertEqual(response.status_code, 404)
 
     def test_local_repository_package(self):
         pkg_info, _, _ = self._force_smpi(local_pkg_content=b"fomo")
@@ -483,7 +498,58 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(b"".join(response.streaming_content), b"fomo")
         pkg_info.file.delete(save=False)
 
-    # legacy public endpoints
+    # icon hashes
+
+    def test_icon_hashes(self):
+        repository1 = force_repository()
+        repository1.icon_hashes = {"un": 64 * "a"}
+        repository1.save()
+        force_catalog(repository=repository1, manifest=self.manifest)
+        repository2 = force_repository()
+        repository2.icon_hashes = {"deux": 64 * "b"}
+        repository2.save()
+        force_catalog(repository=repository2, manifest=self.manifest)
+        response = self._make_munki_request(reverse("monolith_public:repository_icon_hashes"))
+        self.assertEqual(
+            plistlib.loads(response.content),
+            {"un": 64 * "a", "deux": 64 * "b"}
+        )
+
+    # client resources
+
+    def test_client_resource_redirect(self):
+        repository = force_repository()
+        repository.client_resources = ["yolo.zip"]
+        repository.save()
+        force_catalog(repository=repository, manifest=self.manifest)
+        response = self._make_munki_request(reverse("monolith_public:repository_client_resource",
+                                                    args=("yolo.zip",)))
+        self.assertEqual(response.status_code, 302)
+        p = urlparse(response.url)
+        self.assertEqual(p.scheme, "https")
+        self.assertEqual(p.netloc, "s3.us-east1.amazonaws.com")
+        s3_repo_kwargs = repository.get_backend_kwargs()
+        self.assertEqual(
+            p.path,
+            os.path.join(
+                "/",
+                s3_repo_kwargs["bucket"],
+                s3_repo_kwargs.get("prefix", ""),
+                "client_resources",
+                "yolo.zip"
+            )
+        )
+
+    def test_client_resource_not_found(self):
+        repository = force_repository()
+        repository.client_resources = ["yolo.zip"]
+        repository.save()
+        force_catalog(repository=repository, manifest=self.manifest)
+        response = self._make_munki_request(reverse("monolith_public:repository_client_resource",
+                                                    args=("fomo.zip",)))
+        self.assertEqual(response.status_code, 404)
+
+    # legacy URLs
 
     def test_legacy_public_urls_are_disabled_on_tests(self):
         routes = [

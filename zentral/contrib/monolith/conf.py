@@ -1,26 +1,51 @@
-from importlib import import_module
-from django.utils.functional import cached_property
+from datetime import datetime, timedelta
+import logging
+import threading
+from django.utils.functional import cached_property, SimpleLazyObject
 from zentral.conf import settings
 from zentral.utils.osx_package import get_package_builders
+from base.notifier import notifier
+from .repository_backends import load_repository_backend
+
+
+logger = logging.getLogger("zentral.contrib.monolith.conf")
 
 
 class MonolithConf:
-    def app_config(self):
-        return settings['apps']['zentral.contrib.monolith'].copy()
+    reload_interval = timedelta(hours=1)
 
-    @cached_property
-    def repository(self):
-        repository_cfg = self.app_config()['munki_repository']
-        repository_class_name = "Repository"
-        module = import_module(repository_cfg.pop('backend'))
-        repository_class = getattr(module, repository_class_name)
-        return repository_class(repository_cfg)
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._repositories_last_loaded_at = None
+
+    def _reload_repositories(self, *args, **kwargs):
+        logger.info("Reload repositories")
+        # avoid circular dependencies
+        from .models import Repository
+        with self._lock:
+            self._repositories = {}
+            for repository in Repository.objects.select_related("meta_business_unit").all():
+                self._repositories[repository.pk] = load_repository_backend(repository)
+                logger.info("Repository %s loaded", repository)
+            if self._repositories_last_loaded_at is None:
+                # first time
+                notifier.add_callback("monolith.repository", self._reload_repositories)
+            self._repositories_last_loaded_at = datetime.utcnow()
+
+    def get_repository(self, pk):
+        if (
+            self._repositories_last_loaded_at is None
+            or datetime.utcnow() - self._repositories_last_loaded_at > self.reload_interval
+        ):
+            self._reload_repositories()
+        with self._lock:
+            return self._repositories[pk]
 
     @cached_property
     def enrollment_package_builders(self):
         package_builders = get_package_builders()
         enrollment_package_builders = {}
-        epb_cfg = self.app_config().get('enrollment_package_builders')
+        epb_cfg = settings['apps']['zentral.contrib.monolith'].get('enrollment_package_builders')
         if epb_cfg:
             for builder, builder_cfg in epb_cfg.serialize().items():
                 requires = builder_cfg.get("requires")
@@ -36,4 +61,4 @@ class MonolithConf:
         return enrollment_package_builders
 
 
-monolith_conf = MonolithConf()
+monolith_conf = SimpleLazyObject(lambda: MonolithConf())

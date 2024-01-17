@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import timedelta
 from itertools import chain
 import json
@@ -17,6 +18,7 @@ from django.utils.text import slugify
 from zentral.contrib.inventory.models import BaseEnrollment, MetaBusinessUnit, Tag
 from zentral.utils.text import get_version_sort_key
 from .conf import monolith_conf
+from .repository_backends import RepositoryBackend, get_repository_backend, load_repository_backend
 from .utils import build_manifest_enrollment_package
 
 
@@ -70,6 +72,79 @@ def parse_munki_name(name):
         raise MunkiNameError
 
 
+class RepositoryManager(models.Manager):
+    def for_deletion(self):
+        return self.annotate(
+            # not linked to a manifest
+            manifest_link_count=Count("catalog__manifestcatalog"),
+        ).filter(manifest_link_count=0)
+
+    def for_manual_catalogs(self):
+        return self.filter(backend=RepositoryBackend.VIRTUAL)
+
+
+class Repository(models.Model):
+    name = models.CharField(max_length=256, unique=True)
+    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.SET_NULL, blank=True, null=True)
+    backend = models.CharField(max_length=32, choices=RepositoryBackend.choices)
+    backend_kwargs = models.JSONField(editable=False)
+    icon_hashes = models.JSONField(editable=False, default=dict)
+    client_resources = models.JSONField(editable=False, default=list)
+    last_synced_at = models.DateTimeField(editable=False, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = RepositoryManager()
+
+    class Meta:
+        ordering = ("name",)
+        permissions = [
+            ("sync_repository", "Can sync repository"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def can_be_deleted(self):
+        return Repository.objects.for_deletion().filter(pk=self.pk).exists()
+
+    def manifests(self):
+        return Manifest.objects.distinct().filter(manifestcatalog__catalog__repository=self)
+
+    def get_absolute_url(self):
+        return reverse("monolith:repository", args=(self.pk,))
+
+    def get_backend_kwargs(self):
+        backend = load_repository_backend(self)
+        return backend.get_kwargs()
+
+    def get_backend_kwargs_for_event(self):
+        backend = load_repository_backend(self)
+        return backend.get_kwargs_for_event()
+
+    def set_backend_kwargs(self, kwargs):
+        backend = get_repository_backend(self)
+        backend.set_kwargs(kwargs)
+
+    def rewrap_secrets(self):
+        backend = load_repository_backend(self)
+        backend.rewrap_kwargs()
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk,
+             "name": self.name}
+        if not keys_only:
+            if self.meta_business_unit:
+                d["meta_business_unit"] = self.meta_business_unit.serialize_for_event(keys_only=True)
+            d.update({
+                "backend": str(self.backend),
+                "backend_kwargs": self.get_backend_kwargs_for_event(),
+                "created_at": self.created_at,
+                "updated_at": self.updated_at
+            })
+        return d
+
+
 class CatalogManager(models.Manager):
     def for_deletion(self):
         return self.annotate(
@@ -77,23 +152,45 @@ class CatalogManager(models.Manager):
             pkginfo_count=Count("pkginfo", filter=Q(pkginfo__archived_at__isnull=True)),
             # not included in a manifest
             manifestcatalog_count=Count("manifestcatalog")
-        ).filter(pkginfo_count=0, manifestcatalog_count=0)
+        ).filter(
+            repository__backend=RepositoryBackend.VIRTUAL,
+            pkginfo_count=0,
+            manifestcatalog_count=0
+        )
+
+    def for_update(self):
+        return self.filter(repository__backend=RepositoryBackend.VIRTUAL)
+
+    def for_upload(self):
+        return self.filter(repository__backend=RepositoryBackend.VIRTUAL)
+
+    def available_for_manifest(self, manifest, add_only=False):
+        qs = self.filter(
+            Q(repository__meta_business_unit__isnull=True)
+            | Q(repository__meta_business_unit=manifest.meta_business_unit)
+        )
+        if add_only:
+            qs = qs.exclude(
+                pk__in=[mc.catalog_id for mc in manifest.manifestcatalog_set.all()]
+            )
+        return qs
 
 
 class Catalog(models.Model):
-    name = models.CharField(max_length=256, unique=True)
-    priority = models.PositiveIntegerField(default=0)
+    repository = models.ForeignKey(Repository, on_delete=models.CASCADE)
+    name = models.CharField(max_length=256)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    archived_at = models.DateTimeField(blank=True, null=True)
+    archived_at = models.DateTimeField(null=True, editable=False)
 
     objects = CatalogManager()
 
     class Meta:
-        ordering = ('-archived_at', '-priority', 'name')
+        unique_together = (('repository', 'name'),)
+        ordering = ('-archived_at', 'repository__name', 'name', 'pk')
 
     def __str__(self):
-        return self.name
+        return f"{self.repository} - {self.name}"
 
     def get_absolute_url(self):
         return reverse("monolith:catalog", args=(self.pk,))
@@ -102,34 +199,48 @@ class Catalog(models.Model):
         return "{}?{}".format(reverse("monolith:pkg_infos"),
                               urllib.parse.urlencode({"catalog": self.pk}))
 
-    def can_be_deleted(self, override_manual_management=False):
-        return ((override_manual_management or monolith_conf.repository.manual_catalog_management)
-                and self.pkginfo_set.filter(archived_at__isnull=True).count() == 0
-                and self.manifestcatalog_set.count() == 0)
+    def can_be_deleted(self):
+        return Catalog.objects.for_deletion().filter(pk=self.pk).exists()
+
+    def can_be_updated(self):
+        return Catalog.objects.for_update().filter(pk=self.pk).exists()
 
     def serialize_for_event(self, keys_only=False):
-        d = {"pk": self.pk, "name": self.name}
-        if keys_only:
-            return d
-        d.update({"created_at": self.created_at,
-                  "updated_at": self.updated_at})
-        if self.archived_at:
-            d["archived_at"] = self.archived_at
+        d = {"pk": self.pk,
+             "repository": self.repository.serialize_for_event(keys_only=True),
+             "name": self.name}
+        if not keys_only:
+            d.update({"created_at": self.created_at,
+                      "updated_at": self.updated_at})
+            if self.archived_at:
+                d["archived_at"] = self.archived_at
         return d
 
 
+class PkgInfoCategoryManager(models.Manager):
+    def for_upload(self):
+        return self.filter(repository__backend=RepositoryBackend.VIRTUAL)
+
+
 class PkgInfoCategory(models.Model):
+    repository = models.ForeignKey(Repository, on_delete=models.CASCADE)
     name = models.CharField(max_length=256, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = PkgInfoCategoryManager()
+
+    class Meta:
+        unique_together = (('repository', 'name'),)
 
     def __str__(self):
         return self.name
 
     def serialize_for_event(self, keys_only=False):
-        d = {"pk": self.pk, "name": self.name}
-        if keys_only:
-            return d
-        d["created_at"] = self.created_at
+        d = {"pk": self.pk,
+             "repository": self.repository.serialize_for_event(keys_only=True),
+             "name": self.name}
+        if not keys_only:
+            d["created_at"] = self.created_at
         return d
 
 
@@ -212,7 +323,7 @@ class PkgInfoManager(models.Manager):
             f"with aggregated_pi as ({aggregated_pi_query}) "
             "select api.*,"
             "case when pn_total=0 then null else 100.0 * count / pn_total end as percent,"
-            "json_agg(distinct jsonb_build_object('pk', c.id, 'name', c.name, 'priority', c.priority)) as catalogs "
+            "json_agg(distinct jsonb_build_object('pk', c.id, 'name', c.name)) as catalogs "
             "from aggregated_pi as api "
             "{left}join monolith_pkginfo_catalogs as pc on (pc.pkginfo_id = api.pi_pk) "
             "{left}join monolith_catalog as c on (c.id = pc.catalog_id) "
@@ -252,7 +363,7 @@ class PkgInfoManager(models.Manager):
                       'version': version,
                       'version_sort': get_version_sort_key(version),
                       'local': pi_local,
-                      'catalogs': sorted(catalogs, key=lambda c: (c["priority"], c["name"])),
+                      'catalogs': sorted(catalogs, key=lambda c: c["name"]),
                       'count': int(count),
                       'percent': percent}
                 if pi_opts:
@@ -306,6 +417,7 @@ def pkg_info_path(instance, filename):
 
 
 class PkgInfo(models.Model):
+    repository = models.ForeignKey(Repository, on_delete=models.CASCADE)
     name = models.ForeignKey(PkgInfoName, on_delete=models.CASCADE)
     version = models.CharField(max_length=256)
     catalogs = models.ManyToManyField(Catalog)
@@ -334,15 +446,32 @@ class PkgInfo(models.Model):
     def active_catalogs(self):
         return self.catalogs.filter(archived_at__isnull=True)
 
+    def get_original_icon_name(self):
+        return self.data.get("icon_name") or f"{self.name.name}.png"
+
+    def get_monolith_icon_name(self):
+        icon_name = self.data.get("icon_name")
+        if icon_name:
+            root, ext = os.path.splitext(icon_name)
+            name = os.path.basename(root)
+        else:
+            ext = ".png"
+            name = self.name.name
+        return build_munki_name("icon", self.id, name, ext)
+
     def get_pkg_info(self):
         pkg_info = self.data.copy()
         pkg_info.pop("catalogs", None)
-        for attr in ("installer_item_location", "uninstaller_item_loc"):
+        # replace package locations
+        for attr in ("installer_item_location", "uninstaller_item_location"):
             loc = pkg_info.pop(attr, None)
             if loc:
                 root, ext = os.path.splitext(loc)
                 name = os.path.basename(root)
-                pkg_info[attr] = build_munki_name("repository_package", self.id, name, ext)
+                model = attr.removesuffix("_location")
+                pkg_info[attr] = build_munki_name(model, self.id, name, ext)
+        # replace icon name
+        pkg_info["icon_name"] = self.get_monolith_icon_name()
         return pkg_info
 
     def get_absolute_url(self):
@@ -411,6 +540,37 @@ class PkgInfo(models.Model):
     def linked_objects_keys_for_event(self):
         return {"munki_pkginfo_name": ((self.name.name,),),
                 "munki_pkginfo": ((self.name.name, self.version),)}
+
+
+@dataclass
+class CachedPkgInfo:
+    pk: int
+    repository_pk: int
+    version: str
+    file_name: str
+    installer_item_location: str
+    uninstaller_item_location: str
+    icon_name: str
+    name: str
+
+    def get_repository_section_and_name(self, model):
+        section = name = None
+        if model == "installer_item":
+            section = "pkgs"
+            if self.file_name:
+                name = self.file_name
+            elif self.installer_item_location:
+                name = self.installer_item_location
+        elif model == "uninstaller_item" and self.uninstaller_item_location:
+            section = "pkgs"
+            name = self.uninstaller_item_location
+        elif model == "icon":
+            section = "icons"
+            if self.icon_name:
+                name = self.icon_name
+            else:
+                name = f"{self.name}.png"
+        return section, name
 
 
 SUB_MANIFEST_PKG_INFO_KEY_CHOICES = (
@@ -641,7 +801,7 @@ class Manifest(models.Model):
         return [mc.catalog
                 for mc in (self.manifestcatalog_set
                                .distinct()
-                               .select_related("catalog")
+                               .select_related("catalog__repository")
                                .filter(Q(tags__isnull=True) | Q(tags__in=tags)))]
 
     def sub_manifests(self, tags=None):
@@ -692,76 +852,150 @@ class Manifest(models.Model):
                     d[ep.builder] = ep
         return d
 
-    def pkginfos_with_deps_and_updates(self, tags=None):
+    def _pkginfos_with_deps_and_updates(self, tags):
         """PkgInfos linked to a manifest for a given set of tags"""
+        kwargs = {"manifest_pk": self.pk}
         if tags:
-            m2mt_filter = "OR m2mt.tag_id in ({})".format(",".join(str(int(t.id)) for t in tags))
+            m2mt_filter = "OR m2mt.tag_id in %(tag_pks)s"
+            kwargs["tag_pks"] = tuple(t.pk for t in tags)
         else:
             m2mt_filter = ""
         query = (
             "WITH RECURSIVE pkginfos_with_deps_and_updates AS ( "
-            "SELECT pi.id as pi_id, pi.version as pi_version, pn.id AS pn_id, pn.name as pn_name "
+
+            "SELECT pi.id pk,"
+            "pi.repository_id repository_pk,"
+            "pi.version version,"
+            "pi.file file_name,"
+            "pi.data->>'installer_item_location' installer_item_location,"
+            "pi.data->>'uninstaller_item_location' uninstaller_item_location,"
+            "pi.data->>'icon_name' icon_name,"
+            "pn.id name_pk,"
+            "pn.name name "
             "FROM monolith_pkginfo pi "
             "JOIN monolith_pkginfoname pn ON (pi.name_id=pn.id) "
-            "JOIN monolith_submanifestpkginfo sm ON (pn.id=pkg_info_name_id) "
+            "JOIN monolith_submanifestpkginfo sm ON (pn.id=sm.pkg_info_name_id) "
             "JOIN monolith_manifestsubmanifest ms ON (sm.sub_manifest_id=ms.sub_manifest_id) "
             "LEFT JOIN monolith_manifestsubmanifest_tags m2mt ON (ms.id=m2mt.manifestsubmanifest_id) "
-            "WHERE ms.manifest_id = {manifest_id} "
-            "AND (m2mt.tag_id IS NULL {m2mt_filter}) "
+            "WHERE ms.manifest_id = %(manifest_pk)s "
+            f"AND (m2mt.tag_id IS NULL {m2mt_filter}) "
+
             "UNION "
-            "SELECT pi.id, pi.version, pn.id, pn.name "
+
+            "SELECT pi.id,"
+            "pi.repository_id,"
+            "pi.version,"
+            "pi.file,"
+            "pi.data->>'installer_item_location',"
+            "pi.data->>'uninstaller_item_location',"
+            "pi.data->>'icon_name',"
+            "pn.id,"
+            "pn.name "
             "FROM monolith_pkginfo pi "
             "JOIN monolith_pkginfoname pn ON (pi.name_id=pn.id) "
             "LEFT JOIN monolith_pkginfo_requires pr ON (pr.pkginfoname_id=pn.id) "
             "LEFT JOIN monolith_pkginfo_update_for pu ON (pu.pkginfo_id=pi.id) "
-            "JOIN pkginfos_with_deps_and_updates rec ON (pr.pkginfo_id=rec.pi_id OR pu.pkginfoname_id=rec.pn_id) "
+            "JOIN pkginfos_with_deps_and_updates rec ON (pr.pkginfo_id=rec.pk OR pu.pkginfoname_id=rec.name_pk) "
+
             ") "
-            "SELECT pi_id as id, pi_version as version from pkginfos_with_deps_and_updates "
-            "JOIN monolith_pkginfo_catalogs pc ON (pi_id=pc.pkginfo_id) "
+
+            "SELECT pk,"
+            "repository_pk,"
+            "version,"
+            "file_name,"
+            "installer_item_location,"
+            "uninstaller_item_location,"
+            "icon_name,"
+            "name "
+            "from pkginfos_with_deps_and_updates "
+            "JOIN monolith_pkginfo_catalogs pc ON (pk=pc.pkginfo_id) "
             "JOIN monolith_manifestcatalog mc ON (pc.catalog_id=mc.catalog_id) "
             "LEFT JOIN monolith_manifestcatalog_tags m2mt ON (mc.id=m2mt.manifestcatalog_id) "
-            "WHERE mc.manifest_id = {manifest_id} "
-            "AND (m2mt.tag_id IS NULL {m2mt_filter});"
-        ).format(manifest_id=int(self.id), m2mt_filter=m2mt_filter)
-        return PkgInfo.objects.raw(query)
+            "WHERE mc.manifest_id = %(manifest_pk)s "
+            f"AND (m2mt.tag_id IS NULL {m2mt_filter});"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, kwargs)
+        for row in cursor.fetchall():
+            yield CachedPkgInfo(*row)
 
-    def _pkginfo_deps_and_updates(self, package_names, tags):
-        package_names = ",".join("'{}'".format(package_name)
-                                 for package_name in set(package_names))
+    def _enrollment_packages_pkginfo_deps(self, tags):
+        """PkgInfos that enrollment packages require, with their dependencies"""
+        package_names = tuple(chain.from_iterable(
+            ep.get_requires()
+            for ep in self.enrollment_packages(tags).values()
+        ))
         if not package_names:
-            return PkgInfo.objects.none()
+            return
+        kwargs = {
+            "manifest_pk": self.pk,
+            "package_names": package_names,
+        }
         if tags:
-            m2mt_filter = "OR m2mt.tag_id in ({})".format(",".join(str(int(t.id)) for t in tags))
+            m2mt_filter = "OR m2mt.tag_id in %(tag_pks)s"
+            kwargs["tag_pks"] = tuple(t.pk for t in tags)
         else:
             m2mt_filter = ""
         query = (
             "WITH RECURSIVE pkginfos_with_deps_and_updates AS ( "
-            "SELECT pi.id as pi_id, pi.version as pi_version, pn.id AS pn_id, pn.name as pn_name "
+
+            "SELECT pi.id pk,"
+            "pi.repository_id repository_pk,"
+            "pi.version version,"
+            "pi.file file_name,"
+            "pi.data->>'installer_item_location' installer_item_location,"
+            "pi.data->>'uninstaller_item_location' uninstaller_item_location,"
+            "pi.data->>'icon_name' icon_name,"
+            "pn.id name_pk,"
+            "pn.name name "
             "FROM monolith_pkginfo pi "
             "JOIN monolith_pkginfoname pn ON (pi.name_id=pn.id) "
-            "WHERE pn.name in ({package_names}) "
+            "WHERE pn.name in %(package_names)s "
+
             "UNION "
-            "SELECT pi.id, pi.version, pn.id, pn.name "
+
+            "SELECT pi.id,"
+            "pi.repository_id,"
+            "pi.version,"
+            "pi.file,"
+            "pi.data->>'installer_item_location',"
+            "pi.data->>'uninstaller_item_location',"
+            "pi.data->>'icon_name',"
+            "pn.id,"
+            "pn.name "
             "FROM monolith_pkginfo pi "
             "JOIN monolith_pkginfoname pn ON (pi.name_id=pn.id) "
             "LEFT JOIN monolith_pkginfo_requires pr ON (pr.pkginfoname_id=pn.id) "
             "LEFT JOIN monolith_pkginfo_update_for pu ON (pu.pkginfo_id=pi.id) "
-            "JOIN pkginfos_with_deps_and_updates rec ON (pr.pkginfo_id=rec.pi_id OR pu.pkginfoname_id=rec.pn_id) "
+            "JOIN pkginfos_with_deps_and_updates rec ON (pr.pkginfo_id=rec.pk OR pu.pkginfoname_id=rec.name_pk) "
+
             ") "
-            "SELECT pi_id as id, pi_version as version from pkginfos_with_deps_and_updates "
-            "JOIN monolith_pkginfo_catalogs pc ON (pi_id=pc.pkginfo_id) "
+
+            "SELECT pk,"
+            "repository_pk,"
+            "version,"
+            "file_name,"
+            "installer_item_location,"
+            "uninstaller_item_location,"
+            "icon_name,"
+            "name "
+            "from pkginfos_with_deps_and_updates "
+            "JOIN monolith_pkginfo_catalogs pc ON (pk=pc.pkginfo_id) "
             "JOIN monolith_manifestcatalog mc ON (pc.catalog_id=mc.catalog_id) "
             "LEFT JOIN monolith_manifestcatalog_tags m2mt ON (mc.id=m2mt.manifestcatalog_id) "
-            "WHERE mc.manifest_id = {manifest_id} "
-            "AND (m2mt.tag_id IS NULL {m2mt_filter});"
-        ).format(package_names=package_names, manifest_id=int(self.id), m2mt_filter=m2mt_filter)
-        return PkgInfo.objects.raw(query)
+            "WHERE mc.manifest_id = &(manifest_pk)s "
+            f"AND (m2mt.tag_id IS NULL {m2mt_filter});"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, kwargs)
+        for row in cursor.fetchall():
+            yield CachedPkgInfo(*row)
 
-    def enrollment_packages_pkginfo_deps(self, tags=None):
-        """PkgInfos that enrollment packages require, with their dependencies"""
-        required_packages_iter = chain.from_iterable(ep.get_requires()
-                                                     for ep in self.enrollment_packages(tags).values())
-        return self._pkginfo_deps_and_updates(required_packages_iter, tags)
+    def get_pkginfo_for_cache(self, tags, pk):
+        for cached_pkginfo in chain(self._pkginfos_with_deps_and_updates(tags),
+                                    self._enrollment_packages_pkginfo_deps(tags)):
+            if cached_pkginfo.pk == pk:
+                return cached_pkginfo
 
     # the manifest catalog - for a given set of tags
 
@@ -794,6 +1028,20 @@ class Manifest(models.Model):
             pkginfo_list.append(not_in_scope_mep.get_pkg_info())
 
         return pkginfo_list
+
+    def serialize_icon_hashes(self, tags):
+        icon_hashes = {}
+        for catalog in self.catalogs(tags):
+            icon_hashes.update(catalog.repository.icon_hashes)
+        return plistlib.dumps(icon_hashes)
+
+    def serialize_client_resources(self, tags):
+        client_resources = {}
+        for catalog in self.catalogs(tags):
+            repository_pk = catalog.repository.pk
+            for name in catalog.repository.client_resources:
+                client_resources[name] = repository_pk
+        return client_resources
 
     # the manifest
 
@@ -849,7 +1097,7 @@ class ManifestCatalog(models.Model):
 
     class Meta:
         unique_together = (("manifest", "catalog"),)
-        ordering = ('-catalog__priority', '-catalog__name')
+        ordering = ('catalog__name',)
 
 
 class ManifestSubManifest(models.Model):
@@ -904,7 +1152,9 @@ class ManifestEnrollmentPackage(models.Model):
 
     def get_pkg_info(self):
         pkg_info = self.pkg_info.copy()
-        pkg_info["installer_item_location"] = build_munki_name("enrollment_pkg", self.id, self.get_name(), "pkg")
+        name = self.get_name()
+        pkg_info["installer_item_location"] = build_munki_name("enrollment_pkg", self.id, name, "pkg")
+        pkg_info["icon_name"] = build_munki_name("enrollment_pkg_icon", self.id, name, "png")
         return pkg_info
 
     @cached_property

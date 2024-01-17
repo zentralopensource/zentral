@@ -28,6 +28,13 @@ class MonolithSyncCatalogsRequestEvent(BaseEvent):
     event_type = "monolith_sync_catalogs_request"
     tags = ["monolith"]
 
+    def get_linked_objects_keys(self):
+        keys = {}
+        repository_pk = self.payload.get("repository", {}).get("pk")
+        if repository_pk:
+            keys["mdm_repository"] = [(repository_pk,)]
+        return keys
+
 
 register_event_type(MonolithSyncCatalogsRequestEvent)
 
@@ -47,11 +54,14 @@ def post_monolith_munki_request(msn, user_agent, ip, **payload):
     MonolithMunkiRequestEvent.post_machine_request_payloads(msn, user_agent, ip, [payload])
 
 
-def post_monolith_sync_catalogs_request(request):
+def post_monolith_sync_catalogs_request(request, repository):
     event_class = MonolithSyncCatalogsRequestEvent
     event_request = EventRequest.build_from_request(request)
     metadata = EventMetadata(request=event_request)
-    event = event_class(metadata, {})
+    event = event_class(
+        metadata,
+        {"repository": repository.serialize_for_event(keys_only=True)}
+    )
     event.post()
 
 
