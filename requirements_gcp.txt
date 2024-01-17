@@ -16,9 +16,3 @@ google-cloud-kms
 
 # Zentral google_pubsub queues backend
 google-cloud-pubsub<3
-
-# Redis for celery broker
-redis
-
-# Redis for Django cache
-django-redis

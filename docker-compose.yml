@@ -5,6 +5,8 @@ services:
     image: postgres:14
     env_file:
       - ./conf/start/docker/postgres.env
+  redis:
+    image: redis:7
   elastic:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.3.2
     environment:
@@ -41,6 +43,7 @@ services:
     command: runserver
     depends_on:
       - db
+      - redis
       - elastic
       - rabbitmq
     volumes:
@@ -53,6 +56,7 @@ services:
     command: runworkers --external-hostname workers --prometheus --prometheus-sd-file /prometheus_sd/workers.yml
     depends_on:
       - db
+      - redis
       - elastic
       - rabbitmq
     volumes:
@@ -65,6 +69,7 @@ services:
     command: celery
     depends_on:
       - db
+      - redis
       - rabbitmq
     volumes:
       - web_media_root:/var/zentral
