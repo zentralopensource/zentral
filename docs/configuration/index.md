@@ -28,12 +28,12 @@ The configuration can be loaded from a file or an environment variable. To load 
 
  * [`api`](api/)
  * [`django`](django/)
- * `queues`
- * [`password_reset_handler`](password_reset_handler/)
  * [`stores`](stores/)
+ * [`notifier`](notifier/)
+ * [`password_reset_handler`](password_reset_handler/)
  * [`secret_engines`](secret_engines/)
+ * [`users`](users/)
+ * `queues`
  * `actions`
  * `apps`
- * `events`
  * `extra_links`
- * [`users`](users/)
