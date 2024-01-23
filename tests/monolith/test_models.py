@@ -7,7 +7,7 @@ from zentral.contrib.monolith.conf import monolith_conf
 from zentral.contrib.monolith.models import (Manifest, ManifestCatalog, ManifestEnrollmentPackage,
                                              ManifestSubManifest, PkgInfo, PkgInfoName, SubManifest)
 from zentral.contrib.munki.models import ManagedInstall
-from .utils import force_catalog
+from .utils import force_catalog, force_repository
 
 
 def sorted_objects(object_list):
@@ -87,6 +87,32 @@ class MonolithModelsTestCase(TestCase):
             installed_version=cls.pkginfo_2_1.version,
             installed_at=datetime.utcnow()
         )
+
+    # repository backend kwargs
+
+    def test_s3_repository_get_s3_kwargs(self):
+        repository = force_repository()
+        self.assertEqual(
+            repository.get_s3_kwargs(),
+            repository.get_backend_kwargs(),
+        )
+
+    def test_s3_repository_get_virtual_kwargs_err(self):
+        repository = force_repository()
+        self.assertIsNone(repository.get_virtual_kwargs())
+
+    def test_virtual_repository_get_virtual_kwargs(self):
+        repository = force_repository(virtual=True)
+        self.assertEqual({}, repository.get_virtual_kwargs())
+
+    def test_virtual_repository_get_s3_kwargs(self):
+        repository = force_repository(virtual=True)
+        self.assertIsNone(repository.get_s3_kwargs())
+
+    def test_s3_repository_get_unknown_kwargs_err(self):
+        repository = force_repository()
+        with self.assertRaises(AttributeError):
+            repository.get_unknown_kwargs()
 
     def test_pkg_info_name_has_active_pkginfos(self):
         self.assertTrue(self.pkginfo_name_1.has_active_pkginfos)

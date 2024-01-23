@@ -133,7 +133,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), [{
             'id': repository.pk,
             'backend': 'VIRTUAL',
-            'backend_kwargs': {},
+            's3_kwargs': None,
             'name': repository.name,
             'created_at': repository.created_at.isoformat(),
             'updated_at': repository.updated_at.isoformat(),
@@ -151,7 +151,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), [{
             'id': repository.pk,
             'backend': 'S3',
-            'backend_kwargs': repository.get_backend_kwargs(),
+            's3_kwargs': repository.get_backend_kwargs(),
             'name': repository.name,
             'created_at': repository.created_at.isoformat(),
             'updated_at': repository.updated_at.isoformat(),
@@ -178,10 +178,10 @@ class MonolithAPIViewsTestCase(TestCase):
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
              "backend": "S3",
-             "backend_kwargs": {}},
+             "s3_kwargs": {}},
         )
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'backend_kwargs': {'bucket': ['This field is required.']}})
+        self.assertEqual(response.json(), {'s3_kwargs': {'bucket': ['This field is required.']}})
 
     def test_create_s3_repository_invalid_privkey(self):
         self._set_permissions("monolith.add_repository")
@@ -190,11 +190,11 @@ class MonolithAPIViewsTestCase(TestCase):
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
              "backend": "S3",
-             "backend_kwargs": {"bucket": get_random_string(12),
-                                "cloudfront_privkey_pem": "YADA"}},
+             "s3_kwargs": {"bucket": get_random_string(12),
+                           "cloudfront_privkey_pem": "YADA"}},
         )
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {'backend_kwargs': {'cloudfront_privkey_pem': ['Invalid private key.']}})
+        self.assertEqual(response.json(), {'s3_kwargs': {'cloudfront_privkey_pem': ['Invalid private key.']}})
 
     def test_create_s3_repository_missing_cloudfront_domain_key_id(self):
         self._set_permissions("monolith.add_repository")
@@ -203,13 +203,13 @@ class MonolithAPIViewsTestCase(TestCase):
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
              "backend": "S3",
-             "backend_kwargs": {"bucket": get_random_string(12),
-                                "cloudfront_privkey_pem": CLOUDFRONT_PRIVKEY_PEM}},
+             "s3_kwargs": {"bucket": get_random_string(12),
+                           "cloudfront_privkey_pem": CLOUDFRONT_PRIVKEY_PEM}},
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'backend_kwargs': {
+            {'s3_kwargs': {
                 'cloudfront_domain': ['This field is required when configuring Cloudfront.'],
                 'cloudfront_key_id': ['This field is required when configuring Cloudfront.']
              }}
@@ -222,13 +222,13 @@ class MonolithAPIViewsTestCase(TestCase):
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
              "backend": "S3",
-             "backend_kwargs": {"bucket": get_random_string(12),
-                                "cloudfront_domain": "yolo.cloudfront.net"}},
+             "s3_kwargs": {"bucket": get_random_string(12),
+                           "cloudfront_domain": "yolo.cloudfront.net"}},
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'backend_kwargs': {
+            {'s3_kwargs': {
                 'cloudfront_key_id': ['This field is required when configuring Cloudfront.'],
                 'cloudfront_privkey_pem': ['This field is required when configuring Cloudfront.'],
              }}
@@ -240,28 +240,12 @@ class MonolithAPIViewsTestCase(TestCase):
             reverse("monolith_api:repositories"),
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
-             "backend": "YOLO",
-             "backend_kwargs": {"un": 1}},
+             "backend": "YOLO"},
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
             {'backend': ['"YOLO" is not a valid choice.']}
-        )
-
-    def test_create_virtual_repository_bad_backend_kwargs(self):
-        self._set_permissions("monolith.add_repository")
-        response = self._post_json_data(
-            reverse("monolith_api:repositories"),
-            {"name": get_random_string(12),
-             "meta_business_unit": self.mbu.pk,
-             "backend": "VIRTUAL",
-             "backend_kwargs": {"un": 1}},
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(
-            response.json(),
-            {'backend_kwargs': {'non_field_errors': ['Must be an empty dict for a virtual repository.']}}
         )
 
     @patch("base.notifier.Notifier.send_notification")
@@ -276,7 +260,12 @@ class MonolithAPIViewsTestCase(TestCase):
                 {"name": name,
                  "meta_business_unit": self.mbu.pk,
                  "backend": "S3",
-                 "backend_kwargs": {"bucket": bucket}},
+                 "s3_kwargs": {"bucket": bucket,
+                               "access_key_id": "",  # blank values OK
+                               "secret_access_key": "",
+                               "signature_version": "",
+                               "cloudfront_privkey_pem": "",
+                               }},
             )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(callbacks), 1)
@@ -284,7 +273,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {
             'id': repository.pk,
             'backend': 'S3',
-            'backend_kwargs': {"bucket": bucket},
+            's3_kwargs': {"bucket": bucket},
             'name': repository.name,
             'created_at': repository.created_at.isoformat(),
             'updated_at': repository.updated_at.isoformat(),
@@ -316,6 +305,12 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
         send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+        repository_backend = load_repository_backend(repository)
+        self.assertEqual(repository_backend.prefix, "")
+        self.assertEqual(repository_backend.credentials, {})
+        self.assertIsNone(repository_backend.assume_role_arn)
+        self.assertEqual(repository_backend.signature_version, "s3v4")
+        self.assertIsNone(repository_backend.cloudfront_signer)
 
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -334,7 +329,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {
             'id': repository.pk,
             'backend': 'VIRTUAL',
-            'backend_kwargs': {},
+            's3_kwargs': None,
             'name': repository.name,
             'created_at': repository.created_at.isoformat(),
             'updated_at': repository.updated_at.isoformat(),
@@ -386,7 +381,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {
             'id': repository.pk,
             'backend': 'S3',
-            'backend_kwargs': repository.get_backend_kwargs(),
+            's3_kwargs': repository.get_backend_kwargs(),
             'name': repository.name,
             'created_at': repository.created_at.isoformat(),
             'updated_at': repository.updated_at.isoformat(),
@@ -421,7 +416,7 @@ class MonolithAPIViewsTestCase(TestCase):
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
              "backend": "S3",
-             "backend_kwargs": {"bucket": get_random_string(12)}}
+             "s3_kwargs": {"bucket": get_random_string(12)}}
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -450,17 +445,19 @@ class MonolithAPIViewsTestCase(TestCase):
                 {"name": new_name,
                  "meta_business_unit": self.mbu.pk,
                  "backend": "S3",
-                 "backend_kwargs": {"bucket": new_bucket,
-                                    "region_name": "us-east2",
-                                    "prefix": "prefix",
-                                    "access_key_id": "11111111111111111111",
-                                    "secret_access_key": "22222222222222222222",
-                                    "assume_role_arn": "arn:aws:iam::123456789012:role/S3Access",
-                                    "signature_version": "s3v2",
-                                    "endpoint_url": "https://endpoint.example.com",
-                                    "cloudfront_domain": "yada.cloudfront.net",
-                                    "cloudfront_key_id": "YADA",
-                                    "cloudfront_privkey_pem": CLOUDFRONT_PRIVKEY_PEM}},
+                 "s3_kwargs": {
+                     "bucket": new_bucket,
+                     "region_name": "us-east2",
+                     "prefix": "prefix",
+                     "access_key_id": "11111111111111111111",
+                     "secret_access_key": "22222222222222222222",
+                     "assume_role_arn": "arn:aws:iam::123456789012:role/S3Access",
+                     "signature_version": "s3v2",
+                     "endpoint_url": "https://endpoint.example.com",
+                     "cloudfront_domain": "yada.cloudfront.net",
+                     "cloudfront_key_id": "YADA",
+                     "cloudfront_privkey_pem": CLOUDFRONT_PRIVKEY_PEM}
+                 },
             )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
@@ -470,17 +467,19 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {
             'id': repository.pk,
             'backend': 'S3',
-            'backend_kwargs': {"bucket": new_bucket,
-                               "region_name": "us-east2",
-                               "prefix": "prefix",
-                               "access_key_id": "11111111111111111111",
-                               "secret_access_key": "22222222222222222222",
-                               "assume_role_arn": "arn:aws:iam::123456789012:role/S3Access",
-                               "signature_version": "s3v2",
-                               "endpoint_url": "https://endpoint.example.com",
-                               "cloudfront_domain": "yada.cloudfront.net",
-                               "cloudfront_key_id": "YADA",
-                               "cloudfront_privkey_pem": CLOUDFRONT_PRIVKEY_PEM},
+            's3_kwargs': {
+                "bucket": new_bucket,
+                "region_name": "us-east2",
+                "prefix": "prefix",
+                "access_key_id": "11111111111111111111",
+                "secret_access_key": "22222222222222222222",
+                "assume_role_arn": "arn:aws:iam::123456789012:role/S3Access",
+                "signature_version": "s3v2",
+                "endpoint_url": "https://endpoint.example.com",
+                "cloudfront_domain": "yada.cloudfront.net",
+                "cloudfront_key_id": "YADA",
+                "cloudfront_privkey_pem": CLOUDFRONT_PRIVKEY_PEM
+            },
             'name': new_name,
             'created_at': repository.created_at.isoformat(),
             'updated_at': repository.updated_at.isoformat(),

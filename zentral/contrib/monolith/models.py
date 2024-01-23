@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import timedelta
+from functools import partial
 from itertools import chain
 import json
 import logging
@@ -143,6 +144,16 @@ class Repository(models.Model):
                 "updated_at": self.updated_at
             })
         return d
+
+    def _get_BACKEND_kwargs(self, backend):
+        if self.backend == backend:
+            return self.get_backend_kwargs()
+
+    def __getattr__(self, name):
+        for backend in RepositoryBackend:
+            if name == f"get_{backend.lower()}_kwargs":
+                return partial(self._get_BACKEND_kwargs, backend)
+        raise AttributeError
 
 
 class CatalogManager(models.Manager):

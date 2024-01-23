@@ -9,14 +9,14 @@ from .repository_backends.s3 import S3RepositorySerializer
 
 
 class RepositorySerializer(serializers.ModelSerializer):
-    backend_kwargs = serializers.JSONField(source="get_backend_kwargs", required=False)
+    s3_kwargs = S3RepositorySerializer(source="get_s3_kwargs", required=False)
 
     class Meta:
         model = Repository
         fields = (
             "id",
             "backend",
-            "backend_kwargs",
+            "s3_kwargs",
             "name",
             "meta_business_unit",
             "icon_hashes",
@@ -36,23 +36,12 @@ class RepositorySerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        backend_kwargs = data.pop("get_backend_kwargs", {})
         data = super().validate(data)
         backend = data.get("backend")
-        if backend:
-            if backend == RepositoryBackend.S3:
-                backend_serializer = S3RepositorySerializer(data=backend_kwargs)
-                if backend_serializer.is_valid():
-                    data["backend_kwargs"] = backend_serializer.data
-                else:
-                    raise serializers.ValidationError({"backend_kwargs": backend_serializer.errors})
-            elif backend == RepositoryBackend.VIRTUAL:
-                if backend_kwargs and backend_kwargs != {}:
-                    raise serializers.ValidationError({
-                        "backend_kwargs": {
-                            "non_field_errors": ["Must be an empty dict for a virtual repository."]
-                        }
-                    })
+        if backend == RepositoryBackend.S3:
+            data["backend_kwargs"] = data.pop("get_s3_kwargs")
+            if not data["backend_kwargs"]:
+                raise serializers.ValidationError({"s3_kwargs": "This field is required."})
         return data
 
     def create(self, validated_data):

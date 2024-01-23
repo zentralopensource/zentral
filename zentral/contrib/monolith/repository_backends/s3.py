@@ -71,22 +71,23 @@ class S3RepositoryForm(forms.Form):
 
 class S3RepositorySerializer(serializers.Serializer):
     bucket = serializers.CharField()
-    region_name = serializers.CharField(required=False)
-    prefix = serializers.CharField(required=False)
-    access_key_id = serializers.CharField(required=False)
-    secret_access_key = serializers.CharField(required=False)
-    assume_role_arn = serializers.CharField(required=False)
-    signature_version = serializers.CharField(required=False)
-    endpoint_url = serializers.URLField(required=False)
-    cloudfront_domain = serializers.CharField(required=False)
-    cloudfront_key_id = serializers.CharField(required=False)
-    cloudfront_privkey_pem = serializers.CharField(required=False)
+    region_name = serializers.CharField(required=False, allow_blank=True)
+    prefix = serializers.CharField(required=False, allow_blank=True)
+    access_key_id = serializers.CharField(required=False, allow_blank=True)
+    secret_access_key = serializers.CharField(required=False, allow_blank=True)
+    assume_role_arn = serializers.CharField(required=False, allow_blank=True)
+    signature_version = serializers.CharField(required=False, allow_blank=True)
+    endpoint_url = serializers.URLField(required=False, allow_blank=True)
+    cloudfront_domain = serializers.CharField(required=False, allow_blank=True)
+    cloudfront_key_id = serializers.CharField(required=False, allow_blank=True)
+    cloudfront_privkey_pem = serializers.CharField(required=False, allow_blank=True)
 
     def validate_cloudfront_privkey_pem(self, value):
-        try:
-            load_cloudfront_private_key(value)
-        except Exception:
-            raise serializers.ValidationError("Invalid private key.")
+        if value:
+            try:
+                load_cloudfront_private_key(value)
+            except Exception:
+                raise serializers.ValidationError("Invalid private key.")
         return value
 
     def validate(self, data):
