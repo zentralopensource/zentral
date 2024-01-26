@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:users' %}">Users</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
+</ol>
+
+<div class="object-details">
+  <div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">{{ object }}</h2>
+  </div>
+  <div class="d-flex align-items-center mb-3">
+    <h3 class="m-0 fs-5 text-secondary">Realm User</i></h3>
+  </div>
+  <div class="table-responsive mb-3">
+  <table class="table-object-properties">
+    <thead>
+      <th>Attribute</th>
+      <th>Value</th>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Realm</td>
+        <td>
+          {% if perms.realms.view_realm %}
+          <a href="{{ object.realm.get_absolute_url }}">{{ object.realm }}</a>
+          {% else %}
+          {{ object.realm }}
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Username</td>
+        <td>{{ object.username }}</td>
+      </tr>
+      <tr>
+        <td>Email</td>
+        <td>{{ object.email|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>First name</td>
+        <td>{{ object.first_name|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Last name</td>
+        <td>{{ object.last_name|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Full name</td>
+        <td>{{ object.full_name|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Custom attr. 1</td>
+        <td>{{ object.custom_attr_1|default:"-" }}</td>
+      </tr>
+      <tr>
+        <td>Custom attr. 2</td>
+        <td>{{ object.custom_attr_2|default:"-" }}</td>
+      </tr>
+      {% with object.groups_with_types as groups_with_types %}
+      <tr>
+        <td>Group{{ groups_with_types|length|pluralize }} ({{ groups_with_types|length }})</td>
+        <td>
+          {% if groups_with_types %}
+          <ul class="list-unstyled">
+          {% for group, type in groups_with_types %}
+          <li>
+            {% if perms.realms.view_realmgroup %}
+            <a href="{{ group.get_absolute_url }}">{{ group }}</a> ({{ type }})
+            {% else %}
+            {{ group }} ({{ type }})
+            {% endif %}
+          </li>
+          {% endfor %}
+          </ul>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
+      {% endwith %}
+    </tbody>
+  </table>
+  {% created_updated_at object %}
+</div>
+{% endblock %}

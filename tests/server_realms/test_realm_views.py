@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from realms.models import Realm, RealmAuthenticationSession
-from .utils import force_realm, force_realm_group_mapping, force_realm_user
+from .utils import force_realm, force_realm_group, force_realm_group_mapping, force_realm_user
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -474,3 +474,217 @@ class RealmViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_detail.html")
         self.assertEqual(realm.realmgroupmapping_set.count(), 0)
+
+    # realm groups
+
+    def test_realm_groups_redirect(self):
+        self.login_redirect("groups")
+
+    def test_realm_groups_permission_denied(self):
+        self.login()
+        response = self.client.get(reverse("realms:groups"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_realm_groups(self):
+        self.login("realms.view_realmgroup")
+        group = force_realm_group()
+        response = self.client.get(reverse("realms:groups"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_list.html")
+        self.assertContains(response, group.display_name)
+        self.assertContains(response, group.get_absolute_url())
+        self.assertContains(response, "Group (1)")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+
+    def test_realm_groups_no_results(self):
+        self.login("realms.view_realmgroup")
+        group = force_realm_group()
+        response = self.client.get(reverse("realms:groups"), {"display_name": get_random_string(12)})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_list.html")
+        self.assertNotContains(response, group.display_name)
+        self.assertNotContains(response, group.get_absolute_url())
+        self.assertContains(response, "Groups (0)")
+        self.assertContains(response, "We didn't find any item related to your search")
+
+    def test_realm_groups_one_result_realm_link(self):
+        self.login("realms.view_realm", "realms.view_realmgroup")
+        force_realm_group()
+        group = force_realm_group()
+        response = self.client.get(reverse("realms:groups"), {"display_name": group.display_name.upper()[:6],
+                                                              "realm": group.realm.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_list.html")
+        self.assertContains(response, group.display_name)
+        self.assertContains(response, group.get_absolute_url())
+        self.assertContains(response, group.realm.name)
+        self.assertContains(response, group.realm.get_absolute_url())
+        self.assertContains(response, "Group (1)")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+
+    def test_realm_groups_one_result_no_realm_link(self):
+        self.login("realms.view_realmgroup")
+        force_realm_group()
+        group = force_realm_group()
+        response = self.client.get(reverse("realms:groups"), {"display_name": group.display_name.upper()[:6],
+                                                              "realm": group.realm.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_list.html")
+        self.assertContains(response, group.display_name)
+        self.assertContains(response, group.get_absolute_url())
+        self.assertContains(response, group.realm.name)
+        self.assertNotContains(response, group.realm.get_absolute_url())
+        self.assertContains(response, "Group (1)")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+
+    # realm group
+
+    def test_realm_group_redirect(self):
+        group = force_realm_group()
+        self.login_redirect("group", group.pk)
+
+    def test_realm_group_permission_denied(self):
+        group = force_realm_group()
+        self.login("realms.view_realmuser")
+        response = self.client.get(reverse("realms:group", args=(group.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_realm_group_all_links(self):
+        parent = force_realm_group()
+        group = force_realm_group(realm=parent.realm, parent=parent)
+        child = force_realm_group(realm=group.realm, parent=group)
+        force_realm_user(realm=group.realm, group=group)
+        self.login("realms.view_realm", "realms.view_realmgroup", "realms.view_realmuser")
+        response = self.client.get(reverse("realms:group", args=(group.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_detail.html")
+        self.assertContains(response, group.display_name)
+        self.assertContains(response, group.realm.name)
+        self.assertContains(response, group.realm.get_absolute_url())
+        self.assertContains(response, parent.get_absolute_url())
+        self.assertContains(response, "Child (1)")
+        self.assertContains(response, child.get_absolute_url())
+        self.assertContains(response, "User (1)")
+        self.assertContains(response, reverse("realms:users") + f"?realm={group.realm.pk}&realm_group={group.pk}")
+
+    def test_realm_group_no_users_realm_links(self):
+        group = force_realm_group()
+        force_realm_user(realm=group.realm, group=group)
+        self.login("realms.view_realmgroup")
+        response = self.client.get(reverse("realms:group", args=(group.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_detail.html")
+        self.assertContains(response, group.display_name)
+        self.assertContains(response, group.realm.name)
+        self.assertNotContains(response, group.realm.get_absolute_url())
+        self.assertContains(response, "Children (0)")
+        self.assertContains(response, "User (1)")
+        self.assertNotContains(response, reverse("realms:users") + f"?realm={group.realm.pk}&realm_group={group.pk}")
+
+    # realm users
+
+    def test_realm_users_redirect(self):
+        self.login_redirect("users")
+
+    def test_realm_users_permission_denied(self):
+        self.login("realms.view_realmgroup")
+        response = self.client.get(reverse("realms:users"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_realm_users(self):
+        self.login("realms.view_realmuser")
+        _, user = force_realm_user()
+        response = self.client.get(reverse("realms:users"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_list.html")
+        self.assertContains(response, user.username)
+        self.assertContains(response, user.get_absolute_url())
+        self.assertContains(response, "User (1)")
+        self.assertNotContains(response, "We didn't find any item related to your search")
+
+    def test_realm_users_no_results(self):
+        self.login("realms.view_realmuser")
+        _, user = force_realm_user()
+        response = self.client.get(reverse("realms:users"), {"q": get_random_string(12)})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_list.html")
+        self.assertNotContains(response, user.username)
+        self.assertNotContains(response, user.get_absolute_url())
+        self.assertContains(response, "Users (0)")
+        self.assertContains(response, "We didn't find any item related to your search")
+
+    def test_realm_users_one_result_no_realm_link(self):
+        self.login("realms.view_realmuser")
+        group = force_realm_group()
+        force_realm_user(realm=group.realm, group=group)
+        _, user = force_realm_user(realm=group.realm, group=group)
+        response = self.client.get(reverse("realms:users"), {"q": user.username.upper()[:6],
+                                                             "realm_group": group.pk,
+                                                             "realm": user.realm.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_list.html")
+        self.assertContains(response, user.username)
+        self.assertContains(response, user.get_absolute_url())
+        self.assertContains(response, "User (1)")
+        self.assertContains(response, group.realm.name)
+        self.assertNotContains(response, group.realm.get_absolute_url())
+        self.assertNotContains(response, "We didn't find any item related to your search")
+
+    def test_realm_users_one_result_realm_link(self):
+        self.login("realms.view_realm", "realms.view_realmuser")
+        group = force_realm_group()
+        force_realm_user(realm=group.realm, group=group)
+        _, user = force_realm_user(realm=group.realm, group=group)
+        response = self.client.get(reverse("realms:users"), {"q": user.username.upper()[:6],
+                                                             "realm_group": group.pk,
+                                                             "realm": user.realm.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_list.html")
+        self.assertContains(response, user.username)
+        self.assertContains(response, user.get_absolute_url())
+        self.assertContains(response, "User (1)")
+        self.assertContains(response, group.realm.name)
+        self.assertContains(response, group.realm.get_absolute_url())
+        self.assertNotContains(response, "We didn't find any item related to your search")
+
+    # realm user
+
+    def test_realm_user_redirect(self):
+        _, user = force_realm_user()
+        self.login_redirect("user", user.pk)
+
+    def test_realm_user_permission_denied(self):
+        _, user = force_realm_user()
+        self.login("realms.view_realmgroup")
+        response = self.client.get(reverse("realms:user", args=(user.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_realm_user_all_links(self):
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm, group=group)
+        self.login("realms.view_realm", "realms.view_realmgroup", "realms.view_realmuser")
+        response = self.client.get(reverse("realms:user", args=(user.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_detail.html")
+        self.assertContains(response, user.username)
+        self.assertContains(response, user.email)
+        self.assertContains(response, group.realm.get_absolute_url())
+        self.assertContains(response, group.realm.name)
+        self.assertContains(response, group.get_absolute_url())
+        self.assertContains(response, group.display_name)
+        self.assertContains(response, "direct")
+
+    def test_realm_user_no_group_realm_links(self):
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm, group=group)
+        self.login("realms.view_realmuser")
+        response = self.client.get(reverse("realms:user", args=(user.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_detail.html")
+        self.assertContains(response, user.username)
+        self.assertContains(response, user.email)
+        self.assertNotContains(response, group.realm.get_absolute_url())
+        self.assertContains(response, group.realm.name)
+        self.assertNotContains(response, group.get_absolute_url())
+        self.assertContains(response, group.display_name)
+        self.assertContains(response, "direct")

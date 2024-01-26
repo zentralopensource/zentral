@@ -3,7 +3,7 @@ import logging
 from importlib import import_module
 import uuid
 from django.contrib.auth.models import Group
-from django.db import models
+from django.db import connection, models
 from django.urls import reverse
 from django.utils.functional import cached_property
 from .backends.registry import backend_classes
@@ -31,6 +31,9 @@ class Realm(models.Model):
     custom_attr_1_claim = models.CharField(max_length=255, blank=True)
     custom_attr_2_claim = models.CharField(max_length=255, blank=True)
 
+    # SCIM
+    scim_enabled = models.BooleanField(verbose_name="SCIM enabled", default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -56,9 +59,39 @@ class Realm(models.Model):
             yield user_claim, getattr(self, "{}_claim".format(user_claim))
 
 
+class RealmGroup(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
+
+    scim_external_id = models.CharField(max_length=255, null=True)
+
+    display_name = models.CharField(max_length=255)
+
+    parent = models.ForeignKey("self", null=True, on_delete=models.SET_NULL)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("realm", "display_name"),
+                           ("realm", "scim_external_id"),)
+
+    def __str__(self):
+        return self.display_name
+
+    def get_absolute_url(self):
+        return reverse("realms:group", args=(self.pk,))
+
+
 class RealmUser(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
+
+    scim_external_id = models.CharField(max_length=255, null=True)
+    scim_active = models.BooleanField(default=False)
+
+    groups = models.ManyToManyField(RealmGroup, through='RealmUserGroupMembership')
+
     claims = models.JSONField(default=dict)
     password_hash = models.JSONField(null=True)
 
@@ -75,10 +108,14 @@ class RealmUser(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("realm", "username"),)
+        unique_together = (("realm", "username"),
+                           ("realm", "scim_external_id"),)
 
     def __str__(self):
         return self.username
+
+    def get_absolute_url(self):
+        return reverse("realms:user", args=(self.pk,))
 
     def get_full_name(self):
         if self.full_name:
@@ -98,6 +135,47 @@ class RealmUser(models.Model):
     @property
     def email_prefix(self):
         return self.email.split("@")[0].strip()
+
+    def scim_groups(self):
+        sql = (
+            "WITH RECURSIVE groups(value, display, type, parent_id) AS ("
+            "  SELECT rg.uuid, rg.display_name, 'direct' type, rg.parent_id"
+            "  FROM realms_realmgroup rg"
+            "  JOIN realms_realmusergroupmembership rugm ON (rugm.group_id = rg.uuid)"
+            "  WHERE rugm.user_id = %s"
+            "  UNION"
+            "  SELECT prg.uuid, prg.display_name, 'indirect' type, prg.parent_id"
+            "  FROM groups"
+            "  JOIN realms_realmgroup prg ON (prg.uuid = groups.parent_id)"
+            ") SELECT value, display, type FROM groups"
+        )
+        cursor = connection.cursor()
+        cursor.execute(sql, [self.pk])
+        columns = [col[0] for col in cursor.description]
+        for result in cursor.fetchall():
+            yield dict(zip(columns, result))
+
+    def groups_with_types(self):
+        scim_groups = {sg["value"]: sg["type"] for sg in self.scim_groups()}
+        groups_with_types = []
+        for realm_group in RealmGroup.objects.filter(pk__in=scim_groups.keys()).order_by("display_name"):
+            groups_with_types.append((realm_group, scim_groups[realm_group.pk]))
+        return groups_with_types
+
+
+class RealmUserGroupMembership(models.Model):
+    user = models.ForeignKey(RealmUser, on_delete=models.CASCADE)
+    group = models.ForeignKey(RealmGroup, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class RealmEmail(models.Model):
+    user = models.ForeignKey(RealmUser, on_delete=models.CASCADE)
+    primary = models.BooleanField(default=False)
+    type = models.CharField(max_length=255)
+    email = models.EmailField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 class LocalAuthenticationSession:

@@ -9,9 +9,12 @@ from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
+from zentral.conf import settings as zentral_settings
+from zentral.utils.views import UserPaginationListView
 from .backends.registry import backend_classes
-from .forms import RealmGroupMappingForm
-from .models import Realm, RealmAuthenticationSession, RealmGroupMapping
+from .forms import RealmGroupMappingForm, RealmGroupSearchForm, RealmUserSearchForm
+from .models import (Realm, RealmAuthenticationSession, RealmGroup, RealmGroupMapping,
+                     RealmUser, RealmUserGroupMembership)
 from .utils import get_realm_user_mapped_groups
 
 
@@ -80,6 +83,17 @@ class RealmView(PermissionRequiredMixin, DetailView):
         group_mappings = self.object.realmgroupmapping_set.all().order_by("claim", "value", "group__name")
         ctx["group_mappings"] = group_mappings
         ctx["group_mapping_count"] = group_mappings.count()
+        if self.object.scim_enabled:
+            ctx["scim_root_url"] = 'https://{}{}'.format(
+                zentral_settings["api"]["fqdn"],
+                reverse("realms_public:scim_resource_types", args=(self.object.pk,)).replace("/ResourceTypes", "/")
+            )
+        ctx["group_count"] = self.object.realmgroup_set.count()
+        if ctx["group_count"] and self.request.user.has_perm("realms.view_realmgroup"):
+            ctx["groups_url"] = reverse("realms:groups") + f"?realm={ self.object.pk }"
+        ctx["user_count"] = self.object.realmuser_set.count()
+        if ctx["user_count"] and self.request.user.has_perm("realms.view_realmuser"):
+            ctx["users_url"] = reverse("realms:users") + f"?realm={ self.object.pk }"
         return ctx
 
 
@@ -90,6 +104,98 @@ class UpdateRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateVie
 
     def get_form_class(self):
         return self.object.backend_instance.get_form_class()
+
+
+# realm groups
+
+
+class RealmGroupListView(PermissionRequiredMixin, UserPaginationListView):
+    permission_required = "realms.view_realmgroup"
+    template_name = "realms/realmgroup_list.html"
+
+    def get(self, request, *args, **kwargs):
+        self.form = RealmGroupSearchForm(self.request.GET)
+        self.form.is_valid()
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return self.form.get_queryset()
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["form"] = self.form
+        page = ctx["page_obj"]
+        bc = []
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            ctx['reset_link'] = "?{}".format(qd.urlencode())
+            reset_link = "?{}".format(qd.urlencode())
+        else:
+            reset_link = None
+        if self.form.has_changed():
+            bc.append((reverse("realms:groups"), "Groups"))
+            bc.append((reset_link, "Search"))
+        else:
+            bc.append((reset_link, "Groups"))
+        bc.append((None, f"page {page.number} of {page.paginator.num_pages}"))
+        ctx["breadcrumbs"] = bc
+        return ctx
+
+
+class RealmGroupView(PermissionRequiredMixin, DetailView):
+    permission_required = "realms.view_realmgroup"
+    model = RealmGroup
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["children"] = list(self.object.realmgroup_set.all().order_by("display_name"))
+        ctx["user_count"] = RealmUserGroupMembership.objects.filter(group=self.object).count()
+        if ctx["user_count"] and self.request.user.has_perm("realms.view_realmuser"):
+            ctx["users_url"] = reverse("realms:users") + f"?realm={self.object.realm.pk}&realm_group={self.object.pk}"
+        return ctx
+
+
+# realm users
+
+
+class RealmUserListView(PermissionRequiredMixin, UserPaginationListView):
+    permission_required = "realms.view_realmuser"
+    template_name = "realms/realmuser_list.html"
+
+    def get(self, request, *args, **kwargs):
+        self.form = RealmUserSearchForm(self.request.GET)
+        self.form.is_valid()
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return self.form.get_queryset()
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["form"] = self.form
+        page = ctx["page_obj"]
+        bc = []
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            ctx['reset_link'] = "?{}".format(qd.urlencode())
+            reset_link = "?{}".format(qd.urlencode())
+        else:
+            reset_link = None
+        if self.form.has_changed():
+            bc.append((reverse("realms:users"), "Users"))
+            bc.append((reset_link, "Search"))
+        else:
+            bc.append((reset_link, "Users"))
+        bc.append((None, f"page {page.number} of {page.paginator.num_pages}"))
+        ctx["breadcrumbs"] = bc
+        return ctx
+
+
+class RealmUserView(PermissionRequiredMixin, DetailView):
+    permission_required = "realms.view_realmuser"
+    model = RealmUser
 
 
 # group mappings

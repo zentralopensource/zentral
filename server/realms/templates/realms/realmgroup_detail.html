@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:groups' %}">Groups</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
+</ol>
+
+<div class="object-details">
+  <div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">{{ object }}</h2>
+  </div>
+  <div class="d-flex align-items-center mb-3">
+    <h3 class="m-0 fs-5 text-secondary">Realm Group</i></h3>
+  </div>
+  <div class="table-responsive mb-3">
+  <table class="table-object-properties">
+    <thead>
+      <th>Attribute</th>
+      <th>Value</th>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Realm</td>
+        <td>
+          {% if perms.realms.view_realm %}
+          <a href="{{ object.realm.get_absolute_url }}">{{ object.realm }}</a>
+          {% else %}
+          {{ object.realm }}
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Display name</td>
+        <td>{{ object.display_name }}</td>
+      </tr>
+      <tr>
+        <td>Parent</td>
+        <td>
+          {% if object.parent %}
+          <a href="{{ object.parent.get_absolute_url }}">{{ object.parent }}</a>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Child{{ children|length|pluralize:",ren" }} ({{ children|length }})</td>
+        <td>
+          {% if children %}
+          <ul class="list-unstyled">
+            {% for child in children %}
+            <li><a href="{{ child.get_absolute_url }}">{{ child }}</a></li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>User{{ user_count|pluralize }} ({{ user_count }})</td>
+        <td>
+          {% if users_url %}
+          <a href="{{ users_url|safe }}">View all users</a>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  {% created_updated_at object %}
+</div>
+{% endblock %}

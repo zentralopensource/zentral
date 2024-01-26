@@ -92,6 +92,36 @@
                 <td>Custom attr. 2 claim</td>
                 <td>{{ object.custom_attr_2_claim|default:"-" }}</td>
             </tr>
+            <tr>
+              <td>{% if scim_root_url %}SCIM root URL{% else %}SCIM enabled?{% endif %}</td>
+              <td>
+                {% if scim_root_url %}
+                {{ scim_root_url }}
+                {% else %}
+                No
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td>Group{{ group_count|pluralize }} ({{ group_count }})</td>
+              <td>
+                {% if groups_url %}
+                <a href="{{ groups_url }}">View all groups</a>
+                {% else %}
+                -
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td>User{{ user_count|pluralize }} ({{ user_count }})</td>
+              <td>
+                {% if users_url %}
+                <a href="{{ users_url }}">View all users</a>
+                {% else %}
+                -
+                {% endif %}
+              </td>
+            </tr>
             {% for name, value, hidden in object.backend_instance.extra_attributes_for_display %}
             <tr>
                 <td>{{ name }}</td>

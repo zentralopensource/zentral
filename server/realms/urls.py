@@ -24,4 +24,12 @@ urlpatterns = [
     path('<uuid:pk>/test/', views.TestRealmView.as_view(), name='test'),
     path('<uuid:pk>/sessions/<uuid:ras_pk>/', views.RealmAuthenticationSessionView.as_view(),
          name='authentication_session'),
+
+    # groups
+    path('groups/', views.RealmGroupListView.as_view(), name='groups'),
+    path('groups/<uuid:pk>/', views.RealmGroupView.as_view(), name='group'),
+
+    # users
+    path('users/', views.RealmUserListView.as_view(), name='users'),
+    path('users/<uuid:pk>/', views.RealmUserView.as_view(), name='user'),
 ]

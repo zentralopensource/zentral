@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
+  {% for url, anchor_text in breadcrumbs %}
+  {% if url %}
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
+</ol>
+
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Group{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
+</div>
+
+<div class="d-flex flex-wrap align-items-center mb-1">
+  <form method="GET" class="search-form d-flex flex-row flex-wrap w-75">
+    {{ form }}
+    <button type="submit" class="btn btn-link mb-2">
+      <i class="bi bi-search"></i>
+    </button>
+  </form>
+</div>
+
+{% if object_list %}
+
+{% pagination next_url previous_url %}
+
+<table class="table table-striped align-middle">
+  <thead>
+    <th>Realm</th>
+    <th>Name</th>
+  </thead>
+  <tbody>
+    {% for obj in object_list %}
+    <tr>
+      <td>
+        {% if perms.realms.view_realm %}
+        <a href="{{ obj.realm.get_absolute_url }}">{{ obj.realm }}</a>
+        {% else %}
+        {{ obj.realm }}
+        {% endif %}
+      </td>
+      <td><a href="{{ obj.get_absolute_url }}">{{ obj }}</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% pagination next_url previous_url %}
+
+{% elif form.has_changed %}
+    {% url 'realms:groups' as empty_results_url %}
+    {% empty_results empty_results_url %}
+{% endif %}
+
+{% endblock %}
