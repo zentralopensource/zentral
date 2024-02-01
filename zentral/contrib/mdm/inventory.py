@@ -1,4 +1,5 @@
 import logging
+from zentral.contrib.inventory.models import PrincipalUserSource
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.mdm.models import Blueprint, Command, DeviceCommand, Platform
 from zentral.contrib.mdm.commands.base import load_command
@@ -83,6 +84,18 @@ def update_inventory_tree(command, commit_enrolled_device=True):
         "reference": enrolled_device.udid,
         "serial_number": enrolled_device.serial_number
     }
+
+    # principal user
+    realm_user = getattr(command, "realm_user", None)
+    if realm_user:
+        ms_tree["principal_user"] = {
+            "source": {"type": PrincipalUserSource.INVENTORY},
+            "unique_id": str(realm_user.pk),
+            "principal_name": realm_user.username,
+            "display_name": realm_user.get_full_name()
+        }
+
+    # business unit
     try:
         ms_tree["business_unit"] = command.meta_business_unit.api_enrollment_business_units()[0].serialize()
     except IndexError:

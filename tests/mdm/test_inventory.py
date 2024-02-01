@@ -123,3 +123,11 @@ class MDMInventoryTestCase(TestCase):
         self.assertEqual(ms.profiles.count(), 2)
         self.assertEqual(ms.os_version.build, "22A5321d")
         self.assertEqual(ms.osx_app_instances.count(), 3)
+        realm_user = self.dep_enrollment_session.realm_user
+        self.assertEqual(
+            ms.principal_user.serialize(),
+            {"source": {"type": "INVENTORY"},
+             "unique_id": str(realm_user.pk),
+             "principal_name": realm_user.username,
+             "display_name": realm_user.get_full_name()}
+        )
