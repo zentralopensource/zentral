@@ -10,7 +10,8 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from realms.models import Realm, RealmAuthenticationSession
-from .utils import force_realm, force_realm_group, force_realm_group_mapping, force_realm_user
+from zentral.contrib.inventory.models import Tag
+from .utils import force_realm, force_realm_group, force_realm_group_mapping, force_realm_tag_mapping, force_realm_user
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -474,6 +475,86 @@ class RealmViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_detail.html")
         self.assertEqual(realm.realmgroupmapping_set.count(), 0)
+
+    # create tag mapping
+
+    def test_create_tag_mapping_redirect(self):
+        realm = force_realm()
+        self.login_redirect("create_tag_mapping", realm.pk)
+
+    def test_create_tag_mapping_permission_denied(self):
+        realm = force_realm()
+        self.login()
+        response = self.client.get(reverse("realms:create_tag_mapping", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_tag_mapping_get(self):
+        realm = force_realm()
+        self.login("realms.add_realmtagmapping")
+        response = self.client.get(reverse("realms:create_tag_mapping", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmtagmapping_form.html")
+
+    def test_create_tag_mapping_post(self):
+        realm = force_realm()
+        group_name = get_random_string(12)
+        tag = Tag.objects.create(name=get_random_string(12))
+        self.login("realms.add_realmtagmapping", "realms.view_realm", "realms.view_realmtagmapping")
+        response = self.client.post(
+            reverse("realms:create_tag_mapping", args=(realm.pk,)),
+            {"realm": realm.pk,
+             "group_name": group_name,
+             "tag": tag.pk},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_detail.html")
+        self.assertEqual(realm.realmtagmapping_set.count(), 1)
+        rtm = realm.realmtagmapping_set.first()
+        self.assertEqual(rtm.group_name, group_name)
+        self.assertEqual(rtm.tag, tag)
+        self.assertContains(response, rtm.group_name)
+        self.assertContains(response, tag.name)
+
+    # update tag mapping
+
+    def test_update_tag_mapping_redirect(self):
+        realm, rtm = force_realm_tag_mapping()
+        self.login_redirect("update_tag_mapping", realm.pk, rtm.pk)
+
+    def test_update_tag_mapping_permission_denied(self):
+        realm, rtm = force_realm_tag_mapping()
+        self.login("realms.add_realmtagmapping")
+        response = self.client.get(reverse("realms:update_tag_mapping", args=(realm.pk, rtm.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_tag_mapping_get(self):
+        realm, rtm = force_realm_tag_mapping()
+        self.login("realms.change_realmtagmapping")
+        response = self.client.get(reverse("realms:update_tag_mapping", args=(realm.pk, rtm.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmtagmapping_form.html")
+
+    def test_update_tag_mapping_post(self):
+        realm, rtm = force_realm_tag_mapping()
+        group_name = get_random_string(12)
+        tag = Tag.objects.create(name=get_random_string(12))
+        self.login("realms.change_realmtagmapping", "realms.view_realm", "realms.view_realmtagmapping")
+        response = self.client.post(
+            reverse("realms:update_tag_mapping", args=(realm.pk, rtm.pk)),
+            {"realm": realm.pk,
+             "group_name": group_name,
+             "tag": tag.pk},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_detail.html")
+        self.assertEqual(realm.realmtagmapping_set.count(), 1)
+        rtm = realm.realmtagmapping_set.first()
+        self.assertEqual(rtm.group_name, group_name)
+        self.assertEqual(rtm.tag, tag)
+        self.assertContains(response, rtm.group_name)
+        self.assertContains(response, tag.name)
 
     # realm groups
 

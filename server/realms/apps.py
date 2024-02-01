@@ -12,4 +12,5 @@ class ZentralRealmsAppConfig(ZentralAppConfig):
         "realmgroup",
         "realmgroupmapping",
         "realmuser",
+        "realmtagmapping",
     )

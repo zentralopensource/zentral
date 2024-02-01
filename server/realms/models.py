@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group
 from django.db import connection, models
 from django.urls import reverse
 from django.utils.functional import cached_property
+from zentral.contrib.inventory.models import Tag
 from .backends.registry import backend_classes
 
 
@@ -136,6 +137,8 @@ class RealmUser(models.Model):
     def email_prefix(self):
         return self.email.split("@")[0].strip()
 
+    # groups
+
     def scim_groups(self):
         sql = (
             "WITH RECURSIVE groups(value, display, type, parent_id) AS ("
@@ -161,6 +164,24 @@ class RealmUser(models.Model):
         for realm_group in RealmGroup.objects.filter(pk__in=scim_groups.keys()).order_by("display_name"):
             groups_with_types.append((realm_group, scim_groups[realm_group.pk]))
         return groups_with_types
+
+    def iter_group_names(self):
+        for scim_group in self.scim_groups():
+            yield scim_group["display"]
+
+    def mapped_tags(self):
+        group_names = [  # not a set, because the number should be small
+            group_name.lower()
+            for group_name in self.iter_group_names()
+        ]
+        tags_to_add = []
+        tags_to_remove = []
+        for tm in self.realm.realmtagmapping_set.select_related("tag").all():
+            if tm.group_name.lower() in group_names:
+                tags_to_add.append(tm.tag)
+            else:
+                tags_to_remove.append(tm.tag)
+        return tags_to_add, tags_to_remove
 
 
 class RealmUserGroupMembership(models.Model):
@@ -270,3 +291,15 @@ class RealmGroupMapping(models.Model):
 
     class Meta:
         unique_together = (("realm", "claim", "value", "group"),)
+
+
+class RealmTagMapping(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    realm = models.ForeignKey(Realm, on_delete=models.CASCADE)
+    group_name = models.CharField(max_length=255)
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("realm", "group_name", "tag"),)

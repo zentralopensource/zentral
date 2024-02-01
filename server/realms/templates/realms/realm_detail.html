@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
+{% load inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -195,7 +195,47 @@
 </tbody>
 </table>
 {% endif %}
+{% endif %}
+
+{% if perms.realms.view_realmtagmapping %}
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Tag mapping{{ tag_mapping_count|pluralize }} ({{ tag_mapping_count }})</h2>
+    <div class="ms-auto">
+      {% if perms.realms.add_realmtagmapping %}
+      {% url 'realms:create_tag_mapping' object.pk as url %}
+      {% button 'CREATE' url "Create new tag mapping" %}
+      {% endif %}
+    </div>
 </div>
+
+{% if tag_mapping_count %}
+<div class="table-responsive mb-3">
+<table class="table table-striped align-middle table-hover">
+<thead>
+  <th>Group name</th>
+  <th>Tag</th>
+  <th></th>
+</thead>
+<tbody>
+  {% for tag_mapping in tag_mappings %}
+  <tr id="{{ tag_mapping.pk }}" class="data-row">
+    <td>{{ tag_mapping.group_name }}</td>
+    <td>{% inventory_tag tag_mapping.tag %}</td>
+    <td class="text-end py-0">
+      {% if perms.realms.change_realmtagmapping %}
+      {% url 'realms:update_tag_mapping' object.pk tag_mapping.pk as url %}
+      {% button 'UPDATE' url "Edit tag mapping" %}
+      {% endif %}
+      {% if perms.realms.delete_realmtagmapping %}
+      {% url 'realms:delete_tag_mapping' object.pk tag_mapping.pk as url %}
+      {% button 'DELETE' url "Delete tag mapping" %}
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</tbody>
+</table>
+{% endif %}
 {% endif %}
 
 {% endblock %}

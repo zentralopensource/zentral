@@ -1,6 +1,6 @@
 from django import forms
 from django.db.models import Q
-from .models import Realm, RealmGroup, RealmGroupMapping, RealmUser
+from .models import Realm, RealmGroup, RealmGroupMapping, RealmTagMapping, RealmUser
 
 
 class RealmForm(forms.ModelForm):
@@ -25,6 +25,19 @@ class RealmForm(forms.ModelForm):
 class RealmGroupMappingForm(forms.ModelForm):
     class Meta:
         model = RealmGroupMapping
+        fields = "__all__"
+        widgets = {"realm": forms.HiddenInput}
+
+    def __init__(self, *args, **kwargs):
+        realm = kwargs.pop("realm")
+        kwargs.setdefault("initial", {})["realm"] = realm
+        super().__init__(*args, **kwargs)
+        self.fields["realm"].queryset = self.fields["realm"].queryset.filter(pk=realm.pk)
+
+
+class RealmTagMappingForm(forms.ModelForm):
+    class Meta:
+        model = RealmTagMapping
         fields = "__all__"
         widgets = {"realm": forms.HiddenInput}
 

@@ -20,6 +20,17 @@ urlpatterns = [
          views.DeleteRealmGroupMappingView.as_view(),
          name='delete_group_mapping'),
 
+    # tag mappings
+    path('<uuid:pk>/tag_mappings/create/',
+         views.CreateRealmTagMappingView.as_view(),
+         name='create_tag_mapping'),
+    path('<uuid:pk>/tag_mappings/<uuid:tm_pk>/update/',
+         views.UpdateRealmTagMappingView.as_view(),
+         name='update_tag_mapping'),
+    path('<uuid:pk>/tag_mappings/<uuid:tm_pk>/delete/',
+         views.DeleteRealmTagMappingView.as_view(),
+         name='delete_tag_mapping'),
+
     # SSO test views
     path('<uuid:pk>/test/', views.TestRealmView.as_view(), name='test'),
     path('<uuid:pk>/sessions/<uuid:ras_pk>/', views.RealmAuthenticationSessionView.as_view(),

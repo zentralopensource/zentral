@@ -12,8 +12,8 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from zentral.conf import settings as zentral_settings
 from zentral.utils.views import UserPaginationListView
 from .backends.registry import backend_classes
-from .forms import RealmGroupMappingForm, RealmGroupSearchForm, RealmUserSearchForm
-from .models import (Realm, RealmAuthenticationSession, RealmGroup, RealmGroupMapping,
+from .forms import RealmGroupMappingForm, RealmGroupSearchForm, RealmTagMappingForm, RealmUserSearchForm
+from .models import (Realm, RealmAuthenticationSession, RealmGroup, RealmGroupMapping, RealmTagMapping,
                      RealmUser, RealmUserGroupMembership)
 from .utils import get_realm_user_mapped_groups
 
@@ -83,6 +83,9 @@ class RealmView(PermissionRequiredMixin, DetailView):
         group_mappings = self.object.realmgroupmapping_set.all().order_by("claim", "value", "group__name")
         ctx["group_mappings"] = group_mappings
         ctx["group_mapping_count"] = group_mappings.count()
+        tag_mappings = self.object.realmtagmapping_set.all().order_by("group_name", "tag__name")
+        ctx["tag_mappings"] = tag_mappings
+        ctx["tag_mapping_count"] = tag_mappings.count()
         if self.object.scim_enabled:
             ctx["scim_root_url"] = 'https://{}{}'.format(
                 zentral_settings["api"]["fqdn"],
@@ -252,6 +255,65 @@ class DeleteRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixi
     permission_required = "realms.delete_realmgroupmapping"
     model = RealmGroupMapping
     pk_url_kwarg = "gm_pk"
+
+    def get_success_url(self):
+        return self.object.realm.get_absolute_url()
+
+
+# tag mappings
+
+
+class CreateRealmTagMappingView(PermissionRequiredMixin, CreateView):
+    permission_required = "realms.add_realmtagmapping"
+    model = RealmTagMapping
+    form_class = RealmTagMappingForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.realm = get_object_or_404(Realm, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["realm"] = self.realm
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["realm"] = self.realm
+        return ctx
+
+    def get_success_url(self):
+        return "{}#{}".format(self.realm.get_absolute_url(), self.object.pk)
+
+
+class UpdateRealmTagMappingView(PermissionRequiredMixin, UpdateView):
+    permission_required = "realms.change_realmtagmapping"
+    model = RealmTagMapping
+    pk_url_kwarg = "tm_pk"
+    form_class = RealmTagMappingForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.realm = get_object_or_404(Realm, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["realm"] = self.realm
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["realm"] = self.realm
+        return ctx
+
+    def get_success_url(self):
+        return "{}#{}".format(self.realm.get_absolute_url(), self.object.pk)
+
+
+class DeleteRealmTagMappingView(PermissionRequiredMixin, DeleteView):
+    permission_required = "realms.delete_realmtagmapping"
+    model = RealmTagMapping
+    pk_url_kwarg = "tm_pk"
 
     def get_success_url(self):
         return self.object.realm.get_absolute_url()

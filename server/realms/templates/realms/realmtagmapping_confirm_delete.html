@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% with object.realm as realm %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="breadcrumb-item"><a href="{{ realm.get_absolute_url }}">{{ realm }}</a></li>
+  <li class="breadcrumb-item active">Delete tag mapping</li>
+</ol>
+
+<h2>Delete tag mapping</h2>
+
+<form method="post" class="form" >{% csrf_token %}
+  <p>Do you really want to delete this tag mapping?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ realm.get_absolute_url }}#{{ object.pk }}">
+      Cancel
+    </a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endwith %}
+{% endblock %}

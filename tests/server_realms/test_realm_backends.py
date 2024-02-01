@@ -67,7 +67,7 @@ KKbzX9i21E/u9379kpBdfZE18RWsDw==
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
-class RealmModelsTestCase(TestCase):
+class RealmBackendsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.ldap_realm_no_login = Realm.objects.create(

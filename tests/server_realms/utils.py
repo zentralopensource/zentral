@@ -1,7 +1,9 @@
 import uuid
 from django.contrib.auth.models import Group
 from django.utils.crypto import get_random_string
-from realms.models import Realm, RealmEmail, RealmGroup, RealmGroupMapping, RealmUser, RealmUserGroupMembership
+from realms.models import (Realm, RealmEmail, RealmGroup, RealmGroupMapping, RealmTagMapping,
+                           RealmUser, RealmUserGroupMembership)
+from zentral.contrib.inventory.models import Tag
 
 
 def force_realm():
@@ -43,12 +45,12 @@ def force_realm_user(
     return realm, realm_user
 
 
-def force_realm_group(realm=None, parent=None):
+def force_realm_group(realm=None, parent=None, display_name=None):
     if not realm:
         realm = force_realm()
     return RealmGroup.objects.create(
         realm=realm,
-        display_name=get_random_string(12),
+        display_name=display_name or get_random_string(12),
         parent=parent,
         scim_external_id=str(uuid.uuid4()).replace("-", "")[:10] if realm.scim_enabled else None,
     )
@@ -66,3 +68,18 @@ def force_realm_group_mapping(realm=None, group=None):
         group=group
     )
     return realm, realm_group_mapping
+
+
+def force_realm_tag_mapping(realm=None, group_name=None, tag=None):
+    if not realm:
+        realm = force_realm()
+    if not group_name:
+        group_name = get_random_string(12)
+    if not tag:
+        tag = Tag.objects.create(name=get_random_string(12))
+    realm_tag_mapping = RealmTagMapping.objects.create(
+        realm=realm,
+        group_name=group_name,
+        tag=tag
+    )
+    return realm, realm_tag_mapping
