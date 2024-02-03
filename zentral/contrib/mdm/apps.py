@@ -7,6 +7,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
     verbose_name = "Zentral MDM contrib app"
     permission_models = (
         "artifact",
+        "artifactversion",
         "asset",
         "blueprint",
         "blueprintartifact",
