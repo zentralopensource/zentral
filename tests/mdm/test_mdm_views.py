@@ -14,7 +14,8 @@ from cryptography.x509.oid import NameOID
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import MetaBusinessUnit
+from realms.models import RealmGroup, RealmTagMapping, RealmUserGroupMembership
+from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.declarations import dump_legacy_profile_token, load_legacy_profile_token
@@ -298,9 +299,35 @@ class MDMViewsTestCase(TestCase):
         self._assertAbort(post_event, "Invalid header signature")
 
     def test_authenticate_dep_enrollment_session_ios(self, post_event):
-        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, realm_user=True)
         self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
         self.assertIsNone(session.enrolled_device)
+
+        # tags
+        # add realm user to a group
+        realm_group = RealmGroup.objects.create(realm=session.realm_user.realm,
+                                                display_name=get_random_string(12))
+        RealmUserGroupMembership.objects.create(user=session.realm_user, group=realm_group)
+        # unmanaged tag, must be kept
+        unmanaged_tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number=serial_number, tag=unmanaged_tag)
+        # managed tag to add
+        tag_to_add = Tag.objects.create(name=get_random_string(12))
+        RealmTagMapping.objects.create(
+            realm=session.realm_user.realm,
+            group_name=realm_group.display_name,  # match
+            tag=tag_to_add
+        )
+        self.assertFalse(MachineTag.objects.filter(serial_number=serial_number, tag=tag_to_add).exists())
+        # managed tag to remove
+        tag_to_remove = Tag.objects.create(name=get_random_string(12))
+        RealmTagMapping.objects.create(
+            realm=session.realm_user.realm,
+            group_name=get_random_string(12),  # no match
+            tag=tag_to_remove
+        )
+        MachineTag.objects.create(serial_number=serial_number, tag=tag_to_remove)
+
         payload = {
             "UDID": udid,
             "SerialNumber": serial_number,
@@ -326,6 +353,10 @@ class MDMViewsTestCase(TestCase):
         self.assertTrue(session.enrolled_device.user_enrollment is False)
         self.assertIsNone(session.enrolled_device.user_approved_enrollment)
         self.assertTrue(session.enrolled_device.supervised)
+        # tags
+        self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag=unmanaged_tag).exists())
+        self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag=tag_to_add).exists())
+        self.assertFalse(MachineTag.objects.filter(serial_number=serial_number, tag=tag_to_remove).exists())
 
     def test_authenticate_ota_enrollment_session_macos(self, post_event):
         session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, phase3=True)

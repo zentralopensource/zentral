@@ -13,7 +13,7 @@ from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirec
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.views.generic import View
-from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.base import get_command
@@ -269,9 +269,23 @@ class CheckinView(MDMView):
                                                                            defaults=enrolled_device_defaults)
 
         is_reenrollment = isinstance(self.enrollment_session, ReEnrollmentSession)
+
         # purge the installed artifacts and sent commands, if it is not a re-enrollment
         if not created and not is_reenrollment:
             enrolled_device.purge_state(full=True)
+
+        # initial machine tagging
+        if not is_reenrollment and self.enrollment_session.realm_user:
+            tags_to_add, tags_to_remove = self.enrollment_session.realm_user.mapped_tags()
+            # add the tags
+            if tags_to_add:
+                MachineTag.objects.bulk_create((
+                    MachineTag(serial_number=self.serial_number, tag=tag_to_add)
+                    for tag_to_add in tags_to_add
+                ), ignore_conflicts=True)
+            # remove the other ones that are automatically managed
+            if tags_to_remove:
+                MachineTag.objects.filter(serial_number=self.serial_number, tag__in=tags_to_remove).delete()
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)
