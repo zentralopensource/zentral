@@ -3,12 +3,13 @@ import os.path
 import plistlib
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
+from realms.models import RealmGroup, RealmTagMapping, RealmUserGroupMembership
+from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, MetaMachine, Tag
 from zentral.contrib.mdm.commands.certificate_list import CertificateList
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.installed_application_list import InstalledApplicationList
 from zentral.contrib.mdm.commands.profile_list import ProfileList
-from zentral.contrib.mdm.inventory import ms_tree_from_payload
+from zentral.contrib.mdm.inventory import ms_tree_from_payload, update_realm_tags
 from zentral.contrib.mdm.models import Blueprint
 from .utils import force_dep_enrollment_session
 
@@ -22,6 +23,8 @@ class MDMInventoryTestCase(TestCase):
             cls.mbu, authenticated=True, completed=True, realm_user=True
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
+        cls.realm_user = cls.dep_enrollment_session.realm_user
+        cls.realm = cls.realm_user.realm
         cls.blueprint = Blueprint.objects.create(
             name=get_random_string(32),
             collect_apps=Blueprint.InventoryItemCollectionOption.ALL,
@@ -131,3 +134,59 @@ class MDMInventoryTestCase(TestCase):
              "principal_name": realm_user.username,
              "display_name": realm_user.get_full_name()}
         )
+
+    # realm tags
+
+    def test_update_realm_tags(self):
+        serial_number = self.enrolled_device.serial_number
+        mt_qs = MachineTag.objects.filter(serial_number=serial_number)
+        self.assertFalse(mt_qs.exists())
+
+        # tags
+        # add realm user to a group
+        group = RealmGroup.objects.create(realm=self.realm,
+                                          display_name=get_random_string(12))
+        sub_group = RealmGroup.objects.create(realm=self.realm,
+                                              display_name=get_random_string(12),
+                                              parent=group)
+        RealmUserGroupMembership.objects.create(user=self.realm_user, group=sub_group)
+        # tag to add because of a matching tag mapping
+        tag_to_add = Tag.objects.create(name=get_random_string(12))
+        RealmTagMapping.objects.create(
+            realm=self.realm,
+            group_name=group.display_name,  # match on the group
+            tag=tag_to_add
+        )
+        # tag already present
+        tag_already_present = Tag.objects.create(name=get_random_string(12))
+        RealmTagMapping.objects.create(
+            realm=self.realm,
+            group_name=sub_group.display_name,  # match on the sub group
+            tag=tag_already_present
+        )
+        MachineTag.objects.create(serial_number=serial_number, tag=tag_already_present)
+        # tag not managed via the mappings
+        unmanaged_tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number=serial_number, tag=unmanaged_tag)
+        # tag to remove
+        tag_to_remove = Tag.objects.create(name=get_random_string(12))
+        RealmTagMapping.objects.create(
+            realm=self.realm,
+            group_name=get_random_string(12),  # no match
+            tag=tag_to_remove
+        )
+        MachineTag.objects.create(serial_number=serial_number, tag=tag_to_remove)
+
+        self.assertEqual(
+            sorted(update_realm_tags(self.realm), key=lambda d: d["tag_id"]),
+            sorted(
+                [{'serial_number': serial_number, 'tag_id': tag_to_add.pk, 'op': 'c'},
+                 {'serial_number': serial_number, 'tag_id': tag_to_remove.pk, 'op': 'd'}],
+                key=lambda d: d["tag_id"]
+            )
+        )
+        self.assertEqual(mt_qs.count(), 3)
+        self.assertTrue(mt_qs.filter(tag=tag_to_add).exists())
+        self.assertTrue(mt_qs.filter(tag=tag_already_present).exists())
+        self.assertTrue(mt_qs.filter(tag=unmanaged_tag).exists())
+        self.assertFalse(mt_qs.filter(tag=tag_to_remove).exists())

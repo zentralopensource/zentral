@@ -1,4 +1,5 @@
 import logging
+from django.db import connection
 from zentral.contrib.inventory.models import PrincipalUserSource
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.mdm.models import Blueprint, Command, DeviceCommand, Platform
@@ -139,3 +140,78 @@ def update_inventory_tree(command, commit_enrolled_device=True):
         enrolled_device.save()
 
     return ms_tree
+
+
+def update_realm_tags(realm):
+    query = (
+      # all groups / children tags combinations for the realm
+      "WITH RECURSIVE groups_tag(group_pk, tag_pk) AS ("
+      "  SELECT g.uuid, tm.tag_id"
+      "  FROM realms_realmgroup g"
+      "  JOIN realms_realmtagmapping tm ON (LOWER(tm.group_name) = LOWER(g.display_name))"
+      "  WHERE g.realm_id = %(realm_pk)s"
+      "  UNION"
+      "  SELECT cg.uuid, gt.tag_pk"
+      "  FROM realms_realmgroup cg"
+      "  JOIN groups_tag gt ON (gt.group_pk = cg.parent_id)"
+      # joined with the users to get all users / tags combinations for the realm
+      "), users_tag(pk, tag_pk) AS ("
+      "  SELECT gm.user_id, gt.tag_pk"
+      "  FROM realms_realmusergroupmembership gm"
+      "  JOIN groups_tag gt ON (gt.group_pk = gm.group_id)"
+      # prepare the enrollment sessions to get the serial numbers associated with the realm users
+      # first, all enrollment sessions …
+      "), enrollment_sessions(enrolled_device_id, user_pk, created_at) AS ("
+      "  SELECT enrolled_device_id, realm_user_id, created_at"
+      "  FROM mdm_depenrollmentsession WHERE realm_user_id IS NOT NULL"
+      "  UNION"
+      "  SELECT enrolled_device_id, realm_user_id, created_at"
+      "  FROM mdm_otaenrollmentsession WHERE realm_user_id IS NOT NULL"
+      "  UNION"
+      "  SELECT enrolled_device_id, realm_user_id, created_at"
+      "  FROM mdm_reenrollmentsession WHERE realm_user_id IS NOT NULL"
+      "  UNION"
+      "  SELECT enrolled_device_id, realm_user_id, created_at"
+      "  FROM mdm_userenrollmentsession WHERE realm_user_id IS NOT NULL"
+      # … ordered
+      "), sorted_enrollment_sessions(pk, user_pk, row_number) AS ("
+      "  SELECT enrolled_device_id, user_pk,"
+      "  ROW_NUMBER() OVER (partition by enrolled_device_id ORDER BY created_at DESC)"
+      "  FROM enrollment_sessions"
+      # – and only the most recent one for each device
+      "), latest_enrollment_sessions(enrolled_device_pk, user_pk) AS ("
+      "  SELECT pk, user_pk FROM sorted_enrollment_sessions WHERE row_number=1"
+      # joined with the user tags to get all the serial numbers tags combination for the realm
+      "), tags(serial_number, tag_pk) AS ("
+      "  SELECT ed.serial_number, ut.tag_pk"
+      "  FROM users_tag ut"
+      "  JOIN latest_enrollment_sessions les ON (les.user_pk = ut.pk)"
+      "  JOIN mdm_enrolleddevice ed ON (ed.id = les.enrolled_device_pk)"
+      # we insert the missing tags
+      "), inserted_tags AS ("
+      "  INSERT INTO inventory_machinetag(serial_number, tag_id)"
+      "  SELECT tags.serial_number, tags.tag_pk FROM tags"
+      "  WHERE NOT EXISTS ("
+      "    SELECT 1 FROM inventory_machinetag WHERE serial_number=tags.serial_number AND tag_id=tags.tag_pk"
+      "  ) RETURNING serial_number, tag_id, 'c' op"
+      # and delete the other managed tags for the machines linked to a realm user
+      "), deleted_tags AS ("
+      "  DELETE FROM inventory_machinetag mt"
+      "  WHERE tag_id IN ("
+      "    SELECT tag_id FROM realms_realmtagmapping WHERE realm_id = %(realm_pk)s"
+      "  ) AND serial_number IN ("
+      "    SELECT ed.serial_number"
+      "    FROM mdm_enrolleddevice ed"
+      "    JOIN latest_enrollment_sessions les ON (les.enrolled_device_pk=ed.id)"
+      "    JOIN realms_realmuser u ON (u.uuid=les.user_pk)"
+      "    WHERE u.realm_id = %(realm_pk)s"
+      "  ) AND NOT EXISTS ("
+      "    SELECT 1 FROM tags WHERE serial_number=mt.serial_number AND tag_pk=mt.tag_id"
+      "  ) RETURNING serial_number, tag_id, 'd' op"
+      ") SELECT * FROM inserted_tags UNION SELECT * FROM deleted_tags;"
+    )
+    cursor = connection.cursor()
+    cursor.execute(query, {"realm_pk": realm.pk})
+    columns = [col[0] for col in cursor.description]
+    for result in cursor.fetchall():
+        yield dict(zip(columns, result))
