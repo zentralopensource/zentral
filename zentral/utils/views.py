@@ -69,7 +69,6 @@ class DeleteViewWithAudit(DeleteView):
         pass
 
     def form_valid(self, form):
-        self.object = self.get_object()
         # build the event before the object is deleted
         event = AuditEvent.build_from_request_and_instance(
             self.request, self.object,
