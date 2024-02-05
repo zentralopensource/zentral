@@ -83,6 +83,26 @@
         </td>
       </tr>
       {% endwith %}
+      <tr>
+        <td>Zentral user{{ zentral_users|length|pluralize }} ({{ zentral_users|length }})</td>
+        <td>
+          {% if zentral_users %}
+          <ul class="list-unstyled">
+            {% for zentral_user in zentral_users %}
+            <li>
+              {% if perms.accounts.view_user %}
+              <a href="{{ zentral_user.get_absolute_url }}">{{ zentral_user }}</a>
+              {% else %}
+              {{ zentral_user }}
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
     </tbody>
   </table>
   {% created_updated_at object %}

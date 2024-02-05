@@ -201,6 +201,11 @@ class RealmUserView(PermissionRequiredMixin, DetailView):
     permission_required = "realms.view_realmuser"
     model = RealmUser
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["zentral_users"] = list(self.object.get_users().order_by("username"))
+        return ctx
+
 
 # group mappings
 

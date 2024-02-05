@@ -11,7 +11,8 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from realms.models import Realm, RealmAuthenticationSession
 from zentral.contrib.inventory.models import Tag
-from .utils import force_realm, force_realm_group, force_realm_group_mapping, force_realm_tag_mapping, force_realm_user
+from .utils import (force_realm, force_realm_group, force_realm_group_mapping,
+                    force_realm_tag_mapping, force_realm_user, force_user)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -790,6 +791,7 @@ class RealmViewsTestCase(TestCase):
         self.assertContains(response, group.get_absolute_url())
         self.assertContains(response, group.display_name)
         self.assertContains(response, "direct")
+        self.assertContains(response, "Zentral users (0)")
 
     def test_realm_user_no_group_realm_links(self):
         group = force_realm_group()
@@ -805,3 +807,26 @@ class RealmViewsTestCase(TestCase):
         self.assertNotContains(response, group.get_absolute_url())
         self.assertContains(response, group.display_name)
         self.assertContains(response, "direct")
+        self.assertContains(response, "Zentral users (0)")
+
+    def test_realm_user_one_zentral_user_link(self):
+        realm = force_realm(enabled_for_login=True)
+        _, realm_user = force_realm_user(realm=realm)
+        user = force_user(username=realm_user.username, email=realm_user.email)
+        self.login("realms.view_realmuser", "accounts.view_user")
+        response = self.client.get(reverse("realms:user", args=(realm_user.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_detail.html")
+        self.assertContains(response, user.get_absolute_url())
+        self.assertContains(response, "Zentral user (1)")
+
+    def test_realm_user_one_zentral_no_user_link(self):
+        realm = force_realm(enabled_for_login=True)
+        _, realm_user = force_realm_user(realm=realm)
+        user = force_user(username=realm_user.username, email=realm_user.email)
+        self.login("realms.view_realmuser")
+        response = self.client.get(reverse("realms:user", args=(realm_user.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_detail.html")
+        self.assertNotContains(response, user.get_absolute_url())
+        self.assertContains(response, "Zentral user (1)")
