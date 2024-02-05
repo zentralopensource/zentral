@@ -1,6 +1,10 @@
+import logging
 from rest_framework import serializers, status
 from rest_framework.exceptions import APIException
 from .models import RealmEmail, RealmGroup, RealmUser, RealmUserGroupMembership
+
+
+logger = logging.getLogger("zentral.realms.scim")
 
 
 class SCIMException(APIException):
@@ -162,8 +166,25 @@ class SCIMUser(serializers.Serializer):
                 )
         return value
 
+    def update_user(self, user):
+        # with SCIM, we update all the attributes of the matching user,
+        # even if it is not a remote user.
+        user_updated = False
+        for u_attr, ru_attr in (("email", "email"),
+                                ("username", "username"),
+                                ("first_name", "first_name"),
+                                ("last_name", "last_name"),
+                                ("is_active", "scim_active")):
+            val = getattr(self.resource, ru_attr)
+            if getattr(user, u_attr) != val:
+                setattr(user, u_attr, val)
+                user_updated = True
+        if user_updated:
+            user.save()
+            logger.info("User %s updated with realm user %s", user.pk, self.resource.pk)
+
     def save(self):
-        user = RealmUser(
+        self.resource = RealmUser(
             realm=self.realm,
             scim_external_id=self.validated_data.get("externalId"),
             scim_active=self.validated_data["active"],
@@ -173,13 +194,13 @@ class SCIMUser(serializers.Serializer):
         if name:
             first_name = name.get("givenName")
             if first_name:
-                user.first_name = first_name
+                self.resource.first_name = first_name
             last_name = name.get("familyName")
             if last_name:
-                user.last_name = last_name
+                self.resource.last_name = last_name
             formatted = name.get("formatted")
             if formatted:
-                user.full_name = formatted
+                self.resource.full_name = formatted
         primary_email = ""
         emails = self.validated_data.get("emails")
         for email in emails:
@@ -188,23 +209,33 @@ class SCIMUser(serializers.Serializer):
                 primary_email = email["value"]
             if re_primary:
                 break
-        user.email = primary_email
-        user.save()
+        self.resource.email = primary_email
+        self.resource.save()
         for email in emails:
             RealmEmail.objects.create(
-                user=user,
+                user=self.resource,
                 primary=email["primary"],
                 type=email["type"],
                 email=email["value"],
             )
-        return user
+
+        # update matching user
+        user = self.resource.get_user_for_update()
+        if user:
+            self.update_user(user)
+        return self.resource
 
     def update(self):
+        # get the account user to update before updating the realm user
+        user = self.resource.get_user_for_update()
+
+        # key attributes
         self.resource.username = self.validated_data["userName"]
         external_id = self.validated_data.get("externalId")
         if external_id:
             self.resource.scim_external_id = external_id
         self.resource.scim_active = self.validated_data["active"]
+
         # name
         self.resource.full_name = self.validated_data.get("displayName") or ""
         name = self.validated_data.get("name")
@@ -212,6 +243,7 @@ class SCIMUser(serializers.Serializer):
             self.resource.first_name = name.get("givenName") or ""
             self.resource.last_name = name.get("familyName") or ""
             self.resource.full_name = name.get("formatted") or self.resource.full_name
+
         # emails
         primary_email = ""
         existing_realm_emails = {re.email: re for re in self.resource.realmemail_set.all()}
@@ -245,4 +277,8 @@ class SCIMUser(serializers.Serializer):
         self.resource.email = primary_email
         self.resource.save()
         self.resource.realmemail_set.exclude(email__in=found_emails).delete()
+
+        # update matching user
+        if user:
+            self.update_user(user)
         return self.resource

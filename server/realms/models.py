@@ -4,9 +4,11 @@ from importlib import import_module
 import uuid
 from django.contrib.auth.models import Group
 from django.db import connection, models
+from django.db.models import Q
 from django.urls import reverse
 from django.utils.functional import cached_property
 from zentral.contrib.inventory.models import Tag
+from accounts.models import User
 from .backends.registry import backend_classes
 
 
@@ -136,6 +138,25 @@ class RealmUser(models.Model):
     @property
     def email_prefix(self):
         return self.email.split("@")[0].strip()
+
+    # user
+
+    def get_users(self):
+        if not self.realm.enabled_for_login:
+            return User.objects.none()
+        return User.objects.filter(Q(email=self.email) | Q(username=self.username), is_service_account=False)
+
+    def get_user_for_update(self, raise_on_multiple=False):
+        qs = self.get_users().select_for_update()
+        qs_count = qs.count()
+        if qs_count > 1:
+            message = f"Multiple matching users for realm user {self.pk}"
+            if raise_on_multiple:
+                raise ValueError(message)
+            else:
+                logger.error(message)
+        elif qs_count == 1:
+            return qs.first()
 
     # groups
 

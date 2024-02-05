@@ -1,17 +1,19 @@
 import uuid
 from django.contrib.auth.models import Group
 from django.utils.crypto import get_random_string
+from accounts.models import User
 from realms.models import (Realm, RealmEmail, RealmGroup, RealmGroupMapping, RealmTagMapping,
                            RealmUser, RealmUserGroupMembership)
 from zentral.contrib.inventory.models import Tag
 
 
-def force_realm():
+def force_realm(enabled_for_login=False):
     return Realm.objects.create(
         name=get_random_string(12),
         backend="ldap",
         username_claim="username",
-        email_claim="email"
+        email_claim="email",
+        enabled_for_login=enabled_for_login,
     )
 
 
@@ -83,3 +85,22 @@ def force_realm_tag_mapping(realm=None, group_name=None, tag=None):
         tag=tag
     )
     return realm, realm_tag_mapping
+
+
+def force_user(username=None, email=None, active=True, remote=False, service_account=False):
+    if not username:
+        username = get_random_string(12)
+    if not email:
+        email = get_random_string(12) + "@zentral.com"
+    user = User(
+        username=username,
+        email=email,
+        first_name=get_random_string(12),
+        last_name=get_random_string(12),
+        is_active=active,
+        is_remote=remote,
+        is_service_account=service_account,
+    )
+    user.set_password(get_random_string(12))
+    user.save()
+    return user

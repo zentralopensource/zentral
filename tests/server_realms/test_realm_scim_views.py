@@ -10,7 +10,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
 from realms.models import RealmGroup, RealmUser, RealmUserGroupMembership
 from realms.scim_views import SCIMPermissions
-from .utils import force_realm, force_realm_group, force_realm_user
+from .utils import force_realm, force_realm_group, force_realm_user, force_user
 
 
 class RealmViewsTestCase(TestCase):
@@ -650,6 +650,85 @@ class RealmViewsTestCase(TestCase):
         )
         self.assertEqual(user.email, email.email)
 
+    def test_create_user_no_update_user(self):
+        self.set_permissions("realms.add_realmuser")
+        first_name = get_random_string(12)
+        last_name = get_random_string(12)
+        username = get_random_string(12)
+        email = f"{username}@zentral.com"
+        external_id = get_random_string(12)
+        user_to_update = force_user(username=username, email=email, active=False)
+        user_to_update_first_name = user_to_update.first_name
+        user_to_update_last_name = user_to_update.last_name
+        self.assertFalse(user_to_update.is_active)
+        self.assertFalse(self.realm.enabled_for_login)  # no updates
+        response = self.post(
+            reverse("realms_public:scim_users", args=(self.realm.pk,)),
+            {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+             "userName": username,
+             "name": {
+                 "givenName": first_name,
+                 "familyName": last_name,
+             },
+             "emails": [{
+                 "primary": True,
+                 "value": email,
+                 "type": "work"
+             }],
+             "locale": "en-US",
+             "externalId": external_id,
+             "password": "1mz050nq",
+             "active": True}
+        )
+        self.assertEqual(response.status_code, 201)
+        user_to_update.refresh_from_db()
+        self.assertEqual(user_to_update.first_name, user_to_update_first_name)
+        self.assertEqual(user_to_update.last_name, user_to_update_last_name)
+        self.assertFalse(user_to_update.is_active)
+
+    def test_create_user_update_user(self):
+        self.set_permissions("realms.add_realmuser")
+        first_name = get_random_string(12)
+        last_name = get_random_string(12)
+        username = get_random_string(12)
+        email = f"{username}@zentral.com"
+        external_id = get_random_string(12)
+        user_to_update = force_user(username=username, active=False)
+        self.assertFalse(user_to_update.is_active)
+        unmanaged_user = force_user()
+        unmanaged_user_first_name = unmanaged_user.first_name
+        unmanaged_user_last_name = unmanaged_user.last_name
+        self.realm.enabled_for_login = True  # update
+        self.realm.save()
+        response = self.post(
+            reverse("realms_public:scim_users", args=(self.realm.pk,)),
+            {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+             "userName": username,
+             "name": {
+                 "givenName": first_name,
+                 "familyName": last_name,
+             },
+             "emails": [{
+                 "primary": True,
+                 "value": email,
+                 "type": "work"
+             }],
+             "locale": "en-US",
+             "externalId": external_id,
+             "password": "1mz050nq",
+             "active": True}
+        )
+        self.assertEqual(response.status_code, 201)
+        user_to_update.refresh_from_db()
+        self.assertEqual(user_to_update.username, username)
+        self.assertEqual(user_to_update.email, email)
+        self.assertEqual(user_to_update.first_name, first_name)
+        self.assertEqual(user_to_update.last_name, last_name)
+        self.assertTrue(user_to_update.is_active)
+        unmanaged_user.refresh_from_db()
+        self.assertEqual(unmanaged_user.first_name, unmanaged_user_first_name)
+        self.assertEqual(unmanaged_user.last_name, unmanaged_user_last_name)
+
     # update user put
 
     def test_update_user_put_unauthorized(self):
@@ -725,6 +804,51 @@ class RealmViewsTestCase(TestCase):
              'userName': username}
         )
         self.assertEqual(user.email, email)
+
+    def test_update_user_update_user(self):
+        _, realm_user = force_realm_user(realm=self.realm)
+        first_name = get_random_string(12)
+        last_name = get_random_string(12)
+        username = get_random_string(12)
+        email = f"{username}@zentral.com"
+        external_id = get_random_string(12)
+        user_to_update = force_user(username=realm_user.username, active=True)
+        self.assertTrue(user_to_update.is_active)
+        unmanaged_user = force_user()
+        unmanaged_user_first_name = unmanaged_user.first_name
+        unmanaged_user_last_name = unmanaged_user.last_name
+        self.realm.enabled_for_login = True  # update
+        self.realm.save()
+        self.set_permissions("realms.change_realmuser")
+        response = self.put(
+            reverse("realms_public:scim_user", args=(self.realm.pk, realm_user.pk)),
+            {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+             "userName": username,
+             "name": {
+                 "givenName": first_name,
+                 "familyName": last_name,
+             },
+             "emails": [{
+                 "primary": True,
+                 "value": email,
+                 "type": "work"
+             }],
+             "displayName": f"{first_name} {last_name}",
+             "locale": "en-US",
+             "externalId": external_id,
+             "password": "1mz050nq",
+             "active": False}
+        )
+        self.assertEqual(response.status_code, 200)
+        user_to_update.refresh_from_db()
+        self.assertEqual(user_to_update.username, username)
+        self.assertEqual(user_to_update.email, email)
+        self.assertEqual(user_to_update.first_name, first_name)
+        self.assertEqual(user_to_update.last_name, last_name)
+        self.assertFalse(user_to_update.is_active)
+        unmanaged_user.refresh_from_db()
+        self.assertEqual(unmanaged_user.first_name, unmanaged_user_first_name)
+        self.assertEqual(unmanaged_user.last_name, unmanaged_user_last_name)
 
     def test_update_user_put_no_external_id(self):
         _, user = force_realm_user(realm=self.realm)
