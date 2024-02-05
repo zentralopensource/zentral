@@ -495,7 +495,8 @@ class RealmViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realmtagmapping_form.html")
 
-    def test_create_tag_mapping_post(self):
+    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
+    def test_create_tag_mapping_post(self, update_realm_tags):
         realm = force_realm()
         group_name = get_random_string(12)
         tag = Tag.objects.create(name=get_random_string(12))
@@ -515,6 +516,7 @@ class RealmViewsTestCase(TestCase):
         self.assertEqual(rtm.tag, tag)
         self.assertContains(response, rtm.group_name)
         self.assertContains(response, tag.name)
+        update_realm_tags.assert_called_once_with(realm)
 
     # update tag mapping
 
@@ -535,7 +537,8 @@ class RealmViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realmtagmapping_form.html")
 
-    def test_update_tag_mapping_post(self):
+    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
+    def test_update_tag_mapping_post(self, update_realm_tags):
         realm, rtm = force_realm_tag_mapping()
         group_name = get_random_string(12)
         tag = Tag.objects.create(name=get_random_string(12))
@@ -555,6 +558,39 @@ class RealmViewsTestCase(TestCase):
         self.assertEqual(rtm.tag, tag)
         self.assertContains(response, rtm.group_name)
         self.assertContains(response, tag.name)
+        update_realm_tags.assert_called_once_with(realm)
+
+    # delete tag mapping
+
+    def test_delete_tag_mapping_redirect(self):
+        realm, rtm = force_realm_tag_mapping()
+        self.login_redirect("delete_tag_mapping", realm.pk, rtm.pk)
+
+    def test_delete_tag_mapping_permission_denied(self):
+        realm, rtm = force_realm_tag_mapping()
+        self.login("realms.add_realmtagmapping")
+        response = self.client.get(reverse("realms:delete_tag_mapping", args=(realm.pk, rtm.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_tag_mapping_get(self):
+        realm, rtm = force_realm_tag_mapping()
+        self.login("realms.delete_realmtagmapping")
+        response = self.client.get(reverse("realms:delete_tag_mapping", args=(realm.pk, rtm.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmtagmapping_confirm_delete.html")
+
+    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
+    def test_delete_tag_mapping_post(self, update_realm_tags):
+        realm, rtm = force_realm_tag_mapping()
+        tag = Tag.objects.create(name=get_random_string(12))
+        self.login("realms.delete_realmtagmapping", "realms.view_realm", "realms.view_realmtagmapping")
+        response = self.client.post(reverse("realms:delete_tag_mapping", args=(realm.pk, rtm.pk)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_detail.html")
+        self.assertEqual(realm.realmtagmapping_set.count(), 0)
+        self.assertNotContains(response, rtm.group_name)
+        self.assertNotContains(response, tag.name)
+        update_realm_tags.assert_called_once_with(realm)
 
     # realm groups
 

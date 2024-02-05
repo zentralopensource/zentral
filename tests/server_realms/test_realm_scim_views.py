@@ -1,6 +1,7 @@
 from functools import partial, reduce
 import json
 import operator
+from unittest.mock import patch
 import uuid
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -59,7 +60,7 @@ class RealmViewsTestCase(TestCase):
         return getattr(self.client, method)(url, data, **kwargs)
 
     def __getattr__(self, attr):
-        if attr in ("get", "patch", "post", "put"):
+        if attr in ("get", "patch", "post", "put", "delete"):
             return partial(self._make_client_request, attr)
         raise AttributeError
 
@@ -1127,7 +1128,7 @@ class RealmViewsTestCase(TestCase):
              'totalResults': 1}
         )
 
-    # filter users
+    # filter groups
 
     def test_groups_unsupported_filter(self):
         self.set_permissions("realms.view_realmgroup")
@@ -1231,7 +1232,8 @@ class RealmViewsTestCase(TestCase):
              'status': 409}
         )
 
-    def test_create_group(self):
+    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
+    def test_create_group(self, update_realm_tags):
         self.set_permissions("realms.add_realmgroup")
         display_name = get_random_string(12)
         external_id = get_random_string(12)
@@ -1255,8 +1257,10 @@ class RealmViewsTestCase(TestCase):
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
+        update_realm_tags.assert_not_called()
 
-    def test_create_group_with_members(self):
+    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
+    def test_create_group_with_members(self, update_realm_tags):
         _, user = force_realm_user(realm=self.realm)
         group = force_realm_group(realm=self.realm)
         display_name = get_random_string(12)
@@ -1290,6 +1294,7 @@ class RealmViewsTestCase(TestCase):
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
+        update_realm_tags.assert_called_once_with(self.realm)
 
     # update group put
 
@@ -1317,7 +1322,8 @@ class RealmViewsTestCase(TestCase):
              'status': 403}
         )
 
-    def test_update_group_put(self):
+    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
+    def test_update_group_put(self, update_realm_tags):
         group = force_realm_group(realm=self.realm)
         display_name = get_random_string(12)
         self.set_permissions("realms.change_realmgroup")
@@ -1342,6 +1348,7 @@ class RealmViewsTestCase(TestCase):
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
+        update_realm_tags.assert_not_called()
 
     def test_update_group_put_no_external_id(self):
         group = force_realm_group(realm=self.realm)
@@ -1398,7 +1405,8 @@ class RealmViewsTestCase(TestCase):
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
 
-    def test_update_group_put_with_members(self):
+    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
+    def test_update_group_put_with_members(self, update_realm_tags):
         group = force_realm_group(realm=self.realm)
         old_group_member = force_realm_group(realm=self.realm, parent=group)
         _, old_user_member = force_realm_user(realm=self.realm, group=group)
@@ -1440,6 +1448,7 @@ class RealmViewsTestCase(TestCase):
         self.assertEqual(RealmUserGroupMembership.objects.filter(group=group, user=old_user_member).count(), 0)
         old_group_member.refresh_from_db()
         self.assertIsNone(old_group_member.parent)
+        update_realm_tags.assert_called_once_with(self.realm)
 
     # get group by pk
 
@@ -1507,3 +1516,62 @@ class RealmViewsTestCase(TestCase):
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
+
+    # delete group
+
+    def test_group_delete_unauthorized(self):
+        group = force_realm_group(realm=self.realm)
+        response = self.delete(reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
+                               include_token=False)
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(
+            response.json(),
+            {'detail': 'Authentication credentials were not provided.',
+             'schemas': ['urn:ietf:params:scim:api:messages:2.0:Error'],
+             'status': 401}
+        )
+
+    def test_group_delete_permission_denied(self):
+        group = force_realm_group(realm=self.realm)
+        self.set_permissions("realms.view_realmgroup")
+        response = self.delete(reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json(),
+            {'detail': 'You do not have permission to perform this action.',
+             'schemas': ['urn:ietf:params:scim:api:messages:2.0:Error'],
+             'status': 403}
+        )
+
+    def test_group_delete_no_scim_404(self):
+        group = force_realm_group()
+        realm = group.realm
+        self.assertFalse(realm.scim_enabled)
+        self.set_permissions("realms.delete_realmgroup")
+        response = self.delete(reverse("realms_public:scim_group", args=(realm.pk, group.pk)))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.json(),
+            {'detail': 'SCIM not enabled on this Realm.',
+             'schemas': ['urn:ietf:params:scim:api:messages:2.0:Error'],
+             'status': 404}
+        )
+
+    def test_group_delete_not_found_404(self):
+        self.set_permissions("realms.delete_realmgroup")
+        response = self.delete(reverse("realms_public:scim_group", args=(self.realm.pk, str(uuid.uuid4()))))
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.json(),
+            {'detail': 'Group not found.',
+             'schemas': ['urn:ietf:params:scim:api:messages:2.0:Error'],
+             'status': 404}
+        )
+
+    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
+    def test_group_delete(self, update_realm_tags):
+        group = force_realm_group(realm=self.realm)
+        self.set_permissions("realms.delete_realmgroup")
+        response = self.delete(reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)))
+        self.assertEqual(response.status_code, 204)
+        update_realm_tags.assert_called_once_with(self.realm)

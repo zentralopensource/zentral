@@ -1,6 +1,7 @@
 from datetime import datetime
 import os.path
 import plistlib
+from unittest.mock import call, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from realms.models import RealmGroup, RealmTagMapping, RealmUserGroupMembership
@@ -9,7 +10,7 @@ from zentral.contrib.mdm.commands.certificate_list import CertificateList
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.installed_application_list import InstalledApplicationList
 from zentral.contrib.mdm.commands.profile_list import ProfileList
-from zentral.contrib.mdm.inventory import ms_tree_from_payload, update_realm_tags
+from zentral.contrib.mdm.inventory import ms_tree_from_payload, realm_tagging_change_receiver, update_realm_tags
 from zentral.contrib.mdm.models import Blueprint
 from .utils import force_dep_enrollment_session
 
@@ -190,3 +191,40 @@ class MDMInventoryTestCase(TestCase):
         self.assertTrue(mt_qs.filter(tag=tag_already_present).exists())
         self.assertTrue(mt_qs.filter(tag=unmanaged_tag).exists())
         self.assertFalse(mt_qs.filter(tag=tag_to_remove).exists())
+
+    @patch("zentral.contrib.mdm.inventory.logger.error")
+    def test_realm_tagging_change_receiver_error(self, logger_error):
+        sentinel = object()
+        realm_tagging_change_receiver(sentinel)
+        logger_error.assert_called_once_with(
+            "Realm tagging change signal received from %s without realm", sentinel
+        )
+
+    @patch("zentral.contrib.mdm.inventory.logger.info")
+    def test_realm_tagging_change_receiver_info(self, logger_info):
+        serial_number = self.enrolled_device.serial_number
+        mt_qs = MachineTag.objects.filter(serial_number=serial_number)
+        self.assertFalse(mt_qs.exists())
+
+        # tags
+        # add realm user to a group
+        group = RealmGroup.objects.create(realm=self.realm,
+                                          display_name=get_random_string(12))
+        sub_group = RealmGroup.objects.create(realm=self.realm,
+                                              display_name=get_random_string(12),
+                                              parent=group)
+        RealmUserGroupMembership.objects.create(user=self.realm_user, group=sub_group)
+        # tag to add because of a matching tag mapping
+        tag_to_add = Tag.objects.create(name=get_random_string(12))
+        RealmTagMapping.objects.create(
+            realm=self.realm,
+            group_name=group.display_name,  # match on the group
+            tag=tag_to_add
+        )
+
+        sentinel = object()
+        realm_tagging_change_receiver(sentinel, realm=self.realm)
+        logger_info.assert_has_calls([
+            call("Realm tagging change signal received from %s", sentinel),
+            call("Tag %s, Serial number %s, Operation %s", tag_to_add.pk, serial_number, "c")
+        ])

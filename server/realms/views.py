@@ -13,7 +13,8 @@ from zentral.conf import settings as zentral_settings
 from zentral.utils.views import UserPaginationListView
 from .backends.registry import backend_classes
 from .forms import RealmGroupMappingForm, RealmGroupSearchForm, RealmTagMappingForm, RealmUserSearchForm
-from .models import (Realm, RealmAuthenticationSession, RealmGroup, RealmGroupMapping, RealmTagMapping,
+from .models import (realm_tagging_change,
+                     Realm, RealmAuthenticationSession, RealmGroup, RealmGroupMapping, RealmTagMapping,
                      RealmUser, RealmUserGroupMembership)
 from .utils import get_realm_user_mapped_groups
 
@@ -317,6 +318,12 @@ class DeleteRealmTagMappingView(PermissionRequiredMixin, DeleteView):
 
     def get_success_url(self):
         return self.object.realm.get_absolute_url()
+
+    def form_valid(self, form):
+        realm = self.object.realm
+        response = super().form_valid(form)
+        realm_tagging_change.send_robust(self.__class__, realm=realm)
+        return response
 
 
 # SSO Test views

@@ -5,6 +5,7 @@ import uuid
 from django.contrib.auth.models import Group
 from django.db import connection, models
 from django.db.models import Q
+import django.dispatch
 from django.urls import reverse
 from django.utils.functional import cached_property
 from zentral.contrib.inventory.models import Tag
@@ -324,3 +325,6 @@ class RealmTagMapping(models.Model):
 
     class Meta:
         unique_together = (("realm", "group_name", "tag"),)
+
+
+realm_tagging_change = django.dispatch.Signal()

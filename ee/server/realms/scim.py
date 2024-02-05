@@ -1,7 +1,7 @@
 import logging
 from rest_framework import serializers, status
 from rest_framework.exceptions import APIException
-from .models import RealmEmail, RealmGroup, RealmUser, RealmUserGroupMembership
+from .models import realm_tagging_change, RealmEmail, RealmGroup, RealmUser, RealmUserGroupMembership
 
 
 logger = logging.getLogger("zentral.realms.scim")
@@ -69,24 +69,39 @@ class SCIMGroup(serializers.Serializer):
         return value
 
     def update_members(self):
+        members_updated = False
         if "members" in self.validated_data:
             pk_list = [member["value"] for member in self.validated_data.get("members", [])]
             realm = self.resource.realm
             # add new groups
-            (RealmGroup.objects.exclude(parent=self.resource)
-                               .filter(realm=realm, pk__in=pk_list)
-                               .update(parent=self.resource))
+            groups_added = (
+                RealmGroup.objects.exclude(parent=self.resource)
+                                  .filter(realm=realm, pk__in=pk_list)
+                                  .update(parent=self.resource)
+            )
+            members_updated |= groups_added > 0
             # remove old groups
-            (RealmGroup.objects.filter(parent=self.resource)
-                               .exclude(pk__in=pk_list)
-                               .update(parent=None))
+            groups_removed = (
+                RealmGroup.objects.filter(parent=self.resource)
+                                  .exclude(pk__in=pk_list)
+                                  .update(parent=None)
+            )
+            members_updated |= groups_removed > 0
             # add new users
-            RealmUserGroupMembership.objects.bulk_create((
-                RealmUserGroupMembership(user=user, group=self.resource)
-                for user in RealmUser.objects.filter(realm=realm, pk__in=pk_list).exclude(groups=self.resource)
-            ))
+            users_added = len(
+                RealmUserGroupMembership.objects.bulk_create((
+                    RealmUserGroupMembership(user=user, group=self.resource)
+                    for user in RealmUser.objects.filter(realm=realm, pk__in=pk_list).exclude(groups=self.resource)
+                ))
+            )
+            members_updated |= users_added > 0
             # remove old users
-            RealmUserGroupMembership.objects.filter(group=self.resource).exclude(user__pk__in=pk_list).delete()
+            users_removed, _ = (
+                RealmUserGroupMembership.objects.filter(group=self.resource).exclude(user__pk__in=pk_list).delete()
+            )
+            members_updated |= users_removed > 0
+        if members_updated:
+            realm_tagging_change.send_robust(self.__class__, realm=self.realm)
 
     def save(self):
         self.resource = RealmGroup.objects.create(

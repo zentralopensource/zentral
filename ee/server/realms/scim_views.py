@@ -1,6 +1,7 @@
 import datetime
 import logging
 import re
+from django.http import HttpResponse
 from django.urls import reverse
 from rest_framework.exceptions import NotFound
 from rest_framework.parsers import JSONParser
@@ -12,6 +13,7 @@ from accounts.api_authentication import APITokenAuthentication
 from realms.models import Realm, RealmGroup, RealmUser
 from zentral.conf import settings
 from zentral.utils.drf import DefaultDjangoModelPermissions
+from .models import realm_tagging_change
 from .scim import SCIMUser, SCIMException, SCIMGroup
 
 
@@ -402,4 +404,7 @@ class GroupsView(GroupMixin, MultipleResourcesSCIMView):
 
 
 class GroupView(GroupMixin, SingleResourceSCIMView):
-    pass
+    def delete(self, request, *args, **kwargs):
+        self.resource.delete()
+        realm_tagging_change.send_robust(self.__class__, realm=self.realm)
+        return HttpResponse(status=204)

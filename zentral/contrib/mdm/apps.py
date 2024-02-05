@@ -32,3 +32,9 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "usercommand",
         "userenrollment",
     )
+
+    def ready(self):
+        super().ready()
+        from realms.models import realm_tagging_change
+        from .inventory import realm_tagging_change_receiver
+        realm_tagging_change.connect(realm_tagging_change_receiver)

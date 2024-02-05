@@ -3,7 +3,6 @@ from django.db import connection
 from zentral.contrib.inventory.models import PrincipalUserSource
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.mdm.models import Blueprint, Command, DeviceCommand, Platform
-from zentral.contrib.mdm.commands.base import load_command
 
 
 logger = logging.getLogger("zentral.contrib.mdm.inventory")
@@ -101,6 +100,8 @@ def update_inventory_tree(command, commit_enrolled_device=True):
         ms_tree["business_unit"] = command.meta_business_unit.api_enrollment_business_units()[0].serialize()
     except IndexError:
         pass
+
+    from zentral.contrib.mdm.commands.base import load_command  # circular dep with cmds that need to update the inv
 
     for bp_attr, cmd_db_name, ts_attr in (
         (None, "DeviceInformation", "device_information_updated_at"),
@@ -215,3 +216,14 @@ def update_realm_tags(realm):
     columns = [col[0] for col in cursor.description]
     for result in cursor.fetchall():
         yield dict(zip(columns, result))
+
+
+def realm_tagging_change_receiver(sender, **kwargs):
+    try:
+        realm = kwargs["realm"]
+    except KeyError:
+        logger.error("Realm tagging change signal received from %s without realm", sender)
+        return
+    logger.info("Realm tagging change signal received from %s", sender)
+    for op in update_realm_tags(realm):
+        logger.info("Tag %s, Serial number %s, Operation %s", op["tag_id"], op["serial_number"], op["op"])
