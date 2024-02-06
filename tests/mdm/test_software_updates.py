@@ -58,6 +58,7 @@ class MDMSoftwareUpdateTestCase(TestCase):
         expiration_date=None,
         public=False,
         version_extra="",
+        build="",
         prerequisite_build="",
         platform=Platform.MACOS,
     ):
@@ -70,6 +71,7 @@ class MDMSoftwareUpdateTestCase(TestCase):
             patch=patch,
             availability=(posting_date, expiration_date),
             extra=version_extra,
+            build=build,
             prerequisite_build=prerequisite_build,
         )
         SoftwareUpdateDeviceID.objects.create(software_update=su, device_id=device_id)
@@ -85,6 +87,16 @@ class MDMSoftwareUpdateTestCase(TestCase):
         )
         self.assertEqual(str(su), "12.6.2")
         self.assertEqual(su.summary(), "macOS 12.6.2")
+
+    def test_software_update_with_build_representations(self):
+        su = force_software_update(
+            device_id="J413AP",
+            version="14.1.2",
+            build="23B92",
+            posting_date=datetime.date(2023, 11, 30)
+        )
+        self.assertEqual(str(su), "14.1.2 (23B92)")
+        self.assertEqual(su.summary(), "macOS 14.1.2 (23B92)")
 
     def test_software_update_rsr_representations(self):
         su = force_software_update(
@@ -118,6 +130,7 @@ class MDMSoftwareUpdateTestCase(TestCase):
         self.assertEqual(psu.major, 12)
         self.assertEqual(psu.minor, 6)
         self.assertEqual(psu.patch, 2)
+        self.assertEqual(psu.build, "21G320")
         self.assertEqual(
             list(psudi.device_id for psudi in psu.softwareupdatedeviceid_set.all()),
             ["J413AP"],
@@ -129,6 +142,7 @@ class MDMSoftwareUpdateTestCase(TestCase):
         rsr_su_qs = SoftwareUpdate.objects.filter(extra__gt='')
         self.assertEqual(rsr_su_qs.count(), 1)
         rsr_su = rsr_su_qs.first()
+        self.assertEqual(rsr_su.build, "22E772610a")
         self.assertEqual(rsr_su.extra, "(a)")
         self.assertEqual(rsr_su.prerequisite_build, "22E261")
         event_count = 0
@@ -173,11 +187,12 @@ class MDMSoftwareUpdateTestCase(TestCase):
         )
         # replace one software update
         fake_response2["AssetSets"]["macOS"][0]["ProductVersion"] = "12.6.1"
+        fake_response2["AssetSets"]["macOS"][0]["Build"] = "21G217"
         self.assertEqual(
-            SoftwareUpdate.objects.filter(public=False, major=12, minor=6, patch=2).count(), 1
+            SoftwareUpdate.objects.filter(public=False, major=12, minor=6, patch=2, build="21G320").count(), 1
         )
         self.assertEqual(
-            SoftwareUpdate.objects.filter(public=False, major=12, minor=6, patch=1).count(), 0
+            SoftwareUpdate.objects.filter(public=False, major=12, minor=6, patch=1, build="21G217").count(), 0
         )
         # re-run sync with updated response
         response_json.return_value = fake_response2
@@ -199,10 +214,10 @@ class MDMSoftwareUpdateTestCase(TestCase):
         )
         # check replaced software update
         self.assertEqual(
-            SoftwareUpdate.objects.filter(public=False, major=12, minor=6, patch=2).count(), 0
+            SoftwareUpdate.objects.filter(public=False, major=12, minor=6, patch=2, build="21G320").count(), 0
         )
         self.assertEqual(
-            SoftwareUpdate.objects.filter(public=False, major=12, minor=6, patch=1).count(), 1
+            SoftwareUpdate.objects.filter(public=False, major=12, minor=6, patch=1, build="21G217").count(), 1
         )
         event_count = 0
         for event in [cal.args[0] for cal in post_event.call_args_list[12:]]:

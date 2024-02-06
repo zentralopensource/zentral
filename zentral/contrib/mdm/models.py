@@ -2682,6 +2682,7 @@ class SoftwareUpdate(models.Model):
     minor = models.PositiveIntegerField()
     patch = models.PositiveIntegerField()
     extra = models.CharField(max_length=32, blank=True)
+    build = models.CharField(max_length=32, blank=True)
     prerequisite_build = models.CharField(max_length=32, blank=True)
     public = models.BooleanField()
     availability = DateRangeField()
@@ -2690,14 +2691,14 @@ class SoftwareUpdate(models.Model):
 
     class Meta:
         unique_together = (
-            ("platform", "major", "minor", "patch", "extra", "prerequisite_build", "public", "availability"),
+            ("platform", "major", "minor", "patch", "extra", "build", "prerequisite_build", "public", "availability"),
         )
 
     @property
     def comparable_os_version(self):
         return (self.major, self.minor, self.patch, self.extra)
 
-    def __str__(self):
+    def target_os_version(self):
         s = ".".join(
             str(i)
             for a, i in ((a, getattr(self, a)) for a in ("major", "minor", "patch"))
@@ -2705,6 +2706,12 @@ class SoftwareUpdate(models.Model):
         )
         if self.extra:
             s = f"{s} {self.extra}"
+        return s
+
+    def __str__(self):
+        s = self.target_os_version()
+        if self.build:
+            s = f"{s} ({self.build})"
         return s
 
     def summary(self):
@@ -2720,6 +2727,7 @@ class SoftwareUpdate(models.Model):
             "minor",
             "patch",
             "extra",
+            "build",
             "prerequisite_build",
             "public",
             "created_at",

@@ -794,6 +794,7 @@ class TestMDMArtifacts(TestCase):
         target = Target(self.enrolled_device)
         force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
                               version="17.1.2",
+                              build="21B101",
                               posting_date=date(2023, 11, 30))
         sue = force_software_update_enforcement(
             platforms=["iOS"],
@@ -812,6 +813,7 @@ class TestMDMArtifacts(TestCase):
         target = Target(self.enrolled_device)
         force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
                               version="14.1.0",
+                              build="23B74",
                               posting_date=date(2023, 10, 25))
         sue = force_software_update_enforcement(max_os_version="15", local_time=time(9, 30), delay_days=15)
         self.blueprint1.software_update_enforcements.add(sue)
@@ -892,6 +894,7 @@ class TestMDMArtifacts(TestCase):
     def test_device_declaration_items_software_update_enforcement_latest_included(self):
         force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
                               version="14.1.0",
+                              build="23B74",
                               posting_date=date(2023, 10, 25))
         sue = force_software_update_enforcement(max_os_version="15", local_time=time(9, 30), delay_days=15)
         self.blueprint1.software_update_enforcements.add(sue)
@@ -915,7 +918,7 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(configurations[0]["ServerToken"], "d012ad4032e941a8c1f4a61dc6691372d946a4d2")
         self.assertEqual(configurations[1]["Identifier"],
                          f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific")
-        self.assertEqual(configurations[1]["ServerToken"], "3aa402ccdcc30fbe9fc24a437da2fac09f709243")
+        self.assertEqual(configurations[1]["ServerToken"], "724edaf760e7d7282084dcf3eaef6467447accd1")
 
     # update_target_artifact
 

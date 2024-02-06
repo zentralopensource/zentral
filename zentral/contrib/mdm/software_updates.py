@@ -46,6 +46,7 @@ def _iter_software_updates(response):
                                        (int(s) for s in product_info["ProductVersion"].split(".")))))
                 if kwargs.get("patch") is None:
                     kwargs["patch"] = 0
+                kwargs["build"] = product_info.get("Build") or ""
                 if attr == "PublicRapidSecurityResponses":
                     kwargs["extra"] = product_info["ProductVersionExtra"]
                     kwargs["prerequisite_build"] = product_info["PrerequisiteBuild"]

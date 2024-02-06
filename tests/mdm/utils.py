@@ -483,6 +483,7 @@ def force_software_update(
     expiration_date=None,
     public=False,
     version_extra="",
+    build="",
     prerequisite_build="",
     platform=Platform.MACOS,
 ):
@@ -495,6 +496,7 @@ def force_software_update(
         patch=patch,
         availability=(posting_date, expiration_date),
         extra=version_extra,
+        build=build,
         prerequisite_build=prerequisite_build,
     )
     SoftwareUpdateDeviceID.objects.create(software_update=su, device_id=device_id)

@@ -784,7 +784,7 @@ class MDMViewsTestCase(TestCase):
         self._assertAbort(post_event, "Could not build specific software update enforcement",
                           udid=udid, serial_number=serial_number)
 
-    def test_declarative_management_softwareupdate_enforcement_specific_latest(self, post_event):
+    def test_declarative_management_softwareupdate_enforcement_specific_latest_no_build(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         device_id = get_random_string(8)
         session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
@@ -815,6 +815,41 @@ class MDMViewsTestCase(TestCase):
                  'TargetLocalDateTime': '2023-11-09T09:30:00'
               },
              'ServerToken': '46e9bd884ed69f3596a19af1c3dd7debad77e998',
+             'Type': 'com.apple.configuration.softwareupdate.enforcement.specific'}
+        )
+
+    def test_declarative_management_softwareupdate_enforcement_specific_latest_build(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        device_id = get_random_string(8)
+        session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        session.enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
+        session.enrolled_device.save()
+        force_software_update(device_id=device_id, version="14.1.0", build="23B74", posting_date=date(2023, 10, 25))
+        sue = force_software_update_enforcement(
+            details_url="https://www.example.com",
+            max_os_version="15", local_time=time(9, 30), delay_days=15
+        )
+        blueprint = self._add_blueprint(session)
+        blueprint.software_update_enforcements.add(sue)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}."
+                        "softwareupdate-enforcement-specific"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'Identifier': f'zentral.blueprint.{blueprint.pk}.softwareupdate-enforcement-specific',
+             'Payload': {
+                 'DetailsURL': 'https://www.example.com',
+                 'TargetOSVersion': '14.1',
+                 'TargetBuildVersion': '23B74',
+                 'TargetLocalDateTime': '2023-11-09T09:30:00'
+              },
+             'ServerToken': '70f599a2446b04819b674530433c1f1322947ddb',
              'Type': 'com.apple.configuration.softwareupdate.enforcement.specific'}
         )
 

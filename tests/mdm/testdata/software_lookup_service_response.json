@@ -3,6 +3,7 @@
     "iOS": [
       {
         "ProductVersion": "16.2",
+        "Build": "20C65",
         "PostingDate": "2023-01-11",
         "SupportedDevices": [
           "iPad13,18",
@@ -11,6 +12,7 @@
       },
       {
         "ProductVersion": "12.6.2",
+        "Build": "21G320",
         "PostingDate": "2023-01-11",
         "ExpirationDate": "2023-04-20",
         "SupportedDevices": [
@@ -20,6 +22,7 @@
       },
       {
         "ProductVersion": "13.1",
+        "Build": "22C65",
         "PostingDate": "2023-01-11",
         "ExpirationDate": "2023-04-20",
         "SupportedDevices": [
@@ -32,6 +35,7 @@
     "macOS": [
       {
         "ProductVersion": "12.6.2",
+        "Build": "21G320",
         "PostingDate": "2022-12-13",
         "ExpirationDate": "2023-04-20",
         "SupportedDevices": [
@@ -40,6 +44,7 @@
       },
       {
         "ProductVersion": "13.1",
+        "Build": "22C65",
         "PostingDate": "2022-12-13",
         "ExpirationDate": "2023-04-20",
         "SupportedDevices": [
@@ -48,6 +53,7 @@
       },
       {
         "ProductVersion": "13.0.1",
+        "Build": "22A400",
         "PostingDate": "2022-11-09",
         "ExpirationDate": "2023-04-20",
         "SupportedDevices": [
@@ -58,6 +64,7 @@
     "iOS": [
       {
         "ProductVersion": "15.7.2",
+        "Build": "19H218",
         "PostingDate": "2022-12-13",
         "ExpirationDate": "2023-04-20",
         "SupportedDevices": [
@@ -67,6 +74,7 @@
       },
       {
         "ProductVersion": "16.2",
+        "Build": "20C65",
         "PostingDate": "2022-12-13",
         "ExpirationDate": "2023-04-20",
         "SupportedDevices": [
@@ -76,6 +84,7 @@
       },
       {
         "ProductVersion": "16.1.1",
+        "Build": "20B101",
         "PostingDate": "2022-11-16",
         "ExpirationDate": "2023-03-13",
         "SupportedDevices": [
@@ -84,6 +93,7 @@
       },
       {
         "ProductVersion": "16.1.1",
+        "Build": "20B101",
         "PostingDate": "2022-11-09",
         "ExpirationDate": "2023-03-13",
         "SupportedDevices": [
@@ -93,6 +103,7 @@
       },
       {
         "ProductVersion": "16.1.1",
+        "Build": "20B101",
         "PostingDate": "2022-11-09",
         "ExpirationDate": "2023-02-28",
         "SupportedDevices": [
@@ -106,6 +117,7 @@
     "macOS": [
       {
         "ProductVersion": "13.3.1",
+        "Build": "22E772610a",
         "ProductVersionExtra": "(a)",
         "PrerequisiteBuild": "22E261",
         "PostingDate": "2023-05-01",
