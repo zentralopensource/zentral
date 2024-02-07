@@ -132,15 +132,19 @@ class ArtifactManagementViewsTestCase(TestCase):
         self.assertContains(response, artifact.name)
         self.assertNotContains(response, reverse("mdm:delete_artifact", args=(artifact.pk,)))
         self.assertNotContains(response, reverse("mdm:upgrade_profile", args=(artifact.pk,)))
+        self.assertContains(response, "Blueprints (0)")
+        self.assertNotContains(response, reverse("mdm:create_blueprint_artifact", args=(artifact.pk,)))
 
-    def test_artifact_get_perms_delete(self):
+    def test_artifact_with_delete_ba_links(self):
         artifact, _ = force_artifact()
-        self._login("mdm.view_artifact", "mdm.delete_artifact")
+        self._login("mdm.view_artifact", "mdm.delete_artifact", "mdm.add_blueprintartifact")
         response = self.client.get(reverse("mdm:artifact", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_detail.html")
         self.assertContains(response, artifact.name)
         self.assertContains(response, reverse("mdm:delete_artifact", args=(artifact.pk,)))
+        self.assertContains(response, "Blueprints (0)")
+        self.assertContains(response, reverse("mdm:create_blueprint_artifact", args=(artifact.pk,)))
 
     def test_artifact_get_cannot_be_deleted(self):
         blueprint_artifact, artifact, _ = force_blueprint_artifact()

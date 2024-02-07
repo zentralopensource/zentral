@@ -183,17 +183,17 @@
 {% endif %}
 
 
-{% if blueprint_artifacts_count %}
 <div class="d-flex justify-content-between mb-3">
     <h3>Blueprint{{ blueprint_artifacts_count|pluralize }} ({{ blueprint_artifacts_count }})</h3>
     <div class="ms-auto">            
-        {% if perms.mdm.add_blueprint %}
+        {% if perms.mdm.add_blueprintartifact %}
             {% url 'mdm:create_blueprint_artifact' object.pk as url %}
             {% button 'CREATE' url "Add new Blueprint" %}
         {% endif %}
     </div>
 </div>
 
+{% if blueprint_artifacts_count %}
 <table class="table table-striped align-middle table-hover">
   <thead>
     <tr>
