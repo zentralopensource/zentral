@@ -1,4 +1,5 @@
 import base64
+import datetime
 import plistlib
 from unittest.mock import Mock, patch
 import uuid
@@ -9,7 +10,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.events import DEPEnrollmentRequestEvent
 from zentral.contrib.mdm.public_views.dep import dep_web_enroll_callback
-from .utils import force_dep_enrollment, force_dep_enrollment_session, force_realm_user
+from .utils import force_dep_enrollment, force_dep_enrollment_session, force_realm_user, force_software_update
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -100,7 +101,7 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(last_event.payload["status"], "warning")
         self.assertEqual(last_event.payload["reason"], "OS update to version 17.1 (b) required")
 
-    def test_dep_enroll_macos_update_required(self, vicsp, post_event):
+    def test_dep_enroll_min_macos_update_required(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         enrollment = session.dep_enrollment
@@ -122,6 +123,73 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         self.assertIsInstance(last_event, DEPEnrollmentRequestEvent)
         self.assertEqual(last_event.payload["status"], "warning")
         self.assertEqual(last_event.payload["reason"], "OS update to version 14.1 required")
+
+    def test_dep_enroll_max_macos_update_required(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        force_software_update(
+            device_id="J413AP",
+            version="14.3.0",
+            build="23D56",
+            posting_date=datetime.date(2024, 1, 22),
+            expiration_date=datetime.date(3000, 1, 2)
+        )
+        enrollment = session.dep_enrollment
+        enrollment.macos_min_version = "14.1"
+        enrollment.macos_max_version = "15"
+        enrollment.save()
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": session.enrolled_device.serial_number,
+                                                         "UDID": session.enrolled_device.udid,
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "14.0",
+                                                         "VERSION": "23A344",
+                                                         "SOFTWARE_UPDATE_DEVICE_ID": "J413AP"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json(),
+            {'code': 'com.apple.softwareupdate.required', 'details': {'OSVersion': '14.3',
+                                                                      'BuildVersion': '23D56'}}
+        )
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, DEPEnrollmentRequestEvent)
+        self.assertEqual(last_event.payload["status"], "warning")
+        self.assertEqual(last_event.payload["reason"], "OS update to version 14.3 required")
+
+    def test_dep_enroll_max_ios_update_required_min_fallback(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrollment = session.dep_enrollment
+        enrollment.ios_min_version = "17.3"
+        enrollment.ios_max_version = "18"
+        enrollment.save()
+        force_software_update(
+            device_id="iPad11,7",  # match
+            version="17.4.0",
+            build="23E52",
+            posting_date=datetime.date(2500, 1, 2),  # Not available
+            expiration_date=datetime.date(3000, 1, 2)
+        )
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "iPad11,7",
+                                                         "SERIAL": session.enrolled_device.serial_number,
+                                                         "UDID": session.enrolled_device.udid,
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "17.2.1",
+                                                         "VERSION": "21C66",
+                                                         "SOFTWARE_UPDATE_DEVICE_ID": "iPad11,7"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json(),
+            {'code': 'com.apple.softwareupdate.required', 'details': {'OSVersion': '17.3'}},
+        )
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, DEPEnrollmentRequestEvent)
+        self.assertEqual(last_event.payload["status"], "warning")
+        self.assertEqual(last_event.payload["reason"], "OS update to version 17.3 required")
 
     def test_dep_enroll_no_macos_min_version(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d

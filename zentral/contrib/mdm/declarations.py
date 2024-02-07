@@ -9,7 +9,7 @@ from zentral.conf import settings
 from zentral.utils.payloads import get_payload_identifier
 from zentral.utils.time import naive_truncated_isoformat
 from .models import Artifact, ArtifactVersion, EnrolledUser
-from .software_updates import iter_available_software_updates
+from .software_updates import best_available_software_update
 
 
 logger = logging.getLogger("zentral.contrib.mdm.declarations")
@@ -152,12 +152,10 @@ def build_specific_software_update_enforcement(target):
     if not software_update_enforcement:
         return
     if software_update_enforcement.max_os_version:
-        software_update = None
-        for software_update in iter_available_software_updates(
+        software_update = best_available_software_update(
             target.enrolled_device,
-            max_os_version=software_update_enforcement.max_os_version
-        ):
-            break
+            max_os_version=software_update_enforcement.max_os_version,
+        )
         if not software_update:
             logger.warning("Target %s: no software update available", target)
             return

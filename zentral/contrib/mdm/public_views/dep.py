@@ -12,6 +12,7 @@ from zentral.contrib.mdm.crypto import verify_iphone_ca_signed_payload
 from zentral.contrib.mdm.events import DEPEnrollmentRequestEvent
 from zentral.contrib.mdm.models import DEPEnrollmentSession, DEPEnrollment, EnrolledDevice
 from zentral.contrib.mdm.payloads import build_configuration_profile_response, build_mdm_configuration_profile
+from zentral.contrib.mdm.software_updates import best_available_software_update_for_device_id_and_build
 from zentral.utils.os_version import make_comparable_os_version
 from .base import PostEventMixin
 
@@ -38,6 +39,8 @@ class DEPEnrollMixin(PostEventMixin):
             )
             if s
         )
+        self.software_update_device_id = payload.get("SOFTWARE_UPDATE_DEVICE_ID")
+        self.build = payload.get("SUPPLEMENTAL_BUILD_VERSION") or payload.get("VERSION")
         self.product = payload["PRODUCT"]
         self.serial_number = payload["SERIAL"]
         self.udid = payload["UDID"]
@@ -73,14 +76,30 @@ class DEPEnrollMixin(PostEventMixin):
         else:
             logger.error("Unknown product for required software update: %s", self.product)
             return
-        required_os_version = getattr(self.dep_enrollment, f"{platform}_min_version")
-        comparable_required_os_version = make_comparable_os_version(required_os_version)
-        comparable_os_version = make_comparable_os_version(self.os_version)
-        if comparable_required_os_version > comparable_os_version:
-            self.post_event("warning", reason=f"OS update to version {required_os_version} required")
+        # max OS version
+        details = None
+        required_max_os_version = getattr(self.dep_enrollment, f"{platform}_max_version")
+        if required_max_os_version and self.software_update_device_id and self.build:
+            software_update = best_available_software_update_for_device_id_and_build(
+                self.software_update_device_id, self.build
+            )
+            if software_update:
+                details = {"OSVersion": software_update.target_os_version()}
+                if software_update.build:
+                    details["BuildVersion"] = software_update.build
+        if not details:
+            # min OS version
+            required_min_os_version = getattr(self.dep_enrollment, f"{platform}_min_version")
+            if required_min_os_version:
+                comparable_required_min_os_version = make_comparable_os_version(required_min_os_version)
+                comparable_os_version = make_comparable_os_version(self.os_version)
+                if comparable_required_min_os_version > comparable_os_version:
+                    details = {"OSVersion": required_min_os_version}
+        if details:
+            self.post_event("warning", reason=f"OS update to version {details['OSVersion']} required")
             return JsonResponse({
                 "code": "com.apple.softwareupdate.required",
-                "details": {"OSVersion": required_os_version}
+                "details": details,
             }, status=403)
 
     def verify(self):

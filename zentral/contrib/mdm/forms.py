@@ -318,7 +318,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
             field_order.append(key)
         field_order.extend(["realm", "use_realm_user", "realm_user_is_admin",
                             "admin_full_name", "admin_short_name", "admin_password",
-                            "ios_min_version", "macos_min_version"])
+                            "ios_max_version", "ios_min_version", "macos_max_version", "macos_min_version"])
         self.order_fields(field_order)
         self.fields["language"].choices = sorted(self.fields["language"].choices, key=lambda t: (t[1], t[0]))
         self.fields["region"].choices = sorted(self.fields["region"].choices, key=lambda t: (t[1], t[0]))
@@ -348,18 +348,24 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
             raise forms.ValidationError("This option is only valid if the 'use realm user' option is ticked too")
         return realm_user_is_admin
 
-    def _clean_min_version(self, platform):
-        fieldname = f"{platform}_min_version"
+    def _clean_os_version(self, platform, limit):
+        fieldname = f"{platform}_{limit}_version"
         min_version = self.cleaned_data.get(fieldname)
         if min_version and make_comparable_os_version(min_version) == (0, 0, 0):
             raise forms.ValidationError("Not a valid OS version")
         return min_version
 
+    def clean_ios_max_version(self):
+        return self._clean_os_version("ios", "max")
+
     def clean_ios_min_version(self):
-        return self._clean_min_version("ios")
+        return self._clean_os_version("ios", "min")
+
+    def clean_macos_max_version(self):
+        return self._clean_os_version("macos", "max")
 
     def clean_macos_min_version(self):
-        return self._clean_min_version("macos")
+        return self._clean_os_version("macos", "min")
 
     def clean_admin_password(self):
         password = self.cleaned_data.get("admin_password")

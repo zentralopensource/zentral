@@ -1612,8 +1612,10 @@ class DEPEnrollment(MDMEnrollment):
     include_tls_certificates = models.BooleanField(default=False)
 
     # To require a software update before the enrollment
-    ios_min_version = models.CharField(verbose_name="Required iOS version", max_length=32, blank=True)
-    macos_min_version = models.CharField(verbose_name="Required macOS version", max_length=32, blank=True)
+    ios_max_version = models.CharField(verbose_name="max. required iOS version", max_length=32, blank=True)
+    ios_min_version = models.CharField(verbose_name="min. required iOS version", max_length=32, blank=True)
+    macos_max_version = models.CharField(verbose_name="max. required macOS version", max_length=32, blank=True)
+    macos_min_version = models.CharField(verbose_name="min. required macOS version", max_length=32, blank=True)
 
     class Meta:
         ordering = ("name",)

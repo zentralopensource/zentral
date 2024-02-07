@@ -95,6 +95,36 @@ def sync_software_updates():
     return result
 
 
+def iter_available_software_updates_for_device_id_and_build(device_id, build, date=None, max_os_version=None):
+    if date is None:
+        date = datetime.date.today()
+    if max_os_version:
+        max_comparable_os_version = make_comparable_os_version(max_os_version)
+    else:
+        max_comparable_os_version = (math.inf,)
+    for software_update in SoftwareUpdate.objects.filter(
+        Q(public=False) | Q(extra__gt=""),
+        Q(prerequisite_build="") | Q(prerequisite_build=build),
+        availability__contains=date,
+        softwareupdatedeviceid__device_id=device_id
+    ).order_by(
+        "-major",
+        "-minor",
+        "-patch",
+        "-extra",
+    ):
+        if software_update.comparable_os_version >= max_comparable_os_version:
+            continue
+        yield software_update
+
+
+def best_available_software_update_for_device_id_and_build(device_id, build, date=None, max_os_version=None):
+    for software_update in iter_available_software_updates_for_device_id_and_build(
+        device_id, build, date, max_os_version
+    ):
+        return software_update
+
+
 def iter_available_software_updates(enrolled_device, date=None, max_os_version=None):
     try:
         device_id = enrolled_device.device_information["SoftwareUpdateDeviceID"]
@@ -109,26 +139,13 @@ def iter_available_software_updates(enrolled_device, date=None, max_os_version=N
         # should never happen
         logger.error("Enrolled device %s: SoftwareUpdateDeviceID is an empty str", enrolled_device.udid)
         return
-    if date is None:
-        date = datetime.date.today()
-    if max_os_version:
-        max_comparable_os_version = make_comparable_os_version(max_os_version)
-    else:
-        max_comparable_os_version = (math.inf,)
-    for software_update in SoftwareUpdate.objects.filter(
-        Q(public=False) | Q(extra__gt=""),
-        Q(prerequisite_build="") | Q(prerequisite_build=enrolled_device.current_build_version),
-        availability__contains=date,
-        softwareupdatedeviceid__device_id=device_id
-    ).order_by(
-        "-major",
-        "-minor",
-        "-patch",
-        "-extra",
-    ):
-        if software_update.comparable_os_version >= max_comparable_os_version:
-            continue
-        yield software_update
+    build = enrolled_device.current_build_version
+    yield from iter_available_software_updates_for_device_id_and_build(device_id, build, date, max_os_version)
+
+
+def best_available_software_update(enrolled_device, date=None, max_os_version=None):
+    for software_update in iter_available_software_updates(enrolled_device, date, max_os_version):
+        return software_update
 
 
 def best_available_software_updates(enrolled_device, date=None):

@@ -79,11 +79,22 @@
         </tr>
         <tr>
         <th>Required iOS version</th>
-        <td>{{ object.ios_min_version|default:"-" }}</td>
+        <td>
+          {% if not object.ios_min_version and not object.ios_max_version %}
+          -
+          {% else %}
+          {% if object.ios_min_version %} {{ object.ios_min_version }} &lte; {% endif %}OS version{% if object.ios_max_version %} &lt; {{ object.ios_max_version }}{% endif %}
+          {% endif %}
         </tr>
         <tr>
         <th>Required macOS version</th>
-        <td>{{ object.macos_min_version|default:"-" }}</td>
+        <td>
+          {% if not object.macos_min_version and not object.macos_max_version %}
+          -
+          {% else %}
+          {% if object.macos_min_version %} {{ object.macos_min_version }} &lte; {% endif %}OS version{% if object.macos_max_version %} &lt; {{ object.macos_max_version }}{% endif %}
+          {% endif %}
+        </td>
         </tr>
     </tbody>
     </table>
