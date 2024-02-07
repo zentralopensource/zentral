@@ -2,9 +2,75 @@
 
 ### Features (some, not all…)
 
-New `zentral.core.stores.backends.snowflake` store backend.
+#### MDM
+
+Support for DDM software updates, with automatic enforcement of the latest OS versions.
+
+Support for enforced software update to the latest OS versions during ADE.
+
+Available software updates from the official Apple JSON feed and the Software Update Product ID.
+
+Filevault configuration during Setup Assistant with automatic PRK escrow, rotation and database encryption.
+
+Automatic recovery lock and firmware password management, with key rotation and database encryption.
+
+Automatic device tagging based on ADE authentication and IdP SCIM group memberships.
+
+VPP apps with automatic app device assignments.
+
+Support for more manual MDM commands and custom MDM commands.
+
+Variable substitution in MDM InstallApplication command config.
+
+Support for the MDM header signature authentication scheme.
+
+#### APIs / Terraform
+
+Much improved API coverage, many more [Terraform provider](https://registry.terraform.io/providers/zentralopensource/zentral/latest) resources.
+
+Better Terraform exports.
+
+#### Identity provider support
+
+Add SCIM provisioning.
+
+Add Realm user support for up to two custom attributes.
+
+Add Realm group mapping claim separator.
+
+#### Munki
+
+Add Munki _Script Checks_. Those are Zentral compliance checks based on shell scripts, run by the Munki agent. They contribute to the reported health of the machines in the Zentral inventory, like the Inventory and Osquery based Zentral compliance checks.
+
+Support for multiple Munki repositories, and virtual repositories with direct package upload.
+
+Support for the Munki `default_installs` key.
+
+#### Santa
+
+Support for the [Santa Signing ID rules](https://santa.dev/concepts/rules.html#signing-id-rules).
+
+#### Inventory
+
+Jamf extensions attribute to principal user mapping.
+
+Microsoft Intune inventory sync.
+
+#### Events
+
+New Zentral Audit events to track configuration changes.
+
+New `zentral.core.stores.backends.snowflake` store backend for [Snowflake](https://www.snowflake.com/).
+
+#### One more thing…
+
+🚧 Alpha release of the new UI.
 
 ### Backward incompatibilities
+
+#### 🧨 dependency on Redis
+
+Redis is now required. It can be used as cache backend, and background task backends, and replaces Memcached.
 
 #### 🧨 updated monolith configuration
 
