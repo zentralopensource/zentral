@@ -83,7 +83,7 @@
           {% if not object.ios_min_version and not object.ios_max_version %}
           -
           {% else %}
-          {% if object.ios_min_version %} {{ object.ios_min_version }} &lte; {% endif %}OS version{% if object.ios_max_version %} &lt; {{ object.ios_max_version }}{% endif %}
+          {% if object.ios_min_version %} {{ object.ios_min_version }} ≤ {% endif %}OS version{% if object.ios_max_version %} &lt; {{ object.ios_max_version }}{% endif %}
           {% endif %}
         </tr>
         <tr>
@@ -92,7 +92,7 @@
           {% if not object.macos_min_version and not object.macos_max_version %}
           -
           {% else %}
-          {% if object.macos_min_version %} {{ object.macos_min_version }} &lte; {% endif %}OS version{% if object.macos_max_version %} &lt; {{ object.macos_max_version }}{% endif %}
+          {% if object.macos_min_version %} {{ object.macos_min_version }} ≤ {% endif %}OS version{% if object.macos_max_version %} &lt; {{ object.macos_max_version }}{% endif %}
           {% endif %}
         </td>
         </tr>

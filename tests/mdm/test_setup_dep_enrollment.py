@@ -187,7 +187,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         client.add_profile.assert_called_once()
         self.assertEqual(enrollment.uuid, profile_uuid)
         self.assertContains(response, "OS version &lt; 15")
-        self.assertContains(response, "12.3.1 &lte; OS version")
+        self.assertContains(response, "12.3.1 ≤ OS version")
 
     # view DEP enrollment
 
