@@ -30,7 +30,7 @@ Much improved API coverage, many more [Terraform provider](https://registry.terr
 
 Better Terraform exports.
 
-#### Identity provider support
+#### Identity provider
 
 Add SCIM provisioning.
 
@@ -70,7 +70,7 @@ New `zentral.core.stores.backends.snowflake` store backend for [Snowflake](https
 
 #### 🧨 dependency on Redis
 
-Redis is now required. It can be used as cache backend, and background task backends, and replaces Memcached.
+Redis is now required. It can be used as cache and background task backend, and replaces Memcached.
 
 #### 🧨 updated monolith configuration
 
