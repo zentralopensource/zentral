@@ -115,6 +115,10 @@ class ProductArchiveBuilder(BasePackageBuilder):
             self.pkg_refs.append({"id": pkg_ref.get("id"),
                                   "version": pkg_ref.get("version")})
 
+    def get_host_architectures(self):
+        # default to universal packages
+        return ["x86_64", "arm64"]
+
     def _build_empty_distribution(self):
         root = ET.Element("installer-gui-script")
         root.set("minSpecVersion", "1")
@@ -122,11 +126,16 @@ class ProductArchiveBuilder(BasePackageBuilder):
         title.text = self.title
         root.append(title)
         options = ET.Element("options")
-        options.set("customize", "allow")
-        options.set("allow-external-scripts", "no")
+        options.set("allow-external-scripts", "false")
+        options.set("customize", "never")
+        options.set("hostArchitectures", ",".join(self.get_host_architectures()))
+        options.set("require-scripts", "false")
+        options.set("rootVolumeOnly", "true")
         root.append(options)
-        domains = ET.Element("domains")
-        domains.set("enable_anywhere", "true")
+        domains = ET.Element("domains")  # local root only
+        domains.set("enable_anywhere", "false")
+        domains.set("enable_currentUserHome", "false")
+        domains.set("enable_localSystem", "true")
         root.append(domains)
         choices_outline = ET.Element("choices-outline")
         root.append(choices_outline)
