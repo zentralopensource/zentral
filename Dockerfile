@@ -25,8 +25,6 @@ RUN apt-get update && \
             python3-dev \
 # dep for psycopg2
             libpq-dev \
-# dep for pylibmc
-            libmemcached-dev \
 # dep for python-ldap
             libldap2-dev \
             libsasl2-dev \
@@ -171,9 +169,7 @@ RUN apt-get update && \
     apt-get autoremove -y && \
     apt-get install -y --no-install-recommends \
             # pycurl for kombu[sqs]
-            libcurl4-openssl-dev \
-            # for pylibmc
-            libmemcached11 && \
+            libcurl4-openssl-dev && \
 # clean cache
     rm -rf /var/lib/apt/lists/*
 
@@ -185,9 +181,7 @@ RUN apt-get update && \
     apt-get autoremove -y && \
     apt-get install -y --no-install-recommends \
             # pycurl for kombu[sqs]
-            libcurl4-openssl-dev \
-            # for pylibmc
-            libmemcached11 && \
+            libcurl4-openssl-dev && \
 # clean cache
     rm -rf /var/lib/apt/lists/*
 

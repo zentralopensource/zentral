@@ -11,6 +11,3 @@ kombu[sqs]<6  # <6 for compatibility with celery<6
 # to make sure that the celery workers will start
 # TODO: understand why!!!
 pycurl
-
-# Elasticache memcached
-pylibmc
