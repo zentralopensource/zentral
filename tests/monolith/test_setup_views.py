@@ -1633,15 +1633,26 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:sub_manifest", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_sub_manifest_no_pkginfo_edit_link(self):
+    def test_sub_manifest_no_pkginfo_links(self):
         smpi = force_sub_manifest_pkg_info()
         self._login("monolith.view_submanifest")
         response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertNotContains(response, 'class="danger"')
+        self.assertContains(response, "Package (1)")
+        self.assertNotContains(
+            response,
+            reverse("monolith:sub_manifest_add_pkg_info",
+                    args=(smpi.sub_manifest.pk,))
+        )
         self.assertNotContains(
             response,
             reverse("monolith:update_sub_manifest_pkg_info",
+                    args=(smpi.sub_manifest.pk, smpi.pk))
+        )
+        self.assertNotContains(
+            response,
+            reverse("monolith:delete_sub_manifest_pkg_info",
                     args=(smpi.sub_manifest.pk, smpi.pk))
         )
 
@@ -1651,9 +1662,66 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertNotContains(response, 'class="danger"')
+        self.assertContains(response, "Package (1)")
+        self.assertNotContains(
+            response,
+            reverse("monolith:sub_manifest_add_pkg_info",
+                    args=(smpi.sub_manifest.pk,))
+        )
         self.assertContains(
             response,
             reverse("monolith:update_sub_manifest_pkg_info",
+                    args=(smpi.sub_manifest.pk, smpi.pk))
+        )
+        self.assertNotContains(
+            response,
+            reverse("monolith:delete_sub_manifest_pkg_info",
+                    args=(smpi.sub_manifest.pk, smpi.pk))
+        )
+
+    def test_sub_manifest_pkginfo_add_link(self):
+        smpi = force_sub_manifest_pkg_info()
+        self._login("monolith.view_submanifest", "monolith.add_submanifestpkginfo")
+        response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        self.assertNotContains(response, 'class="danger"')
+        self.assertContains(response, "Package (1)")
+        self.assertContains(
+            response,
+            reverse("monolith:sub_manifest_add_pkg_info",
+                    args=(smpi.sub_manifest.pk,))
+        )
+        self.assertNotContains(
+            response,
+            reverse("monolith:update_sub_manifest_pkg_info",
+                    args=(smpi.sub_manifest.pk, smpi.pk))
+        )
+        self.assertNotContains(
+            response,
+            reverse("monolith:delete_sub_manifest_pkg_info",
+                    args=(smpi.sub_manifest.pk, smpi.pk))
+        )
+
+    def test_sub_manifest_pkginfo_delete_link(self):
+        smpi = force_sub_manifest_pkg_info()
+        self._login("monolith.view_submanifest", "monolith.delete_submanifestpkginfo")
+        response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        self.assertNotContains(response, 'class="danger"')
+        self.assertContains(response, "Package (1)")
+        self.assertNotContains(
+            response,
+            reverse("monolith:sub_manifest_add_pkg_info",
+                    args=(smpi.sub_manifest.pk,))
+        )
+        self.assertNotContains(
+            response,
+            reverse("monolith:update_sub_manifest_pkg_info",
+                    args=(smpi.sub_manifest.pk, smpi.pk))
+        )
+        self.assertContains(
+            response,
+            reverse("monolith:delete_sub_manifest_pkg_info",
                     args=(smpi.sub_manifest.pk, smpi.pk))
         )
 

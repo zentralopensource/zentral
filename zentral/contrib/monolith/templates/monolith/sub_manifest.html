@@ -63,7 +63,7 @@
     <h3>Package{{ total.pkginfo|pluralize }} ({{ total.pkginfo }})</h3>
     <div class="ms-auto">
         {% if perms.monolith.add_submanifestpkginfo %}
-            {% url 'monolith:sub_manifest_add_pkg_info' as url %}
+            {% url 'monolith:sub_manifest_add_pkg_info' object.pk as url %}
             {% button 'CREATE' url "Create new Package" %}
         {% endif %}
     </div>
