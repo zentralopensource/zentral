@@ -569,6 +569,37 @@ class RealmViewsTestCase(TestCase):
              'scimType': 'invalidSyntax'}
         )
 
+    def test_create_user_unsupported_schema(self):
+        self.set_permissions("realms.add_realmuser")
+        response = self.post(
+            reverse("realms_public:scim_users", args=(self.realm.pk,)),
+            {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User",
+                         "urn:ietf:params:scim:schemas:core:2.0:YOLO"],
+             "userName": "un",
+             "name": {
+                 "givenName": "deux",
+                 "familyName": "trois",
+             },
+             "emails": [{
+                 "primary": True,
+                 "value": "un@zentral.com",
+                 "type": "work"
+             }],
+             "displayName": "deux trois",
+             "locale": "en-US",
+             "externalId": "4567890",
+             "password": "1mz050nq",
+             "active": True}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'detail': 'Invalid input.',
+             'schemas': ['urn:ietf:params:scim:api:messages:2.0:Error'],
+             'status': 400,
+             'scimType': 'invalidSyntax'}
+        )
+
     def test_create_user(self):
         self.set_permissions("realms.add_realmuser")
         first_name = get_random_string(12)
@@ -578,7 +609,8 @@ class RealmViewsTestCase(TestCase):
         external_id = get_random_string(12)
         response = self.post(
             reverse("realms_public:scim_users", args=(self.realm.pk,)),
-            {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+            {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User",
+                         "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"],
              "userName": username,
              "name": {
                  "givenName": first_name,
@@ -589,6 +621,16 @@ class RealmViewsTestCase(TestCase):
                  "value": email,
                  "type": "work"
              }],
+             "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
+                 "costCenter": "Cost center",
+                 "department": "Department",
+                 "division": "Division",
+                 "employeeNumber": "Employee number",
+                 "manager": {"displayName": "Manager",
+                             "$ref": "1234567890",
+                             "value": "ManagerID"},
+                 "organization": "Organization"
+             },
              "displayName": f"{first_name} {last_name}",
              "locale": "en-US",
              "externalId": external_id,
@@ -1434,6 +1476,26 @@ class RealmViewsTestCase(TestCase):
         response = self.put(
             reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+             "members": []}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'detail': 'Invalid input.',
+             'schemas': ['urn:ietf:params:scim:api:messages:2.0:Error'],
+             'status': 400,
+             'scimType': 'invalidSyntax'}
+        )
+
+    def test_update_group_unsupported_schemas(self):
+        group = force_realm_group(realm=self.realm)
+        self.set_permissions("realms.change_realmgroup")
+        response = self.put(
+            reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
+            {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group",
+                         "urn:ietf:params:scim:schemas:core:2.0:YOLO",],
+             "displayName": "un",
+             "externalId": "0123456789",
              "members": []}
         )
         self.assertEqual(response.status_code, 400)

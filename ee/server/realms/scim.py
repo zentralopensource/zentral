@@ -42,8 +42,14 @@ class SCIMGroup(serializers.Serializer):
         super().__init__(*args, **kwargs)
 
     def validate_schemas(self, value):
-        if value != ["urn:ietf:params:scim:schemas:core:2.0:Group"]:
-            raise serializers.ValidationError("Unsupported schemas")
+        if isinstance(value, list):
+            unsupported_schemas = (
+                set(value)
+                - {"urn:ietf:params:scim:schemas:core:2.0:Group"}
+            )
+            if unsupported_schemas:
+                logger.error("Unsupported SCIM group schemas: %s", unsupported_schemas)
+                raise serializers.ValidationError("Unsupported schemas")
         return value
 
     def validate_externalId(self, value):
@@ -137,6 +143,27 @@ class SCIMEmail(serializers.Serializer):
     value = serializers.CharField(max_length=254)
 
 
+class SCIMEntepriseUserManager(serializers.Serializer):
+    value = serializers.CharField(required=False)
+    ref = serializers.CharField(required=False)
+    displayName = serializers.CharField(required=False)
+
+    def to_internal_value(self, data):
+        ref = data.pop("$ref", None)
+        if ref:
+            data["ref"] = ref
+        return super().to_internal_value(data)
+
+
+class SCIMEnterpriseUser(serializers.Serializer):
+    employeeNumber = serializers.CharField(required=False)
+    costCenter = serializers.CharField(required=False)
+    organization = serializers.CharField(required=False)
+    division = serializers.CharField(required=False)
+    department = serializers.CharField(required=False)
+    manager = SCIMEntepriseUserManager(required=False)
+
+
 class SCIMUser(serializers.Serializer):
     schemas = serializers.ListSerializer(child=serializers.CharField())
     externalId = serializers.CharField(max_length=255, allow_null=True, required=False)
@@ -148,15 +175,29 @@ class SCIMUser(serializers.Serializer):
         child=SCIMEmail(),
         allow_empty=True,
     )
+    enterprise_user = SCIMEnterpriseUser(required=False)
 
     def __init__(self, *args, **kwargs):
         self.resource = kwargs.pop("resource", None)
         self.realm = kwargs.pop("realm")
         super().__init__(*args, **kwargs)
 
+    def to_internal_value(self, data):
+        enterprise_user = data.pop("urn:ietf:params:scim:schemas:extension:enterprise:2.0:User", None)
+        if enterprise_user:
+            data["enterprise_user"] = enterprise_user
+        return super().to_internal_value(data)
+
     def validate_schemas(self, value):
-        if value != ["urn:ietf:params:scim:schemas:core:2.0:User"]:
-            raise serializers.ValidationError("Unsupported schemas")
+        if isinstance(value, list):
+            unsupported_schemas = (
+                set(value)
+                - {"urn:ietf:params:scim:schemas:core:2.0:User",
+                   "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"}
+            )
+            if unsupported_schemas:
+                logger.error("Unsupported SCIM user schemas: %s", unsupported_schemas)
+                raise serializers.ValidationError("Unsupported schemas")
         return value
 
     def validate_externalId(self, value):
