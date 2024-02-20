@@ -23,6 +23,7 @@ nav:
   - Users: configuration/users.md
   - "Azure AD - SAML": configuration/azure_ad_saml.md
   - "Okta - SAML": configuration/okta_saml.md
+  - "Okta - SCIM": configuration/okta_scim.md
   - "OneLogin - SAML": configuration/onelogin_saml.md
 - Apps:
   - Inventory: apps/inventory.md
