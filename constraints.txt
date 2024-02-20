@@ -105,7 +105,7 @@ pyOpenSSL==22.0.0
 pyasn1-modules==0.2.8
 pyasn1==0.4.8
 pycparser==2.21
-pycryptodomex==3.15.0
+pycryptodomex==3.19.1
 pycurl==7.44.1
 pydantic==1.9.1
 pyotp==2.6.0
