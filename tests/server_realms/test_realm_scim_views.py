@@ -546,6 +546,29 @@ class RealmViewsTestCase(TestCase):
              'status': 409}
         )
 
+    def test_create_user_invalid_input(self):
+        self.set_permissions("realms.add_realmuser")
+        response = self.post(
+            reverse("realms_public:scim_users", args=(self.realm.pk,)),
+            {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+             "userName": get_random_string(12),
+             "emails": [{
+                 "primary": True,
+                 "type": "work"
+             }],
+             "locale": "en-US",
+             "password": "1mz050nq",
+             "active": True}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'detail': 'Invalid input.',
+             'schemas': ['urn:ietf:params:scim:api:messages:2.0:Error'],
+             'status': 400,
+             'scimType': 'invalidSyntax'}
+        )
+
     def test_create_user(self):
         self.set_permissions("realms.add_realmuser")
         first_name = get_random_string(12)
@@ -1403,6 +1426,23 @@ class RealmViewsTestCase(TestCase):
                       'location': f'https://zentral/public/realms/{self.realm.pk}/scim/v2/Groups/{group.pk}',
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
+        )
+
+    def test_update_group_invalid_input(self):
+        group = force_realm_group(realm=self.realm)
+        self.set_permissions("realms.change_realmgroup")
+        response = self.put(
+            reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
+            {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+             "members": []}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'detail': 'Invalid input.',
+             'schemas': ['urn:ietf:params:scim:api:messages:2.0:Error'],
+             'status': 400,
+             'scimType': 'invalidSyntax'}
         )
 
     @patch("zentral.contrib.mdm.inventory.update_realm_tags")

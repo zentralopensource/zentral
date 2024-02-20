@@ -145,6 +145,8 @@ class SingleResourceSCIMView(SCIMView):
         if serializer.is_valid():
             resource = serializer.update()
             return self.build_response(self.serialize_resource(resource), status=200)
+        else:
+            logger.error("Invalid input for %s update: %s", self.model_class.__name__, serializer.errors)
         raise SCIMException(detail="Invalid input.", scim_type="invalidSyntax")
 
 
@@ -198,6 +200,8 @@ class MultipleResourcesSCIMView(SCIMView):
         if serializer.is_valid():
             resource = serializer.save()
             return self.build_response(self.serialize_resource(resource), status=201)
+        else:
+            logger.error("Invalid input for %s creation: %s", self.model_class.__name__, serializer.errors)
         raise SCIMException(detail="Invalid input.", scim_type="invalidSyntax")
 
 
