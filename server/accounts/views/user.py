@@ -111,7 +111,7 @@ class RegisterWebAuthnDeviceView(LoginRequiredMixin, FormView):
                     rp_id=zentral_settings["api"]["fqdn"],
                     rp_name="Zentral",
                     exclude_credentials=credentials,
-                    user_id=str(request.user.pk),
+                    user_id=str(request.user.pk).encode("utf-8"),
                     user_name=request.user.username,
                 )
             )

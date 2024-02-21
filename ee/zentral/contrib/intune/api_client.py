@@ -3,7 +3,9 @@ from asgiref.sync import async_to_sync
 from azure.identity.aio import ClientSecretCredential
 from kiota_authentication_azure.azure_identity_authentication_provider import AzureIdentityAuthenticationProvider
 from msgraph import GraphRequestAdapter, GraphServiceClient
-from msgraph.generated.me.managed_devices.managed_devices_request_builder import ManagedDevicesRequestBuilder
+from msgraph.generated.device_management.managed_devices.managed_devices_request_builder import (
+    ManagedDevicesRequestBuilder
+)
 from msgraph_core import GraphClientFactory
 from zentral.contrib.inventory.conf import windows_version_from_build
 import httpx
