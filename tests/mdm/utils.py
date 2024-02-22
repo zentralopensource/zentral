@@ -230,10 +230,10 @@ def force_ota_enrollment(mbu, realm=None):
     )
 
 
-def force_user_enrollment(mbu, realm):
+def force_user_enrollment(mbu, realm=None):
     return UserEnrollment.objects.create(
         push_certificate=force_push_certificate(),
-        realm=realm,
+        realm=realm or force_realm(),
         scep_config=force_scep_config(),
         name=get_random_string(12),
         enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu)

@@ -94,20 +94,11 @@
     <table class="table-object-properties">
     <tbody>
         <tr>
-        <th width="160px">Self-Enrollment</th>
-        <td>
-            {% if enroll_url %}
-            <a href="{{ enroll_url }}">{{ enroll_url }}</a>
-            {% else %}
-            -
-            {% endif %}
-        </td>
-        </tr>
-        <tr>
         <th width="160px">Service discovery</th>
         <td>
             {% if service_discovery_url %}
-            <a href="{{ service_discovery_url }}">https://YOUR_DOMAIN/.well-known/com.apple.remotemanagement/</a>
+            See the <a href="https://developer.apple.com/documentation/devicemanagement/user_enrollment/onboarding_users_with_account_sign-in/implementing_the_simple_authentication_user-enrollment_flow#4084268">Apple documentation.</a><br>
+            <a href="{{ service_discovery_url }}">{{ service_discovery_url }}</a>
             {% else %}
             -
             {% endif %}

@@ -1817,7 +1817,9 @@ class UserEnrollment(MDMEnrollment):
 
     enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
                                              related_name="user_enrollment")
-    # if linked to a realm, the enrollment can start from the device
+    # Realm is required, but not in the database schema.
+    # User enrollments via profiles, with authentication in the device is deprecated
+    # and has been removed.
 
     class Meta:
         ordering = ("-created_at",)
@@ -1836,12 +1838,6 @@ class UserEnrollment(MDMEnrollment):
     def get_absolute_url(self):
         return reverse("mdm:user_enrollment", args=(self.pk,))
 
-    def get_enroll_full_url(self):
-        return "https://{}{}".format(
-            settings["api"]["fqdn"],
-            reverse("mdm_public:user_enrollment_enroll", args=(self.pk,))
-        )
-
     def get_service_discovery_full_url(self):
         if self.realm:
             return "https://{}{}".format(
@@ -1858,25 +1854,18 @@ class UserEnrollment(MDMEnrollment):
 
 
 class UserEnrollmentSessionManager(models.Manager):
-    def create_from_user_enrollment(self, user_enrollment, managed_apple_id=None):
-        if managed_apple_id:
-            status = self.model.STARTED
-            quota = 1  # verified once with SCEP
-        else:
-            status = self.model.ACCOUNT_DRIVEN_START
-            quota = 10  # verified at the beginning of the authentication and once with SCEP
+    def create_from_user_enrollment(self, user_enrollment):
         enrollment_secret = user_enrollment.enrollment_secret
         tags = list(enrollment_secret.tags.all())
         new_es = EnrollmentSecret(
             meta_business_unit=enrollment_secret.meta_business_unit,
-            quota=quota,
+            quota=10,  # verified at the beginning of the authentication and once with SCEP
             expired_at=enrollment_secret.expired_at
         )
         new_es.save(secret_length=55)  # CN max 64 - $ separator - mdm$user
         new_es.tags.set(tags)
-        enrollment_session = self.model(status=status,
+        enrollment_session = self.model(status=self.model.ACCOUNT_DRIVEN_START,
                                         user_enrollment=user_enrollment,
-                                        managed_apple_id=managed_apple_id,
                                         enrollment_secret=new_es)
         enrollment_session.save()
         return enrollment_session

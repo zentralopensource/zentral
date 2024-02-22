@@ -164,13 +164,10 @@ def build_mdm_configuration_profile(enrollment_session):
     mdm_config["CheckInURL"] = "https://{}{}".format(settings["api"][fqdn_key], reverse("mdm_public:checkin"))
     managed_apple_id = getattr(enrollment_session, "managed_apple_id", None)
     if managed_apple_id:
-        if enrollment_session.access_token:
-            # account-driven user enrollment
-            mdm_config["AssignedManagedAppleID"] = managed_apple_id
-            mdm_config["EnrollmentMode"] = "BYOD"
-        else:
-            # unauthenticated user enrollment
-            mdm_config["ManagedAppleID"] = managed_apple_id
+        # account-driven user enrollment
+        mdm_config["AssignedManagedAppleID"] = managed_apple_id
+        # TODO we currently only have BYOD. Implement ADDE / mdm-adde
+        mdm_config["EnrollmentMode"] = "BYOD"
     else:
         mdm_config["AccessRights"] = 8191  # TODO: config
     payloads.extend([

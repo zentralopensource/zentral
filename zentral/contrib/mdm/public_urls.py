@@ -53,9 +53,6 @@ urlpatterns = [
          name='verify_scep_csr'),
 
     # User enrollment / user views
-    path('user_enrollment/<int:pk>/enroll/',
-         public_views.UserEnrollmentEnrollView.as_view(),
-         name='user_enrollment_enroll'),
     path('user_enrollment/<str:secret>/com.apple.remotemanagement/',
          csrf_exempt(public_views.UserEnrollmentServiceDiscoveryView.as_view()),
          name='user_enrollment_service_discovery'),

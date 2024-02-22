@@ -16,7 +16,7 @@ from .utils import force_dep_enrollment, force_dep_enrollment_session, force_rea
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
 @patch("zentral.contrib.mdm.public_views.dep.verify_iphone_ca_signed_payload")
-class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
+class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))

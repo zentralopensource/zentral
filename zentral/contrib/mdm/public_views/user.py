@@ -1,50 +1,18 @@
 import logging
-from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.generic import FormView, View
+from django.views.generic import View
 from zentral.conf import settings
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.contrib.mdm.events import UserEnrollmentRequestEvent
-from zentral.contrib.mdm.forms import UserEnrollmentEnrollForm
 from zentral.contrib.mdm.models import UserEnrollment, UserEnrollmentSession
 from zentral.contrib.mdm.payloads import build_configuration_profile_response, build_mdm_configuration_profile
 from .base import PostEventMixin
 
 
 logger = logging.getLogger('zentral.contrib.mdm.public_views.user')
-
-
-class UserEnrollmentEnrollView(FormView):
-    form_class = UserEnrollmentEnrollForm
-    template_name = "mdm/user_enrollment_enroll.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.user_enrollment = get_object_or_404(
-            UserEnrollment,
-            pk=kwargs["pk"]
-        )
-        if not self.user_enrollment.enrollment_secret.is_valid():
-            # should not happen
-            raise SuspiciousOperation
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["user_enrollment"] = self.user_enrollment
-        return ctx
-
-    def form_valid(self, form):
-        managed_apple_id = form.cleaned_data["managed_apple_id"]
-        user_enrollment_session = UserEnrollmentSession.objects.create_from_user_enrollment(
-            self.user_enrollment, managed_apple_id
-        )
-        return build_configuration_profile_response(
-            build_mdm_configuration_profile(user_enrollment_session),
-            "zentral_user_enrollment"
-        )
 
 
 class UserEnrollmentServiceDiscoveryView(View):
@@ -77,7 +45,7 @@ class EnrollUserView(PostEventMixin, View):
             self.abort("secret verification failed: '{}'".format(e.err_msg))
         else:
             self.user_enrollment = es_request.enrollment_secret.user_enrollment
-            if not self.user_enrollment.realm:
+            if not self.user_enrollment.realm:  # Deprecated, should never happen
                 self.abort("This user enrollment has no realm")
 
     def post(self, request, *args, **kwargs):
@@ -125,6 +93,8 @@ def user_enroll_callback(request, realm_authentication_session, user_enrollment_
 
 
 class AuthenticateUserView(PostEventMixin, View):
+    event_class = UserEnrollmentRequestEvent
+
     def verify_enrollment_secret(self):
         try:
             es_request = verify_enrollment_secret(
@@ -137,7 +107,7 @@ class AuthenticateUserView(PostEventMixin, View):
         else:
             self.user_enrollment_session = es_request.enrollment_secret.user_enrollment_session
             self.realm = self.user_enrollment_session.user_enrollment.realm
-            if not self.realm:
+            if not self.realm:  # Deprecated, should never happen
                 self.abort("This user enrollment has no realm")
 
     def get(self, request, *args, **kwargs):

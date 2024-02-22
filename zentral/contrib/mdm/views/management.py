@@ -416,7 +416,6 @@ class UserEnrollmentView(PermissionRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         user_enrollment = ctx["object"]
         ctx["meta_business_unit"] = user_enrollment.enrollment_secret.meta_business_unit
-        ctx["enroll_url"] = user_enrollment.get_enroll_full_url()
         ctx["service_discovery_url"] = user_enrollment.get_service_discovery_full_url()
         # TODO: pagination, separate view
         ctx["user_enrollment_sessions"] = (ctx["object"].userenrollmentsession_set.all()

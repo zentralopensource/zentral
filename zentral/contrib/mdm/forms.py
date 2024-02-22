@@ -46,9 +46,11 @@ class UserEnrollmentForm(forms.ModelForm):
                   "scep_config", "scep_verification",
                   "blueprint")
 
-
-class UserEnrollmentEnrollForm(forms.Form):
-    managed_apple_id = forms.EmailField(label="Email", required=True)
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data.get("realm"):
+            self.add_error("realm", "This field is required")
+        return cleaned_data
 
 
 class PushCertificateForm(forms.ModelForm):
