@@ -7,7 +7,8 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import DetailView, FormView, TemplateView
 from webauthn import generate_registration_options, options_to_json, verify_registration_response
-from webauthn.helpers.structs import PublicKeyCredentialDescriptor, RegistrationCredential
+from webauthn.helpers import parse_registration_credential_json
+from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 from accounts.events import post_verification_device_event
 from accounts.forms import AddTOTPForm, CheckPasswordForm, RegisterWebAuthnDeviceForm, UpdateProfileForm
 from accounts.models import UserTOTP, UserWebAuthn
@@ -132,7 +133,7 @@ class RegisterWebAuthnDeviceView(LoginRequiredMixin, FormView):
     def form_valid(self, form):
         webauthn_challenge = self.request.session["webauthn_challenge"]
         try:
-            credential = RegistrationCredential.parse_raw(form.cleaned_data["token_response"])
+            credential = parse_registration_credential_json(form.cleaned_data["token_response"])
             verification = verify_registration_response(
                 credential=credential,
                 expected_challenge=trimmed_urlsafe_b64decode(webauthn_challenge["challenge"]),
