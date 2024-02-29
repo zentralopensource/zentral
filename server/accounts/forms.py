@@ -14,7 +14,8 @@ from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
 import pyotp
 from webauthn import generate_authentication_options, options_to_json, verify_authentication_response
-from webauthn.helpers.structs import AuthenticationCredential, PublicKeyCredentialDescriptor
+from webauthn.helpers import parse_authentication_credential_json
+from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 from zentral.conf import settings as zentral_settings
 from zentral.conf.config import ConfigList
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
@@ -302,7 +303,7 @@ class VerifyWebAuthnForm(BaseVerifyForm):
         cleaned_data = super().clean()
         webauthn_challenge = self.session["webauthn_challenge"]
         try:
-            credential = AuthenticationCredential.parse_raw(cleaned_data["token_response"])
+            credential = parse_authentication_credential_json(cleaned_data["token_response"])
         except Exception:
             msg = "Invalid token response"
             logger.exception(msg)

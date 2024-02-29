@@ -64,7 +64,10 @@
           authenticatorData: ab2str(r.authenticatorData),
           clientDataJSON: ab2str(r.clientDataJSON),
           signature: ab2str(r.signature),
-        }
+          userHandle: ab2str(r.userHandle)
+        },
+        type: credential.type,
+        authenticatorAttachment: credential.authenticatorAttachment
       };
       show_message("OK", false);
       document.getElementById('token_response').value = JSON.stringify(data);
