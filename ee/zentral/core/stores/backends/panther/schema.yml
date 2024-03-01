@@ -1,0 +1,203 @@
+schema: Custom.Zentral
+fields:
+    - name: created_at
+      required: true
+      isEventTime: true
+      type: timestamp
+      timeFormats:
+        - "%Y-%m-%dT%H:%M:%S.%f"
+        - "%Y-%m-%dT%H:%M:%S.%N"
+        - "%Y-%m-%dT%H:%M:%S"
+    - name: id
+      required: true
+      type: string
+    - name: index
+      required: true
+      type: int
+    - name: machine
+      type: object
+      fields:
+        # common machine metadata fields
+        - name: meta_business_units
+          type: array
+          element:
+            type: object
+            fields:
+                - name: id
+                  type: bigint
+                - name: name
+                  type: string
+        - name: platform
+          type: string
+        - name: type
+          type: string
+        # inventory sources
+        - name: jamf
+          type: object
+          fields:
+            - name: name
+              type: string
+            - name: os_version
+              type: string
+            - name: principal_user
+              type: object
+              fields:
+                - name: id
+                  type: bigint
+                - name: principal_name
+                  type: string
+                - name: unique_id
+                  type: bigint
+        - name: mdm
+          type: object
+          fields:
+            - name: name
+              type: string
+            - name: os_version
+              type: string
+            - name: principal_user
+              type: object
+              fields:
+                - name: id
+                  type: bigint
+                - name: principal_name
+                  type: string
+                - name: unique_id
+                  type: bigint
+        - name: munki
+          type: object
+          fields:
+            - name: name
+              type: string
+            - name: os_version
+              type: string
+            - name: principal_user
+              type: object
+              fields:
+                - name: id
+                  type: bigint
+                - name: principal_name
+                  type: string
+                - name: unique_id
+                  type: bigint
+        - name: osquery
+          type: object
+          fields:
+            - name: name
+              type: string
+            - name: os_version
+              type: string
+            - name: principal_user
+              type: object
+              fields:
+                - name: id
+                  type: bigint
+                - name: principal_name
+                  type: string
+                - name: unique_id
+                  type: bigint
+        - name: santa
+          type: object
+          fields:
+            - name: name
+              type: string
+            - name: os_version
+              type: string
+            - name: principal_user
+              type: object
+              fields:
+                - name: id
+                  type: bigint
+                - name: principal_name
+                  type: string
+                - name: unique_id
+                  type: bigint
+    - name: machine_serial_number
+      type: string
+    - name: namespace
+      type: string
+    - name: objects
+      type: json
+    - name: payload
+      type: json
+    - name: probes
+      type: array
+      element:
+        type: object
+        fields:
+            - name: name
+              type: string
+            - name: pk
+              type: bigint
+    - name: request
+      type: object
+      fields:
+        - name: method
+          type: string
+        - name: path
+          type: string
+        - name: user
+          type: object
+          fields:
+            - name: email
+              type: string
+              indicators:
+                - email
+            - name: id
+              type: bigint
+            - name: is_remote
+              type: boolean
+            - name: is_service_account
+              type: boolean
+            - name: is_superuser
+              type: boolean
+            - name: session
+              type: object
+              fields:
+                - name: expire_at_browser_close
+                  type: boolean
+                - name: expiry_age
+                  type: bigint
+                - name: is_remote
+                  type: boolean
+                - name: mfa_authenticated
+                  type: boolean
+                - name: token_authenticated
+                  type: boolean
+            - name: username
+              type: string
+        - name: geo
+          type: object
+          fields:
+            - name: city_name
+              type: string
+            - name: continent_name
+              type: string
+            - name: country_iso_code
+              type: string
+            - name: country_name
+              type: string
+            - name: location
+              type: object
+              fields:
+                - name: lat
+                  type: float
+                - name: lon
+                  type: float
+            - name: region_iso_code
+              type: string
+            - name: region_name
+              type: string
+        - name: ip
+          type: string
+          indicators:
+            - ip
+        - name: user_agent
+          type: string
+    - name: tags
+      type: array
+      element:
+        type: string
+    - name: type
+      required: true
+      type: string

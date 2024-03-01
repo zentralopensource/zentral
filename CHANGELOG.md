@@ -62,6 +62,8 @@ New Zentral Audit events to track configuration changes.
 
 New `zentral.core.stores.backends.snowflake` store backend for [Snowflake](https://www.snowflake.com/).
 
+New `zentral.core.stores.backends.panther` store backend for [Panther](https://panther.com/)
+
 #### One more thing…
 
 🚧 Alpha release of the new UI.

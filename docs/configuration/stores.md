@@ -31,6 +31,7 @@ The python module implementing the store, as a string. Currently available:
 * `zentral.core.stores.backends.humio`
 * `zentral.core.stores.backends.kinesis`
 * `zentral.core.stores.backends.opensearch`
+* `zentral.core.stores.backends.panther`
 * `zentral.core.stores.backends.snowflake`
 * `zentral.core.stores.backends.splunk`
 * `zentral.core.stores.backends.sumo_logic`
@@ -101,123 +102,6 @@ Use `included_event_filters` instead.
 **OPTIONAL**
 
 A list of group names. Empty by default (i.e. all users will get the links). Can be used to display the links to the events in the store to only a subset of Zentral users, if not all users have direct access to the store.
-
-## OpenSearch backend options
-
-Use this store if you have a managed AWS OpenSearch domain. API calls to store and retrieve the events can be authenticated using the standard AWS signatures. It is recommended to use a role attached to the EC2 instance or to the container, but an IAM key and a secret can be provided.
-
-### `aws_auth`
-
-**OPTIONAL**
-
-A dictionary to configure the AWS authentication. If omitted, the API calls will not be authenticated. It must contain the AWS region in the `region` key. `access_key_id` and `secret_access_key` can also be used if the default AWS authentication via instance or container profile is not set.
-
-### Simple example
-
-```json
-{
-  "backend": "zentral.core.stores.backends.opensearch",
-  "frontend": true,
-  "index": "zentral-events",
-  "hosts": ["https://example-00000000000000000000000000.us-east-1.es.amazonaws.com"],
-  "kibana_discover_url": "https://example-00000000000000000000000000.us-east-1.es.amazonaws.com/_dashboards",
-  "kibana_index_pattern_uuid": "00000000-0000-0000-0000-000000000000",
-  "aws_auth": {"region": "us-east-1"}
-}
-```
-
-### Full example
-
-In this example, a separate index is setup to receive the Osquery events. You could configure it with a different [OpenSearch policy](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ism.html) to change the retention time or the storage type. Use the index name as the key, add `included_event_filters` and `excluded_event_filters`. Set a priority to make sure that only one index will be chosen by Zentral. Finally do not forget to add a default unfiltered index with the lowest priority. A `read_index` is also required in this kind of setup. It should point to an alias that is covering all the events you want to be able to retrieve in the Zentral GUI.
-
-```json
-{
-  "backend": "zentral.core.stores.backends.opensearch",
-  "frontend": true,
-  "batch_size": 100,
-  "indices": {
-    "zentral-osquery": {
-      "priority": 10,
-      "included_event_filters": {
-        "tags": ["osquery"]
-      }
-    },
-    "zentral-other": {
-      "priority": 1
-    }
-  },
-  "read_index": "zentral-all",
-  "hosts": ["https://example-00000000000000000000000000.us-east-1.es.amazonaws.com"],
-  "kibana_discover_url": "https://example-00000000000000000000000000.us-east-1.es.amazonaws.com/_dashboards",
-  "kibana_index_pattern_uuid": "00000000-0000-0000-0000-000000000000",
-  "aws_auth": {"region": "us-east-1"}
-}
-```
-
-## Kinesis backend options
-
-This store is capable of batch operation. The maximum `batch_size` is 500. See the [`kinesis:PutRecords`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_PutRecords.html) documentation for more details.
-
-### AWS authentication and authorization
-
-When operating in AWS, it is recommended to use a role attached to the EC2 instance or to the container to authenticate the calls to the Kinesis API.
-
-Example of an IAM policy to allow Zentral to write to the Kinesis stream:
-
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "AllowKinesisPut"
-            "Action": [
-                "kinesis:PutRecords",
-                "kinesis:PutRecord"
-            ],
-            "Effect": "Allow",
-            "Resource": "arn:aws:kinesis:<AWS_REGION>:<AWS_ACCOUNT_ID>:stream/<KINESIS_STREAM_NAME>",
-        }
-    ]
-}
-```
-
-The `PutRecord` action can be omitted if the store is configured for batch operations.
-
-If the authentication is not possible using the environment (standard environment variable, instance metadata service, …), you can set `aws_access_key_id` and `aws_secret_access_key` in the store configuration.
-
-You can also configure an AWS IAM role to be assumed, using the `assume_role_arn` store configuration key.
-
-### `stream`
-
-**MANDATORY**
-
-The name of the Kinesis stream.
-
-### `region_name`
-
-**MANDATORY**
-
-The name of the Kinesis stream AWS region.
-
-### `serialization_format`
-
-By default, the events will be serialized using the Zentral canonical serialization.
-
-A serialization format optimized for the use with Kinesis Firehose is also available: `firehose_v1`.
-
-### Full example
-
-```json
-{
-    "backend": "zentral.core.stores.backends.kinesis",
-    "aws_access_key_id": "XXXXXXXXXXXXX",
-    "aws_secret_access_key": "YYYYYYYYYYYYY",
-    "assume_role_arn": "arn:aws:iam::<ACCOUNT_ID>:role/<NAME_OF_THE_ROLE>",
-    "stream": "name_of_the_stream",
-    "region": "us-east-1",
-    "serialization_format": "firehose_v1"
-}
-```
 
 ## HTTP backend options
 
@@ -291,6 +175,151 @@ An integer between 1 and 20, 1 by default. The number of threads to use when pos
         "remove_machine_principal_user"
       ]
     }]
+}
+```
+
+## Kinesis backend options
+
+This store is capable of batch operation. The maximum `batch_size` is 500. See the [`kinesis:PutRecords`](https://docs.aws.amazon.com/kinesis/latest/APIReference/API_PutRecords.html) documentation for more details.
+
+### AWS authentication and authorization
+
+When operating in AWS, it is recommended to use a role attached to the EC2 instance or to the container to authenticate the calls to the Kinesis API.
+
+Example of an IAM policy to allow Zentral to write to the Kinesis stream:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowKinesisPut"
+            "Action": [
+                "kinesis:PutRecords",
+                "kinesis:PutRecord"
+            ],
+            "Effect": "Allow",
+            "Resource": "arn:aws:kinesis:<AWS_REGION>:<AWS_ACCOUNT_ID>:stream/<KINESIS_STREAM_NAME>",
+        }
+    ]
+}
+```
+
+The `PutRecord` action can be omitted if the store is configured for batch operations.
+
+If the authentication is not possible using the environment (standard environment variable, instance metadata service, …), you can set `aws_access_key_id` and `aws_secret_access_key` in the store configuration.
+
+You can also configure an AWS IAM role to be assumed, using the `assume_role_arn` store configuration key.
+
+### `stream`
+
+**MANDATORY**
+
+The name of the Kinesis stream.
+
+### `region_name`
+
+**MANDATORY**
+
+The name of the Kinesis stream AWS region.
+
+### `serialization_format`
+
+By default, the events will be serialized using the Zentral canonical serialization.
+
+A serialization format optimized for the use with Kinesis Firehose is also available: `firehose_v1`.
+
+### Full example
+
+```json
+{
+    "backend": "zentral.core.stores.backends.kinesis",
+    "aws_access_key_id": "XXXXXXXXXXXXX",
+    "aws_secret_access_key": "YYYYYYYYYYYYY",
+    "assume_role_arn": "arn:aws:iam::<ACCOUNT_ID>:role/<NAME_OF_THE_ROLE>",
+    "stream": "name_of_the_stream",
+    "region": "us-east-1",
+    "serialization_format": "firehose_v1"
+}
+```
+
+## OpenSearch backend options
+
+Use this store if you have a managed AWS OpenSearch domain. API calls to store and retrieve the events can be authenticated using the standard AWS signatures. It is recommended to use a role attached to the EC2 instance or to the container, but an IAM key and a secret can be provided.
+
+### `aws_auth`
+
+**OPTIONAL**
+
+A dictionary to configure the AWS authentication. If omitted, the API calls will not be authenticated. It must contain the AWS region in the `region` key. `access_key_id` and `secret_access_key` can also be used if the default AWS authentication via instance or container profile is not set.
+
+### Simple example
+
+```json
+{
+  "backend": "zentral.core.stores.backends.opensearch",
+  "frontend": true,
+  "index": "zentral-events",
+  "hosts": ["https://example-00000000000000000000000000.us-east-1.es.amazonaws.com"],
+  "kibana_discover_url": "https://example-00000000000000000000000000.us-east-1.es.amazonaws.com/_dashboards",
+  "kibana_index_pattern_uuid": "00000000-0000-0000-0000-000000000000",
+  "aws_auth": {"region": "us-east-1"}
+}
+```
+
+### Full example
+
+In this example, a separate index is setup to receive the Osquery events. You could configure it with a different [OpenSearch policy](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ism.html) to change the retention time or the storage type. Use the index name as the key, add `included_event_filters` and `excluded_event_filters`. Set a priority to make sure that only one index will be chosen by Zentral. Finally do not forget to add a default unfiltered index with the lowest priority. A `read_index` is also required in this kind of setup. It should point to an alias that is covering all the events you want to be able to retrieve in the Zentral GUI.
+
+```json
+{
+  "backend": "zentral.core.stores.backends.opensearch",
+  "frontend": true,
+  "batch_size": 100,
+  "indices": {
+    "zentral-osquery": {
+      "priority": 10,
+      "included_event_filters": {
+        "tags": ["osquery"]
+      }
+    },
+    "zentral-other": {
+      "priority": 1
+    }
+  },
+  "read_index": "zentral-all",
+  "hosts": ["https://example-00000000000000000000000000.us-east-1.es.amazonaws.com"],
+  "kibana_discover_url": "https://example-00000000000000000000000000.us-east-1.es.amazonaws.com/_dashboards",
+  "kibana_index_pattern_uuid": "00000000-0000-0000-0000-000000000000",
+  "aws_auth": {"region": "us-east-1"}
+}
+```
+
+## Panther backend options
+
+Zentral can send events to a Panther HTTP log source, with Bearer authentication. A custom schema must be configured in Panther – use [`schema.yaml`](https://github.com/zentralopensource/zentral/tree/main/ee/zentral/core/stores/backends/panther/schema.yaml) from the Zentral repository.
+
+### `endpoint_url`
+
+**MANDATORY**
+
+The Panther [HTTP Log Source](https://docs.panther.com/data-onboarding/data-transports/http) URL.
+
+For example: `https://logs.example.runpanther.net/http/00000000-0000-0000-0000-000000000000`.
+
+### `bearer_token`
+
+**MANDATORY**
+
+The token used for Bearer Authentication.
+
+### Example
+
+```json
+{
+    "backend": "zentral.core.stores.backends.panther",
+    "endpoint_url": "https://logs.example.runpanther.net/http/00000000-0000-0000-0000-000000000000",
+    "bearer_token": "00000000-0000-0000-0000-000000000000",
 }
 ```
 

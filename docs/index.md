@@ -39,6 +39,7 @@ You can deploy it on your machine with [Docker](./deployment/docker-compose), or
 * [DataDog](https://www.datadoghq.com/)
 * [Elasticsearch](https://www.elastic.co/products/elasticsearch)
 * [OpenSearch](https://opensearch.org/)
+* [Panther](https://panther.com/)
 * [Snowflake](https://www.snowflake.com/en/)
 * [Splunk](https://www.splunk.com/en_us/software/features-comparison-chart.html)
 * [sumo logic](https://www.sumologic.com/)
