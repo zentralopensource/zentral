@@ -1,5 +1,5 @@
 import gzip
-import json
+from kombu.utils import json
 import requests
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.stores.backends.base import BaseEventStore

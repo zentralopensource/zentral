@@ -1,5 +1,5 @@
 from datetime import datetime
-import json
+from kombu.utils import json
 import logging
 import re
 import requests

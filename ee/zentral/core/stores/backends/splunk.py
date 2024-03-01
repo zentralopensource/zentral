@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-import json
+from kombu.utils import json
 import logging
 import random
 import time
