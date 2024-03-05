@@ -1,0 +1,91 @@
+---
+name: OSV-Scanner PR Scan
+# see https://github.com/google/osv-scanner/blob/main/.github/workflows/osv-scanner-reusable-pr.yml
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+    branches: [main]
+
+permissions:
+  # Require writing security events to upload SARIF file to security tab
+  security-events: write
+  # Only need to read contents
+  contents: read
+
+jobs:
+  scan-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Do persist credentials, as we need it for the git checkout later
+      - name: "Checkout target branch"
+        run: git checkout $GITHUB_BASE_REF
+      - name: "Rename constraints.txt file"
+        run: cp ./constraints.txt /tmp/requirements.txt
+      - name: "Run scanner on existing code"
+        uses: google/osv-scanner/actions/scanner@main
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --format=json
+            --output=old-results.json
+            -r
+            --skip-git
+            --lock-file=./package-lock.json
+            --lock-file=/tmp/requirements.txt
+      - name: "Checkout current branch"
+        run: git checkout $GITHUB_SHA
+      - name: "Rename constraints.txt file"
+        run: cp ./constraints.txt /tmp/requirements.txt
+      - name: "Run scanner on new code"
+        uses: google/osv-scanner/actions/scanner@main
+        with:
+          scan-args: |-
+            --format=json
+            --output=old-results.json
+            -r
+            --skip-git
+            --lock-file=./package-lock.json
+            --lock-file=/tmp/requirements.txt
+        continue-on-error: true
+      - name: "Run osv-scanner-reporter"
+        uses: google/osv-scanner/actions/reporter@main
+        with:
+          scan-args: |-
+            --output=results.sarif
+            --old=old-results.json
+            --new=new-results.json
+            --gh-annotations=true
+            --fail-on-vuln=true
+      # Upload the results as artifacts (optional).
+      - name: "Upload artifact"
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v4
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+      - name: "Upload old scan json results"
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v4
+        with:
+          name: old-json-results
+          path: old-results.json
+          retention-days: 5
+      - name: "Upload new scan json results"
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-json-results
+          path: new-results.json
+          retention-days: 5
+      # Upload the results to GitHub's code scanning dashboard.
+      - name: "Upload to code-scanning"
+        if: "!cancelled()"
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
