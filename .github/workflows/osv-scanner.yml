@@ -1,0 +1,59 @@
+---
+name: OSV-Scanner Scheduled Scan
+# see https://github.com/google/osv-scanner/blob/main/.github/workflows/osv-scanner-reusable.yml
+
+on:
+  schedule:
+    - cron: "30 12 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  # Require writing security events to upload SARIF file to security tab
+  security-events: write
+  # Only need to read contents
+  contents: read
+
+jobs:
+  scan-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "Rename constraints.txt file"
+        run: cp ./constraints.txt /tmp/requirements.txt
+      - name: "Run scanner"
+        uses: google/osv-scanner/actions/scanner@main
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --format=json
+            --output=results.json
+            -r
+            --skip-git
+            --lock-file=./package-lock.json
+            --lock-file=/tmp/requirements.txt
+      - name: "Run osv-scanner-reporter"
+        uses: google/osv-scanner/actions/reporter@main
+        with:
+          scan-args: |-
+            --output=results.sarif
+            --new=results.json
+            --gh-annotations=false
+            --fail-on-vuln=true
+      # Upload the results as artifacts.
+      - name: "Upload artifact"
+        if: "!cancelled()"
+        uses: actions/upload-artifact@v4
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+      # Upload the results to GitHub's code scanning dashboard.
+      - name: "Upload to code-scanning"
+        if: "!cancelled()"
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
