@@ -158,6 +158,35 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(last_event.payload["status"], "warning")
         self.assertEqual(last_event.payload["reason"], "OS update to version 14.3 required")
 
+    def test_dep_enroll_max_macos_no_update_required(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        force_software_update(
+            device_id="J413AP",
+            version="14.4.0",
+            build="23E214",
+            posting_date=datetime.date(2024, 3, 7),
+            expiration_date=datetime.date(3000, 1, 2)
+        )
+        enrollment = session.dep_enrollment
+        enrollment.macos_min_version = "14.3.1"
+        enrollment.macos_max_version = "15"
+        enrollment.save()
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": session.enrolled_device.serial_number,
+                                                         "UDID": session.enrolled_device.udid,
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "14.4",
+                                                         "VERSION": "23A214",
+                                                         "SOFTWARE_UPDATE_DEVICE_ID": "J413AP"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertSuccess(post_event)
+        _, data = verify_signed_payload(response.content)
+        payload = plistlib.loads(data)
+        self.assertEqual(payload["PayloadIdentifier"], "zentral.mdm")
+
     def test_dep_enroll_max_ios_update_required_min_fallback(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)

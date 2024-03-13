@@ -2687,7 +2687,7 @@ class SoftwareUpdate(models.Model):
 
     @property
     def comparable_os_version(self):
-        return (self.major, self.minor, self.patch, self.extra)
+        return tuple(e for e in (self.major, self.minor, self.patch, self.extra) if e != "")
 
     def target_os_version(self):
         s = ".".join(

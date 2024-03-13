@@ -9,7 +9,9 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import Platform, SoftwareUpdate, SoftwareUpdateDeviceID
-from zentral.contrib.mdm.software_updates import best_available_software_updates, sync_software_updates
+from zentral.contrib.mdm.software_updates import (best_available_software_updates,
+                                                  best_available_software_update_for_device_id_and_build,
+                                                  sync_software_updates)
 from zentral.core.events.base import AuditEvent
 from .utils import force_ota_enrollment_session, force_software_update
 
@@ -472,6 +474,19 @@ class MDMSoftwareUpdateTestCase(TestCase):
         self.assertEqual(minor_update, su_mi)
         self.assertEqual(patch_update, su_p)
         self.assertEqual(rsr_update, su_e)
+
+    # best_available_software_update_for_device_id_and_build
+
+    def test_available_software_update_for_device_id_and_build(self):
+        su = force_software_update(
+            device_id="J413AP",
+            version="14.4.0",
+            build="23E214",
+            posting_date=datetime.date(2024, 3, 7),
+            expiration_date=datetime.date(3000, 1, 2)
+        )
+        b_su = best_available_software_update_for_device_id_and_build("J413AP", "123456")
+        self.assertEqual(su, b_su)
 
     # management command
 

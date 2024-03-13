@@ -83,7 +83,7 @@ class DEPEnrollMixin(PostEventMixin):
             software_update = best_available_software_update_for_device_id_and_build(
                 self.software_update_device_id, self.build
             )
-            if software_update:
+            if software_update and software_update.comparable_os_version > make_comparable_os_version(self.os_version):
                 details = {"OSVersion": software_update.target_os_version()}
                 if software_update.build:
                     details["BuildVersion"] = software_update.build
