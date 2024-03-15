@@ -218,7 +218,7 @@ class SetupFileVaultCommandTestCase(TestCase):
             if sub_payload_type == "com.apple.MCX.FileVault2":
                 self.assertTrue(sub_payload["ForceEnableInSetupAssistant"])
                 self.assertEqual(sub_payload["ShowRecoveryKey"], filevault_config.show_recovery_key)
-                self.assertNotIn("Defer", sub_payload)
+                self.assertTrue(sub_payload["Defer"])  # macOS 14.4 workaround
                 self.assertNotIn("DeferDontAskAtUserLogout", sub_payload)
                 self.assertNotIn("DeferForceAtUserLoginMaxBypassAttempts", sub_payload)
                 self.assertEqual(sub_payload["PayloadIdentifier"], "com.zentral.mdm.fv.configuration")

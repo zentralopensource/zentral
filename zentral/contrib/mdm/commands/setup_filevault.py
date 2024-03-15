@@ -90,7 +90,10 @@ def build_payload(enrolled_device):
     }
     fv_config = config["PayloadContent"][0]
     if enrolled_device.awaiting_configuration and enrolled_device.comparable_os_version >= (14,):
-        fv_config["ForceEnableInSetupAssistant"] = True
+        fv_config.update({
+            "ForceEnableInSetupAssistant": True,
+            "Defer": True,  # macOS 14.4 workaround TODO: re-evaluate later
+        })
     else:
         fv_config.update({
             "Defer": True,
