@@ -543,6 +543,13 @@ def force_location(name=None, organization_name=None):
     return location
 
 
+def force_location_asset(asset=None, location=None):
+    return LocationAsset.objects.create(
+        asset=asset or force_asset(),
+        location=location or force_location()
+    )
+
+
 def force_artifact(
     version_count=1,
     artifact_type=Artifact.Type.PROFILE,
@@ -612,13 +619,9 @@ def force_artifact(
                 manifest={"items": [{"assets": [{}]}]}
             )
         elif artifact_type == Artifact.Type.STORE_APP:
-            location_asset = LocationAsset.objects.create(
-                asset=force_asset(),
-                location=force_location()
-            )
             StoreApp.objects.create(
                 artifact_version=artifact_version,
-                location_asset=location_asset
+                location_asset=force_location_asset(),
             )
     return artifact, artifact_versions
 

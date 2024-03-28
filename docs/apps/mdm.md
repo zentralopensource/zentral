@@ -332,6 +332,43 @@ Result:
 ]
 ```
 
+### `/api/mdm/location_assets/`
+
+ * method: `GET`
+ * required permission: `mdm.view_locationasset`
+ * available filters:
+     * `adam_id`
+     * `pricing_param`
+     * `location_id`
+
+Fetches the list of Apps / Books location assets.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/location_assets/?location_id=749
+```
+
+Result:
+
+```json
+[
+  {
+    "id": 414,
+    "assigned_count": 0,
+    "available_count": 0,
+    "retired_count": 0,
+    "total_count": 0,
+    "created_at": "2024-03-28T19:15:58.212233",
+    "updated_at": "2024-03-28T19:15:58.212237",
+    "location": 749,
+    "asset": 489
+  }
+]
+```
+
 ### `/api/mdm/software_updates/sync/`
 
  * method: `POST`

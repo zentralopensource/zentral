@@ -11,7 +11,7 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
                      DeviceCommand,
                      EnrolledDevice, EnterpriseApp, FileVaultConfig,
-                     Location,
+                     Location, LocationAsset,
                      Platform, Profile,
                      RecoveryPasswordConfig,
                      SoftwareUpdateEnforcement)
@@ -531,3 +531,9 @@ class LocationSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+
+class LocationAssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LocationAsset
+        fields = "__all__"
