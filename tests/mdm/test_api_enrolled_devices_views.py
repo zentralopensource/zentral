@@ -61,6 +61,201 @@ class APIViewsTestCase(TestCase):
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.get(url, **kwargs)
 
+    def post(self, url, data, include_token=True):
+        kwargs = {}
+        if include_token:
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
+        return self.client.post(url, data, **kwargs)
+
+    # enrolled devices
+
+    def test_enrolled_devices_unauthorized(self):
+        response = self.get(reverse("mdm_api:enrolled_devices"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_enrolled_devices_permission_denied(self):
+        response = self.get(reverse("mdm_api:enrolled_devices"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrolled_devices_method_not_allowed(self):
+        self.set_permissions("mdm.add_enrolleddevice")
+        response = self.post(reverse("mdm_api:enrolled_devices"), {})
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.json(), {'detail': 'Method "POST" not allowed.'})
+
+    def test_enrolled_devices_default_values(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(reverse("mdm_api:enrolled_devices"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [{'activation_lock_manageable': None,
+              'apple_silicon': None,
+              'awaiting_configuration': None,
+              'blocked_at': None,
+              'blueprint': None,
+              'bootstrap_token_escrowed': False,
+              'build_version': '',
+              'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
+              'checkout_at': None,
+              'created_at': self.enrolled_device.created_at.isoformat(),
+              'declarative_management': False,
+              'dep_enrollment': None,
+              'filevault_enabled': None,
+              'filevault_prk_escrowed': False,
+              'id': self.enrolled_device.pk,
+              'last_notified_at': None,
+              'last_seen_at': None,
+              'model': None,
+              'name': None,
+              'os_version': '',
+              'platform': 'macOS',
+              'recovery_password_escrowed': False,
+              'serial_number': self.enrolled_device.serial_number,
+              'supervised': None,
+              'udid': self.enrolled_device.udid,
+              'updated_at': self.enrolled_device.updated_at.isoformat(),
+              'user_approved_enrollment': None,
+              'user_enrollment': None}]
+        )
+
+    def test_enrolled_devices_by_serial_number(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + f"?serial_number={self.enrolled_device.serial_number}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [{'activation_lock_manageable': None,
+              'apple_silicon': None,
+              'awaiting_configuration': None,
+              'blocked_at': None,
+              'blueprint': None,
+              'bootstrap_token_escrowed': False,
+              'build_version': '',
+              'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
+              'checkout_at': None,
+              'created_at': self.enrolled_device.created_at.isoformat(),
+              'declarative_management': False,
+              'dep_enrollment': None,
+              'filevault_enabled': None,
+              'filevault_prk_escrowed': False,
+              'id': self.enrolled_device.pk,
+              'last_notified_at': None,
+              'last_seen_at': None,
+              'model': None,
+              'name': None,
+              'os_version': '',
+              'platform': 'macOS',
+              'recovery_password_escrowed': False,
+              'serial_number': self.enrolled_device.serial_number,
+              'supervised': None,
+              'udid': self.enrolled_device.udid,
+              'updated_at': self.enrolled_device.updated_at.isoformat(),
+              'user_approved_enrollment': None,
+              'user_enrollment': None}]
+        )
+
+    def test_enrolled_devices_by_serial_number_no_result(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + "?serial_number=yolofomo"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_enrolled_devices_by_udid(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + f"?udid={self.enrolled_device.udid}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [{'activation_lock_manageable': None,
+              'apple_silicon': None,
+              'awaiting_configuration': None,
+              'blocked_at': None,
+              'blueprint': None,
+              'bootstrap_token_escrowed': False,
+              'build_version': '',
+              'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
+              'checkout_at': None,
+              'created_at': self.enrolled_device.created_at.isoformat(),
+              'declarative_management': False,
+              'dep_enrollment': None,
+              'filevault_enabled': None,
+              'filevault_prk_escrowed': False,
+              'id': self.enrolled_device.pk,
+              'last_notified_at': None,
+              'last_seen_at': None,
+              'model': None,
+              'name': None,
+              'os_version': '',
+              'platform': 'macOS',
+              'recovery_password_escrowed': False,
+              'serial_number': self.enrolled_device.serial_number,
+              'supervised': None,
+              'udid': self.enrolled_device.udid,
+              'updated_at': self.enrolled_device.updated_at.isoformat(),
+              'user_approved_enrollment': None,
+              'user_enrollment': None}]
+        )
+
+    def test_enrolled_devices_by_udid_no_result(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + "?udid=00000000-0000-0000-0000-000000000000"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_enrolled_devices_with_secrets(self):
+        self.enrolled_device.security_info = {"FDE_Enabled": True}
+        self.enrolled_device.set_bootstrap_token(b"un")
+        self.enrolled_device.set_filevault_prk("deux")
+        self.enrolled_device.set_recovery_password("trois")
+        self.enrolled_device.save()
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(reverse("mdm_api:enrolled_devices"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [{'activation_lock_manageable': None,
+              'apple_silicon': None,
+              'awaiting_configuration': None,
+              'blocked_at': None,
+              'blueprint': None,
+              'bootstrap_token_escrowed': True,
+              'build_version': '',
+              'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
+              'checkout_at': None,
+              'created_at': self.enrolled_device.created_at.isoformat(),
+              'declarative_management': False,
+              'dep_enrollment': None,
+              'filevault_enabled': True,
+              'filevault_prk_escrowed': True,
+              'id': self.enrolled_device.pk,
+              'last_notified_at': None,
+              'last_seen_at': None,
+              'model': None,
+              'name': None,
+              'os_version': '',
+              'platform': 'macOS',
+              'recovery_password_escrowed': True,
+              'serial_number': self.enrolled_device.serial_number,
+              'supervised': None,
+              'udid': self.enrolled_device.udid,
+              'updated_at': self.enrolled_device.updated_at.isoformat(),
+              'user_approved_enrollment': None,
+              'user_enrollment': None}]
+        )
+
     # enrolled_device_filevault_prk
 
     def test_enrolled_device_filevault_prk_unauthorized(self):
