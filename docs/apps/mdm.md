@@ -294,6 +294,44 @@ Response:
 }
 ```
 
+### `/api/mdm/locations/`
+
+ * method: `GET`
+ * required permission: `mdm.view_location`
+ * available filters:
+     * `name`
+     * `organization_name`
+
+Fetches the list of Apps / Books locations.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/locations/
+```
+
+Result:
+
+```json
+[
+  {
+    "id": 388,
+    "server_token_expiration_date": "2050-01-01T00:00:00",
+    "organization_name": "Organization name",
+    "name": "Location name",
+    "country_code": "DE",
+    "library_uid": "1dc05825-af1d-422a-9b26-72a2f8c2aae5",
+    "platform": "enterprisestore",
+    "website_url": "https://business.apple.com",
+    "mdm_info_id": "f42d9d70-d304-4ac1-83db-b045fa4bc623",
+    "created_at": "2024-03-28T17:58:15.948083",
+    "updated_at": "2024-03-28T17:58:15.948088"
+  }
+]
+```
+
 ### `/api/mdm/software_updates/sync/`
 
  * method: `POST`

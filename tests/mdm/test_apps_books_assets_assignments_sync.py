@@ -1,4 +1,3 @@
-import datetime
 from unittest.mock import patch, Mock
 import uuid
 from django.test import TestCase
@@ -15,40 +14,12 @@ from zentral.contrib.mdm.apps_books import (_sync_asset_d,
 from zentral.contrib.mdm.events import (AssetCreatedEvent, AssetUpdatedEvent,
                                         DeviceAssignmentCreatedEvent, DeviceAssignmentDeletedEvent,
                                         LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
-from zentral.contrib.mdm.models import Asset, DeviceAssignment, Location, LocationAsset
+from zentral.contrib.mdm.models import Asset, DeviceAssignment, LocationAsset
 from zentral.core.incidents.models import Severity
+from .utils import force_asset, force_location
 
 
 class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
-
-    # tools
-
-    def _force_asset(self):
-        return Asset.objects.create(
-            adam_id=get_random_string(12),
-            pricing_param=get_random_string(12),
-            product_type=Asset.ProductType.APP,
-            device_assignable=True,
-            revocable=True,
-            supported_platforms=["iOS", "macOS"]
-        )
-
-    def _force_location(self):
-        location = Location(
-            server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
-            server_token=get_random_string(12),
-            server_token_expiration_date=datetime.date(2050, 1, 1),
-            organization_name=get_random_string(12),
-            country_code="DE",
-            library_uid=str(uuid.uuid4()),
-            name=get_random_string(12),
-            platform="enterprisestore",
-            website_url="https://business.apple.com",
-            mdm_info_id=uuid.uuid4(),
-        )
-        location.set_notification_auth_token()
-        location.save()
-        return location
 
     # _update_or_create_asset
 
@@ -77,7 +48,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(collected_objects, {"asset": asset})
 
     def test_update_or_create_asset_noop(self):
-        asset = self._force_asset()
+        asset = force_asset()
         notification_id = str(uuid.uuid4())
         collected_objects = {}
         events = list(
@@ -95,7 +66,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(collected_objects, {"asset": asset})
 
     def test_update_or_create_asset_updated(self):
-        asset = self._force_asset()
+        asset = force_asset()
         notification_id = str(uuid.uuid4())
         collected_objects = {}
         events = list(
@@ -124,8 +95,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     # _update_or_create_location_asset
 
     def test_update_or_create_location_asset_created_no_incident(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         collected_objects = {"asset": asset}
         notification_id = str(uuid.uuid4())
         events = list(
@@ -166,8 +137,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(location_asset.total_count, 10)
 
     def test_update_or_create_location_asset_created_minor_incident(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         collected_objects = {"asset": asset}
         notification_id = str(uuid.uuid4())
         events = list(
@@ -204,8 +175,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(iu.severity, Severity.MINOR)
 
     def test_update_or_create_location_asset_created_major_incident(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         collected_objects = {"asset": asset}
         notification_id = str(uuid.uuid4())
         events = list(
@@ -242,8 +213,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(iu.severity, Severity.MAJOR)
 
     def test_update_or_create_location_asset_noop(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -267,8 +238,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(len(events), 0)
 
     def test_update_or_create_location_asset_updated(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -311,8 +282,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     # _update_assignments
 
     def test_update_assignments_noop(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -339,8 +310,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(len(events), 0)
 
     def test_update_assignments_only_remove(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -387,8 +358,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         )
 
     def test_update_assignments_add_and_remove(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -438,7 +409,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     # _sync_asset_d
 
     def test_sync_asset_d(self):
-        location = self._force_location()
+        location = force_location()
         client = Mock()
         asset_name = get_random_string(12)
         bundle_id = "pro.zentral.tests"
@@ -475,7 +446,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     # sync_asset
 
     def test_sync_asset(self):
-        location = self._force_location()
+        location = force_location()
         client = Mock()
         client.get_asset.return_value = {
             "adamId": "408709785",
@@ -499,7 +470,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(len(events), 3)
 
     def test_sync_asset_unknown_asset(self):
-        location = self._force_location()
+        location = force_location()
         client = Mock()
         client.get_asset.return_value = None
         notification_id = str(uuid.uuid4())
@@ -512,7 +483,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     @patch("zentral.contrib.mdm.apps_books.AppsBooksClient")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_sync_assets(self, post_event, AppsBooksClient):
-        location = self._force_location()
+        location = force_location()
         client = Mock()
         AppsBooksClient.from_location.return_value = client
         client.iter_assets.return_value = [
@@ -538,8 +509,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     # _update_location_asset_counts
 
     def test_update_location_asset_counts_noop(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -553,8 +524,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(len(events), 0)
 
     def test_update_location_asset_negative_counts_value_error(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -574,8 +545,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
             )
 
     def test_update_location_asset_assign_count_value_error(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -594,8 +565,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
             )
 
     def test_update_location_asset_available_count_value_error(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -614,8 +585,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
             )
 
     def test_update_location_asset_counts(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -653,8 +624,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     # update_location_asset_counts
 
     def test_update_location_asset_counts_ok(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -682,8 +653,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(location_asset.total_count, 11)
 
     def test_update_location_asset_counts_sync_required(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -732,8 +703,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
 
     @patch("zentral.contrib.mdm.apps_books.queue_install_application_command_if_necessary")
     def test_associate_location_asset(self, queue_install_application_command_if_necessary):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -775,7 +746,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         )
 
     def test_associate_location_asset_unknown_location_asset(self):
-        location = self._force_location()
+        location = force_location()
         client = Mock()
         client.get_asset.return_value = {
             "adamId": "408709785",
@@ -822,8 +793,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         )
 
     def test_associate_location_asset_bad_counts(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -869,8 +840,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
 
     @patch("zentral.contrib.mdm.apps_books.clear_on_the_fly_assignment")
     def test_disassociate_location_asset(self, clear_on_the_fly_assignment):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,
@@ -913,7 +884,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         )
 
     def test_disassociate_location_unknown_asset(self):
-        location = self._force_location()
+        location = force_location()
         client = Mock()
         client.get_asset.return_value = {
             "adamId": "408709785",
@@ -962,8 +933,8 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         )
 
     def test_disassociate_location_bad_counts(self):
-        asset = self._force_asset()
-        location = self._force_location()
+        asset = force_asset()
+        location = force_location()
         location_asset = LocationAsset.objects.create(
             location=location,
             asset=asset,

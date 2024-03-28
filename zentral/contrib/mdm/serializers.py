@@ -11,6 +11,7 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
                      DeviceCommand,
                      EnrolledDevice, EnterpriseApp, FileVaultConfig,
+                     Location,
                      Platform, Profile,
                      RecoveryPasswordConfig,
                      SoftwareUpdateEnforcement)
@@ -512,3 +513,21 @@ class EnterpriseAppSerializer(ArtifactVersionSerializer):
         finally:
             os.unlink(validated_data["enterprise_app"]["package"].name)
         return instance
+
+
+class LocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Location
+        fields = (
+            "id",
+            "server_token_expiration_date",
+            "organization_name",
+            "name",
+            "country_code",
+            "library_uid",
+            "platform",
+            "website_url",
+            "mdm_info_id",
+            "created_at",
+            "updated_at",
+        )

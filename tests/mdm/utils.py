@@ -514,6 +514,35 @@ def force_blueprint(filevault_config=None, recovery_password_config=None, softwa
     return bp
 
 
+def force_asset():
+    return Asset.objects.create(
+        adam_id=get_random_string(12),
+        pricing_param=get_random_string(12),
+        product_type=Asset.ProductType.APP,
+        device_assignable=True,
+        revocable=True,
+        supported_platforms=["iOS", "macOS"]
+    )
+
+
+def force_location(name=None, organization_name=None):
+    location = Location(
+        server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
+        server_token=get_random_string(12),
+        server_token_expiration_date=date(2050, 1, 1),
+        organization_name=organization_name or get_random_string(12),
+        country_code="DE",
+        library_uid=str(uuid.uuid4()),
+        name=name or get_random_string(12),
+        platform="enterprisestore",
+        website_url="https://business.apple.com",
+        mdm_info_id=uuid.uuid4(),
+    )
+    location.set_notification_auth_token()
+    location.save()
+    return location
+
+
 def force_artifact(
     version_count=1,
     artifact_type=Artifact.Type.PROFILE,
@@ -583,31 +612,9 @@ def force_artifact(
                 manifest={"items": [{"assets": [{}]}]}
             )
         elif artifact_type == Artifact.Type.STORE_APP:
-            asset = Asset.objects.create(
-                adam_id="1234567890",
-                pricing_param="STDQ",
-                product_type=Asset.ProductType.APP,
-                device_assignable=True,
-                revocable=True,
-                supported_platforms=[Platform.MACOS]
-            )
-            location = Location(
-                server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
-                server_token=get_random_string(12),
-                server_token_expiration_date=date(2050, 1, 1),
-                organization_name=get_random_string(12),
-                country_code="DE",
-                library_uid=str(uuid.uuid4()),
-                name=get_random_string(12),
-                platform="enterprisestore",
-                website_url="https://business.apple.com",
-                mdm_info_id=uuid.uuid4(),
-            )
-            location.set_notification_auth_token()
-            location.save()
             location_asset = LocationAsset.objects.create(
-                asset=asset,
-                location=location
+                asset=force_asset(),
+                location=force_location()
             )
             StoreApp.objects.create(
                 artifact_version=artifact_version,
