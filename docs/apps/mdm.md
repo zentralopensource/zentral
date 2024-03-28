@@ -72,6 +72,32 @@ To be able to keep sending notifications to enrolled devices, it is important to
 
 ## HTTP API
 
+### `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`
+
+ * method: `POST`
+ * required permission: `mdm.view_depvirtualserver`
+
+Use this endpoint to trigger a DEP virtual server devices sync.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/dep/virtual_servers/1/sync_devices/ \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd4",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd4/"
+}
+```
+
+
 ### `/api/mdm/devices/`
 
  * method: `GET`
@@ -126,28 +152,53 @@ Response:
 ]
 ```
 
-### `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`
+### `/api/mdm/devices/<int:pk>/filevault_prk/`
 
- * method: `POST`
- * required permission: `mdm.view_depvirtualserver`
+ * method: `GET`
+ * required permission: `mdm.view_filevault_prk`
 
-Use this endpoint to trigger a DEP virtual server devices sync.
+Returns the decrypted FileVault PRK for an MDM enrolled device.
 
 Example:
 
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_FQDN/api/mdm/dep/virtual_servers/1/sync_devices/ \
-  | python3 -m json.tool
+  https://$ZTL_FQDN/api/mdm/devices/27/filevault_prk/
 ```
 
 Response:
 
 ```json
 {
-  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd4",
-  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd4/"
+  "id": 27,
+  "serial_number": "012345678910",
+  "filevault_prk": "0000-0000-0000-0000-0000-0000"
+}
+```
+
+### `/api/mdm/devices/<int:pk>/recovery_password/`
+
+ * method: `GET`
+ * required permission: `mdm.view_recovery_password`
+
+Returns the decrypted recovery lock or firmware password for an MDM enrolled device.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/devices/27/recovery_password/
+```
+
+Response:
+
+```json
+{
+  "id": 27,
+  "serial_number": "012345678910",
+  "recovery_password": "000000000000"
 }
 ```
 
