@@ -43,6 +43,7 @@ class EnrolledDeviceSerializer(serializers.ModelSerializer):
             "bootstrap_token_escrowed",
             "filevault_enabled",
             "filevault_prk_escrowed",
+            "recovery_password_escrowed",
             "activation_lock_manageable",
             "last_seen_at",
             "last_notified_at",

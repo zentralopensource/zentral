@@ -110,6 +110,7 @@ class APIViewsTestCase(TestCase):
               'name': None,
               'os_version': '',
               'platform': 'macOS',
+              'recovery_password_escrowed': False,
               'serial_number': self.enrolled_device.serial_number,
               'supervised': None,
               'udid': self.enrolled_device.udid,
@@ -148,6 +149,7 @@ class APIViewsTestCase(TestCase):
               'name': None,
               'os_version': '',
               'platform': 'macOS',
+              'recovery_password_escrowed': False,
               'serial_number': self.enrolled_device.serial_number,
               'supervised': None,
               'udid': self.enrolled_device.udid,
@@ -195,6 +197,7 @@ class APIViewsTestCase(TestCase):
               'name': None,
               'os_version': '',
               'platform': 'macOS',
+              'recovery_password_escrowed': False,
               'serial_number': self.enrolled_device.serial_number,
               'supervised': None,
               'udid': self.enrolled_device.udid,
@@ -214,8 +217,9 @@ class APIViewsTestCase(TestCase):
 
     def test_enrolled_devices_with_secrets(self):
         self.enrolled_device.security_info = {"FDE_Enabled": True}
-        self.enrolled_device.set_filevault_prk("yolo")
-        self.enrolled_device.set_bootstrap_token(b"fomo")
+        self.enrolled_device.set_bootstrap_token(b"un")
+        self.enrolled_device.set_filevault_prk("deux")
+        self.enrolled_device.set_recovery_password("trois")
         self.enrolled_device.save()
         self.set_permissions("mdm.view_enrolleddevice")
         response = self.get(reverse("mdm_api:enrolled_devices"))
@@ -243,6 +247,7 @@ class APIViewsTestCase(TestCase):
               'name': None,
               'os_version': '',
               'platform': 'macOS',
+              'recovery_password_escrowed': True,
               'serial_number': self.enrolled_device.serial_number,
               'supervised': None,
               'udid': self.enrolled_device.udid,

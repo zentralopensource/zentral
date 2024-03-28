@@ -1143,6 +1143,12 @@ class EnrolledDevice(models.Model):
             return True
         return False
 
+    @property
+    def recovery_password_escrowed(self):
+        if self.recovery_password:
+            return True
+        return False
+
 
 class EnrolledUser(models.Model):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
