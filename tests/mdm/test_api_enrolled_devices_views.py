@@ -1,5 +1,6 @@
 from functools import reduce
 import operator
+import plistlib
 from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -8,7 +9,9 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.events import FileVaultPRKViewedEvent, RecoveryPasswordViewedEvent
+from zentral.contrib.mdm.models import Platform
 from .utils import force_dep_enrollment_session
 
 
@@ -62,7 +65,7 @@ class APIViewsTestCase(TestCase):
         return self.client.get(url, **kwargs)
 
     def post(self, url, data, include_token=True):
-        kwargs = {}
+        kwargs = {"content_type": "application/json"}
         if include_token:
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
         return self.client.post(url, data, **kwargs)
@@ -256,7 +259,293 @@ class APIViewsTestCase(TestCase):
               'user_enrollment': None}]
         )
 
-    # enrolled_device_filevault_prk
+    # erase enrolled device
+
+    def test_erase_enrolled_device_unauthorized(self):
+        response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)), {},
+                             include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_erase_enrolled_device_permission_denied(self):
+        self.set_permissions("mdm.view_devicecommand")
+        response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.mdm.api_views.enrolled_devices.EraseDevice.verify_target")
+    def test_erase_enrolled_device_invalid_target(self, verify_target):
+        # it should never happen, but we need to test this code path
+        verify_target.return_value = False
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'detail': 'Invalid target.'})
+
+    def test_erase_enrolled_device_apple_silicon(self):
+        self.enrolled_device.apple_silicon = True
+        self.assertEqual(self.enrolled_device.platform, Platform.MACOS)
+        self.enrolled_device.save()
+        self.set_permissions("mdm.add_devicecommand")
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+        response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)), {})
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+        db_command = self.enrolled_device.commands.first()
+        self.assertEqual(
+            response.json(),
+            {'artifact_operation': None,
+             'artifact_version': None,
+             'created_at': db_command.created_at.isoformat(),
+             'enrolled_device': self.enrolled_device.pk,
+             'error_chain': None,
+             'id': db_command.pk,
+             'name': 'EraseDevice',
+             'not_before': None,
+             'result': None,
+             'result_time': None,
+             'status': None,
+             'time': None,
+             'updated_at': db_command.updated_at.isoformat(),
+             'uuid': str(db_command.uuid)}
+        )
+        response = load_command(db_command).build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "EraseDevice"}
+        )
+
+    def test_erase_enrolled_device_t1_missing_pin(self):
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'pin': ['This field is required.']})
+
+    def test_erase_enrolled_device_t1_bad_pin(self):
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)),
+                             {"pin": "!)="})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'pin': ['This value does not match the required pattern.']})
+
+    def test_erase_enrolled_device_t1(self):
+        self.assertFalse(self.enrolled_device.apple_silicon)
+        self.assertEqual(self.enrolled_device.platform, Platform.MACOS)
+        self.set_permissions("mdm.add_devicecommand")
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+        response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)),
+                             {"pin": "0123456"})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+        db_command = self.enrolled_device.commands.first()
+        self.assertEqual(
+            response.json(),
+            {'artifact_operation': None,
+             'artifact_version': None,
+             'created_at': db_command.created_at.isoformat(),
+             'enrolled_device': self.enrolled_device.pk,
+             'error_chain': None,
+             'id': db_command.pk,
+             'name': 'EraseDevice',
+             'not_before': None,
+             'result': None,
+             'result_time': None,
+             'status': None,
+             'time': None,
+             'updated_at': db_command.updated_at.isoformat(),
+             'uuid': str(db_command.uuid)}
+        )
+        response = load_command(db_command).build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "EraseDevice",
+             "PIN": "0123456"}
+        )
+
+    def test_erase_enrolled_device_ios_missing_fields(self):
+        self.enrolled_device.platform = Platform.IOS
+        self.enrolled_device.save()
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'disallow_proximity_setup': ['This field is required.'],
+                                           'preserve_data_plan': ['This field is required.']})
+
+    def test_erase_enrolled_device_ios(self):
+        self.assertFalse(self.enrolled_device.apple_silicon)
+        self.enrolled_device.platform = Platform.IOS
+        self.enrolled_device.save()
+        self.set_permissions("mdm.add_devicecommand")
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+        response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)),
+                             {"disallow_proximity_setup": True,
+                              "preserve_data_plan": True})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+        db_command = self.enrolled_device.commands.first()
+        self.assertEqual(
+            response.json(),
+            {'artifact_operation': None,
+             'artifact_version': None,
+             'created_at': db_command.created_at.isoformat(),
+             'enrolled_device': self.enrolled_device.pk,
+             'error_chain': None,
+             'id': db_command.pk,
+             'name': 'EraseDevice',
+             'not_before': None,
+             'result': None,
+             'result_time': None,
+             'status': None,
+             'time': None,
+             'updated_at': db_command.updated_at.isoformat(),
+             'uuid': str(db_command.uuid)}
+        )
+        response = load_command(db_command).build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "EraseDevice",
+             "DisallowProximitySetup": True,
+             "PreserveDataPlan": True}
+        )
+
+    # lock enrolled device
+
+    def test_lock_enrolled_device_unauthorized(self):
+        response = self.post(reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,)), {},
+                             include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_lock_enrolled_device_permission_denied(self):
+        self.set_permissions("mdm.view_devicecommand")
+        response = self.post(reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,)), {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_lock_enrolled_device_invalid_target(self):
+        self.enrolled_device.user_enrollment = True  # lock not possible on user enrolled macOS devices
+        self.enrolled_device.save()
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,)), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'detail': 'Invalid target.'})
+
+    def test_lock_enrolled_device_macos_missing_pin(self):
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,)), {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'pin': ['This field is required.']})
+
+    def test_lock_enrolled_device_macos_bad_pin(self):
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,)),
+                             {"pin": "!)="})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'pin': ['This value does not match the required pattern.']})
+
+    def test_lock_enrolled_device_macos(self):
+        self.assertEqual(self.enrolled_device.platform, Platform.MACOS)
+        self.set_permissions("mdm.add_devicecommand")
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+        response = self.post(reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,)),
+                             {"pin": "012345"})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+        db_command = self.enrolled_device.commands.first()
+        self.assertEqual(
+            response.json(),
+            {'artifact_operation': None,
+             'artifact_version': None,
+             'created_at': db_command.created_at.isoformat(),
+             'enrolled_device': self.enrolled_device.pk,
+             'error_chain': None,
+             'id': db_command.pk,
+             'name': 'DeviceLock',
+             'not_before': None,
+             'result': None,
+             'result_time': None,
+             'status': None,
+             'time': None,
+             'updated_at': db_command.updated_at.isoformat(),
+             'uuid': str(db_command.uuid)}
+        )
+        response = load_command(db_command).build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "DeviceLock",
+             "PIN": "012345"}
+        )
+
+    def test_lock_enrolled_device_ios_default(self):
+        self.enrolled_device.platform = Platform.IOS
+        self.enrolled_device.save()
+        self.set_permissions("mdm.add_devicecommand")
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+        response = self.post(reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,)), {})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+        db_command = self.enrolled_device.commands.first()
+        self.assertEqual(
+            response.json(),
+            {'artifact_operation': None,
+             'artifact_version': None,
+             'created_at': db_command.created_at.isoformat(),
+             'enrolled_device': self.enrolled_device.pk,
+             'error_chain': None,
+             'id': db_command.pk,
+             'name': 'DeviceLock',
+             'not_before': None,
+             'result': None,
+             'result_time': None,
+             'status': None,
+             'time': None,
+             'updated_at': db_command.updated_at.isoformat(),
+             'uuid': str(db_command.uuid)}
+        )
+        response = load_command(db_command).build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "DeviceLock"}
+        )
+
+    def test_lock_enrolled_device_ios_full(self):
+        self.enrolled_device.platform = Platform.IOS
+        self.enrolled_device.save()
+        self.set_permissions("mdm.add_devicecommand")
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+        response = self.post(reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,)),
+                             {"message": "Yolo",
+                              "phone_number": "123"})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+        db_command = self.enrolled_device.commands.first()
+        self.assertEqual(
+            response.json(),
+            {'artifact_operation': None,
+             'artifact_version': None,
+             'created_at': db_command.created_at.isoformat(),
+             'enrolled_device': self.enrolled_device.pk,
+             'error_chain': None,
+             'id': db_command.pk,
+             'name': 'DeviceLock',
+             'not_before': None,
+             'result': None,
+             'result_time': None,
+             'status': None,
+             'time': None,
+             'updated_at': db_command.updated_at.isoformat(),
+             'uuid': str(db_command.uuid)}
+        )
+        response = load_command(db_command).build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "DeviceLock",
+             "Message": "Yolo",
+             "PhoneNumber": "123"}
+        )
+
+    # enrolled device filevault prk
 
     def test_enrolled_device_filevault_prk_unauthorized(self):
         response = self.get(reverse("mdm_api:enrolled_device_filevault_prk", args=(self.enrolled_device.pk,)),
@@ -296,7 +585,7 @@ class APIViewsTestCase(TestCase):
         self.assertIsInstance(event, FileVaultPRKViewedEvent)
         self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
 
-    # enrolled_device_filevault_prk
+    # enrolled device recovery password
 
     def test_enrolled_device_recovery_password_unauthorized(self):
         response = self.get(reverse("mdm_api:enrolled_device_recovery_password", args=(self.enrolled_device.pk,)),

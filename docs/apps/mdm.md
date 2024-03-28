@@ -152,6 +152,52 @@ Response:
 ]
 ```
 
+### `/api/mdm/devices/<int:pk>/erase/`
+
+ * method: `POST`
+ * required permission: `mdm.add_devicecommand`
+ * arguments:
+     * `disallow_proximity_setup`
+     * `preserve_data_plan`
+     * `pin`
+
+Queues up an [EraseDevice](https://developer.apple.com/documentation/devicemanagement/erase_a_device) command for the device and notifies it.
+
+On an Apple Silicon device, no arguments are required. For a T1 machine, the `pin` argument is required. For a mobile device, no `pin` can be set, but `disallow_proximity_setup` and `preserve_data_plan` are required.
+
+A serialized device command is returned.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+  https://$ZTL_FQDN/api/mdm/devices/27/erase/
+```
+
+Response:
+
+```json
+{
+  "id": 815,
+  "uuid": "4ec709ba-542e-4adf-8002-7d782e9eae9e",
+  "enrolled_device": 27,
+  "name": "EraseDevice",
+  "artifact_version": null,
+  "artifact_operation": null,
+  "not_before": null,
+  "time": null,
+  "result": null,
+  "result_time": null,
+  "status": null,
+  "error_chain": null,
+  "created_at": "2024-03-28T16:27:05.829954",
+  "updated_at": "2024-03-28T16:27:05.829959"
+}
+```
+
 ### `/api/mdm/devices/<int:pk>/filevault_prk/`
 
  * method: `GET`
@@ -174,6 +220,52 @@ Response:
   "id": 27,
   "serial_number": "012345678910",
   "filevault_prk": "0000-0000-0000-0000-0000-0000"
+}
+```
+
+### `/api/mdm/devices/<int:pk>/lock/`
+
+ * method: `POST`
+ * required permission: `mdm.add_devicecommand`
+ * arguments:
+     * `message`
+     * `phone_number`
+     * `pin`
+
+Queues up a [DeviceLock](https://developer.apple.com/documentation/devicemanagement/lock_a_device) command for the device and notifies it.
+
+`pin` can only be set, and is required for macOS devices. `message` and `phone_number` are optional.
+
+A serialized device command is returned.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"pin": "012345", "message": "This device is locked!", "phone_number": "+49000000000"}'
+  https://$ZTL_FQDN/api/mdm/devices/27/lock/
+```
+
+Response:
+
+```json
+{
+  "id": 815,
+  "uuid": "4ec709ba-542e-4adf-8002-7d782e9eae9e",
+  "enrolled_device": 27,
+  "name": "DeviceLock",
+  "artifact_version": null,
+  "artifact_operation": null,
+  "not_before": null,
+  "time": null,
+  "result": null,
+  "result_time": null,
+  "status": null,
+  "error_chain": null,
+  "created_at": "2024-03-28T16:27:05.829954",
+  "updated_at": "2024-03-28T16:27:05.829959"
 }
 ```
 

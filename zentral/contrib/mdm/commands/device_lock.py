@@ -1,38 +1,63 @@
 import logging
 from django import forms
+from rest_framework import serializers
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt_str, encrypt_str
-from .base import register_command, Command, CommandBaseForm
+from .base import register_command, Command, CommandBaseForm, CommandBaseSerializer
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.device_lock")
 
 
-class DeviceLockForm(CommandBaseForm):
+class DeviceLockHelperMixin:
+    pin_regex = r"[0-9]{6}"
+
+    def update_fields(self):
+        if not self.enrolled_device.platform == Platform.MACOS:
+            self.fields.pop("pin")
+
+    def get_command_kwargs_with_data(self, uuid, data):
+        kwargs = {}
+        message = data.get("message")
+        if message:
+            kwargs["Message"] = message
+        phone_number = data.get("phone_number")
+        if phone_number:
+            kwargs["PhoneNumber"] = phone_number
+        pin = data.get("pin")
+        if pin:
+            kwargs["PIN"] = encrypt_str(pin, model="mdm.devicecommand", field="PIN", uuid=str(uuid))
+        return kwargs
+
+
+class DeviceLockForm(DeviceLockHelperMixin, CommandBaseForm):
     message = forms.CharField(label="Message", max_length=255, required=False,
                               help_text="The message to display on the Lock screen of the device.")
     phone_number = forms.CharField(label="Phone number", max_length=15, required=False,
                                    help_text="The phone number to display on the Lock screen of the device.")
-    pin = forms.RegexField(label="PIN", min_length=6, max_length=6, strip=True, regex=r"[0-9]{6}",
+    pin = forms.RegexField(label="PIN", min_length=6, max_length=6,
+                           strip=True, regex=DeviceLockHelperMixin.pin_regex,
                            help_text="6 numeric digits PIN.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not self.enrolled_device.platform == Platform.MACOS:
-            self.fields.pop("pin")
+        self.update_fields()
 
     def get_command_kwargs(self, uuid):
-        kwargs = {}
-        message = self.cleaned_data.get("message")
-        if message:
-            kwargs["Message"] = message
-        phone_number = self.cleaned_data.get("phone_number")
-        if phone_number:
-            kwargs["PhoneNumber"] = phone_number
-        pin = self.cleaned_data.get("pin")
-        if pin:
-            kwargs["PIN"] = encrypt_str(pin, model="mdm.devicecommand", field="PIN", uuid=str(uuid))
-        return kwargs
+        return self.get_command_kwargs_with_data(uuid, self.cleaned_data)
+
+
+class DeviceLockSerializer(DeviceLockHelperMixin, CommandBaseSerializer):
+    message = serializers.CharField(max_length=255, required=False)
+    phone_number = serializers.CharField(max_length=15, required=False)
+    pin = serializers.RegexField(DeviceLockHelperMixin.pin_regex)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.update_fields()
+
+    def get_command_kwargs(self, uuid):
+        return self.get_command_kwargs_with_data(uuid, self.validated_data)
 
 
 class DeviceLock(Command):
@@ -40,6 +65,7 @@ class DeviceLock(Command):
     display_name = "Device lock"
     reschedule_notnow = True
     form_class = DeviceLockForm
+    serializer_class = DeviceLockSerializer
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

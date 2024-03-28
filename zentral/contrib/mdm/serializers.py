@@ -9,11 +9,33 @@ from .app_manifest import download_package, read_package_info, validate_configur
 from .artifacts import update_blueprint_serialized_artifacts
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
+                     DeviceCommand,
                      EnrolledDevice, EnterpriseApp, FileVaultConfig,
                      Platform, Profile,
                      RecoveryPasswordConfig,
                      SoftwareUpdateEnforcement)
 from .payloads import get_configuration_profile_info
+
+
+class DeviceCommandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeviceCommand
+        fields = (
+            "id",
+            "uuid",
+            "enrolled_device",
+            "name",
+            "artifact_version",
+            "artifact_operation",
+            "not_before",
+            "time",
+            "result",
+            "result_time",
+            "status",
+            "error_chain",
+            "created_at",
+            "updated_at"
+        )
 
 
 class EnrolledDeviceSerializer(serializers.ModelSerializer):

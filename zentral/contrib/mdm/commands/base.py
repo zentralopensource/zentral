@@ -5,6 +5,7 @@ from uuid import uuid4
 from django import forms
 from django.http import HttpResponse
 from django.utils import timezone
+from rest_framework import serializers
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.models import Channel, Command as DBCommand, DeviceCommand, UserCommand
 
@@ -20,6 +21,7 @@ class Command:
     store_result = False
     reschedule_notnow = False
     form_class = None
+    serializer_class = None
 
     @classmethod
     def get_db_name(cls):
@@ -206,6 +208,17 @@ def get_command(channel, uuid):
 
 
 class CommandBaseForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        self.channel = kwargs.pop("channel")
+        self.enrolled_device = kwargs.pop("enrolled_device")
+        self.enrolled_user = kwargs.pop("enrolled_user", None)
+        super().__init__(*args, **kwargs)
+
+    def get_command_kwargs(self, uuid):
+        return {}
+
+
+class CommandBaseSerializer(serializers.Serializer):
     def __init__(self, *args, **kwargs):
         self.channel = kwargs.pop("channel")
         self.enrolled_device = kwargs.pop("enrolled_device")
