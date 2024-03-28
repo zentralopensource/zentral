@@ -1124,6 +1124,25 @@ class EnrolledDevice(models.Model):
         for t in cursor.fetchall():
             yield dict(zip(columns, t))
 
+    @property
+    def bootstrap_token_escrowed(self):
+        if self.bootstrap_token:
+            return True
+        return False
+
+    @property
+    def filevault_enabled(self):
+        try:
+            return self.security_info["FDE_Enabled"]
+        except (KeyError, TypeError):
+            pass
+
+    @property
+    def filevault_prk_escrowed(self):
+        if self.filevault_prk:
+            return True
+        return False
+
 
 class EnrolledUser(models.Model):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)

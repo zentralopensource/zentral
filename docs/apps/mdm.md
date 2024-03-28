@@ -72,10 +72,64 @@ To be able to keep sending notifications to enrolled devices, it is important to
 
 ## HTTP API
 
+### `/api/mdm/devices/`
+
+ * method: `GET`
+ * required permission: `mdm.view_enrolleddevice`
+ * available filters:
+     * `serial_number`
+     * `udid`
+
+Use this endpoint to list the MDM enrolled devices.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/devices/?serial_number=012345678910
+```
+
+Response:
+
+```json
+[
+  {
+    "id": 27,
+    "udid": "2A7F9BCE-9B52-4073-BE21-E419C85068E9",
+    "serial_number": "012345678910",
+    "name": "John’s Mac mini",
+    "model": "Macmini8,1",
+    "platform": "macOS",
+    "os_version": "14.2.1",
+    "build_version": "23C71",
+    "apple_silicon": false,
+    "cert_not_valid_after": "2024-08-05T14:44:01",
+    "blueprint": 1,
+    "awaiting_configuration": false,
+    "declarative_management": true,
+    "dep_enrollment": true,
+    "user_enrollment": false,
+    "user_approved_enrollment": true,
+    "supervised": true,
+    "bootstrap_token_escrowed": true,
+    "filevault_enabled": true,
+    "filevault_prk_escrowed": true,
+    "activation_lock_manageable": true,
+    "last_seen_at": "2024-02-17T20:31:34.848107",
+    "last_notified_at": "2024-03-27T20:44:21.751091",
+    "checkout_at": null,
+    "blocked_at": null,
+    "created_at": "2023-08-06T14:44:01.847058",
+    "updated_at": "2024-02-17T20:31:34.848262"
+  }
+]
+```
+
 ### `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`
 
  * method: `POST`
- * required_permission: `mdm.view_depvirtualserver`
+ * required permission: `mdm.view_depvirtualserver`
 
 Use this endpoint to trigger a DEP virtual server devices sync.
 
@@ -100,7 +154,7 @@ Response:
 ### `/api/mdm/software_updates/sync/`
 
  * method: `POST`
- * required_permission:
+ * required permission:
     * `mdm.add_softwareupdate`
     * `mdm.change_softwareupdate`
     * `mdm.delete_softwareupdate`

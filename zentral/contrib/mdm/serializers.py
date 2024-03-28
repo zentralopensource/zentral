@@ -9,11 +9,48 @@ from .app_manifest import download_package, read_package_info, validate_configur
 from .artifacts import update_blueprint_serialized_artifacts
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
-                     EnterpriseApp, FileVaultConfig,
+                     EnrolledDevice, EnterpriseApp, FileVaultConfig,
                      Platform, Profile,
                      RecoveryPasswordConfig,
                      SoftwareUpdateEnforcement)
 from .payloads import get_configuration_profile_info
+
+
+class EnrolledDeviceSerializer(serializers.ModelSerializer):
+    os_version = serializers.CharField(source="current_os_version")
+    build_version = serializers.CharField(source="current_build_version")
+
+    class Meta:
+        model = EnrolledDevice
+        fields = (
+            "id",
+            "udid",
+            "serial_number",
+            "name",
+            "model",
+            "platform",
+            "os_version",
+            "build_version",
+            "apple_silicon",
+            "cert_not_valid_after",
+            "blueprint",
+            "awaiting_configuration",
+            "declarative_management",
+            "dep_enrollment",
+            "user_enrollment",
+            "user_approved_enrollment",
+            "supervised",
+            "bootstrap_token_escrowed",
+            "filevault_enabled",
+            "filevault_prk_escrowed",
+            "activation_lock_manageable",
+            "last_seen_at",
+            "last_notified_at",
+            "checkout_at",
+            "blocked_at",
+            "created_at",
+            "updated_at",
+        )
 
 
 class ArtifactSerializer(serializers.ModelSerializer):
