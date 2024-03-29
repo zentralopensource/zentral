@@ -107,10 +107,10 @@ class EventRequestUser(object):
                 if ras and ras.is_remote:
                     session_d.update({
                         "is_remote": True,
-                        "realm_authentication_session_pk": ras.pk,
-                        "realm_user_pk": ras.user.pk,
+                        "realm_authentication_session_pk": str(ras.pk),
+                        "realm_user_pk": str(ras.user.pk),
                         "realm": {
-                            "pk": ras.realm.pk,
+                            "pk": str(ras.realm.pk),
                             "name": ras.realm.name
                         }
                     })
