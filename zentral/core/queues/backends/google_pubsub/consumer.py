@@ -1,6 +1,6 @@
-import json
 import logging
 import signal
+from kombu.utils import json
 from django.utils.functional import cached_property
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import pubsub_v1
