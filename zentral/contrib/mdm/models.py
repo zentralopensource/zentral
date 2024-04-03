@@ -55,10 +55,12 @@ def get_platform_values():
 
 class PushCertificate(models.Model):
     name = models.CharField(max_length=256, unique=True)
-    topic = models.CharField(max_length=256, unique=True)
-    not_before = models.DateTimeField()
-    not_after = models.DateTimeField()
-    certificate = models.BinaryField()
+    topic = models.CharField(max_length=256, null=True, unique=True)
+    not_before = models.DateTimeField(null=True)
+    not_after = models.DateTimeField(null=True)
+    certificate = models.BinaryField(null=True)
+    signed_csr = models.BinaryField(null=True)
+    signed_csr_updated_at = models.DateTimeField(null=True)
     private_key = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1033,6 +1035,7 @@ class EnrolledDevice(models.Model):
         return (
             self.checkout_at is None
             and self.push_certificate is not None
+            and self.push_certificate.certificate is not None
             and self.push_certificate.not_before < now
             and now < self.push_certificate.not_after
             and self.token is not None

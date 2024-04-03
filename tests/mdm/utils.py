@@ -57,7 +57,7 @@ def force_realm_user(realm=None):
 # push certificate
 
 
-def force_push_certificate_material(topic=None, reduced_key_size=True):
+def force_push_certificate_material(topic=None, reduced_key_size=True, encrypt_key=True):
     privkey = rsa.generate_private_key(
         public_exponent=65537,
         key_size=512 if reduced_key_size else 2048,
@@ -83,11 +83,16 @@ def force_push_certificate_material(topic=None, reduced_key_size=True):
     cert_pem = cert.public_bytes(
         encoding=serialization.Encoding.PEM
     )
-    privkey_password = get_random_string(12).encode("utf-8")
+    if encrypt_key:
+        privkey_password = get_random_string(12).encode("utf-8")
+        encryption_algorithm = serialization.BestAvailableEncryption(privkey_password)
+    else:
+        privkey_password = None
+        encryption_algorithm = serialization.NoEncryption()
     privkey_pem = privkey.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.BestAvailableEncryption(privkey_password)
+        encryption_algorithm=encryption_algorithm,
     )
     return cert_pem, privkey_pem, privkey_password
 

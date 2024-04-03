@@ -60,29 +60,29 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         push_certificate.rewrap_secrets()
         self.assertEqual(push_certificate.get_private_key(), private_key)
 
-    # add push certificate
+    # upload push certificate
 
-    def test_add_push_certificate_redirect(self):
-        self._login_redirect(reverse("mdm:add_push_certificate"))
+    def test_upload_push_certificate_redirect(self):
+        self._login_redirect(reverse("mdm:upload_push_certificate"))
 
-    def test_add_push_certificate_permission_denied(self):
+    def test_upload_push_certificate_permission_denied(self):
         self._login()
-        response = self.client.get(reverse("mdm:add_push_certificate"))
+        response = self.client.get(reverse("mdm:upload_push_certificate"))
         self.assertEqual(response.status_code, 403)
 
-    def test_add_push_certificate_get(self):
+    def test_upload_push_certificate_get(self):
         self._login("mdm.add_pushcertificate")
-        response = self.client.get(reverse("mdm:add_push_certificate"))
+        response = self.client.get(reverse("mdm:upload_push_certificate"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
-        self.assertContains(response, "Add a MDM push certificate")
+        self.assertContains(response, "Upload MDM push certificate and key")
 
-    def test_add_push_certificate_post(self):
+    def test_upload_push_certificate_post(self):
         self._login("mdm.add_pushcertificate", "mdm.view_pushcertificate")
         name = get_random_string(12)
         topic = get_random_string(12)
         cert_pem, privkey_pem, privkey_password = force_push_certificate_material(topic)
-        response = self.client.post(reverse("mdm:add_push_certificate"),
+        response = self.client.post(reverse("mdm:upload_push_certificate"),
                                     {"name": name,
                                      "certificate_file": SimpleUploadedFile("cert.pem", cert_pem),
                                      "key_file": SimpleUploadedFile("key.pem", privkey_pem),
@@ -99,6 +99,45 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
             serialization.load_pem_private_key(push_certificate.get_private_key(), None).private_numbers(),
             serialization.load_pem_private_key(privkey_pem, privkey_password).private_numbers()
         )
+
+    # create push certificate
+
+    def test_create_push_certificate_redirect(self):
+        self._login_redirect(reverse("mdm:create_push_certificate"))
+
+    def test_create_push_certificate_permission_denied(self):
+        self._login("mdm.view_pushcertificate")
+        response = self.client.get(reverse("mdm:create_push_certificate"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_push_certificate_get(self):
+        self._login("mdm.add_pushcertificate")
+        response = self.client.get(reverse("mdm:create_push_certificate"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
+        self.assertContains(response, "Create MDM push certificate")
+
+    def test_create_push_certificate_name_collision(self):
+        push_certificate = force_push_certificate()
+        self._login("mdm.add_pushcertificate")
+        response = self.client.post(reverse("mdm:create_push_certificate"),
+                                    {"name": push_certificate.name})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
+        self.assertFormError(response.context["form"], "name", "Push certificate with this Name already exists.")
+
+    def test_create_push_certificate_name_post(self):
+        self._login("mdm.add_pushcertificate", "mdm.view_pushcertificate")
+        name = get_random_string(12)
+        response = self.client.post(reverse("mdm:create_push_certificate"),
+                                    {"name": name},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
+        push_certificate = response.context["object"]
+        self.assertEqual(push_certificate.name, name)
+        self.assertIsNotNone(push_certificate.private_key)
+        self.assertIsNone(push_certificate.certificate)
 
     # view push certificate
 
@@ -130,33 +169,136 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("mdm:delete_push_certificate",
                                                  args=(enrollment.push_certificate.pk,)))
 
-    # update push certificate
+    # push certificate CSR
 
-    def test_update_push_certificate_redirect(self):
-        push_certificate = force_push_certificate(with_material=True)
-        self._login_redirect(reverse("mdm:update_push_certificate", args=(push_certificate.pk,)))
+    def test_push_certificate_csr_redirect(self):
+        push_certificate = force_push_certificate()
+        self._login_redirect(reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
 
-    def test_update_push_certificate_permission_denied(self):
-        push_certificate = force_push_certificate(with_material=True)
+    def test_push_certificate_csr_permission_denied(self):
+        push_certificate = force_push_certificate()
         self._login()
-        response = self.client.get(reverse("mdm:update_push_certificate", args=(push_certificate.pk,)))
+        response = self.client.get(reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_update_push_certificate_get(self):
+    def test_push_certificate_csr(self):
         push_certificate = force_push_certificate(with_material=True)
+        self._login("mdm.view_pushcertificate")
+        response = self.client.get(reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], "application/pkcs10")
+        self.assertEqual(response.headers["Content-Disposition"],
+                         f'attachment; filename="push_certificate_{push_certificate.pk}.csr"')
+
+    # push certificate signed CSR
+
+    def test_push_certificate_signed_csr_redirect(self):
+        push_certificate = force_push_certificate()
+        self._login_redirect(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+
+    def test_push_certificate_signed_csr_permission_denied(self):
+        push_certificate = force_push_certificate()
+        self._login()
+        response = self.client.get(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_push_certificate_signed_csr_empty(self):
+        push_certificate = force_push_certificate()
+        self.assertIsNone(push_certificate.signed_csr)
+        self._login("mdm.view_pushcertificate")
+        response = self.client.get(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_push_certificate_signed_csr(self):
+        push_certificate = force_push_certificate()
+        push_certificate.signed_csr = b"1234"
+        push_certificate.save()
+        self._login("mdm.view_pushcertificate")
+        response = self.client.get(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b''.join(response.streaming_content), push_certificate.signed_csr)
+        self.assertEqual(response.headers["Content-Type"], "application/octet-stream")
+        self.assertEqual(response.headers["Content-Disposition"],
+                         f'attachment; filename="push_certificate_{push_certificate.pk}_signed_csr.b64"')
+
+    # upload push certificate certificate
+
+    def test_upload_push_certificate_certificate_redirect(self):
+        push_certificate = force_push_certificate()
+        self._login_redirect(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
+
+    def test_upload_push_certificate_certificate_permission_denied(self):
+        push_certificate = force_push_certificate()
+        self._login("mdm.view_pushcertificate")
+        response = self.client.get(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_upload_push_certificate_certificate_get(self):
+        push_certificate = force_push_certificate()
         self._login("mdm.change_pushcertificate")
-        response = self.client.get(reverse("mdm:update_push_certificate", args=(push_certificate.pk,)))
+        response = self.client.get(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
-        self.assertContains(response, f"Update MDM push certificate <i>{push_certificate.name}</i>")
+        self.assertContains(response, "Upload MDM push certificate")
 
-    def test_update_push_certificate_post(self):
+    def test_upload_push_certificate_certificate_post(self):
+        push_certificate = force_push_certificate()
+        push_certificate.topic = None
+        push_certificate.save()
+        topic = get_random_string(12)
+        cert_pem, privkey_pem, _ = force_push_certificate_material(topic=topic, encrypt_key=False)
+        push_certificate.set_private_key(privkey_pem)
+        push_certificate.save()
+        self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
+        response = self.client.post(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)),
+                                    {"name": push_certificate.name,
+                                     "certificate_file": SimpleUploadedFile("cert.pem", cert_pem)},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
+        self.assertEqual(response.context["object"], push_certificate)
+        push_certificate.refresh_from_db()
+        self.assertEqual(push_certificate.topic, topic)
+
+    def test_upload_push_certificate_certificate_cert_key_mismatch(self):
+        push_certificate = force_push_certificate(with_material=True)
+        cert_pem, _, _ = force_push_certificate_material(topic=push_certificate.topic, encrypt_key=False)
+        self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
+        response = self.client.post(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)),
+                                    {"name": push_certificate.name,
+                                     "certificate_file": SimpleUploadedFile("cert.pem", cert_pem)},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
+        self.assertFormError(response.context["form"], None, "The certificate and key do not form a pair")
+
+    # renew push certificate
+
+    def test_renew_push_certificate_redirect(self):
+        push_certificate = force_push_certificate(with_material=True)
+        self._login_redirect(reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+
+    def test_renew_push_certificate_permission_denied(self):
+        push_certificate = force_push_certificate(with_material=True)
+        self._login()
+        response = self.client.get(reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_renew_push_certificate_get(self):
+        push_certificate = force_push_certificate(with_material=True)
+        self._login("mdm.change_pushcertificate")
+        response = self.client.get(reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
+        self.assertContains(response, "Renew MDM push certificate and key")
+
+    def test_renew_push_certificate_post(self):
         topic = get_random_string(12)
         push_certificate = force_push_certificate(topic=topic)
         new_name = get_random_string(12)
         cert_pem, privkey_pem, privkey_password = force_push_certificate_material(topic)
         self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
-        response = self.client.post(reverse("mdm:update_push_certificate", args=(push_certificate.pk,)),
+        response = self.client.post(reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)),
                                     {"name": new_name,
                                      "certificate_file": SimpleUploadedFile("cert.pem", cert_pem),
                                      "key_file": SimpleUploadedFile("key.pem", privkey_pem),

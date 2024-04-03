@@ -13,7 +13,7 @@ from .app_manifest import read_package_info, validate_configuration
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
 from .commands.set_recovery_lock import validate_recovery_password
-from .crypto import load_push_certificate_and_key
+from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .payloads import get_configuration_profile_info
@@ -53,25 +53,40 @@ class UserEnrollmentForm(forms.ModelForm):
         return cleaned_data
 
 
-class PushCertificateForm(forms.ModelForm):
-    certificate_file = forms.FileField(required=True)
-    key_file = forms.FileField(required=True)
-    key_password = forms.CharField(widget=forms.PasswordInput, required=False)
+class CreatePushCertificateForm(forms.ModelForm):
+    view_title = "Create"
+    view_action = "Create MDM push certificate"
 
     class Meta:
         model = PushCertificate
         fields = ("name",)
 
+    def save(self, *args, **kwargs):
+        push_certificate = super().save(commit=False)
+        push_certificate.set_private_key(generate_push_certificate_key_bytes())
+        push_certificate.save()
+        return push_certificate
+
+
+class BasePushCertificateForm(forms.ModelForm):
+    certificate_file = forms.FileField(required=True)
+
+    class Meta:
+        model = PushCertificate
+        fields = ("name",)
+
+    def get_key_bytes():
+        raise NotImplementedError
+
     def clean(self):
         cleaned_data = super().clean()
         certificate_file = cleaned_data.pop("certificate_file", None)
-        key_file = cleaned_data.pop("key_file", None)
-        key_password = cleaned_data.pop("key_password", None)
-        if certificate_file and key_file:
+        key_bytes, key_password = self.get_key_bytes()
+        if certificate_file and key_bytes:
             try:
                 push_certificate_d = load_push_certificate_and_key(
                     certificate_file.read(),
-                    key_file.read(), key_password
+                    key_bytes, key_password
                 )
             except ValueError as e:
                 raise forms.ValidationError(str(e))
@@ -96,6 +111,46 @@ class PushCertificateForm(forms.ModelForm):
                 setattr(self.instance, k, v)
         self.instance.save()
         return self.instance
+
+
+class PushCertificateForm(BasePushCertificateForm):
+    key_file = forms.FileField(required=True)
+    key_password = forms.CharField(widget=forms.PasswordInput, required=False)
+
+    def get_key_bytes(self):
+        key_file = self.cleaned_data.pop("key_file", None)
+        key_password = self.cleaned_data.pop("key_password", None)
+        return key_file.read(), key_password
+
+    @property
+    def view_title(self):
+        if self.instance.pk:
+            return "Renew"
+        else:
+            return "Upload"
+
+    @property
+    def view_action(self):
+        if self.instance.pk:
+            return "Renew MDM push certificate and key"
+        else:
+            return "Upload MDM push certificate and key"
+
+
+class PushCertificateCertificateForm(BasePushCertificateForm):
+    view_title = "Upload"
+    view_action = "Upload MDM push certificate"
+
+    def get_key_bytes(self):
+        return self.instance.get_private_key(), None
+
+    def save(self):
+        push_certificate = super().save()
+        if push_certificate.signed_csr:
+            push_certificate.signed_csr = None
+            push_certificate.signed_csr_updated_at = None
+            push_certificate.save()
+        return push_certificate
 
 
 class DEPDeviceSearchForm(forms.Form):

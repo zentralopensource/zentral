@@ -6,8 +6,11 @@ from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
+from zentral.contrib.mdm.crypto import generate_push_certificate_csr_der_bytes
 from zentral.contrib.mdm.dep import add_dep_token_certificate
-from zentral.contrib.mdm.forms import (EncryptedDEPTokenForm, PushCertificateForm, LocationForm,
+from zentral.contrib.mdm.forms import (CreatePushCertificateForm,
+                                       EncryptedDEPTokenForm, LocationForm,
+                                       PushCertificateCertificateForm, PushCertificateForm,
                                        UpdateDEPVirtualServerForm)
 from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServer, Location
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
@@ -58,10 +61,16 @@ class PushCertificatesView(PermissionRequiredMixin, ListView):
     model = PushCertificate
 
 
-class AddPushCertificateView(PermissionRequiredMixin, CreateView):
+class UploadPushCertificateView(PermissionRequiredMixin, CreateView):
     permission_required = "mdm.add_pushcertificate"
     model = PushCertificate
     form_class = PushCertificateForm
+
+
+class CreatePushCertificateView(PermissionRequiredMixin, CreateView):
+    permission_required = "mdm.add_pushcertificate"
+    model = PushCertificate
+    form_class = CreatePushCertificateForm
 
 
 class PushCertificateView(PermissionRequiredMixin, DetailView):
@@ -76,7 +85,36 @@ class PushCertificateView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdatePushCertificateView(PermissionRequiredMixin, UpdateView):
+class PushCertificateCSRView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_pushcertificate"
+
+    def get(self, request, *args, **kwargs):
+        push_certificate = get_object_or_404(PushCertificate, pk=kwargs["pk"])
+        csr_bytes = generate_push_certificate_csr_der_bytes(push_certificate)
+        return FileResponse(io.BytesIO(csr_bytes),
+                            content_type="application/pkcs10",
+                            as_attachment=True,
+                            filename=f"push_certificate_{push_certificate.pk}.csr")
+
+
+class PushCertificateSignedCSRView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_pushcertificate"
+
+    def get(self, request, *args, **kwargs):
+        push_certificate = get_object_or_404(PushCertificate, pk=kwargs["pk"], signed_csr__isnull=False)
+        return FileResponse(io.BytesIO(push_certificate.signed_csr),
+                            content_type="application/octet-stream",
+                            as_attachment=True,
+                            filename=f"push_certificate_{push_certificate.pk}_signed_csr.b64")
+
+
+class UploadPushCertificateCertificateView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_pushcertificate"
+    model = PushCertificate
+    form_class = PushCertificateCertificateForm
+
+
+class RenewPushCertificateView(PermissionRequiredMixin, UpdateView):
     permission_required = "mdm.change_pushcertificate"
     model = PushCertificate
     form_class = PushCertificateForm

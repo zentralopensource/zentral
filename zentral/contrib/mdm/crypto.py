@@ -6,7 +6,7 @@ from asn1crypto import cms
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, padding
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.x509.oid import NameOID
 from django.utils.crypto import get_random_string
 from django.utils.functional import SimpleLazyObject
@@ -196,7 +196,7 @@ def encrypt_cms_payload(payload, public_key_bytes, raw_output=False):
     with NamedTemporaryFile() as tmp_pubkey_file:
         tmp_pubkey_file.write(public_key_bytes)
         tmp_pubkey_file.flush()
-        # encrypt the paload
+        # encrypt the payload
         p = subprocess.Popen(["/usr/bin/openssl", "smime",  "-encrypt", tmp_pubkey_file.name],
                              stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE)
@@ -208,6 +208,26 @@ def encrypt_cms_payload(payload, public_key_bytes, raw_output=False):
 
 
 # push certificate
+
+
+def generate_push_certificate_key_bytes(key_size=2048):
+    key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=key_size,
+    )
+    return key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption()
+    )
+
+
+def generate_push_certificate_csr_der_bytes(push_certificate):
+    key = serialization.load_pem_private_key(push_certificate.get_private_key(), None)
+    csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, f"Zentral Push Certificate {push_certificate.pk}")
+    ])).sign(key, hashes.SHA256())
+    return csr.public_bytes(serialization.Encoding.DER)
 
 
 def load_push_certificate_and_key(cert_pem_bytes, key_pem_bytes, password=None):
@@ -231,7 +251,7 @@ def load_push_certificate_and_key(cert_pem_bytes, key_pem_bytes, password=None):
     # (TODO verify <1024bit with padding.OAEP → error)
     pad = padding.PKCS1v15()
     try:
-        key.decrypt(cert.public_key().encrypt(message, pad), pad)
+        assert key.decrypt(cert.public_key().encrypt(message, pad), pad) == message
     except Exception:
         raise ValueError("The certificate and key do not form a pair")
     try:
@@ -244,6 +264,6 @@ def load_push_certificate_and_key(cert_pem_bytes, key_pem_bytes, password=None):
                 serialization.PrivateFormat.PKCS8,
                 serialization.NoEncryption()
             ),
-            "not_before": cert.not_valid_before,
-            "not_after": cert.not_valid_after,
+            "not_before": cert.not_valid_before_utc,
+            "not_after": cert.not_valid_after_utc,
             "topic": topic}

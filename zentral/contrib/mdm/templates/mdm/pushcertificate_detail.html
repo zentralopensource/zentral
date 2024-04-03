@@ -17,13 +17,22 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">MDM push certificate</h3>
         <div class="ms-auto">
+            {% if object.signed_csr %}
+            {% url 'mdm:push_certificate_signed_csr' object.pk as signed_csr_url %}
+            {% button 'DOWNLOAD' signed_csr_url "Download signed CSR" %}
+            {% else %}
+            {% url 'mdm:push_certificate_csr' object.pk as csr_url %}
+            {% button 'DOWNLOAD' csr_url "Download CSR" %}
+            {% endif %}
             {% if perms.mdm.change_pushcertificate %}
-                {% url 'mdm:update_push_certificate' object.pk as url %}
-                {% button 'UPDATE' url "Edit Push Certificate" %}
+                {% url 'mdm:upload_push_certificate_certificate' object.pk as upload_url %}
+                {% button 'UPLOAD' upload_url "Upload Push Certificate" %}
+                {% url 'mdm:renew_push_certificate' object.pk as renew_url %}
+                {% button 'REFRESH' renew_url "Renew Push Certificate and Key" %}
             {% endif %}
             {% if object.can_be_deleted and perms.mdm.delete_pushcertificate %}
-                {% url 'mdm:delete_push_certificate' object.pk as url %}
-                {% button 'DELETE' url "Delete Certificate" %}
+                {% url 'mdm:delete_push_certificate' object.pk as delete_url %}
+                {% button 'DELETE' delete_url "Delete Certificate" %}
             {% endif %}
         </div>
     </div>
@@ -36,15 +45,15 @@
         </tr>
         <tr>
             <th width="160px">Topic</th>
-            <td>{{ object.topic }}</td>
+            <td>{{ object.topic|default:"-" }}</td>
         </tr>
         <tr>
             <th width="160px">Not before</th>
-            <td>{{ object.not_before }}</td>
+            <td>{{ object.not_before|default:"-" }}</td>
         </tr>
         <tr>
             <th width="160px">Not after</th>
-            <td>{{ object.not_after }}</td>
+            <td>{{ object.not_after|default:"-" }}</td>
         </tr>
         </tbody>
     </table>

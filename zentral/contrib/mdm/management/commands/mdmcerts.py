@@ -28,7 +28,7 @@ class Command(BaseCommand):
         parser_i.set_defaults(func=self.do_init)
         parser_r = subparsers.add_parser("req",
                                          called_from_command_line=True,
-                                         help="Create a MDM push certificate request")
+                                         help="Create and sign a MDM push certificate request")
         parser_r.set_defaults(func=self.do_req)
         parser_r.add_argument("-p", "--prefix", default="", help="MDM push certificate files prefix")
         # The country in the CSR is reflected in the Push certificate, but not much else
@@ -38,6 +38,11 @@ class Command(BaseCommand):
                 raise ValueError
             return country.upper()
         parser_r.add_argument("country", type=a_country, help="MDM push certificate country")
+        parser_sr = subparsers.add_parser("sign_req",
+                                          called_from_command_line=True,
+                                          help="Sign a MDM push certificate request")
+        parser_sr.set_defaults(func=self.do_sign_req)
+        parser_sr.add_argument("csr_path", help="The push certificate CSR to sign")
 
     def handle(self, *args, **options):
         self._dir = options.pop("dir")
@@ -105,6 +110,10 @@ class Command(BaseCommand):
     def _push_key_path(self, prefix):
         return os.path.join(self._dir, f"{prefix}push.key")
 
+    def _read_push_csr(self, csr_path):
+        with open(csr_path, "rb") as f:
+            return base64.b64encode(f.read()).decode("utf-8")
+
     def _create_push_csr(self, prefix, country):
         csr_path = self._push_csr_path(prefix)
         self.stderr.write(f"Create Push CSR {csr_path}", ending=" ")
@@ -120,13 +129,11 @@ class Command(BaseCommand):
             "-outform", "der",
             "-out", csr_path
         ], env=env, stderr=subprocess.DEVNULL)
-        with open(csr_path, "rb") as f:
-            b64_csr = base64.b64encode(f.read()).decode("utf-8")
+        b64_csr = self._read_push_csr(csr_path)
         self.stderr.write("OK")
         return b64_csr
 
-    def _sign_push_csr(self, prefix):
-        csr_path = self._push_csr_path(prefix)
+    def _sign_push_csr(self, csr_path):
         self.stderr.write(f"Sign Push CSR {csr_path}", ending=" ")
         pwd = self._get_vendor_private_key_password()
         env = os.environ.copy()
@@ -142,8 +149,7 @@ class Command(BaseCommand):
         self.stderr.write("OK")
         return signature
 
-    def _write_push_req(self, prefix, fullchain, b64_csr, b64_signature):
-        req_path = os.path.join(self._dir, f"{prefix}push.b64")
+    def _write_push_req(self, req_path, fullchain, b64_csr, b64_signature):
         self.stderr.write(f"Save Push REQ {req_path}", ending=" ")
         payload = {
             "PushCertCertificateChain": fullchain,
@@ -159,5 +165,16 @@ class Command(BaseCommand):
         self._init_working_dir()
         fullchain = self._build_vendor_fullchain()
         b64_csr = self._create_push_csr(prefix, options["country"])
-        b64_signature = self._sign_push_csr(prefix)
-        self._write_push_req(prefix, fullchain, b64_csr, b64_signature)
+        csr_path = self._push_csr_path(prefix)
+        b64_signature = self._sign_push_csr(csr_path)
+        req_path = os.path.join(self._dir, f"{prefix}push.b64")
+        self._write_push_req(req_path, fullchain, b64_csr, b64_signature)
+
+    def do_sign_req(self, **options):
+        csr_path = options["csr_path"]
+        self._init_working_dir()
+        fullchain = self._build_vendor_fullchain()
+        b64_csr = self._read_push_csr(csr_path)
+        b64_signature = self._sign_push_csr(csr_path)
+        req_path = f"{csr_path}.b64"
+        self._write_push_req(req_path, fullchain, b64_csr, b64_signature)

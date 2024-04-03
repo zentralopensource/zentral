@@ -12,8 +12,10 @@
     <h2 class="m-0">MDM push certificate{{ object_list|length|pluralize }} ({{ object_list|length }})</h2>
     <div class="ms-auto">
         {% if perms.mdm.add_pushcertificate %}
-            {% url 'mdm:add_push_certificate' as url %}
-            {% button 'CREATE' url "Create new Push Certificate" %}
+            {% url 'mdm:upload_push_certificate' as upload_url %}
+            {% button 'UPLOAD' upload_url "Upload new Push Certificate" %}
+            {% url 'mdm:create_push_certificate' as create_url %}
+            {% button 'CREATE' create_url "Create new Push Certificate" %}
         {% endif %}  
     </div>
 </div>
@@ -45,7 +47,7 @@
 
 {% else %}
     {% if perms.mdm.add_pushcertificate %}
-        {% url 'mdm:add_push_certificate' as link %}
+        {% url 'mdm:create_push_certificate' as link %}
         {% no_entities 'MDM Push Certificates' link %}
     {% else %}
         {% no_entities 'MDM Push Certificates' %}

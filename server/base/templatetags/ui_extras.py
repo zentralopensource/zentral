@@ -86,6 +86,14 @@ ACTION = {
         'icon': "bi bi-download",
         'tooltip': "Download",
     },
+    'REFRESH': {
+        'icon': "bi bi-arrow-counterclockwise",
+        'tooltip': "Renew",
+    },
+    'UPLOAD': {
+        'icon': "bi bi-upload",
+        'tooltip': "Upload",
+    },
     'LINK': {
         'icon': "bi bi-link-45deg",
         'tooltip': "External Link"
