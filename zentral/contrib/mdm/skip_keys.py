@@ -13,7 +13,7 @@ def build_skippable_setup_panes():
     skipkeys = load_yaml()
     skippable_setup_panes = []
     for payloadkey in skipkeys["payloadkeys"]:
-        skippable_setup_panes.append((payloadkey["key"], payloadkey["content"]))
+        skippable_setup_panes.append((payloadkey["key"], payloadkey["title"]))
     return skippable_setup_panes
 
 

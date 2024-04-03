@@ -6,4 +6,4 @@ In this folder, we copy some of the files from the Apple GitHub repository that 
 
 We start with the SkipKeys that can be used to configure which panes to skip in the Setup Assistant.
 
-URL: https://github.com/apple/device-management/blob/b838baacf2e790db729b6ca3f52724adc8bfb96d/other/skipkeys.yaml
+URL: https://github.com/apple/device-management/blob/39e2a8223418ec2eeffb084177ea8bd706114eb0/other/skipkeys.yaml
