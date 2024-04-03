@@ -94,7 +94,7 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 * `Content-Type: application/json`
 
-### /api/monolith/repository/`<int:pk>`/sync/
+### /api/monolith/repositories/`<int:pk>`/sync/
 
 #### Fetch the package infos, the icons, the client resources from the repository
 
