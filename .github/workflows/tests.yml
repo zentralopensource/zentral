@@ -16,13 +16,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: run tests with coverage
-        run: docker-compose run -u root web tests_with_coverage
+        run: docker compose run -u root web tests_with_coverage
         env:
           COMPOSE_DOCKER_CLI_BUILD: 1
           DOCKER_BUILDKIT: 1
 
       - name: output coverage lcov
-        run: docker-compose run -u root web coverage_lcov
+        run: docker compose run -u root web coverage_lcov
         env:
           COMPOSE_DOCKER_CLI_BUILD: 1
           DOCKER_BUILDKIT: 1
