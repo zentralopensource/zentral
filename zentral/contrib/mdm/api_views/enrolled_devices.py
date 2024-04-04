@@ -21,6 +21,34 @@ class EnrolledDeviceList(ListAPIView):
     filterset_fields = ('udid', 'serial_number')
 
 
+class BlockEnrolledDevice(APIView):
+    permission_required = "mdm.change_enrolleddevice"
+    permission_classes = [DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+        if enrolled_device.blocked_at:
+            return Response({"detail": "Device already blocked."}, status=status.HTTP_400_BAD_REQUEST)
+        enrolled_device.block()
+        enrolled_device.refresh_from_db()
+        serializer = EnrolledDeviceSerializer(enrolled_device)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class UnblockEnrolledDevice(APIView):
+    permission_required = "mdm.change_enrolleddevice"
+    permission_classes = [DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+        if not enrolled_device.blocked_at:
+            return Response({"detail": "Device not blocked."}, status=status.HTTP_400_BAD_REQUEST)
+        enrolled_device.unblock()
+        enrolled_device.refresh_from_db()
+        serializer = EnrolledDeviceSerializer(enrolled_device)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class CreateEnrolledDeviceCommandView(APIView):
     permission_required = "mdm.add_devicecommand"
     permission_classes = [DjangoPermissionRequired]
@@ -42,8 +70,8 @@ class CreateEnrolledDeviceCommandView(APIView):
             queue=True,
             uuid=uuid
         )
-        cmd_serializer = DeviceCommandSerializer(command.db_command)
-        return Response(cmd_serializer.data, status=status.HTTP_201_CREATED)
+        serializer = DeviceCommandSerializer(command.db_command)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class EraseEnrolledDevice(CreateEnrolledDeviceCommandView):

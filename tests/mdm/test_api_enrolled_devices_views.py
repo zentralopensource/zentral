@@ -259,6 +259,120 @@ class APIViewsTestCase(TestCase):
               'user_enrollment': None}]
         )
 
+    # block enrolled device
+
+    def test_block_enrolled_device_unauthorized(self):
+        response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None,
+                             include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_block_enrolled_device_permission_denied(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 403)
+
+    def test_block_enrolled_device_already_blocked(self):
+        self.enrolled_device.block()
+        self.set_permissions("mdm.change_enrolleddevice")
+        response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Device already blocked."})
+
+    def test_block_enrolled_device(self):
+        self.enrolled_device.unblock()
+        self.set_permissions("mdm.change_enrolleddevice")
+        response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 200)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(
+            response.json(),
+            {'activation_lock_manageable': None,
+             'apple_silicon': None,
+             'awaiting_configuration': None,
+             'blocked_at': self.enrolled_device.blocked_at.isoformat(),
+             'blueprint': None,
+             'bootstrap_token_escrowed': False,
+             'build_version': '',
+             'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
+             'checkout_at': None,
+             'created_at': self.enrolled_device.created_at.isoformat(),
+             'declarative_management': False,
+             'dep_enrollment': None,
+             'filevault_enabled': None,
+             'filevault_prk_escrowed': False,
+             'id': self.enrolled_device.pk,
+             'last_notified_at': None,
+             'last_seen_at': None,
+             'model': None,
+             'name': None,
+             'os_version': '',
+             'platform': 'macOS',
+             'recovery_password_escrowed': False,
+             'serial_number': self.enrolled_device.serial_number,
+             'supervised': None,
+             'udid': self.enrolled_device.udid,
+             'updated_at': self.enrolled_device.updated_at.isoformat(),
+             'user_approved_enrollment': None,
+             'user_enrollment': None}
+        )
+
+    # unblock enrolled device
+
+    def test_unblock_enrolled_device_unauthorized(self):
+        response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None,
+                             include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_unblock_enrolled_device_permission_denied(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 403)
+
+    def test_unblock_enrolled_device_already_unblocked(self):
+        self.enrolled_device.unblock()
+        self.set_permissions("mdm.change_enrolleddevice")
+        response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Device not blocked."})
+
+    def test_unblock_enrolled_device(self):
+        self.enrolled_device.block()
+        self.set_permissions("mdm.change_enrolleddevice")
+        response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 200)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(
+            response.json(),
+            {'activation_lock_manageable': None,
+             'apple_silicon': None,
+             'awaiting_configuration': None,
+             'blocked_at': None,
+             'blueprint': None,
+             'bootstrap_token_escrowed': False,
+             'build_version': '',
+             'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
+             'checkout_at': None,
+             'created_at': self.enrolled_device.created_at.isoformat(),
+             'declarative_management': False,
+             'dep_enrollment': None,
+             'filevault_enabled': None,
+             'filevault_prk_escrowed': False,
+             'id': self.enrolled_device.pk,
+             'last_notified_at': None,
+             'last_seen_at': None,
+             'model': None,
+             'name': None,
+             'os_version': '',
+             'platform': 'macOS',
+             'recovery_password_escrowed': False,
+             'serial_number': self.enrolled_device.serial_number,
+             'supervised': None,
+             'udid': self.enrolled_device.udid,
+             'updated_at': self.enrolled_device.updated_at.isoformat(),
+             'user_approved_enrollment': None,
+             'user_enrollment': None}
+        )
+
     # erase enrolled device
 
     def test_erase_enrolled_device_unauthorized(self):

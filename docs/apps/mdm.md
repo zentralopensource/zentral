@@ -152,6 +152,104 @@ Response:
 ]
 ```
 
+### `/api/mdm/devices/<int:pk>/block/`
+
+ * method: `POST`
+ * required permission: `mdm.change_enrolleddevice`
+
+Blocks an enrolled device. Releases it from the MDM and denies further MDM enrollments. A serialized device is returned.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/devices/27/block/
+```
+
+Response:
+
+```json
+{
+  "id": 27,
+  "udid": "2A7F9BCE-9B52-4073-BE21-E419C85068E9",
+  "serial_number": "012345678910",
+  "name": "John’s Mac mini",
+  "model": "Macmini8,1",
+  "platform": "macOS",
+  "os_version": "14.2.1",
+  "build_version": "23C71",
+  "apple_silicon": false,
+  "cert_not_valid_after": "2024-08-05T14:44:01",
+  "blueprint": 1,
+  "awaiting_configuration": false,
+  "declarative_management": true,
+  "dep_enrollment": true,
+  "user_enrollment": false,
+  "user_approved_enrollment": true,
+  "supervised": true,
+  "bootstrap_token_escrowed": true,
+  "filevault_enabled": true,
+  "filevault_prk_escrowed": true,
+  "activation_lock_manageable": true,
+  "last_seen_at": "2024-02-17T20:31:34.848107",
+  "last_notified_at": "2024-03-27T20:44:21.751091",
+  "checkout_at": null,
+  "blocked_at": "2024-02-04T07:03:12.345678",
+  "created_at": "2023-08-06T14:44:01.847058",
+  "updated_at": "2024-02-04T07:03:12.456789",
+}
+```
+
+### `/api/mdm/devices/<int:pk>/unblock/`
+
+ * method: `POST`
+ * required permission: `mdm.change_enrolleddevice`
+
+Unblocks an enrolled device. The device can enroll again. A serialized device is returned.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/devices/27/unblock/
+```
+
+Response:
+
+```json
+{
+  "id": 27,
+  "udid": "2A7F9BCE-9B52-4073-BE21-E419C85068E9",
+  "serial_number": "012345678910",
+  "name": "John’s Mac mini",
+  "model": "Macmini8,1",
+  "platform": "macOS",
+  "os_version": "14.2.1",
+  "build_version": "23C71",
+  "apple_silicon": false,
+  "cert_not_valid_after": "2024-08-05T14:44:01",
+  "blueprint": 1,
+  "awaiting_configuration": false,
+  "declarative_management": true,
+  "dep_enrollment": true,
+  "user_enrollment": false,
+  "user_approved_enrollment": true,
+  "supervised": true,
+  "bootstrap_token_escrowed": true,
+  "filevault_enabled": true,
+  "filevault_prk_escrowed": true,
+  "activation_lock_manageable": true,
+  "last_seen_at": "2024-02-17T20:31:34.848107",
+  "last_notified_at": "2024-03-27T20:44:21.751091",
+  "checkout_at": null,
+  "blocked_at": null,
+  "created_at": "2023-08-06T14:44:01.847058",
+  "updated_at": "2024-02-17T20:31:34.848262"
+}
+```
+
 ### `/api/mdm/devices/<int:pk>/erase/`
 
  * method: `POST`
