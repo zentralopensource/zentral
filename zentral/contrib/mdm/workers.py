@@ -153,6 +153,7 @@ class DevicesAPNSWorker(BaseAPNSWorker):
         "  AND ed.checkout_at IS NULL"
         "  AND ed.token IS NOT NULL"
         "  AND ed.push_magic IS NOT NULL"
+        "  AND pc.certificate IS NOT NULL"
         "  AND pc.not_before < NOW()"
         "  AND pc.not_after > NOW()"
         # must be notified
@@ -224,6 +225,7 @@ class UsersAPNSWorker(BaseAPNSWorker):
         "  AND ed.checkout_at IS NULL"
         "  AND eu.token IS NOT NULL"
         "  AND ed.push_magic IS NOT NULL"
+        "  AND pc.certificate IS NOT NULL"
         "  AND pc.not_before < NOW()"
         "  AND pc.not_after > NOW()"
         # must be notified

@@ -16,6 +16,11 @@ class MDMWorkersTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
         cls.push_certificate = force_push_certificate(with_material=True, reduced_key_size=False)
+        cls.bad_push_certificate = force_push_certificate(with_material=False, reduced_key_size=False)
+        cls.bad_push_certificate.certificate = None
+        cls.bad_push_certificate.not_before = None
+        cls.bad_push_certificate.not_after = None
+        cls.bad_push_certificate.save()
 
     # common / config
 
@@ -288,6 +293,20 @@ class MDMWorkersTestCase(TestCase):
         w.run(only_once=True)
         self.assertEqual(len(post_event.call_args_list), 0)
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_devices_apns_worker_one_device_bad_push_certificate_no_notifications(self, post_event):
+        self.assertIsNone(self.bad_push_certificate.certificate)
+        session, _, _ = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True, push_certificate=self.bad_push_certificate
+        )
+        enrolled_device = session.enrolled_device
+        self.assertIsNone(enrolled_device.last_notified_at)
+        enrolled_device.created_at -= timedelta(seconds=6)  # Old enough
+        enrolled_device.save()
+        w = DevicesAPNSWorker()
+        w.run(only_once=True)
+        self.assertEqual(len(post_event.call_args_list), 0)
+
     @patch("zentral.contrib.mdm.workers.apns_client_cache.get_or_create")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_devices_apns_worker_one_device_first_notification_success(self, post_event, get_or_create):
@@ -472,6 +491,19 @@ class MDMWorkersTestCase(TestCase):
         )
         enrolled_user = force_enrolled_user(session.enrolled_device)
         self.assertIsNone(enrolled_user.last_notified_at)
+        w = UsersAPNSWorker()
+        w.run(only_once=True)
+        self.assertEqual(len(post_event.call_args_list), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_users_apns_worker_one_user_bad_push_certificate_no_notifications(self, post_event):
+        session, _, _ = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True, push_certificate=self.bad_push_certificate
+        )
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        self.assertIsNone(enrolled_user.last_notified_at)
+        enrolled_user.created_at -= timedelta(seconds=6)  # Old enough
+        enrolled_user.save()
         w = UsersAPNSWorker()
         w.run(only_once=True)
         self.assertEqual(len(post_event.call_args_list), 0)
