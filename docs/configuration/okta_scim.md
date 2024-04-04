@@ -31,6 +31,8 @@ In the `General` tab of the Okta application, click `Edit`, select `SCIM` in the
 
 Open the `Provisioning` tab of the Okta application, click `Edit`. Use the `SCIM root URL` from the Zentral realm detail page as `SCIM connector base URL`.
 
+Set `userName` as `Unique identifier field for users`.
+
 Under `Supported provisioning actions`, choose `Push New Users`, `Push Profile Updates` and `Push Groups`. The synchronization is only one-way, from Okta to Zentral.
 
 Select the `HTTP Header` authentication, and use the API token of the service account you have just created as bearer token.
