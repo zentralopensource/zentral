@@ -1592,6 +1592,11 @@ class DEPVirtualServer(models.Model):
 
 
 class DEPEnrollment(MDMEnrollment):
+
+    class UsernamePattern(models.TextChoices):
+        DEVICE_USERNAME = "$REALM_USER.DEVICE_USERNAME", "Username prefix without '.'"
+        EMAIL_PREFIX = "$REALM_USER.EMAIL_PREFIX", "Email prefix"
+
     # link with the Apple DEP web services
     uuid = models.UUIDField(unique=True, editable=False)
     virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE)
@@ -1605,10 +1610,25 @@ class DEPEnrollment(MDMEnrollment):
     # if linked to a realm, a user has to authenticate to get the mdm payload.
     # if realm, use the realm user either to auto populate the user form
     # or auto create the admin
-    use_realm_user = models.BooleanField(default=False)
+    use_realm_user = models.BooleanField(
+        default=False,
+        help_text="Use this option to prefill the account creation info with the realm user attributes."
+    )
+    # if the realm user is used, the following attribute determines how the
+    # the account username is derived from the realm user attributes.
+    # see zentral.contrib.mdm.payloads.substitute_variables
+    username_pattern = models.CharField(
+        max_length=255, choices=UsernamePattern.choices,
+        blank=True,
+        help_text="The pattern used to derive the account username from the realm user attributes."
+    )
     # if the realm user is not an admin, we will only use the info
     # to autopopulate the user form, and we will need a default admin
-    realm_user_is_admin = models.BooleanField(default=True)
+    realm_user_is_admin = models.BooleanField(
+        default=True,
+        help_text="If false, the user created from the realm user during the Setup Assistant will be "
+                  "a regular user, and the admin account information is required."
+    )
     # optional admin account info
     admin_full_name = models.CharField(max_length=80, blank=True, null=True)
     admin_short_name = models.CharField(max_length=32, blank=True, null=True)

@@ -39,11 +39,11 @@ def force_realm():
     )
 
 
-def force_realm_user(realm=None):
+def force_realm_user(realm=None, username=None, email=None):
     if not realm:
         realm = force_realm()
-    username = get_random_string(12)
-    email = f"{username}@example.com"
+    username = username or get_random_string(12)
+    email = email or f"{username}@example.com"
     realm_user = RealmUser.objects.create(
         realm=realm,
         claims={"username": username,
@@ -302,8 +302,14 @@ def force_dep_enrollment_session(
     device_udid=None,
     serial_number=None,
     realm_user=False,
+    realm_user_email=None,
+    realm_user_username=None,
 ):
     dep_enrollment = force_dep_enrollment(mbu, push_certificate)
+    if realm_user:
+        dep_enrollment.use_realm_user = True
+        dep_enrollment.username_pattern = DEPEnrollment.UsernamePattern.DEVICE_USERNAME
+        dep_enrollment.save()
     if serial_number is None:
         serial_number = get_random_string(12)
     if device_udid is None:
@@ -312,7 +318,8 @@ def force_dep_enrollment_session(
         dep_enrollment, serial_number, device_udid
     )
     if realm_user:
-        session.dep_enrollment.realm, session.realm_user = force_realm_user()
+        session.dep_enrollment.realm, session.realm_user = force_realm_user(email=realm_user_email,
+                                                                            username=realm_user_username)
         session.dep_enrollment.use_realm_user = True
         session.dep_enrollment.save()
         session.save()

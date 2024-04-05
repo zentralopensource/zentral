@@ -7,7 +7,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import AccountConfiguration
 from zentral.contrib.mdm.commands.scheduling import _configure_dep_enrollment_accounts
-from zentral.contrib.mdm.models import Channel, Command, Platform, RequestStatus
+from zentral.contrib.mdm.models import Channel, Command, DEPEnrollment, Platform, RequestStatus
 from .utils import force_dep_enrollment_session, force_enrolled_user, force_ota_enrollment_session
 
 
@@ -22,7 +22,9 @@ class AccountConfigurationCommandTestCase(TestCase):
             cls.mbu,
             authenticated=True,
             completed=True,
-            realm_user=True
+            realm_user=True,
+            realm_user_username="yolo.fomo@example.com",
+            realm_user_email="un.deux@example.com",
         )
 
     # verify_channel_and_device
@@ -50,17 +52,34 @@ class AccountConfigurationCommandTestCase(TestCase):
 
     # build_command
 
-    def test_build_command_realm_user_no_password_hash_admin(self):
+    def test_build_command_realm_user_no_password_hash_admin_default_username(self):
         cmd = AccountConfiguration.create_for_device(
             self.dep_enrollment_session.enrolled_device
         )
+        self.assertEqual(self.dep_enrollment_session.dep_enrollment.username_pattern,
+                         DEPEnrollment.UsernamePattern.DEVICE_USERNAME)
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
         self.assertEqual(payload["AutoSetupAdminAccounts"], [])
         self.assertFalse(payload["DontAutoPopulatePrimaryAccountInfo"])
         self.assertTrue(payload["LockPrimaryAccountInfo"])
         self.assertEqual(payload["PrimaryAccountFullName"], self.dep_enrollment_session.realm_user.get_full_name())
-        self.assertEqual(payload["PrimaryAccountUserName"], self.dep_enrollment_session.realm_user.device_username)
+        self.assertEqual(payload["PrimaryAccountUserName"], "yolofomo")
+        self.assertFalse(payload["SetPrimarySetupAccountAsRegularUser"])
+        self.assertFalse(payload["SkipPrimarySetupAccountCreation"])
+
+    def test_build_command_realm_user_no_password_hash_admin_email_prefix_username(self):
+        cmd = AccountConfiguration.create_for_device(
+            self.dep_enrollment_session.enrolled_device
+        )
+        self.dep_enrollment_session.dep_enrollment.username_pattern = DEPEnrollment.UsernamePattern.EMAIL_PREFIX
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(payload["AutoSetupAdminAccounts"], [])
+        self.assertFalse(payload["DontAutoPopulatePrimaryAccountInfo"])
+        self.assertTrue(payload["LockPrimaryAccountInfo"])
+        self.assertEqual(payload["PrimaryAccountFullName"], self.dep_enrollment_session.realm_user.get_full_name())
+        self.assertEqual(payload["PrimaryAccountUserName"], "un.deux")
         self.assertFalse(payload["SetPrimarySetupAccountAsRegularUser"])
         self.assertFalse(payload["SkipPrimarySetupAccountCreation"])
 

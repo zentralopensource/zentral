@@ -367,13 +367,13 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
                 initial = key in self.instance.skip_setup_items
             else:
                 initial = False
-            self.fields[key] = forms.BooleanField(
+            self.fields[f"ssp-{key}"] = forms.BooleanField(
                 label=content,
                 initial=initial,
                 required=False
             )
             field_order.append(key)
-        field_order.extend(["realm", "use_realm_user", "realm_user_is_admin",
+        field_order.extend(["realm", "use_realm_user", "username_pattern", "realm_user_is_admin",
                             "admin_full_name", "admin_short_name", "admin_password",
                             "ios_max_version", "ios_min_version", "macos_max_version", "macos_min_version"])
         self.order_fields(field_order)
@@ -397,6 +397,17 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
         if use_realm_user and not realm:
             raise forms.ValidationError("This option is only valid if a 'realm' is selected")
         return use_realm_user
+
+    def clean_username_pattern(self):
+        use_realm_user = self.cleaned_data.get("use_realm_user")
+        username_pattern = self.cleaned_data.get("username_pattern")
+        if not use_realm_user:
+            if username_pattern:
+                raise forms.ValidationError("This field can only be used if the 'use realm user' option is ticked")
+        else:
+            if not username_pattern:
+                raise forms.ValidationError("This field is required when the 'use realm user' option is ticked")
+        return username_pattern
 
     def clean_realm_user_is_admin(self):
         use_realm_user = self.cleaned_data.get("use_realm_user")
@@ -448,7 +459,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
         super().clean()
         skip_setup_items = []
         for key, _ in skippable_setup_panes:
-            if self.cleaned_data.get(key, False):
+            if self.cleaned_data.get(f"ssp-{key}", False):
                 skip_setup_items.append(key)
         if self.admin_info_incomplete():
             raise forms.ValidationError("Admin information incomplete")

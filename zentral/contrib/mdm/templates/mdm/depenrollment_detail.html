@@ -120,10 +120,16 @@
         <th>Use realm user</th>
         <td>{{ object.use_realm_user|yesno }}</td>
         </tr>
+        {% if object.use_realm_user %}
+        <tr>
+        <th>Username pattern</th>
+        <td>{{ object.get_username_pattern_display }}</td>
+        </tr>
         <tr>
         <th>Realm user is admin</th>
         <td>{{ object.realm_user_is_admin|yesno }}</td>
         </tr>
+        {% endif %}
         <tr>
         <th>Admin full name</th>
         <td>{{ object.admin_full_name|default:"-" }}</td>

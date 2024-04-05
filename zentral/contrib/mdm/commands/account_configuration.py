@@ -1,6 +1,7 @@
 import logging
 from realms.utils import serialize_password_hash_dict
 from zentral.contrib.mdm.models import Channel, Platform, DEPEnrollmentSession
+from zentral.contrib.mdm.payloads import substitute_variables
 from .base import register_command, Command
 
 
@@ -38,7 +39,8 @@ class AccountConfiguration(Command):
                 command["DontAutoPopulatePrimaryAccountInfo"] = False
                 command["LockPrimaryAccountInfo"] = True
                 command["PrimaryAccountFullName"] = self.realm_user.get_full_name()
-                command["PrimaryAccountUserName"] = self.realm_user.device_username
+                command["PrimaryAccountUserName"] = substitute_variables(dep_enrollment.username_pattern,
+                                                                         self.enrollment_session)
                 command["SetPrimarySetupAccountAsRegularUser"] = not dep_enrollment.realm_user_is_admin
             elif dep_enrollment.realm_user_is_admin:
                 # Auto setup admin with realm user

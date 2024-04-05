@@ -11,7 +11,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from realms.utils import build_password_hash_dict
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.models import DEPDevice
+from zentral.contrib.mdm.models import DEPDevice, DEPEnrollment
 from .utils import (force_dep_enrollment, force_dep_device, force_dep_virtual_server,
                     force_push_certificate, force_realm, force_scep_config)
 
@@ -129,6 +129,92 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                              "await_device_configured",
                              "Required for the admin account setup")
 
+    def test_create_dep_enrollment_missing_realm(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-use_realm_user": "on",
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"],
+                             "use_realm_user",
+                             "This option is only valid if a 'realm' is selected")
+
+    def test_create_dep_enrollment_missing_username_pattern(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        realm = force_realm()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-realm": realm.pk,
+                                     "de-use_realm_user": "on",
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"],
+                             "username_pattern",
+                             "This field is required when the 'use realm user' option is ticked")
+
+    def test_create_dep_enrollment_invalid_username_pattern_choice(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        realm = force_realm()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-realm": realm.pk,
+                                     "de-username_pattern": "YOLO",
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"],
+                             "username_pattern",
+                             'Select a valid choice. YOLO is not one of the available choices.')
+
+    def test_create_dep_enrollment_username_pattern_without_use_realm_user(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        realm = force_realm()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-realm": realm.pk,
+                                     "de-username_pattern": DEPEnrollment.UsernamePattern.EMAIL_PREFIX,
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "es-meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["dep_enrollment_form"],
+                             "username_pattern",
+                             "This field can only be used if the 'use realm user' option is ticked")
+
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_create_dep_enrollment_post(self, from_dep_virtual_server):
         profile_uuid = uuid.uuid4()
@@ -157,7 +243,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-admin_short_name": "fomo",
                                      "de-await_device_configured": "on",
                                      "de-admin_password": "1234",
-                                     "de-Accessibility": "on",
+                                     "de-ssp-Accessibility": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -212,6 +298,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, enrollment.push_certificate.get_absolute_url())
         self.assertContains(response, enrollment.scep_config.name)
         self.assertNotContains(response, enrollment.scep_config.get_absolute_url())
+        self.assertNotContains(response, "Username pattern")
+        self.assertNotContains(response, "Username prefix without")
+        self.assertNotContains(response, "Realm user is admin")
 
     def test_view_dep_enrollment_extra_perms(self):
         enrollment = force_dep_enrollment(self.mbu)
@@ -224,6 +313,20 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, enrollment.push_certificate.get_absolute_url())
         self.assertContains(response, enrollment.scep_config.name)
         self.assertContains(response, enrollment.scep_config.get_absolute_url())
+
+    def test_view_dep_enrollment_use_realm_user(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        enrollment.use_realm_user = True
+        enrollment.username_pattern = DEPEnrollment.UsernamePattern.DEVICE_USERNAME
+        enrollment.save()
+        self._login("mdm.view_depenrollment")
+        response = self.client.get(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
+        self.assertContains(response, enrollment.name)
+        self.assertContains(response, "Username pattern")
+        self.assertContains(response, "Username prefix without")
+        self.assertContains(response, "Realm user is admin")
 
     # update DEP enrollment
 
@@ -325,7 +428,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-virtual_server": enrollment.virtual_server.pk,
                                      "de-is_mdm_removable": "on",
                                      "de-is_supervised": "",
-                                     "de-AppleID": "on",
+                                     "de-ssp-AppleID": "on",
                                      "de-language": "de",
                                      "de-include_tls_certificates": "on",
                                      "de-macos_min_version": "13.3.1",
