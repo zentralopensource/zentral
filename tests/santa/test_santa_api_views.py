@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 from unittest.mock import patch
 import uuid
@@ -43,7 +44,9 @@ class SantaAPIViewsTestCase(TestCase):
 
     # preflight
 
-    def _get_preflight_data(self, enrolled=False):
+    def _get_preflight_data(self, version=None, enrolled=False):
+        if version is None:
+            version = datetime.utcnow().strftime("%Y.2")
         if enrolled:
             serial_number = self.machine_serial_number
             hardware_uuid = self.enrolled_machine.hardware_uuid
@@ -52,7 +55,7 @@ class SantaAPIViewsTestCase(TestCase):
             hardware_uuid = uuid.uuid4()
         data = {
             "os_build": "20C69",
-            "santa_version": "2022.1",
+            "santa_version": version,
             "hostname": "hostname",
             "os_version": "11.1",
             "client_mode": "LOCKDOWN",
@@ -106,7 +109,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
         self.assertEqual(json_response["full_sync_interval"], Configuration.DEFAULT_FULL_SYNC_INTERVAL)
-        self.assertEqual(json_response["clean_sync"], True)
+        self.assertEqual(json_response["sync_type"], "clean")
         self.assertTrue(json_response["blocked_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
         self.assertTrue(json_response["allowed_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
 
@@ -211,33 +214,61 @@ class SantaAPIViewsTestCase(TestCase):
         enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
         self.assertEqual(enrolled_machine.binary_rule_count, 0)
 
-    def test_preflight_enrollment_clean_sync(self):
-        # enrollment, clean sync not requested → clean sync
-        data, serial_number, hardware_uuid = self._get_preflight_data()
+    def test_preflight_enrollment_clean_sync_true(self):
+        # enrollment, clean sync not requested, legacy Santa version → clean sync True
+        data, serial_number, hardware_uuid = self._get_preflight_data(version="2022.1")
         url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertTrue(json_response["clean_sync"])
 
-    def test_preflight_no_enrollment_no_clean_sync(self):
-        # no enrollment, clean sync not requested → no clean sync
+    def test_preflight_enrollment_sync_type_clean(self):
+        # enrollment, clean sync not requested → sync type clean
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["sync_type"], "clean")
+
+    def test_preflight_no_enrollment_clean_sync_false(self):
+        # no enrollment, clean sync not requested, legacy Santa version → clean sync False
+        data, serial_number, hardware_uuid = self._get_preflight_data(version="2022.1", enrolled=True)
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertFalse(json_response["clean_sync"])
+
+    def test_preflight_no_enrollment_sync_type_normal(self):
+        # no enrollment, clean sync not requested → sync type normal
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
-        self.assertFalse(json_response.get("clean_sync", False))
+        self.assertEqual(json_response["sync_type"], "normal")
 
-    def test_preflight_no_enrollment_clean_sync_requested(self):
-        # no enrollment, clean sync requested → clean sync
-        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+    def test_preflight_no_enrollment_legacy_clean_sync_requested(self):
+        # no enrollment, clean sync requested, legacy Santa version → clean sync True
+        data, serial_number, hardware_uuid = self._get_preflight_data(version="2022.1", enrolled=True)
         data["request_clean_sync"] = True
         url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
         response = self.post_as_json(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertTrue(json_response["clean_sync"])
+
+    def test_preflight_no_enrollment_clean_sync_requested(self):
+        # no enrollment, clean sync requested → sync type clean
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        data["request_clean_sync"] = True
+        url = reverse("santa_public:preflight", args=(self.enrollment_secret.secret, hardware_uuid))
+        response = self.post_as_json(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["sync_type"], "clean")
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_sync_not_ok_conf_without_severity_no_incident_update(self, post_event):

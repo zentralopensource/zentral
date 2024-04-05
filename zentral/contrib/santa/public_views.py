@@ -263,17 +263,26 @@ class PreflightView(BaseSyncView):
 
     def do_post(self):
         self._commit_machine_snapshot()
+        comparable_santa_version = self.enrolled_machine.get_comparable_santa_version()
 
         response_dict = self.enrolled_machine.enrollment.configuration.get_sync_server_config(
             self.enrolled_machine.serial_number,
-            self.enrolled_machine.get_comparable_santa_version()
+            comparable_santa_version,
         )
 
         # clean sync?
         clean_sync = self.request_data.get("request_clean_sync") or self.enrollment_action is not None
         if clean_sync:
             MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).delete()
-            response_dict["clean_sync"] = True
+            if comparable_santa_version < (2024, 1):
+                response_dict["clean_sync"] = True
+            else:
+                response_dict["sync_type"] = "clean"
+        else:
+            if comparable_santa_version < (2024, 1):
+                response_dict["clean_sync"] = False
+            else:
+                response_dict["sync_type"] = "normal"
 
         # sync incident update?
         incident_update = None
