@@ -104,6 +104,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_SAMESITE = django_zentral_settings.get("SESSION_COOKIE_SAMESITE", "Lax")
 
 if "SESSION_COOKIE_AGE" in django_zentral_settings:
     SESSION_COOKIE_AGE = django_zentral_settings["SESSION_COOKIE_AGE"]
