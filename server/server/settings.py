@@ -103,6 +103,7 @@ AUTHENTICATION_BACKENDS = [
     'realms.auth_backends.RealmBackend',
 ]
 
+# SESSION*
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = django_zentral_settings.get("SESSION_COOKIE_SAMESITE", "Lax")
 
@@ -112,6 +113,9 @@ if "SESSION_COOKIE_AGE" in django_zentral_settings:
 if "SESSION_EXPIRE_AT_BROWSER_CLOSE" in django_zentral_settings:
     SESSION_EXPIRE_AT_BROWSER_CLOSE = django_zentral_settings["SESSION_EXPIRE_AT_BROWSER_CLOSE"]
 
+# CSRF*
+CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_SAMESITE = "Strict"
 if "CSRF_TRUSTED_ORIGINS" in django_zentral_settings:
     CSRF_TRUSTED_ORIGINS = django_zentral_settings["CSRF_TRUSTED_ORIGINS"]
 
