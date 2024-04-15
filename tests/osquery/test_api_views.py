@@ -321,7 +321,7 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:atc", args=[99999]))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No AutomaticTableConstruction matches the given query."
         })
 
     def test_get_atc(self):
@@ -397,7 +397,7 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("osquery_api:atc", args=[9999]), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No AutomaticTableConstruction matches the given query."
         })
 
     def test_update_atc(self):
@@ -529,7 +529,7 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse("osquery_api:atc", args=[9999]))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No AutomaticTableConstruction matches the given query."
         })
 
     def test_delete_atc(self):
@@ -637,7 +637,7 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:file_category", args=[9999]))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No FileCategory matches the given query."
         })
 
     def test_get_file_category(self):
@@ -713,7 +713,7 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("osquery_api:file_category", args=[9999]), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No FileCategory matches the given query."
         })
 
     def test_update_file_category(self):
@@ -845,7 +845,7 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse("osquery_api:file_category", args=[9999]))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No FileCategory matches the given query."
         })
 
     def test_delete_file_category(self):
@@ -930,7 +930,7 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:configuration", args=(9999,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No Configuration matches the given query."
         })
 
     def test_get_configuration(self):
@@ -1084,7 +1084,7 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse('osquery_api:configuration', args=(9999,)), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No Configuration matches the given query."
         })
 
     def test_update_configuration_atc_not_found(self):
@@ -1228,7 +1228,7 @@ class APIViewsTestCase(TestCase):
         response = self.delete(reverse('osquery_api:configuration', args=(9999,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No Configuration matches the given query."
         })
 
     def test_delete_configuration_cannot_delete(self):
@@ -1699,7 +1699,7 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:pack", args=(9999,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No Pack matches the given query."
         })
 
     def test_get_pack(self):
@@ -1734,7 +1734,7 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("osquery_api:pack", args=(9999,)), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No Pack matches the given query."
         })
 
     def test_update_pack_slug_conflict(self):
@@ -3311,7 +3311,7 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("osquery_api:configuration_pack", args=(9999,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No ConfigurationPack matches the given query."
         })
 
     def test_get_configuration_pack(self):
@@ -3341,7 +3341,7 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
-            "detail": "Not found."
+            "detail": "No ConfigurationPack matches the given query."
         })
 
     def test_update_configuration_pack_configuration_fields_empty(self):

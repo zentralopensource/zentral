@@ -1686,7 +1686,7 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("santa.delete_rule")
         response = self.delete(reverse("santa_api:rule", args=(123456789,)))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(response.json(), {'detail': 'Not found.'})
+        self.assertEqual(response.json(), {'detail': 'No Rule matches the given query.'})
 
     def test_rule_delete_unauthorized(self):
         configuration = self.force_configuration()
