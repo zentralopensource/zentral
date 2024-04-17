@@ -477,10 +477,13 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response['Content-Type'], "application/x-plist")
         plist_config = plistlib.loads(response.content)
         self.assertEqual(
-            plist_config["SyncBaseURL"],
-            f'https://{settings["api"]["fqdn"]}/public/santa/sync/{enrollment.secret.secret}/'
+            plist_config,
+            {'ClientMode': configuration.client_mode,
+             'SyncBaseURL': f'https://{settings["api"]["fqdn"]}/public/santa/sync/',
+             'SyncExtraHeaders': {
+                 'Zentral-Authorization': f'Bearer {enrollment.secret.secret}'
+             }}
         )
-        self.assertEqual(plist_config["ClientMode"], configuration.client_mode)
 
     def test_enrollment_configuration_profile_permission_denied(self):
         _, enrollment = self._force_enrollment()

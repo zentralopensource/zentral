@@ -10,8 +10,13 @@ def build_santa_enrollment_configuration(enrollment):
     base_url_key = "tls_hostname"
     if configuration.client_certificate_auth:
         base_url_key = "tls_hostname_for_client_cert_auth"
-    config["SyncBaseURL"] = "{}/public/santa/sync/{}/".format(settings["api"][base_url_key],
-                                                              enrollment.secret.secret)
+    config.update({
+        "SyncBaseURL": "{}/public/santa/sync/".format(settings["api"][base_url_key]),
+        # See https://developer.apple.com/documentation/foundation/nsurlrequest#1776617
+        # Authorization is reserved, so we use 'Zentral-Authorization'
+        # See also https://github.com/google/santa/blob/344a35aaf63c24a56f7a021ce18ecab090584da3/Source/common/SNTConfigurator.h#L418-L421  # NOQA
+        "SyncExtraHeaders": {"Zentral-Authorization": f"Bearer {enrollment.secret.secret}"},
+    })
     return config
 
 

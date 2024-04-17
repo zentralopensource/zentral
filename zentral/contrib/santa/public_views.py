@@ -24,6 +24,23 @@ logger = logging.getLogger('zentral.contrib.santa.views.api')
 class BaseSyncView(View):
     use_enrolled_machine_cache = True
 
+    def _get_enrollment_secret_secret(self):
+        try:
+            scheme, secret = self.request.META["HTTP_ZENTRAL_AUTHORIZATION"].split()
+            scheme = scheme.strip()
+            secret = secret.strip()
+        except KeyError:
+            # Legacy URLs, TODO: remove
+            try:
+                return self.kwargs["enrollment_secret"]
+            except KeyError:
+                logger.error("No authentication credentials found")
+        else:
+            if scheme != "Bearer":
+                logger.error("Wrong Authorization header scheme")
+            else:
+                return secret
+
     def _get_client_cert_dn(self):
         dn = self.request.META.get("HTTP_X_SSL_CLIENT_S_DN")
         if dn:
@@ -59,8 +76,12 @@ class BaseSyncView(View):
             return enrolled_machine
 
     def post(self, request, *args, **kwargs):
-        # URL kwargs
-        self.enrollment_secret_secret = kwargs["enrollment_secret"]
+        # secret
+        self.enrollment_secret_secret = self._get_enrollment_secret_secret()
+        if not self.enrollment_secret_secret:
+            return JsonResponse({"detail": "Unauthorized"}, status=401)
+
+        # machine ID
         try:
             self.hardware_uuid = str(UUID(kwargs["machine_id"]))
         except ValueError:
