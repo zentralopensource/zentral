@@ -111,6 +111,7 @@ class SantaRuleEngineTestCase(TestCase):
                                    ("EQHXZ8M8AV:com.google.Chrome", True),
                                    ("EQHXZ8M8AV:chrome_crashpad_handler", True),
                                    ("EQHXZ8M8AV:not-a-thing", True),
+                                   ("94KV3E626L:Frameworks[]Electron Framework", True),
                                    ("EQHXZ8M8AV", False)):
             self.assertEqual(test_signing_id_identifier(identifier), result)
 

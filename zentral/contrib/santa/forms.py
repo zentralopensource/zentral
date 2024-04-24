@@ -209,7 +209,7 @@ def test_signing_id_identifier(identifier):
     team_id, signing_id = identifier.split(":", 1)
     if not test_team_id(team_id) and team_id != "platform":
         return False
-    return re.match(r'^([0-9a-zA-Z_\-]+\.)*([0-9a-zA-Z_\-]+)\Z', signing_id) is not None
+    return True
 
 
 def test_team_id(team_id):
@@ -279,17 +279,21 @@ class RuleForm(RuleFormMixin, forms.Form):
 
         # identifier
         if target_identifier:
+            if "target_identifier" in self.fields:
+                error_field = "target_identifier"
+            else:
+                error_field = None
             if target_type == Target.SIGNING_ID:
                 if not test_signing_id_identifier(target_identifier):
-                    self.add_error("target_identifier", "Invalid Signing ID target identifier")
+                    self.add_error(error_field, "Invalid Signing ID target identifier")
             elif target_type == Target.TEAM_ID:
                 target_identifier = target_identifier.upper()
                 if not test_team_id(target_identifier):
-                    self.add_error("target_identifier", "Invalid Team ID")
+                    self.add_error(error_field, "Invalid Team ID")
             else:
                 target_identifier = target_identifier.lower()
                 if not test_sha256(target_identifier):
-                    self.add_error("target_identifier", "Invalid sha256")
+                    self.add_error(error_field, "Invalid sha256")
 
         # policy
         try:

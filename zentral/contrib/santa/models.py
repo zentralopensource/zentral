@@ -531,13 +531,17 @@ class TargetManager(models.Manager):
         q = kwargs.get("query")
         if not q:
             return []
+        q = "%{}%".format(connection.ops.prep_for_like_query(q))
         query = (
             "select c.organizational_unit, c.organization "
             "from inventory_certificate as c "
             "join inventory_file as f on (f.signed_by_id = c.id) "
             "join inventory_source as s on (s.id = f.source_id) "
             "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-            "and (c.organizational_unit ~* %s or c.organization ~* %s)"
+            "and ("
+            "  upper(c.organizational_unit) like upper(%s)"
+            "  or upper(c.organization) like upper(%s)"
+            ") "
             "group by c.organizational_unit, c.organization "
             "order by c.organization, c.organizational_unit"
         )
@@ -565,12 +569,13 @@ class TargetManager(models.Manager):
         q = kwargs.get("query")
         if not q:
             return []
+        q = "%{}%".format(connection.ops.prep_for_like_query(q))
         query = (
             "select f.signing_id "
             "from inventory_file as f "
             "join inventory_source as s on (s.id = f.source_id) "
             "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-            "and f.signing_id ~* %s "
+            "and upper(f.signing_id) like upper(%s) "
             "group by f.signing_id "
             "order by f.signing_id"
         )

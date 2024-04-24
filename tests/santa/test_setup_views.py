@@ -2,6 +2,7 @@ import datetime
 from functools import reduce
 import operator
 import plistlib
+import urllib.parse
 from accounts.models import User
 from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
@@ -611,6 +612,36 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/rule_form.html")
         self.assertFormError(response.context["form"], "target_identifier", "Invalid Team ID")
 
+    def test_create_configuration_team_id_rule_preselected_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,))
+                                    + "?" + urllib.parse.urlencode({"tea": "JQ525L2MZD"}),
+                                    {"policy": Rule.ALLOWLIST},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "JQ525L2MZD")
+        rule = response.context["object_list"][0]
+        self.assertEqual(rule.configuration, configuration)
+        self.assertEqual(rule.target.identifier, "JQ525L2MZD")
+        self.assertEqual(rule.target.type, Target.TEAM_ID)
+
+    def test_create_configuration_team_id_rule_preselected_error(self):
+        # This is a test for when a team ID is picked from the list of target
+        # to create a rule, but … this is not a valid team ID.
+        # This should never happen!
+        configuration = self._force_configuration()
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,))
+                                    + "?" + urllib.parse.urlencode({"tea": "NOT_A_TEAM_ID"}),
+                                    {"policy": Rule.ALLOWLIST},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"],
+                             None, "Invalid Team ID")
+
     def test_create_conflict_configuration_rule(self):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_rule", "santa.view_rule")
@@ -841,6 +872,16 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(len(team_ids), 1)
         self.assertEqual(team_ids[0][0].organizational_unit, self.file_team_id)
 
+    def test_pick_rule_team_id_special_chars(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        response = self.client.get(reverse("santa:pick_rule_team_id", args=(configuration.pk,)),
+                                   {"query": "[]"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/pick_rule_team_id.html")
+        team_ids = response.context["team_ids"]
+        self.assertEqual(len(team_ids), 0)
+
     def test_pick_rule_signing_id_access_denied(self):
         configuration = self._force_configuration()
         self._login("santa.add_configuration", "santa.view_configuration")
@@ -858,6 +899,16 @@ class SantaSetupViewsTestCase(TestCase):
         signing_ids = response.context["signing_ids"]
         self.assertEqual(len(signing_ids), 1)
         self.assertEqual(signing_ids[0][0].signing_id, self.file_signing_id)
+
+    def test_pick_rule_signing_id_special_chars(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        response = self.client.get(reverse("santa:pick_rule_signing_id", args=(configuration.pk,)),
+                                   {"query": "94KV3E626L:Frameworks[]Electron Framework"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/pick_rule_signing_id.html")
+        signing_ids = response.context["signing_ids"]
+        self.assertEqual(len(signing_ids), 0)
 
     # terraform export
 
