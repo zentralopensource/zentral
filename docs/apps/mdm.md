@@ -306,8 +306,7 @@ Returns the decrypted FileVault PRK for an MDM enrolled device.
 Example:
 
 ```bash
-curl -XPOST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
   https://$ZTL_FQDN/api/mdm/devices/27/filevault_prk/
 ```
 
@@ -377,8 +376,7 @@ Returns the decrypted recovery lock or firmware password for an MDM enrolled dev
 Example:
 
 ```bash
-curl -XPOST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
   https://$ZTL_FQDN/api/mdm/devices/27/recovery_password/
 ```
 
