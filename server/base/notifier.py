@@ -60,7 +60,15 @@ class Notifier:
         p.subscribe(**{channel: self._message_handler for channel in channels})
         if self._thread is None:
             logger.debug("Start thread")
-            self._thread = p.run_in_thread(exception_handler=self._exception_handler, daemon=True)
+            self._thread = p.run_in_thread(
+                exception_handler=self._exception_handler,
+                daemon=True,
+                # sleep_time is a bad name for this important parameter.
+                # see https://github.com/redis/redis-py/issues/821
+                # with 60s, problems with the socket will be recovered from,
+                # and we let the OS do its job.
+                sleep_time=60.0
+            )
 
     def _message_handler(self, message):
         channel = message['channel']
