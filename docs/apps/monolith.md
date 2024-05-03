@@ -110,7 +110,7 @@ Example:
 ```
 curl -X POST \
      -H "Authorization: Token $TOKEN" \
-     https://$FQDN/api/monolith/repository/1/sync/
+     https://$FQDN/api/monolith/repositories/1/sync/
 ```
 
 Response:
