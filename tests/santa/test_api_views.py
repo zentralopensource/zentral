@@ -166,16 +166,6 @@ class APIViewsTestCase(TestCase):
         response = self.post_json_data(url, [], include_token=True)
         self.assertEqual(response.status_code, 403)
 
-    def test_ruleset_update_unauthorized(self):
-        url = reverse("santa_api:ruleset_update")
-        response = self.post_json_data(url, {}, include_token=False)
-        self.assertEqual(response.status_code, 401)
-
-    def test_ruleset_update_permission_denied(self):
-        url = reverse("santa_api:ruleset_update")
-        response = self.post_json_data(url, {}, include_token=True)
-        self.assertEqual(response.status_code, 403)
-
     def test_ingest_fileinfo(self):
         self.set_permissions("inventory.add_file")
         url = reverse("santa_api:ingest_file_info")
@@ -243,6 +233,18 @@ class APIViewsTestCase(TestCase):
         )
         self.assertEqual(file_qs.count(), 1)
         self.assertEqual(cert_qs.count(), 1)
+
+    # ruleset update
+
+    def test_ruleset_update_unauthorized(self):
+        url = reverse("santa_api:ruleset_update")
+        response = self.post_json_data(url, {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_ruleset_update_permission_denied(self):
+        url = reverse("santa_api:ruleset_update")
+        response = self.post_json_data(url, {}, include_token=True)
+        self.assertEqual(response.status_code, 403)
 
     def test_ruleset_update_rule(self):
         self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
@@ -615,6 +617,55 @@ class APIViewsTestCase(TestCase):
             json_response,
             {"rules": {"0": {"non_field_errors": ["Conflict between tags and excluded_tags"]}}}
         )
+
+    def test_ruleset_update_rule_unusual_signingid(self):
+        self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
+                             "santa.add_rule", "santa.change_rule", "santa.delete_rule")
+        url = reverse("santa_api:ruleset_update")
+
+        # JSON rule for all configurations
+        data = {
+            "name": get_random_string(12),
+            "rules": [
+                {"rule_type": "SIGNINGID",
+                 "identifier": "94KV3E626L:Frameworks[]Electron Framework",
+                 "policy": "BLOCKLIST"},
+            ]
+        }
+        self.assertEqual(self.configuration.rule_set.count(), 0)
+        self.assertEqual(self.configuration2.rule_set.count(), 0)
+        response = self.post_json_data(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        ruleset = RuleSet.objects.get(name=data["name"])
+        self.assertEqual(
+            json_response,
+            {'ruleset': {
+                 'name': ruleset.name,
+                 'pk': ruleset.pk
+             },
+             'dry_run': False,
+             'result': 'created',
+             'configurations': [
+                 {'name': self.configuration.name,
+                  'pk': self.configuration.pk,
+                  'rule_results': {'created': 1,
+                                   'deleted': 0,
+                                   'present': 0,
+                                   'updated': 0}},
+                 {'name': self.configuration2.name,
+                  'pk': self.configuration2.pk,
+                  'rule_results': {'created': 1,
+                                   'deleted': 0,
+                                   'present': 0,
+                                   'updated': 0}}
+             ]}
+        )
+        self.assertEqual(self.configuration.rule_set.count(), 1)
+        rule = self.configuration.rule_set.select_related("target").first()
+        self.assertEqual(rule.target.type, "SIGNINGID")
+        self.assertEqual(rule.target.identifier, "94KV3E626L:Frameworks[]Electron Framework")
+        self.assertEqual(self.configuration2.rule_set.count(), 1)
 
     # targets export
 

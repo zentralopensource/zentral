@@ -227,7 +227,7 @@ class RuleUpdateSerializer(serializers.Serializer):
     policy = serializers.ChoiceField(choices=["ALLOWLIST", "ALLOWLIST_COMPILER", "BLOCKLIST", "SILENT_BLOCKLIST"])
     rule_type = serializers.ChoiceField(choices=[k for k, _ in Target.TYPE_CHOICES])
     sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z', required=False)  # Legacy field  TODO remove eventually
-    identifier = serializers.RegexField(r'^[a-zA-Z0-9:\.]+\Z', required=False)
+    identifier = serializers.CharField(required=False)
     custom_msg = serializers.CharField(required=False)
     description = serializers.CharField(required=False)
     serial_numbers = serializers.ListField(
