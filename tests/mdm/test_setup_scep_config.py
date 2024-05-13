@@ -121,6 +121,68 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(scep_config.url, url)
         self.assertEqual(scep_config.get_challenge_kwargs()["challenge"], challenge)
 
+    def test_create_scep_config_microsoft_ca_post(self):
+        self._login("mdm.add_scepconfig", "mdm.view_scepconfig")
+        name = get_random_string(64)
+        url = "https://example.com/{}".format(get_random_string(12))
+        mc_url = "https://example.com/{}".format(get_random_string(12))
+        mc_username = get_random_string(12)
+        mc_password = get_random_string(12)
+        response = self.client.post(reverse("mdm:create_scep_config"),
+                                    {"sc-name": name,
+                                     "sc-url": url,
+                                     "sc-key_usage": 0,
+                                     "sc-key_is_extractable": "on",
+                                     "sc-keysize": 2048,
+                                     "sc-allow_all_apps_access": "on",
+                                     "sc-challenge_type": "MICROSOFT_CA",
+                                     "mc-url": mc_url,
+                                     "mc-username": mc_username,
+                                     "mc-password": mc_password},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/scepconfig_detail.html")
+        self.assertContains(response, name)
+        self.assertContains(response, mc_url)
+        self.assertContains(response, mc_username)
+        self.assertContains(response, mc_password)
+        scep_config = response.context["object"]
+        scep_config_challenge_kwargs = scep_config.get_challenge_kwargs()
+        self.assertEqual(scep_config_challenge_kwargs["url"], mc_url)
+        self.assertEqual(scep_config_challenge_kwargs["username"], mc_username)
+        self.assertEqual(scep_config_challenge_kwargs["password"], mc_password)
+
+    def test_create_scep_config_okta_ca_post(self):
+        self._login("mdm.add_scepconfig", "mdm.view_scepconfig")
+        name = get_random_string(64)
+        url = "https://example.com/{}".format(get_random_string(12))
+        oc_url = "https://example.com/{}".format(get_random_string(12))
+        oc_username = get_random_string(12)
+        oc_password = get_random_string(12)
+        response = self.client.post(reverse("mdm:create_scep_config"),
+                                    {"sc-name": name,
+                                     "sc-url": url,
+                                     "sc-key_usage": 0,
+                                     "sc-key_is_extractable": "on",
+                                     "sc-keysize": 2048,
+                                     "sc-allow_all_apps_access": "on",
+                                     "sc-challenge_type": "OKTA_CA",
+                                     "oc-url": oc_url,
+                                     "oc-username": oc_username,
+                                     "oc-password": oc_password},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/scepconfig_detail.html")
+        self.assertContains(response, name)
+        self.assertContains(response, oc_url)
+        self.assertContains(response, oc_username)
+        self.assertContains(response, oc_password)
+        scep_config = response.context["object"]
+        scep_config_challenge_kwargs = scep_config.get_challenge_kwargs()
+        self.assertEqual(scep_config_challenge_kwargs["url"], oc_url)
+        self.assertEqual(scep_config_challenge_kwargs["username"], oc_username)
+        self.assertEqual(scep_config_challenge_kwargs["password"], oc_password)
+
     # view SCEP config
 
     def test_view_scep_config_redirect(self):
@@ -170,6 +232,29 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/scepconfig_form.html")
         self.assertContains(response, f"Update {scep_config.name}")
 
+    def test_update_scep_config_static_post(self):
+        scep_config = self._force_scep_config()
+        self._login("mdm.change_scepconfig", "mdm.view_scepconfig")
+        new_name = get_random_string(12)
+        new_challenge = get_random_string(12)
+        response = self.client.post(reverse("mdm:update_scep_config", args=(scep_config.pk,)),
+                                    {"sc-name": new_name,
+                                     "sc-url": scep_config.url,
+                                     "sc-key_usage": scep_config.key_usage,
+                                     "sc-key_is_extractable": "on" if scep_config.key_is_extractable else "",
+                                     "sc-keysize": scep_config.keysize,
+                                     "sc-allow_all_apps_access": "on" if scep_config.allow_all_apps_access else "",
+                                     "sc-challenge_type": "STATIC",
+                                     "s-challenge": new_challenge},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/scepconfig_detail.html")
+        self.assertContains(response, new_name)
+        self.assertContains(response, new_challenge)
+        scep_config = response.context["object"]
+        scep_config_challenge_kwargs = scep_config.get_challenge_kwargs()
+        self.assertEqual(scep_config_challenge_kwargs["challenge"], new_challenge)
+
     def test_update_scep_config_microsoft_ca_post(self):
         scep_config = self._force_scep_config()
         self._login("mdm.change_scepconfig", "mdm.view_scepconfig")
@@ -200,6 +285,37 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(scep_config_challenge_kwargs["url"], mc_url)
         self.assertEqual(scep_config_challenge_kwargs["username"], mc_username)
         self.assertEqual(scep_config_challenge_kwargs["password"], mc_password)
+
+    def test_update_scep_config_okta_ca_post(self):
+        scep_config = self._force_scep_config()
+        self._login("mdm.change_scepconfig", "mdm.view_scepconfig")
+        new_name = get_random_string(12)
+        oc_url = "https://example.com/{}".format(get_random_string(12))
+        oc_username = get_random_string(12)
+        oc_password = get_random_string(12)
+        response = self.client.post(reverse("mdm:update_scep_config", args=(scep_config.pk,)),
+                                    {"sc-name": new_name,
+                                     "sc-url": scep_config.url,
+                                     "sc-key_usage": scep_config.key_usage,
+                                     "sc-key_is_extractable": "on" if scep_config.key_is_extractable else "",
+                                     "sc-keysize": scep_config.keysize,
+                                     "sc-allow_all_apps_access": "on" if scep_config.allow_all_apps_access else "",
+                                     "sc-challenge_type": "OKTA_CA",
+                                     "oc-url": oc_url,
+                                     "oc-username": oc_username,
+                                     "oc-password": oc_password},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/scepconfig_detail.html")
+        self.assertContains(response, new_name)
+        self.assertContains(response, oc_url)
+        self.assertContains(response, oc_username)
+        self.assertContains(response, oc_password)
+        scep_config = response.context["object"]
+        scep_config_challenge_kwargs = scep_config.get_challenge_kwargs()
+        self.assertEqual(scep_config_challenge_kwargs["url"], oc_url)
+        self.assertEqual(scep_config_challenge_kwargs["username"], oc_username)
+        self.assertEqual(scep_config_challenge_kwargs["password"], oc_password)
 
     # list SCEP configs
 

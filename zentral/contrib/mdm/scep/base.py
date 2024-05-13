@@ -28,7 +28,7 @@ class SCEPChallenge:
             else:
                 if not val:
                     raise SCEPChallengeError(
-                        f"'{key} key empty in Static SCEP challenge kwargs {self.scep_config.pk}"
+                        f"'{key}' key empty in Static SCEP challenge kwargs {self.scep_config.pk}"
                     )
                 setattr(self, key, val)
 

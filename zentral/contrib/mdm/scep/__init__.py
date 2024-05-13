@@ -8,6 +8,7 @@ logger = logging.getLogger("zentral.contrib.mdm.scep")
 class SCEPChallengeType(enum.Enum):
     STATIC = "Static"
     MICROSOFT_CA = "Microsoft CA Web Enrollment (certsrv)"
+    OKTA_CA = "Okta CA Dynamic Challenge"
 
     @classmethod
     def choices(cls):
@@ -21,6 +22,9 @@ def get_scep_challenge(scep_config, load=False):
     elif scep_config.challenge_type == SCEPChallengeType.MICROSOFT_CA.name:
         from .microsoft_ca import MicrosoftCAChallenge
         return MicrosoftCAChallenge(scep_config, load)
+    elif scep_config.challenge_type == SCEPChallengeType.OKTA_CA.name:
+        from .microsoft_ca import OktaCAChallenge
+        return OktaCAChallenge(scep_config, load)
     else:
         raise ValueError(f"Unknown challenge type: {scep_config.challenge_type}")
 

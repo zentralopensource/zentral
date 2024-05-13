@@ -72,6 +72,16 @@
             <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
             <span hidden>{{ kwargs.password }}</span>
           </dd>
+          {% elif object.challenge_type == "OKTA_CA" %}
+          <dt class="col-sm-3 text-md-end">Challenge URL</dt>
+          <dd class="col-sm-9">{{ kwargs.url }}</dd>
+          <dt class="col-sm-3 text-md-end">Username</dt>
+          <dd class="col-sm-9">{{ kwargs.username }}</dt>
+          <dt class="col-sm-3 text-md-end">Password</dt>
+          <dd class="col-sm-9">
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ kwargs.password }}</span>
+          </dd>
           {% endif %}
           {% endwith %}
         </dl>

@@ -46,7 +46,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_profile_service_configuration_profile)
 from zentral.contrib.mdm.scep import SCEPChallengeType
-from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm
+from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm, OktaCAChallengeForm
 from zentral.contrib.mdm.scep.static import StaticChallengeForm
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.contrib.mdm.software_updates import best_available_software_updates
@@ -1119,6 +1119,10 @@ class CreateSCEPConfigView(PermissionRequiredMixin, TemplateView):
         if not microsoft_ca_form:
             microsoft_ca_form = MicrosoftCAChallengeForm(prefix="mc")
         context["microsoft_ca_form"] = microsoft_ca_form
+        okta_ca_form = kwargs.get("okta_ca_form")
+        if not okta_ca_form:
+            okta_ca_form = OktaCAChallengeForm(prefix="oc")
+        context["okta_ca_form"] = okta_ca_form
         static_form = kwargs.get("static_form")
         if not static_form:
             static_form = StaticChallengeForm(prefix="s")
@@ -1128,11 +1132,14 @@ class CreateSCEPConfigView(PermissionRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         scep_config_form = SCEPConfigForm(request.POST, prefix="sc")
         microsoft_ca_form = MicrosoftCAChallengeForm(request.POST, prefix="mc")
+        okta_ca_form = OktaCAChallengeForm(request.POST, prefix="oc")
         static_form = StaticChallengeForm(request.POST, prefix="s")
         if scep_config_form.is_valid():
             challenge_type = SCEPChallengeType[scep_config_form.cleaned_data["challenge_type"]]
             if challenge_type == SCEPChallengeType.MICROSOFT_CA:
                 challenge_form = microsoft_ca_form
+            elif challenge_type == SCEPChallengeType.OKTA_CA:
+                challenge_form = okta_ca_form
             elif challenge_type == SCEPChallengeType.STATIC:
                 challenge_form = static_form
             if challenge_form.is_valid():
@@ -1144,6 +1151,7 @@ class CreateSCEPConfigView(PermissionRequiredMixin, TemplateView):
             return self.render_to_response(
                 self.get_context_data(scep_config_form=scep_config_form,
                                       microsoft_ca_form=microsoft_ca_form,
+                                      okta_ca_form=okta_ca_form,
                                       static_form=static_form)
             )
 
@@ -1183,6 +1191,17 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
                 )
             )
         context["microsoft_ca_form"] = microsoft_ca_form
+        okta_ca_form = kwargs.get("okta_ca_form")
+        if not okta_ca_form:
+            okta_ca_form = OktaCAChallengeForm(
+                prefix="oc",
+                initial=(
+                    self.scep_config.get_challenge_kwargs()
+                    if self.challenge_type == SCEPChallengeType.OKTA_CA
+                    else None
+                )
+            )
+        context["okta_ca_form"] = okta_ca_form
         static_form = kwargs.get("static_form")
         if not static_form:
             static_form = StaticChallengeForm(
@@ -1211,6 +1230,15 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
                 else None
             )
         )
+        okta_ca_form = OktaCAChallengeForm(
+            request.POST,
+            prefix="oc",
+            initial=(
+                self.scep_config.get_challenge_kwargs()
+                if self.challenge_type == SCEPChallengeType.OKTA_CA
+                else None
+            )
+        )
         static_form = StaticChallengeForm(
             request.POST,
             prefix="s",
@@ -1224,6 +1252,8 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
             challenge_type = SCEPChallengeType[scep_config_form.cleaned_data["challenge_type"]]
             if challenge_type == SCEPChallengeType.MICROSOFT_CA:
                 challenge_form = microsoft_ca_form
+            elif challenge_type == SCEPChallengeType.OKTA_CA:
+                challenge_form = okta_ca_form
             elif challenge_type == SCEPChallengeType.STATIC:
                 challenge_form = static_form
             if challenge_form.is_valid():
@@ -1235,6 +1265,7 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
             return self.render_to_response(
                 self.get_context_data(scep_config_form=scep_config_form,
                                       microsoft_ca_form=microsoft_ca_form,
+                                      okta_ca_form=okta_ca_form,
                                       static_form=static_form)
             )
 
