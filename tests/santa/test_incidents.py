@@ -3,7 +3,8 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.santa.incidents import SyncIncident
 from zentral.contrib.santa.models import Configuration
-from zentral.core.incidents.utils import open_incident, Severity
+from zentral.core.incidents.models import Incident, Status
+from zentral.core.incidents.utils import apply_incident_update, open_incident, Severity
 
 
 class SantaIncidentsTestCase(TestCase):
@@ -55,3 +56,29 @@ class SantaIncidentsTestCase(TestCase):
         incident_update = SyncIncident.build_incident_update(cfg, Severity.MAJOR)
         incident, _ = open_incident(incident_update)
         self.assertEqual(incident.loaded_incident.get_name(), "Unknown Santa configuration client out of sync")
+
+    def test_santa_incident_cannot_be_reopened(self):
+        cfg = Mock()
+        cfg.pk = 1230981234
+        # open & close an incident
+        incident_update = SyncIncident.build_incident_update(cfg, Severity.MAJOR)
+        list(apply_incident_update(incident_update, "0123456789"))
+        incident = Incident.objects.get(incident_type=incident_update.incident_type,
+                                        key=incident_update.key,
+                                        status__in=Status.open_values())
+        self.assertEqual(Status(incident.status), Status.OPEN)
+        incident_update = SyncIncident.build_incident_update(cfg, Severity.NONE)
+        list(apply_incident_update(incident_update, "0123456789"))
+        # the incident is now closed
+        incident.refresh_from_db()
+        self.assertEqual(Status(incident.status), Status.CLOSED)
+        self.assertEqual(incident.get_next_statuses(), [Status.REOPENED])
+        # open a second incident on the same configuration
+        incident_update = SyncIncident.build_incident_update(cfg, Severity.MAJOR)
+        list(apply_incident_update(incident_update, "0123456789"))
+        incident2 = Incident.objects.get(incident_type=incident_update.incident_type,
+                                         key=incident_update.key,
+                                         status__in=Status.open_values())
+        self.assertNotEqual(incident, incident2)
+        # make sure that the first incident cannot be reopened because there is already an open incident
+        self.assertEqual(len(incident.get_next_statuses()), 0)

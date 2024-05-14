@@ -119,6 +119,13 @@ class Incident(models.Model):
                     next_statuses.remove(status)
                 except ValueError:
                     pass
+        if Status.REOPENED in next_statuses:
+            if Incident.objects.filter(
+                incident_type=self.incident_type,
+                key=self.key,
+                status__in=Status.open_values()
+            ).exists():
+                next_statuses.remove(Status.REOPENED)
         return next_statuses
 
     def get_next_status_choices(self):
