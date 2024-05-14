@@ -9,8 +9,8 @@ class IncidentSearchForm(forms.Form):
 
     q = forms.CharField(label="Query", required=False,
                         widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Keywords…"}))
-    severity = forms.ChoiceField(label="Severity", choices=[("", "..."), ] + sorted(Severity.choices()), required=False)
-    status = forms.ChoiceField(label="Status", choices=[("", "..."), ] + sorted(Status.choices()), required=False)
+    severity = forms.ChoiceField(label="Severity", choices=[("", "...")], required=False)
+    status = forms.ChoiceField(label="Status", choices=[("", "...")], required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
