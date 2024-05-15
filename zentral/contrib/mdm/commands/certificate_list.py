@@ -20,7 +20,7 @@ class CertificateList(Command):
             channel == Channel.DEVICE
             and (
                 not enrolled_device.user_enrollment
-                or enrolled_device.platform in (Platform.IOS, Platform.MACOS)
+                or enrolled_device.platform in (Platform.IOS, Platform.IPADOS, Platform.MACOS)
             )
         )
 

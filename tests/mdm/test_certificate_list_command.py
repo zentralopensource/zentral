@@ -71,10 +71,10 @@ class CertificateListCommandTestCase(TestCase):
             self.enrolled_device
         ))
 
-    def test_scope_user_enrollment_ipados_not_ok(self):
+    def test_scope_user_enrollment_ipados_ok(self):
         self.enrolled_device.platform = Platform.IPADOS
         self.enrolled_device.user_enrollment = True
-        self.assertFalse(CertificateList.verify_channel_and_device(
+        self.assertTrue(CertificateList.verify_channel_and_device(
             Channel.DEVICE,
             self.enrolled_device
         ))

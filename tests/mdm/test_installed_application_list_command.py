@@ -53,7 +53,7 @@ class InstalledApplicationListCommandTestCase(TestCase):
             (Channel.USER, Platform.MACOS, False, True),
             (Channel.USER, Platform.TVOS, False, False),
             (Channel.DEVICE, Platform.IOS, True, True),
-            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.IPADOS, True, True),
             (Channel.DEVICE, Platform.MACOS, True, False),
             (Channel.DEVICE, Platform.TVOS, True, False),
             (Channel.USER, Platform.IOS, True, False),

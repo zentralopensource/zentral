@@ -53,7 +53,7 @@ class InstallProfile(Command):
                 or enrolled_device.platform in (Platform.IPADOS, Platform.MACOS)
             ) and (
                 not enrolled_device.user_enrollment
-                or enrolled_device.platform in (Platform.IOS, Platform.MACOS)
+                or enrolled_device.platform in (Platform.IOS, Platform.IPADOS, Platform.MACOS)
             )
         )
 

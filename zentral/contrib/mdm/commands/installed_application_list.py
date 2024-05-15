@@ -19,7 +19,7 @@ class InstalledApplicationList(Command):
                 or enrolled_device.platform == Platform.MACOS
             ) and (
                 not enrolled_device.user_enrollment
-                or enrolled_device.platform == Platform.IOS
+                or enrolled_device.platform in (Platform.IOS, Platform.IPADOS)
             )
         )
 

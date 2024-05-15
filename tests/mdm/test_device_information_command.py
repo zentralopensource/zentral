@@ -49,7 +49,7 @@ class DeviceInformationCommandTestCase(TestCase):
             (Channel.USER, Platform.MACOS, False, True),
             (Channel.USER, Platform.TVOS, False, False),
             (Channel.DEVICE, Platform.IOS, True, True),
-            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.IPADOS, True, True),
             (Channel.DEVICE, Platform.MACOS, True, True),
             (Channel.DEVICE, Platform.TVOS, True, False),
         ):
