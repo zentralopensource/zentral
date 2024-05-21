@@ -1,8 +1,10 @@
 from datetime import datetime
 from django.utils.crypto import get_random_string
+from tests.munki.utils import force_enrollment as force_munki_enrollment
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment,
-                                             Manifest, ManifestCatalog, ManifestSubManifest,
+                                             Manifest, ManifestCatalog,
+                                             ManifestEnrollmentPackage, ManifestSubManifest,
                                              PkgInfo, PkgInfoCategory, PkgInfoName,
                                              SubManifest, SubManifestPkgInfo,
                                              Repository, RepositoryBackend)
@@ -153,3 +155,20 @@ def force_enrollment(mbu=None, tag_count=0):
         Enrollment.objects.create(manifest=force_manifest(mbu=mbu), secret=enrollment_secret),
         tags
     )
+
+
+def force_manifest_enrollment_package(manifest=None, tags=None):
+    if not manifest:
+        manifest = force_manifest()
+    munki_enrollment = force_munki_enrollment(meta_business_unit=manifest.meta_business_unit)
+    mep = ManifestEnrollmentPackage.objects.create(
+        manifest=manifest,
+        builder="zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder",
+        enrollment_pk=munki_enrollment.pk
+    )
+    munki_enrollment.distributor = mep
+    munki_enrollment.save()
+    if not tags:
+        tags = []
+    mep.tags.set(tags)
+    return mep
