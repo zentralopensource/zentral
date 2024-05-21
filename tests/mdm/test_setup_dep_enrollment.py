@@ -66,11 +66,13 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
     def test_create_dep_enrollment_os_version_errors(self):
         self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
+        display_name = get_random_string(12)
         push_certificate = force_push_certificate()
         scep_config = force_scep_config()
         dep_virtual_server = force_dep_virtual_server()
         response = self.client.post(reverse("mdm:create_dep_enrollment"),
                                     {"de-name": name,
+                                     "de-display_name": display_name,
                                      "de-scep_config": scep_config.pk,
                                      "de-push_certificate": push_certificate.pk,
                                      "de-virtual_server": dep_virtual_server.pk,
@@ -226,11 +228,13 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         from_dep_virtual_server.return_value = client
         self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
+        display_name = get_random_string(12)
         push_certificate = force_push_certificate()
         scep_config = force_scep_config()
         dep_virtual_server = force_dep_virtual_server()
         response = self.client.post(reverse("mdm:create_dep_enrollment"),
                                     {"de-name": name,
+                                     "de-display_name": display_name,
                                      "de-scep_config": scep_config.pk,
                                      "de-scep_verification": "",
                                      "de-push_certificate": push_certificate.pk,
@@ -249,11 +253,13 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
         self.assertContains(response, name)
+        self.assertContains(response, display_name)
         self.assertContains(response, push_certificate.name)
         self.assertContains(response, scep_config.name)
         self.assertContains(response, "without CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, name)
+        self.assertEqual(enrollment.display_name, display_name)
         self.assertEqual(enrollment.push_certificate, push_certificate)
         self.assertEqual(enrollment.scep_config, scep_config)
         self.assertEqual(enrollment.ios_max_version, "")
@@ -294,6 +300,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
         self.assertContains(response, enrollment.name)
+        self.assertContains(response, enrollment.display_name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertNotContains(response, enrollment.push_certificate.get_absolute_url())
         self.assertContains(response, enrollment.scep_config.name)
@@ -419,8 +426,10 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         from_dep_virtual_server.return_value = client
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
         new_name = get_random_string(12)
+        new_display_name = get_random_string(12)
         response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                     {"de-name": new_name,
+                                     "de-display_name": new_display_name,
                                      "de-realm": realm.pk,
                                      "de-scep_config": enrollment.scep_config.pk,
                                      "de-scep_verification": "on",
@@ -441,12 +450,14 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
         self.assertContains(response, new_name)
+        self.assertContains(response, new_display_name)
         self.assertContains(response, realm.name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertContains(response, enrollment.scep_config.name)
         self.assertContains(response, "with CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, new_name)
+        self.assertEqual(enrollment.display_name, new_display_name)
         self.assertEqual(enrollment.realm, realm)
         self.assertEqual(enrollment.macos_min_version, "13.3.1")
         self.assertEqual(enrollment.skip_setup_items, ["AppleID"])
@@ -482,6 +493,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
         response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                     {"de-name": enrollment.name,
+                                     "de-display_name": enrollment.display_name,
                                      "de-realm": realm.pk,
                                      "de-scep_config": enrollment.scep_config.pk,
                                      "de-push_certificate": enrollment.push_certificate.pk,
@@ -514,6 +526,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
         response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                     {"de-name": enrollment.name,
+                                     "de-display_name": enrollment.display_name,
                                      "de-realm": realm.pk,
                                      "de-scep_config": enrollment.scep_config.pk,
                                      "de-push_certificate": enrollment.push_certificate.pk,
@@ -549,6 +562,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
         response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                     {"de-name": enrollment.name,
+                                     "de-display_name": enrollment.display_name,
                                      "de-realm": realm.pk,
                                      "de-scep_config": enrollment.scep_config.pk,
                                      "de-push_certificate": enrollment.push_certificate.pk,

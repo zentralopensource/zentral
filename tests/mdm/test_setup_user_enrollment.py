@@ -71,17 +71,20 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/userenrollment_form.html")
+        self.assertFormError(response.context["user_enrollment_form"], "display_name", "This field is required.")
         self.assertFormError(response.context["user_enrollment_form"], "realm", "This field is required")
 
     def test_create_user_enrollment_post(self):
         self._login("mdm.add_userenrollment", "mdm.view_userenrollment")
         realm = force_realm()
         name = get_random_string(64)
+        display_name = get_random_string(12)
         push_certificate = force_push_certificate()
         scep_config = force_scep_config()
         response = self.client.post(reverse("mdm:create_user_enrollment"),
                                     {"ue-realm": realm.pk,
                                      "ue-name": name,
+                                     "ue-display_name": display_name,
                                      "ue-scep_config": scep_config.pk,
                                      "ue-scep_verification": "",
                                      "ue-push_certificate": push_certificate.pk,
@@ -90,11 +93,13 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/userenrollment_detail.html")
         self.assertContains(response, name)
+        self.assertContains(response, display_name)
         self.assertContains(response, push_certificate.name)
         self.assertContains(response, scep_config.name)
         self.assertContains(response, "without CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, name)
+        self.assertEqual(enrollment.display_name, display_name)
         self.assertEqual(enrollment.push_certificate, push_certificate)
         self.assertEqual(enrollment.scep_config, scep_config)
 
@@ -117,6 +122,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/userenrollment_detail.html")
         self.assertContains(response, enrollment.name)
+        self.assertContains(response, enrollment.display_name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertNotContains(response, enrollment.push_certificate.get_absolute_url())
         self.assertContains(response, enrollment.scep_config.name)
@@ -159,9 +165,11 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self._login("mdm.change_userenrollment", "mdm.view_userenrollment")
         new_realm = force_realm()
         new_name = get_random_string(64)
+        new_display_name = get_random_string(12)
         response = self.client.post(reverse("mdm:update_user_enrollment", args=(enrollment.pk,)),
                                     {"ue-realm": new_realm.pk,
                                      "ue-name": new_name,
+                                     "ue-display_name": new_display_name,
                                      "ue-scep_config": enrollment.scep_config.pk,
                                      "ue-scep_verification": "on",
                                      "ue-push_certificate": enrollment.push_certificate.pk,
@@ -171,12 +179,14 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/userenrollment_detail.html")
         self.assertContains(response, new_realm.name)
         self.assertContains(response, new_name)
+        self.assertContains(response, new_display_name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertContains(response, enrollment.scep_config.name)
         self.assertContains(response, "with CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.realm, new_realm)
         self.assertEqual(enrollment.name, new_name)
+        self.assertEqual(enrollment.display_name, new_display_name)
 
     # list User enrollments
 

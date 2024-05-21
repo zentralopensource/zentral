@@ -57,7 +57,8 @@ def build_configuration_profile_response(data, filename):
 
 
 def build_profile(display_name, suffix, content,
-                  payload_type="Configuration", payload_description=None,
+                  payload_type="Configuration",
+                  payload_description=None, payload_organization=None,
                   sign=True, encrypt=False):
     profile = {"PayloadUUID": generate_payload_uuid(),
                "PayloadIdentifier": get_payload_identifier(suffix),
@@ -67,13 +68,22 @@ def build_profile(display_name, suffix, content,
                "PayloadContent": content}
     if payload_description:
         profile["PayloadDescription"] = payload_description
+    if payload_organization:
+        profile["PayloadOrganization"] = payload_organization
     data = plistlib.dumps(profile)
     if sign:
         data = sign_payload(data)
     return data
 
 
-def build_payload(payload_type, payload_display_name, suffix, content, payload_version=1, encapsulate_content=False):
+def build_payload(
+    payload_type,
+    payload_display_name,
+    suffix,
+    content,
+    payload_version=1,
+    encapsulate_content=False,
+):
     payload = {"PayloadUUID": generate_payload_uuid(),
                "PayloadType": payload_type,
                "PayloadDisplayName": payload_display_name,
@@ -92,7 +102,7 @@ def build_root_ca_payloads():
     root_certificate = split_certificate_chain(settings["api"]["tls_fullchain"])[-1]
     return [
         build_payload("com.apple.security.pem",
-                      "Zentral - root CA", "tls-root-ca-cert",
+                      "root CA", "tls-root-ca-cert",
                       root_certificate.encode("utf-8"),
                       encapsulate_content=True)
     ]
@@ -113,7 +123,7 @@ def build_scep_payload(enrollment_session):
     scep_payload = {"Subject": subject}
     update_scep_payload(scep_payload, enrollment_session.get_enrollment().scep_config)
     return build_payload("com.apple.security.scep",
-                         enrollment_session.get_payload_name(),
+                         "SCEP",
                          "scep",
                          scep_payload,
                          encapsulate_content=True)
@@ -122,11 +132,13 @@ def build_scep_payload(enrollment_session):
 def build_profile_service_configuration_profile(ota_obj):
     if isinstance(ota_obj, OTAEnrollmentSession):
         url_path = reverse("mdm_public:ota_session_enroll")
+        display_name = ota_obj.get_enrollment().display_name
     elif isinstance(ota_obj, OTAEnrollment):
         url_path = reverse("mdm_public:ota_enroll")
+        display_name = ota_obj.display_name
     else:
         raise ValueError("ota_obj not an OTAEnrollment nor an OTAEnrollmentSession")
-    return build_profile("Zentral - OTA MDM Enrollment",
+    return build_profile(display_name,
                          "profile-service",
                          {"URL": "{}{}".format(settings["api"]["tls_hostname"], url_path),
                           "DeviceAttributes": ["UDID",
@@ -137,12 +149,16 @@ def build_profile_service_configuration_profile(ota_obj):
                                                "IMEI"],
                           "Challenge": ota_obj.enrollment_secret.secret},
                          payload_type="Profile Service",
-                         payload_description="Install this profile to enroll your device with Zentral")
+                         payload_description=f"Install this profile to enroll your device with {display_name}",
+                         payload_organization=display_name)
 
 
 def build_ota_scep_configuration_profile(ota_enrollment_session):
-    return build_profile(ota_enrollment_session.get_payload_name(), "scep",
-                         [build_scep_payload(ota_enrollment_session)])
+    return build_profile(
+        ota_enrollment_session.get_enrollment().display_name,
+        "scep",
+        [build_scep_payload(ota_enrollment_session)],
+    )
 
 
 def build_mdm_configuration_profile(enrollment_session):
@@ -173,10 +189,16 @@ def build_mdm_configuration_profile(enrollment_session):
     payloads.extend([
         scep_payload,
         build_payload("com.apple.mdm",
-                      "Zentral - MDM",
+                      "MDM",
                       "mdm", mdm_config)
     ])
-    return build_profile("Zentral - MDM enrollment", "mdm", payloads)
+
+    display_name = enrollment_session.get_enrollment().display_name
+    return build_profile(
+        display_name,
+        "mdm", payloads,
+        payload_organization=display_name,
+    )
 
 
 def substitute_variables(obj, enrollment_session, enrolled_user=None):

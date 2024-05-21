@@ -211,10 +211,11 @@ def force_dep_device(
 # enrollments
 
 
-def force_dep_enrollment(mbu, push_certificate=None):
+def force_dep_enrollment(mbu, push_certificate=None, display_name=None):
     if push_certificate is None:
         push_certificate = force_push_certificate()
     return DEPEnrollment.objects.create(
+        display_name=display_name or get_random_string(12),
         name=get_random_string(12),
         uuid=uuid.uuid4(),
         push_certificate=push_certificate,
@@ -225,23 +226,25 @@ def force_dep_enrollment(mbu, push_certificate=None):
     )
 
 
-def force_ota_enrollment(mbu, realm=None):
+def force_ota_enrollment(mbu, realm=None, display_name=None):
     return OTAEnrollment.objects.create(
         push_certificate=force_push_certificate(),
         scep_config=force_scep_config(),
         name=get_random_string(12),
         enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu),
         realm=realm,
+        display_name=display_name or get_random_string(12),
     )
 
 
-def force_user_enrollment(mbu, realm=None):
+def force_user_enrollment(mbu, realm=None, enrollment_display_name=None):
     return UserEnrollment.objects.create(
         push_certificate=force_push_certificate(),
         realm=realm or force_realm(),
         scep_config=force_scep_config(),
         name=get_random_string(12),
-        enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu)
+        enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu),
+        display_name=enrollment_display_name or get_random_string(12)
     )
 
 
@@ -304,8 +307,9 @@ def force_dep_enrollment_session(
     realm_user=False,
     realm_user_email=None,
     realm_user_username=None,
+    enrollment_display_name=None,
 ):
-    dep_enrollment = force_dep_enrollment(mbu, push_certificate)
+    dep_enrollment = force_dep_enrollment(mbu, push_certificate, display_name=enrollment_display_name)
     if realm_user:
         dep_enrollment.use_realm_user = True
         dep_enrollment.username_pattern = DEPEnrollment.UsernamePattern.DEVICE_USERNAME

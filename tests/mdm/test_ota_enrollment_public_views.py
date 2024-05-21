@@ -72,6 +72,7 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         _, profile_data = verify_signed_payload(response.content)
         profile = plistlib.loads(profile_data)
         self.assertEqual(profile["PayloadContent"]["URL"], "https://zentral/public/mdm/ota_session_enroll/")
+        self.assertEqual(profile["PayloadOrganization"], enrollment.display_name)
 
     # ota_enroll
 

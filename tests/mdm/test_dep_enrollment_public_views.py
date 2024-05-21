@@ -313,7 +313,8 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
 
     def test_dep_web_enroll(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
-        session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True)
+        display_name = get_random_string(12)
+        session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True, enrollment_display_name=display_name)
         enrollment = session.dep_enrollment
         serial_number = get_random_string(10)
         udid = str(uuid.uuid4()).upper()
@@ -348,3 +349,4 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         _, profile_data = verify_signed_payload(response.content)
         profile = plistlib.loads(profile_data)
         self.assertEqual(profile["PayloadIdentifier"], "zentral.mdm")
+        self.assertEqual(profile["PayloadOrganization"], display_name)

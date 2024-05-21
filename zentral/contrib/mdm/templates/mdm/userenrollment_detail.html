@@ -27,6 +27,10 @@
     <table class="table-object-properties">
     <tbody>
         <tr>
+        <th width="160px">Display name</th>
+        <td>{{ object.display_name }}</td>
+        </tr>
+        <tr>
         <th width="160px">Push certificate</th>
         <td>
             {% if perms.mdm.view_pushcertificate %}

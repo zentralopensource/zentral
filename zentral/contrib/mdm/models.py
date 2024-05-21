@@ -1214,9 +1214,6 @@ class EnrollmentSession(models.Model):
         if serial_number:
             return MetaMachine(serial_number).get_urlsafe_serial_number()
 
-    def get_payload_name(self):
-        return "Zentral - {prefix} Enrollment SCEP".format(prefix=" - ".join(self.get_prefix().split("$")))
-
     def is_completed(self):
         return self.status == self.COMPLETED
 
@@ -1246,6 +1243,8 @@ class EnrollmentSession(models.Model):
 
 
 class MDMEnrollment(models.Model):
+    display_name = models.CharField(max_length=128, default="Zentral MDM",
+                                    help_text="Name displayed in the device settings")
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
 
     scep_config = models.ForeignKey(SCEPConfig, on_delete=models.PROTECT)

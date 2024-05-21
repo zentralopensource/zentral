@@ -93,7 +93,8 @@ class MDMUserEnrollmentPublicViewsTestCase(TestCase):
         self.assertAbort(post_event, "Invalid access token")
 
     def test_enroll_user(self, post_event):
-        enrollment = force_user_enrollment(self.mbu, self.realm)
+        display_name = get_random_string(12)
+        enrollment = force_user_enrollment(self.mbu, self.realm, enrollment_display_name=display_name)
         _, realm_user = force_realm_user(self.realm)
         enrollment_session = UserEnrollmentSession.objects.create_from_user_enrollment(enrollment)
         enrollment_session.set_account_driven_authenticated_status(realm_user)
@@ -105,6 +106,7 @@ class MDMUserEnrollmentPublicViewsTestCase(TestCase):
         self.assertSuccess(post_event)
         _, data = verify_signed_payload(response.content)
         payload = plistlib.loads(data)
+        self.assertEqual(payload["PayloadOrganization"], display_name)
         mdm_payload = [p for p in payload["PayloadContent"] if p["PayloadType"] == "com.apple.mdm"][0]
         self.assertEqual(mdm_payload["AssignedManagedAppleID"], realm_user.email)
         self.assertEqual(mdm_payload["EnrollmentMode"], "BYOD")

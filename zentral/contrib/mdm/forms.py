@@ -34,7 +34,7 @@ logger = logging.getLogger("zentral.contrib.mdm.forms")
 class OTAEnrollmentForm(forms.ModelForm):
     class Meta:
         model = OTAEnrollment
-        fields = ("name", "realm", "push_certificate",
+        fields = ("name", "display_name", "realm", "push_certificate",
                   "scep_config", "scep_verification",
                   "blueprint")
 
@@ -42,7 +42,7 @@ class OTAEnrollmentForm(forms.ModelForm):
 class UserEnrollmentForm(forms.ModelForm):
     class Meta:
         model = UserEnrollment
-        fields = ("name", "realm", "push_certificate",
+        fields = ("name", "display_name", "realm", "push_certificate",
                   "scep_config", "scep_verification",
                   "blueprint")
 
@@ -373,7 +373,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
                 required=False
             )
             field_order.append(key)
-        field_order.extend(["realm", "use_realm_user", "username_pattern", "realm_user_is_admin",
+        field_order.extend(["display_name", "realm", "use_realm_user", "username_pattern", "realm_user_is_admin",
                             "admin_full_name", "admin_short_name", "admin_password",
                             "ios_max_version", "ios_min_version", "macos_max_version", "macos_min_version"])
         self.order_fields(field_order)

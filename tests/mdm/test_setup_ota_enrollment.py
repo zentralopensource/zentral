@@ -62,10 +62,12 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
     def test_create_ota_enrollment_post(self):
         self._login("mdm.add_otaenrollment", "mdm.view_otaenrollment")
         name = get_random_string(64)
+        display_name = get_random_string(12)
         push_certificate = force_push_certificate()
         scep_config = force_scep_config()
         response = self.client.post(reverse("mdm:create_ota_enrollment"),
                                     {"oe-name": name,
+                                     "oe-display_name": display_name,
                                      "oe-scep_config": scep_config.pk,
                                      "oe-scep_verification": "",
                                      "oe-push_certificate": push_certificate.pk,
@@ -74,11 +76,13 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/otaenrollment_detail.html")
         self.assertContains(response, name)
+        self.assertContains(response, display_name)
         self.assertContains(response, push_certificate.name)
         self.assertContains(response, scep_config.name)
         self.assertContains(response, "without CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, name)
+        self.assertEqual(enrollment.display_name, display_name)
         self.assertEqual(enrollment.push_certificate, push_certificate)
         self.assertEqual(enrollment.scep_config, scep_config)
 
@@ -101,6 +105,7 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/otaenrollment_detail.html")
         self.assertContains(response, enrollment.name)
+        self.assertContains(response, enrollment.display_name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertNotContains(response, enrollment.push_certificate.get_absolute_url())
         self.assertContains(response, enrollment.scep_config.name)
@@ -170,8 +175,10 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         enrollment = force_ota_enrollment(self.mbu)
         self._login("mdm.change_otaenrollment", "mdm.view_otaenrollment")
         new_name = get_random_string(64)
+        new_display_name = get_random_string(12)
         response = self.client.post(reverse("mdm:update_ota_enrollment", args=(enrollment.pk,)),
                                     {"oe-name": new_name,
+                                     "oe-display_name": new_display_name,
                                      "oe-scep_config": enrollment.scep_config.pk,
                                      "oe-scep_verification": "on",
                                      "oe-push_certificate": enrollment.push_certificate.pk,
@@ -180,11 +187,13 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/otaenrollment_detail.html")
         self.assertContains(response, new_name)
+        self.assertContains(response, new_display_name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertContains(response, enrollment.scep_config.name)
         self.assertContains(response, "with CSR verification")
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, new_name)
+        self.assertEqual(enrollment.display_name, new_display_name)
 
     # revoke OTA enrollment
 
