@@ -16,13 +16,14 @@ from zentral.utils.drf import (DjangoPermissionRequired, DefaultDjangoModelPermi
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
 from .models import (CacheServer, Catalog, Condition, Enrollment,
-                     Manifest, ManifestCatalog, ManifestSubManifest,
+                     Manifest, ManifestCatalog, ManifestEnrollmentPackage,  ManifestSubManifest,
                      Repository,
                      SubManifest, SubManifestPkgInfo)
 from .repository_backends import load_repository_backend
 from .serializers import (CatalogSerializer, ConditionSerializer,
                           EnrollmentSerializer,
-                          ManifestSerializer, ManifestCatalogSerializer, ManifestSubManifestSerializer,
+                          ManifestCatalogSerializer, ManifestEnrollmentPackageSerializer,
+                          ManifestSerializer, ManifestSubManifestSerializer,
                           RepositorySerializer,
                           SubManifestSerializer, SubManifestPkgInfoSerializer)
 from .utils import build_configuration_plist, build_configuration_profile
@@ -264,6 +265,26 @@ class ManifestCatalogList(generics.ListCreateAPIView):
 class ManifestCatalogDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = ManifestCatalog.objects.all()
     serializer_class = ManifestCatalogSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+
+    def perform_destroy(self, instance):
+        manifest = instance.manifest
+        response = super().perform_destroy(instance)
+        manifest.bump_version()
+        return response
+
+
+class ManifestEnrollmentPackageList(generics.ListCreateAPIView):
+    queryset = ManifestEnrollmentPackage.objects.all()
+    serializer_class = ManifestEnrollmentPackageSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_fields = ("manifest_id", "builder")
+
+
+class ManifestEnrollmentPackageDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = ManifestEnrollmentPackage.objects.all()
+    serializer_class = ManifestEnrollmentPackageSerializer
     permission_classes = [DefaultDjangoModelPermissions]
 
     def perform_destroy(self, instance):
