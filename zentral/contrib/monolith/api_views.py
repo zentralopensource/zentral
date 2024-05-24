@@ -289,9 +289,8 @@ class ManifestEnrollmentPackageDetail(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_destroy(self, instance):
         manifest = instance.manifest
-        response = super().perform_destroy(instance)
+        instance.delete(delete_enrollment=False)
         manifest.bump_version()
-        return response
 
 
 # manifest sub manifests
