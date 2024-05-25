@@ -1140,10 +1140,11 @@ class ManifestEnrollmentPackage(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def delete(self, *args, **kwargs):
+        delete_enrollment = kwargs.pop("delete_enrollment", True)
         self.file.delete(save=False)
         enrollment = self.get_enrollment()
         super().delete(*args, **kwargs)
-        if enrollment:
+        if delete_enrollment and enrollment:
             enrollment.delete()
 
     def get_installer_item_filename(self):

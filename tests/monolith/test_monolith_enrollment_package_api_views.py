@@ -9,6 +9,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.monolith.models import ManifestEnrollmentPackage
+from zentral.contrib.munki.models import Enrollment as MunkiEnrollment
 from tests.munki.utils import force_enrollment as force_munki_enrollment
 from .utils import force_manifest, force_manifest_enrollment_package
 
@@ -420,6 +421,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_delete_manifest_enrollment_package(self):
         mep = force_manifest_enrollment_package()
+        enrollment = mep.get_enrollment()
         manifest = mep.manifest
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
@@ -428,3 +430,4 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 204)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 3)
+        self.assertTrue(MunkiEnrollment.objects.filter(pk=enrollment.pk).exists())
