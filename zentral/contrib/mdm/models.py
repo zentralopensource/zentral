@@ -1083,7 +1083,7 @@ class EnrolledDevice(models.Model):
             "  'DEP' enrollment_type, e.name enrollment_name, e.id enrollment_id"
             "  FROM mdm_depenrollmentsession s"
             "  JOIN mdm_depenrollment e ON (s.dep_enrollment_id = e.id)"
-            "  WHERE s.enrolled_device_id = %s"
+            "  WHERE s.enrolled_device_id = %s "
 
             "UNION"
 
@@ -1091,7 +1091,7 @@ class EnrolledDevice(models.Model):
             "  'OTA' enrollment_type, e.name enrollment_name, e.id enrollment_id"
             "  FROM mdm_otaenrollmentsession s"
             "  JOIN mdm_otaenrollment e ON (s.ota_enrollment_id = e.id)"
-            "  WHERE s.enrolled_device_id = %s"
+            "  WHERE s.enrolled_device_id = %s "
 
             "UNION"
 
@@ -1107,7 +1107,7 @@ class EnrolledDevice(models.Model):
             "  LEFT JOIN mdm_depenrollment d ON (s.dep_enrollment_id = d.id)"
             "  LEFT JOIN mdm_otaenrollment o ON (s.ota_enrollment_id = o.id)"
             "  LEFT JOIN mdm_userenrollment u ON (s.user_enrollment_id = u.id)"
-            "  WHERE s.enrolled_device_id = %s"
+            "  WHERE s.enrolled_device_id = %s "
 
             "UNION"
 
