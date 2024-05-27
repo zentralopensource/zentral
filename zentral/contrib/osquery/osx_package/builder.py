@@ -10,10 +10,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     name = "Zentral Osquery Enrollment"
     package_name = "zentral_osquery_enroll.pkg"
-    base_package_identifier = "io.zentral.osquery_enroll"
+    base_package_identifier = "com.zentral.osquery_enroll"
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")
     form = EnrollmentForm
     standalone = True
+    local_subfolder = "osquery"
 
     def __init__(self, enrollment, version=None):
         super().__init__(enrollment, version,
@@ -53,7 +54,7 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
                              (("%EXTRA_FLAGS%", "\n".join(extra_flags)),))
 
         # add enrollment info plist
-        with open(self.get_root_path("usr/local/zentral/osquery/enrollment.plist"), "wb") as f:
+        with open(self.get_root_path(f"usr/local/zentral/{self.local_subfolder}/enrollment.plist"), "wb") as f:
             plistlib.dump({"enrollment": {"id": self.enrollment.pk,
                                           "version": self.enrollment.version},
                            "fqdn": tls_hostname}, f)

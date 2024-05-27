@@ -18,16 +18,31 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
     installer_item_hash = h.hexdigest()
     installer_item_size = len(package_content)
     installed_size = installer_item_size * 10  # TODO: bug
-    postinstall_script = (
+    installcheck_script = (
         '#!/usr/local/munki/munki-python\n'
-        'import os\n'
+        'import plistlib\n'
+        'import sys\n'
         '\n'
-        'RECEIPTS_DIR = "/var/db/receipts/"\n'
         '\n'
-        'for filename in os.listdir(RECEIPTS_DIR):\n'
-        '    if filename.startswith("{}") and not filename.startswith("{}"):\n'
-        '        os.unlink(os.path.join(RECEIPTS_DIR, filename))\n'
-    ).format(builder.base_package_identifier, builder.package_identifier)
+        'def do_install_check():\n'
+        f'    with open("/usr/local/zentral/{builder.local_subfolder}/enrollment.plist", "rb") as f:\n'
+        '        info = plistlib.load(f)\n'
+        '    return (\n'
+        f'        info["enrollment"]["id"] == {builder.enrollment.pk}\n'
+        f'        and info["enrollment"]["version"] == {builder.enrollment.version}\n'
+        f'        and info["fqdn"] == "{builder.get_tls_hostname()}"\n'
+        '    )\n'
+        '\n'
+        '\n'
+        'if __name__ == "__main__":\n'
+        '    try:\n'
+        '        ok = do_install_check()\n'
+        '    except Exception:\n'
+        '        pass\n'
+        '    else:\n'
+        '        if ok:\n'
+        '            sys.exit(1)\n'
+    )
     return {'description': '{} package'.format(builder.name),
             'display_name': builder.name,
             'installed_size': installed_size,
@@ -35,7 +50,7 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
             'installer_item_size': installer_item_size,
             'minimum_os_version': '10.9.0',  # TODO: hardcoded
             'name': manifest_enrollment_package.get_name(),
-            'postinstall_script': postinstall_script,
+            'installcheck_script': installcheck_script,
             'receipts': [
                 {'installed_size': installed_size,
                  'packageid': builder.package_identifier,
