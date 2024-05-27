@@ -4,6 +4,7 @@ from asn1crypto.core import load as load_asn1
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import ExtensionOID, NameOID
+from django.utils.timezone import make_naive
 
 
 def split_certificate_chain(chain):
@@ -161,8 +162,8 @@ def build_name_attributes_update_dict_from_name(name):
 def build_cert_tree(certificate):
     """Return an inventory certificate tree from a x509 Certificate"""
     cert_tree = {
-        "valid_from": certificate.not_valid_before,
-        "valid_until": certificate.not_valid_after,
+        "valid_from": make_naive(certificate.not_valid_before_utc),
+        "valid_until": make_naive(certificate.not_valid_after_utc),
         "signed_by": build_name_attributes_update_dict_from_name(certificate.issuer),
         "sha_1": certificate.fingerprint(hashes.SHA1()).hex()
     }
