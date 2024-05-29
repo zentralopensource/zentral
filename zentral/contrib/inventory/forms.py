@@ -454,8 +454,8 @@ class AndroidAppSearchForm(BaseAppSearchForm):
         wheres = []
         display_name = self.cleaned_data.get("display_name")
         if display_name:
-            args.append(display_name)
-            wheres.append("aa.display_name ~* %s")
+            args.append("%{}%".format(connection.ops.prep_for_like_query(display_name)))
+            wheres.append("UPPER(aa.display_name) LIKE UPPER(%s)")
         source = self.get_source()
         if source:
             args.append(source.id)
@@ -539,8 +539,8 @@ class DebPackageSearchForm(BaseAppSearchForm):
         wheres = []
         name = self.cleaned_data.get("name")
         if name:
-            args.append(name)
-            wheres.append("dp.name ~* %s")
+            args.append("%{}%".format(connection.ops.prep_for_like_query(name)))
+            wheres.append("UPPER(dp.name) LIKE UPPER(%s)")
         source = self.get_source()
         if source:
             args.append(source.id)
@@ -626,8 +626,8 @@ class IOSAppSearchForm(BaseAppSearchForm):
         wheres = []
         name = self.cleaned_data.get("name")
         if name:
-            args.append(name)
-            wheres.append("ia.name ~* %s")
+            args.append("%{}%".format(connection.ops.prep_for_like_query(name)))
+            wheres.append("UPPER(ia.name) LIKE UPPER(%s)")
         source = self.get_source()
         if source:
             args.append(source.id)
@@ -720,9 +720,10 @@ class MacOSAppSearchForm(BaseAppSearchForm):
         wheres = []
         bundle = self.cleaned_data.get("bundle")
         if bundle:
-            args.append(bundle)
-            args.append(bundle)
-            wheres.append("(a.bundle_id ~* %s OR a.bundle_name ~* %s)")
+            prepared_bundle = "%{}%".format(connection.ops.prep_for_like_query(bundle))
+            args.append(prepared_bundle)
+            args.append(prepared_bundle)
+            wheres.append("(UPPER(a.bundle_id) LIKE UPPER(%s) OR UPPER(a.bundle_name) LIKE UPPER(%s))")
         source = self.get_source()
         if source:
             args.append(source.id)
@@ -809,8 +810,8 @@ class ProgramsSearchForm(BaseAppSearchForm):
         wheres = []
         name = self.cleaned_data.get("name")
         if name:
-            args.append(name)
-            wheres.append("p.name ~* %s")
+            args.append("%{}%".format(connection.ops.prep_for_like_query(name)))
+            wheres.append("UPPER(p.name) LIKE UPPER(%s)")
         source = self.get_source()
         if source:
             args.append(source.id)

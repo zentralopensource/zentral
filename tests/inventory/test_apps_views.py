@@ -173,6 +173,16 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Result (1)")
         self.assertContains(response, ">AndroidApp1</a>")
 
+    def test_android_apps_bundle_name_and_source_search_special_char_no_error(self):
+        self._login("inventory.view_androidapp")
+        response = self.client.get("{}?{}".format(
+            reverse("inventory:android_apps"),
+            urlencode({"display_name": "AndroidApp1\\",
+                       "source": self.ms.source.id,
+                       "action": "search"})
+        ))
+        self.assertContains(response, "We didn't find any item related to your search")
+
     # Debian packages
 
     def test_deb_packages_redirect(self):
@@ -220,6 +230,16 @@ class AppsViewsTestCase(TestCase):
                        "action": "search"})
         ))
         self.assertContains(response, "Result (1)")
+
+    def test_deb_packages_name_and_source_search_special_char_no_error(self):
+        self._login("inventory.view_debpackage")
+        response = self.client.get("{}?{}".format(
+            reverse("inventory:deb_packages"),
+            urlencode({"name": "deb_package_1\\",
+                       "source": self.ms.source.id,
+                       "action": "search"})
+        ))
+        self.assertContains(response, "We didn't find any item related to your search")
 
     # iOS apps
 
@@ -269,6 +289,16 @@ class AppsViewsTestCase(TestCase):
         ))
         self.assertContains(response, "Result (1)")
 
+    def test_ios_apps_name_and_source_search_special_char_no_error(self):
+        self._login("inventory.view_iosapp")
+        response = self.client.get("{}?{}".format(
+            reverse("inventory:ios_apps"),
+            urlencode({"name": "2Password\\",
+                       "source": self.ms.source.id,
+                       "action": "search"})
+        ))
+        self.assertContains(response, "We didn't find any item related to your search")
+
     # macOS apps
 
     def test_macos_apps_redirect(self):
@@ -317,6 +347,16 @@ class AppsViewsTestCase(TestCase):
         ))
         self.assertContains(response, "Result (1)")
 
+    def test_macos_apps_bundle_id_and_source_search_special_char_no_error(self):
+        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
+        response = self.client.get("{}?{}".format(
+            reverse("inventory:macos_apps"),
+            urlencode({"bundle": "io.zentral.baller\\",
+                       "source": self.ms.source.id,
+                       "action": "search"})
+        ))
+        self.assertContains(response, "We didn't find any item related to your search")
+
     # Programs
 
     def test_programs_redirect(self):
@@ -364,3 +404,13 @@ class AppsViewsTestCase(TestCase):
                        "action": "search"})
         ))
         self.assertContains(response, "Result (1)")
+
+    def test_programs_name_and_source_search_special_char_no_error(self):
+        self._login("inventory.view_program", "inventory.view_programinstance")
+        response = self.client.get("{}?{}".format(
+            reverse("inventory:programs"),
+            urlencode({"name": "program_1\\",
+                       "source": self.ms.source.id,
+                       "action": "search"})
+        ))
+        self.assertContains(response, "We didn't find any item related to your search")
