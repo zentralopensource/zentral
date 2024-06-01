@@ -572,7 +572,7 @@
   }
 
   function showFirstTab() {
-    const source = $('a[data-toggle="tab"]').first().tab("show").data("source");
+    const source = $('a[data-bs-toggle="tab"]').first().tab("show").data("source");
     updateHash(source);
   }
 
@@ -581,7 +581,7 @@
   }
 
   $(document).ready(function(){
-    $('a[data-toggle="tab"]').click(function(event){
+    $('a[data-bs-toggle="tab"]').click(function(event){
       event.preventDefault();
       $(this).tab('show');
     }).on('shown.bs.tab', function (e) {
