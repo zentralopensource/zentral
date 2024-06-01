@@ -128,6 +128,7 @@ for app_name in zentral_settings.get('apps', []):
     INSTALLED_APPS.append(app_name)
 
 MIDDLEWARE = [
+    'base.middlewares.never_cache_middleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

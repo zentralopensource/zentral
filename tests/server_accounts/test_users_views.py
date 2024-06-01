@@ -82,6 +82,7 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "base/index.html")
         self.assertTrue(response.context["request"].user.is_authenticated)
         self.assertEqual(response.context["request"].user, self.ui_user)
+        self.assertEqual(response["Cache-Control"], 'max-age=0, no-cache, no-store, must-revalidate, private')
 
     def test_simple_login_wrong_password(self):
         response = self.client.post(reverse("login"),

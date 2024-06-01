@@ -9,7 +9,6 @@ from django.shortcuts import redirect, resolve_url
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic import FormView, View
@@ -25,7 +24,7 @@ logger = logging.getLogger("zentral.accounts.views.auth")
 
 @sensitive_post_parameters()
 @csrf_protect
-@never_cache
+# 'never_cache' with custom middleware
 def login(request):
     """
     Displays the login form and handles the login action.
