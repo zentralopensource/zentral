@@ -14,7 +14,7 @@ CSP_HEADER = 'Content-Security-Policy'
 DEFAULT_CSP_POLICIES = {
   "default-src": "'self'",
   "img-src": "'self' https://*.mzstatic.com",
-  "script-src": "'self' 'unsafe-inline'",  # unsafe-inline ignored when nonce-* is supported
+  "script-src": "'self'",
   "base-uri": "'none'",
   "frame-ancestors": "'none'",
   "object-src": "'none'",

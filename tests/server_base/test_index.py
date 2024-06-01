@@ -67,7 +67,7 @@ class BaseViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "base/index.html")
         self.assertIn(";object-src 'none';", response["Content-Security-Policy"])
-        self.assertIn(";script-src 'self' 'unsafe-inline' 'nonce-", response["Content-Security-Policy"])
+        self.assertIn(";script-src 'self' 'nonce-", response["Content-Security-Policy"])
         self.assertNotIn("unsafe-eval", response["Content-Security-Policy"])
 
     # extra links
