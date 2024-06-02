@@ -148,7 +148,11 @@
     "zentral.contrib.jamf": {},
     "zentral.contrib.jamf_protect": {},
     "zentral.contrib.mdm": {
-      "scep_ca_fullchain": "NOT_A_VALID_CERT"
+      "scep_ca_fullchain": "NOT_A_VALID_CERT",
+      "push_csr_signer": {
+        "backend": "zentral.contrib.mdm.push_csr_signers.ZentralSaaSPushCSRSigner",
+        "url": "https://www.example.com/api/"
+      }
     },
     "zentral.contrib.munki": {
       "metrics": true

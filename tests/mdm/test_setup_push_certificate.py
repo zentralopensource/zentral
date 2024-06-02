@@ -1,5 +1,6 @@
 from functools import reduce
 import operator
+from unittest.mock import Mock, patch
 from cryptography.hazmat.primitives import serialization
 from django.contrib.auth.models import Group, Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -151,16 +152,57 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_view_push_certificate(self):
+    def test_view_push_certificate_signer(self):
         topic = get_random_string(12)
         push_certificate = force_push_certificate(topic=topic, with_material=True)
-        self._login("mdm.view_pushcertificate", "mdm.delete_pushcertificate")
+        self._login("mdm.view_pushcertificate",
+                    "mdm.change_pushcertificate",
+                    "mdm.delete_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
         self.assertContains(response, push_certificate.name)
         self.assertContains(response, topic)
         self.assertContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+
+    @patch("zentral.contrib.mdm.views.setup.push_csr_signer", False)
+    def test_view_push_certificate_no_signer(self):
+        topic = get_random_string(12)
+        push_certificate = force_push_certificate(topic=topic, with_material=True)
+        self._login("mdm.view_pushcertificate",
+                    "mdm.change_pushcertificate",
+                    "mdm.delete_pushcertificate")
+        response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
+        self.assertContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+
+    def test_view_push_certificate_signer_no_links(self):
+        topic = get_random_string(12)
+        push_certificate = force_push_certificate(topic=topic, with_material=True)
+        self._login("mdm.view_pushcertificate")
+        response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
+        self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+
+    @patch("zentral.contrib.mdm.views.setup.push_csr_signer", False)
+    def test_view_push_certificate_no_signer_no_links(self):
+        topic = get_random_string(12)
+        push_certificate = force_push_certificate(topic=topic, with_material=True)
+        self._login("mdm.view_pushcertificate")
+        response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
+        self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
 
     def test_no_delete_push_certificate_link(self):
         enrollment = self._force_user_enrollment()
@@ -177,13 +219,13 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_push_certificate_csr_permission_denied(self):
         push_certificate = force_push_certificate()
-        self._login()
+        self._login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_push_certificate_csr(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login("mdm.view_pushcertificate")
+        self._login("mdm.change_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["Content-Type"], "application/pkcs10")
@@ -198,28 +240,33 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_push_certificate_signed_csr_permission_denied(self):
         push_certificate = force_push_certificate()
-        self._login()
+        self._login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_push_certificate_signed_csr_empty(self):
-        push_certificate = force_push_certificate()
-        self.assertIsNone(push_certificate.signed_csr)
-        self._login("mdm.view_pushcertificate")
+    @patch("zentral.contrib.mdm.views.setup.push_csr_signer", False)
+    def test_push_certificate_no_signer_404(self):
+        push_certificate = force_push_certificate(with_material=True)
+        self._login("mdm.change_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_push_certificate_signed_csr(self):
-        push_certificate = force_push_certificate()
-        push_certificate.signed_csr = b"1234"
-        push_certificate.save()
-        self._login("mdm.view_pushcertificate")
+    @patch("zentral.contrib.mdm.push_csr_signers.requests.post")
+    @patch("zentral.contrib.mdm.push_csr_signers.make_get_caller_identity_request")
+    def test_push_certificate_signed_csr(self, make_get_caller_identity_request, requests_post):
+        make_get_caller_identity_request.return_value = {}
+        response = Mock()
+        response.json.return_value = {"signed_csr": "1234"}
+        requests_post.return_value = response
+        push_certificate = force_push_certificate(with_material=True)
+        self._login("mdm.change_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(b''.join(response.streaming_content), push_certificate.signed_csr)
+        self.assertEqual(b''.join(response.streaming_content), b"1234")
         self.assertEqual(response.headers["Content-Type"], "application/octet-stream")
         self.assertEqual(response.headers["Content-Disposition"],
                          f'attachment; filename="push_certificate_{push_certificate.pk}_signed_csr.b64"')
+        make_get_caller_identity_request.assert_called_once()
 
     # upload push certificate certificate
 

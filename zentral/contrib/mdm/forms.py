@@ -144,14 +144,6 @@ class PushCertificateCertificateForm(BasePushCertificateForm):
     def get_key_bytes(self):
         return self.instance.get_private_key(), None
 
-    def save(self):
-        push_certificate = super().save()
-        if push_certificate.signed_csr:
-            push_certificate.signed_csr = None
-            push_certificate.signed_csr_updated_at = None
-            push_certificate.save()
-        return push_certificate
-
 
 class DEPDeviceSearchForm(forms.Form):
     template_name = "django/forms/search.html"

@@ -2,7 +2,7 @@ import io
 import logging
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
-from django.http import FileResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
@@ -15,6 +15,7 @@ from zentral.contrib.mdm.forms import (CreatePushCertificateForm,
 from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServer, Location
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_root_ca_configuration_profile)
+from zentral.contrib.mdm.push_csr_signers import signer as push_csr_signer
 from zentral.contrib.mdm.terraform import iter_resources
 from zentral.utils.terraform import build_config_response
 
@@ -82,11 +83,16 @@ class PushCertificateView(PermissionRequiredMixin, DetailView):
         ctx["dep_enrollments"] = list(self.object.depenrollment_set.all().order_by("-pk"))
         ctx["ota_enrollments"] = list(self.object.otaenrollment_set.all().order_by("-pk"))
         ctx["user_enrollments"] = list(self.object.userenrollment_set.all().order_by("-pk"))
+        if self.request.user.has_perm("mdm.change_pushcertificate"):
+            if push_csr_signer:
+                ctx["signed_csr_url"] = reverse("mdm:push_certificate_signed_csr", args=(self.object.pk,))
+            else:
+                ctx["csr_url"] = reverse("mdm:push_certificate_csr", args=(self.object.pk,))
         return ctx
 
 
 class PushCertificateCSRView(PermissionRequiredMixin, View):
-    permission_required = "mdm.view_pushcertificate"
+    permission_required = "mdm.change_pushcertificate"
 
     def get(self, request, *args, **kwargs):
         push_certificate = get_object_or_404(PushCertificate, pk=kwargs["pk"])
@@ -98,11 +104,15 @@ class PushCertificateCSRView(PermissionRequiredMixin, View):
 
 
 class PushCertificateSignedCSRView(PermissionRequiredMixin, View):
-    permission_required = "mdm.view_pushcertificate"
+    permission_required = "mdm.change_pushcertificate"
 
     def get(self, request, *args, **kwargs):
-        push_certificate = get_object_or_404(PushCertificate, pk=kwargs["pk"], signed_csr__isnull=False)
-        return FileResponse(io.BytesIO(push_certificate.signed_csr),
+        if not push_csr_signer:
+            raise Http404
+        push_certificate = get_object_or_404(PushCertificate, pk=kwargs["pk"])
+        csr = generate_push_certificate_csr_der_bytes(push_certificate)
+        b64_csr = push_csr_signer.get_signed_b64_csr(csr)
+        return FileResponse(io.BytesIO(b64_csr),
                             content_type="application/octet-stream",
                             as_attachment=True,
                             filename=f"push_certificate_{push_certificate.pk}_signed_csr.b64")

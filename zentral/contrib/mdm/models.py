@@ -59,8 +59,6 @@ class PushCertificate(models.Model):
     not_before = models.DateTimeField(null=True)
     not_after = models.DateTimeField(null=True)
     certificate = models.BinaryField(null=True)
-    signed_csr = models.BinaryField(null=True)
-    signed_csr_updated_at = models.DateTimeField(null=True)
     private_key = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

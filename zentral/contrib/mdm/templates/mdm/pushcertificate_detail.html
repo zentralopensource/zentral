@@ -17,11 +17,10 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">MDM push certificate</h3>
         <div class="ms-auto">
-            {% if object.signed_csr %}
-            {% url 'mdm:push_certificate_signed_csr' object.pk as signed_csr_url %}
+            {% if signed_csr_url %}
             {% button 'DOWNLOAD' signed_csr_url "Download signed CSR" %}
-            {% else %}
-            {% url 'mdm:push_certificate_csr' object.pk as csr_url %}
+            {% endif %}
+            {% if csr_url %}
             {% button 'DOWNLOAD' csr_url "Download CSR" %}
             {% endif %}
             {% if perms.mdm.change_pushcertificate %}
