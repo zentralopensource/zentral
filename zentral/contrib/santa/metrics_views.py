@@ -76,6 +76,8 @@ class MetricsView(BasePrometheusMetricsView):
                 labels["target_type"] = "binary"
             elif target_type == Target.BUNDLE:
                 labels["target_type"] = "bundle"
+            elif target_type == Target.CDHASH:
+                labels["target_type"] = "cdhash"
             elif target_type == Target.CERTIFICATE:
                 labels["target_type"] = "certificate"
             elif target_type == Target.TEAM_ID:

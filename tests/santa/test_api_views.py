@@ -18,6 +18,7 @@ from zentral.contrib.santa.events import SantaRuleUpdateEvent
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment, Bundle
 from zentral.core.events.base import AuditEvent
 from zentral.utils.payloads import get_payload_identifier
+from .test_rule_engine import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
 class APIViewsTestCase(TestCase):
@@ -173,6 +174,7 @@ class APIViewsTestCase(TestCase):
             {'Bundle Name': '1Password 7',
              'Bundle Version': '70700015',
              'Bundle Version Str': '7.7',
+             'CDHash': '575bc039ebf67a3fd686a14d5d1bc569ec7ba18e',
              'Team ID': '2BUA8C4S2C',
              'Signing ID': 'com.1password.1password',
              'Code-signed': 'Yes',
@@ -232,6 +234,10 @@ class APIViewsTestCase(TestCase):
              'present': 1}
         )
         self.assertEqual(file_qs.count(), 1)
+        file = file_qs.first()
+        self.assertEqual(file.cdhash, '575bc039ebf67a3fd686a14d5d1bc569ec7ba18e')
+        self.assertEqual(file.sha_256, 'df469b87ae9221e5df3f0e585f05926865cef907d332934dc33a3fa4b6b2cc3a')
+        self.assertEqual(file.signing_id, '2BUA8C4S2C:com.1password.1password')
         self.assertEqual(cert_qs.count(), 1)
 
     # ruleset update
@@ -667,6 +673,72 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(rule.target.identifier, "94KV3E626L:Frameworks[]Electron Framework")
         self.assertEqual(self.configuration2.rule_set.count(), 1)
 
+    def test_ruleset_update_cdhash_rule(self):
+        self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
+                             "santa.add_rule", "santa.change_rule", "santa.delete_rule")
+        url = reverse("santa_api:ruleset_update")
+
+        cdhash = new_cdhash()
+
+        # JSON rule for all configurations
+        data = {
+            "name": get_random_string(12),
+            "rules": [
+                {"rule_type": "CDHASH",
+                 "identifier": cdhash,
+                 "policy": "ALLOWLIST"},
+            ]
+        }
+        self.assertEqual(self.configuration.rule_set.count(), 0)
+        response = self.post_json_data(url, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        ruleset = RuleSet.objects.get(name=data["name"])
+        self.assertEqual(
+            json_response,
+            {'ruleset': {
+                 'name': ruleset.name,
+                 'pk': ruleset.pk
+             },
+             'dry_run': False,
+             'result': 'created',
+             'configurations': [
+                 {'name': self.configuration.name,
+                  'pk': self.configuration.pk,
+                  'rule_results': {'created': 1,
+                                   'deleted': 0,
+                                   'present': 0,
+                                   'updated': 0}},
+                 {'name': self.configuration2.name,
+                  'pk': self.configuration2.pk,
+                  'rule_results': {'created': 1,
+                                   'deleted': 0,
+                                   'present': 0,
+                                   'updated': 0}}
+             ]}
+        )
+        self.assertEqual(self.configuration.rule_set.count(), 1)
+        rule = self.configuration.rule_set.select_related("target").first()
+        self.assertEqual(rule.target.type, "CDHASH")
+        self.assertEqual(rule.target.identifier, cdhash)
+
+    def test_ruleset_update_bad_cdhash_rule(self):
+        self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
+                             "santa.add_rule", "santa.change_rule", "santa.delete_rule")
+        url = reverse("santa_api:ruleset_update")
+        data = {
+            "name": get_random_string(12),
+            "rules": [
+                {"rule_type": "CDHASH",
+                 "identifier": get_random_string(12),
+                 "policy": "BLOCKLIST"},
+            ]
+        }
+        self.assertEqual(self.configuration.rule_set.count(), 0)
+        response = self.post_json_data(url, data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'rules': {'0': {'identifier': ['Invalid cdhash identifier']}}})
+
     # targets export
 
     def test_targets_export_unauthorized(self):
@@ -810,6 +882,19 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target': ['rule already exists for this target']})
         self.assertEqual(Rule.objects.count(), 1)
+
+    def test_create_rule_cdhash_failed(self):
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": self.configuration.pk,
+            "policy": Rule.ALLOWLIST,
+            "target_type": Target.CDHASH,
+            "target_identifier": get_random_string(32)
+        }
+        response = self.post_json_data(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {'target_identifier': ['Invalid cdhash target identifier']})
+        self.assertEqual(Rule.objects.count(), 0)
 
     def test_create_rule_team_id_failed(self):
         self.set_permissions("santa.add_rule")
@@ -1072,6 +1157,33 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'policy': ['"invalid" is not a valid choice.']})
         self.assertEqual(Rule.objects.count(), 0)
+
+    def test_rule_create_all_types(self):
+        configuration = self.force_configuration()
+        self.set_permissions("santa.add_rule")
+        for target_identifier, target_type in (
+            (new_sha256(), Target.BINARY),
+            (new_sha256(), Target.CERTIFICATE),
+            (new_cdhash(), Target.CDHASH),
+            (new_team_id(), Target.TEAM_ID),
+            (new_signing_id_identifier(), Target.SIGNING_ID),
+        ):
+            data = {
+                "configuration": configuration.pk,
+                "policy": Rule.BLOCKLIST,
+                "target_type": target_type,
+                "target_identifier": target_identifier,
+            }
+            response = self.post_json_data(reverse("santa_api:rules"), data)
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+            self.assertEqual(Rule.objects.count(), 1)
+            rule_json = response.json()
+            self.assertEqual(rule_json["target_type"], target_type)
+            self.assertEqual(rule_json["target_identifier"], target_identifier)
+            rule = Rule.objects.first()
+            self.assertEqual(rule.target.type, target_type)
+            self.assertEqual(rule.target.identifier, target_identifier)
+            rule.delete()
 
     def test_rule_create_with_custom_msg(self):
         configuration = self.force_configuration()

@@ -84,13 +84,18 @@ class SantaEventEvent(BaseEvent):
 
     def get_linked_objects_keys(self):
         keys = {}
+        file_args = []
         file_sha256 = self.payload.get("file_sha256")
         if file_sha256:
-            keys['file'] = [("sha256", file_sha256)]
-        signing_chain = list(self.iter_signing_chain())
+            file_args.append(("sha256", file_sha256))
+        cdhash = self.payload.get("cdhash")
+        if cdhash:
+            file_args.append(("cdhash", cdhash))
+        if file_args:
+            keys['file'] = file_args
         team_id = self.payload.get("team_id")
-        signing_id = self.payload.get("signing_id")
         cert_sha256_list = []
+        signing_chain = list(self.iter_signing_chain())
         for cert_idx, cert in enumerate(signing_chain):
             # cert sha256
             cert_sha256 = cert.get("sha256")
@@ -110,10 +115,11 @@ class SantaEventEvent(BaseEvent):
                     pass
         if team_id:
             keys["apple_team_id"] = [(team_id,)]
-        if signing_id:
-            keys["signing_id"] = [(signing_id,)]
         if cert_sha256_list:
             keys['certificate'] = cert_sha256_list
+        signing_id = self.payload.get("signing_id")
+        if signing_id:
+            keys["signing_id"] = [(signing_id,)]
         return keys
 
 
@@ -165,16 +171,28 @@ class SantaRuleUpdateEvent(BaseEvent):
         target = rule.get("target")
         if not target:
             return keys
-        sha256 = target.get("sha256")
-        if not sha256:
-            return keys
         target_type = target.get("type")
-        if target_type == Target.BINARY:
-            keys["file"] = [("sha256", sha256)]
-        elif target_type == Target.CERTIFICATE:
-            keys["certificate"] = [("sha256", sha256)]
-        elif target_type == Target.BUNDLE:
-            keys["bundle"] = [("sha256", sha256)]
+        if target_type == Target.CDHASH:
+            cdhash = target.get("cdhash")
+            if cdhash:
+                keys["file"] = [("cdhash", cdhash)]
+        elif target_type == Target.SIGNING_ID:
+            signing_id = target.get("signing_id")
+            if signing_id:
+                keys["signing_id"] = [(signing_id,)]
+        elif target_type == Target.TEAM_ID:
+            team_id = target.get("team_id")
+            if team_id:
+                keys["apple_team_id"] = [(team_id,)]
+        else:
+            sha256 = target.get("sha256")
+            if sha256:
+                if target_type == Target.BINARY:
+                    keys["file"] = [("sha256", sha256)]
+                elif target_type == Target.CERTIFICATE:
+                    keys["certificate"] = [("sha256", sha256)]
+                elif target_type == Target.BUNDLE:
+                    keys["bundle"] = [("sha256", sha256)]
         return keys
 
 
@@ -232,7 +250,8 @@ def _build_file_tree_from_santa_event(event_d):
             "name": "Santa events"
         }
     }
-    for from_a, to_a in (("file_name", "name"),
+    for from_a, to_a in (("cdhash", "cdhash"),
+                         ("file_name", "name"),
                          ("file_path", "path"),
                          ("file_bundle_path", "bundle_path"),
                          ("file_sha256", "sha_256"),

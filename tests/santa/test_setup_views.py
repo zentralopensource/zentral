@@ -14,10 +14,7 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, File, Tag
 from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, Target
 from zentral.core.events.base import AuditEvent
-
-
-def get_random_sha256():
-    return get_random_string(64, "abcdef0123456789")
+from .test_rule_engine import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -33,11 +30,12 @@ class SantaSetupViewsTestCase(TestCase):
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         # file tree
-        cls.file_sha256 = get_random_sha256()
+        cls.cdhash = new_cdhash()
+        cls.file_sha256 = new_sha256()
         cls.file_name = get_random_string(12)
         cls.file_bundle_name = get_random_string(12)
-        cls.file_cert_sha256 = get_random_sha256()
-        cls.file_team_id = get_random_string(10, allowed_chars="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        cls.file_cert_sha256 = new_sha256()
+        cls.file_team_id = new_team_id()
         cls.file_signing_id = f"{cls.file_team_id}:transcoderx"
         cls.file_cert_cn = f"Developer ID Application: YOLO ({cls.file_team_id})"
         cls.file, _ = File.objects.commit({
@@ -51,6 +49,7 @@ class SantaSetupViewsTestCase(TestCase):
             'name': cls.file_name,
             'path': ('/Library/Frameworks/Compressor.framework/'
                      'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
+            'cdhash': cls.cdhash,
             'sha_256': cls.file_sha256,
             'signing_id': cls.file_signing_id,
             'signed_by': {
@@ -109,8 +108,8 @@ class SantaSetupViewsTestCase(TestCase):
         enrollment = Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
         return configuration, enrollment
 
-    def _force_bundle(self):
-        bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=get_random_sha256())
+    def _force_bundle(self, uploaded=False):
+        bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=new_sha256())
         return Bundle.objects.create(
             target=bundle_target,
             executable_rel_path=get_random_string(12),
@@ -118,8 +117,24 @@ class SantaSetupViewsTestCase(TestCase):
             name=self.file_bundle_name,
             version=self.file.bundle.bundle_version,
             version_str=self.file.bundle.bundle_version_str,
-            binary_count=1
+            binary_count=1,
+            uploaded_at=datetime.datetime.utcnow() if uploaded else None,
         )
+
+    def _force_rule(self, target_type, configuration=None, target_identifier=None, policy=Rule.ALLOWLIST):
+        if configuration is None:
+            configuration = self._force_configuration()
+        if target_identifier is None:
+            if target_type == Target.TEAM_ID:
+                target_identifier = new_team_id()
+            elif target_type == Target.CDHASH:
+                target_identifier = new_cdhash()
+            elif target_type == Target.SIGNING_ID:
+                target_identifier = new_signing_id_identifier()
+            else:
+                target_identifier = new_sha256()
+        target = Target.objects.create(type=target_type, identifier=target_identifier)
+        return Rule.objects.create(configuration=configuration, target=target, policy=policy)
 
     # index
 
@@ -142,7 +157,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, "Configuration (1)")
         self.assertContains(response, configuration.name)
         # no perms, no targets
-        self.assertNotContains(response, "Collected targets (4)")
+        self.assertNotContains(response, "Collected targets (5)")
 
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:index"))
@@ -151,14 +166,28 @@ class SantaSetupViewsTestCase(TestCase):
         # no perms, no configuration
         self.assertNotContains(response, "Configuration (1)")
         self.assertNotContains(response, configuration.name)
-        # 1 binary, 1 certificate, 1 team ID, 1 signing ID
-        self.assertContains(response, "Collected targets (4)")
+        # 1 binary, 1 cdhash, 1 certificate, 1 team ID, 1 signing ID
+        self.assertContains(response, "Collected targets (5)")
 
     # configurations
 
     def test_configurations_redirect(self):
         self._login_redirect(reverse("santa:configuration_list"))
-        self._login_redirect(reverse("santa:create_configuration"))
+
+    def test_configurations_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:configuration_list"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_configurations(self):
+        configuration = self._force_configuration()
+        self._login("santa.view_configuration")
+        response = self.client.get(reverse("santa:configuration_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_list.html")
+        self.assertContains(response, configuration.name)
+
+    # configuration
 
     def test_configuration_redirect(self):
         configuration = self._force_configuration()
@@ -237,10 +266,17 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
-    def test_get_create_configuration_view(self):
+    # create configuration
+
+    def test_create_configuration_redirect(self):
+        self._login_redirect(reverse("santa:create_configuration"))
+
+    def test_create_configuration_permission_denied(self):
         self._login()
         response = self.client.get(reverse("santa:create_configuration"))
         self.assertEqual(response.status_code, 403)
+
+    def test_get_create_configuration_view(self):
         self._login("santa.add_configuration")
         response = self.client.get(reverse("santa:create_configuration"))
         self.assertEqual(response.status_code, 200)
@@ -306,6 +342,12 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(metadata["objects"], {"santa_configuration": [str(configuration.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
+    # update configuration
+
+    def test_update_configuration_redirect(self):
+        configuration = self._force_configuration()
+        self._login_redirect(reverse("santa:update_configuration", args=(configuration.pk,)))
+
     def test_post_update_configuration_view_permission_denied(self):
         self._login("santa.add_configuration", "santa.view_configuration")
         configuration = self._force_configuration()
@@ -322,9 +364,9 @@ class SantaSetupViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_update_configuration_view(self, post_event):
-        self._login("santa.add_configuration", "santa.change_configuration", "santa.view_configuration")
         configuration = self._force_configuration()
         prev_updated_at = configuration.updated_at
+        self._login("santa.change_configuration", "santa.view_configuration")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("santa:update_configuration", args=(configuration.pk,)),
                                         {"name": configuration.name,
@@ -399,8 +441,8 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
     def test_post_update_configuration_view_remount_usb_mode_error(self):
-        self._login("santa.add_configuration", "santa.change_configuration", "santa.view_configuration")
         configuration = self._force_configuration()
+        self._login("santa.change_configuration", "santa.view_configuration")
         response = self.client.post(reverse("santa:update_configuration", args=(configuration.pk,)),
                                     {"name": configuration.name,
                                      "batch_size": 50,
@@ -415,53 +457,67 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertFormError(response.context["form"],
                              "remount_usb_mode", "'Block USB mount' must be set to use this option")
 
-    def test_get_create_enrollment_view(self):
-        self._login("santa.add_configuration", "santa.view_configuration")
+    # enrollment
+
+    def test_create_enrollment_redirect(self):
         configuration = self._force_configuration()
+        self._login_redirect(reverse("santa:create_enrollment", args=(configuration.pk,)))
+
+    def test_create_enrollment_permission_denied(self):
+        configuration = self._force_configuration()
+        self._login()
         response = self.client.get(reverse("santa:create_enrollment", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
-        self._login("santa.add_configuration", "santa.view_configuration", "santa.add_enrollment")
+
+    def test_get_create_enrollment_view(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_enrollment")
         response = self.client.get(reverse("santa:create_enrollment", args=(configuration.pk,)))
         self.assertTemplateUsed(response, "santa/enrollment_form.html")
         self.assertContains(response, "Create enrollment")
         self.assertContains(response, configuration.name)
 
-    def create_enrollment(self, configuration, no_assertions=False):
-        mbu, _ = MetaBusinessUnit.objects.get_or_create(name="{} MBU".format(configuration.name))
-        if not mbu.api_enrollment_enabled():
-            mbu.create_enrollment_business_unit()
-        response = self.client.post(reverse("santa:create_enrollment", args=(configuration.pk,)),
-                                    {"secret-meta_business_unit": mbu.pk,
-                                     "configuration": configuration.pk,
-                                     "santa_release": ""}, follow=True)
-        if no_assertions:
-            return response, None
-        enrollment = response.context["enrollments"][0]
-        self.assertEqual(enrollment.version, 1)
-        return response, enrollment
-
-    def test_post_create_enrollment_view(self):
-        self._login("santa.add_configuration", "santa.view_configuration")
+    def test_post_create_enrollment_view_errors(self):
         configuration = self._force_configuration()
-        response, enrollment = self.create_enrollment(configuration, no_assertions=True)
-        self.assertEqual(response.status_code, 403)
-        self._login("santa.add_configuration", "santa.view_configuration", "santa.add_enrollment")
-        response, enrollment = self.create_enrollment(configuration)
+        self._login("santa.add_enrollment", "santa.view_configuration")
+        response = self.client.post(reverse("santa:create_enrollment", args=(configuration.pk,)),
+                                    {"secret-meta_business_unit": self.mbu.pk,
+                                     "secret-quota": "abcd",
+                                     "configuration": configuration.pk}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context["form"], "meta_business_unit",
+                             "Select a valid choice. That choice is not one of the available choices.")
+        self.assertFormError(response.context["form"], "quota",
+                             "Enter a whole number.")
+
+    def test_post_create_enrollment_view_no_view_enrollment_perm(self):
+        configuration = self._force_configuration()
+        self.mbu.create_enrollment_business_unit()
+        self._login("santa.add_enrollment", "santa.view_configuration")
+        response = self.client.post(reverse("santa:create_enrollment", args=(configuration.pk,)),
+                                    {"secret-meta_business_unit": self.mbu.pk,
+                                     "configuration": configuration.pk}, follow=True)
+        self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertEqual(response.context["object"], configuration)
-        # response does not contain enrollment secret meta business unit name
-        self.assertNotContains(response, enrollment.secret.meta_business_unit.name)
-        # response does not contain link to download enrollment configuration plist
-        self.assertNotContains(response, reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
-        # response does not contain link to download enrollment configuration profile
-        self.assertNotContains(response, reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,)))
-        self._login("santa.view_configuration", "santa.view_enrollment")
-        response = self.client.get(configuration.get_absolute_url())
-        # response contains enrollment secret meta business unit name
+        # no view enrollment perm!
+        self.assertNotIn("enrollments", response.context)
+
+    def test_post_create_enrollment_view(self):
+        configuration = self._force_configuration()
+        self.mbu.create_enrollment_business_unit()
+        self._login("santa.add_enrollment", "santa.view_enrollment", "santa.view_configuration")
+        response = self.client.post(reverse("santa:create_enrollment", args=(configuration.pk,)),
+                                    {"secret-meta_business_unit": self.mbu.pk,
+                                     "configuration": configuration.pk}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertEqual(response.context["object"], configuration)
+        # with view enrollment perm
+        enrollment = response.context["enrollments"][0]
+        self.assertEqual(enrollment.configuration, configuration)
         self.assertContains(response, enrollment.secret.meta_business_unit.name)
-        # response contains link to download enrollment configuration plist
         self.assertContains(response, reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
-        # response contains link to download enrollment configuration profile
         self.assertContains(response, reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,)))
 
     def test_enrollment_plist_permission_denied(self):
@@ -499,90 +555,258 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
 
-    def test_configuration_rules_redirects(self):
-        self._login("santa.add_configuration", "santa.view_configuration")
+    # configuration rules
+
+    def test_configuration_rules_redirect(self):
         configuration = self._force_configuration()
-        self.client.logout()
         self._login_redirect(reverse("santa:configuration_rules", args=(configuration.pk,)))
-        self._login_redirect(reverse("santa:create_configuration_rule", args=(configuration.pk,)))
-        self._login_redirect(reverse("santa:pick_rule_binary", args=(configuration.pk,)))
-        self._login_redirect(reverse("santa:pick_rule_bundle", args=(configuration.pk,)))
-        self._login_redirect(reverse("santa:pick_rule_certificate", args=(configuration.pk,)))
 
     def test_configuration_rules_permission_denied(self):
-        self._login("santa.add_configuration", "santa.view_configuration")
         configuration = self._force_configuration()
-        for view_name in ("configuration_rules", "create_configuration_rule",
-                          "pick_rule_binary", "pick_rule_bundle", "pick_rule_certificate"):
-            response = self.client.get(reverse(f"santa:{view_name}", args=(configuration.pk,)))
-            self.assertEqual(response.status_code, 403)
+        self._login()
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 403)
 
-    def test_configuration_rules_search(self):
+    def test_configuration_rules_no_rules(self):
         configuration = self._force_configuration()
-        self._login("santa.add_configuration", "santa.view_configuration",
-                    "santa.add_rule", "santa.view_rule")
+        self._login("santa.view_rule")
         response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/configuration_rules.html")
         self.assertNotContains(response, "We didn't find any item related to your search")
-        binary_hash = get_random_sha256()
-        description = get_random_string(12)
-        self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
-                         {"target_type": Target.BINARY,
-                          "target_identifier": binary_hash,
-                          "policy": Rule.ALLOWLIST,
-                          "description": description})
-        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)),
-                                   {"identifier": binary_hash})
+        self.assertNotContains(response, reverse("santa:configuration_rules",
+                                                 args=(configuration.pk,)) + '">all the items')
+
+    def test_configuration_rules_binary_search(self):
+        rule = self._force_rule(target_type=Target.BINARY)
+        self._login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)),
+                                   {"identifier": rule.target.identifier})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/configuration_rules.html")
-        self.assertNotContains(response, "We didn't find any item related to your search")
-        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)),
+        self.assertContains(response, rule.target.identifier)
+        self.assertNotContains(response, reverse("santa:configuration_rules",
+                                                 args=(rule.configuration.pk,)) + '">all the items')
+
+    def test_configuration_rules_no_result(self):
+        rule = self._force_rule(target_type=Target.BINARY)
+        self._login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)),
                                    {"identifier": "does not exists"})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/configuration_rules.html")
         self.assertContains(response, "We didn't find any item related to your search")
         self.assertContains(response, reverse("santa:configuration_rules",
-                                              args=(configuration.pk,)) + '">all the items')
+                                              args=(rule.configuration.pk,)) + '">all the items')
+
+    def test_configuration_three_cdhash_rules(self):
+        configuration = self._force_configuration()
+        for _ in range(3):
+            self._force_rule(target_type=Target.CDHASH, configuration=configuration)
+        self._force_rule(target_type=Target.SIGNING_ID, configuration=configuration)
+        self._login("santa.view_rule")
+        self.user.items_per_page = 1
+        self.user.save()
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)),
+                                   {"target_type": Target.CDHASH, "page": 2})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "Rules (3)")
+        self.assertEqual(response.context["next_url"], "?target_type=CDHASH&page=3")
+        self.assertEqual(response.context["reset_link"], "?target_type=CDHASH")
+        self.assertEqual(response.context["previous_url"], "?target_type=CDHASH&page=1")
 
     # create configuration rule
+
+    def test_create_configuration_rule_redirect(self):
+        configuration = self._force_configuration()
+        self._login_redirect(reverse("santa:create_configuration_rule", args=(configuration.pk,)))
 
     def test_create_configuration_rule_permission_denied(self):
         self._login("santa.add_configuration", "santa.view_configuration")
         configuration = self._force_configuration()
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
                                     {"target_type": Target.BINARY,
-                                     "target_identifier": get_random_sha256(),
+                                     "target_identifier": new_sha256(),
                                      "policy": Rule.ALLOWLIST},
                                     follow=True)
         self.assertEqual(response.status_code, 403)
 
-    def test_create_configuration_binary_rule(self):
+    def test_create_configuration_rules(self):
         self._login("santa.add_configuration", "santa.view_configuration")
         configuration = self._force_configuration()
         # create
-        binary_hash = get_random_sha256()
-        description = get_random_string(12)
+        self._login("santa.add_rule", "santa.view_rule")
+        for target_identifier, target_type in (
+            (new_sha256(), Target.BINARY),
+            (new_sha256(), Target.CERTIFICATE),
+            (new_cdhash(), Target.CDHASH),
+            (new_team_id(), Target.TEAM_ID),
+            (new_signing_id_identifier(), Target.SIGNING_ID),
+        ):
+            description = get_random_string(12)
+            response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                        {"target_type": target_type,
+                                         "target_identifier": target_identifier,
+                                         "policy": Rule.ALLOWLIST,
+                                         "description": description}, follow=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertTemplateUsed(response, "santa/configuration_rules.html")
+            self.assertContains(response, target_identifier)
+            self.assertContains(response, description)
+            rule = response.context["object_list"][0]
+            self.assertEqual(rule.configuration, configuration)
+            self.assertEqual(rule.target.identifier, target_identifier)
+            self.assertEqual(rule.target.type, target_type)
+            self.assertEqual(rule.policy, Rule.ALLOWLIST)
+            self.assertEqual(rule.custom_msg, "")
+            self.assertEqual(rule.description, description)
+            self.assertEqual(rule.serial_numbers, [])
+            self.assertEqual(rule.primary_users, [])
+            self.assertContains(response, description)
+
+    def test_create_configuration_binary_rule_error(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
+        configuration = self._force_configuration()
+        # create
         self._login("santa.add_rule", "santa.view_rule")
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
                                     {"target_type": Target.BINARY,
-                                     "target_identifier": binary_hash,
-                                     "policy": Rule.ALLOWLIST,
-                                     "description": description}, follow=True)
+                                     "target_identifier": get_random_string(12),
+                                     "policy": Rule.ALLOWLIST},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "target_identifier", "Invalid sha256")
+
+    def test_create_configuration_binary_rule_preselected_get_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        response = self.client.get(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                   {"bin": self.file.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertContains(response, self.file.sha_256)
+        self.assertContains(response, "Add Santa binary rule")
+
+    def test_create_configuration_binary_rule_preselected_post_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,))
+                                    + "?" + urllib.parse.urlencode({"bin": self.file.pk}),
+                                    {"policy": Rule.ALLOWLIST},
+                                    follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/configuration_rules.html")
-        self.assertContains(response, binary_hash)
-        self.assertContains(response, description)
+        self.assertContains(response, self.file.sha_256)
         rule = response.context["object_list"][0]
         self.assertEqual(rule.configuration, configuration)
-        self.assertEqual(rule.target.identifier, binary_hash)
+        self.assertEqual(rule.target.identifier, self.file.sha_256)
         self.assertEqual(rule.target.type, Target.BINARY)
-        self.assertEqual(rule.policy, Rule.ALLOWLIST)
-        self.assertEqual(rule.custom_msg, "")
-        self.assertEqual(rule.description, description)
-        self.assertEqual(rule.serial_numbers, [])
-        self.assertEqual(rule.primary_users, [])
-        self.assertContains(response, description)
+
+    def test_create_configuration_bundle_rule_preselected_not_uploaded_error(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule", "santa.view_rule")
+        bundle = self._force_bundle()
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,))
+                                    + "?" + urllib.parse.urlencode({"bun": bundle.pk}),
+                                    {"policy": Rule.ALLOWLIST},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], None, "This bundle has not been uploaded yet.")
+
+    def test_create_configuration_bundle_rule_preselected_get_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        bundle = self._force_bundle(uploaded=True)
+        response = self.client.get(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                   {"bun": bundle.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertContains(response, bundle.target.identifier)
+        self.assertContains(response, "Add Santa bundle rule")
+
+    def test_create_configuration_bundle_rule_preselected_post_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule", "santa.view_rule")
+        bundle = self._force_bundle(uploaded=True)
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,))
+                                    + "?" + urllib.parse.urlencode({"bun": bundle.pk}),
+                                    {"policy": Rule.ALLOWLIST},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, bundle.target.identifier)
+        rule = response.context["object_list"][0]
+        self.assertEqual(rule.configuration, configuration)
+        self.assertEqual(rule.target, bundle.target)
+
+    def test_create_configuration_cdhash_rule_error(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
+        configuration = self._force_configuration()
+        # create
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.CDHASH,
+                                     "target_identifier": get_random_string(12),
+                                     "policy": Rule.ALLOWLIST},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "target_identifier", "Invalid cdhash target identifier")
+
+    def test_create_configuration_cdhash_rule_preselected_get_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        cdhash = new_cdhash()
+        response = self.client.get(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                   {"cdhash": cdhash})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertContains(response, cdhash)
+        self.assertContains(response, "Add Santa cdhash rule")
+
+    def test_create_configuration_cdhash_rule_preselected_post_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule", "santa.view_rule")
+        cdhash = new_cdhash()
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,))
+                                    + "?" + urllib.parse.urlencode({"cdhash": cdhash}),
+                                    {"policy": Rule.ALLOWLIST},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, cdhash)
+        rule = response.context["object_list"][0]
+        self.assertEqual(rule.configuration, configuration)
+        self.assertEqual(rule.target.identifier, cdhash)
+        self.assertEqual(rule.target.type, Target.CDHASH)
+
+    def test_create_configuration_certificate_rule_preselected_get_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        response = self.client.get(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                   {"cert": self.file.signed_by.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertContains(response, self.file.signed_by.sha_256)
+        self.assertContains(response, "Add Santa certificate rule")
+
+    def test_create_configuration_certificate_rule_preselected_post_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,))
+                                    + "?" + urllib.parse.urlencode({"cert": self.file.signed_by.pk}),
+                                    {"policy": Rule.ALLOWLIST},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, self.file.signed_by.sha_256)
+        rule = response.context["object_list"][0]
+        self.assertEqual(rule.configuration, configuration)
+        self.assertEqual(rule.target.identifier, self.file.signed_by.sha_256)
+        self.assertEqual(rule.target.type, Target.CERTIFICATE)
 
     def test_create_configuration_signing_id_rule_error(self):
         self._login("santa.add_configuration", "santa.view_configuration")
@@ -598,6 +822,31 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/rule_form.html")
         self.assertFormError(response.context["form"], "target_identifier", "Invalid Signing ID target identifier")
 
+    def test_create_configuration_signing_id_rule_preselected_get_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        response = self.client.get(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                   {"sig": "43AQ936H96:org.mozilla.firefox"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertContains(response, "43AQ936H96:org.mozilla.firefox")
+        self.assertContains(response, "Add Santa signing ID rule")
+
+    def test_create_configuration_signing_id_rule_preselected_post_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,))
+                                    + "?" + urllib.parse.urlencode({"sig": "43AQ936H96:org.mozilla.firefox"}),
+                                    {"policy": Rule.ALLOWLIST},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "43AQ936H96:org.mozilla.firefox")
+        rule = response.context["object_list"][0]
+        self.assertEqual(rule.configuration, configuration)
+        self.assertEqual(rule.target.identifier, "43AQ936H96:org.mozilla.firefox")
+        self.assertEqual(rule.target.type, Target.SIGNING_ID)
+
     def test_create_configuration_team_id_rule_error(self):
         self._login("santa.add_configuration", "santa.view_configuration")
         configuration = self._force_configuration()
@@ -612,7 +861,17 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/rule_form.html")
         self.assertFormError(response.context["form"], "target_identifier", "Invalid Team ID")
 
-    def test_create_configuration_team_id_rule_preselected_ok(self):
+    def test_create_configuration_team_id_rule_preselected_get_ok(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        response = self.client.get(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                   {"tea": "JQ525L2MZD"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertContains(response, "JQ525L2MZD")
+        self.assertContains(response, "Add Santa team ID rule")
+
+    def test_create_configuration_team_id_rule_preselected_post_ok(self):
         configuration = self._force_configuration()
         self._login("santa.add_rule", "santa.view_rule")
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,))
@@ -647,7 +906,7 @@ class SantaSetupViewsTestCase(TestCase):
                     "santa.add_rule", "santa.view_rule")
         configuration = self._force_configuration()
         # create
-        binary_hash = get_random_sha256()
+        binary_hash = new_sha256()
         self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
                          {"target_type": Target.BINARY,
                           "target_identifier": binary_hash,
@@ -666,7 +925,7 @@ class SantaSetupViewsTestCase(TestCase):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_rule", "santa.view_rule")
         configuration = self._force_configuration()
-        binary_hash = get_random_sha256()
+        binary_hash = new_sha256()
         tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(3)]
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
                                     {"target_type": Target.BINARY,
@@ -685,12 +944,14 @@ class SantaSetupViewsTestCase(TestCase):
                                        'excluded_primary_users': ["'fomo' both included and excluded"],
                                        'excluded_tags': [f"'{tags[0].name}' both included and excluded"]})
 
+    # update configuration rule
+
     def test_update_configuration_rule(self):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_rule", "santa.view_rule")
         configuration = self._force_configuration()
         # create
-        binary_hash = get_random_sha256()
+        binary_hash = new_sha256()
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
                                     {"target_type": Target.BINARY,
                                      "target_identifier": binary_hash,
@@ -735,7 +996,7 @@ class SantaSetupViewsTestCase(TestCase):
                     "santa.add_rule", "santa.view_rule", "santa.change_rule")
         configuration = self._force_configuration()
         # create
-        binary_hash = get_random_sha256()
+        binary_hash = new_sha256()
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
                                     {"target_type": Target.BINARY,
                                      "target_identifier": binary_hash,
@@ -760,12 +1021,14 @@ class SantaSetupViewsTestCase(TestCase):
                                        'excluded_primary_users': ["'fomo' both included and excluded"],
                                        'excluded_tags': [f"'{tags[0].name}' both included and excluded"]})
 
+    # delete configuration rule
+
     def test_delete_configuration_rule(self):
         self._login("santa.add_configuration", "santa.view_configuration",
                     "santa.add_rule", "santa.view_rule")
         configuration = self._force_configuration()
         # create
-        binary_hash = get_random_sha256()
+        binary_hash = new_sha256()
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
                                     {"target_type": Target.BINARY,
                                      "target_identifier": binary_hash,
@@ -785,6 +1048,12 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/configuration_rules.html")
         self.assertFalse(any(rule.target.identifier == binary_hash for rule in response.context["object_list"]))
 
+    # pick rule binary
+
+    def test_pick_rule_binary_redirect(self):
+        configuration = self._force_configuration()
+        self._login_redirect(reverse("santa:pick_rule_binary", args=(configuration.pk,)))
+
     def test_pick_rule_binary_access_denied(self):
         configuration = self._force_configuration()
         self._login("santa.add_configuration", "santa.view_configuration")
@@ -802,6 +1071,12 @@ class SantaSetupViewsTestCase(TestCase):
         binaries = response.context["binaries"]
         self.assertEqual(binaries, [(self.file, None)])
         self.assertContains(response, self.file.sha_256)
+
+    # pick rule bundle
+
+    def test_pick_rule_bundle_redirect(self):
+        configuration = self._force_configuration()
+        self._login_redirect(reverse("santa:pick_rule_bundle", args=(configuration.pk,)))
 
     def test_pick_rule_bundle_access_denied(self):
         configuration = self._force_configuration()
@@ -837,6 +1112,36 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, "Bundle not uploaded yet")
         self.assertContains(response, "Create rule")
 
+    # pick rule cdhash
+
+    def test_pick_rule_cdhash_redirect(self):
+        configuration = self._force_configuration()
+        self._login_redirect(reverse("santa:pick_rule_cdhash", args=(configuration.pk,)))
+
+    def test_pick_rule_cdhash_access_denied(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_configuration", "santa.view_configuration")
+        response = self.client.get(reverse("santa:pick_rule_cdhash", args=(configuration.pk,)),
+                                   {"query": self.cdhash})
+        self.assertEqual(response.status_code, 403)
+
+    def test_pick_rule_cdhash(self):
+        configuration = self._force_configuration()
+        self._login("santa.add_rule")
+        response = self.client.get(reverse("santa:pick_rule_cdhash", args=(configuration.pk,)),
+                                   {"query": self.cdhash})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/pick_rule_cdhash.html")
+        cdhashes = response.context["cdhashes"]
+        self.assertEqual(len(cdhashes), 1)
+        self.assertEqual(cdhashes[0][0].cdhash, self.cdhash)
+
+    # pick rule certificate
+
+    def test_pick_rule_certificate_redirect(self):
+        configuration = self._force_configuration()
+        self._login_redirect(reverse("santa:pick_rule_certificate", args=(configuration.pk,)))
+
     def test_pick_rule_certificate_access_denied(self):
         configuration = self._force_configuration()
         self._login("santa.add_configuration", "santa.view_configuration")
@@ -853,6 +1158,12 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/pick_rule_certificate.html")
         certificates = response.context["certificates"]
         self.assertEqual(certificates, [(self.file.signed_by, None)])
+
+    # pick rule team id
+
+    def test_pick_rule_team_id_redirect(self):
+        configuration = self._force_configuration()
+        self._login_redirect(reverse("santa:pick_rule_team_id", args=(configuration.pk,)))
 
     def test_pick_rule_team_id_access_denied(self):
         configuration = self._force_configuration()
@@ -881,6 +1192,12 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/pick_rule_team_id.html")
         team_ids = response.context["team_ids"]
         self.assertEqual(len(team_ids), 0)
+
+    # pick rule signing id
+
+    def test_pick_rule_signing_id_redirect(self):
+        configuration = self._force_configuration()
+        self._login_redirect(reverse("santa:pick_rule_signing_id", args=(configuration.pk,)))
 
     def test_pick_rule_signing_id_access_denied(self):
         configuration = self._force_configuration()

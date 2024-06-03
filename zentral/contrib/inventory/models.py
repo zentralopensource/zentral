@@ -1628,6 +1628,7 @@ class File(AbstractMTObject):
     source = models.ForeignKey(Source, on_delete=models.PROTECT)
     name = models.TextField()
     path = models.TextField()
+    cdhash = models.CharField(max_length=40, blank=True, null=True, db_index=True)
     sha_256 = models.CharField(max_length=64, db_index=True)
     signing_id = models.TextField(blank=True, null=True, db_index=True)
     bundle = models.ForeignKey(OSXApp, on_delete=models.PROTECT, blank=True, null=True)

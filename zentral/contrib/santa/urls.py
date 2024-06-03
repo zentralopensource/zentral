@@ -57,12 +57,16 @@ urlpatterns = [
     path('configurations/<int:configuration_pk>/rules/pick_team_id/',
          views.PickRuleTeamIDView.as_view(),
          name='pick_rule_team_id'),
+    path('configurations/<int:configuration_pk>/rules/pick_cdhash/',
+         views.PickRuleCDHashView.as_view(),
+         name='pick_rule_cdhash'),
     path('configurations/<int:configuration_pk>/rules/pick_signing_id/',
          views.PickRuleSigningIDView.as_view(),
          name='pick_rule_signing_id'),
 
     # targets
     path('targets/', views.TargetsView.as_view(), name="targets"),
+    # binary
     path('targets/binaries/<str:identifier>/', views.BinaryView.as_view(), name="binary"),
     path('targets/binaries/<str:identifier>/events/',
          views.BinaryEventsView.as_view(), name="binary_events"),
@@ -70,6 +74,7 @@ urlpatterns = [
          views.FetchBinaryEventsView.as_view(), name="fetch_binary_events"),
     path('targets/binaries/<str:identifier>/events/store_redirect/',
          views.BinaryEventsStoreRedirectView.as_view(), name="binary_events_store_redirect"),
+    # bundle
     path('targets/bundles/<str:identifier>/', views.BundleView.as_view(), name="bundle"),
     path('targets/bundles/<str:identifier>/events/',
          views.BundleEventsView.as_view(), name="bundle_events"),
@@ -77,6 +82,7 @@ urlpatterns = [
          views.FetchBundleEventsView.as_view(), name="fetch_bundle_events"),
     path('targets/bundles/<str:identifier>/events/store_redirect/',
          views.BundleEventsStoreRedirectView.as_view(), name="bundle_events_store_redirect"),
+    # certificate
     path('targets/certificates/<str:identifier>/', views.CertificateView.as_view(), name="certificate"),
     path('targets/certificates/<str:identifier>/events/',
          views.CertificateEventsView.as_view(), name="certificate_events"),
@@ -84,6 +90,7 @@ urlpatterns = [
          views.FetchCertificateEventsView.as_view(), name="fetch_certificate_events"),
     path('targets/certificates/<str:identifier>/events/store_redirect/',
          views.CertificateEventsStoreRedirectView.as_view(), name="certificate_events_store_redirect"),
+    # team id
     path('targets/teamids/<str:identifier>/', views.TeamIDView.as_view(), name="teamid"),
     path('targets/teamids/<str:identifier>/events/',
          views.TeamIDEventsView.as_view(), name="teamid_events"),
@@ -91,6 +98,15 @@ urlpatterns = [
          views.FetchTeamIDEventsView.as_view(), name="fetch_teamid_events"),
     path('targets/teamids/<str:identifier>/events/store_redirect/',
          views.TeamIDEventsStoreRedirectView.as_view(), name="teamid_events_store_redirect"),
+    # cdhash
+    path('targets/cdhashes/<str:identifier>/', views.CDHashView.as_view(), name="cdhash"),
+    path('targets/cdhashes/<str:identifier>/events/',
+         views.CDHashEventsView.as_view(), name="cdhash_events"),
+    path('targets/cdhashes/<str:identifier>/events/fetch/',
+         views.FetchCDHashEventsView.as_view(), name="fetch_cdhash_events"),
+    path('targets/cdhashes/<str:identifier>/events/store_redirect/',
+         views.CDHashEventsStoreRedirectView.as_view(), name="cdhash_events_store_redirect"),
+    # signing id
     path('targets/signingids/<str:identifier>/', views.SigningIDView.as_view(), name="signingid"),
     path('targets/signingids/<str:identifier>/events/',
          views.SigningIDEventsView.as_view(), name="signingid_events"),

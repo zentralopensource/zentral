@@ -36,6 +36,7 @@
             </button>
             <ul class="dropdown-menu" aria-labelledby="createRule">
                 <li><a class="dropdown-item" href="{% url 'santa:create_configuration_rule' configuration.id %}">Base rule</a></li>
+                <li><a class="dropdown-item" href="{% url 'santa:pick_rule_cdhash' configuration.id %}">cdhash rule</a></li>
                 <li><a class="dropdown-item" href="{% url 'santa:pick_rule_binary' configuration.id %}">Binary rule</a></li>
                 <li><a class="dropdown-item" href="{% url 'santa:pick_rule_bundle' configuration.id %}">Bundle rule</a></li>
                 <li><a class="dropdown-item" href="{% url 'santa:pick_rule_certificate' configuration.id %}">Certificate rule</a></li>
@@ -98,12 +99,11 @@
         <tr>
             <td>{{ target.get_type_display }}</td>
         <td>
-            {% if target.type != "SIGNINGID" and perms.santa.view_target %}
+            {% if perms.santa.view_target %}
                 <a href="{{ target.get_absolute_url }}"><code>{{ target.identifier }}</code></a>
             {% else %}
                 <code>{{ target.identifier }}</code>
             {% endif %}
-            {% if target.type == "BINARY" %}
             {% for file in target.files %}
             <dl class="row">
                 <dt class="col-2 text-md-end">name</dt>
@@ -135,7 +135,6 @@
             {% endif %}
             </dl>
             {% endfor %}
-            {% endif %}
             {% if target.type == "BUNDLE" %}
             {% with target.bundle as bundle %}
             <dl class="row">

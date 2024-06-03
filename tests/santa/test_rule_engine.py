@@ -5,7 +5,11 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
                                           MachineRule, Rule, Target, translate_rule_policy)
-from zentral.contrib.santa.forms import test_signing_id_identifier
+from zentral.contrib.santa.forms import test_cdhash, test_signing_id_identifier
+
+
+def new_cdhash():
+    return get_random_string(length=40, allowed_chars='abcdef0123456789')
 
 
 def new_sha256():
@@ -50,6 +54,8 @@ class SantaRuleEngineTestCase(TestCase):
             identifier = new_team_id()
         elif target_type == Target.SIGNING_ID:
             identifier = new_signing_id_identifier()
+        elif target_type == Target.CDHASH:
+            identifier = new_cdhash()
         else:
             identifier = new_sha256()
         target = Target.objects.create(type=target_type, identifier=identifier)
@@ -104,6 +110,13 @@ class SantaRuleEngineTestCase(TestCase):
 
     # tests
 
+    def test_cdhash_identifier(self):
+        for identifier, result in (("platform:com.apple.curl", False),
+                                   ("yolo", False),
+                                   ("EQHXZ8M8AV:com.google.Chrome", False),
+                                   ("575bc039ebf67a3fd686a14d5d1bc569ec7ba18e", True)):
+            self.assertEqual(test_cdhash(identifier), result)
+
     def test_sining_id_identifier(self):
         for identifier, result in (("platform:com.apple.curl", True),
                                    ("yolo", False),
@@ -154,13 +167,17 @@ class SantaRuleEngineTestCase(TestCase):
                     cursor=None
                 )
         self.enrolled_machine.binary_rule_count = 3
+        self.enrolled_machine.cdhash_rule_count = 0
         self.enrolled_machine.certificate_rule_count = 2
         self.enrolled_machine.signingid_rule_count = 0
         self.enrolled_machine.teamid_rule_count = 1
         self.assertFalse(self.enrolled_machine.sync_ok())
 
     def test_multiple_rules_cursor_sync_not_ok(self):
-        for target_type, count in ((Target.BINARY, 3), (Target.CERTIFICATE, 2), (Target.TEAM_ID, 1)):
+        for target_type, count in ((Target.BINARY, 4),
+                                   (Target.CDHASH, 3),
+                                   (Target.CERTIFICATE, 2),
+                                   (Target.TEAM_ID, 1)):
             for i in range(count):
                 # create rule
                 target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
@@ -172,7 +189,8 @@ class SantaRuleEngineTestCase(TestCase):
                     version=rule.version,
                     cursor=get_random_string(8) if target_type == Target.BINARY else None
                 )
-        self.enrolled_machine.binary_rule_count = 3
+        self.enrolled_machine.binary_rule_count = 4
+        self.enrolled_machine.cdhash_rule_count = 3
         self.enrolled_machine.certificate_rule_count = 2
         self.enrolled_machine.signingid_rule_count = 0
         self.enrolled_machine.teamid_rule_count = 1
@@ -180,6 +198,7 @@ class SantaRuleEngineTestCase(TestCase):
 
     def test_multiple_rules_sync_ok(self):
         for target_type, count in ((Target.BINARY, 3),
+                                   (Target.CDHASH, 5),
                                    (Target.CERTIFICATE, 2),
                                    (Target.SIGNING_ID, 1),
                                    (Target.TEAM_ID, 4)):
@@ -195,6 +214,7 @@ class SantaRuleEngineTestCase(TestCase):
                     cursor=None,
                 )
         self.enrolled_machine.binary_rule_count = 3
+        self.enrolled_machine.cdhash_rule_count = 5
         self.enrolled_machine.certificate_rule_count = 2
         self.enrolled_machine.signingid_rule_count = 1
         self.enrolled_machine.teamid_rule_count = 4

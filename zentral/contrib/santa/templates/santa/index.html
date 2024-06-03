@@ -74,6 +74,11 @@
       </thead>
       <tbody>
         <tr>
+          <td><a href="{% url "santa:targets" %}?target_type=CDHASH">cdhash</a></td>
+          <td>{{ targets.cdhash.count }}</td>
+          <td>{{ targets.cdhash.rule_count }}</td>
+        </tr>
+        <tr>
           <td><a href="{% url "santa:targets" %}?target_type=BINARY">Binary</a></td>
           <td>{{ targets.binary.count }}</td>
           <td>{{ targets.binary.rule_count }}</td>

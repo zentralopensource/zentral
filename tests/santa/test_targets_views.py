@@ -11,10 +11,7 @@ from zentral.contrib.inventory.models import File
 from accounts.models import User
 from zentral.contrib.santa.models import Bundle, Configuration, Target
 from zentral.core.stores.conf import frontend_store
-
-
-def get_random_sha256():
-    return get_random_string(64, "abcdef0123456789")
+from .test_rule_engine import new_cdhash, new_sha256, new_team_id
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -26,11 +23,12 @@ class SantaSetupViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
         # file tree
-        cls.file_sha256 = get_random_sha256()
+        cls.cdhash = new_cdhash()
+        cls.file_sha256 = new_sha256()
         cls.file_name = get_random_string(12)
         cls.file_bundle_name = get_random_string(12)
-        cls.file_cert_sha256 = get_random_sha256()
-        cls.file_team_id = get_random_string(10, allowed_chars="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        cls.file_cert_sha256 = new_sha256()
+        cls.file_team_id = new_team_id()
         cls.file_signing_id = f"{cls.file_team_id}:com.zentral.example"
         cls.file_cert_cn = f"Developer ID Application: YOLO ({cls.file_team_id})"
         cls.file, _ = File.objects.commit({
@@ -44,6 +42,7 @@ class SantaSetupViewsTestCase(TestCase):
             'name': cls.file_name,
             'path': ('/Library/Frameworks/Compressor.framework/'
                      'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
+            'cdhash': cls.cdhash,
             'sha_256': cls.file_sha256,
             'signing_id': cls.file_signing_id,
             'signed_by': {
@@ -97,7 +96,7 @@ class SantaSetupViewsTestCase(TestCase):
         return Configuration.objects.create(name=get_random_string(12))
 
     def _force_bundle(self):
-        bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=get_random_sha256())
+        bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=new_sha256())
         return Bundle.objects.create(
             target=bundle_target,
             executable_rel_path=get_random_string(12),
@@ -123,7 +122,8 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:targets"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
-        self.assertContains(response, "Targets (4)")
+        self.assertContains(response, "Targets (5)")
+        self.assertContains(response, self.cdhash)
         self.assertContains(response, self.file_sha256)
         self.assertContains(response, self.file_cert_sha256)
         self.assertContains(response, self.file_team_id)
@@ -135,7 +135,20 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
         self.assertContains(response, "Target (1)")
+        self.assertNotContains(response, self.cdhash)
         self.assertContains(response, self.file_sha256)
+        self.assertNotContains(response, self.file_cert_sha256)
+        self.assertContains(response, self.file_team_id)
+        self.assertNotContains(response, self.file_signing_id)
+
+    def test_cdhash_targets(self):
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:targets"), {"target_type": Target.CDHASH})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/targets.html")
+        self.assertContains(response, "Target (1)")
+        self.assertContains(response, self.cdhash)
+        self.assertNotContains(response, self.file_sha256)
         self.assertNotContains(response, self.file_cert_sha256)
         self.assertContains(response, self.file_team_id)
         self.assertNotContains(response, self.file_signing_id)
@@ -146,6 +159,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
         self.assertContains(response, "Target (1)")
+        self.assertNotContains(response, self.cdhash)
         self.assertNotContains(response, self.file_sha256)
         self.assertContains(response, self.file_cert_sha256)
         self.assertContains(response, self.file_team_id)
@@ -157,6 +171,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
         self.assertContains(response, "Target (1)")
+        self.assertNotContains(response, self.cdhash)
         self.assertNotContains(response, self.file_sha256)
         self.assertNotContains(response, self.file_cert_sha256)
         self.assertContains(response, self.file_team_id)
@@ -168,6 +183,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
         self.assertContains(response, "Target (1)")
+        self.assertNotContains(response, self.cdhash)
         self.assertNotContains(response, self.file_sha256)
         self.assertNotContains(response, self.file_cert_sha256)
         self.assertContains(response, self.file_team_id)
@@ -352,6 +368,85 @@ class SantaSetupViewsTestCase(TestCase):
         bundle = self._force_bundle()
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:bundle_events_store_redirect", args=(bundle.target.identifier,)),
+                                   {"es": frontend_store.name})
+        self.assertTrue(response.url.startswith("/kibana/"))
+
+    # cdhash target
+
+    def test_cdhash_target_redirect(self):
+        self._login_redirect(reverse("santa:cdhash", args=(self.cdhash,)))
+
+    def test_cdhash_target_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:cdhash", args=(self.cdhash,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_cdhash_target_no_configuration(self):
+        self._login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:cdhash", args=(self.cdhash,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/target_detail.html")
+        self.assertContains(response, self.cdhash)
+        self.assertNotContains(response, "createRule")
+
+    def test_cdhash_target_configuration_no_add_rule_perm(self):
+        configuration = self._force_configuration()
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:cdhash", args=(self.cdhash,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/target_detail.html")
+        self.assertContains(response, self.cdhash)
+        self.assertNotContains(response, "createRule")
+        self.assertNotContains(response, configuration.name)
+
+    def test_cdhash_target_configuration_add_rule_perm(self):
+        configuration = self._force_configuration()
+        self._login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:cdhash", args=(self.cdhash,)))
+        self.assertContains(response, "createRule")
+        self.assertContains(response, configuration.name)
+
+    def test_cdhash_target_events_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:cdhash_events", args=(self.cdhash,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    def test_cdhash_target_events(self, get_aggregated_object_event_counts):
+        get_aggregated_object_event_counts.return_value = {}
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:cdhash_events", args=(self.cdhash,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/target_events.html")
+        self.assertContains(response, self.cdhash)
+
+    def test_fetch_cdhash_target_events_redirect(self):
+        self._login_redirect(reverse("santa:fetch_cdhash_events", args=(self.cdhash,)))
+
+    def test_fetch_cdhash_target_events_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:fetch_cdhash_events", args=(self.cdhash,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    def test_fetch_cdhash_target_events(self, fetch_object_events):
+        fetch_object_events.return_value = ([], None)
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:fetch_cdhash_events", args=(self.cdhash,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/stores/events_events.html")
+
+    def test_cdhash_target_store_redirect_login_redirect(self):
+        self._login_redirect(reverse("santa:cdhash_events_store_redirect", args=(self.cdhash,)))
+
+    def test_cdhash_target_store_redirect_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("santa:cdhash_events_store_redirect", args=(self.cdhash,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_cdhash_target_store_redirect(self):
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:cdhash_events_store_redirect", args=(self.cdhash,)),
                                    {"es": frontend_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
 

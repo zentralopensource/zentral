@@ -80,6 +80,7 @@ class TargetView(PermissionRequiredMixin, TemplateView):
     permission_required = "santa.view_target"
     template_name = "santa/target_detail.html"
     target_type = None
+    target_type_display = None
     title = None
     add_rule_link_key = None
     add_rule_link_attr = "pk"
@@ -114,12 +115,7 @@ class TargetView(PermissionRequiredMixin, TemplateView):
         ctx = super().get_context_data()
         self.identifier = kwargs["identifier"]
         ctx["target_type"] = self.target_type
-        if self.target_type == Target.TEAM_ID:
-            ctx["target_type_display"] = "Team ID"
-        elif self.target_type == Target.SIGNING_ID:
-            ctx["target_type_display"] = "Signing ID"
-        else:
-            ctx["target_type_display"] = self.target_type.title()
+        ctx["target_type_display"] = self.target_type_display
         ctx["title"] = self.title or ctx["target_type_display"]
         ctx["identifier"] = self.identifier
 
@@ -151,6 +147,7 @@ class TargetView(PermissionRequiredMixin, TemplateView):
 
 class BinaryView(TargetView):
     target_type = Target.BINARY
+    target_type_display = "Binary"
     add_rule_link_key = "bin"
 
     def get_objects(self):
@@ -164,6 +161,7 @@ class BinaryView(TargetView):
 
 class BundleView(TargetView):
     target_type = Target.BUNDLE
+    target_type_display = "Bundle"
     add_rule_link_key = "bun"
 
     def get_objects(self):
@@ -174,8 +172,19 @@ class BundleView(TargetView):
         )
 
 
+class CDHashView(TargetView):
+    target_type = Target.CDHASH
+    target_type_display = "cdhash"
+    add_rule_link_key = "cdhash"
+    add_rule_link_attr = "cdhash"
+
+    def get_objects(self):
+        return Target.objects.get_cdhash_objects(self.identifier)
+
+
 class CertificateView(TargetView):
     target_type = Target.CERTIFICATE
+    target_type_display = "Certificate"
     add_rule_link_key = "cert"
 
     def get_objects(self):
@@ -187,6 +196,7 @@ class CertificateView(TargetView):
 
 class TeamIDView(TargetView):
     target_type = Target.TEAM_ID
+    target_type_display = "Team ID"
     title = "Team ID"
     add_rule_link_key = "tea"
     add_rule_link_attr = "organizational_unit"
@@ -197,6 +207,7 @@ class TeamIDView(TargetView):
 
 class SigningIDView(TargetView):
     target_type = Target.SIGNING_ID
+    target_type_display = "Signing ID"
     title = "Signing ID"
     add_rule_link_key = "sig"
     add_rule_link_attr = "signing_id"
@@ -280,6 +291,23 @@ class BundleEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     identifier_key = "sha256"
 
 
+class CDHashEventsView(EventsMixin, EventsView):
+    template_name = "santa/target_events.html"
+    target_type = Target.CDHASH
+    target_type_display = "cdhash"
+    object_key = "cdhash"
+
+
+class FetchCDHashEventsView(EventsMixin, FetchEventsView):
+    target_type = Target.CDHASH
+    object_key = "cdhash"
+
+
+class CDHashEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    target_type = Target.SIGNING_ID
+    object_key = "cdhash"
+
+
 class CertificateEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.CERTIFICATE
@@ -300,23 +328,6 @@ class CertificateEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     identifier_key = "sha256"
 
 
-class TeamIDEventsView(EventsMixin, EventsView):
-    template_name = "santa/target_events.html"
-    target_type = Target.TEAM_ID
-    target_type_display = "Team ID"
-    object_key = "apple_team_id"
-
-
-class FetchTeamIDEventsView(EventsMixin, FetchEventsView):
-    target_type = Target.TEAM_ID
-    object_key = "apple_team_id"
-
-
-class TeamIDEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
-    target_type = Target.TEAM_ID
-    object_key = "apple_team_id"
-
-
 class SigningIDEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.SIGNING_ID
@@ -332,3 +343,20 @@ class FetchSigningIDEventsView(EventsMixin, FetchEventsView):
 class SigningIDEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     target_type = Target.SIGNING_ID
     object_key = "signing_id"
+
+
+class TeamIDEventsView(EventsMixin, EventsView):
+    template_name = "santa/target_events.html"
+    target_type = Target.TEAM_ID
+    target_type_display = "Team ID"
+    object_key = "apple_team_id"
+
+
+class FetchTeamIDEventsView(EventsMixin, FetchEventsView):
+    target_type = Target.TEAM_ID
+    object_key = "apple_team_id"
+
+
+class TeamIDEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
+    target_type = Target.TEAM_ID
+    object_key = "apple_team_id"

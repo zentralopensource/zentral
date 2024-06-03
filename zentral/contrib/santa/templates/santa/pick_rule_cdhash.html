@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_rules' configuration.pk %}">rules</a></li>
+  <li class="breadcrumb-item active">Pick Santa rule cdhash</li>
+</ol>
+
+<h2>Pick Santa rule cdhash</h2>
+
+<form method="GET" class="search-form d-flex flex-row flex-wrap w-25">
+
+    {{ form }}
+
+    <button type="submit" name="action" value="search" class="btn btn-link mb-2">
+        <i class="bi bi-search"></i>
+    </button>
+</form>
+
+{% if cdhashes %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>cdhash</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for cdhash, rule in cdhashes %}
+    <tr>
+      <td><code>{{ cdhash.cdhash }}</code></td>
+      <td>
+        {% if rule %}
+        {% if not rule.ruleset %}
+        <a class="btn btn-outline-secondary" href="{% url 'santa:update_configuration_rule' configuration.pk rule.pk %}">
+          Update rule
+        </a>
+        {% else %}
+        Ruleset rule exists
+        {% endif %}
+        {% else %}
+        <a class="btn btn-primary" href="{% url 'santa:create_configuration_rule' configuration.pk %}?cdhash={{ cdhash.cdhash }}">
+          Create rule
+        </a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% elif form.has_changed %}
+<div class="text-center py-5">
+    <h5>We didn't find any item related to your search</h5>
+</div>
+{% endif %}
+
+{% endblock %}

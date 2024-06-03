@@ -60,17 +60,7 @@
         {% with target.object as obj %}
         <tr>
         <td class="col-md-1">
-            <a href="{{ target.url }}">
-            {% if target.target_type == "TEAMID"%}
-            Team ID
-            {% else %}
-            {% if target.target_type == "SIGNINGID" %}
-            Signing ID
-            {% else %}
-            {{ target.target_type|title }}
-            {% endif %}
-            {% endif %}
-            </a>
+            <a href="{{ target.url }}">{{ target.get_type_display }}</a>
         </td>
         <td>
             <a href="{{ target.url }}"><code>{{ target.identifier }}</code></a>
@@ -92,7 +82,8 @@
             {% if target.target_type == "TEAMID" %}
             <br>{{ obj.organization }}
             {% endif %}
-            {% if target.target_type == "SIGNINGID" %}
+            {% if target.target_type == "CDHASH" or target.target_type == "SIGNINGID" %}
+            <br>{{ obj.file_name }}
             {% if obj.cert_cn %}
             <br>{{ obj.cert_cn }}
             {% endif %}

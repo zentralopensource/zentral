@@ -12,7 +12,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .events import post_santa_rule_update_event
 from .models import Bundle, Configuration, Rule, Target, Enrollment, translate_rule_policy
-from .forms import test_sha256, test_signing_id_identifier, test_team_id
+from .forms import test_cdhash, test_sha256, test_signing_id_identifier, test_team_id
 
 
 logger = logging.getLogger("zentral.contrib.santa.serializers")
@@ -103,7 +103,10 @@ class RuleSerializer(serializers.ModelSerializer):
 
         # identifier
         if target_identifier:
-            if target_type == Target.SIGNING_ID:
+            if target_type == Target.CDHASH:
+                if not test_cdhash(target_identifier):
+                    raise serializers.ValidationError({"target_identifier": "Invalid cdhash target identifier"})
+            elif target_type == Target.SIGNING_ID:
                 if not test_signing_id_identifier(target_identifier):
                     raise serializers.ValidationError({"target_identifier": "Invalid Signing ID target identifier"})
             elif target_type is Target.TEAM_ID:
@@ -279,7 +282,12 @@ class RuleUpdateSerializer(serializers.Serializer):
             else:
                 data["identifier"] = sha256
         elif identifier:
-            if rule_type == Target.SIGNING_ID:
+            if rule_type == Target.CDHASH:
+                if test_cdhash(identifier):
+                    data["identifier"] = identifier
+                else:
+                    raise serializers.ValidationError({"identifier": "Invalid cdhash identifier"})
+            elif rule_type == Target.SIGNING_ID:
                 if test_signing_id_identifier(identifier):
                     data["identifier"] = identifier
                 else:
@@ -300,7 +308,6 @@ class RuleUpdateSerializer(serializers.Serializer):
         if data["policy"] != Rule.BLOCKLIST and "custom_msg" in data:
             if data["custom_msg"]:
                 raise serializers.ValidationError("Custom message can only be set on BLOCKLIST rules")
-            del data["custom_msg"]
         # scope conflicts
         for attr in ("serial_numbers", "primary_users", "tags"):
             if set(data.get(attr, [])).intersection(set(data.get(f"excluded_{attr}", []))):
@@ -422,8 +429,16 @@ def build_file_tree_from_santa_fileinfo(fi_d):
             "name": "Santa fileinfo"
         }
     }
-    for from_a, to_a in (("SHA-256", "sha_256"),):
+    for from_a, to_a in (("SHA-256", "sha_256"),
+                         ("CDHash", "cdhash")):
         file_d[to_a] = fi_d.get(from_a)
+    team_id = fi_d.get("Team ID")
+    signing_id = fi_d.get("Signing ID")
+    if team_id and signing_id:
+        if not signing_id.startswith(team_id):
+            signing_id = f"{team_id}:{signing_id}"
+    if signing_id:
+        file_d["signing_id"] = signing_id
     path = fi_d.get("Path")
     file_d["path"], file_d["name"] = os.path.split(path)
     for a, val in (("bundle", _build_bundle_tree_from_santa_fileinfo(fi_d)),

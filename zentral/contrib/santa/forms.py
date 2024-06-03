@@ -87,6 +87,14 @@ class BundleSearchForm(forms.Form):
                                                          "size": 50}))
 
 
+class CDHashSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
+    query = forms.CharField(required=False,
+                            widget=forms.TextInput(attrs={"placeholder": "cdhash",
+                                                          "size": 50}))
+
+
 class CertificateSearchForm(forms.Form):
     template_name = "django/forms/search.html"
 
@@ -199,6 +207,10 @@ class RuleFormMixin:
             )
 
 
+def test_cdhash(cdhash):
+    return re.match(r'^[a-f0-9]{40}\Z', cdhash) is not None
+
+
 def test_sha256(sha256):
     return re.match(r'^[a-f0-9]{64}\Z', sha256) is not None
 
@@ -234,11 +246,12 @@ class RuleForm(RuleFormMixin, forms.Form):
         self.configuration = kwargs.pop("configuration")
         self.binary = kwargs.pop("binary", None)
         self.bundle = kwargs.pop("bundle", None)
+        self.cdhash = kwargs.pop("cdhash", None)
         self.certificate = kwargs.pop("certificate", None)
         self.team_id = kwargs.pop("team_id", None)
         self.signing_id = kwargs.pop("signing_id", None)
         super().__init__(*args, **kwargs)
-        if self.binary or self.bundle or self.certificate or self.team_id or self.signing_id:
+        if self.binary or self.bundle or self.cdhash or self.certificate or self.team_id or self.signing_id:
             del self.fields["target_type"]
             del self.fields["target_identifier"]
         if self.bundle:
@@ -258,6 +271,9 @@ class RuleForm(RuleFormMixin, forms.Form):
         elif self.bundle:
             target_type = Target.BUNDLE
             target_identifier = self.bundle.target.identifier
+        elif self.cdhash:
+            target_type = Target.CDHASH
+            target_identifier = self.cdhash
         elif self.certificate:
             target_type = Target.CERTIFICATE
             target_identifier = self.certificate.sha_256
@@ -283,7 +299,10 @@ class RuleForm(RuleFormMixin, forms.Form):
                 error_field = "target_identifier"
             else:
                 error_field = None
-            if target_type == Target.SIGNING_ID:
+            if target_type == Target.CDHASH:
+                if not test_cdhash(target_identifier):
+                    self.add_error(error_field, "Invalid cdhash target identifier")
+            elif target_type == Target.SIGNING_ID:
                 if not test_signing_id_identifier(target_identifier):
                     self.add_error(error_field, "Invalid Signing ID target identifier")
             elif target_type == Target.TEAM_ID:
@@ -306,10 +325,10 @@ class RuleForm(RuleFormMixin, forms.Form):
             try:
                 bundle = Bundle.objects.get(target__identifier=target_identifier)
             except Bundle.DoesNotExist:
-                self.add_error("bundle", 'Unknown bundle.')
+                self.add_error(None, 'Unknown bundle.')
             else:
                 if not bundle.uploaded_at:
-                    self.add_error("bundle", "This bundle has not been uploaded yet.")
+                    self.add_error(None, "This bundle has not been uploaded yet.")
             if policy and policy not in Rule.BUNDLE_POLICIES:
                 self.add_error("policy", "Policy not allowed for bundles.")
 

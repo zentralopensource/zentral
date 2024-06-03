@@ -6,6 +6,7 @@ from prometheus_client.parser import text_string_to_metric_families
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.santa.models import Configuration, EnrolledMachine, Enrollment, Rule, Target
 from zentral.conf import settings
+from .test_rule_engine import new_cdhash, new_sha256, new_team_id
 
 
 class SantaMetricsViewsTestCase(TestCase):
@@ -75,13 +76,20 @@ class SantaMetricsViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_rules(self):
-        for target_type in (Target.BINARY, Target.BUNDLE, Target.CERTIFICATE, Target.TEAM_ID, Target.SIGNING_ID):
+        for target_type in (Target.BINARY,
+                            Target.BUNDLE,
+                            Target.CDHASH,
+                            Target.CERTIFICATE,
+                            Target.TEAM_ID,
+                            Target.SIGNING_ID):
+            if target_type == Target.CDHASH:
+                identifier = new_cdhash()
             if target_type == Target.TEAM_ID:
-                identifier = get_random_string(10).upper()
+                identifier = new_team_id()
             elif target_type == Target.SIGNING_ID:
                 identifier = "platform:com.apple.curl"
             else:
-                identifier = get_random_string(64, "0123456789abcdef")
+                identifier = new_sha256()
             target = Target.objects.create(type=target_type, identifier=identifier)
             Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         response = self._make_authenticated_request()
@@ -89,7 +97,7 @@ class SantaMetricsViewsTestCase(TestCase):
             if family.name != "zentral_santa_rules":
                 continue
             else:
-                self.assertEqual(len(family.samples), 5)
+                self.assertEqual(len(family.samples), 6)
                 target_type_set = set()
                 for sample in family.samples:
                     self.assertEqual(sample.value, 1)
@@ -97,7 +105,7 @@ class SantaMetricsViewsTestCase(TestCase):
                     self.assertEqual(sample.labels["ruleset"], "_")
                     self.assertEqual(sample.labels["policy"], "blocklist")
                     target_type_set.add(sample.labels["target_type"])
-                self.assertEqual(target_type_set, {"binary", "bundle", "certificate", "teamid", "signingid"})
+                self.assertEqual(target_type_set, {"binary", "bundle", "cdhash", "certificate", "teamid", "signingid"})
                 break
         else:
             raise AssertionError("could not find expected metric family")

@@ -890,7 +890,7 @@ class EnrollmentSecretForm(forms.ModelForm):
 
     def clean(self):
         super().clean()
-        meta_business_unit = self.cleaned_data["meta_business_unit"] or self.meta_business_unit
+        meta_business_unit = self.cleaned_data.get("meta_business_unit") or self.meta_business_unit
         if meta_business_unit:
             tag_set = set(self.cleaned_data['tags'])
             wrong_tag_set = tag_set - set(Tag.objects.available_for_meta_business_unit(meta_business_unit))

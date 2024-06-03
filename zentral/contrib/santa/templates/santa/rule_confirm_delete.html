@@ -27,7 +27,6 @@
       <td>{{ target.get_type_display }}</td>
       <td>
         {{ target.identifier }}
-        {% if target.type == "BINARY" %}
         {% for file in target.files %}
         <dl class="row">
           <dt class="col-sm-3 text-md-end">name</dt>
@@ -48,7 +47,6 @@
           {% endif %}
         </dl>
         {% endfor %}
-        {% endif %}
         {% if target.type == "BUNDLE" %}
         {% with target.bundle as bundle %}
         <dl class="row">

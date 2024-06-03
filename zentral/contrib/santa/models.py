@@ -279,6 +279,7 @@ class EnrolledMachine(models.Model):
     santa_version = models.TextField()
 
     binary_rule_count = models.IntegerField(null=True)
+    cdhash_rule_count = models.IntegerField(null=True)
     certificate_rule_count = models.IntegerField(null=True)
     compiler_rule_count = models.IntegerField(null=True)
     signingid_rule_count = models.IntegerField(null=True)
@@ -333,11 +334,11 @@ class TargetManager(models.Manager):
     def summary(self):
         query = (
             "with collected_files as ("
-            "  select f.sha_256, f.signed_by_id, f.signing_id, f.name"
+            "  select f.cdhash, f.sha_256, f.signed_by_id, f.signing_id, f.name"
             "  from inventory_file as f"
             "  join inventory_source as s on (f.source_id = s.id)"
             "  where s.module = 'zentral.contrib.santa' and s.name = 'Santa events'"
-            "  group by f.sha_256, f.signed_by_id, f.signing_id, f.name"
+            "  group by f.cdhash, f.sha_256, f.signed_by_id, f.signing_id, f.name"
             "), collected_certificates as ("
             "  select c.sha_256, c.common_name"
             "  from inventory_certificate as c"
@@ -350,6 +351,15 @@ class TargetManager(models.Manager):
             "  where c.organizational_unit ~ '[A-Z0-9]{10}'"
             "  group by c.organizational_unit, c.organization"
             ") "
+            "select 'cdhash' as target_type,"
+            "count(distinct cdhash) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_files as f on (t.type = 'CDHASH' and t.identifier=f.cdhash)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_files "
+            "where cdhash is not null "
+            "union "
             "select 'binary' as target_type,"
             "count(*) as target_count,"
             "(select count(distinct t.id)"
@@ -411,11 +421,13 @@ class TargetManager(models.Manager):
             ti_where = ("where c.organizational_unit ~ '[A-Z0-9]{10}' and ("
                         "upper(c.organization) like upper(%(q)s) "
                         "or upper(c.organizational_unit) like upper(%(q)s))")
+            ch_where = "where upper(f.cdhash) like upper(%(q)s)"
             si_where = "where upper(f.signing_id) like upper(%(q)s)"
             bu_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
         else:
             bi_where = ce_where = bu_where = ""
             ti_where = "where c.organizational_unit ~ '[A-Z0-9]{10}'"
+            ch_where = "where f.cdhash IS NOT NULL"
             si_where = "where f.signing_id IS NOT NULL"
         targets_subqueries = {
             "BINARY":
@@ -452,6 +464,16 @@ class TargetManager(models.Manager):
                 "join collected_files as f on (c.id = f.signed_by_id) "
                 f"{ti_where} "
                 "group by target_type, c.organizational_unit, c.organization",
+            "CDHASH":
+                "select 'CDHASH' as target_type, f.cdhash as identifier, f.cdhash as sort_str,"
+                "jsonb_build_object("
+                " 'file_name', f.name,"
+                " 'cert_cn', c.common_name"
+                ") as object "
+                "from collected_files as f "
+                "left join inventory_certificate as c on (f.signed_by_id = c.id) "
+                f"{ch_where} "
+                "group by target_type, f.cdhash, f.name, c.common_name",
             "SIGNINGID":
                 "select 'SIGNINGID' as target_type, f.signing_id as identifier, f.signing_id as sort_str,"
                 "jsonb_build_object("
@@ -477,11 +499,11 @@ class TargetManager(models.Manager):
                                        if target_type is None or k == target_type)
         query = (
             "with collected_files as ("
-            "  select f.sha_256 as identifier, f.signed_by_id, f.signing_id, f.name"
+            "  select f.sha_256 as identifier, f.cdhash, f.signed_by_id, f.signing_id, f.name"
             "  from inventory_file as f"
             "  join inventory_source as s on (f.source_id = s.id)"
             "  where s.module='zentral.contrib.santa' and s.name = 'Santa events'"
-            "  group by f.sha_256, f.signed_by_id, f.signing_id, f.name"
+            "  group by f.sha_256, f.cdhash, f.signed_by_id, f.signing_id, f.name"
             f"), targets as ({targets_query}) "
             "select target_type, identifier, object, count(*) over() as full_count,"
             "(select count(*) from santa_rule as r"
@@ -550,6 +572,40 @@ class TargetManager(models.Manager):
         nt_teamid = namedtuple('TeamID', [col[0] for col in cursor.description])
         return [nt_teamid(*row) for row in cursor.fetchall()]
 
+    def get_cdhash_objects(self, identifier):
+        query = (
+            "select f.cdhash "
+            "from inventory_file as f "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and f.cdhash = %s "
+            "group by f.cdhash "
+            "order by f.cdhash"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [identifier])
+        nt_cdhash = namedtuple('CDHash', [col[0] for col in cursor.description])
+        return [nt_cdhash(*row) for row in cursor.fetchall()]
+
+    def search_cdhash_objects(self, **kwargs):
+        q = kwargs.get("query")
+        if not q:
+            return []
+        q = "%{}%".format(connection.ops.prep_for_like_query(q))
+        query = (
+            "select f.cdhash "
+            "from inventory_file as f "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and upper(f.cdhash) like upper(%s) "
+            "group by f.cdhash "
+            "order by f.cdhash"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [q])
+        nt_cdhash = namedtuple('CDHash', [col[0] for col in cursor.description])
+        return [nt_cdhash(*row) for row in cursor.fetchall()]
+
     def get_signingid_objects(self, identifier):
         query = (
             "select f.signing_id "
@@ -562,7 +618,7 @@ class TargetManager(models.Manager):
         )
         cursor = connection.cursor()
         cursor.execute(query, [identifier])
-        nt_signingid = namedtuple('TeamID', [col[0] for col in cursor.description])
+        nt_signingid = namedtuple('SigningID', [col[0] for col in cursor.description])
         return [nt_signingid(*row) for row in cursor.fetchall()]
 
     def search_signingid_objects(self, **kwargs):
@@ -588,12 +644,14 @@ class TargetManager(models.Manager):
 class Target(models.Model):
     BINARY = "BINARY"
     BUNDLE = "BUNDLE"
+    CDHASH = "CDHASH"
     CERTIFICATE = "CERTIFICATE"
     SIGNING_ID = "SIGNINGID"
     TEAM_ID = "TEAMID"
     TYPE_CHOICES = (
         (BINARY, "Binary"),
         (BUNDLE, "Bundle"),
+        (CDHASH, "cdhash"),
         (CERTIFICATE, "Certificate"),
         (SIGNING_ID, "Signing ID"),
         (TEAM_ID, "Team ID"),
@@ -620,6 +678,10 @@ class Target(models.Model):
     def files(self):
         if self.type == self.BINARY:
             return list(File.objects.select_related("bundle").filter(sha_256=self.identifier))
+        elif self.type == self.CDHASH:
+            return list(File.objects.select_related("bundle").filter(cdhash=self.identifier))
+        elif self.type == self.SIGNING_ID:
+            return list(File.objects.select_related("bundle").filter(signing_id=self.identifier))
         else:
             return []
 
@@ -639,7 +701,9 @@ class Target(models.Model):
 
     def serialize_for_event(self):
         d = {"type": self.type}
-        if self.type == self.SIGNING_ID:
+        if self.type == self.CDHASH:
+            d["cdhash"] = self.identifier
+        elif self.type == self.SIGNING_ID:
             d["signing_id"] = self.identifier
         elif self.type == self.TEAM_ID:
             d["team_id"] = self.identifier
@@ -920,7 +984,7 @@ class MachineRuleManager(models.Manager):
             version = rule.pop("version")
             if policy == MachineRule.REMOVE or not rule["custom_msg"]:
                 rule.pop("custom_msg", None)
-            if use_sha256_attr and rule["rule_type"] not in (Target.SIGNING_ID, Target.TEAM_ID):
+            if use_sha256_attr and rule["rule_type"] not in (Target.CDHASH, Target.SIGNING_ID, Target.TEAM_ID):
                 rule["sha256"] = rule.pop("identifier")
             self.update_or_create(enrolled_machine=enrolled_machine,
                                   target=Target(pk=target_id),

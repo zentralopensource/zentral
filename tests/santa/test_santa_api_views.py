@@ -14,6 +14,7 @@ from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaEventEvent, 
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
                                           MachineRule, Rule, Target)
 from zentral.core.incidents.models import Severity
+from .test_rule_engine import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -71,6 +72,7 @@ class SantaAPIViewsTestCase(TestCase):
             "serial_num": serial_number,
             "primary_user": "mark.torpedo@example.com",
             "binary_rule_count": 0,
+            "cdhash_rule_count": 0,
             "certificate_rule_count": 0,
             "compiler_rule_count": 0,
             "signingid_rule_count": 0,
@@ -115,6 +117,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight(self, post_event):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         for idx, key in enumerate(("binary_rule_count",
+                                   "cdhash_rule_count",
                                    "certificate_rule_count",
                                    "compiler_rule_count",
                                    "signingid_rule_count",
@@ -147,11 +150,12 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(enrolled_machine.santa_version, data["santa_version"])
         self.assertEqual(enrolled_machine.client_mode, Configuration.LOCKDOWN_MODE)
         self.assertEqual(enrolled_machine.binary_rule_count, 1)
-        self.assertEqual(enrolled_machine.certificate_rule_count, 2)
-        self.assertEqual(enrolled_machine.compiler_rule_count, 3)
-        self.assertEqual(enrolled_machine.signingid_rule_count, 4)
-        self.assertEqual(enrolled_machine.teamid_rule_count, 5)
-        self.assertEqual(enrolled_machine.transitive_rule_count, 6)
+        self.assertEqual(enrolled_machine.cdhash_rule_count, 2)
+        self.assertEqual(enrolled_machine.certificate_rule_count, 3)
+        self.assertEqual(enrolled_machine.compiler_rule_count, 4)
+        self.assertEqual(enrolled_machine.signingid_rule_count, 5)
+        self.assertEqual(enrolled_machine.teamid_rule_count, 6)
+        self.assertEqual(enrolled_machine.transitive_rule_count, 7)
 
         # LOCKDOWN mode
         Configuration.objects.update(client_mode=Configuration.LOCKDOWN_MODE)
@@ -292,7 +296,7 @@ class SantaAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_sync_not_ok_conf_without_severity_no_incident_update(self, post_event):
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
         rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
@@ -321,7 +325,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.configuration.sync_incident_severity = Severity.CRITICAL.value
         self.configuration.save()
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
         rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
@@ -353,7 +357,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.enrolled_machine.last_sync_ok = False
         self.enrolled_machine.save()
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
         rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
@@ -385,7 +389,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.configuration.sync_incident_severity = Severity.MAJOR.value
         self.configuration.save()
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
         rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
@@ -418,7 +422,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.enrolled_machine.last_sync_ok = False
         self.enrolled_machine.save()
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
         rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
@@ -480,7 +484,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response, {"rules": []})
         # add a rule
-        target = Target.objects.create(type=Target.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
+        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
         rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
         response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
         self.assertEqual(response.status_code, 200)
@@ -614,6 +618,59 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json("eventupload", uuid.uuid4(), {})
         self.assertEqual(response.status_code, 403)
 
+    def test_eventupload_cdhash_signing_id_team_id(self):
+        team_id = new_team_id()
+        event_d = {
+            'cdhash': new_cdhash(),
+            'current_sessions': [],
+            'decision': 'BLOCK_UNKNOWN',
+            'executing_user': 'root',
+            'execution_time': 2242783327.585212,
+            'file_bundle_id': 'servicecontroller:com.apple.stomp.transcoderx',
+            'file_bundle_name': 'CompressorTranscoderX',
+            'file_bundle_path': ('/Library/Frameworks/Compressor.framework/'
+                                 'Versions/A/Resources/CompressorTranscoderX.bundle'),
+            'file_bundle_version': '3.5.3',
+            'file_bundle_version_string': '3.5.3',
+            'file_name': 'compressord',
+            'file_path': ('/Library/Frameworks/Compressor.framework/'
+                          'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
+            'file_sha256': new_sha256(),
+            'logged_in_users': [],
+            'parent_name': 'launchd',
+            'pid': 95,
+            'ppid': 1,
+            'quarantine_timestamp': 0,
+            'signing_id': new_signing_id_identifier(),
+            'team_id': team_id,
+            'signing_chain': [{'cn': 'Software Signing',
+                               'ou': team_id,
+                               'org': 'Apple Inc.',
+                               'sha256': new_sha256(),
+                               'valid_from': 1172268176,
+                               'valid_until': 1421272976},
+                              {'cn': 'Apple Code Signing Certification Authority',
+                               'org': 'Apple Inc.',
+                               'ou': 'Apple Certification Authority',
+                               'sha256': '3afa0bf5027fd0532f436b39363a680aefd6baf7bf6a4f97f17be2937b84b150',
+                               'valid_from': 1171487959,
+                               'valid_until': 1423948759},
+                              {'cn': 'Apple Root CA',
+                               'org': 'Apple Inc.',
+                               'ou': 'Apple Certification Authority',
+                               'sha256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                               'valid_from': 1146001236,
+                               'valid_until': 2054670036}]
+        }
+        response = self.post_as_json("eventupload", self.enrolled_machine.hardware_uuid, {"events": [event_d]})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        self.assertEqual(Bundle.objects.count(), 0)
+        f = File.objects.get(sha_256=event_d["file_sha256"])
+        self.assertEqual(f.cdhash, event_d["cdhash"])
+        self.assertEqual(f.signing_id, event_d["signing_id"])
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_eventupload_without_bundle(self, post_event):
         event_d = {
@@ -630,16 +687,16 @@ class SantaAPIViewsTestCase(TestCase):
             'file_name': 'compressord',
             'file_path': ('/Library/Frameworks/Compressor.framework/'
                           'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
-            'file_sha256': get_random_string(64, "0123456789abcdef"),
+            'file_sha256': new_sha256(),
             'logged_in_users': [],
             'parent_name': 'launchd',
             'pid': 95,
             'ppid': 1,
             'quarantine_timestamp': 0,
             'signing_chain': [{'cn': 'Software Signing',
-                               'ou': get_random_string(10, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+                               'ou': new_team_id(),
                                'org': 'Apple Inc.',
-                               'sha256': get_random_string(64, "0123456789abcdef"),
+                               'sha256': new_sha256(),
                                'valid_from': 1172268176,
                                'valid_until': 1421272976},
                               {'cn': 'Apple Code Signing Certification Authority',
@@ -696,16 +753,16 @@ class SantaAPIViewsTestCase(TestCase):
             'file_name': 'compressord',
             'file_path': ('/Library/Frameworks/Compressor.framework/'
                           'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
-            'file_sha256': get_random_string(64, "0123456789abcdef"),
+            'file_sha256': new_sha256(),
             'logged_in_users': [],
             'parent_name': 'launchd',
             'pid': 95,
             'ppid': 1,
             'quarantine_timestamp': 0,
             'signing_chain': [{'cn': 'Software Signing',
-                               'ou': get_random_string(10, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+                               'ou': new_team_id(),
                                'org': 'Apple Inc.',
-                               'sha256': get_random_string(64, "0123456789abcdef"),
+                               'sha256': new_sha256(),
                                'valid_from': 1172268176,
                                'valid_until': 1421272976},
                               {'cn': 'Apple Code Signing Certification Authority',
@@ -752,16 +809,16 @@ class SantaAPIViewsTestCase(TestCase):
             'file_name': 'compressord',
             'file_path': ('/Library/Frameworks/Compressor.framework/'
                           'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
-            'file_sha256': get_random_string(64, "0123456789abcdef"),
+            'file_sha256': new_sha256(),
             'logged_in_users': [],
             'parent_name': 'launchd',
             'pid': 95,
             'ppid': 1,
             'quarantine_timestamp': 0,
             'signing_chain': [{'cn': 'Software Signing',
-                               'ou': get_random_string(10, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+                               'ou': new_team_id(),
                                'org': 'Apple Inc.',
-                               'sha256': get_random_string(64, "0123456789abcdef"),
+                               'sha256': new_sha256(),
                                'valid_from': 1172268176,
                                'valid_until': 1421272976},
                               {'cn': 'Apple Code Signing Certification Authority',
