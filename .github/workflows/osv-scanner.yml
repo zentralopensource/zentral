@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   scan-scheduled:
-    uses: "google/osv-scanner/.github/workflows/osv-scanner-reusable.yml@v1.7.0"
+    uses: "google/osv-scanner/.github/workflows/osv-scanner-reusable.yml@main"
     with:
       scan-args: |-
         --lockfile ./package-lock.json
