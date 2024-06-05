@@ -16,6 +16,7 @@ from django.views.generic import DeleteView, DetailView, FormView, ListView, Tem
 from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
+from zentral.core.compliance_checks.models import Status
 from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
@@ -535,6 +536,7 @@ class MachineView(PermissionRequiredMixin, TemplateView):
 
         # compliance checks
         compliance_check_statuses = []
+        cc_total = cc_ok = cc_pending = cc_unknown = cc_failed = 0
         if self.request.user.has_perm("compliance_checks.view_machinestatus"):
             for cc_model, cc_pk, cc_name, status, status_time in machine.compliance_check_statuses():
                 cc_url = None
@@ -542,7 +544,21 @@ class MachineView(PermissionRequiredMixin, TemplateView):
                 if self.request.user.has_perms(cc_cls.required_view_permissions):
                     cc_url = reverse("compliance_checks:redirect", args=(cc_pk,))
                 compliance_check_statuses.append((cc_url, cc_name, status, status_time))
+                cc_total += 1
+                if status == Status.OK:
+                    cc_ok += 1
+                elif status == Status.PENDING:
+                    cc_pending += 1
+                elif status == Status.UNKNOWN:
+                    cc_unknown += 1
+                elif status == Status.FAILED:
+                    cc_failed += 1
         context["compliance_check_statuses"] = compliance_check_statuses
+        context["compliance_check_total"] = cc_total
+        context["compliance_check_ok"] = cc_ok
+        context["compliance_check_failed"] = cc_failed
+        context["compliance_check_pending"] = cc_pending
+        context["compliance_check_unknown"] = cc_unknown
 
         # event links
         context['show_events_link'] = frontend_store.machine_events

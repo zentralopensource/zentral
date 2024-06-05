@@ -463,7 +463,12 @@
   </div><!-- end col-md-6 -->
   <div class="col-md-6">
     {% if perms.compliance_checks.view_machinestatus %}
-    <h3>Compliance check{{ compliance_check_statuses|length|pluralize }} ({{ compliance_check_statuses|length }})</h3>
+    <h3>Compliance check{{ compliance_check_total|pluralize }} ({{ compliance_check_total }})</h3>
+    {% if compliance_check_total %}
+    <p>
+      {{ compliance_check_ok }} OK{% if compliance_check_failed %}, {{ compliance_check_failed }} Failed{% endif %}{% if compliance_check_pending %}, {{ compliance_check_pending }} Pending{% endif %}{% if compliance_check_unknown %}, {{ compliance_check_unknown }} Unknown{% endif %}
+    </p>
+    {% endif %}
     {% if compliance_check_statuses %}
     <table class="table table-striped align-middle table-hover">
       <thead>
