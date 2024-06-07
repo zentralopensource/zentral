@@ -60,7 +60,7 @@
         {% with target.object as obj %}
         <tr>
         <td class="col-md-1">
-            <a href="{{ target.url }}">{{ target.get_type_display }}</a>
+            {{ target.target_type_for_display }}
         </td>
         <td>
             <a href="{{ target.url }}"><code>{{ target.identifier }}</code></a>

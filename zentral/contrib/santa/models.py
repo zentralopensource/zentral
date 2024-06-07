@@ -521,6 +521,7 @@ class TargetManager(models.Manager):
         cursor.execute(f"{query} offset %(offset)s limit %(limit)s", kwargs)
         columns = [col[0] for col in cursor.description]
         results = []
+        type_dict = dict(Target.TYPE_CHOICES)
         for row in cursor.fetchall():
             result = dict(zip(columns, row))
             obj = json.loads(result.pop("object"))
@@ -529,6 +530,7 @@ class TargetManager(models.Manager):
                     obj[attr] = parser.parse(obj[attr])
             result["object"] = obj
             url_name = result["target_type"].lower()
+            result["target_type_for_display"] = type_dict.get(result["target_type"], result["target_type"])
             result["url"] = reverse(f"santa:{url_name}", args=(result["identifier"],))
             results.append(result)
         return results
