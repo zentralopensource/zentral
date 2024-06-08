@@ -1,7 +1,11 @@
+from datetime import datetime
 import plistlib
 from dateutil import parser
+from django.db import connection
+import psycopg2.extras
 from zentral.conf import settings
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload
+from .models import Target
 
 
 def build_santa_enrollment_configuration(enrollment):
@@ -100,3 +104,46 @@ def parse_santa_log_message(message):
     if args:
         d["args"] = args.split()
     return d
+
+
+def update_or_create_targets(targets):
+    query = (
+        'insert into santa_target '
+        '("type", "identifier", "blocked_count", "collected_count", "executed_count", "created_at", "updated_at") '
+        'values %s '
+        'on conflict ("type", "identifier") do update '
+        'set blocked_count = santa_target.blocked_count + excluded.blocked_count, '
+        'collected_count = santa_target.collected_count + excluded.collected_count, '
+        'executed_count = santa_target.executed_count + excluded.executed_count, '
+        'updated_at = excluded.updated_at '
+        'returning *, (xmax = 0) AS _created'
+    )
+    with connection.cursor() as cursor:
+        now = datetime.utcnow()
+        result = psycopg2.extras.execute_values(
+            cursor, query,
+            ((target_type, target_identifier,
+              val["blocked_incr"], val["collected_incr"], val["executed_incr"],
+              now, now)
+             for (target_type, target_identifier), val in targets.items()),
+            fetch=True
+        )
+        columns = [c.name for c in cursor.description]
+        targets = {}
+        for t in result:
+            target_d = dict(zip(columns, t))
+            created = target_d.pop("_created")
+            target = Target(**target_d)
+            targets[(target.type, target.identifier)] = (target, created)
+        return targets
+
+
+def add_bundle_binary_targets(bundle, binary_target_identifiers):
+    query = (
+        'insert into santa_bundle_binary_targets '
+        '("bundle_id", "target_id") '
+        "select %s, id from santa_target where type = 'BINARY' and identifier in %s "
+        'on conflict ("bundle_id", "target_id") do nothing'
+    )
+    with connection.cursor() as cursor:
+        return cursor.execute(query, [bundle.pk, tuple(binary_target_identifiers)])

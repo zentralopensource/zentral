@@ -675,7 +675,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_eventupload_without_bundle(self, post_event):
         event_d = {
             'current_sessions': [],
-            'decision': 'BLOCK_UNKNOWN',
+            'decision': 'ALLOW_UNKNOWN',
             'executing_user': 'root',
             'execution_time': 2242783327.585212,
             'file_bundle_id': 'servicecontroller:com.apple.stomp.transcoderx',
@@ -712,6 +712,14 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_from': 1146001236,
                                'valid_until': 2054670036}]
         }
+        self.assertEqual(Target.objects.all().count(), 0)
+        Target.objects.create(
+            type=Target.CERTIFICATE,
+            identifier=event_d["signing_chain"][1]["sha256"],
+            blocked_count=3,
+            collected_count=2,
+            executed_count=1
+        )
         response = self.post_as_json("eventupload", self.enrolled_machine.hardware_uuid, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -726,6 +734,20 @@ class SantaAPIViewsTestCase(TestCase):
         for i, cert in enumerate(event_d["signing_chain"]):
             self.assertEqual(event.payload[f"signing_cert_{i}"], cert)
         self.assertNotIn("signing_chain", event.payload)
+        self.assertEqual(Target.objects.all().count(), 4)
+        for target_type, target_identifier, b_count, c_count, e_count in (
+            (Target.BINARY, event_d["file_sha256"], 0, 0, 1),
+            (Target.CERTIFICATE, event_d["signing_chain"][0]["sha256"], 0, 0, 1),
+            (Target.CERTIFICATE, event_d["signing_chain"][1]["sha256"], 3, 2, 2),  # executed_count = 1 + 1
+            (Target.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 0, 0, 1),
+        ):
+            self.assertTrue(
+                Target.objects.filter(type=target_type,
+                                      identifier=target_identifier,
+                                      blocked_count=b_count,
+                                      collected_count=c_count,
+                                      executed_count=e_count).exists()
+            )
 
     def test_deprecated_eventupload(self):
         url = reverse("santa_public:deprecated_eventupload", args=(self.enrollment_secret.secret,
@@ -778,6 +800,14 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_from': 1146001236,
                                'valid_until': 2054670036}]
         }
+        self.assertEqual(Target.objects.all().count(), 0)
+        Target.objects.create(
+            type=Target.BINARY,
+            identifier=event_d["file_sha256"],
+            blocked_count=3,
+            collected_count=2,
+            executed_count=1,
+        )
         response = self.post_as_json("eventupload", self.enrolled_machine.hardware_uuid, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -790,6 +820,21 @@ class SantaAPIViewsTestCase(TestCase):
         event = events[0]
         self.assertIsInstance(event, SantaEventEvent)
         self.assertEqual(event.payload["signing_chain"], event_d["signing_chain"])
+        self.assertEqual(Target.objects.all().count(), 5)
+        for target_type, target_identifier, b_count, c_count, e_count in (
+            (Target.BINARY, event_d["file_sha256"], 4, 2, 1),
+            (Target.BUNDLE, event_d["file_bundle_hash"], 1, 0, 0),
+            (Target.CERTIFICATE, event_d["signing_chain"][0]["sha256"], 1, 0, 0),
+            (Target.CERTIFICATE, event_d["signing_chain"][1]["sha256"], 1, 0, 0),
+            (Target.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 1, 0, 0),
+        ):
+            self.assertTrue(
+                Target.objects.filter(type=target_type,
+                                      identifier=target_identifier,
+                                      blocked_count=b_count,
+                                      collected_count=c_count,
+                                      executed_count=e_count).exists()
+            )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_eventupload_bundle_binary(self, post_event):
@@ -838,7 +883,9 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_from': 1146001236,
                                'valid_until': 2054670036}]
         }
-        t, _ = Target.objects.get_or_create(type=Target.BUNDLE, identifier=event_d["file_bundle_hash"])
+        t, _ = Target.objects.get_or_create(type=Target.BUNDLE,
+                                            identifier=event_d["file_bundle_hash"],
+                                            blocked_count=1)
         b, _ = Bundle.objects.update_or_create(
             target=t,
             defaults={"binary_count": event_d["file_bundle_binary_count"]}
@@ -860,6 +907,24 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(file_qs.count(), 1)
         file = file_qs.first()
         self.assertEqual(file.signing_id, event_d["signing_id"])
+        self.assertEqual(Target.objects.all().count(), 8)
+        for target_type, target_identifier, b_count, c_count, e_count in (
+            (Target.BINARY, event_d["file_sha256"], 0, 1, 0),
+            (Target.BUNDLE, event_d["file_bundle_hash"], 1, 0, 0),
+            (Target.CDHASH, event_d["cdhash"], 0, 1, 0),
+            (Target.SIGNING_ID, event_d["signing_id"], 0, 1, 0),
+            (Target.TEAM_ID, event_d["team_id"], 0, 1, 0),
+            (Target.CERTIFICATE, event_d["signing_chain"][0]["sha256"], 0, 1, 0),
+            (Target.CERTIFICATE, event_d["signing_chain"][1]["sha256"], 0, 1, 0),
+            (Target.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 0, 1, 0),
+        ):
+            self.assertTrue(
+                Target.objects.filter(type=target_type,
+                                      identifier=target_identifier,
+                                      blocked_count=b_count,
+                                      collected_count=c_count,
+                                      executed_count=e_count).exists()
+            )
 
     # postflight
 

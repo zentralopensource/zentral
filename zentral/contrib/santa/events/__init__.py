@@ -3,6 +3,7 @@ import logging
 from zentral.conf import settings
 from zentral.contrib.inventory.models import File
 from zentral.contrib.santa.models import Bundle, EnrolledMachine, Target
+from zentral.contrib.santa.utils import add_bundle_binary_targets, update_or_create_targets
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.utils.certificates import APPLE_DEV_ID_ISSUER_CN, parse_apple_dev_id
 from zentral.utils.text import shard
@@ -263,6 +264,16 @@ def _build_file_tree_from_santa_event(event_d):
     return app_d
 
 
+def _is_allow_event(event_d):
+    decision = event_d.get('decision')
+    return decision and decision.startswith("ALLOW_")
+
+
+def _is_block_event(event_d):
+    decision = event_d.get('decision')
+    return decision and decision.startswith("BLOCK_")
+
+
 def _is_allow_unknown_event(event_d):
     return event_d.get('decision') == "ALLOW_UNKNOWN"
 
@@ -271,7 +282,59 @@ def _is_bundle_binary_pseudo_event(event_d):
     return event_d.get('decision') == "BUNDLE_BINARY"
 
 
-def _create_missing_bundles(events):
+def _update_targets(events):
+    targets = {}
+    for event_d in events:
+        # target keys
+        target_keys = []
+        file_sha256 = event_d.get("file_sha256")
+        if file_sha256:
+            target_keys.append((Target.BINARY, file_sha256))
+        cdhash = event_d.get("cdhash")
+        if cdhash:
+            target_keys.append((Target.CDHASH, cdhash))
+        team_id = event_d.get("team_id")
+        if team_id:
+            target_keys.append((Target.TEAM_ID, team_id))
+        signing_id = event_d.get("signing_id")
+        if signing_id:
+            target_keys.append((Target.SIGNING_ID, signing_id))
+        signing_chain = event_d.get("signing_chain")
+        if signing_chain:
+            for cert_d in signing_chain:
+                sha256 = cert_d.get("sha256")
+                if sha256:
+                    target_keys.append((Target.CERTIFICATE, sha256))
+        if not _is_bundle_binary_pseudo_event(event_d):
+            bundle_hash = event_d.get("file_bundle_hash")
+            if bundle_hash:
+                target_keys.append((Target.BUNDLE, bundle_hash))
+        # increments
+        blocked_incr = collected_incr = executed_incr = 0
+        if _is_block_event(event_d):
+            blocked_incr = 1
+        elif _is_bundle_binary_pseudo_event(event_d):
+            collected_incr = 1
+        elif _is_allow_event(event_d):
+            executed_incr = 1
+        else:
+            logger.warning("Unknown decision: %s", event_d.get("decision", "-"))
+        # aggregations
+        for target_key in target_keys:
+            target_increments = targets.setdefault(
+                target_key,
+                {"blocked_incr": 0, "collected_incr": 0, "executed_incr": 0}
+            )
+            target_increments["blocked_incr"] += blocked_incr
+            target_increments["collected_incr"] += collected_incr
+            target_increments["executed_incr"] += executed_incr
+    if targets:
+        return update_or_create_targets(targets)
+    else:
+        return {}
+
+
+def _create_missing_bundles(events, targets):
     bundle_events = {
         sha256: event_d
         for sha256, event_d in (
@@ -292,7 +355,10 @@ def _create_missing_bundles(events):
     )
     unknown_file_bundle_hashes = list(set(bundle_events.keys()) - existing_sha256_set)
     for sha256 in unknown_file_bundle_hashes:
-        target, _ = Target.objects.get_or_create(type=Target.BUNDLE, identifier=sha256)
+        target, _ = targets.get((Target.BUNDLE, sha256), (None, None))
+        if not target:
+            logger.error("Missing BUNDLE target %s", sha256)
+            continue
         defaults = {}
         event_d = bundle_events[sha256]
         for event_attr, bundle_attr in (("file_bundle_path", "path"),
@@ -327,19 +393,18 @@ def _create_bundle_binaries(events):
             logger.error("Unknown bundle: %s", bundle_sha256)
             continue
         if bundle.uploaded_at:
-            logger.info("Bundle %s already uploaded", bundle_sha256)
+            logger.error("Bundle %s already uploaded", bundle_sha256)
             continue
-        binary_targets = []
+        binary_target_identifiers = []
         binary_count = bundle.binary_count
         for event_d in events:
             if not binary_count:
                 event_binary_count = event_d.get("file_bundle_binary_count")
                 if event_binary_count:
                     binary_count = event_binary_count
-            binary_sha256 = event_d.get("file_sha256")
-            binary_target, _ = Target.objects.get_or_create(type=Target.BINARY, identifier=binary_sha256)
-            binary_targets.append(binary_target)
-        bundle.binary_targets.add(*binary_targets)
+            binary_target_identifiers.append(event_d["file_sha256"])
+        if binary_target_identifiers:
+            add_bundle_binary_targets(bundle, binary_target_identifiers)
         save_bundle = False
         if not bundle.binary_count and binary_count:
             bundle.binary_count = binary_count
@@ -411,7 +476,8 @@ def process_events(enrolled_machine, user_agent, ip, data):
     events = data.get("events", [])
     if not events:
         return []
-    unknown_file_bundle_hashes = _create_missing_bundles(events)
+    targets = _update_targets(events)
+    unknown_file_bundle_hashes = _create_missing_bundles(events, targets)
     _create_bundle_binaries(events)
     _commit_files(events)
     _post_santa_events(enrolled_machine, user_agent, ip, events)

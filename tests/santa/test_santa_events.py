@@ -1,11 +1,18 @@
 import datetime
-from django.test import SimpleTestCase
-from zentral.contrib.santa.events import (_build_file_tree_from_santa_event, EventMetadata,
+from unittest.mock import patch
+from django.test import TestCase
+from zentral.contrib.santa.events import (_build_file_tree_from_santa_event,
+                                          _create_bundle_binaries,
+                                          _create_missing_bundles,
+                                          _update_targets,
+                                          EventMetadata,
                                           SantaEnrollmentEvent, SantaEventEvent,
                                           SantaRuleSetUpdateEvent, SantaRuleUpdateEvent)
+from zentral.contrib.santa.models import Bundle, Target
+from .test_rule_engine import new_sha256
 
 
-class SantaEventTestCase(SimpleTestCase):
+class SantaEventTestCase(TestCase):
     maxDiff = None
 
     def test_event_with_signed_bundle(self):
@@ -608,3 +615,87 @@ class SantaEventTestCase(SimpleTestCase):
             event.get_linked_objects_keys(),
             {"santa_configuration": [(13,)]}
         )
+
+    # _update_targets
+
+    @patch("zentral.contrib.santa.events.logger.warning")
+    def test_update_targets_unknown_decisiton(self, logger_warning):
+        event_d = {"decision": "UNKNOWN!!!"}
+        self.assertEqual(_update_targets([event_d]), {})
+        logger_warning.assert_called_once_with("Unknown decision: %s", "UNKNOWN!!!")
+
+    # _create_missing_bundles
+
+    @patch("zentral.contrib.santa.events.logger.error")
+    def test_create_missing_bundles_missing_target(self, logger_error):
+        event_d = {"decision": "BLOCK_UNKNOWN",
+                   "file_bundle_hash": new_sha256()}
+        _create_missing_bundles([event_d], {})
+        logger_error.assert_called_once_with("Missing BUNDLE target %s", event_d["file_bundle_hash"])
+
+    # _create_bundle_binaries
+
+    @patch("zentral.contrib.santa.events.logger.error")
+    def test_create_bundle_binaries_missing_bundle(self, logger_error):
+        event_d = {"decision": "BUNDLE_BINARY",
+                   "file_bundle_hash": new_sha256()}
+        _create_bundle_binaries([event_d])
+        self.assertEqual(Bundle.objects.count(), 0)
+        logger_error.assert_called_once_with("Unknown bundle: %s", event_d["file_bundle_hash"])
+
+    @patch("zentral.contrib.santa.events.logger.error")
+    def test_create_bundle_binaries_bundle_already_uploaded(self, logger_error):
+        event_d = {"decision": "BUNDLE_BINARY",
+                   "file_bundle_hash": new_sha256(),
+                   "file_bundle_binary_count": 42}
+        t = Target.objects.create(type=Target.BUNDLE,
+                                  identifier=event_d["file_bundle_hash"],
+                                  blocked_count=1)
+        Bundle.objects.create(
+            target=t,
+            binary_count=event_d["file_bundle_binary_count"],
+            uploaded_at=datetime.datetime.utcnow()
+        )
+        _create_bundle_binaries([event_d])
+        logger_error.assert_called_once_with("Bundle %s already uploaded", event_d["file_bundle_hash"])
+
+    def test_create_bundle_binaries_bundle_without_binary_count(self):
+        binary_target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
+        event_d = {"decision": "BUNDLE_BINARY",
+                   "file_bundle_hash": new_sha256(),
+                   "file_bundle_binary_count": 1,
+                   "file_sha256": binary_target.identifier}
+        bundle_target = Target.objects.create(type=Target.BUNDLE,
+                                              identifier=event_d["file_bundle_hash"],
+                                              blocked_count=1)
+        b = Bundle.objects.create(
+            target=bundle_target,
+            binary_count=0,
+        )
+        self.assertEqual(b.binary_targets.count(), 0)
+        _create_bundle_binaries([event_d])
+        self.assertEqual(set(b.binary_targets.all()), set([binary_target]))
+        b.refresh_from_db()
+        self.assertIsNotNone(b.uploaded_at)
+
+    @patch("zentral.contrib.santa.events.logger.error")
+    def test_create_bundle_wrong_binary_target_number(self, logger_error):
+        binary_target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
+        event_d = {"decision": "BUNDLE_BINARY",
+                   "file_bundle_hash": new_sha256(),
+                   "file_bundle_binary_count": 1,
+                   "file_sha256": binary_target.identifier}
+        bundle_target = Target.objects.create(type=Target.BUNDLE,
+                                              identifier=event_d["file_bundle_hash"],
+                                              blocked_count=1)
+        b = Bundle.objects.create(
+            target=bundle_target,
+            binary_count=event_d["file_bundle_binary_count"],
+        )
+        extra_target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
+        b.binary_targets.add(extra_target)
+        self.assertEqual(b.binary_targets.count(), 1)
+        _create_bundle_binaries([event_d])
+        self.assertEqual(b.binary_targets.count(), 2)
+        logger_error.assert_called_once_with("Bundle %s as wrong number of binary targets",
+                                             event_d["file_bundle_hash"])

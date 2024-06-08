@@ -659,7 +659,12 @@ class Target(models.Model):
         (TEAM_ID, "Team ID"),
     )
     type = models.CharField(choices=TYPE_CHOICES, max_length=16)
-    identifier = models.CharField(max_length=64)
+    identifier = models.CharField(max_length=256)
+    blocked_count = models.IntegerField(default=0)
+    collected_count = models.IntegerField(default=0)
+    executed_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = TargetManager()
 
