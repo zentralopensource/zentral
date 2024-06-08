@@ -91,6 +91,9 @@ class SantaEventEvent(BaseEvent):
         cdhash = self.payload.get("cdhash")
         if cdhash:
             file_args.append(("cdhash", cdhash))
+        signing_id = self.payload.get("signing_id")
+        if signing_id:
+            file_args.append(("apple_signing_id", signing_id))
         if file_args:
             keys['file'] = file_args
         team_id = self.payload.get("team_id")
@@ -117,9 +120,6 @@ class SantaEventEvent(BaseEvent):
             keys["apple_team_id"] = [(team_id,)]
         if cert_sha256_list:
             keys['certificate'] = cert_sha256_list
-        signing_id = self.payload.get("signing_id")
-        if signing_id:
-            keys["signing_id"] = [(signing_id,)]
         return keys
 
 
@@ -179,7 +179,7 @@ class SantaRuleUpdateEvent(BaseEvent):
         elif target_type == Target.SIGNING_ID:
             signing_id = target.get("signing_id")
             if signing_id:
-                keys["signing_id"] = [(signing_id,)]
+                keys["file"] = [("apple_signing_id", signing_id)]
         elif target_type == Target.TEAM_ID:
             team_id = target.get("team_id")
             if team_id:

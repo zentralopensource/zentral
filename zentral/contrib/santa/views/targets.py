@@ -295,17 +295,20 @@ class CDHashEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.CDHASH
     target_type_display = "cdhash"
-    object_key = "cdhash"
+    object_key = "file"
+    identifier_key = "cdhash"
 
 
 class FetchCDHashEventsView(EventsMixin, FetchEventsView):
     target_type = Target.CDHASH
-    object_key = "cdhash"
+    object_key = "file"
+    identifier_key = "cdhash"
 
 
 class CDHashEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     target_type = Target.SIGNING_ID
-    object_key = "cdhash"
+    object_key = "file"
+    identifier_key = "cdhash"
 
 
 class CertificateEventsView(EventsMixin, EventsView):
@@ -332,17 +335,20 @@ class SigningIDEventsView(EventsMixin, EventsView):
     template_name = "santa/target_events.html"
     target_type = Target.SIGNING_ID
     target_type_display = "Signing ID"
-    object_key = "signing_id"
+    object_key = "file"
+    identifier_key = "apple_signing_id"
 
 
 class FetchSigningIDEventsView(EventsMixin, FetchEventsView):
     target_type = Target.SIGNING_ID
-    object_key = "signing_id"
+    object_key = "file"
+    identifier_key = "apple_signing_id"
 
 
 class SigningIDEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     target_type = Target.SIGNING_ID
-    object_key = "signing_id"
+    object_key = "file"
+    identifier_key = "apple_signing_id"
 
 
 class TeamIDEventsView(EventsMixin, EventsView):

@@ -345,12 +345,12 @@ class SantaEventTestCase(SimpleTestCase):
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57"),
-                      ("cdhash", "575bc039ebf67a3fd686a14d5d1bc569ec7ba18e"),],
+                      ("cdhash", "575bc039ebf67a3fd686a14d5d1bc569ec7ba18e"),
+                      ("apple_signing_id", "43AQ936H96:org.mozilla.firefox")],
              "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b"),
                              ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
                              ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
-             "apple_team_id": [("43AQ936H96",)],
-             "signing_id": [("43AQ936H96:org.mozilla.firefox",)]}
+             "apple_team_id": [("43AQ936H96",)]}
         )
 
     def test_std_event_with_team_id_linked_objects_flat(self):
@@ -358,12 +358,12 @@ class SantaEventTestCase(SimpleTestCase):
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57"),
-                      ("cdhash", "575bc039ebf67a3fd686a14d5d1bc569ec7ba18e"),],
+                      ("cdhash", "575bc039ebf67a3fd686a14d5d1bc569ec7ba18e"),
+                      ("apple_signing_id", "43AQ936H96:org.mozilla.firefox")],
              "certificate": [("sha256", "96f18e09d65445985c7df5df74ef152a0bc42e8934175a626180d9700c343e7b"),
                              ("sha256", "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f"),
                              ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
-             "apple_team_id": [("43AQ936H96",)],
-             "signing_id": [("43AQ936H96:org.mozilla.firefox",)]}
+             "apple_team_id": [("43AQ936H96",)]}
         )
 
     def test_mas_event_without_team_id_linked_objects(self):
@@ -390,11 +390,12 @@ class SantaEventTestCase(SimpleTestCase):
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57"),
-                      ("cdhash", "575bc039ebf67a3fd686a14d5d1bc569ec7ba18e"),],
+                      ("cdhash", "575bc039ebf67a3fd686a14d5d1bc569ec7ba18e"),
+                      ("apple_signing_id", "43AQ936H96:org.mozilla.firefox")],
+
              "certificate": [("sha256", "61977d6006459c4cefe9b988a453589946224957bfc07b262cd7ca1b7a61e04e"),
                              ("sha256", "ce057691d730f89ca25e916f7335f4c8a15713dcd273a658c024023f8eb809c2"),
-                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
-             "signing_id": [("43AQ936H96:org.mozilla.firefox",)]}
+                             ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")]}
         )
 
     def test_mas_event_with_team_id_linked_objects(self):
@@ -402,12 +403,12 @@ class SantaEventTestCase(SimpleTestCase):
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"file": [("sha256", "4bc6526e30f2d22d21dd58c60d401454bb6c772733a59cc1c3a21b52b0a23f57"),
-                      ("cdhash", "575bc039ebf67a3fd686a14d5d1bc569ec7ba18e"),],
+                      ("cdhash", "575bc039ebf67a3fd686a14d5d1bc569ec7ba18e"),
+                      ("apple_signing_id", "43AQ936H96:org.mozilla.firefox")],
              "certificate": [("sha256", "61977d6006459c4cefe9b988a453589946224957bfc07b262cd7ca1b7a61e04e"),
                              ("sha256", "ce057691d730f89ca25e916f7335f4c8a15713dcd273a658c024023f8eb809c2"),
                              ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
-             "apple_team_id": [("43AQ936H96",)],
-             "signing_id": [("43AQ936H96:org.mozilla.firefox",)]}
+             "apple_team_id": [("43AQ936H96",)]}
         )
 
     def test_mas_event_with_team_id_linked_objects_flat(self):
@@ -545,7 +546,7 @@ class SantaEventTestCase(SimpleTestCase):
             event.get_linked_objects_keys(),
             {"santa_configuration": [(1,)],
              "santa_ruleset": [(42,)],
-             "signing_id": [("43AQ936H96:org.mozilla.firefox",)]}
+             "file": [("apple_signing_id", "43AQ936H96:org.mozilla.firefox",)]}
         )
 
     def test_team_id_rule_update_linked_objects(self):
