@@ -793,7 +793,9 @@ class SantaAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_eventupload_bundle_binary(self, post_event):
+        cdhash = new_cdhash()
         event_d = {
+            'cdhash': cdhash,
             'current_sessions': [],
             'decision': 'BUNDLE_BINARY',
             'executing_user': 'root',
@@ -815,6 +817,8 @@ class SantaAPIViewsTestCase(TestCase):
             'pid': 95,
             'ppid': 1,
             'quarantine_timestamp': 0,
+            'team_id': new_team_id(),
+            'signing_id': new_signing_id_identifier(),
             'signing_chain': [{'cn': 'Software Signing',
                                'ou': new_team_id(),
                                'org': 'Apple Inc.',
@@ -839,6 +843,8 @@ class SantaAPIViewsTestCase(TestCase):
             target=t,
             defaults={"binary_count": event_d["file_bundle_binary_count"]}
         )
+        file_qs = File.objects.filter(cdhash=cdhash)
+        self.assertEqual(file_qs.count(), 0)
         response = self.post_as_json("eventupload", self.enrolled_machine.hardware_uuid, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -851,6 +857,9 @@ class SantaAPIViewsTestCase(TestCase):
         )
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 0)
+        self.assertEqual(file_qs.count(), 1)
+        file = file_qs.first()
+        self.assertEqual(file.signing_id, event_d["signing_id"])
 
     # postflight
 
