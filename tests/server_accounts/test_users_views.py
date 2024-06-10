@@ -32,10 +32,9 @@ class AccountUsersViewsTestCase(TestCase):
                                                  get_random_string(12),
                                                  is_superuser=True)
         # user
-        cls.pwd = get_random_string(18)
         cls.user = User.objects.create_user(get_random_string(19),
                                             "{}@zentral.io".format(get_random_string(12)),
-                                            get_random_string(12))
+                                            get_random_string(18))
         # remote user
         cls.remote_user = User.objects.create_user(get_random_string(19),
                                                    "{}@zentral.io".format(get_random_string(12)),
@@ -814,3 +813,47 @@ class AccountUsersViewsTestCase(TestCase):
         email = mail.outbox[0]
         self.assertEqual(email.subject, "Password reset on Zentral")
         self.assertIn(f"Your username, in case you've forgotten: {self.ui_user.username}", email.body)
+
+    # password change
+
+    def test_password_change_get(self):
+        self.login()
+        response = self.client.get(reverse("password_change"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "registration/password_change_form.html")
+
+    def test_password_change_default_password_policy_1(self):
+        self.login()
+        response = self.client.post(reverse("password_change"),
+                                    {"old_password": self.ui_user_pwd,
+                                     "new_password1": "123",
+                                     "new_password2": "123"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "registration/password_change_form.html")
+        self.assertFormError(response.context["form"], "new_password2",
+                             ["This password is too short. It must contain at least 8 characters.",
+                              "This password is too common.",
+                              "This password is entirely numeric."])
+
+    def test_password_change_default_password_policy_2(self):
+        self.login()
+        response = self.client.post(reverse("password_change"),
+                                    {"old_password": self.ui_user_pwd,
+                                     "new_password1": self.ui_user.username,
+                                     "new_password2": self.ui_user.username},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "registration/password_change_form.html")
+        self.assertFormError(response.context["form"], "new_password2",
+                             ["The password is too similar to the username."])
+
+    def test_password_change_post(self):
+        self.login()
+        response = self.client.post(reverse("password_change"),
+                                    {"old_password": self.ui_user_pwd,
+                                     "new_password1": "lskdjlkd1",
+                                     "new_password2": "lskdjlkd1"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "registration/password_change_done.html")
