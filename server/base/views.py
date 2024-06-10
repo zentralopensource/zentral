@@ -1,6 +1,7 @@
 import logging
 from django.apps import apps
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.generic import TemplateView, View
 from zentral.core.stores.conf import frontend_store
@@ -21,7 +22,10 @@ class IndexView(LoginRequiredMixin, TemplateView):
         context = super(IndexView, self).get_context_data(**kwargs)
         app_list = []
         for app_name, app_config in apps.app_configs.items():
-            if getattr(app_config, "events_module", None) is not None:
+            if (
+                self.request.user.has_module_perms(app_name)
+                and getattr(app_config, "events_module", None) is not None
+            ):
                 app_list.append(app_name)
         app_list.sort()
         context["apps"] = app_list
@@ -46,6 +50,8 @@ class AppHistogramDataView(LoginRequiredMixin, View):
         if set(search_dict.keys()) != {"tag"} or not isinstance(search_dict["tag"], str):
             logger.error("Incompatible app %s all event search dict", app)
             raise Http404
+        if not self.request.user.has_module_perms(app):
+            raise PermissionDenied("Not allowed")
         interval = kwargs["interval"]
         bucket_number = int(kwargs["bucket_number"])
         app_tag = search_dict["tag"]

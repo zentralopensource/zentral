@@ -1,5 +1,6 @@
 from functools import reduce
 import operator
+from django.apps import apps
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase, override_settings
@@ -69,6 +70,44 @@ class BaseViewsTestCase(TestCase):
         self.assertIn(";object-src 'none';", response["Content-Security-Policy"])
         self.assertIn(";script-src 'self' 'nonce-", response["Content-Security-Policy"])
         self.assertNotIn("unsafe-eval", response["Content-Security-Policy"])
+
+    # app histograms
+
+    def test_index_no_perms(self):
+        self._login()
+        response = self.client.get(reverse("base:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "base/index.html")
+        self.assertNotContains(response, 'canvas class="chart"')
+        for app_name in apps.app_configs:
+            self.assertNotContains(response, 'data-app="{{ app_name }}"')
+
+    def test_hist_data_unknown_app(self):
+        self._login()
+        response = self.client.get(reverse("base:app_hist_data", args=("yolo", "day", 14)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_hist_data_permission_denied(self):
+        self._login("santa.view_configuration")
+        for app_name in apps.app_configs:
+            response = self.client.get(reverse("base:app_hist_data", args=(app_name, "day", 14)))
+            if app_name == "santa":
+                self.assertEqual(response.status_code, 200)
+            elif response.status_code != 404:
+                self.assertEqual(response.status_code, 403)
+
+    def test_index_santa_perms(self):
+        self._login("santa.view_configuration", "osquery.view_enrollment")
+        response = self.client.get(reverse("base:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "base/index.html")
+        self.assertContains(response, 'canvas class="chart"')
+        self.assertContains(response, 'data-app="osquery"')
+        self.assertContains(response, 'data-app="santa"')
+        for app_name in apps.app_configs:
+            if app_name in ("osquery", "santa"):
+                continue
+            self.assertNotContains(response, 'data-app="{{ app_name }}"')
 
     # extra links
 
