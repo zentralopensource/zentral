@@ -109,6 +109,9 @@ AUTH_PASSWORD_VALIDATORS = django_zentral_settings.get("AUTH_PASSWORD_VALIDATORS
     {
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
+    {
+        "NAME": "accounts.password_validation.PasswordNotAlreadyUsedValidator",
+    },
 ])
 
 AUTHENTICATION_BACKENDS = [

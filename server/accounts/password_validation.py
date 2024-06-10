@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
 
 
-class PasswordNotAlreadyUsedValidator(object):
+class PasswordNotAlreadyUsedValidator:
     def __init__(self, min_unique_passwords=None):
         # min_unique_passwords == None: always a new password
         # min_unique_passwords == 10: password different than the 10 last passwords
@@ -23,19 +23,16 @@ class PasswordNotAlreadyUsedValidator(object):
             tested_passwords += 1
             if check_password(password, uph.password):
                 raise ValidationError(
-                    _("This password has already been used."),
+                    _("You have already used that password, try another."),
                     code='password_already_used',
                     params={'min_unique_passwords': self.min_unique_passwords},
                 )
-            if self.min_unique_passwords and self.min_unique_passwords >= tested_passwords:
+            if self.min_unique_passwords and tested_passwords >= self.min_unique_passwords:
                 break
 
     def get_help_text(self):
         if self.min_unique_passwords:
-            msg = (
-                "Your password must be different than the last %(min_unique_passwords)d passwords."
-                % {'min_unique_passwords': self.min_unique_passwords}
-            )
+            msg = f"Your password must be different than the last {self.min_unique_passwords} passwords."
         else:
             msg = "Your password must not have been used before."
         return _(msg)
