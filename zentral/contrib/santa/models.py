@@ -660,11 +660,7 @@ class Target(models.Model):
     )
     type = models.CharField(choices=TYPE_CHOICES, max_length=16)
     identifier = models.CharField(max_length=256)
-    blocked_count = models.IntegerField(default=0)
-    collected_count = models.IntegerField(default=0)
-    executed_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     objects = TargetManager()
 
@@ -717,6 +713,19 @@ class Target(models.Model):
         else:
             d["sha256"] = self.identifier
         return d
+
+
+class TargetCounter(models.Model):
+    target = models.ForeignKey(Target, on_delete=models.CASCADE)
+    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
+    blocked_count = models.IntegerField(default=0)
+    collected_count = models.IntegerField(default=0)
+    executed_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("target", "configuration"),)
 
 
 class BundleManager(models.Manager):

@@ -1,6 +1,7 @@
 import datetime
 from unittest.mock import patch
 from django.test import TestCase
+from django.utils.crypto import get_random_string
 from zentral.contrib.santa.events import (_build_file_tree_from_santa_event,
                                           _create_bundle_binaries,
                                           _create_missing_bundles,
@@ -8,7 +9,7 @@ from zentral.contrib.santa.events import (_build_file_tree_from_santa_event,
                                           EventMetadata,
                                           SantaEnrollmentEvent, SantaEventEvent,
                                           SantaRuleSetUpdateEvent, SantaRuleUpdateEvent)
-from zentral.contrib.santa.models import Bundle, Target
+from zentral.contrib.santa.models import Bundle, Configuration, Target
 from .test_rule_engine import new_sha256
 
 
@@ -621,7 +622,8 @@ class SantaEventTestCase(TestCase):
     @patch("zentral.contrib.santa.events.logger.warning")
     def test_update_targets_unknown_decisiton(self, logger_warning):
         event_d = {"decision": "UNKNOWN!!!"}
-        self.assertEqual(_update_targets([event_d]), {})
+        configuration = Configuration.objects.create(name=get_random_string(12))
+        self.assertEqual(_update_targets(configuration, [event_d]), {})
         logger_warning.assert_called_once_with("Unknown decision: %s", "UNKNOWN!!!")
 
     # _create_missing_bundles
@@ -649,8 +651,7 @@ class SantaEventTestCase(TestCase):
                    "file_bundle_hash": new_sha256(),
                    "file_bundle_binary_count": 42}
         t = Target.objects.create(type=Target.BUNDLE,
-                                  identifier=event_d["file_bundle_hash"],
-                                  blocked_count=1)
+                                  identifier=event_d["file_bundle_hash"])
         Bundle.objects.create(
             target=t,
             binary_count=event_d["file_bundle_binary_count"],
@@ -666,8 +667,7 @@ class SantaEventTestCase(TestCase):
                    "file_bundle_binary_count": 1,
                    "file_sha256": binary_target.identifier}
         bundle_target = Target.objects.create(type=Target.BUNDLE,
-                                              identifier=event_d["file_bundle_hash"],
-                                              blocked_count=1)
+                                              identifier=event_d["file_bundle_hash"])
         b = Bundle.objects.create(
             target=bundle_target,
             binary_count=0,
@@ -686,8 +686,7 @@ class SantaEventTestCase(TestCase):
                    "file_bundle_binary_count": 1,
                    "file_sha256": binary_target.identifier}
         bundle_target = Target.objects.create(type=Target.BUNDLE,
-                                              identifier=event_d["file_bundle_hash"],
-                                              blocked_count=1)
+                                              identifier=event_d["file_bundle_hash"])
         b = Bundle.objects.create(
             target=bundle_target,
             binary_count=event_d["file_bundle_binary_count"],

@@ -282,7 +282,7 @@ def _is_bundle_binary_pseudo_event(event_d):
     return event_d.get('decision') == "BUNDLE_BINARY"
 
 
-def _update_targets(events):
+def _update_targets(configuration, events):
     targets = {}
     for event_d in events:
         # target keys
@@ -329,7 +329,7 @@ def _update_targets(events):
             target_increments["collected_incr"] += collected_incr
             target_increments["executed_incr"] += executed_incr
     if targets:
-        return update_or_create_targets(targets)
+        return update_or_create_targets(configuration, targets)
     else:
         return {}
 
@@ -476,7 +476,7 @@ def process_events(enrolled_machine, user_agent, ip, data):
     events = data.get("events", [])
     if not events:
         return []
-    targets = _update_targets(events)
+    targets = _update_targets(enrolled_machine.enrollment.configuration, events)
     unknown_file_bundle_hashes = _create_missing_bundles(events, targets)
     _create_bundle_binaries(events)
     _commit_files(events)

@@ -106,25 +106,41 @@ def parse_santa_log_message(message):
     return d
 
 
-def update_or_create_targets(targets):
+def update_or_create_targets(configuration, targets):
     query = (
-        'insert into santa_target '
-        '("type", "identifier", "blocked_count", "collected_count", "executed_count", "created_at", "updated_at") '
-        'values %s '
-        'on conflict ("type", "identifier") do update '
-        'set blocked_count = santa_target.blocked_count + excluded.blocked_count, '
-        'collected_count = santa_target.collected_count + excluded.collected_count, '
-        'executed_count = santa_target.executed_count + excluded.executed_count, '
-        'updated_at = excluded.updated_at '
-        'returning *, (xmax = 0) AS _created'
+        'with observations('
+        '  type, identifier, configuration_id, blocked_incr, collected_incr, executed_incr, ts'
+        ') as ('
+        '  values %s'
+        '), updated_targets as ('
+        '  insert into santa_target(type, identifier, created_at)'
+        '  select type, identifier, ts from observations'
+        '  on conflict (type, identifier) do nothing'
+        '  returning *'
+        '), observed_targets as ('
+        "  select id, type, identifier, created_at, 't' _created from updated_targets"
+        '  union'  # updated_targets doesn't return the values that are already present
+        "  select t.id, t.type, t.identifier, t.created_at, 'f' _created"
+        '  from santa_target t join observations o on (t.type = o.type and t.identifier = o.identifier)'
+        '), updated_target_counters as ('
+        '  insert into santa_targetcounter('
+        '    target_id, configuration_id, blocked_count, collected_count, executed_count, created_at, updated_at'
+        '  )'
+        '  select ot.id, o.configuration_id, o.blocked_incr, o.collected_incr, o.executed_incr, o.ts, o.ts'
+        '  from observed_targets ot join observations o on (o.type = ot.type and o.identifier = ot.identifier)'
+        '  on conflict (target_id, configuration_id) do update'
+        '  set blocked_count = santa_targetcounter.blocked_count + excluded.blocked_count,'
+        '  collected_count = santa_targetcounter.collected_count + excluded.collected_count,'
+        '  executed_count = santa_targetcounter.executed_count + excluded.executed_count,'
+        '  updated_at = excluded.updated_at'
+        ') select * from observed_targets;'
     )
     with connection.cursor() as cursor:
-        now = datetime.utcnow()
         result = psycopg2.extras.execute_values(
             cursor, query,
-            ((target_type, target_identifier,
+            ((target_type, target_identifier, configuration.id,
               val["blocked_incr"], val["collected_incr"], val["executed_incr"],
-              now, now)
+              datetime.utcnow())
              for (target_type, target_identifier), val in targets.items()),
             fetch=True
         )

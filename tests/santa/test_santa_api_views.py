@@ -12,7 +12,7 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, File, MachineSnapshot, MetaBusinessUnit
 from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaEventEvent, SantaPreflightEvent
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
-                                          MachineRule, Rule, Target)
+                                          MachineRule, Rule, Target, TargetCounter)
 from zentral.core.incidents.models import Severity
 from .test_rule_engine import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
@@ -713,12 +713,16 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_until': 2054670036}]
         }
         self.assertEqual(Target.objects.all().count(), 0)
-        Target.objects.create(
+        target = Target.objects.create(
             type=Target.CERTIFICATE,
             identifier=event_d["signing_chain"][1]["sha256"],
+        )
+        TargetCounter.objects.create(
+            target=target,
+            configuration=self.configuration,
             blocked_count=3,
             collected_count=2,
-            executed_count=1
+            executed_count=1,
         )
         response = self.post_as_json("eventupload", self.enrolled_machine.hardware_uuid, {"events": [event_d]})
         self.assertEqual(response.status_code, 200)
@@ -742,11 +746,12 @@ class SantaAPIViewsTestCase(TestCase):
             (Target.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 0, 0, 1),
         ):
             self.assertTrue(
-                Target.objects.filter(type=target_type,
-                                      identifier=target_identifier,
-                                      blocked_count=b_count,
-                                      collected_count=c_count,
-                                      executed_count=e_count).exists()
+                TargetCounter.objects.filter(target__type=target_type,
+                                             target__identifier=target_identifier,
+                                             configuration=self.configuration,
+                                             blocked_count=b_count,
+                                             collected_count=c_count,
+                                             executed_count=e_count).exists()
             )
 
     def test_deprecated_eventupload(self):
@@ -801,9 +806,13 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_until': 2054670036}]
         }
         self.assertEqual(Target.objects.all().count(), 0)
-        Target.objects.create(
+        target = Target.objects.create(
             type=Target.BINARY,
             identifier=event_d["file_sha256"],
+        )
+        TargetCounter.objects.create(
+            target=target,
+            configuration=self.configuration,
             blocked_count=3,
             collected_count=2,
             executed_count=1,
@@ -829,11 +838,12 @@ class SantaAPIViewsTestCase(TestCase):
             (Target.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 1, 0, 0),
         ):
             self.assertTrue(
-                Target.objects.filter(type=target_type,
-                                      identifier=target_identifier,
-                                      blocked_count=b_count,
-                                      collected_count=c_count,
-                                      executed_count=e_count).exists()
+                TargetCounter.objects.filter(target__type=target_type,
+                                             target__identifier=target_identifier,
+                                             configuration=self.configuration,
+                                             blocked_count=b_count,
+                                             collected_count=c_count,
+                                             executed_count=e_count).exists()
             )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -884,8 +894,7 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_until': 2054670036}]
         }
         t, _ = Target.objects.get_or_create(type=Target.BUNDLE,
-                                            identifier=event_d["file_bundle_hash"],
-                                            blocked_count=1)
+                                            identifier=event_d["file_bundle_hash"])
         b, _ = Bundle.objects.update_or_create(
             target=t,
             defaults={"binary_count": event_d["file_bundle_binary_count"]}
@@ -910,7 +919,6 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(Target.objects.all().count(), 8)
         for target_type, target_identifier, b_count, c_count, e_count in (
             (Target.BINARY, event_d["file_sha256"], 0, 1, 0),
-            (Target.BUNDLE, event_d["file_bundle_hash"], 1, 0, 0),
             (Target.CDHASH, event_d["cdhash"], 0, 1, 0),
             (Target.SIGNING_ID, event_d["signing_id"], 0, 1, 0),
             (Target.TEAM_ID, event_d["team_id"], 0, 1, 0),
@@ -919,11 +927,12 @@ class SantaAPIViewsTestCase(TestCase):
             (Target.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 0, 1, 0),
         ):
             self.assertTrue(
-                Target.objects.filter(type=target_type,
-                                      identifier=target_identifier,
-                                      blocked_count=b_count,
-                                      collected_count=c_count,
-                                      executed_count=e_count).exists()
+                TargetCounter.objects.filter(target__type=target_type,
+                                             target__identifier=target_identifier,
+                                             configuration=self.configuration,
+                                             blocked_count=b_count,
+                                             collected_count=c_count,
+                                             executed_count=e_count).exists()
             )
 
     # postflight
