@@ -14,7 +14,8 @@
   "dependencies": {
     "@popperjs/core": "^2.11.8",
     "bootstrap": "^5.3.2",
-    "bootstrap-icons": "^1.11"
+    "bootstrap-icons": "^1.11",
+    "chart.js": "^4.4.3"
   },
   "scripts": {
     "build": "webpack build --mode=production"
