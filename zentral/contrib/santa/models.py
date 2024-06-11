@@ -1,7 +1,6 @@
 from collections import namedtuple
-from dateutil import parser
-import json
 import logging
+import uuid
 from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator
 from django.contrib.postgres.fields import ArrayField
 from django.db import connection, models
@@ -9,12 +8,392 @@ from django.db.models import Count, Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
+from django.utils.translation import gettext_lazy as _
+from realms.models import Realm, RealmGroup, RealmUser
 from zentral.core.incidents.models import Severity
 from zentral.contrib.inventory.models import BaseEnrollment, Certificate, File, Tag
 from zentral.utils.text import shard
 
 
 logger = logging.getLogger("zentral.contrib.santa.models")
+
+
+# Targets
+
+
+class TargetManager(models.Manager):
+    def summary(self):
+        query = (
+            "with collected_files as ("
+            "  select f.cdhash, f.sha_256, f.signed_by_id, f.signing_id, f.name"
+            "  from inventory_file as f"
+            "  join inventory_source as s on (f.source_id = s.id)"
+            "  where s.module = 'zentral.contrib.santa' and s.name = 'Santa events'"
+            "  group by f.cdhash, f.sha_256, f.signed_by_id, f.signing_id, f.name"
+            "), collected_certificates as ("
+            "  select c.sha_256, c.common_name"
+            "  from inventory_certificate as c"
+            "  join collected_files as f on (c.id = f.signed_by_id)"
+            "  group by c.sha_256, c.common_name"
+            "), collected_team_ids as ("
+            "  select c.organizational_unit, c.organization"
+            "  from inventory_certificate as c"
+            "  join collected_files as f on (c.id = f.signed_by_id)"
+            "  where c.organizational_unit ~ '[A-Z0-9]{10}'"
+            "  group by c.organizational_unit, c.organization"
+            ") "
+            "select 'cdhash' as target_type,"
+            "count(distinct cdhash) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_files as f on (t.type = 'CDHASH' and t.identifier=f.cdhash)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_files "
+            "where cdhash is not null "
+            "union "
+            "select 'binary' as target_type,"
+            "count(*) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_files as f on (t.type = 'BINARY' and t.identifier=f.sha_256)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_files "
+            "union "
+            "select 'certificate' as target_type,"
+            "count(*) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_certificates as c on (t.type = 'CERTIFICATE' and t.identifier=c.sha_256)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_certificates "
+            "union "
+            "select 'teamid' as target_type,"
+            "count(*) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_team_ids as i on (t.type = 'TEAMID' and t.identifier=i.organizational_unit)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_team_ids "
+            "union "
+            "select 'signingid' as target_type,"
+            "count(distinct signing_id) as target_count,"
+            "(select count(distinct t.id)"
+            " from santa_target as t"
+            " join collected_files as f on (t.type = 'SIGNINGID' and t.identifier=f.signing_id)"
+            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
+            "from collected_files "
+            "where signing_id is not null "
+            "union "
+            "select 'bundle' as target_type,"
+            "count(*) as target_count,"
+            "(select count(distinct b.id)"
+            " from santa_bundle as b"
+            " join santa_rule as r on (b.target_id = r.target_id)) as rule_count "
+            "from santa_bundle "
+            "union "
+            "select 'metabundle' as target_type,"
+            "count(*) as target_count,"
+            "(select count(distinct mb.id)"
+            " from santa_metabundle as mb"
+            " join santa_rule as r on (mb.target_id = r.target_id)) as rule_count "
+            "from santa_metabundle"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query)
+        summary = {"total": 0}
+        for target_type, target_count, rule_count in cursor.fetchall():
+            summary[target_type.lower()] = {"count": target_count, "rule_count": rule_count}
+            summary["total"] += target_count
+        return summary
+
+    def get_teamid_objects(self, identifier):
+        query = (
+            "select c.organizational_unit, c.organization "
+            "from inventory_certificate as c "
+            "join inventory_file as f on (f.signed_by_id = c.id) "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and c.organizational_unit = %s "
+            "group by c.organizational_unit, c.organization "
+            "order by c.organization, c.organizational_unit"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [identifier])
+        nt_teamid = namedtuple('TeamID', [col[0] for col in cursor.description])
+        return [nt_teamid(*row) for row in cursor.fetchall()]
+
+    def search_teamid_objects(self, **kwargs):
+        q = kwargs.get("query")
+        if not q:
+            return []
+        q = "%{}%".format(connection.ops.prep_for_like_query(q))
+        query = (
+            "select c.organizational_unit, c.organization "
+            "from inventory_certificate as c "
+            "join inventory_file as f on (f.signed_by_id = c.id) "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and ("
+            "  upper(c.organizational_unit) like upper(%s)"
+            "  or upper(c.organization) like upper(%s)"
+            ") "
+            "group by c.organizational_unit, c.organization "
+            "order by c.organization, c.organizational_unit"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [q, q])
+        nt_teamid = namedtuple('TeamID', [col[0] for col in cursor.description])
+        return [nt_teamid(*row) for row in cursor.fetchall()]
+
+    def get_cdhash_objects(self, identifier):
+        query = (
+            "select f.cdhash "
+            "from inventory_file as f "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and f.cdhash = %s "
+            "group by f.cdhash "
+            "order by f.cdhash"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [identifier])
+        nt_cdhash = namedtuple('CDHash', [col[0] for col in cursor.description])
+        return [nt_cdhash(*row) for row in cursor.fetchall()]
+
+    def search_cdhash_objects(self, **kwargs):
+        q = kwargs.get("query")
+        if not q:
+            return []
+        q = "%{}%".format(connection.ops.prep_for_like_query(q))
+        query = (
+            "select f.cdhash "
+            "from inventory_file as f "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and upper(f.cdhash) like upper(%s) "
+            "group by f.cdhash "
+            "order by f.cdhash"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [q])
+        nt_cdhash = namedtuple('CDHash', [col[0] for col in cursor.description])
+        return [nt_cdhash(*row) for row in cursor.fetchall()]
+
+    def get_signingid_objects(self, identifier):
+        query = (
+            "select f.signing_id "
+            "from inventory_file as f "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and f.signing_id = %s "
+            "group by f.signing_id "
+            "order by f.signing_id"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [identifier])
+        nt_signingid = namedtuple('SigningID', [col[0] for col in cursor.description])
+        return [nt_signingid(*row) for row in cursor.fetchall()]
+
+    def search_signingid_objects(self, **kwargs):
+        q = kwargs.get("query")
+        if not q:
+            return []
+        q = "%{}%".format(connection.ops.prep_for_like_query(q))
+        query = (
+            "select f.signing_id "
+            "from inventory_file as f "
+            "join inventory_source as s on (s.id = f.source_id) "
+            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+            "and upper(f.signing_id) like upper(%s) "
+            "group by f.signing_id "
+            "order by f.signing_id"
+        )
+        cursor = connection.cursor()
+        cursor.execute(query, [q])
+        nt_signingid = namedtuple('SigningID', [col[0] for col in cursor.description])
+        return [nt_signingid(*row) for row in cursor.fetchall()]
+
+
+class Target(models.Model):
+    class Type(models.TextChoices):
+        TEAM_ID = "TEAMID", _("Team ID")
+        CERTIFICATE = "CERTIFICATE", _("Certificate")
+        METABUNDLE = "METABUNDLE", _("MetaBundle")
+        BUNDLE = "BUNDLE", _("Bundle")
+        SIGNING_ID = "SIGNINGID", _("Signing ID")
+        BINARY = "BINARY", _("Binary")
+        CDHASH = "CDHASH", _("cdhash")
+
+        @property
+        def has_sha256_identifier(self):
+            return self.value in (self.BINARY, self.BUNDLE, self.CERTIFICATE, self.METABUNDLE)
+
+        @property
+        def is_native(self):
+            # BUNDLE and METABUNDLE are only intended to use on the server side
+            return self.value not in (self.BUNDLE, self.METABUNDLE)
+
+        @classmethod
+        def rule_choices(cls):
+            return [(member.value, member.label) for member in cls if member.is_native]
+
+        @property
+        def url_name(self):
+            return f"santa:{self.value.lower()}"
+
+    type = models.CharField(choices=Type.choices, max_length=16)
+    identifier = models.CharField(max_length=256)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = TargetManager()
+
+    class Meta:
+        unique_together = (("type", "identifier"),)
+
+    def get_absolute_url(self):
+        target_type = self.Type(self.type)
+        return reverse(target_type.url_name, args=(self.identifier,))
+
+    @cached_property
+    def team_id(self):
+        if self.type == self.Type.SIGNING_ID:
+            return self.identifier.split(":")[0]
+        elif self.type == self.Type.TEAM_ID:
+            return self.identifier
+
+    @cached_property
+    def files(self):
+        qs = File.objects.select_related("bundle").filter(
+            source__module="zentral.contrib.santa",
+            source__name="Santa events"
+        )
+        if self.type == self.Type.BINARY:
+            return list(qs.filter(sha_256=self.identifier))
+        elif self.type == self.Type.CDHASH:
+            return list(qs.filter(cdhash=self.identifier))
+        elif self.type == self.Type.SIGNING_ID:
+            return list(qs.filter(signing_id=self.identifier))
+        else:
+            return []
+
+    @cached_property
+    def certificates(self):
+        if self.type == self.Type.CERTIFICATE:
+            return list(Certificate.objects.filter(sha_256=self.identifier))
+        else:
+            return []
+
+    @cached_property
+    def team_ids(self):
+        if self.team_id:
+            return Target.objects.get_teamid_objects(self.team_id)
+        else:
+            return []
+
+    def serialize_for_event(self):
+        d = {"type": self.type}
+        if self.type == self.Type.CDHASH:
+            d["cdhash"] = self.identifier
+        elif self.type == self.Type.SIGNING_ID:
+            d["signing_id"] = self.identifier
+        elif self.type == self.Type.TEAM_ID:
+            d["team_id"] = self.identifier
+        else:
+            d["sha256"] = self.identifier
+        return d
+
+
+class TargetCounter(models.Model):
+    target = models.ForeignKey(Target, on_delete=models.CASCADE)
+    configuration = models.ForeignKey("santa.Configuration", on_delete=models.CASCADE)
+    blocked_count = models.IntegerField(default=0)
+    collected_count = models.IntegerField(default=0)
+    executed_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("target", "configuration"),)
+
+
+class TargetState(models.Model):
+    class State(models.IntegerChoices):
+        BANNED = -100
+        SUSPECT = -50
+        UNTRUSTED = 0
+        PARTIALLY_ALLOWLISTED = 50
+        GLOBALLY_ALLOWLISTED = 100
+
+    target = models.ForeignKey(Target, on_delete=models.CASCADE)
+    configuration = models.ForeignKey("santa.Configuration", on_delete=models.CASCADE)
+    flagged = models.BooleanField(default=False)
+    state = models.IntegerField(choices=State.choices, default=State.UNTRUSTED)
+    score = models.IntegerField(default=0)
+    reset_at = models.DateTimeField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("target", "configuration"),)
+
+
+class MetaBundle(models.Model):
+    target = models.OneToOneField(Target, on_delete=models.PROTECT)
+    signing_id_targets = models.ManyToManyField(Target, related_name="parent_metabundle")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @cached_property
+    def signing_ids(self):
+        return [sit.identifier for sit in self.signing_id_targets.all().order_by("identifier")]
+
+
+class BundleManager(models.Manager):
+    def search(self, **kwargs):
+        name = kwargs.get("name")
+        if name:
+            qs = self.filter(Q(name__icontains=name) | Q(bundle_id__icontains=name))
+            return (
+                qs.select_related("target")
+                  .annotate(binary_target_count=Count("binary_targets"))
+                  .order_by("name")
+            )
+        else:
+            return []
+
+
+class Bundle(models.Model):
+    target = models.OneToOneField(Target, on_delete=models.PROTECT)
+
+    path = models.TextField()
+    executable_rel_path = models.TextField()
+    bundle_id = models.TextField()
+    name = models.TextField()
+    version = models.TextField()
+    version_str = models.TextField()
+
+    binary_count = models.PositiveIntegerField()
+    binary_targets = models.ManyToManyField(Target, related_name="parent_bundle")
+    uploaded_at = models.DateTimeField(null=True)
+
+    metabundle = models.ForeignKey(MetaBundle, on_delete=models.SET_NULL, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = BundleManager()
+
+    def __str__(self):
+        return f"{self.bundle_id} {self.version_str}"
+
+    def get_absolute_url(self):
+        return reverse("santa:bundle", args=(self.target.identifier,))
+
+    def files(self):
+        return File.objects.filter(
+            source__module="zentral.contrib.santa",
+            source__name="Santa events",
+            sha_256__in=self.binary_targets.values_list("identifier", flat=True)
+        ).order_by("name")
 
 
 # Configuration / Enrollment
@@ -131,6 +510,39 @@ class Configuration(models.Model):
         verbose_name="Remount USB mode",
     )
 
+    # Voting
+
+    voting_realm = models.ForeignKey(
+        Realm, on_delete=models.SET_NULL, blank=True, null=True,
+        help_text="Realm used to authenticate the users of the exception portal"
+    )
+    default_voting_weight = models.PositiveIntegerField(
+        blank=True, default=0,
+        help_text="Default users voting weight"
+    )
+    default_ballot_target_types = ArrayField(
+        models.CharField(max_length=16, choices=Target.Type.choices),
+        blank=True, default=list,
+        help_text="List of the target types users have the permission to vote on by default"
+    )
+    banned_threshold = models.IntegerField(
+        validators=[MinValueValidator(-1000), MaxValueValidator(-1)],
+        blank=True, default=-26,
+        help_text="Voting score (-1000 → -1) at which a target is banned"
+    )
+    partially_allowlisted_threshold = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(1000)],
+        blank=True, default=5,
+        help_text="Voting score (1 → 1000) at which a target is allowlisted "
+                  "for the users having requested an exception"
+    )
+    globally_allowlisted_threshold = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(1000)],
+        blank=True, default=50,
+        help_text="Voting score (1 → 1000) at which a target is allowlisted "
+                  "for all the devices enrolled in the configuration"
+    )
+
     # Zentral options
 
     allow_unknown_shard = models.IntegerField(
@@ -228,10 +640,20 @@ class Configuration(models.Model):
             "full_sync_interval": self.full_sync_interval,
             "enable_bundles": self.enable_bundles,
             "enable_transitive_rules": self.enable_transitive_rules,
+            # Regexes
             "allowed_path_regex": self.allowed_path_regex,
             "blocked_path_regex": self.blocked_path_regex,
+            # Voting
+            "voting_realm": self.voting_realm.serialize_for_event(keys_only=True) if self.voting_realm else None,
+            "default_voting_weight": self.default_voting_weight,
+            "default_ballot_target_types": sorted(self.default_ballot_target_types),
+            "banned_threshold": self.banned_threshold,
+            "partially_allowlisted_threshold": self.partially_allowlisted_threshold,
+            "globally_allowlisted_threshold": self.globally_allowlisted_threshold,
+            # USB
             "block_usb_mount": self.block_usb_mount,
             "remount_usb_mode": self.remount_usb_mode,
+            # Zentral options
             "allow_unknown_shard": self.allow_unknown_shard,
             "enable_all_event_upload_shard": self.enable_all_event_upload_shard,
             "sync_incident_severity": self.sync_incident_severity,
@@ -242,6 +664,41 @@ class Configuration(models.Model):
 
     def can_be_deleted(self):
         return self.enrollment_set.all().count() == 0
+
+
+class VotingGroup(models.Model):
+    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
+    realm_group = models.ForeignKey(RealmGroup, on_delete=models.CASCADE)
+    can_unflag_target = models.BooleanField(default=False)
+    can_mark_malware = models.BooleanField(default=False)
+    can_reset_target = models.BooleanField(default=False)
+    ballot_target_types = ArrayField(models.CharField(max_length=16, choices=Target.Type.choices))
+    voting_weight = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("configuration", "realm_group"),)
+
+    def get_absolute_url(self):
+        return f"{self.configuration.get_absolute_url()}#vg-{self.pk}"
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk,
+             "configuration": self.configuration.serialize_for_event(keys_only=True),
+             "realm_group": self.realm_group.serialize_for_event(keys_only=True)}
+        if keys_only:
+            return d
+        d.update({
+            "can_unflag_target": self.can_unflag_target,
+            "can_mark_malware": self.can_mark_malware,
+            "can_reset_target": self.can_reset_target,
+            "ballot_target_types": sorted(self.ballot_target_types),
+            "voting_weight": self.voting_weight,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
 
 
 class Enrollment(BaseEnrollment):
@@ -266,6 +723,31 @@ class EnrolledMachineManager(models.Manager):
             .filter(serial_number=serial_number)
             .order_by("-updated_at")
         )
+
+    def current_for_primary_user(self, primary_user, max_age_days=90):
+        query = (
+            "with ranked_enrolled_machines as ("
+            "  select em.id, cms.last_seen,"
+            "  rank() over (partition by (em.serial_number, em.enrollment_id) order by em.id desc) rank"
+            "  from santa_enrolledmachine em"
+            "  join inventory_currentmachinesnapshot cms on (em.serial_number = cms.serial_number)"
+            "  join inventory_source s on (cms.source_id = s.id)"
+            "  where s.module = 'zentral.contrib.santa' and s.name = 'Santa'"
+            "  and cms.last_seen > now() - interval '%s days'"
+            "  and em.primary_user = %s"
+            ") "
+            "select id, last_seen from ranked_enrolled_machines where rank = 1"
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(query, [max_age_days, primary_user])
+            enrolled_machine_pks = {em_id: last_seen for em_id, last_seen in cursor.fetchall()}
+        enrolled_machines = []
+        for enrolled_machine in (
+            self.select_related("enrollment__configuration__voting_realm")
+                .filter(pk__in=enrolled_machine_pks.keys())
+        ):
+            enrolled_machines.append((enrolled_machine, enrolled_machine_pks[enrolled_machine.pk]))
+        return enrolled_machines
 
 
 class EnrolledMachine(models.Model):
@@ -312,13 +794,11 @@ class EnrolledMachine(models.Model):
                                          .annotate(count=Count("id"))
         }
         ok = True
-        for target_type, attr in ((Target.BINARY, "binary_rule_count"),
-                                  (Target.CDHASH, "cdhash_rule_count"),
-                                  (Target.CERTIFICATE, "certificate_rule_count"),
-                                  (Target.SIGNING_ID, "signingid_rule_count"),
-                                  (Target.TEAM_ID, "teamid_rule_count")):
-            synced_count = synced_rules.get(target_type, 0)
-            reported_count = getattr(self, attr) or 0
+        for target_type in Target.Type:
+            if not target_type.is_native:
+                continue
+            synced_count = synced_rules.get(target_type.value, 0)
+            reported_count = getattr(self, f"{target_type.value.lower()}_rule_count") or 0
             if synced_count != reported_count:
                 logger.error(
                     "Enrolled machine %s: %s rules synced %s, reported %s",
@@ -328,445 +808,33 @@ class EnrolledMachine(models.Model):
         return ok
 
 
-# Rules
+# Voting
 
 
-class TargetManager(models.Manager):
-    def summary(self):
-        query = (
-            "with collected_files as ("
-            "  select f.cdhash, f.sha_256, f.signed_by_id, f.signing_id, f.name"
-            "  from inventory_file as f"
-            "  join inventory_source as s on (f.source_id = s.id)"
-            "  where s.module = 'zentral.contrib.santa' and s.name = 'Santa events'"
-            "  group by f.cdhash, f.sha_256, f.signed_by_id, f.signing_id, f.name"
-            "), collected_certificates as ("
-            "  select c.sha_256, c.common_name"
-            "  from inventory_certificate as c"
-            "  join collected_files as f on (c.id = f.signed_by_id)"
-            "  group by c.sha_256, c.common_name"
-            "), collected_team_ids as ("
-            "  select c.organizational_unit, c.organization"
-            "  from inventory_certificate as c"
-            "  join collected_files as f on (c.id = f.signed_by_id)"
-            "  where c.organizational_unit ~ '[A-Z0-9]{10}'"
-            "  group by c.organizational_unit, c.organization"
-            ") "
-            "select 'cdhash' as target_type,"
-            "count(distinct cdhash) as target_count,"
-            "(select count(distinct t.id)"
-            " from santa_target as t"
-            " join collected_files as f on (t.type = 'CDHASH' and t.identifier=f.cdhash)"
-            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
-            "from collected_files "
-            "where cdhash is not null "
-            "union "
-            "select 'binary' as target_type,"
-            "count(*) as target_count,"
-            "(select count(distinct t.id)"
-            " from santa_target as t"
-            " join collected_files as f on (t.type = 'BINARY' and t.identifier=f.sha_256)"
-            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
-            "from collected_files "
-            "union "
-            "select 'certificate' as target_type,"
-            "count(*) as target_count,"
-            "(select count(distinct t.id)"
-            " from santa_target as t"
-            " join collected_certificates as c on (t.type = 'CERTIFICATE' and t.identifier=c.sha_256)"
-            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
-            "from collected_certificates "
-            "union "
-            "select 'teamid' as target_type,"
-            "count(*) as target_count,"
-            "(select count(distinct t.id)"
-            " from santa_target as t"
-            " join collected_team_ids as i on (t.type = 'TEAMID' and t.identifier=i.organizational_unit)"
-            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
-            "from collected_team_ids "
-            "union "
-            "select 'signingid' as target_type,"
-            "count(distinct signing_id) as target_count,"
-            "(select count(distinct t.id)"
-            " from santa_target as t"
-            " join collected_files as f on (t.type = 'SIGNINGID' and t.identifier=f.signing_id)"
-            " join santa_rule as r on (t.id = r.target_id)) as rule_count "
-            "from collected_files "
-            "where signing_id is not null "
-            "union "
-            "select 'bundle' as target_type,"
-            "count(*) as target_count,"
-            "(select count(distinct b.id)"
-            " from santa_bundle as b"
-            " join santa_rule as r on (b.target_id = r.target_id)) as rule_count "
-            "from santa_bundle"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query)
-        summary = {"total": 0}
-        for target_type, target_count, rule_count in cursor.fetchall():
-            summary[target_type.lower()] = {"count": target_count, "rule_count": rule_count}
-            summary["total"] += target_count
-        return summary
-
-    def search_query(self, q=None, target_type=None):
-        if not target_type:
-            target_type = None
-        kwargs = {}
-        if q:
-            kwargs["q"] = "%{}%".format(connection.ops.prep_for_like_query(q))
-            bi_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
-            ce_where = ("where upper(c.common_name) like upper(%(q)s) "
-                        "or upper(c.organizational_unit) like upper(%(q)s) "
-                        "or upper(c.sha_256) like upper(%(q)s)")
-            ti_where = ("where c.organizational_unit ~ '[A-Z0-9]{10}' and ("
-                        "upper(c.organization) like upper(%(q)s) "
-                        "or upper(c.organizational_unit) like upper(%(q)s))")
-            ch_where = "where upper(f.cdhash) like upper(%(q)s)"
-            si_where = "where upper(f.signing_id) like upper(%(q)s)"
-            bu_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
-        else:
-            bi_where = ce_where = bu_where = ""
-            ti_where = "where c.organizational_unit ~ '[A-Z0-9]{10}'"
-            ch_where = "where f.cdhash IS NOT NULL"
-            si_where = "where f.signing_id IS NOT NULL"
-        targets_subqueries = {
-            "BINARY":
-                "select 'BINARY' as target_type,  f.identifier, f.name as sort_str,"
-                "jsonb_build_object("
-                " 'name', f.name,"
-                " 'cert_cn', c.common_name,"
-                " 'cert_sha256', c.sha_256,"
-                " 'cert_ou', c.organizational_unit"
-                ") as object "
-                "from collected_files as f "
-                "left join inventory_certificate as c on (f.signed_by_id = c.id) "
-                f"{bi_where} "
-                "group by target_type, f.identifier, f.name, c.common_name, c.sha_256, c.organizational_unit",
-            "CERTIFICATE":
-                "select 'CERTIFICATE' as target_type, c.sha_256 as identifier, c.common_name as sort_str,"
-                "jsonb_build_object("
-                " 'cn', c.common_name,"
-                " 'ou', c.organizational_unit,"
-                " 'valid_from', c.valid_from,"
-                " 'valid_until', c.valid_until"
-                ") as object "
-                "from inventory_certificate as c "
-                "join collected_files as f on (c.id = f.signed_by_id) "
-                f"{ce_where} "
-                "group by target_type, c.sha_256, c.common_name, c.organizational_unit, c.valid_from, c.valid_until",
-            "TEAMID":
-                "select 'TEAMID' as target_type, c.organizational_unit as identifier, c.organization as sort_str,"
-                "jsonb_build_object("
-                " 'organizational_unit', c.organizational_unit,"
-                " 'organization', c.organization"
-                ") as object "
-                "from inventory_certificate as c "
-                "join collected_files as f on (c.id = f.signed_by_id) "
-                f"{ti_where} "
-                "group by target_type, c.organizational_unit, c.organization",
-            "CDHASH":
-                "select 'CDHASH' as target_type, f.cdhash as identifier, f.cdhash as sort_str,"
-                "jsonb_build_object("
-                " 'file_name', f.name,"
-                " 'cert_cn', c.common_name"
-                ") as object "
-                "from collected_files as f "
-                "left join inventory_certificate as c on (f.signed_by_id = c.id) "
-                f"{ch_where} "
-                "group by target_type, f.cdhash, f.name, c.common_name",
-            "SIGNINGID":
-                "select 'SIGNINGID' as target_type, f.signing_id as identifier, f.signing_id as sort_str,"
-                "jsonb_build_object("
-                " 'file_name', f.name,"
-                " 'cert_cn', c.common_name"
-                ") as object "
-                "from collected_files as f "
-                "left join inventory_certificate as c on (f.signed_by_id = c.id) "
-                f"{si_where} "
-                "group by target_type, f.signing_id, f.name, c.common_name",
-            "BUNDLE":
-                "select 'BUNDLE' as target_type, t.identifier, b.name as sort_str,"
-                "jsonb_build_object("
-                " 'name', b.name,"
-                " 'version', b.version,"
-                " 'version_str', b.version_str"
-                ") as object "
-                "from santa_bundle as b "
-                "join santa_target as t on (b.target_id = t.id) "
-                f"{bu_where} "
-        }
-        targets_query = " union ".join(v for k, v in targets_subqueries.items()
-                                       if target_type is None or k == target_type)
-        query = (
-            "with collected_files as ("
-            "  select f.sha_256 as identifier, f.cdhash, f.signed_by_id, f.signing_id, f.name"
-            "  from inventory_file as f"
-            "  join inventory_source as s on (f.source_id = s.id)"
-            "  where s.module='zentral.contrib.santa' and s.name = 'Santa events'"
-            "  group by f.sha_256, f.cdhash, f.signed_by_id, f.signing_id, f.name"
-            f"), targets as ({targets_query}) "
-            "select target_type, identifier, object, count(*) over() as full_count,"
-            "(select count(*) from santa_rule as r"
-            " join santa_target as t on (r.target_id = t.id)"
-            " where t.type = ts.target_type and t.identifier = ts.identifier) as rule_count "
-            "from targets as ts "
-            "order by sort_str, identifier "
-        )
-        return query, kwargs
-
-    def search(self, q=None, target_type=None, offset=0, limit=10):
-        query, kwargs = self.search_query(q, target_type)
-        kwargs.update({"offset": offset, "limit": limit})
-        cursor = connection.cursor()
-        cursor.execute(f"{query} offset %(offset)s limit %(limit)s", kwargs)
-        columns = [col[0] for col in cursor.description]
-        results = []
-        type_dict = dict(Target.TYPE_CHOICES)
-        for row in cursor.fetchall():
-            result = dict(zip(columns, row))
-            obj = json.loads(result.pop("object"))
-            for attr in ("valid_from", "valid_until"):
-                if attr in obj:
-                    obj[attr] = parser.parse(obj[attr])
-            result["object"] = obj
-            url_name = result["target_type"].lower()
-            result["target_type_for_display"] = type_dict.get(result["target_type"], result["target_type"])
-            result["url"] = reverse(f"santa:{url_name}", args=(result["identifier"],))
-            results.append(result)
-        return results
-
-    def get_teamid_objects(self, identifier):
-        query = (
-            "select c.organizational_unit, c.organization "
-            "from inventory_certificate as c "
-            "join inventory_file as f on (f.signed_by_id = c.id) "
-            "join inventory_source as s on (s.id = f.source_id) "
-            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-            "and c.organizational_unit = %s "
-            "group by c.organizational_unit, c.organization "
-            "order by c.organization, c.organizational_unit"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query, [identifier])
-        nt_teamid = namedtuple('TeamID', [col[0] for col in cursor.description])
-        return [nt_teamid(*row) for row in cursor.fetchall()]
-
-    def search_teamid_objects(self, **kwargs):
-        q = kwargs.get("query")
-        if not q:
-            return []
-        q = "%{}%".format(connection.ops.prep_for_like_query(q))
-        query = (
-            "select c.organizational_unit, c.organization "
-            "from inventory_certificate as c "
-            "join inventory_file as f on (f.signed_by_id = c.id) "
-            "join inventory_source as s on (s.id = f.source_id) "
-            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-            "and ("
-            "  upper(c.organizational_unit) like upper(%s)"
-            "  or upper(c.organization) like upper(%s)"
-            ") "
-            "group by c.organizational_unit, c.organization "
-            "order by c.organization, c.organizational_unit"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query, [q, q])
-        nt_teamid = namedtuple('TeamID', [col[0] for col in cursor.description])
-        return [nt_teamid(*row) for row in cursor.fetchall()]
-
-    def get_cdhash_objects(self, identifier):
-        query = (
-            "select f.cdhash "
-            "from inventory_file as f "
-            "join inventory_source as s on (s.id = f.source_id) "
-            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-            "and f.cdhash = %s "
-            "group by f.cdhash "
-            "order by f.cdhash"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query, [identifier])
-        nt_cdhash = namedtuple('CDHash', [col[0] for col in cursor.description])
-        return [nt_cdhash(*row) for row in cursor.fetchall()]
-
-    def search_cdhash_objects(self, **kwargs):
-        q = kwargs.get("query")
-        if not q:
-            return []
-        q = "%{}%".format(connection.ops.prep_for_like_query(q))
-        query = (
-            "select f.cdhash "
-            "from inventory_file as f "
-            "join inventory_source as s on (s.id = f.source_id) "
-            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-            "and upper(f.cdhash) like upper(%s) "
-            "group by f.cdhash "
-            "order by f.cdhash"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query, [q])
-        nt_cdhash = namedtuple('CDHash', [col[0] for col in cursor.description])
-        return [nt_cdhash(*row) for row in cursor.fetchall()]
-
-    def get_signingid_objects(self, identifier):
-        query = (
-            "select f.signing_id "
-            "from inventory_file as f "
-            "join inventory_source as s on (s.id = f.source_id) "
-            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-            "and f.signing_id = %s "
-            "group by f.signing_id "
-            "order by f.signing_id"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query, [identifier])
-        nt_signingid = namedtuple('SigningID', [col[0] for col in cursor.description])
-        return [nt_signingid(*row) for row in cursor.fetchall()]
-
-    def search_signingid_objects(self, **kwargs):
-        q = kwargs.get("query")
-        if not q:
-            return []
-        q = "%{}%".format(connection.ops.prep_for_like_query(q))
-        query = (
-            "select f.signing_id "
-            "from inventory_file as f "
-            "join inventory_source as s on (s.id = f.source_id) "
-            "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-            "and upper(f.signing_id) like upper(%s) "
-            "group by f.signing_id "
-            "order by f.signing_id"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query, [q])
-        nt_signingid = namedtuple('SigningID', [col[0] for col in cursor.description])
-        return [nt_signingid(*row) for row in cursor.fetchall()]
-
-
-class Target(models.Model):
-    BINARY = "BINARY"
-    BUNDLE = "BUNDLE"
-    CDHASH = "CDHASH"
-    CERTIFICATE = "CERTIFICATE"
-    SIGNING_ID = "SIGNINGID"
-    TEAM_ID = "TEAMID"
-    TYPE_CHOICES = (
-        (BINARY, "Binary"),
-        (BUNDLE, "Bundle"),
-        (CDHASH, "cdhash"),
-        (CERTIFICATE, "Certificate"),
-        (SIGNING_ID, "Signing ID"),
-        (TEAM_ID, "Team ID"),
-    )
-    type = models.CharField(choices=TYPE_CHOICES, max_length=16)
-    identifier = models.CharField(max_length=256)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    objects = TargetManager()
-
-    class Meta:
-        unique_together = (("type", "identifier"),)
-
-    def get_absolute_url(self):
-        return reverse(f"santa:{self.type.lower()}", args=(self.identifier,))
-
-    @cached_property
-    def team_id(self):
-        if self.type == self.SIGNING_ID:
-            return self.identifier.split(":")[0]
-        elif self.type == self.TEAM_ID:
-            return self.identifier
-
-    @cached_property
-    def files(self):
-        if self.type == self.BINARY:
-            return list(File.objects.select_related("bundle").filter(sha_256=self.identifier))
-        elif self.type == self.CDHASH:
-            return list(File.objects.select_related("bundle").filter(cdhash=self.identifier))
-        elif self.type == self.SIGNING_ID:
-            return list(File.objects.select_related("bundle").filter(signing_id=self.identifier))
-        else:
-            return []
-
-    @cached_property
-    def certificates(self):
-        if self.type == self.CERTIFICATE:
-            return list(Certificate.objects.filter(sha_256=self.identifier))
-        else:
-            return []
-
-    @cached_property
-    def team_ids(self):
-        if self.team_id:
-            return Target.objects.get_teamid_objects(self.team_id)
-        else:
-            return []
-
-    def serialize_for_event(self):
-        d = {"type": self.type}
-        if self.type == self.CDHASH:
-            d["cdhash"] = self.identifier
-        elif self.type == self.SIGNING_ID:
-            d["signing_id"] = self.identifier
-        elif self.type == self.TEAM_ID:
-            d["team_id"] = self.identifier
-        else:
-            d["sha256"] = self.identifier
-        return d
-
-
-class TargetCounter(models.Model):
+class Ballot(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     target = models.ForeignKey(Target, on_delete=models.CASCADE)
-    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
-    blocked_count = models.IntegerField(default=0)
-    collected_count = models.IntegerField(default=0)
-    executed_count = models.IntegerField(default=0)
+    event_target = models.ForeignKey(Target, on_delete=models.CASCADE, null=True, related_name="+")
+    realm_user = models.ForeignKey(RealmUser, on_delete=models.SET_NULL, null=True)
+    user_uid = models.CharField()
+
+    replaced_by = models.ForeignKey("self", null=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("target", "configuration"),)
+        unique_together = (("target", "realm_user", "user_uid", "replaced_by"),)
 
 
-class BundleManager(models.Manager):
-    def search(self, **kwargs):
-        name = kwargs.get("name")
-        if name:
-            qs = self.filter(Q(name__icontains=name) | Q(bundle_id__icontains=name))
-            return (
-                qs.select_related("target")
-                  .annotate(binary_target_count=Count("binary_targets"))
-                  .order_by("name")
-            )
-        else:
-            return []
-
-
-class Bundle(models.Model):
-    target = models.OneToOneField(Target, on_delete=models.PROTECT)
-
-    path = models.TextField()
-    executable_rel_path = models.TextField()
-    bundle_id = models.TextField()
-    name = models.TextField()
-    version = models.TextField()
-    version_str = models.TextField()
-
-    binary_count = models.PositiveIntegerField()
-    binary_targets = models.ManyToManyField(Target, related_name="parent_bundle")
-    uploaded_at = models.DateTimeField(null=True)
-
+class Vote(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    ballot = models.ForeignKey(Ballot, on_delete=models.CASCADE)
+    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
+    was_yes_vote = models.BooleanField()
+    weight = models.PositiveIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
-    objects = BundleManager()
-
-    def __str__(self):
-        return f"{self.bundle_id} {self.version_str}"
-
-    def get_absolute_url(self):
-        return reverse("santa:bundle", args=(self.target.identifier,))
+    class Meta:
+        unique_together = (("ballot", "configuration"),)
 
 
 class RuleSet(models.Model):
@@ -782,40 +850,28 @@ class RuleSet(models.Model):
         return {"pk": self.pk, "name": self.name}
 
 
-def translate_rule_policy(policy):
-    if not isinstance(policy, int):
-        policy = int(policy)
-    if policy == Rule.ALLOWLIST:
-        return "ALLOWLIST"
-    elif policy == Rule.ALLOWLIST_COMPILER:
-        return "ALLOWLIST_COMPILER"
-    elif policy == Rule.BLOCKLIST:
-        return "BLOCKLIST"
-    elif policy == Rule.SILENT_BLOCKLIST:
-        return "SILENT_BLOCKLIST"
-    elif policy == MachineRule.REMOVE:
-        return "REMOVE"
-    else:
-        raise ValueError(f"Unknown santa policy: {policy}")
-
-
 class Rule(models.Model):
-    ALLOWLIST = 1
-    BLOCKLIST = 2
-    SILENT_BLOCKLIST = 3
-    ALLOWLIST_COMPILER = 5
-    POLICY_CHOICES = (
-        (ALLOWLIST, "Allowlist"),
-        (BLOCKLIST, "Blocklist"),
-        (SILENT_BLOCKLIST, "Silent blocklist"),
-        (ALLOWLIST_COMPILER, "Allowlist compiler"),
-    )
-    BUNDLE_POLICIES = (ALLOWLIST, ALLOWLIST_COMPILER)
+    class Policy(models.IntegerChoices):
+        ALLOWLIST = 1, _("Allowlist")
+        BLOCKLIST = 2, _("Blocklist")
+        SILENT_BLOCKLIST = 3, _("Silent blocklist")
+        REMOVE = 4,  _("Remove")
+        ALLOWLIST_COMPILER = 5, _("Allowlist compiler")
+
+        @property
+        def sync_only(self):
+            # the REMOVE policy is only used for the sync protocol
+            return self.value == self.REMOVE
+
+        @classmethod
+        def rule_choices(cls):
+            return [(member.value, member.label) for member in cls if not member.sync_only]
+
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
     ruleset = models.ForeignKey(RuleSet, on_delete=models.CASCADE, null=True)
 
     target = models.ForeignKey(Target, on_delete=models.PROTECT)
-    policy = models.PositiveSmallIntegerField(choices=POLICY_CHOICES)
+    policy = models.PositiveSmallIntegerField(choices=Policy.rule_choices())
     custom_msg = models.TextField(blank=True)
     description = models.TextField(blank=True)
     version = models.PositiveIntegerField(default=1)
@@ -835,13 +891,13 @@ class Rule(models.Model):
         unique_together = (("configuration", "target"),)
 
     def is_blocking_rule(self):
-        return self.policy in (self.BLOCKLIST, self.SILENT_BLOCKLIST)
+        return self.policy in (self.Policy.BLOCKLIST, self.Policy.SILENT_BLOCKLIST)
 
     def get_absolute_url(self):
         return reverse("santa:configuration_rules", args=(self.configuration_id,)) + f"#rule-{self.pk}"
 
     def get_translated_policy(self):
-        return translate_rule_policy(self.policy)
+        return self.Policy(int(self.policy)).name
 
     def serialize_for_event(self):
         d = {
@@ -892,43 +948,31 @@ class MachineRuleManager(models.Manager):
             "  where ("
             "    {wheres}"
             "  )"
-            "), expanded_rules as ("  # expand the bundle rules
-            "   select case when bt.target_id is not null then bt.target_id else fr.target_id end as target_id,"
-            "   fr.policy, fr.custom_msg, fr.version,"
-            "   b.binary_count as file_bundle_binary_count, b.target_id as file_bundle_target_id"
-            "   from filtered_rules as fr"
-            "   left join santa_bundle as b on (b.target_id = fr.target_id)"
-            "   left join santa_bundle_binary_targets as bt on (bt.bundle_id = b.id)"
             "), machine_rules as ("  # current enrolled machine machine rules
             "   select target_id, policy, version"
             "   from santa_machinerule"
             "   where enrolled_machine_id = %(enrolled_machine_pk)s"
             "), rule_product as ("  # full product of the configured rules and the machine rules
-            "  select er.target_id as rule_target_id, er.policy as rule_policy,"
-            "  er.custom_msg as rule_custom_msg, er.version as rule_version,"
-            "  er.file_bundle_binary_count, er.file_bundle_target_id,"
+            "  select fr.target_id as rule_target_id, fr.policy as rule_policy,"
+            "  fr.custom_msg as rule_custom_msg, fr.version as rule_version,"
             "  mr.target_id as machine_rule_target_id, mr.policy as machine_rule_policy,"
             "  mr.version as machine_rule_version"
-            "  from expanded_rules as er"
-            "  full outer join machine_rules as mr on (mr.target_id = er.target_id)"
+            "  from filtered_rules as fr"
+            "  full outer join machine_rules as mr on (mr.target_id = fr.target_id)"
             "), changed_rules as ("  # filter the product to get the changes
             "  select rule_target_id as target_id, rule_policy as policy,"
-            "  rule_custom_msg as custom_msg, rule_version as version,"
-            "  file_bundle_binary_count, file_bundle_target_id"
+            "  rule_custom_msg as custom_msg, rule_version as version"
             "  from rule_product where ("
             "    (machine_rule_target_id is null)"
             "    or (rule_target_id is not null"
             "        and (rule_policy <> machine_rule_policy or rule_version <> machine_rule_version)))"
             "  union"
-            "  select machine_rule_target_id as target_id, 4 as policy, null as custom_msg, 1 as version,"
-            "  null as file_bundle_binary_count, null as file_bundle_target_id"
+            "  select machine_rule_target_id as target_id, 4 as policy, null as custom_msg, 1 as version"
             "  from rule_product where rule_target_id is null"
             ") "  # limit, order and join with target to get all the necessary info
-            "select t.id as target_id, t.type as rule_type, t.identifier, cr.policy, cr.custom_msg, cr.version,"
-            "cr.file_bundle_binary_count, t2.identifier as file_bundle_hash "
+            "select t.id as target_id, t.type as rule_type, t.identifier, cr.policy, cr.custom_msg, cr.version "
             "from changed_rules as cr "
             "join santa_target as t on (t.id = cr.target_id) "
-            "left join santa_target as t2 on (t2.id = cr.file_bundle_target_id) "
             "order by t.identifier limit %(batch_size)s"
         )
         configuration = enrolled_machine.enrollment.configuration
@@ -971,7 +1015,7 @@ class MachineRuleManager(models.Manager):
         # fresh start from last known OK state
         # remove all unacknowlegded machine rules, except the REMOVE ones
         # this will ultimately refresh all the rules that haven't been acknowleged
-        qs_cleanup = qs.exclude(policy=MachineRule.REMOVE).filter(cursor__isnull=False)
+        qs_cleanup = qs.exclude(policy=Rule.Policy.REMOVE).filter(cursor__isnull=False)
         if cursor:
             # do not delete request cursor rules. We will acknowlege them
             qs_cleanup = qs_cleanup.exclude(cursor=cursor)
@@ -981,7 +1025,7 @@ class MachineRuleManager(models.Manager):
         if cursor:
             qs = qs.filter(cursor=cursor)
             # remove the REMOVE machine rules from the last batch
-            qs.filter(policy=MachineRule.REMOVE).delete()
+            qs.filter(policy=Rule.Policy.REMOVE).delete()
             # acknowlege the other machine rules from the last batch
             qs.update(cursor=None)
 
@@ -996,12 +1040,12 @@ class MachineRuleManager(models.Manager):
             if new_cursor is None:
                 new_cursor = get_random_string(8)
             target_id = rule.pop("target_id")
-            policy = rule.pop("policy")  # need a translation
-            rule["policy"] = translate_rule_policy(policy)
+            policy = Rule.Policy(rule.pop("policy"))
+            rule["policy"] = policy.name
             version = rule.pop("version")
-            if policy == MachineRule.REMOVE or not rule["custom_msg"]:
+            if policy == Rule.Policy.REMOVE or not rule["custom_msg"]:
                 rule.pop("custom_msg", None)
-            if use_sha256_attr and rule["rule_type"] not in (Target.CDHASH, Target.SIGNING_ID, Target.TEAM_ID):
+            if use_sha256_attr and Target.Type(rule["rule_type"]).has_sha256_identifier:
                 rule["sha256"] = rule.pop("identifier")
             self.update_or_create(enrolled_machine=enrolled_machine,
                                   target=Target(pk=target_id),
@@ -1018,13 +1062,9 @@ class MachineRuleManager(models.Manager):
 
 
 class MachineRule(models.Model):
-    REMOVE = 4
-    POLICY_CHOICES = Rule.POLICY_CHOICES + (
-        (REMOVE, "Remove"),
-    )
     enrolled_machine = models.ForeignKey(EnrolledMachine, on_delete=models.CASCADE)
     target = models.ForeignKey(Target, on_delete=models.PROTECT)
-    policy = models.PositiveSmallIntegerField(choices=POLICY_CHOICES)
+    policy = models.PositiveSmallIntegerField(choices=Rule.Policy.choices)
     version = models.PositiveIntegerField()
     cursor = models.CharField(max_length=8, null=True)
 

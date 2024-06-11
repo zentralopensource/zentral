@@ -18,7 +18,7 @@ from zentral.contrib.santa.utils import build_configuration_plist, build_configu
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
                                ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
-from .models import Configuration, Rule, RuleSet, Target, Enrollment, translate_rule_policy
+from .models import Configuration, Rule, RuleSet, Target, Enrollment
 from .serializers import (RuleSerializer, RuleSetUpdateSerializer, ConfigurationSerializer,
                           EnrollmentSerializer, build_file_tree_from_santa_fileinfo)
 from .tasks import export_targets
@@ -165,7 +165,7 @@ class IngestFileInfo(APIView):
 
 class RuleFilter(filters.FilterSet):
     target_identifier = filters.CharFilter(field_name="target__identifier")
-    target_type = filters.ChoiceFilter(field_name="target__type", choices=Target.TYPE_CHOICES)
+    target_type = filters.ChoiceFilter(field_name="target__type", choices=Target.Type.rule_choices())
     configuration_id = filters.ModelChoiceFilter(queryset=Configuration.objects.all())
 
 
@@ -245,10 +245,12 @@ class RuleSetUpdate(APIView):
                 else:
                     rule_updated = False
                     rule_updates = {}
-                    if rule.policy != rule_defaults["policy"]:
-                        rule_updates.setdefault("removed", {})["policy"] = translate_rule_policy(rule.policy)
-                        rule.policy = rule_defaults["policy"]
-                        rule_updates.setdefault("added", {})["policy"] = translate_rule_policy(rule.policy)
+                    rule_policy = Rule.Policy(rule.policy)
+                    rule_defaults_policy = Rule.Policy(rule_defaults["policy"])
+                    if rule_policy != rule_defaults_policy:
+                        rule_updates.setdefault("removed", {})["policy"] = rule_policy.name
+                        rule.policy = rule_defaults_policy
+                        rule_updates.setdefault("added", {})["policy"] = rule_defaults_policy.name
                         rule_updated = True
                     custom_msg = rule_defaults.get("custom_msg", "")
                     if rule.custom_msg != custom_msg:
@@ -388,26 +390,12 @@ class TargetsExport(APIView):
     permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
-        query = request.GET.get("q")
-        if query:
-            query = query.strip()
-        else:
-            query = None
-        target_type = request.GET.get("target_type")
-        if target_type:
-            if target_type not in (Target.BINARY,
-                                   Target.BUNDLE,
-                                   Target.CERTIFICATE,
-                                   Target.TEAM_ID,
-                                   Target.SIGNING_ID):
-                raise ValidationError("Unknown target type")
-        else:
-            target_type = None
-        export_format = request.GET.get("export_format", "xlsx")
+        search_kwargs = request.GET.dict()
+        export_format = search_kwargs.pop("export_format", None)
         if export_format not in ("xlsx", "zip"):
             raise ValidationError("Unknown export format")
         filename = f"santa_targets_export_{timezone.now():%Y-%m-%d_%H-%M-%S}.{export_format}"
-        result = export_targets.apply_async((query, target_type, filename))
+        result = export_targets.apply_async((search_kwargs, export_format, filename))
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)

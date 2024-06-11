@@ -1,12 +1,19 @@
+import json
+import logging
 import re
+from dateutil import parser
 from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Count, F
+from django.urls import reverse
 from zentral.conf import settings
 from zentral.contrib.inventory.models import Tag
 from .events import post_santa_rule_update_event
-from .models import Bundle, Configuration, Enrollment, Rule, RuleSet, Target, translate_rule_policy
+from .models import Configuration, Enrollment, Rule, RuleSet, Target, TargetState, VotingGroup
+
+
+logger = logging.getLogger("zentral.contrib.santa.forms")
 
 
 class ConfigurationForm(forms.ModelForm):
@@ -55,6 +62,27 @@ class ConfigurationForm(forms.ModelForm):
         return cleaned_data
 
 
+class VotingGroupForm(forms.ModelForm):
+    class Meta:
+        model = VotingGroup
+        fields = (
+            "realm_group",
+            "can_unflag_target",
+            "can_mark_malware",
+            "can_reset_target",
+            "ballot_target_types",
+            "voting_weight"
+        )
+
+    def __init__(self, *args, **kwargs):
+        self.configuration = kwargs.pop("configuration")
+        super().__init__(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        self.instance.configuration = self.configuration
+        return super().save(*args, **kwargs)
+
+
 class EnrollmentForm(forms.ModelForm):
     class Meta:
         model = Enrollment
@@ -76,14 +104,6 @@ class BinarySearchForm(forms.Form):
 
     name = forms.CharField(label="Name", required=False,
                            widget=forms.TextInput(attrs={"placeholder": "name",
-                                                         "size": 50}))
-
-
-class BundleSearchForm(forms.Form):
-    template_name = "django/forms/search.html"
-
-    name = forms.CharField(label="Name", required=False,
-                           widget=forms.TextInput(attrs={"placeholder": "bundle name, ID",
                                                          "size": 50}))
 
 
@@ -128,11 +148,11 @@ class RuleSearchForm(forms.Form):
         empty_label='...',
     )
     target_type = forms.ChoiceField(
-        choices=(('', '...'),) + Target.TYPE_CHOICES,
+        choices=[('', '...')] + Target.Type.rule_choices(),
         required=False,
     )
     policy = forms.ChoiceField(
-        choices=(('', '...'),) + Rule.POLICY_CHOICES,
+        choices=[('', '...')] + Rule.Policy.rule_choices(),
         required=False,
     )
     identifier = forms.CharField(
@@ -228,10 +248,25 @@ def test_team_id(team_id):
     return re.match(r'^[0-9A-Z]{10}\Z', team_id) is not None
 
 
+def cleanup_target_identifier(target_type, identifier):
+    if target_type == Target.Type.CDHASH:
+        validator = test_cdhash
+    elif target_type == Target.Type.SIGNING_ID:
+        validator = test_signing_id_identifier
+    elif target_type == Target.Type.TEAM_ID:
+        identifier = identifier.upper()
+        validator = test_team_id
+    else:
+        identifier = identifier.lower()
+        validator = test_sha256
+    if validator(identifier):
+        return identifier
+
+
 class RuleForm(RuleFormMixin, forms.Form):
-    target_type = forms.ChoiceField(choices=Target.TYPE_CHOICES)
+    target_type = forms.ChoiceField(choices=Target.Type.rule_choices())
     target_identifier = forms.CharField()
-    policy = forms.ChoiceField(choices=Rule.POLICY_CHOICES)
+    policy = forms.ChoiceField(choices=Rule.Policy.rule_choices())
     custom_msg = forms.CharField(label="Custom message", required=False,
                                  widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
     description = forms.CharField(required=False, widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
@@ -245,43 +280,39 @@ class RuleForm(RuleFormMixin, forms.Form):
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration")
         self.binary = kwargs.pop("binary", None)
-        self.bundle = kwargs.pop("bundle", None)
         self.cdhash = kwargs.pop("cdhash", None)
         self.certificate = kwargs.pop("certificate", None)
         self.team_id = kwargs.pop("team_id", None)
         self.signing_id = kwargs.pop("signing_id", None)
         super().__init__(*args, **kwargs)
-        if self.binary or self.bundle or self.cdhash or self.certificate or self.team_id or self.signing_id:
+        if (
+            self.binary
+            or self.cdhash
+            or self.certificate
+            or self.team_id
+            or self.signing_id
+        ):
             del self.fields["target_type"]
             del self.fields["target_identifier"]
-        if self.bundle:
-            self.fields["policy"].choices = (
-                (k, v)
-                for k, v in Rule.POLICY_CHOICES
-                if k in Rule.BUNDLE_POLICIES
-            )
-        if not any(k == Rule.BLOCKLIST for k, _ in self.fields["policy"].choices):
+        if not any(k == Rule.Policy.BLOCKLIST for k, _ in self.fields["policy"].choices):
             del self.fields["custom_msg"]
 
     def clean(self):
         cleaned_data = super().clean()
         if self.binary:
-            target_type = Target.BINARY
+            target_type = Target.Type.BINARY
             target_identifier = self.binary.sha_256
-        elif self.bundle:
-            target_type = Target.BUNDLE
-            target_identifier = self.bundle.target.identifier
         elif self.cdhash:
-            target_type = Target.CDHASH
+            target_type = Target.Type.CDHASH
             target_identifier = self.cdhash
         elif self.certificate:
-            target_type = Target.CERTIFICATE
+            target_type = Target.Type.CERTIFICATE
             target_identifier = self.certificate.sha_256
         elif self.team_id:
-            target_type = Target.TEAM_ID
+            target_type = Target.Type.TEAM_ID
             target_identifier = self.team_id
         elif self.signing_id:
-            target_type = Target.SIGNING_ID
+            target_type = Target.Type.SIGNING_ID
             target_identifier = self.signing_id
         else:
             target_type = cleaned_data.get("target_type")
@@ -299,20 +330,9 @@ class RuleForm(RuleFormMixin, forms.Form):
                 error_field = "target_identifier"
             else:
                 error_field = None
-            if target_type == Target.CDHASH:
-                if not test_cdhash(target_identifier):
-                    self.add_error(error_field, "Invalid cdhash target identifier")
-            elif target_type == Target.SIGNING_ID:
-                if not test_signing_id_identifier(target_identifier):
-                    self.add_error(error_field, "Invalid Signing ID target identifier")
-            elif target_type == Target.TEAM_ID:
-                target_identifier = target_identifier.upper()
-                if not test_team_id(target_identifier):
-                    self.add_error(error_field, "Invalid Team ID")
-            else:
-                target_identifier = target_identifier.lower()
-                if not test_sha256(target_identifier):
-                    self.add_error(error_field, "Invalid sha256")
+            target_identifier = cleanup_target_identifier(target_type, target_identifier)
+            if target_identifier is None:
+                self.add_error(error_field, f"Invalid {target_type} identifier")
 
         # policy
         try:
@@ -320,20 +340,8 @@ class RuleForm(RuleFormMixin, forms.Form):
         except (TypeError, ValueError):
             pass
 
-        # bundle target checks
-        if target_type == Target.BUNDLE:
-            try:
-                bundle = Bundle.objects.get(target__identifier=target_identifier)
-            except Bundle.DoesNotExist:
-                self.add_error(None, 'Unknown bundle.')
-            else:
-                if not bundle.uploaded_at:
-                    self.add_error(None, "This bundle has not been uploaded yet.")
-            if policy and policy not in Rule.BUNDLE_POLICIES:
-                self.add_error("policy", "Policy not allowed for bundles.")
-
         # custom message only on blocklist rules
-        if policy and policy != Rule.BLOCKLIST:
+        if policy and policy != Rule.Policy.BLOCKLIST:
             custom_msg = cleaned_data.get("custom_msg")
             if custom_msg:
                 self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
@@ -379,16 +387,13 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        target_type = cleaned_data.get("target_type")
 
         try:
             policy = int(cleaned_data.get("policy"))
         except (TypeError, ValueError):
             pass
         else:
-            if target_type == Target.BUNDLE and policy not in Rule.BUNDLE_POLICIES:
-                self.add_error("policy", "Policy not allowed for bundles.")
-            if policy != Rule.BLOCKLIST:
+            if policy != Rule.Policy.BLOCKLIST:
                 custom_msg = cleaned_data.get("custom_msg")
                 if custom_msg:
                     self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
@@ -401,12 +406,13 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
         updates = {}
         updated = False
         # policy
-        policy = self.cleaned_data["policy"]
-        if self.instance.policy != policy:
-            updates.setdefault("removed", {})["policy"] = translate_rule_policy(self.instance.policy)
+        policy = Rule.Policy(self.cleaned_data["policy"])
+        instance_policy = Rule.Policy(self.instance.policy)
+        if instance_policy != policy:
+            updates.setdefault("removed", {})["policy"] = instance_policy.name
             self.instance.policy = policy
             updated = True
-            updates.setdefault("added", {})["policy"] = translate_rule_policy(self.instance.policy)
+            updates.setdefault("added", {})["policy"] = self.instance.policy.name
         # custom_msg
         custom_msg = self.cleaned_data["custom_msg"]
         if self.instance.custom_msg != custom_msg:
@@ -517,12 +523,509 @@ class TargetSearchForm(forms.Form):
         label='SHA256, Name, …',
         required=False,
         widget=forms.TextInput(
-            attrs={"autofocus": True,
-                   "size": 32,
-                   }
+            attrs={"autofocus": True, "size": 50}
         )
     )
     target_type = forms.ChoiceField(
-        choices=(('', '...'),) + Target.TYPE_CHOICES,
+        choices=[('', '…'),] + Target.Type.choices,
         required=False,
     )
+    target_state = forms.ChoiceField(
+        label="State",
+        required=False,
+        choices=[('', '…')] + TargetState.State.choices,
+    )
+    last_seen_days = forms.ChoiceField(
+        label="Last seen",
+        required=False,
+        choices=[('', '…'),
+                 ('1', '24 hours'),
+                 ('3', '3 days'),
+                 ('7', '7 days'),
+                 ('14', '14 days'),
+                 ('30', '30 days'),
+                 ('90', '90 days')],
+    )
+    configuration = forms.ModelChoiceField(queryset=Configuration.objects.all(), empty_label="…")
+    has_yes_votes = forms.BooleanField(label="Yes votes")
+    has_no_votes = forms.BooleanField(label="No votes")
+    todo = forms.BooleanField(label="Waiting for my ballot only", required=False, initial=False)
+    order_by = forms.ChoiceField(
+        label="Order by",
+        required=False,
+        choices=[('', '…'),
+                 ('-last_seen', '↓ Last seen'),
+                 ('-executed', '↓ Executed count'),
+                 ('-blocked', '↓ Blocked count')]
+    )
+
+    @classmethod
+    def search_query(
+        cls,
+        q=None,
+        target_type=None,
+        target_state=None,
+        configuration_pk=None,
+        has_yes_votes=None,
+        has_no_votes=None,
+        username=None,
+        email=None,
+        last_seen_days=None,
+        order_by=None,
+    ):
+        if not target_type:
+            target_type = None
+        kwargs = {}
+        # q
+        if q:
+            kwargs["q"] = "%{}%".format(connection.ops.prep_for_like_query(q))
+            bi_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
+            ce_where = ("where upper(c.common_name) like upper(%(q)s) "
+                        "or upper(c.organizational_unit) like upper(%(q)s) "
+                        "or upper(c.sha_256) like upper(%(q)s)")
+            ti_where = ("where c.organizational_unit ~ '[A-Z0-9]{10}' and ("
+                        "upper(c.organization) like upper(%(q)s) "
+                        "or upper(c.organizational_unit) like upper(%(q)s))")
+            ch_where = "where upper(name) like upper(%(q)s) or upper(f.cdhash) like upper(%(q)s)"
+            si_where = "where upper(f.signing_id) like upper(%(q)s)"
+            bu_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
+            mbu_where = "where upper(b.name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
+        else:
+            bi_where = ce_where = bu_where = mbu_where = ""
+            ti_where = "where c.organizational_unit ~ '[A-Z0-9]{10}'"
+            ch_where = "where f.cdhash IS NOT NULL"
+            si_where = "where f.signing_id IS NOT NULL"
+        wheres = []
+        havings = []
+        # target state
+        if target_state is not None:
+            wheres.append("coalesce(ts.state, 0) = %(target_state)s")
+            kwargs["target_state"] = target_state
+        # configuration
+        if configuration_pk:
+            ac_cfg_where = "where tc.configuration_id = %(configuration_pk)s"
+            wheres.append("(ac.configuration_id = %(configuration_pk)s "
+                          " or ts.configuration_id = %(configuration_pk)s)")
+            kwargs["configuration_pk"] = configuration_pk
+        else:
+            ac_cfg_where = ""
+        # votes?
+        if has_yes_votes or has_no_votes:
+            votes_where = ""
+            if configuration_pk:
+                votes_where = "and hvv.configuration_id = %(configuration_pk)s"
+            if has_yes_votes != has_no_votes:
+                if has_yes_votes:
+                    votes_where = f"{votes_where} and hvv.was_yes_vote = 't'"
+                elif has_no_votes:
+                    votes_where = f"{votes_where} and hvv.was_yes_vote = 'f'"
+            wheres.append(
+                "exists ("
+                "  select * from santa_vote hvv"
+                "  join santa_ballot hvb on (hvv.ballot_id = hvb.id)"
+                "  where hvb.target_id = t.id"
+                f" {votes_where}"
+                ")"
+            )
+        # no votes from user
+        if username or email:
+            todo_cfg_where = ""
+            if configuration_pk:
+                todo_cfg_where = "and nev.configuration_id = %(configuration_pk)s"
+            wheres.append(
+                "not exists ("
+                "  select * from santa_vote nev"
+                "  join santa_ballot neb on (nev.ballot_id = neb.id)"
+                "  left join realms_realmuser neu on (neb.realm_user_id = neu.uuid)"
+                "  where neb.target_id = t.id "
+                "  and (neb.user_uid = %(username)s or neu.username = %(username)s"
+                "       or neb.user_uid = %(email)s or neu.username = %(email)s)"
+                f" {todo_cfg_where}"
+                ")"
+            )
+            kwargs["username"] = username
+            kwargs["email"] = email
+        if last_seen_days is not None:
+            havings.append(
+                "(max(ac.last_seen) is not null and max(ac.last_seen) > now() - interval '%(last_seen_days)s days')"
+            )
+            kwargs["last_seen_days"] = last_seen_days
+        # serialize wheres & havings
+        if wheres:
+            where = "where " + " and ".join(wheres)
+        else:
+            where = ""
+        if havings:
+            having = "having " + " and ".join(havings)
+        else:
+            having = ""
+
+        targets_subqueries = {
+            "BINARY":
+                "select 'BINARY' as target_type,  f.identifier, f.name as sort_str,"
+                "jsonb_build_object("
+                " 'name', f.name,"
+                " 'cert_cn', c.common_name,"
+                " 'cert_sha256', c.sha_256,"
+                " 'cert_ou', c.organizational_unit"
+                ") as object "
+                "from collected_files as f "
+                "left join inventory_certificate as c on (f.signed_by_id = c.id) "
+                f"{bi_where} "
+                "group by target_type, f.identifier, f.name, c.common_name, c.sha_256, c.organizational_unit",
+            "CERTIFICATE":
+                "select 'CERTIFICATE' as target_type, c.sha_256 as identifier, c.common_name as sort_str,"
+                "jsonb_build_object("
+                " 'cn', c.common_name,"
+                " 'ou', c.organizational_unit,"
+                " 'valid_from', c.valid_from,"
+                " 'valid_until', c.valid_until"
+                ") as object "
+                "from inventory_certificate as c "
+                "join collected_files as f on (c.id = f.signed_by_id) "
+                f"{ce_where} "
+                "group by target_type, c.sha_256, c.common_name, c.organizational_unit, c.valid_from, c.valid_until",
+            "TEAMID":
+                "select 'TEAMID' as target_type, c.organizational_unit as identifier, c.organization as sort_str,"
+                "jsonb_build_object("
+                " 'organizational_unit', c.organizational_unit,"
+                " 'organization', c.organization"
+                ") as object "
+                "from inventory_certificate as c "
+                "join collected_files as f on (c.id = f.signed_by_id) "
+                f"{ti_where} "
+                "group by target_type, c.organizational_unit, c.organization",
+            "CDHASH":
+                "select 'CDHASH' as target_type, f.cdhash as identifier, f.cdhash as sort_str,"
+                "jsonb_build_object("
+                " 'file_names', jsonb_agg(distinct f.name),"
+                " 'cert_cns', jsonb_agg(distinct c.common_name)"
+                ") as object "
+                "from collected_files as f "
+                "left join inventory_certificate as c on (f.signed_by_id = c.id) "
+                f"{ch_where} "
+                "group by target_type, f.cdhash",
+            "SIGNINGID":
+                "select 'SIGNINGID' as target_type, f.signing_id as identifier, f.signing_id as sort_str,"
+                "jsonb_build_object("
+                " 'file_names', jsonb_agg(distinct f.name),"
+                " 'cert_cns', jsonb_agg(distinct c.common_name)"
+                ") as object "
+                "from collected_files as f "
+                "left join inventory_certificate as c on (f.signed_by_id = c.id) "
+                f"{si_where} "
+                "group by target_type, f.signing_id",
+            "BUNDLE":
+                "select 'BUNDLE' as target_type, t.identifier, b.name as sort_str,"
+                "jsonb_build_object("
+                " 'name', b.name,"
+                " 'version', b.version,"
+                " 'version_str', b.version_str"
+                ") as object "
+                "from santa_bundle as b "
+                "join santa_target as t on (b.target_id = t.id) "
+                f"{bu_where}",
+            "METABUNDLE":
+                "select 'METABUNDLE' as target_type, t.identifier, max(b.name) as sort_str,"
+                "jsonb_build_object("
+                " 'names', jsonb_agg(b.name)"
+                ") as object "
+                "from santa_metabundle as mb "
+                "join santa_target as t on (mb.target_id = t.id) "
+                "left join santa_bundle as b on (b.metabundle_id = mb.id) "
+                f"{mbu_where} "
+                "group by target_type, t.identifier"
+        }
+        targets_query = " union ".join(v for k, v in targets_subqueries.items()
+                                       if target_type is None or k == target_type)
+        if order_by == "-last_seen":
+            primary_order_by = "max(ac.last_seen) desc,"
+        elif order_by == "-executed":
+            primary_order_by = "coalesce(sum(ac.executed_count), 0) desc,"
+        elif order_by == "-blocked":
+            primary_order_by = "coalesce(sum(ac.blocked_count), 0) desc,"
+        else:
+            if order_by:
+                logger.error("Unknown order by value: %s", order_by)
+            primary_order_by = ""
+        query = (
+            "with collected_files as ("
+            "  select f.sha_256 as identifier, f.cdhash, f.signed_by_id, f.signing_id, f.name"
+            "  from inventory_file as f"
+            "  join inventory_source as s on (f.source_id = s.id)"
+            "  where s.module='zentral.contrib.santa' and s.name = 'Santa events'"
+            "  group by f.sha_256, f.cdhash, f.signed_by_id, f.signing_id, f.name"
+            "), targets_info as ("
+            f" {targets_query}"
+            "), targets as ("
+            "  select t.id, t.type target_type, t.identifier, ti.sort_str, ti.object"
+            "  from targets_info ti"
+            "  join santa_target t on (t.type = ti.target_type and t.identifier = ti.identifier)"
+            "), all_counters as ("
+            #  direct counters
+            "  select tc.target_id, tc.configuration_id,"
+            "  tc.blocked_count, tc.collected_count, tc.executed_count, tc.updated_at last_seen"
+            "  from santa_targetcounter tc"
+            f" {ac_cfg_where}"
+            #  aggregated metabundle counters
+            "  union"
+            "  select mb.target_id, tc.configuration_id,"
+            "  sum(tc.blocked_count) blocked_count,"
+            "  sum(tc.collected_count) collected_count,"
+            "  sum(tc.executed_count) executed_count,"
+            "  max(tc.updated_at) last_seen"
+            "  from santa_metabundle mb"
+            "  join santa_bundle b on (b.metabundle_id = mb.id)"
+            "  join santa_targetcounter tc on (tc.target_id = b.target_id)"
+            f" {ac_cfg_where}"
+            "  group by mb.target_id, tc.configuration_id"
+            ") "
+            "select t.id, t.target_type, t.identifier, t.object, count(*) over() as full_count,"
+            # counters
+            "coalesce(sum(ac.blocked_count), 0) blocked_count,"
+            "coalesce(sum(ac.collected_count), 0) collected_count,"
+            "coalesce(sum(ac.executed_count), 0) executed_count,"
+            "max(ac.last_seen) last_seen,"
+            # states
+            "coalesce(max(ts.state), 0) max_state,"
+            "coalesce(min(ts.state), 0) min_state,"
+            "coalesce(max(ts.score), 0) max_score,"
+            "coalesce(min(ts.score), 0) min_score,"
+            "min(ts.updated_at) min_state_updated_at,"
+            "max(ts.updated_at) max_state_updated_at,"
+            # rules
+            "(select count(*) from santa_rule r where r.target_id = t.id) rule_count "
+            "from targets t "
+            "left join all_counters ac on (ac.target_id = t.id) "
+            "left join santa_targetstate ts on (ts.target_id = t.id) "
+            f"{where} "
+            "group by t.id, t.target_type, t.identifier, t.object, t.sort_str "
+            f"{having} "
+            f"order by {primary_order_by} t.sort_str, t.identifier "
+        )
+        return query, kwargs
+
+    def search_query_kwargs(self, current_username, current_email):
+        kwargs = {}
+        q = self.cleaned_data.get("q")
+        if q:
+            kwargs["q"] = q
+        target_type = self.cleaned_data.get("target_type")
+        if target_type:
+            kwargs["target_type"] = target_type
+        target_state = self.cleaned_data.get("target_state")
+        if target_state != "":
+            kwargs["target_state"] = int(target_state)
+        configuration = self.cleaned_data.get("configuration")
+        if configuration:
+            kwargs["configuration_pk"] = configuration.pk
+        has_yes_votes = self.cleaned_data.get("has_yes_votes")
+        if has_yes_votes:
+            kwargs["has_yes_votes"] = has_yes_votes
+        has_no_votes = self.cleaned_data.get("has_no_votes")
+        if has_no_votes:
+            kwargs["has_no_votes"] = has_no_votes
+        todo = self.cleaned_data.get("todo")
+        if todo and (current_username or current_email):
+            if current_username:
+                kwargs["username"] = current_username
+            if current_email:
+                kwargs["email"] = current_email
+        try:
+            kwargs["last_seen_days"] = min(366, max(1, int(self.cleaned_data.get("last_seen_days"))))
+        except (ValueError, TypeError):
+            pass
+        order_by = self.cleaned_data.get("order_by")
+        if order_by:
+            kwargs["order_by"] = order_by
+        return kwargs
+
+    def results(self, current_username, current_email, offset, limit):
+        query, kwargs = self.search_query(**self.search_query_kwargs(current_username, current_email))
+        kwargs.update({"offset": offset, "limit": limit})
+        with connection.cursor() as cursor:
+            cursor.execute(f"{query} offset %(offset)s limit %(limit)s", kwargs)
+            columns = [col[0] for col in cursor.description]
+            results = []
+            for row in cursor.fetchall():
+                result = dict(zip(columns, row))
+                row_obj = json.loads(result.pop("object"))
+                obj = {}
+                for key, val in row_obj.items():
+                    if key in ("valid_from", "valid_until"):
+                        val = parser.parse(val)
+                    elif isinstance(val, list):
+                        val = sorted(set(i for i in val if i is not None))
+                    obj[key] = val
+                result["object"] = obj
+                result["target_type"] = target_type = Target.Type(result.pop("target_type"))
+                result["target_type_for_display"] = target_type.label
+                result["url"] = reverse(target_type.url_name, args=(result["identifier"],))
+                result["min_state"] = TargetState.State(result.pop("min_state"))
+                result["max_state"] = TargetState.State(result.pop("max_state"))
+                results.append(result)
+        return results
+
+
+class BallotSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
+    target_type = forms.ChoiceField(
+        label="Type",
+        choices=[('', '…'),] + Target.Type.choices,
+        required=False,
+    )
+    target_identifier = forms.CharField(
+        label="Identifier",
+        required=False,
+        widget=forms.TextInput(attrs={"size": 50})
+    )
+    target_state = forms.ChoiceField(
+        label="State",
+        required=False,
+        choices=[('', '…')] + TargetState.State.choices,
+    )
+    configuration = forms.ModelChoiceField(queryset=Configuration.objects.all(), empty_label="…")
+    realm_user = forms.CharField(label="User", required=False)
+    include_yes_votes = forms.BooleanField(label="Yes votes", required=False, initial=False)
+    include_no_votes = forms.BooleanField(label="No votes", required=False, initial=False)
+    include_revised_ballots = forms.BooleanField(label="Revised ballots", required=False, initial=False)
+    include_reset_ballots = forms.BooleanField(label="Reset ballots", required=False, initial=False)
+    todo = forms.BooleanField(label="Waiting for my ballot only", required=False, initial=False)
+
+    def results(self, current_username, current_email, offset, limit):
+        where_list = ["(et.identifier is null or (s.module = 'zentral.contrib.santa' and s.name = 'Santa events'))",]
+        having_list = []
+        kwargs = {"offset": offset, "limit": limit}
+        target_type = self.cleaned_data.get("target_type")
+        if target_type:
+            where_list.append("t.type = %(target_type)s")
+            kwargs["target_type"] = target_type
+        target_identifier = self.cleaned_data.get("target_identifier")
+        if target_identifier:
+            where_list.append("t.identifier = %(target_identifier)s")
+            kwargs["target_identifier"] = target_identifier
+        target_state = self.cleaned_data.get("target_state")
+        if target_state != "":
+            where_list.append("coalesce(ts.state, 0) = %(target_state)s")
+            kwargs["target_state"] = target_state
+        configuration = self.cleaned_data.get("configuration")
+        if configuration:
+            where_list.append("v.configuration_id = %(configuration_pk)s")
+            kwargs["configuration_pk"] = configuration.pk
+        realm_user = self.cleaned_data.get("realm_user")
+        if realm_user:
+            where_list.append("(b.user_uid = %(realm_user)s or u.username = %(realm_user)s)")
+            kwargs["realm_user"] = realm_user
+        include_yes_votes = self.cleaned_data.get("include_yes_votes", False)
+        include_no_votes = self.cleaned_data.get("include_no_votes", False)
+        if include_yes_votes != include_no_votes:
+            if include_yes_votes:
+                having_list.append("bool_or(coalesce(v.was_yes_vote, 'f')) = 't'")
+            else:
+                having_list.append("bool_or(coalesce(not v.was_yes_vote, 'f')) = 't'")
+        include_revised_ballots = self.cleaned_data.get("include_revised_ballots")
+        if not include_revised_ballots:
+            where_list.append("b.replaced_by_id is null")
+        include_reset_ballots = self.cleaned_data.get("include_reset_ballots")
+        if not include_reset_ballots:
+            where_list.append("(ts.reset_at is null or v.created_at is null or v.created_at > ts.reset_at)")
+        todo = self.cleaned_data.get("todo")
+        if todo:
+            todo_cfg_where = ""
+            if configuration:
+                todo_cfg_where = "and nev.configuration_id = %(configuration_pk)s"
+            where_list.append(
+                "not exists ("
+                "  select * from santa_vote nev"
+                "  join santa_ballot neb on (nev.ballot_id = neb.id)"
+                "  left join realms_realmuser neu on (neb.realm_user_id = neu.uuid)"
+                "  where neb.target_id = t.id "
+                "  and (neb.user_uid = %(current_username)s or neu.username = %(current_username)s"
+                "       or neb.user_uid = %(current_email)s or neu.username = %(current_email)s)"
+                f" {todo_cfg_where}"
+                ")"
+            )
+            kwargs["current_username"] = current_username
+            kwargs["current_email"] = current_email
+        wheres = " and ".join(where_list)
+        if wheres:
+            wheres = f"where {wheres} "
+        havings = " and ".join(having_list)
+        if havings:
+            havings = f"having {havings} "
+        query = (
+            "select b.id, b.created_at, b.target_id, b.replaced_by_id,"
+            "t.type target_type, t.identifier target_identifier,"
+            "et.identifier event_target_identifier, max(f.name) filename,"
+            "coalesce(ts.state, 0) target_state,"
+            "b.user_uid, u.uuid realmuser_id, u.username realmuser_username,"
+            "bool_or(coalesce(v.was_yes_vote, 'f')) has_yes_votes,"
+            "bool_or(coalesce(not v.was_yes_vote, 'f')) has_no_votes,"
+            "jsonb_agg("
+            "  distinct jsonb_build_object("
+            "    'cfg_name', c.name,"
+            "    'cfg_pk', c.id,"
+            "    'yes_vote', v.was_yes_vote,"
+            "    'weight', v.weight,"
+            "    'reset', ts.reset_at is not null and v.created_at is not null and ts.reset_at > v.created_at"
+            "  )"
+            ") votes, "
+            "count(*) over() full_count "
+            "from santa_ballot b "
+            "join santa_target t on (b.target_id = t.id) "
+            "left join santa_target et on (b.event_target_id = et.id) "
+            "left join realms_realmuser u on (b.realm_user_id = u.uuid) "
+            "left join santa_vote v on (v.ballot_id = b.id) "
+            "left join santa_configuration c on (v.configuration_id = c.id) "
+            "left join santa_targetstate ts on (ts.target_id = t.id) "
+            "left join inventory_file f on (f.sha_256 = et.identifier) "
+            "left join inventory_source s on (f.source_id = s.id) "
+            f"{wheres}"
+            "group by b.id, b.created_at, b.target_id, b.replaced_by_id,"
+            "t.type, t.identifier, et.identifier,"
+            "ts.state,"
+            "b.user_uid, u.uuid, u.username "
+            f"{havings}"
+            "order by b.created_at desc offset %(offset)s limit %(limit)s"
+        )
+        results = []
+        with connection.cursor() as cursor:
+            cursor.execute(query, kwargs)
+            columns = [col[0] for col in cursor.description]
+            for row in cursor.fetchall():
+                result = dict(zip(columns, row))
+                result["votes"] = [v for v in json.loads(result.pop("votes")) if v["cfg_pk"] is not None]
+                result["target_type"] = Target.Type(result.pop("target_type"))
+                result["target_url"] = reverse(result["target_type"].url_name,
+                                               args=(result["target_identifier"],))
+                if result["event_target_identifier"]:
+                    result["event_target_url"] = reverse(Target.Type.BINARY.url_name,
+                                                         args=(result["event_target_identifier"],))
+                results.append(result)
+        return results
+
+
+class AdminVoteForm(forms.Form):
+    yes_no = forms.ChoiceField(choices=[], required=True)
+
+    def __init__(self, *args, **kwargs):
+        self.configuration = kwargs.pop("configuration")
+        kwargs["prefix"] = f"cfg-{self.configuration.pk}"
+        allowed_votes = kwargs.pop("allowed_votes")
+        super().__init__(*args, **kwargs)
+        choices = [("NOVOTE", "No vote")]
+        for yes_no in allowed_votes:
+            if yes_no is True:
+                choices.append(("YES", "Upvote"))
+            if yes_no is False:
+                choices.append(("NO", "Downvote"))
+        self.fields["yes_no"].choices = choices
+
+    def get_vote(self):
+        yes_no = self.cleaned_data.get("yes_no")
+        if yes_no == "YES":
+            return (self.configuration, True)
+        elif yes_no == "NO":
+            return (self.configuration, False)
+        return None

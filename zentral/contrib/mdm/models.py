@@ -1315,7 +1315,7 @@ class MDMEnrollment(models.Model):
         return {
             "pk": self.pk,
             "name": self.name,
-            "realm": self.realm.serialize_for_events(keys_only=True) if self.realm else None,
+            "realm": self.realm.serialize_for_event(keys_only=True) if self.realm else None,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }

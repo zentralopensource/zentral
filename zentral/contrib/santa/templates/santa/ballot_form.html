@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:ballots' %}">Ballots</a></li>
+  <li class="breadcrumb-item active">Cast a ballot</li>
+</ol>
+
+<h2 class="mb-3">Cast a ballot</h2>
+
+<form method="POST">{% csrf_token %}
+  <table class="table">
+    <thead>
+      <th>Configuration</th>
+      <th>Decision</th>
+    </thead>
+    <tbody>
+      {% for form in forms %}
+      <tr>
+        <td>{{ form.configuration }}</td>
+        <td>{{ form.yes_no }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ target.get_absolute_url }}">
+      Cancel
+    </a>
+    <button type="submit" class="btn btn-primary">
+      Save
+    </button>
+  </p>
+</form>
+{% endblock %}

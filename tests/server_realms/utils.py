@@ -7,7 +7,7 @@ from realms.models import (Realm, RealmEmail, RealmGroup, RealmGroupMapping, Rea
 from zentral.contrib.inventory.models import Tag
 
 
-def force_realm(backend="ldap", enabled_for_login=False):
+def force_realm(backend="ldap", enabled_for_login=False, user_portal=False):
     if backend == "ldap":
         config = {
             "host": "ldap.example.com",
@@ -36,6 +36,7 @@ def force_realm(backend="ldap", enabled_for_login=False):
         username_claim="username",
         email_claim="email",
         enabled_for_login=enabled_for_login,
+        user_portal=user_portal,
     )
 
 

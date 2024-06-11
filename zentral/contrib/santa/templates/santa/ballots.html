@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  {% if form.has_changed %}
+  <li class="breadcrumb-item"><a href="{% url 'santa:ballots' %}">Ballots</a></li>
+  {% if reset_link %}
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Search</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">Search</li>
+  {% endif %}
+  {% else %}
+  <li  class="breadcrumb-item active">Ballots</li>
+  {% endif %}
+  <li class="breadcrumb-item active">page {{ page_num }} of {{ num_pages }}</li>
+</ol>
+
+<h2 class="mb-3">Ballot{{ ballot_count|pluralize }} ({{ ballot_count }})</h2>
+
+<form method="GET" class="search-form">
+  {{ form }}
+  <button type="submit" class="btn btn-link mb-2">
+    <i class="bi bi-search"></i>
+  </button>
+</form>
+
+{% pagination next_url previous_url %}
+
+{% include "santa/_ballot_list.html" with show_target=True %}
+
+{% pagination next_url previous_url %}
+
+{% if not ballots and form.has_changed %}
+
+{% url 'santa:ballots' as empty_results_url %}
+{% empty_results empty_results_url %}
+{% endif %}
+
+{% endblock %}

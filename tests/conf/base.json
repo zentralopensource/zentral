@@ -220,7 +220,8 @@
       ]
     },
     "zentral.contrib.santa": {
-      "metrics": true
+      "metrics": true,
+      "user_portal": true
     },
     "zentral.contrib.wsone": {},
     "zentral.contrib.intune": {}

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load base_extras inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.configuration.get_absolute_url }}">{{ object.configuration }}</a></li>
+  <li class="breadcrumb-item active">Delete voting group</li>
+</ol>
+
+<h2>Delete voting group</h2>
+
+<form method="POST">{% csrf_token %}
+  <p>Do you really want to delete this voting group?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endblock %}

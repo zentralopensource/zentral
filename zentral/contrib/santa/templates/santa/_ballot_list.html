@@ -1,0 +1,67 @@
+{% if ballots %}
+
+<table class="table table-striped align-middle">
+<thead>
+    <tr>
+        {% if show_target %}
+        <th>Target</th>
+        {% endif %}
+        <th>Event target</th>
+        <th>User</th>
+        <th>Votes</th>
+        <th>Created at</th>
+    <tr>
+</thead>
+<tbody>
+    {% for ballot in ballots %}
+    <tr>
+      {% if show_target %}
+      <td>
+        <a href="{{ ballot.target_url }}">{{ ballot.target_type.label }}</a>
+      </td>
+      {% endif %}
+      <td>
+        {% if ballot.event_target_url %}
+        <a href="{{ ballot.event_target_url }}">{{ ballot.filename }}</a>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td>
+        {% if ballot.realmuser_username %}
+        {% if perms.realms.view_realmuser %}
+        <a href="{{ ballot.realmuser_pk }}">{{ ballot.realmuser_username }}</a>
+        {% else %}
+        {{ ballot.realmuser_username }}
+        {% endif %}
+        {% else %}
+        {{ ballot.user_uid }}
+        {% endif %}
+      </td>
+      <td {% if ballot.replaced_by_id %} style="background-color: var(--bs-danger-bg-subtle)"{% endif %}>
+        <ul>
+          {% for vote in ballot.votes %}
+          <li>
+            {% if perms.santa.view_configuration %}
+            <a href="{% url 'santa:configuration' vote.cfg_pk %}">{{ vote.cfg_name }}</a>
+            {% else %}
+            {{ vote.cfg_name }}
+            {% endif %}
+            {% if vote.yes_vote %}+{% else %}-{% endif %}{{ vote.weight }}
+          </li>
+          {% endfor %}
+        </ul>
+      </td>
+      <td>
+        {{ ballot.created_at }}
+      </td>
+    </tr>
+    {% endfor %}
+</tbody>
+</table>
+
+{% if search_ballots_link %}
+<p><a href="{{ search_ballots_link }}">Search all target ballots</a></p>
+{% endif %}
+
+{% endif %}

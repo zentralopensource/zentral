@@ -12,7 +12,7 @@ class SantaTerraformTestCase(TestCase):
     def force_configuration(self):
         return Configuration.objects.create(name=get_random_string(12))
 
-    def force_rule(self, target_type=Target.BINARY, policy=Rule.ALLOWLIST):
+    def force_rule(self, target_type=Target.Type.BINARY, policy=Rule.Policy.ALLOWLIST):
         target = Target.objects.create(
             type=target_type,
             identifier=get_random_string(length=64, allowed_chars='abcdef0123456789')

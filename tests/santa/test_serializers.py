@@ -8,14 +8,14 @@ from zentral.contrib.santa.serializers import RuleUpdateSerializer, EnrollmentSe
 
 
 class SantaSerializersTestCase(TestCase):
-    def test_rule_wrong_policy_for_bundle_rule(self):
+    def test_no_bundle_rule(self):
         data = {"rule_type": "BUNDLE",
                 "identifier": get_random_string(64, "0123456789abcdef"),
                 "policy": "BLOCKLIST"}
         serializer = RuleUpdateSerializer(data=data)
         self.assertFalse(serializer.is_valid())
-        ed = serializer.errors["non_field_errors"][0]
-        self.assertEqual(str(ed), "Wrong policy for BUNDLE rule")
+        ed = serializer.errors["rule_type"][0]
+        self.assertEqual(str(ed), '"BUNDLE" is not a valid choice.')
 
     def test_rule_identifier_and_sha256(self):
         data = {"rule_type": "BINARY",
@@ -49,7 +49,7 @@ class SantaSerializersTestCase(TestCase):
             self.assertEqual(s.is_valid(), valid)
             if not s.is_valid():
                 ed = s.errors["identifier"][0]
-                self.assertEqual(str(ed), "Invalid sha256")
+                self.assertEqual(str(ed), "Invalid BINARY identifier")
 
     def test_rule_signing_id(self):
         for identifier, valid in (("y", False),
@@ -65,7 +65,7 @@ class SantaSerializersTestCase(TestCase):
             self.assertEqual(s.is_valid(), valid)
             if not s.is_valid():
                 ed = s.errors["identifier"][0]
-                self.assertEqual(str(ed), "Invalid Signing ID identifier")
+                self.assertEqual(str(ed), "Invalid SIGNINGID identifier")
 
     def test_rule_team_id(self):
         for identifier, valid in (("y", False), ("43AQ936H96", True), ("4"*64, False)):
@@ -78,7 +78,7 @@ class SantaSerializersTestCase(TestCase):
             self.assertEqual(s.is_valid(), valid)
             if not s.is_valid():
                 ed = s.errors["identifier"][0]
-                self.assertEqual(str(ed), "Invalid Team ID")
+                self.assertEqual(str(ed), "Invalid TEAMID identifier")
 
     def test_rule_sha_signing_id_error(self):
         s = RuleUpdateSerializer(data={

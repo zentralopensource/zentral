@@ -6,10 +6,10 @@ import django.utils.timezone
 
 def create_all_targets(apps, schema_editor):
     MigrationTarget = apps.get_model("santa", "Target")
+    query = """with collected_files as (  select f.sha_256 as identifier, f.cdhash, f.signed_by_id, f.signing_id, f.name  from inventory_file as f  join inventory_source as s on (f.source_id = s.id)  where s.module='zentral.contrib.santa' and s.name = 'Santa events'  group by f.sha_256, f.cdhash, f.signed_by_id, f.signing_id, f.name), targets as (select 'BINARY' as target_type,  f.identifier, f.name as sort_str,jsonb_build_object( 'name', f.name, 'cert_cn', c.common_name, 'cert_sha256', c.sha_256, 'cert_ou', c.organizational_unit) as object from collected_files as f left join inventory_certificate as c on (f.signed_by_id = c.id)  group by target_type, f.identifier, f.name, c.common_name, c.sha_256, c.organizational_unit union select 'CERTIFICATE' as target_type, c.sha_256 as identifier, c.common_name as sort_str,jsonb_build_object( 'cn', c.common_name, 'ou', c.organizational_unit, 'valid_from', c.valid_from, 'valid_until', c.valid_until) as object from inventory_certificate as c join collected_files as f on (c.id = f.signed_by_id)  group by target_type, c.sha_256, c.common_name, c.organizational_unit, c.valid_from, c.valid_until union select 'TEAMID' as target_type, c.organizational_unit as identifier, c.organization as sort_str,jsonb_build_object( 'organizational_unit', c.organizational_unit, 'organization', c.organization) as object from inventory_certificate as c join collected_files as f on (c.id = f.signed_by_id) where c.organizational_unit ~ '[A-Z0-9]{10}' group by target_type, c.organizational_unit, c.organization union select 'CDHASH' as target_type, f.cdhash as identifier, f.cdhash as sort_str,jsonb_build_object( 'file_name', f.name, 'cert_cn', c.common_name) as object from collected_files as f left join inventory_certificate as c on (f.signed_by_id = c.id) where f.cdhash IS NOT NULL group by target_type, f.cdhash, f.name, c.common_name union select 'SIGNINGID' as target_type, f.signing_id as identifier, f.signing_id as sort_str,jsonb_build_object( 'file_name', f.name, 'cert_cn', c.common_name) as object from collected_files as f left join inventory_certificate as c on (f.signed_by_id = c.id) where f.signing_id IS NOT NULL group by target_type, f.signing_id, f.name, c.common_name union select 'BUNDLE' as target_type, t.identifier, b.name as sort_str,jsonb_build_object( 'name', b.name, 'version', b.version, 'version_str', b.version_str) as object from santa_bundle as b join santa_target as t on (b.target_id = t.id)  ) select target_type, identifier, object, count(*) over() as full_count,(select count(*) from santa_rule as r join santa_target as t on (r.target_id = t.id) where t.type = ts.target_type and t.identifier = ts.identifier) as rule_count from targets as ts order by sort_str, identifier"""  # NOQA
+    args = {}
     try:
-        from zentral.contrib.santa.models import Target
-        query, args = Target.objects.search_query()
-        from zentral.contrib.santa.forms import test_cdhash, test_sha256, test_signing_id_identifier, test_team_id
+        from zentral.contrib.santa.forms import cleanup_target_identifier
     except Exception:
         return
     with connection.cursor() as cursor:
@@ -24,19 +24,11 @@ def create_all_targets(apps, schema_editor):
                 found_target_d = dict(zip(cols, found_target))
                 target_type = found_target_d["target_type"]
                 identifier = found_target_d["identifier"]
-                identifier = identifier.strip()
-                if (
-                    (target_type == Target.CDHASH and not test_cdhash(identifier))
-                    or (target_type == Target.SIGNING_ID and not test_signing_id_identifier(identifier))
-                    or (target_type == Target.TEAM_ID and not test_team_id(identifier))
-                    or (target_type in (Target.BUNDLE, Target.BINARY, Target.CERTIFICATE)
-                        and not test_sha256(identifier))
-                ):
-                    print("INCOMPATIBLE IDENTIFIER", target_type, identifier, flush=True)
-                else:
+                identifier = cleanup_target_identifier(target_type, identifier)
+                if identifier:
                     new_targets.append(
-                        MigrationTarget(type=found_target_d["target_type"],
-                                        identifier=found_target_d["identifier"])
+                        MigrationTarget(type=target_type,
+                                        identifier=identifier)
                     )
             if new_targets:
                 MigrationTarget.objects.bulk_create(new_targets, ignore_conflicts=True)

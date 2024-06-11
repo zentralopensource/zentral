@@ -22,10 +22,10 @@ class RealmModelsTestCase(TestCase):
         self.assertEqual(tta, [tm1.tag])
         self.assertEqual(ttr, [tm2.tag])
 
-    def test_serialize_for_events(self):
+    def test_serialize_for_event(self):
         realm = force_realm()
         self.assertEqual(
-            realm.serialize_for_events(),
+            realm.serialize_for_event(),
             {'backend': 'ldap',
              'config': {
                  'bind_dn': 'uid=zentral,ou=Users,o=yolo,dc=example,dc=com',

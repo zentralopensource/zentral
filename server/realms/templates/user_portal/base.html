@@ -1,0 +1,37 @@
+{% extends 'user_portal/boilerplate.html' %}
+{% load i18n static %}
+
+{% block body %}
+<div class="container">
+
+  <header class="main-head">
+    <h1 class="logo"><a href="{% url 'realms_public:up_index' realm.pk %}">User Portal</a></h1>
+    {% if realm_user %}
+    {{ realm_user }}
+    <form action="{% url 'realms_public:up_logout' realm.pk %}" method="POST" style="display:inline-block">{% csrf_token %}
+      <button type="submit">Logout</button>
+    </form>
+    {% endif %}
+  </header>
+
+  <nav class="main-nav">
+  </nav>
+
+  <section class="content">
+    {% if messages %}
+    <ul class="messages">
+    {% for message in messages %}
+      <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+    {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% block main %}
+    {% endblock %}
+  </section>
+
+  <footer class="main-footer">
+  </footer>
+
+</div>
+{% endblock %}

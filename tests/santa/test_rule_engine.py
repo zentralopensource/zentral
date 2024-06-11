@@ -3,25 +3,10 @@ from django.db.models import F
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
-from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
-                                          MachineRule, Rule, Target, translate_rule_policy)
+from zentral.contrib.santa.models import (Configuration, EnrolledMachine, Enrollment,
+                                          MachineRule, Rule, Target)
 from zentral.contrib.santa.forms import test_cdhash, test_signing_id_identifier
-
-
-def new_cdhash():
-    return get_random_string(length=40, allowed_chars='abcdef0123456789')
-
-
-def new_sha256():
-    return get_random_string(length=64, allowed_chars='abcdef0123456789')
-
-
-def new_team_id():
-    return get_random_string(10, allowed_chars="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-
-def new_signing_id_identifier():
-    return ":".join((new_team_id(), get_random_string(10, allowed_chars="abcdefghij")))
+from .utils import new_cdhash, new_sha256, new_team_id, new_signing_id_identifier
 
 
 class SantaRuleEngineTestCase(TestCase):
@@ -49,12 +34,12 @@ class SantaRuleEngineTestCase(TestCase):
 
     # utils
 
-    def create_rule(self, target_type=Target.BINARY, policy=Rule.ALLOWLIST, configuration=None):
-        if target_type == Target.TEAM_ID:
+    def create_rule(self, target_type=Target.Type.BINARY, policy=Rule.Policy.ALLOWLIST, configuration=None):
+        if target_type == Target.Type.TEAM_ID:
             identifier = new_team_id()
-        elif target_type == Target.SIGNING_ID:
+        elif target_type == Target.Type.SIGNING_ID:
             identifier = new_signing_id_identifier()
-        elif target_type == Target.CDHASH:
+        elif target_type == Target.Type.CDHASH:
             identifier = new_cdhash()
         else:
             identifier = new_sha256()
@@ -64,28 +49,12 @@ class SantaRuleEngineTestCase(TestCase):
         rule = Rule.objects.create(configuration=configuration, target=target, policy=policy)
         return target, rule
 
-    def create_bundle_rule(self, policy=Rule.ALLOWLIST):
-        bundle_target = Target.objects.create(type=Target.BUNDLE, identifier=new_sha256())
-        bundle = Bundle.objects.create(
-            target=bundle_target,
-            path=get_random_string(78),
-            executable_rel_path=get_random_string(89),
-            name=get_random_string(13),
-            version=get_random_string(13),
-            version_str=get_random_string(12),
-            binary_count=3,
-        )
-        for _ in range(bundle.binary_count):
-            binary_target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
-            bundle.binary_targets.add(binary_target)
-        bundle_rule = Rule.objects.create(
-            configuration=self.configuration,
-            target=bundle_target,
-            policy=policy
-        )
-        return bundle_target, bundle, bundle_rule
-
-    def create_and_serialize_for_iter_rule(self, target_type=Target.BINARY, policy=Rule.ALLOWLIST, configuration=None):
+    def create_and_serialize_for_iter_rule(
+        self,
+        target_type=Target.Type.BINARY,
+        policy=Rule.Policy.ALLOWLIST,
+        configuration=None
+    ):
         target, rule = self.create_rule(target_type, policy, configuration)
         result = {
             "target_id": target.pk,
@@ -97,12 +66,17 @@ class SantaRuleEngineTestCase(TestCase):
         }
         return target, rule, result
 
-    def create_and_serialize_rule(self, target_type=Target.BINARY, policy=Rule.ALLOWLIST, configuration=None):
+    def create_and_serialize_rule(
+        self,
+        target_type=Target.Type.BINARY,
+        policy=Rule.Policy.ALLOWLIST,
+        configuration=None
+    ):
         target, rule = self.create_rule(target_type, policy, configuration)
         serialized_rule = {
             "rule_type": target.type,
             "identifier": target.identifier,
-            "policy": translate_rule_policy(rule.policy),
+            "policy": rule.policy.name,
         }
         if rule.custom_msg:
             serialized_rule["custom_msg"] = rule.custom_msg
@@ -133,7 +107,7 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertTrue(self.enrolled_machine2.sync_ok())
 
     def test_multiple_rules_missing_reported_teamid_sync_not_ok(self):
-        for target_type, count in ((Target.BINARY, 3), (Target.CERTIFICATE, 2), (Target.TEAM_ID, 1)):
+        for target_type, count in ((Target.Type.BINARY, 3), (Target.Type.CERTIFICATE, 2), (Target.Type.TEAM_ID, 1)):
             for i in range(count):
                 # create rule
                 target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
@@ -152,12 +126,12 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertFalse(self.enrolled_machine.sync_ok())
 
     def test_multiple_rules_missing_synced_certificate_sync_not_ok(self):
-        for target_type, count in ((Target.BINARY, 3), (Target.CERTIFICATE, 2), (Target.TEAM_ID, 1)):
+        for target_type, count in ((Target.Type.BINARY, 3), (Target.Type.CERTIFICATE, 2), (Target.Type.TEAM_ID, 1)):
             for i in range(count):
                 # create rule
                 target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
                 # sync rule
-                if target_type == Target.CERTIFICATE:
+                if target_type == Target.Type.CERTIFICATE:
                     continue
                 MachineRule.objects.create(
                     enrolled_machine=self.enrolled_machine,
@@ -174,12 +148,12 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertFalse(self.enrolled_machine.sync_ok())
 
     def test_multiple_rules_missing_cdhash_sync_not_ok(self):
-        for target_type, count in ((Target.BINARY, 2), (Target.CDHASH, 1),):
+        for target_type, count in ((Target.Type.BINARY, 2), (Target.Type.CDHASH, 1),):
             for i in range(count):
                 # create rule
                 target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
                 # sync rule
-                if target_type == Target.CDHASH:
+                if target_type == Target.Type.CDHASH:
                     continue
                 MachineRule.objects.create(
                     enrolled_machine=self.enrolled_machine,
@@ -196,10 +170,10 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertFalse(self.enrolled_machine.sync_ok())
 
     def test_multiple_rules_cursor_sync_not_ok(self):
-        for target_type, count in ((Target.BINARY, 4),
-                                   (Target.CDHASH, 3),
-                                   (Target.CERTIFICATE, 2),
-                                   (Target.TEAM_ID, 1)):
+        for target_type, count in ((Target.Type.BINARY, 4),
+                                   (Target.Type.CDHASH, 3),
+                                   (Target.Type.CERTIFICATE, 2),
+                                   (Target.Type.TEAM_ID, 1)):
             for i in range(count):
                 # create rule
                 target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
@@ -209,7 +183,7 @@ class SantaRuleEngineTestCase(TestCase):
                     target=target,
                     policy=rule.policy,
                     version=rule.version,
-                    cursor=get_random_string(8) if target_type == Target.BINARY else None
+                    cursor=get_random_string(8) if target_type == Target.Type.BINARY else None
                 )
         self.enrolled_machine.binary_rule_count = 4
         self.enrolled_machine.cdhash_rule_count = 3
@@ -219,11 +193,11 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertFalse(self.enrolled_machine.sync_ok())
 
     def test_multiple_rules_sync_ok(self):
-        for target_type, count in ((Target.BINARY, 3),
-                                   (Target.CDHASH, 5),
-                                   (Target.CERTIFICATE, 2),
-                                   (Target.SIGNING_ID, 1),
-                                   (Target.TEAM_ID, 4)):
+        for target_type, count in ((Target.Type.BINARY, 3),
+                                   (Target.Type.CDHASH, 5),
+                                   (Target.Type.CERTIFICATE, 2),
+                                   (Target.Type.SIGNING_ID, 1),
+                                   (Target.Type.TEAM_ID, 4)):
             for i in range(count):
                 # create rule
                 target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
@@ -400,40 +374,6 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, tag_pks)), [result])
         rule.excluded_tags.add(tags[-1])
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, tag_pks)), [])
-
-    def test_iter_bundle_new_rules(self):
-        bundle_target, bundle, bundle_rule = self.create_bundle_rule()
-        results = [{
-            "target_id": binary_target.pk,
-            "policy": bundle_rule.policy,
-            "rule_type": binary_target.type,
-            "identifier": binary_target.identifier,
-            "custom_msg": "",
-            "version": bundle_rule.version,
-            "file_bundle_hash": bundle_target.identifier,
-            "file_bundle_binary_count": bundle.binary_count,
-        } for binary_target in bundle.binary_targets.all().order_by("identifier")]
-        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), results)
-        # simulate acknowleged sync
-        for binary_target in bundle.binary_targets.all():
-            MachineRule.objects.create(
-                enrolled_machine=self.enrolled_machine,
-                target=binary_target,
-                policy=bundle_rule.policy,
-                version=bundle_rule.version,
-            )
-        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
-        # delete the rule
-        bundle_rule.delete()
-        new_results = []
-        for r in results:
-            nr = r.copy()
-            nr["policy"] = MachineRule.REMOVE
-            nr.pop("custom_msg")
-            nr.pop("file_bundle_hash")
-            nr.pop("file_bundle_binary_count")
-            new_results.append(nr)
-        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), new_results)
 
     def test_configuration_leakage(self):
         configuration2 = Configuration.objects.create(name=get_random_string(256))
@@ -635,45 +575,10 @@ class SantaRuleEngineTestCase(TestCase):
             self.assertEqual(machine_rule_qs.count(), 1)
             machine_rule = machine_rule_qs.first()
             self.assertEqual(machine_rule.target, target)
-            self.assertEqual(machine_rule.policy, MachineRule.REMOVE)
+            self.assertEqual(machine_rule.policy, Rule.Policy.REMOVE)
             self.assertEqual(machine_rule.cursor, response_cursor)
         MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
         self.assertEqual(machine_rule_qs.count(), 0)
-
-    def test_bundle_rules(self):
-        # all bundle binary rules with extra attributes
-        bundle_target, bundle, bundle_rule = self.create_bundle_rule()
-        serialized_rules = [{
-            "policy": translate_rule_policy(bundle_rule.policy),
-            "rule_type": binary_target.type,
-            "identifier": binary_target.identifier,
-            "file_bundle_hash": bundle_target.identifier,
-            "file_bundle_binary_count": bundle.binary_count,
-        } for binary_target in bundle.binary_targets.all().order_by("identifier")]
-        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
-        self.assertEqual(rule_batch, serialized_rules)
-        # noop
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
-        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
-        self.assertEqual(rule_batch, [])
-        self.assertIsNone(response_cursor)
-        # delete rule
-        bundle_rule.delete()
-        serialized_remove_rules = []
-        # all bundle binary remove rules without extra attributes
-        for sr in serialized_rules:
-            srr = sr.copy()
-            srr["policy"] = "REMOVE"
-            srr.pop("file_bundle_hash")
-            srr.pop("file_bundle_binary_count")
-            serialized_remove_rules.append(srr)
-        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
-        self.assertEqual(rule_batch, serialized_remove_rules)
-        # noop
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
-        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
-        self.assertEqual(rule_batch, [])
-        self.assertIsNone(response_cursor)
 
     def test_scoped_rule(self):
         # rule without restrictions

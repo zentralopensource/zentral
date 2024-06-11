@@ -11,8 +11,8 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .events import post_santa_rule_update_event
-from .models import Bundle, Configuration, Rule, Target, Enrollment, translate_rule_policy
-from .forms import test_cdhash, test_sha256, test_signing_id_identifier, test_team_id
+from .models import Configuration, Rule, Target, Enrollment
+from .forms import cleanup_target_identifier
 
 
 logger = logging.getLogger("zentral.contrib.santa.serializers")
@@ -64,7 +64,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
 
 class RuleSerializer(serializers.ModelSerializer):
-    target_type = serializers.ChoiceField(choices=[c[0] for c in Target.TYPE_CHOICES], source="target.type")
+    target_type = serializers.ChoiceField(choices=[c[0] for c in Target.Type.rule_choices()], source="target.type")
     target_identifier = serializers.CharField(source="target.identifier")
     ruleset = serializers.PrimaryKeyRelatedField(read_only=True)
     version = serializers.IntegerField(default=1, read_only=True)
@@ -103,20 +103,9 @@ class RuleSerializer(serializers.ModelSerializer):
 
         # identifier
         if target_identifier:
-            if target_type == Target.CDHASH:
-                if not test_cdhash(target_identifier):
-                    raise serializers.ValidationError({"target_identifier": "Invalid cdhash target identifier"})
-            elif target_type == Target.SIGNING_ID:
-                if not test_signing_id_identifier(target_identifier):
-                    raise serializers.ValidationError({"target_identifier": "Invalid Signing ID target identifier"})
-            elif target_type is Target.TEAM_ID:
-                target_identifier = target_identifier.upper()
-                if not test_team_id(target_identifier):
-                    raise serializers.ValidationError({"target_identifier": "Invalid Team ID"})
-            else:
-                target_identifier = target_identifier.lower()
-                if not test_sha256(target_identifier):
-                    raise serializers.ValidationError({"target_identifier": "Invalid sha256"})
+            target_identifier = cleanup_target_identifier(target_type, target_identifier)
+            if not target_identifier:
+                raise serializers.ValidationError({"target_identifier": f"Invalid {target_type} identifier"})
 
         # Only one rule per target allowed for a given configuration
         test_qs = Rule.objects.filter(
@@ -129,23 +118,11 @@ class RuleSerializer(serializers.ModelSerializer):
         if test_qs.count():
             raise serializers.ValidationError({"target": "rule already exists for this target"})
 
-        # bundle target checks
-        if target_type is Target.BUNDLE:
-            try:
-                bundle = Bundle.objects.get(target__identifier=target_identifier)
-            except Bundle.DoesNotExist:
-                raise serializers.ValidationError({"target_type": f'Bundle for {target_identifier} does not exist.'})
-            else:
-                if not bundle.uploaded_at:
-                    raise serializers.ValidationError({"bundle": "This bundle has not been uploaded yet."})
-
         # policy
-        policy = int(data.get("policy"))
-        if policy is not Rule.BLOCKLIST:
+        policy = Rule.Policy(data.get("policy"))
+        if policy is not Rule.Policy.BLOCKLIST:
             if data.get("custom_msg"):
                 raise serializers.ValidationError({"custom_msg": "Can only be set on BLOCKLIST rules"})
-        if policy not in Rule.BUNDLE_POLICIES and target_type is Target.BUNDLE:
-            raise serializers.ValidationError({"policy": f"Policy {policy} not allowed for bundles."})
 
         return data
 
@@ -198,8 +175,8 @@ class RuleSerializer(serializers.ModelSerializer):
                     added_items = added.serialize_for_event(**kwargs)
                     removed_items = removed.serialize_for_event(**kwargs)
                 elif attr == "policy":
-                    added_items = translate_rule_policy(added)
-                    removed_items = translate_rule_policy(removed)
+                    added_items = Rule.Policy(added).name
+                    removed_items = Rule.Policy(removed).name
                 else:
                     added_items = added
                     removed_items = removed
@@ -228,7 +205,7 @@ class RuleSerializer(serializers.ModelSerializer):
 
 class RuleUpdateSerializer(serializers.Serializer):
     policy = serializers.ChoiceField(choices=["ALLOWLIST", "ALLOWLIST_COMPILER", "BLOCKLIST", "SILENT_BLOCKLIST"])
-    rule_type = serializers.ChoiceField(choices=[k for k, _ in Target.TYPE_CHOICES])
+    rule_type = serializers.ChoiceField(choices=[k for k, _ in Target.Type.rule_choices()])
     sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z', required=False)  # Legacy field  TODO remove eventually
     identifier = serializers.CharField(required=False)
     custom_msg = serializers.CharField(required=False)
@@ -260,15 +237,12 @@ class RuleUpdateSerializer(serializers.Serializer):
 
     def validate_policy(self, value):
         try:
-            return getattr(Rule, value)
+            return getattr(Rule.Policy, value)
         except AttributeError:
             raise serializers.ValidationError(f"Unknown policy: {value}")
 
     def validate(self, data):
-        rule_type = data["rule_type"]
-        # bundle rule policy
-        if rule_type == Target.BUNDLE and not data["policy"] in Rule.BUNDLE_POLICIES:
-            raise serializers.ValidationError("Wrong policy for BUNDLE rule")
+        rule_type = Target.Type(data["rule_type"])
         # identifier (or sha256)
         identifier = data.pop("identifier", None)
         sha256 = data.pop("sha256", None)
@@ -277,35 +251,17 @@ class RuleUpdateSerializer(serializers.Serializer):
         elif identifier and sha256:
             raise serializers.ValidationError("sha256 and identifier cannot be both set")
         elif sha256:
-            if rule_type in (Target.SIGNING_ID, Target.TEAM_ID):
+            if not rule_type.has_sha256_identifier:
                 raise serializers.ValidationError({"sha256": f"This field cannot be used in a {rule_type} rule"})
             else:
                 data["identifier"] = sha256
         elif identifier:
-            if rule_type == Target.CDHASH:
-                if test_cdhash(identifier):
-                    data["identifier"] = identifier
-                else:
-                    raise serializers.ValidationError({"identifier": "Invalid cdhash identifier"})
-            elif rule_type == Target.SIGNING_ID:
-                if test_signing_id_identifier(identifier):
-                    data["identifier"] = identifier
-                else:
-                    raise serializers.ValidationError({"identifier": "Invalid Signing ID identifier"})
-            elif rule_type == Target.TEAM_ID:
-                identifier = identifier.upper()
-                if test_team_id(identifier):
-                    data["identifier"] = identifier
-                else:
-                    raise serializers.ValidationError({"identifier": "Invalid Team ID"})
-            else:
-                identifier = identifier.lower()
-                if test_sha256(identifier):
-                    data["identifier"] = identifier
-                else:
-                    raise serializers.ValidationError({"identifier": "Invalid sha256"})
+            identifier = cleanup_target_identifier(rule_type, identifier)
+            if not identifier:
+                raise serializers.ValidationError({"identifier": f"Invalid {rule_type} identifier"})
+            data["identifier"] = identifier
         # custom message only with blocklist rule
-        if data["policy"] != Rule.BLOCKLIST and "custom_msg" in data:
+        if data["policy"] != Rule.Policy.BLOCKLIST and "custom_msg" in data:
             if data["custom_msg"]:
                 raise serializers.ValidationError("Custom message can only be set on BLOCKLIST rules")
         # scope conflicts
@@ -359,14 +315,6 @@ class RuleSetUpdateSerializer(serializers.Serializer):
                             ).exists()):
                 rule_errors[str(rule_id)] = {
                     "non_field_errors": ["{rule_type}/{identifier}: conflict".format(**rule)]
-                }
-            elif (
-                rule["rule_type"] == Target.BUNDLE and
-                not Bundle.objects.filter(target__identifier=rule["identifier"],
-                                          uploaded_at__isnull=False).exists()
-            ):
-                rule_errors[str(rule_id)] = {
-                    "non_field_errors": ["{rule_type}/{identifier}: bundle unknown or not uploaded".format(**rule)]
                 }
         if rule_errors:
             raise serializers.ValidationError({"rules": rule_errors})

@@ -3,7 +3,7 @@ import logging
 from zentral.conf import settings
 from zentral.contrib.inventory.models import File
 from zentral.contrib.santa.models import Bundle, EnrolledMachine, Target
-from zentral.contrib.santa.utils import add_bundle_binary_targets, update_or_create_targets
+from zentral.contrib.santa.utils import add_bundle_binary_targets, update_metabundles, update_or_create_targets
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.utils.certificates import APPLE_DEV_ID_ISSUER_CN, parse_apple_dev_id
 from zentral.utils.text import shard
@@ -173,26 +173,33 @@ class SantaRuleUpdateEvent(BaseEvent):
         if not target:
             return keys
         target_type = target.get("type")
-        if target_type == Target.CDHASH:
+        if not target_type:
+            return keys
+        try:
+            target_type = Target.Type(target_type)
+        except (ValueError, TypeError):
+            logger.error("Invalid target type")
+            return keys
+        if target_type == Target.Type.CDHASH:
             cdhash = target.get("cdhash")
             if cdhash:
                 keys["file"] = [("cdhash", cdhash)]
-        elif target_type == Target.SIGNING_ID:
+        elif target_type == Target.Type.SIGNING_ID:
             signing_id = target.get("signing_id")
             if signing_id:
                 keys["file"] = [("apple_signing_id", signing_id)]
-        elif target_type == Target.TEAM_ID:
+        elif target_type == Target.Type.TEAM_ID:
             team_id = target.get("team_id")
             if team_id:
                 keys["apple_team_id"] = [(team_id,)]
         else:
             sha256 = target.get("sha256")
             if sha256:
-                if target_type == Target.BINARY:
+                if target_type == Target.Type.BINARY:
                     keys["file"] = [("sha256", sha256)]
-                elif target_type == Target.CERTIFICATE:
+                elif target_type == Target.Type.CERTIFICATE:
                     keys["certificate"] = [("sha256", sha256)]
-                elif target_type == Target.BUNDLE:
+                elif target_type == Target.Type.BUNDLE:
                     keys["bundle"] = [("sha256", sha256)]
         return keys
 
@@ -289,26 +296,26 @@ def _update_targets(configuration, events):
         target_keys = []
         file_sha256 = event_d.get("file_sha256")
         if file_sha256:
-            target_keys.append((Target.BINARY, file_sha256))
+            target_keys.append((Target.Type.BINARY, file_sha256))
         cdhash = event_d.get("cdhash")
         if cdhash:
-            target_keys.append((Target.CDHASH, cdhash))
+            target_keys.append((Target.Type.CDHASH, cdhash))
         team_id = event_d.get("team_id")
         if team_id:
-            target_keys.append((Target.TEAM_ID, team_id))
+            target_keys.append((Target.Type.TEAM_ID, team_id))
         signing_id = event_d.get("signing_id")
         if signing_id:
-            target_keys.append((Target.SIGNING_ID, signing_id))
+            target_keys.append((Target.Type.SIGNING_ID, signing_id))
         signing_chain = event_d.get("signing_chain")
         if signing_chain:
             for cert_d in signing_chain:
                 sha256 = cert_d.get("sha256")
                 if sha256:
-                    target_keys.append((Target.CERTIFICATE, sha256))
+                    target_keys.append((Target.Type.CERTIFICATE, sha256))
         if not _is_bundle_binary_pseudo_event(event_d):
             bundle_hash = event_d.get("file_bundle_hash")
             if bundle_hash:
-                target_keys.append((Target.BUNDLE, bundle_hash))
+                target_keys.append((Target.Type.BUNDLE, bundle_hash))
         # increments
         blocked_incr = collected_incr = executed_incr = 0
         if _is_block_event(event_d):
@@ -348,14 +355,14 @@ def _create_missing_bundles(events, targets):
         return
     existing_sha256_set = set(
         Bundle.objects.filter(
-            target__type=Target.BUNDLE,
+            target__type=Target.Type.BUNDLE,
             target__identifier__in=bundle_events.keys(),
             uploaded_at__isnull=False,  # to recover from blocked uploads
         ).values_list("target__identifier", flat=True)
     )
     unknown_file_bundle_hashes = list(set(bundle_events.keys()) - existing_sha256_set)
     for sha256 in unknown_file_bundle_hashes:
-        target, _ = targets.get((Target.BUNDLE, sha256), (None, None))
+        target, _ = targets.get((Target.Type.BUNDLE, sha256), (None, None))
         if not target:
             logger.error("Missing BUNDLE target %s", sha256)
             continue
@@ -386,9 +393,10 @@ def _create_bundle_binaries(events):
             bundle_sha256 = event_d.get("file_bundle_hash")
             if bundle_sha256:
                 bundle_binary_events.setdefault(bundle_sha256, []).append(event_d)
+    uploaded_bundles = set()
     for bundle_sha256, events in bundle_binary_events.items():
         try:
-            bundle = Bundle.objects.get(target__type=Target.BUNDLE, target__identifier=bundle_sha256)
+            bundle = Bundle.objects.get(target__type=Target.Type.BUNDLE, target__identifier=bundle_sha256)
         except Bundle.DoesNotExist:
             logger.error("Unknown bundle: %s", bundle_sha256)
             continue
@@ -416,8 +424,10 @@ def _create_bundle_binaries(events):
             elif binary_target_count == bundle.binary_count:
                 bundle.uploaded_at = datetime.utcnow()
                 save_bundle = True
+                uploaded_bundles.add(bundle)
         if save_bundle:
             bundle.save()
+    return uploaded_bundles
 
 
 def _commit_files(events):
@@ -478,8 +488,14 @@ def process_events(enrolled_machine, user_agent, ip, data):
         return []
     targets = _update_targets(enrolled_machine.enrollment.configuration, events)
     unknown_file_bundle_hashes = _create_missing_bundles(events, targets)
-    _create_bundle_binaries(events)
+    uploaded_bundles = _create_bundle_binaries(events)
     _commit_files(events)
+    if uploaded_bundles:
+        logger.info("Update MetaBundles")
+        try:
+            update_metabundles(uploaded_bundles)
+        except Exception:
+            logger.exception("Could not update MetaBundles")
     _post_santa_events(enrolled_machine, user_agent, ip, events)
     return unknown_file_bundle_hashes
 

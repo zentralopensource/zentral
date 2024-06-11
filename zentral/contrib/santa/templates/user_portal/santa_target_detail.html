@@ -1,0 +1,75 @@
+{% extends 'user_portal/base.html' %}
+
+{% block main %}
+
+{% if current_machine %}
+{{ current_machine.serial_number }} - {{ current_machine.computer_name }}
+{% endif %}
+
+<h3>App</h3>
+{% for object in target_info.objects %}
+<dl>
+  <dt>Name</dt>
+  <dd>{{ object.name }}</dd>
+  <dt>Version</dt>
+  <dd>{{ object.version }}</dd>
+  {% if publisher_info %}
+  <dt>Publisher</dt>
+  <dd>
+    <dl>
+      {% if publisher_info.team_id %}
+      <dt>Team ID</dt>
+      <dd>{{ publisher_info.team_id }}</dd>
+      {% endif %}
+      {% if publisher_info.name %}
+      <dt>Name</dt>
+      <dd>{{ publisher_info.name }}</dd>
+      {% endif %}
+    </dl>
+  </dd>
+  {% endif %}
+</dl>
+{% endfor %}
+
+{% if ballot_box %}
+<h3>Status</h3>
+{% for configuration, target_state in states %}
+<dl>
+  <dt>Configuration</dt>
+  <dd>{{ configuration }}{% if configuration == current_configuration %}*{% endif %}<dd>
+  <dt>Status</dt>
+  <dd>
+    {{ target_state.get_state_display }}
+  </dd>
+  <dt>Score</dt>
+  <dd>{{ target_state.score }}</dd>
+</dl>
+{% endfor %}
+
+{% if existing_ballot %}
+<h3>Vote</h3>
+<dl>
+  <dt>Date</dt>
+  <dd>{{ existing_ballot.created_at }}</dd>
+  <dt>Configurations</dt>
+  <dd>
+    {% for configuration, yes_vote in existing_votes %}
+    {{ configuration }} - {% if yes_vote %}👍{% else %}👎{% endif %}<br>
+    {% endfor %}
+  </dd>
+</dl>
+{% endif %}
+
+{% if ballot_box.is_upvoting_allowed or ballot_box.is_downvoting_allowed %}
+<h3>{% if vote %}Update your{% else %}Cast a{% endif %} vote for this application</h3>
+<form method="POST">{% csrf_token %}
+  {% if ballot_box.is_upvoting_allowed %}
+  <p><button type="submit" name="yes_vote" value="oui">Vote to allowlist this</button></p>
+  {% endif %}
+  {% if ballot_box.is_downvoting_allowed %}
+  <p><button type="submit" name="yes_vote" value="non">Vote to blocklist this</button></p>
+  {% endif %}
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

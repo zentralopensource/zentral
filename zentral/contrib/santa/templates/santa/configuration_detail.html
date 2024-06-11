@@ -84,6 +84,16 @@
                 <td>Enable transitive rules</td>
                 <td>{{ object.enable_transitive_rules|yesno }}</td>
             </tr>
+            </tbody>
+        </table>
+        {% if object.allowed_path_regex or object.blocked_path_regex %}
+        <table class="table-object-properties">
+          <tbody>
+            <tr>
+              <td colspan="2">
+                <h5>Regexes</h5>
+              </td>
+            </tr>
             {% if object.allowed_path_regex %}
             <tr>
                 <td>Allow path regex</td>
@@ -100,6 +110,16 @@
                 </td>
             </tr>
             {% endif %}
+          </tbody>
+        </table>
+        {% endif %}
+        <table class="table-object-properties">
+          <tbody>
+            <tr>
+              <td colspan="2">
+                <h5>USB</h5>
+              </td>
+            </tr>
             <tr>
                 <td>Block USB mass storage</td>
                 <td>{{ object.block_usb_mount|yesno }}</td>
@@ -114,6 +134,58 @@
                     {% endif %}
                 </td>
             </tr>
+          </tbody>
+        </table>
+        <table class="table-object-properties">
+          <tbody>
+            <tr>
+              <td colspan="2">
+                <h5>Voting</h5>
+              </td>
+            </tr>
+            <tr>
+              <td>Realm</td>
+              <td>
+                {% if object.voting_realm %}
+                {% if perms.realms.view_realm %}
+                <a href="{{ object.voting_realm.get_absolute_url }}">{{ object.voting_realm }}</a>
+                {% else %}
+                {{ object.voting_realm }}
+                {% endif %}
+                {% else %}
+                -
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td>Default voting weight</td>
+              <td>
+                {{ object.default_voting_weight }}
+              </td>
+            </tr>
+            <tr>
+              <td>Default ballot target types</td>
+              <td>
+                {{ object.default_ballot_target_types|join:", "|default:"-" }}
+              </td>
+            </tr>
+            <tr>
+              <td>Thresholds</td>
+              <td>
+                Globally allowlisted: {{ object.globally_allowlisted_threshold }}
+                <br>Partially allowlisted: {{ object.partially_allowlisted_threshold}}
+                <br>Banned: {{ object.banned_threshold }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <table class="table-object-properties">
+          <tbody>
+            <tr>
+              <td colspan="2">
+                <h5>Zentral options</h5>
+              </td>
+            </tr>
             <tr>
                 <td>Allow Unknown shard</td>
                 <td>{{ object.allow_unknown_shard }}%</td>
@@ -126,7 +198,7 @@
                 <td>Sync incident severity</td>
                 <td>{{ object.get_sync_incident_severity|default:"Configuration error" }}</td>
             </tr>
-            </tbody>
+          </tbody>
         </table>
     </div>
 
@@ -214,13 +286,71 @@
 {% endif %}
 {% endif %}
 
+{% if perms.santa.view_votinggroup %}
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Voting group{{ voting_groups|length|pluralize }} ({{ voting_groups|length }})</h2>
+    {% if perms.santa.add_votinggroup %}
+        <div class="ms-auto">
+            {% url 'santa:create_voting_group' object.id as url %}
+            {% button 'CREATE' url "Create voting group" %}
+        </div>
+    {% endif %}
+</div>
+
+{% if voting_groups %}
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
+    <thead>
+      <tr>
+        <th>Realm group</th>
+        <th>Can unflag target?</th>
+        <th>Can mark malware?</th>
+        <th>Can reset target?</th>
+        <th>Target types</th>
+        <th>Voting weight</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for voting_group in voting_groups %}
+      <tr class="data-row" id="vg-{{ voting_group.pk }}">
+        <td>
+          {% if perms.realms.view_realmgroup %}
+          <a href="{{ voting_group.realm_group.get_absolute_url }}">{{ voting_group.realm_group }}</a>
+          {% else %}
+          {{ voting_group.realm_group }}
+          {% endif %}
+        </td>
+        <td>{{ voting_group.can_unflag_target|yesno }}</td>
+        <td>{{ voting_group.can_mark_malware|yesno }}</td>
+        <td>{{ voting_group.can_reset_target|yesno }}</td>
+        <td>{{ voting_group.ballot_target_types|join:", "|default:"-" }}</td>
+        <td>{{ voting_group.voting_weight }}</td>
+        <td class="text-end py-0">
+          {% if perms.santa.change_votinggroup %}
+          {% url 'santa:update_voting_group' configuration.id voting_group.id as url %}
+          {% button 'UPDATE' url "Edit voting group" %}
+          {% endif %}
+          {% if perms.santa.delete_votinggroup %}
+          {% url 'santa:delete_voting_group' configuration.id voting_group.id as url %}
+          {% button 'DELETE' url "Delete voting group" %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
 {% if perms.santa.view_rule %}
 <div class="d-flex justify-content-between mb-3">
-    {% if perms.santa.add_rule %}
+    {% if perms.santa.view_rule %}
         <a type="button" href="{% url 'santa:configuration_rules' object.id %}">
     {% endif %}
             <h2 class="m-0">Rule{{ rules_count|pluralize }} ({{ rules_count }})</h2>
-    {% if perms.santa.add_rule %}
+    {% if perms.santa.view_rule %}
         </a>
     {% endif %}
 </div>

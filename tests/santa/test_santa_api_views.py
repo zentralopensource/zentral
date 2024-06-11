@@ -14,7 +14,7 @@ from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaEventEvent, 
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
                                           MachineRule, Rule, Target, TargetCounter)
 from zentral.core.incidents.models import Severity
-from .test_rule_engine import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
+from .utils import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -328,8 +328,8 @@ class SantaAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_sync_not_ok_conf_without_severity_no_incident_update(self, post_event):
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
             target=target,
@@ -357,8 +357,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.configuration.sync_incident_severity = Severity.CRITICAL.value
         self.configuration.save()
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
             target=target,
@@ -389,8 +389,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.enrolled_machine.last_sync_ok = False
         self.enrolled_machine.save()
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
             target=target,
@@ -421,8 +421,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.configuration.sync_incident_severity = Severity.MAJOR.value
         self.configuration.save()
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
             target=target,
@@ -454,8 +454,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.enrolled_machine.last_sync_ok = False
         self.enrolled_machine.save()
         # add one synced rule
-        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=self.enrolled_machine,
             target=target,
@@ -516,14 +516,14 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response, {"rules": []})
         # add a rule
-        target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.BLOCKLIST)
+        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
         response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(
             json_response["rules"],
-            [{"rule_type": Target.BINARY,
+            [{"rule_type": Target.Type.BINARY,
               "identifier": target.identifier,
               "policy": "BLOCKLIST"}]
         )
@@ -533,7 +533,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(
             json_response["rules"],
-            [{"rule_type": Target.BINARY,
+            [{"rule_type": Target.Type.BINARY,
               "identifier": target.identifier,
               "policy": "BLOCKLIST"}]
         )
@@ -552,7 +552,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(
             json_response["rules"],
-            [{"rule_type": Target.BINARY,
+            [{"rule_type": Target.Type.BINARY,
               "identifier": target.identifier,
               "policy": "BLOCKLIST",
               "custom_msg": rule.custom_msg}]
@@ -563,7 +563,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(
             json_response["rules"],
-            [{"rule_type": Target.BINARY,
+            [{"rule_type": Target.Type.BINARY,
               "identifier": target.identifier,
               "policy": "BLOCKLIST",
               "custom_msg": rule.custom_msg}]
@@ -582,7 +582,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(
             json_response["rules"],
-            [{"rule_type": Target.BINARY,
+            [{"rule_type": Target.Type.BINARY,
               "identifier": target.identifier,
               "policy": "REMOVE"}]
         )
@@ -592,7 +592,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(
             json_response["rules"],
-            [{"rule_type": Target.BINARY,
+            [{"rule_type": Target.Type.BINARY,
               "identifier": target.identifier,
               "policy": "REMOVE"}]
         )
@@ -605,7 +605,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(
             json_response["rules"],
-            [{"rule_type": Target.BINARY,
+            [{"rule_type": Target.Type.BINARY,
               "identifier": target.identifier,
               "policy": "REMOVE"}]
         )
@@ -623,7 +623,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(
             json_response["rules"],
-            [{"rule_type": Target.BINARY,
+            [{"rule_type": Target.Type.BINARY,
               "identifier": target.identifier,
               "policy": "BLOCKLIST",
               "custom_msg": rule.custom_msg}]
@@ -746,7 +746,7 @@ class SantaAPIViewsTestCase(TestCase):
         }
         self.assertEqual(Target.objects.all().count(), 0)
         target = Target.objects.create(
-            type=Target.CERTIFICATE,
+            type=Target.Type.CERTIFICATE,
             identifier=event_d["signing_chain"][1]["sha256"],
         )
         TargetCounter.objects.create(
@@ -772,10 +772,10 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertNotIn("signing_chain", event.payload)
         self.assertEqual(Target.objects.all().count(), 4)
         for target_type, target_identifier, b_count, c_count, e_count in (
-            (Target.BINARY, event_d["file_sha256"], 0, 0, 1),
-            (Target.CERTIFICATE, event_d["signing_chain"][0]["sha256"], 0, 0, 1),
-            (Target.CERTIFICATE, event_d["signing_chain"][1]["sha256"], 3, 2, 2),  # executed_count = 1 + 1
-            (Target.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 0, 0, 1),
+            (Target.Type.BINARY, event_d["file_sha256"], 0, 0, 1),
+            (Target.Type.CERTIFICATE, event_d["signing_chain"][0]["sha256"], 0, 0, 1),
+            (Target.Type.CERTIFICATE, event_d["signing_chain"][1]["sha256"], 3, 2, 2),  # executed_count = 1 + 1
+            (Target.Type.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 0, 0, 1),
         ):
             self.assertTrue(
                 TargetCounter.objects.filter(target__type=target_type,
@@ -839,7 +839,7 @@ class SantaAPIViewsTestCase(TestCase):
         }
         self.assertEqual(Target.objects.all().count(), 0)
         target = Target.objects.create(
-            type=Target.BINARY,
+            type=Target.Type.BINARY,
             identifier=event_d["file_sha256"],
         )
         TargetCounter.objects.create(
@@ -853,7 +853,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {"event_upload_bundle_binaries": [event_d["file_bundle_hash"]]})
-        b = Bundle.objects.get(target__type=Target.BUNDLE, target__identifier=event_d["file_bundle_hash"])
+        b = Bundle.objects.get(target__type=Target.Type.BUNDLE, target__identifier=event_d["file_bundle_hash"])
         self.assertIsNone(b.uploaded_at)
         self.assertEqual(b.bundle_id, event_d["file_bundle_id"])
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
@@ -863,11 +863,11 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(event.payload["signing_chain"], event_d["signing_chain"])
         self.assertEqual(Target.objects.all().count(), 5)
         for target_type, target_identifier, b_count, c_count, e_count in (
-            (Target.BINARY, event_d["file_sha256"], 4, 2, 1),
-            (Target.BUNDLE, event_d["file_bundle_hash"], 1, 0, 0),
-            (Target.CERTIFICATE, event_d["signing_chain"][0]["sha256"], 1, 0, 0),
-            (Target.CERTIFICATE, event_d["signing_chain"][1]["sha256"], 1, 0, 0),
-            (Target.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 1, 0, 0),
+            (Target.Type.BINARY, event_d["file_sha256"], 4, 2, 1),
+            (Target.Type.BUNDLE, event_d["file_bundle_hash"], 1, 0, 0),
+            (Target.Type.CERTIFICATE, event_d["signing_chain"][0]["sha256"], 1, 0, 0),
+            (Target.Type.CERTIFICATE, event_d["signing_chain"][1]["sha256"], 1, 0, 0),
+            (Target.Type.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 1, 0, 0),
         ):
             self.assertTrue(
                 TargetCounter.objects.filter(target__type=target_type,
@@ -925,7 +925,7 @@ class SantaAPIViewsTestCase(TestCase):
                                'valid_from': 1146001236,
                                'valid_until': 2054670036}]
         }
-        t, _ = Target.objects.get_or_create(type=Target.BUNDLE,
+        t, _ = Target.objects.get_or_create(type=Target.Type.BUNDLE,
                                             identifier=event_d["file_bundle_hash"])
         b, _ = Bundle.objects.update_or_create(
             target=t,
@@ -941,22 +941,22 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertIsNotNone(b.uploaded_at)
         self.assertEqual(
             list(b.binary_targets.all()),
-            [Target.objects.get(type=Target.BINARY, identifier=event_d["file_sha256"])]
+            [Target.objects.get(type=Target.Type.BINARY, identifier=event_d["file_sha256"])]
         )
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 0)
         self.assertEqual(file_qs.count(), 1)
         file = file_qs.first()
         self.assertEqual(file.signing_id, event_d["signing_id"])
-        self.assertEqual(Target.objects.all().count(), 8)
+        self.assertEqual(Target.objects.all().count(), 9)
         for target_type, target_identifier, b_count, c_count, e_count in (
-            (Target.BINARY, event_d["file_sha256"], 0, 1, 0),
-            (Target.CDHASH, event_d["cdhash"], 0, 1, 0),
-            (Target.SIGNING_ID, event_d["signing_id"], 0, 1, 0),
-            (Target.TEAM_ID, event_d["team_id"], 0, 1, 0),
-            (Target.CERTIFICATE, event_d["signing_chain"][0]["sha256"], 0, 1, 0),
-            (Target.CERTIFICATE, event_d["signing_chain"][1]["sha256"], 0, 1, 0),
-            (Target.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 0, 1, 0),
+            (Target.Type.BINARY, event_d["file_sha256"], 0, 1, 0),
+            (Target.Type.CDHASH, event_d["cdhash"], 0, 1, 0),
+            (Target.Type.SIGNING_ID, event_d["signing_id"], 0, 1, 0),
+            (Target.Type.TEAM_ID, event_d["team_id"], 0, 1, 0),
+            (Target.Type.CERTIFICATE, event_d["signing_chain"][0]["sha256"], 0, 1, 0),
+            (Target.Type.CERTIFICATE, event_d["signing_chain"][1]["sha256"], 0, 1, 0),
+            (Target.Type.CERTIFICATE, event_d["signing_chain"][2]["sha256"], 0, 1, 0),
         ):
             self.assertTrue(
                 TargetCounter.objects.filter(target__type=target_type,

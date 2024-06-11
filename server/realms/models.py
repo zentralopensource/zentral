@@ -19,7 +19,14 @@ logger = logging.getLogger('zentral.realms.models')
 class Realm(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    enabled_for_login = models.BooleanField(default=False)
+    enabled_for_login = models.BooleanField(
+        default=False,
+        help_text="If True, users will be able to sign in to the Zentral admin console"
+    )
+    user_portal = models.BooleanField(
+        default=False,
+        help_text="If True, users will be able to sign in to this realm user portal",
+    )
     login_session_expiry = models.PositiveIntegerField(null=True, default=0)
 
     # backend + backend config
@@ -72,7 +79,7 @@ class Realm(models.Model):
                            "custom_attr_1", "custom_attr_2"):
             yield user_claim, getattr(self, "{}_claim".format(user_claim))
 
-    def serialize_for_events(self, keys_only=False):
+    def serialize_for_event(self, keys_only=False):
         d = {"pk": str(self.pk),
              "name": self.name}
         if keys_only:
@@ -118,6 +125,20 @@ class RealmGroup(models.Model):
 
     def get_absolute_url(self):
         return reverse("realms:group", args=(self.pk,))
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": str(self.pk),
+             "realm": self.realm.serialize_for_event(keys_only=True),
+             "display_name": self.display_name}
+        if keys_only:
+            return d
+        d.update({
+            "scim_external_id": self.scim_external_id,
+            "parent": self.parent.serialize_for_event(keys_only=True) if self.parent else None,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
 
 
 class RealmUser(models.Model):

@@ -98,6 +98,7 @@ class RealmsAPIViewsTestCase(TestCase):
               'openidc_config': None,
               'saml_config': None,
               'enabled_for_login': False,
+              'user_portal': False,
               'login_session_expiry': 0,
               'username_claim': 'username',
               'email_claim': 'email',
@@ -129,6 +130,7 @@ class RealmsAPIViewsTestCase(TestCase):
                   "idp_metadata": "<md></md>",
               },
               'enabled_for_login': False,
+              'user_portal': False,
               'login_session_expiry': 0,
               'username_claim': 'username',
               'email_claim': 'email',
@@ -155,7 +157,7 @@ class RealmsAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_realm(self):
-        realm = force_realm(backend="openidc")
+        realm = force_realm(backend="openidc", user_portal=True)
         self.set_permissions("realms.view_realm")
         response = self.get(reverse("realms_api:realm", args=(realm.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -173,6 +175,7 @@ class RealmsAPIViewsTestCase(TestCase):
              },
              'saml_config': None,
              'enabled_for_login': False,
+             'user_portal': True,
              'login_session_expiry': 0,
              'username_claim': 'username',
              'email_claim': 'email',

@@ -103,6 +103,11 @@
           <td>{{ targets.bundle.count }}</td>
           <td>{{ targets.bundle.rule_count }}</td>
         </tr>
+        <tr>
+          <td><a href="{% url "santa:targets" %}?target_type=METABUNDLE">MetaBundle</a></td>
+          <td>{{ targets.metabundle.count }}</td>
+          <td>{{ targets.metabundle.rule_count }}</td>
+        </tr>
       </tbody>
     </table>
     {% endif %}

@@ -66,6 +66,18 @@
     <dd class="col-sm-9">{{ cert.valid_from }} - {{ cert.valid_until }}</dd>
   </dl>
   {% endfor %}
+  {% if metabundle %}
+  <dl class="row">
+    <dt class="col-sm-3 text-md-end">Signing ID{{ metabundle.signing_ids|length|pluralize }}</dt>
+    <dd class="col-sm-9">
+      <ul>
+        {% for signing_id in metabundle.signing_ids %}
+        <li>{{ signing_id }}</li>
+        {% endfor %}
+      </ul>
+    </dd>
+  </dl>
+  {% endif %}
   {% for team_id in team_ids %}
   <dl class="row">
     <dt class="col-sm-3 text-md-end">Organization</dt>

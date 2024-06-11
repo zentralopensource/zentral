@@ -1,3 +1,5 @@
+from datetime import datetime
+from decimal import Decimal
 import csv
 import json
 import os
@@ -8,11 +10,11 @@ from django.core.files.storage import default_storage
 from django.db import connection, transaction
 from django.utils.text import slugify
 import xlsxwriter
-from .models import Target
+from .forms import TargetSearchForm
 
 
-def _iter_targets(q, target_type, window_size=2000):
-    query, kwargs = Target.objects.search_query(q, target_type)
+def _iter_targets(search_kwargs, window_size=2000):
+    query, kwargs = TargetSearchForm.search_query(**search_kwargs)
     with transaction.atomic(), connection.cursor() as cursor:
         cursor.execute(f"DECLARE santa_targets_export_cursor CURSOR FOR {query}", kwargs)
         while True:
@@ -20,13 +22,39 @@ def _iter_targets(q, target_type, window_size=2000):
             results = cursor.fetchall()
             if not results:
                 break
-            for target_type, identifier, obj, _, rule_count in results:
-                obj = json.loads(obj)
-                row = [("identifier", identifier),
-                       ("rule count", rule_count)]
-                for k, v in sorted(obj.items()):
-                    row.append((k.replace("_", " "), v if v is not None else ""))
-                yield target_type, row
+            columns = [col[0] for col in cursor.description]
+            for result in results:
+                target = dict(zip(columns, result))
+                row = []
+                for field, key in (("identifier", "identifier"),
+                                   ("blocked count", "blocked_count"),
+                                   ("collected count", "collected_count"),
+                                   ("executed count", "executed_count"),
+                                   ("last seen", "last_seen"),
+                                   ("min state", "min_state"),
+                                   ("max state", "max_state"),
+                                   ("min score", "min_score"),
+                                   ("max score", "max_score"),
+                                   ("min state updated at", "min_state_updated_at"),
+                                   ("max state updated at", "max_state_updated_at"),
+                                   ("rule count", "rule_count")):
+                    val = target.get(key)
+                    if val is None:
+                        val = ""
+                    elif isinstance(val, datetime):
+                        val = val.isoformat()
+                    elif isinstance(val, Decimal):
+                        val = int(val)
+                    row.append((field, val))
+                obj = json.loads(target["object"])
+                for key, val in sorted(obj.items()):
+                    field = key.replace("_", " ")
+                    if val is None:
+                        val = ""
+                    elif isinstance(val, list):
+                        val = "|".join(str(i) for i in val)
+                    row.append((field, val))
+                yield target["target_type"], row
 
 
 def _export_targets_zip(iterator, filepath):
@@ -83,18 +111,17 @@ def _export_targets_xlsx(iterator, filepath):
     os.unlink(xlsx_p)
 
 
-def _export_targets(query, target_type, filename):
-    _, extension = os.path.splitext(filename)
+def _export_targets(search_kwargs, export_format, filename):
     filepath = os.path.join("exports", filename)
-    iterator = _iter_targets(query, target_type)
-    if extension == ".zip":
+    iterator = _iter_targets(search_kwargs)
+    if export_format == "zip":
         content_type = "application/zip"
         _export_targets_zip(iterator, filepath)
-    elif extension == ".xlsx":
+    elif export_format == "xlsx":
         content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         _export_targets_xlsx(iterator, filepath)
     else:
-        raise ValueError("Unknown file extension '{}'".format(extension))
+        raise ValueError("Unsupported export format")
     return {
         "filepath": filepath,
         "headers": {
@@ -105,5 +132,5 @@ def _export_targets(query, target_type, filename):
 
 
 @shared_task
-def export_targets(query, target_type, filename):
-    return _export_targets(query, target_type, filename)
+def export_targets(search_kwargs, export_format, filename):
+    return _export_targets(search_kwargs, export_format, filename)

@@ -10,7 +10,7 @@ from zentral.contrib.santa.events import (_build_file_tree_from_santa_event,
                                           SantaEnrollmentEvent, SantaEventEvent,
                                           SantaRuleSetUpdateEvent, SantaRuleUpdateEvent)
 from zentral.contrib.santa.models import Bundle, Configuration, Target
-from .test_rule_engine import new_sha256
+from .utils import new_sha256
 
 
 class SantaEventTestCase(TestCase):
@@ -650,7 +650,7 @@ class SantaEventTestCase(TestCase):
         event_d = {"decision": "BUNDLE_BINARY",
                    "file_bundle_hash": new_sha256(),
                    "file_bundle_binary_count": 42}
-        t = Target.objects.create(type=Target.BUNDLE,
+        t = Target.objects.create(type=Target.Type.BUNDLE,
                                   identifier=event_d["file_bundle_hash"])
         Bundle.objects.create(
             target=t,
@@ -661,12 +661,12 @@ class SantaEventTestCase(TestCase):
         logger_error.assert_called_once_with("Bundle %s already uploaded", event_d["file_bundle_hash"])
 
     def test_create_bundle_binaries_bundle_without_binary_count(self):
-        binary_target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
+        binary_target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
         event_d = {"decision": "BUNDLE_BINARY",
                    "file_bundle_hash": new_sha256(),
                    "file_bundle_binary_count": 1,
                    "file_sha256": binary_target.identifier}
-        bundle_target = Target.objects.create(type=Target.BUNDLE,
+        bundle_target = Target.objects.create(type=Target.Type.BUNDLE,
                                               identifier=event_d["file_bundle_hash"])
         b = Bundle.objects.create(
             target=bundle_target,
@@ -680,18 +680,18 @@ class SantaEventTestCase(TestCase):
 
     @patch("zentral.contrib.santa.events.logger.error")
     def test_create_bundle_wrong_binary_target_number(self, logger_error):
-        binary_target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
+        binary_target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
         event_d = {"decision": "BUNDLE_BINARY",
                    "file_bundle_hash": new_sha256(),
                    "file_bundle_binary_count": 1,
                    "file_sha256": binary_target.identifier}
-        bundle_target = Target.objects.create(type=Target.BUNDLE,
+        bundle_target = Target.objects.create(type=Target.Type.BUNDLE,
                                               identifier=event_d["file_bundle_hash"])
         b = Bundle.objects.create(
             target=bundle_target,
             binary_count=event_d["file_bundle_binary_count"],
         )
-        extra_target = Target.objects.create(type=Target.BINARY, identifier=new_sha256())
+        extra_target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
         b.binary_targets.add(extra_target)
         self.assertEqual(b.binary_targets.count(), 1)
         _create_bundle_binaries([event_d])

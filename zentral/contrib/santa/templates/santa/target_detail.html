@@ -10,6 +10,7 @@
   <li class="breadcrumb-item active">{{ target_type_display }}</li>
 </ol>
 
+
 <div class="object-details">
     <div class="d-flex align-items-center mb-1">
         <h2 class="m-0">{{ title }}</h2>
@@ -22,195 +23,208 @@
             {% endfor %}
         </div>
     </div>
-    <table class="table-object-properties">
+  <table class="table-object-properties">
     <tbody>
-        <tr>
+      <tr>
         <td style="width:20vw">identifier</td>
         <td><code>{{ identifier }}</code></td>
-        </tr>
-        <tr>
-        <td colspan="2">&nbsp;</td>
-        </tr>
-        {% for obj in objects %}
-        {% if target_type == "BINARY" %}
-        <tr>
-        <td>name</td>
-        <td>{{ obj.name }}</td>
-        </tr>
-        <tr>
-        <td>path</td>
-        <td>{{ obj.path|truncatechars_middle:80 }}</td>
-        </tr>
-        {% if obj.bundle %}
-        {% with obj.bundle as bundle %}
-        <tr>
-        <td>bundle id</td>
+      </tr>
+      <tr>
+        <td>Info</td>
         <td>
-            {{ bundle.bundle_id }}
+          {% if prepared_objects %}
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                {% for col in prepared_objects.cols %}
+                <th width="{{ prepared_objects.width }}%">{{ col }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in prepared_objects.rows %}
+              <tr>
+                {% for val in row %}
+                <td>{{ val|default:"-" }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          -
+          {% endif %}
         </td>
-        </tr>
+      </tr>
+      <tr>
+    <tbody>
+  </table>
+</div>
+
+<ul class="nav nav-tabs" id="target-tabs" role="tablist">
+  {% if show_ballots %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link{% if show_ballots %} active{% endif %}"
+            id="ballots-tab"
+            data-bs-toggle="tab" data-bs-target="#ballots-tab-pane"
+            type="button" role="tab"
+            aria-controls="ballots-tab-pane"
+            aria-selected="true">
+      Ballot{{ ballot_count|pluralize }} ({{ ballot_count }})
+    </button>
+  </li>
+  {% endif %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link{% if not show_ballots %} active{% endif %}"
+            id="related-targets-tab"
+            data-bs-toggle="tab" data-bs-target="#related-targets-tab-pane"
+            type="button" role="tab"
+            aria-controls="related-targets-tab-pane"
+            aria-selected="{% if not show_ballots %}true{% else %}false{% endif %}">
+      Related target{{ total_related_targets|pluralize }} ({{ total_related_targets }})
+    </button>
+  </li>
+  {% if show_rules %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link"
+            id="rules-tab"
+            data-bs-toggle="tab" data-bs-target="#rules-tab-pane"
+            type="button" role="tab"
+            aria-controls="rules-tab-pane"
+            aria-selected="false">
+      Rule{{ rule_count|pluralize }} ({{ rule_count }})
+    </button>
+  </li>
+  {% endif %}
+</ul>
+
+<div class="tab-content">
+
+  {% if show_ballots %}
+  <div class="tab-pane fade show active"
+       id="ballots-tab-pane" role="tabpanel"
+       aria-labelledby="ballots-tab" tabindex="0">
+
+    <p class="mt-2 mb-2">
+      {% if cast_ballot_url %}
+      <a class="btn btn-outline-secondary" href="{{ cast_ballot_url }}">
+        Cast a ballot
+      </a>
+      {% else %}
+      You cannot vote on this target
+      {% endif %}
+    </p>
+
+    {% include "santa/_ballot_list.html" %}
+  </div>
+  {% endif %}
+
+  <div class="tab-pane fade{% if not show_ballots %} show active{% endif %}"
+       id="related-targets-tab-pane" role="tabpanel"
+       aria-labelledby="related-targets-tab" tabindex="1">
+
+    <table class="table table-striped align-top">
+      <thead>
         <tr>
-        <td>bundle name</td>
-        <td>{{ bundle.bundle_name }}</td>
+          <th>Type</th>
+          <th>Identifier</th>
+          <th style="width:60%">Info</th>
         </tr>
+      </thead>
+      <tbody>
+        {% for target_type, target_type_display, target_infos in related_targets %}
+        {% for target_info in target_infos %}
         <tr>
-        <td>bundle path</td>
-        <td>
-            {{ bundle.bundle_path|default:"-"|truncatechars_middle:80 }}
-        </td>
-        </tr>
-        <tr>
-        <td>bundle version</td>
-        <td>
-            {{ bundle.bundle_version_str|default:"-" }}
-        </td>
-        </tr>
-        {% endwith %}
-        {% endif %}
-        <tr>
-        <td>signed by</td>
-        <td>
-            {% if obj.signed_by %}
-            <a href="{% url 'santa:certificate' obj.signed_by.sha_256 %}">
-            <code>{{ obj.signed_by.sha_256 }}</code>
-            </a>
-            <br>{{ obj.signed_by.common_name }} / {{ obj.signed_by.organizational_unit }}
+          <td>{{ target_type_display }}</td>
+          <td>
+            <a href="{{ target_info.url }}"><code>{{ target_info.identifier }}</code></a>
+          </td>
+          <td>
+            {% if target_info.prepared_objects %}
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  {% for col in target_info.prepared_objects.cols %}
+                  <th width="{{ target_info.prepared_objects.width }}%">{{ col }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in target_info.prepared_objects.rows %}
+                <tr>
+                  {% for val in row %}
+                  <td style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:0">{{ val|default:"-" }}</td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
             {% else %}
             -
             {% endif %}
-        </td>
+          </td>
         </tr>
-        {% endif %}
-        {% if target_type == "BUNDLE" %}
-        <tr>
-        <td>id</td>
-        <td>{{ obj.bundle_id|default:"-" }}</td>
-        </tr>
-        <tr>
-        <td>name</td>
-        <td>{{ obj.name|default:"-" }}</td>
-        </tr>
-        <tr>
-        <td>version</td>
-        <td>{{ obj.version|default:"-" }} / {{ obj.version_str|default:"-" }}</td>
-        </tr>
-        <tr>
-        <td>binary count</td>
-        <td>{{ obj.binary_count }}</td>
-        </tr>
-        {% endif %}
-        {% if target_type == "CERTIFICATE" %}
-        <tr>
-        <td>cn</td>
-        <td>{{ obj.common_name }}</td>
-        </tr>
-        {% if obj.organization %}
-        <tr>
-        <td>org</td>
-        <td>{{ obj.organization }}</td>
-        </tr>
-        {% endif %}
-        {% if obj.organizational_unit %}
-        <tr>
-        <td>ou</td>
-        <td>{{ obj.organizational_unit }}</td>
-        </tr>
-        {% endif %}
-        <tr>
-        <td>validity</td>
-        <td>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}</td>
-        </tr>
-        {% endif %}
-        {% if not forloop.last %}
-        <tr>
-        <td colspan="2">&nbsp;</td>
-        </tr>
-        {% endif %}
         {% endfor %}
-        {% if target_type == "TEAMID" %}
-        <tr>
-        <td>Organization{{ objects|length|pluralize }}</td>
-        <td>
-            <ul class="list-unstyled">
-            {% for obj in objects %}
-            <li>{{ obj.organization|default:"-" }}</li>
-            {% endfor %}
-            </ul>
-        </td>
-        </tr>
-        {% endif %}
-        {% if target_type == "CDHASH" %}
-        <tr>
-        <td>cdhash{{objects|length|pluralize:"es" }}</td>
-        <td>
-            <ul class="list-unstyled">
-            {% for obj in objects %}
-            <li>{{ obj.cdhash }}</li>
-            {% endfor %}
-            </ul>
-        </td>
-        </tr>
-        {% endif %}
-        {% if target_type == "SIGNINGID" %}
-        <tr>
-        <td>Signing ID{{objects|length|pluralize }}</td>
-        <td>
-            <ul class="list-unstyled">
-            {% for obj in objects %}
-            <li>{{ obj.signing_id }}</li>
-            {% endfor %}
-            </ul>
-        </td>
-        </tr>
-        {% endif %}
-    </tbody>
+        {% endfor %}
+      </tbody>
     </table>
-</div>
+  </div>
 
+  {% if show_rules %}
+  <div class="tab-pane fade"
+       id="rules-tab-pane" role="tabpanel"
+       aria-labelledby="rules-tab" tabindex="2">
 
-<div class="d-flex align-items-center mb-3">
-    <h3 class="m-0">Rule{{ rule_count|pluralize }} ({{ rule_count }})</h3>
-    <div class="ms-auto"> 
-        {% if perms.santa.add_rule and add_rule_links %}
-            <button class="btn btn-link dropdown-toggle" type="button"
-                data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="createRule">
-                <i class="bi bi-plus-circle"></i>
-            </button>
-            <ul class="dropdown-menu" aria-labelledby="createRule">
-                {% for text, url in add_rule_links %}
-                <li><a class="dropdown-item" href="{{ url }}">{{ text }}</a></li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </div>
+    {% if perms.santa.add_rule and add_rule_links %}
+    <p class="mt-2">
+      <div class="dropdown">
+        <button class="btn btn-outline-secondary dropdown-toggle"
+                type="button"
+                data-bs-toggle="dropdown"
+                aria-haspopup="true" aria-expanded="false"
+                id="createRule">
+            Create a rule
+        </button>
+        <ul class="dropdown-menu" aria-labelledby="createRule">
+          {% for text, url in add_rule_links %}
+          <li><a class="dropdown-item" href="{{ url }}">{{ text }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </p>
+    {% endif %}
+
+    {% if rule_count %}
+    <table class="table table-striped align-middle">
+      <thead>
+        <th>Configuration</th>
+        <th>Ruleset</th>
+        <th>Policy</th>
+      </thead>
+      <tbody>
+        {% for rule in rules %}
+        <tr>
+          <td>
+            {% if perms.santa.view_rule %}
+            <a href="{{ rule.get_absolute_url }}">{{ rule.configuration }}</a>
+            {% else %}
+            {{ rule.configuration }}
+            {% endif %}
+          </td>
+          <td>{{ rule.ruleset|default:"-" }}</td>
+          <td>
+            <span class="label label-{% if rule.is_blocking_rule %}danger{% else %}success{% endif %}">
+              {{ rule.get_policy_display }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% endif %}
+
 </div>
-{% if rule_count %}
-<table class="table table-striped align-middle">
-  <thead>
-    <th>Configuration</th>
-    <th>Ruleset</th>
-    <th>Policy</th>
-  </thead>
-  <tbody>
-    {% for rule in rules %}
-    <tr>
-      <td>
-        {% if perms.santa.view_rule %}
-        <a href="{{ rule.get_absolute_url }}">{{ rule.configuration }}</a>
-        {% else %}
-        {{ rule.configuration }}
-        {% endif %}
-      </td>
-      <td>{{ rule.ruleset|default:"-" }}</td>
-      <td>
-        <span class="label label-{% if rule.is_blocking_rule %}danger{% else %}success{% endif %}">
-          {{ rule.get_policy_display }}
-        </span>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
 
 {% endblock %}
