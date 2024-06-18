@@ -14,7 +14,7 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, File, Tag
 from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, Target
 from zentral.core.events.base import AuditEvent
-from .test_rule_engine import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
+from .utils import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')

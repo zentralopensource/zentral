@@ -10,7 +10,7 @@ from zentral.contrib.santa.events import (_build_file_tree_from_santa_event,
                                           SantaEnrollmentEvent, SantaEventEvent,
                                           SantaRuleSetUpdateEvent, SantaRuleUpdateEvent)
 from zentral.contrib.santa.models import Bundle, Configuration, Target
-from .test_rule_engine import new_sha256
+from .utils import new_sha256
 
 
 class SantaEventTestCase(TestCase):
