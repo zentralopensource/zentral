@@ -2,7 +2,7 @@ import logging
 from django.db import connection
 from prometheus_client import Gauge
 from zentral.utils.prometheus import BasePrometheusMetricsView
-from .models import Configuration, Rule, Target
+from .models import Configuration, translate_rule_policy
 
 
 logger = logging.getLogger("zentral.contrib.santa.metrics_views")
@@ -12,96 +12,107 @@ class MetricsView(BasePrometheusMetricsView):
     @staticmethod
     def _add_mode_to_labels(mode, labels):
         if mode == Configuration.MONITOR_MODE:
-            labels["mode"] = "monitor"
+            labels["mode"] = "MONITOR"
         elif mode == Configuration.LOCKDOWN_MODE:
-            labels["mode"] = "lockdown"
+            labels["mode"] = "LOCKDOWN"
         else:
             logger.warning("Unknown santa configuration mode: %s", mode)
             return False
         return True
 
-    def add_configurations_gauge(self):
-        g = Gauge('zentral_santa_configurations', 'Zentral Santa Configurations',
-                  ['mode'], registry=self.registry)
-        query = (
-            "select client_mode, count(*) "
-            "from santa_configuration "
-            "group by client_mode"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query)
-        for mode, count in cursor.fetchall():
-            labels = {}
-            if not self._add_mode_to_labels(mode, labels):
-                continue
-            g.labels(**labels).set(count)
+    def add_configurations_info(self):
+        g = Gauge('zentral_santa_configurations_info', 'Zentral Santa configuration info',
+                  ['pk', 'name', 'mode'], registry=self.registry)
+        query = "select id, name, client_mode from santa_configuration;"
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            for cfg_pk, name, mode in cursor.fetchall():
+                labels = {
+                    "pk": cfg_pk,
+                    "name": name,
+                }
+                if not self._add_mode_to_labels(mode, labels):
+                    continue
+                g.labels(**labels).set(1)
 
     def add_enrolled_machines_gauge(self):
-        g = Gauge('zentral_santa_enrolled_machines', 'Zentral Santa Enrolled Machines',
-                  ['configuration', 'mode', 'santa_version'], registry=self.registry)
+        g = Gauge('zentral_santa_enrolled_machines_total', 'Zentral Santa Enrolled Machines',
+                  ['cfg_pk', 'mode', 'santa_version'], registry=self.registry)
         query = (
-            "select c.name, m.client_mode, m.santa_version, count(*) "
+            "select e.configuration_id, m.client_mode, m.santa_version, count(*) "
             "from santa_enrolledmachine as m "
             "join santa_enrollment as e on (m.enrollment_id = e.id) "
-            "join santa_configuration as c on (e.configuration_id = c.id) "
-            "group by c.name, m.client_mode, m.santa_version"
+            "group by e.configuration_id, m.client_mode, m.santa_version"
         )
-        cursor = connection.cursor()
-        cursor.execute(query)
-        for configuration, mode, santa_version, count in cursor.fetchall():
-            labels = {"configuration": configuration,
-                      "santa_version": santa_version}
-            if not self._add_mode_to_labels(mode, labels):
-                continue
-            g.labels(**labels).set(count)
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            for cfg_pk, mode, santa_version, count in cursor.fetchall():
+                labels = {"cfg_pk": cfg_pk,
+                          "santa_version": santa_version}
+                if not self._add_mode_to_labels(mode, labels):
+                    continue
+                g.labels(**labels).set(count)
 
     def add_rules_gauge(self):
-        g = Gauge('zentral_santa_rules', 'Zentral Santa Rules',
-                  ['configuration', 'ruleset', 'target_type', 'policy'], registry=self.registry)
+        g = Gauge('zentral_santa_rules_total', 'Zentral Santa Rules',
+                  ['cfg_pk', 'ruleset', 'target_type', 'policy'], registry=self.registry)
         query = (
-            "select c.name, s.name, t.type, r.policy, count(*) "
+            "select r.configuration_id, s.name, t.type, r.policy, count(*) "
             "from santa_rule as r "
-            "join santa_configuration as c on (r.configuration_id = c.id) "
             "left join santa_ruleset as s on (r.ruleset_id = s.id) "
             "join santa_target as t on (r.target_id = t.id) "
-            "group by c.name, s.name, t.type, r.policy"
+            "group by r.configuration_id, s.name, t.type, r.policy"
         )
-        cursor = connection.cursor()
-        cursor.execute(query)
-        for configuration, ruleset, target_type, policy, count in cursor.fetchall():
-            labels = {"configuration": configuration,
-                      "ruleset": ruleset if ruleset else "_"}
-            # target type
-            if target_type == Target.BINARY:
-                labels["target_type"] = "binary"
-            elif target_type == Target.BUNDLE:
-                labels["target_type"] = "bundle"
-            elif target_type == Target.CDHASH:
-                labels["target_type"] = "cdhash"
-            elif target_type == Target.CERTIFICATE:
-                labels["target_type"] = "certificate"
-            elif target_type == Target.TEAM_ID:
-                labels["target_type"] = "teamid"
-            elif target_type == Target.SIGNING_ID:
-                labels["target_type"] = "signingid"
-            else:
-                logging.warning("Unknown target type: %s", target_type)
-                continue
-            # policy
-            if policy == Rule.ALLOWLIST:
-                labels["policy"] = "allowlist"
-            elif policy == Rule.BLOCKLIST:
-                labels["policy"] = "blocklist"
-            elif policy == Rule.SILENT_BLOCKLIST:
-                labels["policy"] = "silent blocklist"
-            elif policy == Rule.ALLOWLIST_COMPILER:
-                labels["policy"] = "allowlist compiler"
-            else:
-                logging.warning("Unknown rule policy: %s", policy)
-                continue
-            g.labels(**labels).set(count)
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            for cfg_pk, ruleset, target_type, policy, count in cursor.fetchall():
+                try:
+                    policy_label = translate_rule_policy(policy)
+                except ValueError:
+                    logger.error("Unknown rule policy: %s", policy)
+                    continue
+                g.labels(
+                    cfg_pk=cfg_pk,
+                    ruleset=ruleset if ruleset else "_",
+                    target_type=target_type,
+                    policy=policy_label,
+                ).set(count)
+
+    def add_targets_gauges(self):
+        totals = ("total", "blocked_total", "executed_total", "collected_total", "rules_total")
+        gauges = {}
+        for total in totals:
+            total_for_display = " ".join(w.title() for w in total.split("_") if w != "total")
+            gauges[total] = Gauge(
+                f'zentral_santa_targets_{total}',
+                f'Zentral Santa Targets {total_for_display}'.strip(),
+                ["cfg_pk", "type"],
+                registry=self.registry,
+            )
+        query = (
+            'select tc.configuration_id, t.type, count(*) total,'
+            'sum(tc.blocked_count) blocked_total,'
+            'sum(tc.executed_count) executed_total,'
+            'sum(tc.collected_count) collected_total,'
+            'sum(case when r.id is null then 0 else 1 end) rules_total '
+            'from santa_targetcounter tc '
+            'join santa_target t on (t.id = tc.target_id) '
+            'left join santa_rule r on (r.target_id = tc.target_id and r.configuration_id = tc.configuration_id) '
+            'group by tc.configuration_id, t.type;'
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            columns = [c.name for c in cursor.description]
+            for result in cursor.fetchall():
+                result_d = dict(zip(columns, result))
+                for total in totals:
+                    gauges[total].labels(
+                        cfg_pk=result_d["configuration_id"],
+                        type=result_d["type"]
+                    ).set(result_d[total])
 
     def populate_registry(self):
-        self.add_configurations_gauge()
+        self.add_configurations_info()
         self.add_enrolled_machines_gauge()
         self.add_rules_gauge()
+        self.add_targets_gauges()

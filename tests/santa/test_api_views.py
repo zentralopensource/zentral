@@ -18,7 +18,7 @@ from zentral.contrib.santa.events import SantaRuleUpdateEvent
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment, Bundle
 from zentral.core.events.base import AuditEvent
 from zentral.utils.payloads import get_payload_identifier
-from .test_rule_engine import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
+from .utils import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
 class APIViewsTestCase(TestCase):

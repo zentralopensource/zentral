@@ -11,7 +11,7 @@ from zentral.contrib.inventory.models import File
 from accounts.models import User
 from zentral.contrib.santa.models import Bundle, Configuration, Target
 from zentral.core.stores.conf import frontend_store
-from .test_rule_engine import new_cdhash, new_sha256, new_team_id
+from .utils import new_cdhash, new_sha256, new_team_id
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')

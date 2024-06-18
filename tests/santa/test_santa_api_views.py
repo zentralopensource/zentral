@@ -14,7 +14,7 @@ from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaEventEvent, 
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
                                           MachineRule, Rule, Target, TargetCounter)
 from zentral.core.incidents.models import Severity
-from .test_rule_engine import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
+from .utils import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
