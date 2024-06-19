@@ -152,6 +152,20 @@
       "push_csr_signer": {
         "backend": "zentral.contrib.mdm.push_csr_signers.ZentralSaaSPushCSRSigner",
         "url": "https://www.example.com/api/"
+      },
+      "provisioning": {
+        "scep_configs": {
+          "test": {
+            "name": "YoloFomo",
+            "url": "https://www.example.com/scep/",
+            "challenge_type": "MICROSOFT_CA",
+            "microsoft_ca_challenge_kwargs": {
+              "url": "https://www.example.com/ndes/",
+              "username": "Yolo",
+              "password": "Fomo"
+            }
+          }
+        }
       }
     },
     "zentral.contrib.munki": {

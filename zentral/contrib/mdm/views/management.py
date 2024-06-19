@@ -1166,7 +1166,7 @@ class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
     permission_required = "mdm.change_scepconfig"
 
     def dispatch(self, request, *args, **kwargs):
-        self.scep_config = get_object_or_404(SCEPConfig, pk=kwargs["pk"])
+        self.scep_config = get_object_or_404(SCEPConfig, pk=kwargs["pk"], provisioning_uid__isnull=True)
         self.challenge_type = SCEPChallengeType[self.scep_config.challenge_type]
         return super().dispatch(request, *args, **kwargs)
 

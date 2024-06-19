@@ -1,4 +1,5 @@
 import datetime
+from functools import partial
 import hashlib
 import logging
 import plistlib
@@ -460,6 +461,7 @@ class Blueprint(models.Model):
 
 
 class SCEPConfig(models.Model):
+    provisioning_uid = models.CharField(max_length=256, unique=True, null=True, editable=False)
     name = models.CharField(max_length=256, unique=True)
     url = models.URLField()
     key_usage = models.IntegerField(choices=((0, 'None (0)'),
@@ -501,10 +503,24 @@ class SCEPConfig(models.Model):
 
     def can_be_deleted(self):
         return (
-            self.depenrollment_set.count() == 0
+            self.provisioning_uid is None
+            and self.depenrollment_set.count() == 0
             and self.otaenrollment_set.count() == 0
             and self.userenrollment_set.count() == 0
         )
+
+    def can_be_updated(self):
+        return self.provisioning_uid is None
+
+    def _get_CHALLENGE_TYPE_challenge_kwargs(self, challenge_type):
+        if self.challenge_type == challenge_type.name:
+            return self.get_challenge_kwargs()
+
+    def __getattr__(self, name):
+        for challenge_type in SCEPChallengeType:
+            if name == f"get_{challenge_type.name.lower()}_challenge_kwargs":
+                return partial(self._get_CHALLENGE_TYPE_challenge_kwargs, challenge_type)
+        raise AttributeError
 
 
 # Apps and (not!) Books

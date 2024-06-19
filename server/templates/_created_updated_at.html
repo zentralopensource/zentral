@@ -1,6 +1,12 @@
 <div class="table-responsive">
     <table class="table w-auto">
         <tbody>
+        {% if object.provisioning_uid %}
+            <tr>
+                <th class="border-0 p-0 pe-3 text-secondary">Provisioning UID</th>
+                <td class="border-0 p-0 text-secondary">{{ object.provisioning_uid }}</td>
+            </tr>
+        {% endif %}
         {% if object.version %}
             <tr>
                 <th class="border-0 p-0 pe-3 text-secondary">Version</th>

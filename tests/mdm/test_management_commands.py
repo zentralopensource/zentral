@@ -5,7 +5,7 @@ import uuid
 from django.core.management import call_command
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.mdm.models import Location
+from zentral.contrib.mdm.models import Location, SCEPConfig
 from zentral.contrib.mdm.dep_client import DEPClientError
 from .utils import force_dep_virtual_server
 
@@ -204,3 +204,21 @@ class MDMManagementCommandsTest(TestCase):
             f"{dvs2.pk} {dvs2}\n"
         )
         sync_dep_virtual_server_devices.assert_not_called()
+
+    # provisioning
+
+    def test_scep_config_provisioning(self):
+        qs = SCEPConfig.objects.all()
+        self.assertEqual(qs.count(), 0)
+        call_command('provision')
+        self.assertEqual(qs.count(), 1)
+        scep_config = qs.first()
+        # see tests/conf/base.json
+        self.assertEqual(scep_config.name, "YoloFomo")
+        self.assertEqual(scep_config.challenge_type, "MICROSOFT_CA")
+        self.assertEqual(
+            scep_config.get_challenge_kwargs(),
+            {"url": "https://www.example.com/ndes/",
+             "username": "Yolo",
+             "password": "Fomo"}
+        )

@@ -17,6 +17,7 @@ class ZentralAppConfig(AppConfig):
         self.events_templates_dir = None
         self.incidents_module = None
         self.probes_module = None
+        self.provisioning_module = None
 
     def ready(self):
         """
@@ -26,6 +27,7 @@ class ZentralAppConfig(AppConfig):
         self.import_events()
         self.import_incidents()
         self.import_probes()
+        self.import_provisioning()
 
     def _import_submodule(self, submodule_name):
         try:
@@ -51,3 +53,6 @@ class ZentralAppConfig(AppConfig):
 
     def import_probes(self):
         self._import_submodule("probes")
+
+    def import_provisioning(self):
+        self._import_submodule("provisioning")

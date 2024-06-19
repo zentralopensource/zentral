@@ -14,8 +14,11 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Location, LocationAsset,
                      Platform, Profile,
                      RecoveryPasswordConfig,
+                     SCEPConfig,
                      SoftwareUpdateEnforcement)
 from .payloads import get_configuration_profile_info
+from .scep.microsoft_ca import MicrosoftCAChallengeSerializer, OktaCAChallengeSerializer
+from .scep.static import StaticChallengeSerializer
 
 
 class DeviceCommandSerializer(serializers.ModelSerializer):
@@ -153,6 +156,65 @@ class RecoveryPasswordConfigSerializer(serializers.ModelSerializer):
         instance.set_static_password(static_password)
         instance.save()
         return instance
+
+
+class SCEPConfigSerializer(serializers.ModelSerializer):
+    microsoft_ca_challenge_kwargs = MicrosoftCAChallengeSerializer(
+        source="get_microsoft_ca_challenge_kwargs",
+        required=False,
+    )
+    okta_ca_challenge_kwargs = OktaCAChallengeSerializer(
+        source="get_okta_ca_challenge_kwargs",
+        required=False,
+    )
+    static_challenge_kwargs = StaticChallengeSerializer(
+        source="get_static_challenge_kwargs",
+        required=False,
+    )
+
+    class Meta:
+        model = SCEPConfig
+        fields = (
+            "id",
+            "provisioning_uid",
+            "name",
+            "url",
+            "key_usage",
+            "key_is_extractable",
+            "keysize",
+            "allow_all_apps_access",
+            "challenge_type",
+            "microsoft_ca_challenge_kwargs",
+            "okta_ca_challenge_kwargs",
+            "static_challenge_kwargs",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate(self, data):
+        data = super().validate(data)
+        challenge_type = data.get("challenge_type")
+        if challenge_type:
+            field_name = f"{challenge_type.lower()}_challenge_kwargs"
+            data["challenge_kwargs"] = data.pop(f"get_{field_name}", {})
+            if not data["challenge_kwargs"]:
+                raise serializers.ValidationError({field_name: "This field is required."})
+        return data
+
+    def create(self, validated_data):
+        challenge_kwargs = validated_data.pop("challenge_kwargs", {})
+        validated_data["challenge_kwargs"] = {}
+        scep_config = super().create(validated_data)
+        scep_config.set_challenge_kwargs(challenge_kwargs)
+        scep_config.save()
+        return scep_config
+
+    def update(self, instance, validated_data):
+        challenge_kwargs = validated_data.pop("challenge_kwargs", {})
+        scep_config = super().update(instance, validated_data)
+        scep_config.set_challenge_kwargs(challenge_kwargs)
+        scep_config.save()
+        return scep_config
 
 
 class SoftwareUpdateEnforcementSerializer(serializers.ModelSerializer):

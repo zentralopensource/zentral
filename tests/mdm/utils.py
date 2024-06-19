@@ -126,8 +126,9 @@ def force_push_certificate(topic=None, with_material=False, reduced_key_size=Tru
 # SCEP config
 
 
-def force_scep_config():
+def force_scep_config(provisioning_uid=None):
     scep_config = SCEPConfig(
+        provisioning_uid=provisioning_uid,
         name=get_random_string(12),
         url="https://example.com/{}".format(get_random_string(12)),
         challenge_type="STATIC",

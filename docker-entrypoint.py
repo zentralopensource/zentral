@@ -47,6 +47,21 @@ def wait_for_db_migration():
     print("DB migration OK")
 
 
+def wait_for_provisioning():
+    i = 0
+    while True:
+        try:
+            subprocess.run(['python', 'server/manage.py', 'provision'], check=True)
+        except subprocess.CalledProcessError:
+            retry_delay = min(20, (i + 1)) * random.uniform(0.8, 1.2)
+            warnings.warn(f"Can't do provisioning! Sleep {retry_delay:.1f}s…")
+            time.sleep(retry_delay)
+            i += 1
+        else:
+            break
+    print("Provisioning OK")
+
+
 def django_collectstatic():
     subprocess.run(['python', 'server/manage.py', 'collectstatic', '-v0', '--noinput'], check=True)
 
@@ -120,6 +135,7 @@ if __name__ == '__main__':
             create_zentral_superuser()
         else:
             wait_for_db(env)
+        wait_for_provisioning()
         if cmd in KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC:
             django_collectstatic()
         wd = KNOWN_COMMANDS_CHDIR.get(cmd)

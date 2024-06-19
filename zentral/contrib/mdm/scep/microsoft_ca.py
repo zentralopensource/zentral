@@ -1,6 +1,7 @@
 import logging
 import re
 from django import forms
+from rest_framework import serializers
 import requests
 from . import SCEPChallengeType
 from .base import SCEPChallengeError, SCEPChallenge
@@ -31,10 +32,26 @@ class BaseMicrosoftCAChallenge(SCEPChallenge):
         raise SCEPChallengeError("Could not find challenge in response.")
 
 
+class BaseMicrosoftCAChallengeSerializer(serializers.Serializer):
+    url = serializers.URLField()
+    username = serializers.CharField()
+    password = serializers.CharField()
+
+    def get_challenge_kwargs(self):
+        return {k: v for k, v in self.cleaned_data.items() if v}
+
+
+# Microsoft CA
+
+
 class MicrosoftCAChallengeForm(forms.Form):
     url = forms.URLField(label="URL", help_text="Full URL of the NDES mscep_admin/ endpoint")
     username = forms.CharField(help_text="mscep admin user (to get one time challenges)")
     password = forms.CharField(help_text="mscep admin password", widget=forms.PasswordInput(render_value=True))
+
+
+class MicrosoftCAChallengeSerializer(BaseMicrosoftCAChallengeSerializer):
+    pass
 
 
 class MicrosoftCAChallenge(BaseMicrosoftCAChallenge):
@@ -44,10 +61,17 @@ class MicrosoftCAChallenge(BaseMicrosoftCAChallenge):
     regexp = r"challenge password is: <B> ([A-Z0-9]{16,32}) </B>"
 
 
+# Okta CA
+
+
 class OktaCAChallengeForm(forms.Form):
     url = forms.URLField(label="Challenge URL")
     username = forms.CharField()
     password = forms.CharField(widget=forms.PasswordInput(render_value=True))
+
+
+class OktaCAChallengeSerializer(BaseMicrosoftCAChallengeSerializer):
+    pass
 
 
 class OktaCAChallenge(BaseMicrosoftCAChallenge):

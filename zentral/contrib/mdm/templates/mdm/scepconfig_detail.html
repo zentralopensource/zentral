@@ -16,7 +16,7 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">SCEP Configuration</h3>
         <div class="ms-auto">
-            {% if perms.mdm.change_scepconfig %}
+            {% if perms.mdm.change_scepconfig and object.can_be_updated %}
                 {% url 'mdm:update_scep_config' object.pk as url %}
                 {% button 'UPDATE' url "Edit SCEP Configuration" %}
             {% endif %}
