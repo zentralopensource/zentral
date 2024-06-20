@@ -1,3 +1,4 @@
+---
 site_name: Zentral
 theme: readthedocs
 
@@ -6,40 +7,40 @@ edit_uri: https://github.com/zentralopensource/zentral/edit/main/docs/
 docs_dir: docs/
 site_dir: build/
 extra_css:
-- theme/zentral.css
+  - theme/zentral.css
 
 nav:
-- Introduction:
-  - Welcome to Zentral: index.md
-  - Architecture overview: architecture/index.md
-- Configuration:
-  - Intro: configuration/index.md
-  - API: configuration/api.md
-  - Django: configuration/django.md
-  - Event stores: configuration/stores.md
-  - Notifier: configuration/notifier.md
-  - Password reset handler: configuration/password_reset_handler.md
-  - Secret engines: configuration/secret_engines.md
-  - Users: configuration/users.md
-  - "Azure AD - SAML": configuration/azure_ad_saml.md
-  - "Okta - SAML": configuration/okta_saml.md
-  - "Okta - SCIM": configuration/okta_scim.md
-  - "OneLogin - SAML": configuration/onelogin_saml.md
-- Apps:
-  - Inventory: apps/inventory.md
-  - MDM: apps/mdm.md
-  - Monolith: apps/monolith.md
-  - Munki: apps/munki.md
-  - Osquery: apps/osquery.md
-  - Santa: apps/santa.md
-  - Workspace One: apps/wsone.md
-- Deployment:
-  - Intro: deployment/index.md
-  - Docker: deployment/docker-compose.md
-  - ZAIO on AWS: deployment/zaio-aws.md
-  - ZAIO on GCP: deployment/zaio-gcp.md
-  - ZAIO setup: deployment/zaio-setup.md
-- Development:
-  - Intro: development/index.md
-  - Secure coding notes: development/secure-coding.md
-  - EE Split: development/ee-split.md
+  - Introduction:
+      - Welcome to Zentral: index.md
+      - Architecture overview: architecture/index.md
+  - Configuration:
+      - Intro: configuration/index.md
+      - API: configuration/api.md
+      - Django: configuration/django.md
+      - Event stores: configuration/stores.md
+      - Notifier: configuration/notifier.md
+      - Password reset handler: configuration/password_reset_handler.md
+      - Secret engines: configuration/secret_engines.md
+      - Users: configuration/users.md
+      - "Azure AD - SAML": configuration/azure_ad_saml.md
+      - "Okta - SAML": configuration/okta_saml.md
+      - "Okta - SCIM": configuration/okta_scim.md
+      - "OneLogin - SAML": configuration/onelogin_saml.md
+  - Apps:
+      - Inventory: apps/inventory.md
+      - MDM: apps/mdm.md
+      - Monolith: apps/monolith.md
+      - Munki: apps/munki.md
+      - Osquery: apps/osquery.md
+      - Santa: apps/santa.md
+      - Workspace One: apps/wsone.md
+  - Deployment:
+      - Intro: deployment/index.md
+      - Docker: deployment/docker-compose.md
+      - ZAIO on AWS: deployment/zaio-aws.md
+      - ZAIO on GCP: deployment/zaio-gcp.md
+      - ZAIO setup: deployment/zaio-setup.md
+  - Development:
+      - Intro: development/index.md
+      - Secure coding notes: development/secure-coding.md
+      - EE Split: development/ee-split.md
