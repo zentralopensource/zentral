@@ -1,5 +1,4 @@
-version: '2'
-
+---
 services:
   syslog:
     build: ./conf/syslog/docker/syslog-ng/

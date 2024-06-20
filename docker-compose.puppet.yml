@@ -1,5 +1,4 @@
-version: '2'
-
+---
 services:
   puppet:
     hostname: puppet
@@ -22,7 +21,9 @@ services:
       - "8080:8080"
       - "8081:8081"
     depends_on:
-      - puppet  # puppet depends on puppetdb but puppetdb needs puppet for setup (ssl)
+      # puppet depends on puppetdb but puppetdb needs
+      # puppet for setup (ssl)
+      - puppet
       - puppetdbpostgres
   web:
     environment:

@@ -1,5 +1,4 @@
-version: '2'
-
+---
 services:
   db:
     image: postgres:14
@@ -53,7 +52,11 @@ services:
     extends:
       file: docker-compose.common.yml
       service: app
-    command: runworkers --external-hostname workers --prometheus --prometheus-sd-file /prometheus_sd/workers.yml
+    command: >-
+      runworkers
+      --external-hostname workers
+      --prometheus
+      --prometheus-sd-file /prometheus_sd/workers.yml
     depends_on:
       - db
       - redis
