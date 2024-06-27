@@ -146,7 +146,6 @@
       ]
     },
     "zentral.contrib.jamf": {},
-    "zentral.contrib.jamf_protect": {},
     "zentral.contrib.mdm": {
       "scep_ca_fullchain": "NOT_A_VALID_CERT",
       "push_csr_signer": {
@@ -196,7 +195,6 @@
         }
       }
     },
-    "zentral.contrib.okta": {},
     "zentral.contrib.osquery": {},
     "zentral.contrib.puppet": {
       "instances": [
@@ -219,7 +217,6 @@
       "metrics": true
     },
     "zentral.contrib.wsone": {},
-    "zentral.contrib.intune": {},
-    "zentral.contrib.zendesk": {}
+    "zentral.contrib.intune": {}
   }
 }
