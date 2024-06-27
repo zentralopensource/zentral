@@ -45,6 +45,7 @@ class Provisioner:
             logger.exception("Could not create %s instance %s", self.model, uid)
         else:
             logger.info("%s instance %s created. PK: %s", self.model, uid, instance.pk)
+            return instance
 
     def update_instance(self, instance, uid, spec):
         logger.info("Update %s instance %s", self.model, uid)

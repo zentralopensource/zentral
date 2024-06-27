@@ -12,6 +12,7 @@ from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from accounts.models import User
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
+from zentral.contrib.monolith.events import MonolithSyncCatalogsRequestEvent
 from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, EnrolledMachine,
                                              PkgInfo, PkgInfoName)
 from zentral.contrib.monolith.repository_backends import load_repository_backend
@@ -116,14 +117,35 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:repositories"))
         self.assertEqual(response.status_code, 403)
 
-    def test_repositories(self):
+    def test_repositories_all_links(self):
         repository = force_repository()
+        repository2 = force_repository(provisioning_uid=get_random_string(12))
+        self._login("monolith.view_repository", "monolith.change_repository", "monolith.delete_repository")
+        response = self.client.get(reverse("monolith:repositories"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_list.html")
+        self.assertContains(response, repository.get_absolute_url())
+        self.assertContains(response, repository.name)
+        self.assertContains(response, repository2.name)
+        self.assertContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:update_repository", args=(repository2.pk,)))
+        self.assertContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository2.pk,)))
+
+    def test_repositories_no_links(self):
+        repository = force_repository()
+        repository2 = force_repository(provisioning_uid=get_random_string(12))
         self._login("monolith.view_repository")
         response = self.client.get(reverse("monolith:repositories"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_list.html")
         self.assertContains(response, repository.get_absolute_url())
         self.assertContains(response, repository.name)
+        self.assertContains(response, repository2.name)
+        self.assertNotContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:update_repository", args=(repository2.pk,)))
+        self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository2.pk,)))
 
     # create repository
 
@@ -296,7 +318,41 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_repository_get_no_edit_link(self):
+    def test_repository_get_all_links(self):
+        repository = force_repository()
+        self._login(
+            "monolith.view_repository",
+            "monolith.change_repository",
+            "monolith.delete_repository",
+            "monolith.sync_repository"
+        )
+        response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, repository.name)
+        self.assertContains(response, repository.get_backend_kwargs()["secret_access_key"])
+        self.assertContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
+
+    def test_provisioned_repository_get_sync_only_no_secrets(self):
+        repository = force_repository(provisioning_uid=get_random_string(12))
+        self._login(
+            "monolith.view_repository",
+            "monolith.change_repository",
+            "monolith.delete_repository",
+            "monolith.sync_repository"
+        )
+        response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, repository.name)
+        self.assertNotContains(response, repository.get_backend_kwargs()["secret_access_key"])
+        self.assertNotContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
+
+    def test_repository_get_no_links(self):
         repository = force_repository()
         self._login("monolith.view_repository")
         response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
@@ -304,8 +360,10 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "monolith/repository_detail.html")
         self.assertContains(response, repository.name)
         self.assertNotContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
 
-    def test_repository_get_edit_link(self):
+    def test_repository_get_update_only(self):
         repository = force_repository()
         self._login("monolith.view_repository", "monolith.change_repository")
         response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
@@ -313,6 +371,19 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "monolith/repository_detail.html")
         self.assertContains(response, repository.name)
         self.assertContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
+
+    def test_repository_get_delete_only(self):
+        repository = force_repository()
+        self._login("monolith.view_repository", "monolith.delete_repository")
+        response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, repository.name)
+        self.assertNotContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
 
     # update repository
 
@@ -332,6 +403,12 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:update_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_form.html")
+
+    def test_update_provisioned_repository_get_404(self):
+        repository = force_repository(provisioning_uid=get_random_string(12))
+        self._login("monolith.change_repository")
+        response = self.client.get(reverse("monolith:update_repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 404)
 
     def test_update_s3_repository_bad_mbu(self):
         repository = force_repository()
@@ -459,10 +536,16 @@ class MonolithSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_repository_get_not_found(self):
+    def test_delete_linked_repository_get_not_found(self):
         repository = force_repository()
         manifest = force_manifest()
         force_catalog(repository=repository, manifest=manifest)
+        self._login("monolith.delete_repository")
+        response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_provisioned_repository_get_not_found(self):
+        repository = force_repository(provisioning_uid=get_random_string(12))
         self._login("monolith.delete_repository")
         response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 404)
@@ -501,6 +584,60 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
         send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+
+    # sync repository
+
+    def test_sync_repository_redirect(self):
+        repository = force_repository()
+        self._login_redirect(reverse("monolith:sync_repository", args=(repository.pk,)))
+
+    def test_sync_repository_permission_denied(self):
+        repository = force_repository()
+        self._login("monolith.change_repository")
+        response = self.client.get(reverse("monolith:sync_repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.monolith.views.load_repository_backend")
+    def test_sync_repository(self, load_repository_backend, post_event, send_notification):
+        repository = force_repository()
+        self._login("monolith.sync_repository", "monolith.view_repository")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:sync_repository", args=(repository.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, repository.name)
+        self.assertContains(response, "Repository synced")
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, MonolithSyncCatalogsRequestEvent)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.monolith.views.load_repository_backend")
+    def test_sync_repository_error(self, load_repository_backend, post_event, send_notification):
+        load_repository_backend.return_value.sync_catalogs.side_effect = ValueError("YoLoFoMo")
+        repository = force_repository()
+        self._login("monolith.sync_repository", "monolith.view_repository")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:sync_repository", args=(repository.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 0)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, repository.name)
+        self.assertNotContains(response, "Repository synced")
+        self.assertContains(response, "Could not sync repository: YoLoFoMo")
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, MonolithSyncCatalogsRequestEvent)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        send_notification.assert_not_called()
 
     # pkg infos
 

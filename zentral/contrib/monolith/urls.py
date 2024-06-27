@@ -12,6 +12,7 @@ urlpatterns = [
     path('repositories/<int:pk>/', views.RepositoryView.as_view(), name='repository'),
     path('repositories/<int:pk>/update/', views.UpdateRepositoryView.as_view(), name='update_repository'),
     path('repositories/<int:pk>/delete/', views.DeleteRepositoryView.as_view(), name='delete_repository'),
+    path('repositories/<int:pk>/sync/', views.SyncRepositoryView.as_view(), name='sync_repository'),
 
     # pkg infos
     path('pkginfos/', views.PkgInfosView.as_view(), name='pkg_infos'),

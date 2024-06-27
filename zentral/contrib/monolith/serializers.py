@@ -17,6 +17,7 @@ class RepositorySerializer(serializers.ModelSerializer):
         model = Repository
         fields = (
             "id",
+            "provisioning_uid",
             "backend",
             "s3_kwargs",
             "name",
@@ -62,6 +63,14 @@ class RepositorySerializer(serializers.ModelSerializer):
         for manifest in repository.manifests():
             manifest.bump_version()
         return repository
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if instance.provisioning_uid:
+            for field in list(ret.keys()):
+                if field == "backend" or "kwargs" in field:
+                    ret.pop(field)
+        return ret
 
 
 class CatalogSerializer(serializers.ModelSerializer):

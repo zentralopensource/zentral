@@ -1,6 +1,6 @@
 from datetime import datetime
 import plistlib
-from unittest.mock import call, Mock
+from unittest.mock import call, Mock, patch
 from django.db.models.expressions import CombinedExpression
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -36,7 +36,8 @@ class MonolithRepositoriesTestCase(TestCase):
 
     # sync catalogs
 
-    def test_sync_catalogs(self):
+    @patch("zentral.contrib.monolith.repository_backends.base.SyncEventManager.audit_callback")
+    def test_sync_catalogs(self, audit_callback):
         db_repository = force_repository()
         manifest = force_manifest()
         catalog = force_catalog(repository=db_repository, manifest=manifest)
@@ -47,7 +48,6 @@ class MonolithRepositoriesTestCase(TestCase):
         requires_pin_name = get_random_string(12)
         update_for_pin_name = get_random_string(12)
         now = datetime.utcnow()
-        audit_callback = Mock()
         repository = self._load_repository(
             db_repository,
             [{"catalogs": [catalog.name],
@@ -87,9 +87,9 @@ class MonolithRepositoriesTestCase(TestCase):
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
 
-    def test_missing_catalog(self):
+    @patch("zentral.contrib.monolith.repository_backends.base.SyncEventManager.audit_callback")
+    def test_missing_catalog(self, audit_callback):
         db_repository = force_repository()
-        audit_callback = Mock()
         repository = self._load_repository(
             db_repository,
             [{"name": get_random_string(12),
@@ -98,7 +98,8 @@ class MonolithRepositoriesTestCase(TestCase):
         repository.sync_catalogs(audit_callback)
         self.assertEqual(len(audit_callback.call_args_list), 0)
 
-    def test_sync_catalogs_catalog_updates(self):
+    @patch("zentral.contrib.monolith.repository_backends.base.SyncEventManager.audit_callback")
+    def test_sync_catalogs_catalog_updates(self, audit_callback):
         db_repository = force_repository()
         old_catalog = force_catalog(repository=db_repository)
         oc_prev_value = old_catalog.serialize_for_event()
@@ -108,7 +109,6 @@ class MonolithRepositoriesTestCase(TestCase):
         m_prev_value = manifest.serialize_for_event()
         new_catalog = force_catalog(repository=db_repository, manifest=manifest, archived=True)
         nc_prev_value = new_catalog.serialize_for_event()
-        audit_callback = Mock()
         repository = self._load_repository(
             db_repository,
             [{"catalogs": [new_catalog.name],
@@ -128,7 +128,8 @@ class MonolithRepositoriesTestCase(TestCase):
         new_catalog.refresh_from_db()
         self.assertIsNone(new_catalog.archived_at)
 
-    def test_sync_catalogs_pkg_info_archived(self):
+    @patch("zentral.contrib.monolith.repository_backends.base.SyncEventManager.audit_callback")
+    def test_sync_catalogs_pkg_info_archived(self, audit_callback):
         db_repository = force_repository()
         rpita_catalog = force_catalog(repository=db_repository)
         rpitac_prev_value = rpita_catalog.serialize_for_event()
@@ -138,7 +139,6 @@ class MonolithRepositoriesTestCase(TestCase):
         manifest = force_manifest()
         m_prev_value = manifest.serialize_for_event()
         new_catalog = force_catalog(repository=db_repository, manifest=manifest)
-        audit_callback = Mock()
         repository = load_repository_backend(db_repository)
         repository = self._load_repository(
             db_repository,
@@ -164,7 +164,8 @@ class MonolithRepositoriesTestCase(TestCase):
         rpita_catalog.refresh_from_db()
         self.assertIsNotNone(rpita_catalog.archived_at)
 
-    def test_sync_catalogs_pkg_info_unarchived(self):
+    @patch("zentral.contrib.monolith.repository_backends.base.SyncEventManager.audit_callback")
+    def test_sync_catalogs_pkg_info_unarchived(self, audit_callback):
         db_repository = force_repository()
         manifest = force_manifest()
         manifest_prev_value = manifest.serialize_for_event()
@@ -172,7 +173,6 @@ class MonolithRepositoriesTestCase(TestCase):
         pkg_info_to_unarchive = force_pkg_info(local=False, catalog=catalog, archived=True)
         self.assertIsNotNone(pkg_info_to_unarchive.archived_at)
         prev_value = pkg_info_to_unarchive.serialize_for_event()
-        audit_callback = Mock()
         repository = load_repository_backend(db_repository)
         repository = self._load_repository(
             db_repository,

@@ -186,6 +186,14 @@
           ],
           "optional": true
         }
+      },
+      "provisioning": {
+        "repositories": {
+          "test": {
+            "name": "YoloFomo",
+            "backend": "VIRTUAL"
+          }
+        }
       }
     },
     "zentral.contrib.okta": {},

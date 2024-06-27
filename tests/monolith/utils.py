@@ -21,8 +21,15 @@ Y5iiw7n52shShyNTBggl3Xp8BILhfrIgGJ6o8jOQwA==
 -----END RSA PRIVATE KEY-----"""
 
 
-def force_repository(mbu=None, virtual=False, secret_access_key=None, cloudfront_privkey_pem=None):
+def force_repository(
+    mbu=None,
+    virtual=False,
+    secret_access_key=None,
+    cloudfront_privkey_pem=None,
+    provisioning_uid=None
+):
     r = Repository.objects.create(
+        provisioning_uid=provisioning_uid,
         name=get_random_string(12),
         meta_business_unit=mbu,
         backend=RepositoryBackend.VIRTUAL if virtual else RepositoryBackend.S3,

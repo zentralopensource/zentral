@@ -26,13 +26,13 @@ register_event_type(MonolithMunkiRequestEvent)
 
 class MonolithSyncCatalogsRequestEvent(BaseEvent):
     event_type = "monolith_sync_catalogs_request"
-    tags = ["monolith"]
+    tags = ["monolith", "zentral"]
 
     def get_linked_objects_keys(self):
         keys = {}
         repository_pk = self.payload.get("repository", {}).get("pk")
         if repository_pk:
-            keys["mdm_repository"] = [(repository_pk,)]
+            keys["monolith_repository"] = [(repository_pk,)]
         return keys
 
 

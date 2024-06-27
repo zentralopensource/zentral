@@ -53,7 +53,7 @@
       <td>{{ repository.last_synced_at|default:"-" }}</td>
       {% if perms.monolith.change_repository or perms.monolith.delete_repository %}
       <td class="text-end py-0">
-        {% if perms.monolith.change_repository %}
+        {% if perms.monolith.change_repository and repository.can_be_updated %}
         {% url 'monolith:update_repository' repository.id as url %}
         {% button 'UPDATE' url "Edit repository" %}
         {% endif %}

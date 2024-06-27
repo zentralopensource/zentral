@@ -1,5 +1,6 @@
 import logging
 from urllib.parse import urlencode
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -20,6 +21,7 @@ from zentral.utils.terraform import build_config_response
 from zentral.utils.text import get_version_sort_key, shard as compute_shard, encode_args
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 from .conf import monolith_conf
+from .events import post_monolith_sync_catalogs_request
 from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
                     AddManifestEnrollmentPackageForm,
                     AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
@@ -36,7 +38,7 @@ from .models import (Catalog, CacheServer,
                      Condition,
                      Repository,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestPkgInfo)
-from .repository_backends import RepositoryBackend
+from .repository_backends import load_repository_backend, RepositoryBackend
 from .repository_backends.s3 import S3RepositoryForm
 from .terraform import iter_resources
 from .utils import test_monolith_object_inclusion, test_pkginfo_catalog_inclusion
@@ -160,7 +162,7 @@ class UpdateRepositoryView(PermissionRequiredMixin, TemplateView):
     permission_required = "monolith.change_repository"
 
     def dispatch(self, request, *args, **kwargs):
-        self.repository = get_object_or_404(Repository, pk=kwargs["pk"])
+        self.repository = get_object_or_404(Repository.objects.for_update(), pk=kwargs["pk"])
         self.backend = RepositoryBackend(self.repository.backend)
         return super().dispatch(request, *args, **kwargs)
 
@@ -251,6 +253,29 @@ class DeleteRepositoryView(PermissionRequiredMixin, DeleteView):
 
         transaction.on_commit(post_event_and_notify)
         return super().form_valid(form)
+
+
+class SyncRepositoryView(PermissionRequiredMixin, View):
+    permission_required = "monolith.sync_repository"
+    success_url = reverse_lazy("monolith:repositories")
+
+    def post(self, request, *args, **kwargs):
+        db_repository = get_object_or_404(Repository, pk=kwargs["pk"])
+        post_monolith_sync_catalogs_request(request, db_repository)
+        repository = load_repository_backend(db_repository)
+        try:
+            repository.sync_catalogs(request)
+        except Exception as e:
+            logger.exception("Could not sync repository %s", db_repository.pk)
+            messages.error(request, f"Could not sync repository: {e}")
+        else:
+            messages.info(request, "Repository synced")
+
+            def notify():
+                notifier.send_notification("monolith.repository", str(db_repository.pk))
+
+            transaction.on_commit(notify)
+        return redirect(db_repository)
 
 
 # pkg infos

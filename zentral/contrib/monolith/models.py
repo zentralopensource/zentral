@@ -74,8 +74,13 @@ def parse_munki_name(name):
 
 
 class RepositoryManager(models.Manager):
+    def for_update(self):
+        return self.filter(
+            provisioning_uid__isnull=True
+        )
+
     def for_deletion(self):
-        return self.annotate(
+        return self.for_update().annotate(
             # not linked to a manifest
             manifest_link_count=Count("catalog__manifestcatalog"),
         ).filter(manifest_link_count=0)
@@ -85,6 +90,7 @@ class RepositoryManager(models.Manager):
 
 
 class Repository(models.Model):
+    provisioning_uid = models.CharField(max_length=256, unique=True, null=True, editable=False)
     name = models.CharField(max_length=256, unique=True)
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.SET_NULL, blank=True, null=True)
     backend = models.CharField(max_length=32, choices=RepositoryBackend.choices)
@@ -108,6 +114,9 @@ class Repository(models.Model):
 
     def can_be_deleted(self):
         return Repository.objects.for_deletion().filter(pk=self.pk).exists()
+
+    def can_be_updated(self):
+        return Repository.objects.for_update().filter(pk=self.pk).exists()
 
     def manifests(self):
         return Manifest.objects.distinct().filter(manifestcatalog__catalog__repository=self)

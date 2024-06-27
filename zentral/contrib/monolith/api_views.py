@@ -1,5 +1,3 @@
-import uuid
-from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
@@ -10,7 +8,6 @@ from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer
 from rest_framework.views import APIView
 from base.notifier import notifier
-from zentral.core.events.base import AuditEvent, EventRequest
 from zentral.utils.drf import (DjangoPermissionRequired, DefaultDjangoModelPermissions,
                                ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -68,33 +65,11 @@ class SyncRepository(APIView):
     permission_required = "monolith.sync_repository"
     permission_classes = [DjangoPermissionRequired]
 
-    def initialize_events(self, request):
-        self.events = []
-        self.event_uuid = uuid.uuid4()
-        self.event_index = 0
-        self.event_request = EventRequest.build_from_request(request)
-
-    def audit_callback(self, instance, action, prev_value=None):
-        event = AuditEvent.build(
-            instance, action, prev_value=prev_value,
-            event_uuid=self.event_uuid, event_index=self.event_index,
-            event_request=self.event_request
-        )
-        event.metadata.add_objects({"monolith_repository": ((self.db_repository.pk,),)})
-        self.events.append(event)
-        self.event_index += 1
-
-    def post_events(self):
-        for event in self.events:
-            event.post()
-
     def post(self, request, *args, **kwargs):
         self.db_repository = get_object_or_404(Repository, pk=kwargs["pk"])
         post_monolith_sync_catalogs_request(request, self.db_repository)
         repository = load_repository_backend(self.db_repository)
-        self.initialize_events(request)
-        repository.sync_catalogs(self.audit_callback)
-        transaction.on_commit(lambda: self.post_events())
+        repository.sync_catalogs(request)
         return Response({"status": 0})
 
 
@@ -118,6 +93,11 @@ class RepositoryDetail(RetrieveUpdateDestroyAPIViewWithAudit):
         if not instance.can_be_deleted():
             raise ValidationError('This repository cannot be deleted')
         return super().perform_destroy(instance)
+
+    def perform_update(self, serializer):
+        if not serializer.instance.can_be_updated():
+            raise ValidationError('This repository cannot be updated')
+        return super().perform_update(serializer)
 
 
 # catalogs

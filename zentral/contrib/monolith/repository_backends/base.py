@@ -2,13 +2,38 @@ from datetime import datetime
 import hashlib
 import logging
 import plistlib
+import uuid
+from django.db import transaction
 from django.db.models import Count, Q
 from zentral.contrib.monolith.models import Catalog, Manifest, PkgInfo, PkgInfoCategory, PkgInfoName
-from zentral.core.events.base import AuditEvent
+from zentral.core.events.base import AuditEvent, EventRequest
 from zentral.core.secret_engines import decrypt, decrypt_str, encrypt_str, rewrap
 
 
 logger = logging.getLogger('zentral.contrib.monolith.repository_backends.base')
+
+
+class SyncEventManager:
+    def __init__(self, repository, request=None):
+        self.repository_pk = repository.pk
+        self.event_request = EventRequest.build_from_request(request) if request else None
+        self.events = []
+        self.event_uuid = uuid.uuid4()
+        self.event_index = 0
+
+    def audit_callback(self, instance, action, prev_value=None):
+        event = AuditEvent.build(
+            instance, action, prev_value=prev_value,
+            event_uuid=self.event_uuid, event_index=self.event_index,
+            event_request=self.event_request
+        )
+        event.metadata.add_objects({"monolith_repository": ((self.repository_pk,),)})
+        self.events.append(event)
+        self.event_index += 1
+
+    def post_events(self):
+        for event in self.events:
+            event.post()
 
 
 class BaseRepository:
@@ -91,16 +116,13 @@ class BaseRepository:
                 catalog = Catalog.objects.get(repository=self.repository, name=catalog_name)
             except Catalog.DoesNotExist:
                 catalog = Catalog.objects.create(repository=self.repository, name=catalog_name)
-                if audit_callback:
-                    audit_callback(catalog, AuditEvent.Action.CREATED)
+                audit_callback(catalog, AuditEvent.Action.CREATED)
             else:
                 if catalog.archived_at:
-                    if audit_callback:
-                        prev_value = catalog.serialize_for_event()
+                    prev_value = catalog.serialize_for_event()
                     catalog.archived_at = None
                     catalog.save()
-                    if audit_callback:
-                        audit_callback(catalog, AuditEvent.Action.UPDATED, prev_value)
+                    audit_callback(catalog, AuditEvent.Action.UPDATED, prev_value)
             catalogs.append(catalog)
         return catalogs
 
@@ -145,12 +167,10 @@ class BaseRepository:
             pkg_info.catalogs.set(catalogs)
             pkg_info.requires.set(requires)
             pkg_info.update_for.set(update_for)
-            if audit_callback:
-                audit_callback(pkg_info, AuditEvent.Action.CREATED)
+            audit_callback(pkg_info, AuditEvent.Action.CREATED)
         else:
             updated = False
-            if audit_callback:
-                prev_value = pkg_info.serialize_for_event()
+            prev_value = pkg_info.serialize_for_event()
             # unarchive if necessary
             if pkg_info.archived_at:
                 pkg_info.archived_at = None
@@ -183,37 +203,35 @@ class BaseRepository:
             # save updates
             if updated:
                 pkg_info.save()  # even if only the m2m attributes were updated, for updated_at
-                if audit_callback:
-                    audit_callback(pkg_info, AuditEvent.Action.UPDATED, prev_value)
+                audit_callback(pkg_info, AuditEvent.Action.UPDATED, prev_value)
 
         return catalogs, pkg_info
 
     def _archive_catalog(self, catalog, audit_callback):
-        if audit_callback:
-            prev_value = catalog.serialize_for_event()
+        prev_value = catalog.serialize_for_event()
         catalog.archived_at = datetime.utcnow()
         catalog.save()
-        if audit_callback:
-            audit_callback(catalog, AuditEvent.Action.UPDATED, prev_value)
+        audit_callback(catalog, AuditEvent.Action.UPDATED, prev_value)
 
     def _archive_pkg_info(self, pkg_info, audit_callback):
-        if audit_callback:
-            prev_value = pkg_info.serialize_for_event()
+        prev_value = pkg_info.serialize_for_event()
         pkg_info.archived_at = datetime.utcnow()
         pkg_info.save()
-        if audit_callback:
-            audit_callback(pkg_info, AuditEvent.Action.UPDATED, prev_value)
+        audit_callback(pkg_info, AuditEvent.Action.UPDATED, prev_value)
 
     def _bump_manifest(self, manifest, audit_callback):
-        if audit_callback:
-            prev_value = manifest.serialize_for_event()
+        prev_value = manifest.serialize_for_event()
         manifest.bump_version()
-        if audit_callback:
-            audit_callback(manifest, AuditEvent.Action.UPDATED, prev_value)
+        audit_callback(manifest, AuditEvent.Action.UPDATED, prev_value)
 
-    def sync_catalogs(self, audit_callback=None):
+    def sync_catalogs(self, event_request=None):
+        # initialize sync event manager
+        sync_event_manager = SyncEventManager(self.repository, event_request)
+        audit_callback = sync_event_manager.audit_callback
+
         found_pkg_info_pks = set([])
         found_catalog_pks = set([])
+
         # initialize repository icon hashes
         repo_icon_hashes = {}
         icon_hashes_content = self.get_icon_hashes_content()
@@ -250,6 +268,9 @@ class BaseRepository:
         # bump versions of manifests connected to found catalogs
         for manifest in Manifest.objects.distinct().filter(manifestcatalog__catalog__pk__in=found_catalog_pks):
             self._bump_manifest(manifest, audit_callback)
+
+        # post events
+        transaction.on_commit(lambda: sync_event_manager.post_events())
 
     # to implement in the subclasses
 
