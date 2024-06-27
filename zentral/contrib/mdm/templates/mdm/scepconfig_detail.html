@@ -49,6 +49,7 @@
       <th>Allow all apps access</th>
       <td>{{ object.allow_all_apps_access|yesno }}</td>
     </tr>
+    {% if not object.provisioning_uid %}
     <tr>
       <th>Challenge
       <td>
@@ -87,6 +88,7 @@
         </dl>
       </td>
     </tr>
+    {% endif %}
   </tbody>
 </table>
 

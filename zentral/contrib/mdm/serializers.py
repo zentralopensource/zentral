@@ -216,6 +216,14 @@ class SCEPConfigSerializer(serializers.ModelSerializer):
         scep_config.save()
         return scep_config
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if instance.provisioning_uid:
+            for field in list(ret.keys()):
+                if "challenge" in field:
+                    ret.pop(field)
+        return ret
+
 
 class SoftwareUpdateEnforcementSerializer(serializers.ModelSerializer):
     latest_fields = ("max_os_version", "delay_days", "local_time")

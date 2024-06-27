@@ -50,7 +50,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         scep_config = force_scep_config(provisioning_uid="yolo")
         self.assertFalse(scep_config.can_be_deleted())
 
-    # can be edited
+    # can be updated
 
     def test_no_provisioning_uid_can_be_updated(self):
         scep_config = force_scep_config()
@@ -219,12 +219,13 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("mdm:update_scep_config", args=(scep_config.pk,)))
         self.assertNotContains(response, reverse("mdm:delete_scep_config", args=(scep_config.pk,)))
 
-    def test_view_scep_config_provisioning_no_update_delete_links(self):
+    def test_view_scep_config_provisioning_no_update_delete_links_no_secrets(self):
         scep_config = force_scep_config(provisioning_uid=get_random_string(12))
         self._login("mdm.view_scepconfig", "mdm.delete_scepconfig", "mdm.change_scepconfig")
         response = self.client.get(reverse("mdm:scep_config", args=(scep_config.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/scepconfig_detail.html")
+        self.assertNotContains(response, scep_config.get_challenge_kwargs()["challenge"])
         self.assertContains(response, "Provisioning UID")
         self.assertContains(response, scep_config.provisioning_uid)
         self.assertNotContains(response, reverse("mdm:update_scep_config", args=(scep_config.pk,)))

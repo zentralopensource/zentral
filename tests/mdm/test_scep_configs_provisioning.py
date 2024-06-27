@@ -43,6 +43,47 @@ class MDMSCEPConfigProvisioningTestCase(TestCase):
 
     # serializer
 
+    def test_serializer_full_serialization(self):
+        scep_config = force_scep_config()
+        serializer = SCEPConfigProvisioner.serializer_class(scep_config)
+        self.assertEqual(
+            serializer.data,
+            {'id': scep_config.pk,
+             'provisioning_uid': None,
+             'name': scep_config.name,
+             'url': scep_config.url,
+             'key_usage': 0,
+             'key_is_extractable': False,
+             'keysize': 2048,
+             'allow_all_apps_access': False,
+             'challenge_type': 'STATIC',
+             'microsoft_ca_challenge_kwargs': None,
+             'okta_ca_challenge_kwargs': None,
+             'static_challenge_kwargs': {
+                 'challenge': scep_config.get_challenge_kwargs()['challenge']
+              },
+             'created_at': scep_config.created_at.isoformat(),
+             'updated_at': scep_config.updated_at.isoformat()}
+        )
+
+    def test_serializer_reduced_serialization(self):
+        provisioning_uid = get_random_string(12)
+        scep_config = force_scep_config(provisioning_uid=provisioning_uid)
+        serializer = SCEPConfigProvisioner.serializer_class(scep_config)
+        self.assertEqual(
+            serializer.data,
+            {'id': scep_config.pk,
+             'provisioning_uid': provisioning_uid,
+             'name': scep_config.name,
+             'url': scep_config.url,
+             'key_usage': 0,
+             'key_is_extractable': False,
+             'keysize': 2048,
+             'allow_all_apps_access': False,
+             'created_at': scep_config.created_at.isoformat(),
+             'updated_at': scep_config.updated_at.isoformat()}
+        )
+
     def test_serializer_required_fields(self):
         serializer = SCEPConfigProvisioner.serializer_class(data={})
         serializer.is_valid()
@@ -124,27 +165,6 @@ class MDMSCEPConfigProvisioningTestCase(TestCase):
                 'url': ['This field is required.'],
                 'username': ['This field is required.'],
                 'password': ['This field is required.']}}
-        )
-
-    def test_static_challenge_serialization(self):
-        scep_config = force_scep_config(provisioning_uid="yolo")
-        serializer = SCEPConfigProvisioner.serializer_class(scep_config)
-        self.assertEqual(
-            serializer.data,
-            {'id': scep_config.pk,
-             'provisioning_uid': 'yolo',
-             'name': scep_config.name,
-             'url': scep_config.url,
-             'key_usage': 0,
-             'key_is_extractable': False,
-             'keysize': 2048,
-             'allow_all_apps_access': False,
-             'challenge_type': 'STATIC',
-             'microsoft_ca_challenge_kwargs': None,
-             'okta_ca_challenge_kwargs': None,
-             'static_challenge_kwargs': {'challenge': scep_config.get_challenge_kwargs()["challenge"]},
-             'created_at': scep_config.created_at.isoformat(),
-             'updated_at': scep_config.updated_at.isoformat()}
         )
 
     # settings
