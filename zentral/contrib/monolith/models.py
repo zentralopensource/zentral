@@ -932,7 +932,9 @@ class Manifest(models.Model):
             "JOIN monolith_manifestcatalog mc ON (pc.catalog_id=mc.catalog_id) "
             "LEFT JOIN monolith_manifestcatalog_tags m2mt ON (mc.id=m2mt.manifestcatalog_id) "
             "WHERE mc.manifest_id = %(manifest_pk)s "
-            f"AND (m2mt.tag_id IS NULL {m2mt_filter});"
+            f"AND (m2mt.tag_id IS NULL {m2mt_filter})"
+            "GROUP BY pk, repository_pk, version, file_name,"
+            "installer_item_location, uninstaller_item_location, icon_name, name;"
         )
         cursor = connection.cursor()
         cursor.execute(query, kwargs)
@@ -1003,8 +1005,10 @@ class Manifest(models.Model):
             "JOIN monolith_pkginfo_catalogs pc ON (pk=pc.pkginfo_id) "
             "JOIN monolith_manifestcatalog mc ON (pc.catalog_id=mc.catalog_id) "
             "LEFT JOIN monolith_manifestcatalog_tags m2mt ON (mc.id=m2mt.manifestcatalog_id) "
-            "WHERE mc.manifest_id = &(manifest_pk)s "
-            f"AND (m2mt.tag_id IS NULL {m2mt_filter});"
+            "WHERE mc.manifest_id = %(manifest_pk)s "
+            f"AND (m2mt.tag_id IS NULL {m2mt_filter}) "
+            "GROUP BY pk, repository_pk, version, file_name,"
+            "installer_item_location, uninstaller_item_location, icon_name, name;"
         )
         cursor = connection.cursor()
         cursor.execute(query, kwargs)

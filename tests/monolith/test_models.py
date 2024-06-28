@@ -1,13 +1,12 @@
 from datetime import datetime
-import random
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
-from zentral.contrib.monolith.conf import monolith_conf
-from zentral.contrib.monolith.models import (Manifest, ManifestCatalog, ManifestEnrollmentPackage,
-                                             ManifestSubManifest, PkgInfo, PkgInfoName, SubManifest)
+from zentral.contrib.monolith.models import (CachedPkgInfo,
+                                             Manifest, ManifestCatalog, ManifestSubManifest,
+                                             PkgInfo, PkgInfoName, SubManifest)
 from zentral.contrib.munki.models import ManagedInstall
-from .utils import force_catalog, force_repository
+from .utils import force_catalog, force_pkg_info, force_manifest_enrollment_package, force_repository
 
 
 def sorted_objects(object_list):
@@ -34,10 +33,6 @@ class MonolithModelsTestCase(TestCase):
         ManifestSubManifest.objects.create(manifest=cls.manifest, sub_manifest=cls.sub_manifest_1)
         msm = ManifestSubManifest.objects.create(manifest=cls.manifest, sub_manifest=cls.sub_manifest_2)
         msm.tags.set([cls.tag_1, cls.tag_2])
-        cls.builder = random.choice(list(monolith_conf.enrollment_package_builders.keys()))
-        cls.mep_1 = ManifestEnrollmentPackage.objects.create(manifest=cls.manifest, builder=cls.builder)
-        cls.mep_2 = ManifestEnrollmentPackage.objects.create(manifest=cls.manifest, builder=cls.builder)
-        cls.mep_2.tags.set([cls.tag_1, cls.tag_2])
         cls.pkginfo_name_1 = PkgInfoName.objects.create(name="aaaa first name")
         cls.pkginfo_1_1 = PkgInfo.objects.create(repository=cls.catalog_1.repository,
                                                  name=cls.pkginfo_name_1, version="1.0",
@@ -162,17 +157,21 @@ class MonolithModelsTestCase(TestCase):
                          sorted_objects([self.catalog_1, self.catalog_2]))
 
     def test_manifest_enrollment_package(self):
+        mep_1 = force_manifest_enrollment_package(self.manifest, module="munki")
+        mep_2 = force_manifest_enrollment_package(self.manifest, module="osquery",
+                                                  tags=[self.tag_1, self.tag_2])
         self.assertEqual(self.manifest.enrollment_packages(),
-                         {self.builder: self.mep_1})
+                         {mep_1.builder: mep_1})
         self.assertEqual(self.manifest.enrollment_packages([self.tag_3]),
-                         {self.builder: self.mep_1})
+                         {mep_1.builder: mep_1})
         self.assertEqual(self.manifest.enrollment_packages([self.tag_1, self.tag_3]),
-                         {self.builder: self.mep_1})
+                         {mep_1.builder: mep_1})
         self.assertEqual(self.manifest.enrollment_packages([self.tag_2]),
-                         {self.builder: self.mep_1})
+                         {mep_1.builder: mep_1})
         # Only with fully matching tags do we get the second manifest enrollment package
         self.assertEqual(self.manifest.enrollment_packages([self.tag_2, self.tag_1]),
-                         {self.builder: self.mep_2})
+                         {mep_1.builder: mep_1,
+                          mep_2.builder: mep_2})
 
     # PkgInfo.objects.alles
 
@@ -272,3 +271,72 @@ class MonolithModelsTestCase(TestCase):
             self.assertEqual(pkg_info_r["count"], 1)
             self.assertEqual(pkg_info_r["percent"], 100)
         self.assertEqual(pkg_name_r_2["count"], 1)
+
+    # _enrollment_packages_pkginfo_deps
+
+    def test_enrollment_packages_pkginfo_deps_1(self):
+        force_manifest_enrollment_package(self.manifest, module="munki",
+                                          catalog=self.catalog_1)
+        force_manifest_enrollment_package(self.manifest, module="osquery",
+                                          tags=[self.tag_1, self.tag_2],
+                                          catalog=self.catalog_2)
+        cpis = list(self.manifest._enrollment_packages_pkginfo_deps([]))
+        self.assertEqual(len(cpis), 1)
+        cpi = cpis[0]
+        self.assertIsInstance(cpi, CachedPkgInfo)
+        self.assertEqual(cpi.name, "munkitools_core")
+
+    def test_enrollment_packages_pkginfo_deps_2(self):
+        force_manifest_enrollment_package(self.manifest, module="munki",
+                                          catalog=self.catalog_1)
+        force_manifest_enrollment_package(self.manifest, module="osquery",
+                                          tags=[self.tag_1, self.tag_2],
+                                          catalog=self.catalog_2)
+        cpis = sorted(
+            self.manifest._enrollment_packages_pkginfo_deps([self.tag_1, self.tag_2]),
+            key=lambda cpi: cpi.name
+        )
+        self.assertEqual(len(cpis), 2)
+        self.assertIsInstance(cpis[0], CachedPkgInfo)
+        self.assertEqual(cpis[0].name, "munkitools_core")
+        self.assertIsInstance(cpis[1], CachedPkgInfo)
+        self.assertEqual(cpis[1].name, "osquery")
+
+    # _pkginfos_with_deps_and_updates
+
+    def test_pkginfos_with_deps_and_updates_1(self):
+        pkg_info_1 = force_pkg_info(catalog=self.catalog_1, sub_manifest=self.sub_manifest_1)
+        force_pkg_info(catalog=self.catalog_2, sub_manifest=self.sub_manifest_2)
+        cpis = list(self.manifest._pkginfos_with_deps_and_updates([]))
+        self.assertEqual(len(cpis), 1)
+        cpi = cpis[0]
+        self.assertIsInstance(cpi, CachedPkgInfo)
+        self.assertEqual(cpi.name, pkg_info_1.name.name)
+
+    def test_pkginfos_with_deps_and_updates_2(self):
+        pkg_info_1 = force_pkg_info(catalog=self.catalog_1, sub_manifest=self.sub_manifest_1)
+        pkg_info_2 = force_pkg_info(catalog=self.catalog_2, sub_manifest=self.sub_manifest_2)
+        cpis = sorted(
+            self.manifest._pkginfos_with_deps_and_updates([self.tag_1, self.tag_2]),
+            key=lambda cpi: cpi.name == pkg_info_2.name.name
+        )
+        self.assertEqual(len(cpis), 2)
+        self.assertIsInstance(cpis[0], CachedPkgInfo)
+        self.assertEqual(cpis[0].name, pkg_info_1.name.name)
+        self.assertIsInstance(cpis[1], CachedPkgInfo)
+        self.assertEqual(cpis[1].name, pkg_info_2.name.name)
+
+    # get_pkginfo_for_cache
+
+    def test_get_pkginfo_for_cache_pkg(self):
+        pkg_info = force_pkg_info(catalog=self.catalog_1, sub_manifest=self.sub_manifest_1)
+        cpi = self.manifest.get_pkginfo_for_cache([self.tag_3], pkg_info.pk)
+        self.assertEqual(cpi.name, pkg_info.name.name)
+
+    def test_get_pkginfo_for_cache_mep(self):
+        force_manifest_enrollment_package(self.manifest, module="osquery",
+                                          tags=[self.tag_1, self.tag_2],
+                                          catalog=self.catalog_2)
+        pkg_info = PkgInfo.objects.get(name__name="osquery")
+        cpi = self.manifest.get_pkginfo_for_cache([self.tag_1, self.tag_2], pkg_info.pk)
+        self.assertEqual(cpi.name, pkg_info.name.name)
