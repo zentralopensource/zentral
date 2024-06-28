@@ -153,6 +153,11 @@
         "url": "https://www.example.com/api/"
       },
       "provisioning": {
+        "push_certificates": {
+            "Default": {
+              "name": "Default"
+            }
+        },
         "scep_configs": {
           "test": {
             "name": "YoloFomo",

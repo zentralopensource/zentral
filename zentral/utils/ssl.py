@@ -4,6 +4,14 @@ from cryptography.hazmat.primitives import serialization
 from django.utils.crypto import get_random_string
 
 
+def ensure_bytes(v):
+    if isinstance(v, str):
+        return v.encode("utf-8")
+    elif isinstance(v, memoryview):
+        return v.tobytes()
+    return v
+
+
 def create_client_ssl_context(certdata=None, keydata=None, keydata_password=None, cadata=None):
     """Create a client SSL context
 
@@ -13,13 +21,6 @@ def create_client_ssl_context(certdata=None, keydata=None, keydata_password=None
     cadata           -- PEM-encoded certificates (bytes or str) for server verification
     """
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-
-    def ensure_bytes(v):
-        if isinstance(v, str):
-            return v.encode("utf-8")
-        elif isinstance(v, memoryview):
-            return v.tobytes()
-        return v
 
     # client cert authentication
     if certdata and keydata:

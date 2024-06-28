@@ -166,6 +166,25 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
         self.assertNotContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
         self.assertContains(response, reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
+
+    def test_view_provisioned_push_certificate_signer(self):
+        topic = get_random_string(12)
+        push_certificate = force_push_certificate(topic=topic, with_material=True, provisioning_uid="YoLoFoMo")
+        self._login("mdm.view_pushcertificate",
+                    "mdm.change_pushcertificate",
+                    "mdm.delete_pushcertificate")
+        response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
+        self.assertContains(response, push_certificate.name)
+        self.assertContains(response, topic)
+        self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
 
     @patch("zentral.contrib.mdm.views.setup.push_csr_signer", False)
     def test_view_push_certificate_no_signer(self):
@@ -180,6 +199,24 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
         self.assertContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
         self.assertNotContains(response, reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
+
+    @patch("zentral.contrib.mdm.views.setup.push_csr_signer", False)
+    def test_view_provisioned_push_certificate_no_signer(self):
+        topic = get_random_string(12)
+        push_certificate = force_push_certificate(topic=topic, with_material=True, provisioning_uid="YoLoFoMo")
+        self._login("mdm.view_pushcertificate",
+                    "mdm.change_pushcertificate",
+                    "mdm.delete_pushcertificate")
+        response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
+        self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+        self.assertContains(response, reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
 
     def test_view_push_certificate_signer_no_links(self):
         topic = get_random_string(12)
@@ -191,6 +228,9 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
         self.assertNotContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
         self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:upload_push_certificate_certificate",
+                                                 args=(push_certificate.pk,)))
 
     @patch("zentral.contrib.mdm.views.setup.push_csr_signer", False)
     def test_view_push_certificate_no_signer_no_links(self):
@@ -203,6 +243,9 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
         self.assertNotContains(response, reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
         self.assertNotContains(response, reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+        self.assertNotContains(response, reverse("mdm:upload_push_certificate_certificate",
+                                                 args=(push_certificate.pk,)))
 
     def test_no_delete_push_certificate_link(self):
         enrollment = self._force_user_enrollment()
@@ -318,6 +361,38 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
         self.assertFormError(response.context["form"], None, "The certificate and key do not form a pair")
+
+    def test_upload_push_certificate_certificate_different_topic(self):
+        push_certificate = force_push_certificate(with_material=True)
+        cert_pem, _, _ = force_push_certificate_material(privkey_bytes=push_certificate.get_private_key())
+        self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
+        response = self.client.post(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)),
+                                    {"name": push_certificate.name,
+                                     "certificate_file": SimpleUploadedFile("cert.pem", cert_pem)},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
+        self.assertFormError(response.context["form"], None, "The new certificate has a different topic")
+
+    def test_upload_push_certificate_certificate_topic_conflict(self):
+        push_certificate_conflict = force_push_certificate()
+        push_certificate = force_push_certificate(with_material=True)
+        push_certificate.certificate = None
+        push_certificate.topic = None
+        push_certificate.save()
+        cert_pem, _, _ = force_push_certificate_material(
+            topic=push_certificate_conflict.topic,
+            privkey_bytes=push_certificate.get_private_key()
+        )
+        self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
+        response = self.client.post(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)),
+                                    {"name": push_certificate.name,
+                                     "certificate_file": SimpleUploadedFile("cert.pem", cert_pem)},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
+        self.assertFormError(response.context["form"], None,
+                             "A difference certificate with the same topic already exists")
 
     # renew push certificate
 

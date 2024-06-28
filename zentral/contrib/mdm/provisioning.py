@@ -1,5 +1,10 @@
-from .serializers import SCEPConfigSerializer
+from .serializers import PushCertificateSerializer, SCEPConfigSerializer
 from zentral.utils.provisioning import Provisioner
+
+
+class PushCertificateProvisioner(Provisioner):
+    config_key = "push_certificates"
+    serializer_class = PushCertificateSerializer
 
 
 class SCEPConfigProvisioner(Provisioner):

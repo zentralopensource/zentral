@@ -62,7 +62,7 @@ class CreatePushCertificateForm(forms.ModelForm):
         fields = ("name",)
 
     def save(self, *args, **kwargs):
-        push_certificate = super().save(commit=False)
+        push_certificate = super().save()
         push_certificate.set_private_key(generate_push_certificate_key_bytes())
         push_certificate.save()
         return push_certificate
@@ -90,8 +90,6 @@ class BasePushCertificateForm(forms.ModelForm):
                 )
             except ValueError as e:
                 raise forms.ValidationError(str(e))
-            except Exception:
-                raise forms.ValidationError("Could not load certificate or key file")
             if self.instance.topic:
                 if push_certificate_d["topic"] != self.instance.topic:
                     raise forms.ValidationError("The new certificate has a different topic")
@@ -104,12 +102,16 @@ class BasePushCertificateForm(forms.ModelForm):
     def save(self):
         push_certificate_d = self.cleaned_data.pop("push_certificate_d")
         self.instance.name = self.cleaned_data["name"]
+        private_key = None
         for k, v in push_certificate_d.items():
             if k == "private_key":
-                self.instance.set_private_key(v)
+                private_key = v
             else:
                 setattr(self.instance, k, v)
         self.instance.save()
+        if private_key:
+            self.instance.set_private_key(private_key)
+            self.instance.save()
         return self.instance
 
 

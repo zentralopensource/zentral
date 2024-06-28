@@ -29,7 +29,7 @@
                 {% url 'mdm:renew_push_certificate' object.pk as renew_url %}
                 {% button 'REFRESH' renew_url "Renew Push Certificate and Key" %}
             {% endif %}
-            {% if object.can_be_deleted and perms.mdm.delete_pushcertificate %}
+            {% if perms.mdm.delete_pushcertificate and object.can_be_deleted %}
                 {% url 'mdm:delete_push_certificate' object.pk as delete_url %}
                 {% button 'DELETE' delete_url "Delete Certificate" %}
             {% endif %}

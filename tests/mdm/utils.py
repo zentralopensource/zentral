@@ -57,11 +57,14 @@ def force_realm_user(realm=None, username=None, email=None):
 # push certificate
 
 
-def force_push_certificate_material(topic=None, reduced_key_size=True, encrypt_key=True):
-    privkey = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=512 if reduced_key_size else 2048,
-    )  # lgtm[py/weak-crypto-key]
+def force_push_certificate_material(topic=None, reduced_key_size=True, encrypt_key=True, privkey_bytes=None):
+    if privkey_bytes:
+        privkey = serialization.load_pem_private_key(privkey_bytes, None)
+    else:
+        privkey = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=512 if reduced_key_size else 2048,
+        )  # lgtm[py/weak-crypto-key]
     builder = x509.CertificateBuilder()
     name = get_random_string(12)
     if topic is None:
@@ -97,12 +100,18 @@ def force_push_certificate_material(topic=None, reduced_key_size=True, encrypt_k
     return cert_pem, privkey_pem, privkey_password
 
 
-def force_push_certificate(topic=None, with_material=False, reduced_key_size=True, commit=True):
+def force_push_certificate(
+    topic=None,
+    with_material=False,
+    reduced_key_size=True,
+    commit=True,
+    provisioning_uid=None,
+):
     if topic is None:
         topic = get_random_string(12)
     name = get_random_string(12)
     if with_material:
-        push_certificate = PushCertificate(name=name)
+        push_certificate = PushCertificate.objects.create(provisioning_uid=provisioning_uid, name=name)
         cert_pem, privkey_pem, privkey_password = force_push_certificate_material(topic, reduced_key_size)
         for k, v in load_push_certificate_and_key(cert_pem, privkey_pem, privkey_password).items():
             if k == "private_key":
@@ -110,11 +119,12 @@ def force_push_certificate(topic=None, with_material=False, reduced_key_size=Tru
             else:
                 setattr(push_certificate, k, v)
     else:
-        push_certificate = PushCertificate(
+        push_certificate = PushCertificate.objects.create(
+            provisioning_uid=provisioning_uid,
             name=name,
             topic=topic,
-            not_before="2000-01-01",
-            not_after="2040-01-01",
+            not_before=datetime(2000, 1, 1),
+            not_after=datetime(2040, 1, 1),
             certificate=b"1",
         )
         push_certificate.set_private_key(b"2")

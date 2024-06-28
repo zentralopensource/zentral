@@ -5,14 +5,16 @@ from django.db import transaction
 from rest_framework import serializers
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.os_version import make_comparable_os_version
+from zentral.utils.ssl import ensure_bytes
 from .app_manifest import download_package, read_package_info, validate_configuration
 from .artifacts import update_blueprint_serialized_artifacts
+from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
                      DeviceCommand,
                      EnrolledDevice, EnterpriseApp, FileVaultConfig,
                      Location, LocationAsset,
-                     Platform, Profile,
+                     Platform, Profile, PushCertificate,
                      RecoveryPasswordConfig,
                      SCEPConfig,
                      SoftwareUpdateEnforcement)
@@ -107,6 +109,66 @@ class FileVaultConfigSerializer(serializers.ModelSerializer):
         elif bypass_attempts > -1:
             raise serializers.ValidationError({"bypass_attempts": "Must be -1 when at_login_only is False"})
         return data
+
+
+class PushCertificateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PushCertificate
+        fields = (
+            "id",
+            "provisioning_uid",
+            "name",
+            "topic",
+            "not_before",
+            "not_after",
+            "certificate",
+            "created_at",
+            "updated_at"
+        )
+
+    def to_internal_value(self, data):
+        # We need to implement this to keep the certificate
+        # and apply it only if it is provided in the uploaded data.
+        # There is no reason to nullify the certificate!
+        certificate = data.pop("certificate", None)
+        data = super().to_internal_value(data)
+        if certificate:
+            data["certificate"] = certificate
+        return data
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if instance.certificate:
+            ret["certificate"] = ensure_bytes(instance.certificate).decode("ascii")
+        return ret
+
+    def validate(self, data):
+        certificate = data.pop("certificate", None)
+        if certificate:
+            if not self.instance:
+                raise serializers.ValidationError("Certificate cannot be set when creating a push certificate")
+            try:
+                push_certificate_d = load_push_certificate_and_key(
+                    certificate,
+                    self.instance.get_private_key(),
+                )
+            except ValueError as e:
+                raise serializers.ValidationError(str(e))
+            if self.instance.topic:
+                if push_certificate_d["topic"] != self.instance.topic:
+                    raise serializers.ValidationError("The new certificate has a different topic")
+            else:
+                if PushCertificate.objects.filter(topic=push_certificate_d["topic"]).exists():
+                    raise serializers.ValidationError("A different certificate with the same topic already exists")
+            push_certificate_d.pop("private_key")
+            data.update(push_certificate_d)
+        return data
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        instance.set_private_key(generate_push_certificate_key_bytes())
+        instance.save()
+        return instance
 
 
 class RecoveryPasswordConfigSerializer(serializers.ModelSerializer):

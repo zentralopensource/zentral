@@ -54,15 +54,36 @@ def get_platform_values():
 # Push certificates
 
 
+class PushCertificateManager(models.Manager):
+    def for_update(self):
+        return self.filter(provisioning_uid__isnull=True)
+
+    def for_deletion(self):
+        return self.for_update().annotate(
+            enrolled_device_count=Count("enrolleddevice"),
+            dep_enrollment_count=Count("depenrollment"),
+            ota_enrollment_count=Count("otaenrollment"),
+            user_enrollment_count=Count("userenrollment"),
+        ).filter(
+            enrolled_device_count=0,
+            dep_enrollment_count=0,
+            ota_enrollment_count=0,
+            user_enrollment_count=0,
+        )
+
+
 class PushCertificate(models.Model):
+    provisioning_uid = models.CharField(max_length=256, unique=True, null=True, editable=False)
     name = models.CharField(max_length=256, unique=True)
-    topic = models.CharField(max_length=256, null=True, unique=True)
-    not_before = models.DateTimeField(null=True)
-    not_after = models.DateTimeField(null=True)
+    topic = models.CharField(max_length=256, null=True, unique=True, editable=False)
+    not_before = models.DateTimeField(null=True, editable=False)
+    not_after = models.DateTimeField(null=True, editable=False)
     certificate = models.BinaryField(null=True)
-    private_key = models.TextField()
+    private_key = models.TextField(default="", editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = PushCertificateManager()
 
     class Meta:
         ordering = ('name', 'topic')
@@ -74,17 +95,17 @@ class PushCertificate(models.Model):
         return reverse("mdm:push_certificate", args=(self.pk,))
 
     def can_be_deleted(self):
-        return (
-            self.enrolleddevice_set.count() == 0
-            and self.depenrollment_set.count() == 0
-            and self.otaenrollment_set.count() == 0
-            and self.userenrollment_set.count() == 0
-        )
+        return PushCertificate.objects.for_deletion().filter(pk=self.pk).exists()
+
+    def can_be_updated(self):
+        return PushCertificate.objects.for_update().filter(pk=self.pk).exists()
 
     # secret
 
     def _get_secret_engine_kwargs(self, field):
-        return {"name": self.name, "model": "mdm.pushcertificate", "field": field}
+        if not self.pk:
+            raise ValueError("PushCertificate must have a pk")
+        return {"pk": self.pk, "model": "mdm.pushcertificate", "field": field}
 
     def get_private_key(self):
         return decrypt(self.private_key, **self._get_secret_engine_kwargs("private_key"))
