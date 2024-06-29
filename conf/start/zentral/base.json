@@ -62,6 +62,7 @@
     "zentral.core.incidents": {
       "metrics": true
     },
+    "zentral.core.terraform": {},
     "zentral.contrib.inventory": {
       "metrics": true,
       "clients": [

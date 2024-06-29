@@ -1,4 +1,3 @@
-import base64
 import logging
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
@@ -13,6 +12,7 @@ from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
+from zentral.utils.http import basic_auth_username_and_password_from_request
 from zentral.utils.text import encode_args
 from .events import (post_instance_created_event,
                      post_instance_deleted_event,
@@ -154,19 +154,10 @@ class InstanceEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
 
 class EventNotificationsView(JSONPostAPIView):
     def check_basic_auth(self):
-        auth_header = self.request.META.get("HTTP_AUTHORIZATION", None)
-        if not auth_header:
-            logger.error("Missing Authorization header", extra={'request': self.request})
-            raise APIAuthError
-        if isinstance(auth_header, str):
-            auth_header = auth_header.encode("utf-8")
         try:
-            scheme, params = auth_header.split()
-            assert scheme.lower() == b"basic"
-            decoded_params = base64.b64decode(params)
-            username, password = decoded_params.split(b":", 1)
-        except Exception:
-            logger.error("Invalid basic authentication header", extra={'request': self.request})
+            username, password = basic_auth_username_and_password_from_request(self.request)
+        except ValueError as e:
+            logger.exception("Authentication error: %s", e, extra={'request': self.request})
             raise APIAuthError
         self.instance = get_object_or_404(Instance, pk=self.kwargs["pk"])
         if (
