@@ -35,9 +35,9 @@
         {% for push_certificate in object_list %}
         <tr>
         <td><a href="{{ push_certificate.get_absolute_url }}">{{ push_certificate.name }}</a></td>
-        <td>{{ push_certificate.topic }}</td>
-        <td>{{ push_certificate.not_before }}</td>
-        <td>{{ push_certificate.not_after }}</td>
+        <td>{{ push_certificate.topic|default:"-" }}</td>
+        <td>{{ push_certificate.not_before|default:"-" }}</td>
+        <td>{{ push_certificate.not_after|default:"-" }}</td>
         </tr>
         {% endfor %}
     </tbody>
