@@ -1278,7 +1278,7 @@ class EnrollmentSession(models.Model):
 
 
 class MDMEnrollment(models.Model):
-    display_name = models.CharField(max_length=128, default="Zentral MDM",
+    display_name = models.CharField(max_length=128, default="Zentral MDM",  # ! Terraform Provider default value too !
                                     help_text="Name displayed in the device settings")
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
 
@@ -1301,13 +1301,23 @@ class MDMEnrollment(models.Model):
     class Meta:
         abstract = True
 
+    def can_be_deleted(self):
+        raise NotImplementedError
+
+    def delete(self, *args, **kwargs):
+        if self.can_be_deleted():
+            self.enrollment_secret.delete()
+            super().delete(*args, **kwargs)
+        else:
+            raise ValueError(f"{self.__class__.__name__} {self.pk} cannot be deleted")
+
 
 # OTA Enrollment
 
 
 class OTAEnrollment(MDMEnrollment):
     name = models.CharField(max_length=256, unique=True)
-    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.CASCADE,
                                              related_name="ota_enrollment")
     # if linked to an auth realm, a user has to authenticate to get the mdm payload.
 
@@ -1341,7 +1351,7 @@ class OTAEnrollment(MDMEnrollment):
             self.save()
 
     def can_be_deleted(self):
-        return self.otaenrollmentsession_set.count() == 0
+        return self.otaenrollmentsession_set.count() == 0 and self.reenrollmentsession_set.count() == 0
 
 
 class OTAEnrollmentSessionManager(models.Manager):
@@ -1639,7 +1649,7 @@ class DEPEnrollment(MDMEnrollment):
     virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE)
 
     # to protect the dep enrollment endpoint. Link to the meta business unit too
-    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.CASCADE,
                                              related_name="dep_enrollment", editable=False)
 
     # Authentication
@@ -1725,6 +1735,9 @@ class DEPEnrollment(MDMEnrollment):
 
     def requires_account_configuration(self):
         return self.use_realm_user or self.has_hardcoded_admin()
+
+    def can_be_deleted(self):
+        return self.depenrollmentsession_set.count() == 0 and self.reenrollmentsession_set.count() == 0
 
 
 class DEPDevice(models.Model):
@@ -1900,7 +1913,7 @@ class DEPEnrollmentSession(EnrollmentSession):
 class UserEnrollment(MDMEnrollment):
     name = models.CharField(max_length=256, unique=True)
 
-    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.PROTECT,
+    enrollment_secret = models.OneToOneField(EnrollmentSecret, on_delete=models.CASCADE,
                                              related_name="user_enrollment")
     # Realm is required, but not in the database schema.
     # User enrollments via profiles, with authentication in the device is deprecated
@@ -1936,6 +1949,9 @@ class UserEnrollment(MDMEnrollment):
             self.enrollment_secret.revoked_at = timezone.now()
             self.enrollment_secret.save()
             self.save()
+
+    def can_be_deleted(self):
+        return self.userenrollmentsession_set.count() == 0 and self.reenrollmentsession_set.count() == 0
 
 
 class UserEnrollmentSessionManager(models.Manager):

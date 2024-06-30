@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmUser
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.models import DEPEnrollmentSession, ReEnrollmentSession
+from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentSession, ReEnrollmentSession
 from zentral.contrib.mdm.payloads import build_scep_payload
 from .utils import complete_enrollment_session, force_dep_enrollment, force_realm_user
 
@@ -28,6 +28,28 @@ class TestDEPEnrollment(TestCase):
             username=username,
             email=email,
         )
+
+    def test_dep_enrollment_cannot_be_deleted(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        DEPEnrollmentSession.objects.create_from_dep_enrollment(
+            enrollment, get_random_string(12), str(uuid.uuid4())
+        )
+        self.assertFalse(enrollment.can_be_deleted())
+
+    def test_dep_enrollment_delete_value_error(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        DEPEnrollmentSession.objects.create_from_dep_enrollment(
+            enrollment, get_random_string(12), str(uuid.uuid4())
+        )
+        with self.assertRaises(ValueError) as cm:
+            enrollment.delete()
+        self.assertEqual(cm.exception.args[0], f"DEPEnrollment {enrollment.pk} cannot be deleted")
+
+    def test_dep_enrollment_delete_ok(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        enrollment_pk = enrollment.pk
+        enrollment.delete()
+        self.assertFalse(DEPEnrollment.objects.filter(pk=enrollment_pk).exists())
 
     def test_create_dep_enrollment_session(self):
         enrollment = force_dep_enrollment(self.mbu)

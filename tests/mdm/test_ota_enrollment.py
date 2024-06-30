@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
-from zentral.contrib.mdm.models import OTAEnrollmentSession, ReEnrollmentSession
+from zentral.contrib.mdm.models import OTAEnrollment, OTAEnrollmentSession, ReEnrollmentSession
 from zentral.contrib.mdm.payloads import build_scep_payload
 from .utils import complete_enrollment_session, force_ota_enrollment, force_realm_user
 
@@ -16,6 +16,28 @@ class TestOTAEnrollment(TestCase):
     def setUpTestData(cls):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
+
+    def test_ota_enrollment_cannot_be_deleted(self):
+        enrollment = force_ota_enrollment(self.mbu)
+        OTAEnrollmentSession.objects.create_from_machine_info(
+            enrollment, get_random_string(12), str(uuid.uuid4())
+        )
+        self.assertFalse(enrollment.can_be_deleted())
+
+    def test_ota_enrollment_delete_value_error(self):
+        enrollment = force_ota_enrollment(self.mbu)
+        OTAEnrollmentSession.objects.create_from_machine_info(
+            enrollment, get_random_string(12), str(uuid.uuid4())
+        )
+        with self.assertRaises(ValueError) as cm:
+            enrollment.delete()
+        self.assertEqual(cm.exception.args[0], f"OTAEnrollment {enrollment.pk} cannot be deleted")
+
+    def test_ota_enrollment_delete_ok(self):
+        enrollment = force_ota_enrollment(self.mbu)
+        enrollment_pk = enrollment.pk
+        enrollment.delete()
+        self.assertFalse(OTAEnrollment.objects.filter(pk=enrollment_pk).exists())
 
     def test_create_ota_enrollment_session(self):
         enrollment = force_ota_enrollment(self.mbu)
