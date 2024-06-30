@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmUser
-from zentral.contrib.inventory.models import EnrollmentSecret
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.crypto import load_push_certificate_and_key
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
@@ -237,7 +237,9 @@ def force_dep_enrollment(mbu, push_certificate=None, display_name=None):
     )
 
 
-def force_ota_enrollment(mbu, realm=None, display_name=None):
+def force_ota_enrollment(mbu=None, realm=None, display_name=None):
+    if mbu is None:
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
     return OTAEnrollment.objects.create(
         push_certificate=force_push_certificate(),
         scep_config=force_scep_config(),

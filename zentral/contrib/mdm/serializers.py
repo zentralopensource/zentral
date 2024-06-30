@@ -3,7 +3,8 @@ import os
 from django.core.files import File
 from django.db import transaction
 from rest_framework import serializers
-from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.models import EnrollmentSecret, Tag
+from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.ssl import ensure_bytes
 from .app_manifest import download_package, read_package_info, validate_configuration
@@ -14,6 +15,7 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      DeviceCommand,
                      EnrolledDevice, EnterpriseApp, FileVaultConfig,
                      Location, LocationAsset,
+                     OTAEnrollment,
                      Platform, Profile, PushCertificate,
                      RecoveryPasswordConfig,
                      SCEPConfig,
@@ -109,6 +111,28 @@ class FileVaultConfigSerializer(serializers.ModelSerializer):
         elif bypass_attempts > -1:
             raise serializers.ValidationError({"bypass_attempts": "Must be -1 when at_login_only is False"})
         return data
+
+
+class OTAEnrollmentSerializer(serializers.ModelSerializer):
+    enrollment_secret = EnrollmentSecretSerializer(many=False)
+
+    class Meta:
+        model = OTAEnrollment
+        fields = "__all__"
+
+    def create(self, validated_data):
+        secret_data = validated_data.pop('enrollment_secret')
+        secret_tags = secret_data.pop("tags", [])
+        secret = EnrollmentSecret.objects.create(**secret_data)
+        if secret_tags:
+            secret.tags.set(secret_tags)
+        return OTAEnrollment.objects.create(enrollment_secret=secret, **validated_data)
+
+    def update(self, instance, validated_data):
+        secret_serializer = self.fields["enrollment_secret"]
+        secret_data = validated_data.pop('enrollment_secret')
+        secret_serializer.update(instance.enrollment_secret, secret_data)
+        return super().update(instance, validated_data)
 
 
 class PushCertificateSerializer(serializers.ModelSerializer):

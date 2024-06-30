@@ -36,6 +36,10 @@ class TestDEPEnrollment(TestCase):
         )
         self.assertEqual(session.get_enrollment(), enrollment)
         self.assertEqual(session.status, "STARTED")
+        self.assertEqual(
+            session.serialize_for_event(),
+            {"enrollment_session": {"pk": session.pk, "type": "dep", "status": "STARTED"}}
+        )
 
     def test_dep_enrollment_session_scep_payload(self):
         enrollment = force_dep_enrollment(self.mbu)

@@ -18,6 +18,10 @@ class TestUserEnrollment(TestCase):
         session = UserEnrollmentSession.objects.create_from_user_enrollment(enrollment)
         self.assertEqual(session.get_enrollment(), enrollment)
         self.assertEqual(session.status, "ACCOUNT_DRIVEN_START")
+        self.assertEqual(
+            session.serialize_for_event(),
+            {"enrollment_session": {"pk": session.pk, "type": "user", "status": "ACCOUNT_DRIVEN_START"}}
+        )
 
     def test_user_enrollment_session_scep_payload(self):
         enrollment = force_user_enrollment(self.mbu, self.realm)

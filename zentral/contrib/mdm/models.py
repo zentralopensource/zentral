@@ -1323,7 +1323,7 @@ class OTAEnrollment(MDMEnrollment):
              "created_at": self.created_at,
              "updated_at": self.updated_at}
         d.update(self.enrollment_secret.serialize_for_event())
-        return {"ota_enrollment": d}
+        return d
 
     def get_absolute_url(self):
         return reverse("mdm:ota_enrollment", args=(self.pk,))
@@ -1339,6 +1339,9 @@ class OTAEnrollment(MDMEnrollment):
             self.enrollment_secret.revoked_at = timezone.now()
             self.enrollment_secret.save()
             self.save()
+
+    def can_be_deleted(self):
+        return self.otaenrollmentsession_set.count() == 0
 
 
 class OTAEnrollmentSessionManager(models.Manager):
@@ -1419,7 +1422,7 @@ class OTAEnrollmentSession(EnrollmentSession):
             raise ValueError("Wrong enrollment sessions status")
 
     def serialize_for_event(self):
-        return super().serialize_for_event("ota", self.ota_enrollment.serialize_for_event())
+        return super().serialize_for_event("ota", {"ota_enrollment": self.ota_enrollment.serialize_for_event()})
 
     def get_blueprint(self):
         return self.ota_enrollment.blueprint
@@ -1712,10 +1715,10 @@ class DEPEnrollment(MDMEnrollment):
         return self.depdevice_set.exclude(last_op_type=DEPDevice.OP_TYPE_DELETED)
 
     def serialize_for_event(self):
-        return {"dep_enrollment": {"uuid": self.pk,
-                                   "name": self.name,
-                                   "created_at": self.created_at,
-                                   "updated_at": self.updated_at}}
+        return {"uuid": self.pk,
+                "name": self.name,
+                "created_at": self.created_at,
+                "updated_at": self.updated_at}
 
     def has_hardcoded_admin(self):
         return self.admin_full_name and self.admin_short_name and self.admin_password_hash
@@ -1852,7 +1855,7 @@ class DEPEnrollmentSession(EnrollmentSession):
             raise ValueError("Wrong enrollment sessions status")
 
     def serialize_for_event(self):
-        return super().serialize_for_event("dep", self.dep_enrollment.serialize_for_event())
+        return super().serialize_for_event("dep", {"dep_enrollment": self.dep_enrollment.serialize_for_event()})
 
     def get_blueprint(self):
         return self.dep_enrollment.blueprint
@@ -1915,7 +1918,7 @@ class UserEnrollment(MDMEnrollment):
              "created_at": self.created_at,
              "updated_at": self.updated_at}
         d.update(self.enrollment_secret.serialize_for_event())
-        return {"user_enrollment": d}
+        return d
 
     def get_absolute_url(self):
         return reverse("mdm:user_enrollment", args=(self.pk,))
@@ -1989,7 +1992,7 @@ class UserEnrollmentSession(EnrollmentSession):
             raise ValueError("Wrong enrollment sessions status")
 
     def serialize_for_event(self):
-        return super().serialize_for_event("user", self.user_enrollment.serialize_for_event())
+        return super().serialize_for_event("user", {"user_enrollment": self.user_enrollment.serialize_for_event()})
 
     def get_blueprint(self):
         return self.user_enrollment.blueprint
