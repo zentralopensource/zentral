@@ -6,5 +6,6 @@ from .enrolled_devices import *  # NOQA
 from .filevault_configs import *  # NOQA
 from .push_certificates import *  # NOQA
 from .recovery_password_configs import *  # NOQA
+from .scep_configs import *  # NOQA
 from .software_update_enforcements import *  # NOQA
 from .software_updates import *  # NOQA
