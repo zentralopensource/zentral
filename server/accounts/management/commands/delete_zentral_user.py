@@ -11,9 +11,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         username = kwargs["username"]
-        deleted_user_count, _ = User.objects.filter(username=username).delete()
-        if deleted_user_count == 0:
+        deleted_objects_count, _ = User.objects.filter(username=username).delete()
+        if not deleted_objects_count:
             self.stderr.write("0 users deleted")
             sys.exit(11)
         else:
-            self.stdout.write(f"{deleted_user_count} user(s) deleted")
+            self.stdout.write("1 user deleted")

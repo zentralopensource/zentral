@@ -2,7 +2,7 @@ from io import StringIO
 from unittest.mock import patch
 from django.core.management import call_command
 from django.test import TestCase
-from accounts.models import User
+from accounts.models import APIToken, User
 
 
 class DeleteZentralUserTestCase(TestCase):
@@ -26,8 +26,9 @@ class DeleteZentralUserTestCase(TestCase):
         self.assertEqual(stderr, "0 users deleted\n")
 
     def test_delete_one_user(self):
-        User.objects.create_user("yolo", "fomo@example.com")
+        user = User.objects.create_user("yolo", "fomo@example.com")
+        APIToken.objects.update_or_create_for_user(user),
         stdout, stderr = self.call_command("yolo")
-        self.assertEqual(stdout, "1 user(s) deleted\n")
+        self.assertEqual(stdout, "1 user deleted\n")
         self.assertEqual(stderr, "")
         self.assertFalse(User.objects.filter(username="yolo").exists())
