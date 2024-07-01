@@ -36,6 +36,14 @@ class Command(BaseCommand):
             return
         self.stdout.write(" ".join(str(arg) for arg in args))
 
+    def check_options(self):
+        if self.service_account:
+            if self.superuser:
+                self.exit_with_error("A service account cannot be a super user", 5)
+            elif self.send_reset:
+                self.exit_with_error("A service account cannot receive a password reset", 6)
+            self.with_api_token = True
+
     def check_username(self, username):
         username = username.strip()
         if not username:
@@ -107,7 +115,7 @@ class Command(BaseCommand):
 
     def create_api_token(self):
         self.context["api_token_created"] = False
-        if self.with_api_token or self.service_account:
+        if self.with_api_token:
             if APIToken.objects.filter(user=self.user).exists():
                 self.print("Existing API token")
             else:
@@ -144,6 +152,7 @@ class Command(BaseCommand):
             "service_account": self.service_account,
             "superuser": self.superuser,
         }
+        self.check_options()
         self.check_username(kwargs["username"])
         self.check_email(kwargs["email"])
         self.check_user_conflict()

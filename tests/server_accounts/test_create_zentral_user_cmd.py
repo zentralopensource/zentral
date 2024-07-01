@@ -18,6 +18,16 @@ class CreateZentralUserTestCase(TestCase):
         )
         return out.getvalue()
 
+    def test_service_account_superuser(self):
+        with self.assertRaises(SystemExit) as cm:
+            self.call_command("yolo", "fomo@example.com", "--service-account", "--superuser")
+        self.assertEqual(cm.exception.code, 5)
+
+    def test_service_account_send_reset(self):
+        with self.assertRaises(SystemExit) as cm:
+            self.call_command("yolo", "fomo@example.com", "--service-account", "--send-reset")
+        self.assertEqual(cm.exception.code, 6)
+
     def test_create_user_invalid_username(self):
         with self.assertRaises(SystemExit) as cm:
             self.call_command(" ", "fomo@example.com")
@@ -119,7 +129,7 @@ class CreateZentralUserTestCase(TestCase):
 
     def test_superuser_service_account(self):
         result = json.loads(
-            self.call_command("yolo", "fomo@example.com", "--service-account", "--superuser", "--json")
+            self.call_command("yolo", "fomo@example.com", "--service-account", "--json")
         )
         api_token = result.pop("api_token")
         self.assertEqual(
@@ -128,7 +138,7 @@ class CreateZentralUserTestCase(TestCase):
              'created': True,
              'email': 'fomo@example.com',
              'service_account': True,
-             'superuser': True,
+             'superuser': False,
              'updated': False,
              'username': 'yolo'}
         )
