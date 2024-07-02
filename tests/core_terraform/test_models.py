@@ -1,5 +1,6 @@
 import secrets
 from django.test import TestCase
+from accounts.models import User
 from zentral.core.terraform.models import StateVersion
 from .utils import force_state, force_state_version
 
@@ -12,6 +13,15 @@ class TerraformBackendModelsTestCase(TestCase):
         state = force_state()
         self.assertEqual(str(state), state.slug)
 
+    def test_state_get_created_by_display_created_by_username(self):
+        state = force_state()
+        self.assertEqual(state.get_created_by_display(), state.created_by_username)
+
+    def test_state_get_created_by_display_created_by(self):
+        user = User.objects.create_user("yolo", "fomo@zentral.com")
+        state = force_state(created_by=user)
+        self.assertEqual(state.get_created_by_display(), "fomo@zentral.com")
+
     # StateVersion
 
     def test_state_version_str(self):
@@ -20,6 +30,15 @@ class TerraformBackendModelsTestCase(TestCase):
             str(state_version),
             state_version.state.slug + " - " + str(state_version.created_at)
         )
+
+    def test_state_version_get_created_by_display_created_by_username(self):
+        state_version = force_state_version()
+        self.assertEqual(state_version.get_created_by_display(), state_version.created_by_username)
+
+    def test_state_version_get_created_by_display_created_by(self):
+        user = User.objects.create_user("yolo", "fomo@zentral.com")
+        state_version = force_state_version(created_by=user)
+        self.assertEqual(state_version.get_created_by_display(), "fomo@zentral.com")
 
     def test_state_version_set_encryption_key_error(self):
         state_version = StateVersion(state=force_state(), created_by_username="yolo")

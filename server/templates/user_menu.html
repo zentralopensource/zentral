@@ -45,6 +45,9 @@
             <li><a class="dropdown-item" href="{% url 'accounts:users' %}">Users</a></li>
             <li><a class="dropdown-item" href="{% url 'accounts:groups' %}">Groups</a></li>
             <li><a class="dropdown-item" href="{% url 'realms:list' %}">Realms</a></li>
+            {% if perms.terraform.view_state %}
+            <li><a class="dropdown-item" href="{% url 'terraform:index' %}">Terraform</a></li>
+            {% endif %}
         </ul>
     </li>
     <li class="nav-item dropdown">

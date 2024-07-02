@@ -19,10 +19,10 @@ def build_lock_info(lock_id=None):
     }
 
 
-def force_state(slug=None, locked=False):
+def force_state(slug=None, locked=False, created_by=None):
     if slug is None:
         slug = slugify(get_random_string(12))
-    state = State.objects.create(slug=slug, created_by_username=get_random_string(12))
+    state = State.objects.create(slug=slug, created_by=created_by, created_by_username=get_random_string(12))
     if locked:
         lock_id = str(uuid.uuid4())
         Lock.objects.create(
@@ -34,11 +34,12 @@ def force_state(slug=None, locked=False):
     return state
 
 
-def force_state_version(state=None, data=None):
+def force_state_version(state=None, data=None, created_by=None):
     if state is None:
         state = force_state()
     sv = StateVersion.objects.create(
         state=state,
+        created_by=created_by,
         created_by_username=get_random_string(12)
     )
     if data is None:

@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'terraform:index' %}">Terraform</a>
+  <li class="breadcrumb-item active">State <code>{{ object.slug }}</code></li>
+</ol>
+
+<div class="d-flex justify-content-between mb-3">
+  <h2 class="m-0">TF state <code>{{ object.slug }}</code></h2>
+</div>
+
+{% if state_versions %}
+<h4 style="margin:24px 0">{{ state_versions|length }} Version{{ state_versions|length|pluralize }}</h4>
+
+<table class="table">
+  <thead>
+    <th>Created by</th>
+    <th>Created at</th>
+  </thead>
+  <tbody>
+    {% for state_version in state_versions  %}
+    <tr>
+      <td>{{ state_version.get_created_by_display }}</td>
+      <td>{{ state_version.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h4 style="margin:24px 0">HTTP backend configuration</h4>
+
+<p>You can use the following configuration block within the <code>terraform</code> block to use Zentral as HTTP state backend:</p>
+
+{% codeexample 'hcl' %}
+backend "http" {
+  address        = "https://{{ fqdn }}{% url 'terraform_api:backend_state' object %}"
+  lock_address   = "https://{{ fqdn }}{% url 'terraform_api:backend_lock' object %}"
+  unlock_address = "https://{{ fqdn }}{% url 'terraform_api:backend_lock' object %}"
+  lock_method    = "POST"
+  unlock_method  = "DELETE"
+  username       = "Zentral username (user or service account)"
+  password       = "Zentral API token"
+}
+{% endcodeexample %}
+
+<p>You can also set a partial configuration:</p>
+
+{% codeexample 'hcl' %}
+backend "http" {
+  address        = "https://{{ fqdn }}{% url 'terraform_api:backend_state' object %}"
+  lock_address   = "https://{{ fqdn }}{% url 'terraform_api:backend_lock' object %}"
+  unlock_address = "https://{{ fqdn }}{% url 'terraform_api:backend_lock' object %}"
+  lock_method    = "POST"
+  unlock_method  = "DELETE"
+}
+{% endcodeexample %}
+
+<p>The other arguments can be specified via the <code>init</code> command line:</p>
+
+{% codeexample 'bash' %}
+tofu init \
+  -backend-config="username=$ZTL_USERNAME" \
+  -backend-config="password=$ZTL_API_TOKEN"
+{% endcodeexample %}
+
+{% endblock %}

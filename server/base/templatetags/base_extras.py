@@ -135,6 +135,36 @@ def pythonprettyprint(val):
     return mark_safe(highlight(s, lexer, formatter))
 
 
+@register.tag(name="codeexample")
+def do_code_example(parser, token):
+    try:
+        tag_name, lexer_name = token.split_contents()
+    except ValueError:
+        raise template.TemplateSyntaxError(
+            "%r tag requires a single argument, the lexer name" % token.contents.split()[0]
+        )
+    if not (lexer_name[0] == lexer_name[-1] and lexer_name[0] in ('"', "'")):
+        raise template.TemplateSyntaxError(
+            "%r tag's argument should be in quotes" % tag_name
+        )
+    lexer_name = lexer_name.strip("'").strip('"')
+    nodelist = parser.parse(("endcodeexample",))
+    parser.delete_first_token()
+    return CodeExampleNode(lexer_name, nodelist)
+
+
+class CodeExampleNode(template.Node):
+    def __init__(self, lexer_name, nodelist):
+        self.lexer_name = lexer_name
+        self.nodelist = nodelist
+
+    def render(self, context):
+        output = self.nodelist.render(context)
+        lexer = lexers.get_lexer_by_name(self.lexer_name)
+        formatter = HtmlFormatter(cssclass="highlight code-example")
+        return mark_safe(highlight(output, lexer, formatter))
+
+
 @register.filter()
 def maybetimestamp(val):
     try:

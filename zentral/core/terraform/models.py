@@ -2,6 +2,7 @@ import logging
 import zlib
 from cryptography.fernet import Fernet
 from django.db import models
+from django.urls import reverse
 from accounts.models import User
 from zentral.core.secret_engines import decrypt, encrypt, rewrap
 from zentral.utils.ssl import ensure_bytes
@@ -19,6 +20,14 @@ class State(models.Model):
     def __str__(self):
         return self.slug
 
+    def get_absolute_url(self):
+        return reverse("terraform:state", args=(self.pk,))
+
+    def get_created_by_display(self):
+        if self.created_by:
+            return str(self.created_by)
+        return self.created_by_username
+
 
 class StateVersion(models.Model):
     state = models.ForeignKey(State, on_delete=models.CASCADE)
@@ -30,6 +39,11 @@ class StateVersion(models.Model):
 
     def __str__(self):
         return f"{self.state} - {self.created_at}"
+
+    def get_created_by_display(self):
+        if self.created_by:
+            return str(self.created_by)
+        return self.created_by_username
 
     # secret - encryption key
 

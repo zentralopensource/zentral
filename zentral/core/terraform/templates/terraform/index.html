@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load ui_extras incidents_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Terraform</li>
+</ol>
+
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">TF state{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
+</div>
+
+{% pagination next_url previous_url %}
+
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
+    <thead>
+      <th>Slug</th>
+      <th>Created by</th>
+      <th>Created at</th>
+    </thead>
+    <tbody>
+      {% for state in object_list %}
+      <tr>
+        <td><a href="{{ state.get_absolute_url }}"><code>{{ state.slug }}</code></a></td>
+        <td>{{ state.get_created_by_display }}</td>
+        <td>{{ state.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% pagination next_url previous_url %}
+
+{% endblock %}
