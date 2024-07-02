@@ -3,7 +3,7 @@ from django.test import TestCase
 from zentral.contrib.monolith.models import Repository
 
 
-class MonolithManagementCommandsTest(TestCase):
+class MonolithProvisionManagementCommandsTest(TestCase):
 
     # provisioning
 
