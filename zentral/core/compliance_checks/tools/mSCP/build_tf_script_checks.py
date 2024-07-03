@@ -78,10 +78,15 @@ def get_script_check_data(
     rule_custom_data,
     default_odv_source
 ):
+    result = rule_data.get("result")
+    if not result:
+        print("  🔥 no script result found in rule definition")
+        return
+
     title = rule_data["title"]
     discussion = rule_data["discussion"].strip()
     source = rule_data["check"].strip()
-    result = rule_data["result"]
+
     try:
         string_result = str(result["string"])
     except KeyError:
@@ -113,7 +118,8 @@ def get_script_check_data(
             string_result = set_odv(string_result, odv)
             base64_result = set_odv(base64_result, odv)
         else:
-            input("  ✦ Missing $ODV!")
+            print("  🔥 Missing $ODV!")
+            return
     sca = {
         "name": f'[mSCP] - {section_data["name"]} - {title}',
         "description": discussion,
@@ -136,7 +142,7 @@ def get_script_check_data(
         tf_expected_result = escape_terraform_string(base64_result)
         sc_expected_result = f'base64encode("{tf_expected_result}\\n")'
     else:
-        input(f"Unknown result type: {result}!")
+        print("  🔥 Unknown result type:", result)
         return
     if not raw_expected_result:
         sc_expected_result = f'"{sc_expected_result}"'
@@ -147,18 +153,23 @@ def get_script_check_data(
         sc_arch_arm64 = "false"
     elif "arm64" in tags:
         sc_arch_amd64 = "false"
+    sca.update({
+        "type": sc_type,
+        "arch_amd64": sc_arch_amd64,
+        "arch_arm64": sc_arch_arm64,
+        "expected_result": sc_expected_result,
+    })
     # min/max OS version
+    if "macOS" not in rule_data or not rule_data.get("macOS"):
+        print("  🔥 no macOS versions found")
+        return sca
     min_os_ver_elm = min([int(i) for i in v.split(".")]
                          for v in rule_data["macOS"])
     min_os_version = ".".join(str(i) for i in min_os_ver_elm)
     max_os_version = str(min_os_ver_elm[0] + 1)
     sca.update({
-        "type": sc_type,
-        "arch_amd64": sc_arch_amd64,
-        "arch_arm64": sc_arch_arm64,
         "min_os_version": min_os_version,
         "max_os_version": max_os_version,
-        "expected_result": sc_expected_result,
     })
     return sca
 
@@ -178,7 +189,7 @@ def generate_terraform_resources(
             print("Section", section_data["name"])
             for rule in rules:
                 if rule.startswith("supplemental_"):
-                    print("  Supplemental rule", rule, "skipped!!!")
+                    print("  ❌ Supplemental rule", rule, "skipped!!!")
                     continue
                 rule_data = get_rule_data(repository, rule)
                 rule_custom_data = get_rule_custom_data(repository,
@@ -191,10 +202,16 @@ def generate_terraform_resources(
                     rule_custom_data,
                     default_odv_source,
                 )
+                if not sc_data:
+                    print("  ❌ rule", rule, "skipped!!!")
+                    continue
                 if min_os_version:
                     sc_data["min_os_version"] = min_os_version
                 if max_os_version:
                     sc_data["max_os_version"] = max_os_version
+                if "min_os_version" not in sc_data or "max_os_version" not in sc_data:
+                    print("  ❌ Missing min OS version or max OS version", rule, "skipped!!!")
+                    continue
                 f.write(
                     TEMPLATE.format(
                         section=section,
