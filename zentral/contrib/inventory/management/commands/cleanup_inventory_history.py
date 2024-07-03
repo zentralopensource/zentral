@@ -20,7 +20,7 @@ class Command(BaseCommand):
         )
 
     def set_options(self, **options):
-        self.quiet = options.get("quiet", False)
+        self.quiet = options["quiet"] or options["verbosity"] == 0
         self.min_date = get_min_date(options["days"])
         if not self.quiet:
             self.stdout.write("min date: {}".format(self.min_date.isoformat()))
