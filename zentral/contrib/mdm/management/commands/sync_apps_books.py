@@ -12,16 +12,21 @@ class Command(BaseCommand):
         parser.add_argument('--location', dest='location_ids', type=int, nargs=1,
                             help='sync apps & books locations assets')
 
+    def write(self, msg):
+        if self.verbosity:
+            self.stdout.write(msg)
+
     def handle(self, *args, **kwargs):
+        self.verbosity = kwargs.get("verbosity", 1)
         location_qs = Location.objects.all().order_by("name")
         if kwargs.get('list_locations'):
-            self.stdout.write("Existing locations:")
+            self.write("Existing locations:")
             for location in location_qs:
-                self.stdout.write(f"{location.pk} {location}")
+                self.write(f"{location.pk} {location}")
             return
         location_ids = kwargs.get("location_ids")
         if location_ids:
             location_qs = location_qs.filter(pk__in=location_ids)
         for location in location_qs:
-            self.stdout.write(f"Sync apps & books for location {location.pk} {location}")
+            self.write(f"Sync apps & books for location {location.pk} {location}")
             sync_assets(location)
