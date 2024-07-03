@@ -133,6 +133,7 @@ class ZentralSettings(ConfigDict):
                     "zentral.core.compliance_checks",
                     "zentral.core.incidents",
                     "zentral.core.probes",
+                    "zentral.core.terraform",
                     "zentral.contrib.inventory"]:
             self.setdefault("apps", {}).setdefault(app, {})
 
