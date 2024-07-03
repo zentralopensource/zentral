@@ -3,6 +3,7 @@ from django.core.management.base import BaseCommand
 from base.notifier import notifier
 from zentral.contrib.monolith.models import Repository
 from zentral.contrib.monolith.repository_backends import load_repository_backend
+from zentral.core.queues import queues
 
 
 class Command(BaseCommand):
@@ -29,3 +30,4 @@ class Command(BaseCommand):
                         notifier.send_notification("monolith.repository", str(db_repository.pk))
 
                     transaction.on_commit(notify)
+        queues.stop()
