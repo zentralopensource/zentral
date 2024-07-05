@@ -165,6 +165,33 @@ class EventRequestGeo(object):
         if kwargs:
             return cls(**kwargs)
 
+    @classmethod
+    def build_from_request(cls, request):
+        kwargs = {}
+        for header, attr, sub_attr, attr_type in (
+            ("HTTP_CF_IPCITY", "city_name", None, None),
+            ("HTTP_CF_IPCONTINENT", "continent_name", None, None),
+            ("HTTP_CF_IPCOUNTRY", "country_iso_code", None, None),
+            ("HTTP_CF_IPLATITUDE", "location", "lat", float),
+            ("HTTP_CF_IPLONGITUDE", "location", "lon", float),
+            ("HTTP_CF_REGION", "region_name", None, None)
+        ):
+            val = request.META.get(header)
+            if not val:
+                continue
+            if attr_type:
+                try:
+                    val = attr_type(val)
+                except ValueError:
+                    continue
+            d = kwargs
+            if sub_attr:
+                d = d.setdefault(attr, {})
+                attr = sub_attr
+            d[attr] = val
+        if kwargs:
+            return cls(**kwargs)
+
     def serialize(self):
         d = {}
         for attr in self.geo_attr_list:
@@ -191,12 +218,14 @@ class EventRequest(object):
     @classmethod
     def build_from_request(cls, request):
         user_agent, ip = user_agent_and_ip_address_from_request(request)
-        user = EventRequestUser.build_from_request(request)
         method = request.method
         path = request.get_full_path()
+        user = EventRequestUser.build_from_request(request)
+        geo = EventRequestGeo.build_from_request(request)
         return EventRequest(
             user_agent, ip,
-            user=user, method=method, path=path
+            method=method, path=path,
+            user=user, geo=geo,
         )
 
     @classmethod
