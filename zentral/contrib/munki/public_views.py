@@ -143,7 +143,8 @@ class JobDetailsView(BaseView):
         if munki_state:
             response_d['last_seen_sha1sum'] = munki_state.sha1sum
             response_d['managed_installs'] = (
-                munki_state.last_managed_installs_sync is None
+                munki_state.force_full_sync_at is not None
+                or munki_state.last_managed_installs_sync is None
                 or (
                     now - munki_state.last_managed_installs_sync
                     > timedelta(days=configuration.managed_installs_sync_interval_days)
@@ -158,6 +159,7 @@ class JobDetailsView(BaseView):
             and arch
             and (
                 munki_state is None
+                or munki_state.force_full_sync_at is not None
                 or munki_state.last_script_checks_run is None
                 or (
                     now - munki_state.last_script_checks_run
@@ -319,8 +321,12 @@ class PostJobView(BaseView):
                                 'run_type': report['run_type'],
                                 'start_time': start_time,
                                 'end_time': end_time})
-        MunkiState.objects.update_or_create(machine_serial_number=self.machine_serial_number,
-                                            defaults=update_dict)
+        if script_check_results is not None and managed_installs is not None:
+            update_dict["force_full_sync_at"] = None
+        MunkiState.objects.update_or_create(
+            machine_serial_number=self.machine_serial_number,
+            defaults=update_dict
+        )
 
         # events
         post_munki_request_event(

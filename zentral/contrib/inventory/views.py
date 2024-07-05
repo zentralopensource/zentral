@@ -12,6 +12,7 @@ from django.urls import reverse, reverse_lazy
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
+from django.utils.functional import SimpleLazyObject
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
 from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
@@ -53,25 +54,74 @@ from .utils import (AndroidAppFilter, AndroidAppFilterForm,
 logger = logging.getLogger("zentral.contrib.inventory.views")
 
 
-source_machine_subviews = {"_loaded": False}
+# Machine subviews contributed by the different apps.
+#
+# A machine subview is a piece of view that is displayed
+# in the tab info for a given source.
 
 
 def _load_source_machine_subviews():
+    result = {}
     for app in settings["apps"]:
         try:
             subview = getattr(import_module(f"{app}.views"), "InventoryMachineSubview")
         except (ModuleNotFoundError, AttributeError):
             pass
         else:
-            source_machine_subviews.setdefault(subview.source_key, []).append(subview)
-    source_machine_subviews["_loaded"] = True
+            result.setdefault(subview.source_key, []).append(subview)
+    return result
+
+
+source_machine_subviews = SimpleLazyObject(_load_source_machine_subviews)
 
 
 def _get_source_machine_subview(source, serial_number, user):
-    if not source_machine_subviews["_loaded"]:
-        _load_source_machine_subviews()
     source_key = (source.module, source.name)
     return [subview(serial_number, user) for subview in source_machine_subviews.get(source_key, [])]
+
+
+# Machine actions contributed by the different apps.
+#
+# A machine action is a link to a page where an action can be
+# triggered for a give machine. The Zentral apps can offer actions
+# that are filtered and displayed in the `Action` dropdown menu.
+
+
+def _load_machine_actions():
+    result = {}
+    for app in settings["apps"]:
+        try:
+            actions = getattr(import_module(f"{app}.machine_actions"), "actions")
+        except (ModuleNotFoundError, AttributeError):
+            pass
+        else:
+            for action in actions:
+                result.setdefault(action.category or "", []).append(action)
+    return result
+
+
+machine_actions = SimpleLazyObject(_load_machine_actions)
+
+
+def _get_machine_actions(serial_number, user):
+    actions = []
+    for category in sorted(machine_actions.keys()):
+        category_actions = []
+        for action_class in machine_actions[category]:
+            action = action_class(serial_number, user)
+            if action.check_permissions():
+                category_actions.append((
+                    action.get_url(),
+                    action.get_disabled(),
+                    action.title,
+                    action.display_class,
+                ))
+        if category_actions:
+            actions.append((category, category_actions))
+    return actions
+
+
+# The views
 
 
 class MachineListView(PermissionRequiredMixin, UserPaginationMixin, TemplateView):
@@ -574,14 +624,7 @@ class MachineView(PermissionRequiredMixin, TemplateView):
         context["store_links"] = store_links
 
         # other actions
-        context["can_manage_tags"] = self.request.user.has_perms((
-            "inventory.view_machinetag",
-            "inventory.add_machinetag",
-            "inventory.change_machinetag",
-            "inventory.delete_machinetag",
-            "inventory.add_tag",
-        ))
-        context["can_archive_machine"] = self.request.user.has_perm("inventory.change_machinesnapshot")
+        context["actions"] = _get_machine_actions(machine.serial_number, self.request.user)
 
         return context
 

@@ -270,6 +270,28 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertNotIn("script_checks", response.json())
 
+    def test_job_details_second_time_too_early_force_full_sync_script_check(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number=enrolled_machine.serial_number, tag=tag)
+        sc = force_script_check(
+            type=ScriptCheck.Type.ZSH_BOOL,
+            source="echo true",
+            expected_result="t",
+        )
+        MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
+                                  last_script_checks_run=datetime.utcnow(),
+                                  force_full_sync_at=datetime.utcnow())  # forced
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(
+            response.json()["script_checks"],
+            [{'pk': sc.pk, 'version': 1, 'type': 'ZSH_BOOL', 'source': 'echo true', 'expected_result': True}]
+        )
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_job_details_second_time_script_check(self, post_event):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
@@ -327,6 +349,57 @@ class MunkiAPIViewsTestCase(TestCase):
              "status": "OUT_OF_SCOPE",
              "previous_status": "OK"}
         )
+
+    def test_job_details_managed_installs_first_time(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        munki_state = MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number)
+        self.assertIsNone(munki_state.last_managed_installs_sync)
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertTrue(response.json()["managed_installs"])
+
+    def test_job_details_managed_installs_too_early(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
+                                  last_managed_installs_sync=datetime.utcnow())
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertFalse(response.json()["managed_installs"])
+
+    def test_job_details_managed_installs_too_forced_sync(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
+                                  last_managed_installs_sync=datetime.utcnow(),
+                                  force_full_sync_at=datetime.utcnow())
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertTrue(response.json()["managed_installs"])
+
+    def test_job_details_managed_installs_too_old(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        MunkiState.objects.create(
+            machine_serial_number=enrolled_machine.serial_number,
+            last_managed_installs_sync=(
+                datetime.utcnow()
+                - timedelta(days=enrolled_machine.enrollment.configuration.managed_installs_sync_interval_days,
+                            seconds=1)
+            )
+        )
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertTrue(response.json()["managed_installs"])
 
     # post job
 
@@ -660,3 +733,19 @@ class MunkiAPIViewsTestCase(TestCase):
             )
             with self.assertRaises(NoReverseMatch):
                 reverse(f"munki_public_legacy:{route}", urlconf=urlpatterns_wo_legacy)
+
+    def test_post_job_force_full_sync(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        munki_state = MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
+                                                force_full_sync_at=datetime.utcnow())
+        response = self._post_as_json(reverse("munki_public:post_job"),
+                                      {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                                            "system_info": {"computer_name": get_random_string(12)}},
+                                       "last_seen_report_found": True,
+                                       "reports": [],
+                                       "managed_installs": {},
+                                       "script_check_results": []},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+        munki_state.refresh_from_db()
+        self.assertIsNone(munki_state.force_full_sync_at)

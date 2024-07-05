@@ -11,7 +11,7 @@ urlpatterns = [
     path('configurations/create/', views.CreateConfigurationView.as_view(), name='create_configuration'),
     path('configurations/<int:pk>/', views.ConfigurationView.as_view(), name='configuration'),
     path('configurations/<int:pk>/events/', views.ConfigurationEventsView.as_view(), name='configuration_events'),
-    path('configurations/<int:pk>/events/fetch/', 
+    path('configurations/<int:pk>/events/fetch/',
          views.FetchConfigurationEventsView.as_view(),
          name='fetch_configuration_events'),
     path('configurations/<int:pk>/events/store_redirect/',
@@ -49,6 +49,10 @@ urlpatterns = [
          views.CreateInstallProbeView.as_view(), name='create_install_probe'),
     path('install_probes/<int:probe_id>/update/',
          views.UpdateInstallProbeView.as_view(), name='update_install_probe'),
+
+    # machine actions
+    path('machine/<str:urlsafe_serial_number>/force_full_sync/',
+         views.ForceMachineFullSync.as_view(), name='force_machine_full_sync'),
 
     # terraform
     path('terraform_export/',

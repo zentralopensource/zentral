@@ -1,3 +1,4 @@
+from datetime import datetime
 import enum
 from django.contrib.postgres.fields import ArrayField
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -151,6 +152,11 @@ class MunkiState(models.Model):
     start_time = models.DateTimeField(blank=True, null=True)
     end_time = models.DateTimeField(blank=True, null=True)
     last_seen = models.DateTimeField(auto_now=True)
+    force_full_sync_at = models.DateTimeField(null=True)
+
+    def force_full_sync(self):
+        self.force_full_sync_at = datetime.utcnow()
+        self.save()
 
 
 # managed install

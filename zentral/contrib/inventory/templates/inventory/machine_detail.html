@@ -69,22 +69,25 @@
         <span class="bi bi bi-gear" aria-hidden="true"></span> profiles
       </a>
       {% endif %}
-      {% if can_manage_tags or can_archive_machine %}
+      {% if actions %}
       <div class="btn-group">
         <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
           Action <span class="caret"></span>
         </button>
         <ul class="dropdown-menu">
-          {% if can_manage_tags %}
-          <li>
-            <a href="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}" class="dropdown-item">Manage tags</a>
-          </li>
+          {% for category, links in actions %}
+          {% if category %}
+          <li><span class="dropdown-item disabled">{{ category }}</span></li>
           {% endif %}
-          {% if can_archive_machine %}
+          {% for link, disabled, anchor_text, display_class in links %}
           <li>
-            <a href="{% url 'inventory:archive_machine' machine.get_urlsafe_serial_number %}" class="dropdown-item"><span class="text-danger">Archive</span></a>
+            <a href="{{ link }}" class="dropdown-item{% if disabled %} disabled{% endif %}{% if display_class %} text-{{ display_class }}{% endif %}">{{ anchor_text }}</a>
           </li>
+          {% endfor %}
+          {% if not forloop.last %}
+          <li><hr class="dropdown-divider"></li>
           {% endif %}
+          {% endfor %}
         </ul>
       </div>
       {% endif %}

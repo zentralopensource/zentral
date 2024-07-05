@@ -1,5 +1,6 @@
 import logging
 from urllib.parse import urlencode
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -8,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
+from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
 from zentral.core.events.base import AuditEvent
 from zentral.core.probes.models import ProbeSource
@@ -19,7 +21,7 @@ from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, Update
 from .compliance_checks import MunkiScriptCheck
 from .forms import (CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, ScriptCheckForm,
                     ScriptCheckSearchForm, UpdateInstallProbeForm)
-from .models import Configuration, Enrollment, PrincipalUserDetectionSource, ScriptCheck
+from .models import Configuration, Enrollment, MunkiState, PrincipalUserDetectionSource, ScriptCheck
 from .terraform import iter_resources
 
 
@@ -543,3 +545,27 @@ class UpdateInstallProbeView(PermissionRequiredMixin, FormView):
 
     def get_success_url(self):
         return self.probe_source.get_absolute_url("munki")
+
+
+# Machine actions
+
+
+class ForceMachineFullSync(PermissionRequiredMixin, TemplateView):
+    permission_required = "munki.change_munkistate"
+    template_name = "munki/force_machine_full_sync_confirm.html"
+
+    def get_munki_state(self):
+        self.machine = MetaMachine.from_urlsafe_serial_number(self.kwargs["urlsafe_serial_number"])
+        self.munki_state = get_object_or_404(MunkiState, machine_serial_number=self.machine.serial_number)
+
+    def get_context_data(self, **kwargs):
+        self.get_munki_state()
+        ctx = super().get_context_data(**kwargs)
+        ctx["machine"] = self.machine
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self.get_munki_state()
+        self.munki_state.force_full_sync()
+        messages.info(request, f"Full sync forced during next Munki run for machine {self.machine.serial_number}")
+        return redirect(self.machine.get_absolute_url())

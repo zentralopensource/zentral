@@ -1,7 +1,7 @@
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.munki.compliance_checks import MunkiScriptCheck
-from zentral.contrib.munki.models import Configuration, Enrollment, EnrolledMachine, ScriptCheck
+from zentral.contrib.munki.models import Configuration, Enrollment, EnrolledMachine, MunkiState, ScriptCheck
 from zentral.core.compliance_checks.models import ComplianceCheck
 
 
@@ -76,3 +76,11 @@ def make_enrolled_machine(enrollment, tag_name=None):
         tag = Tag.objects.create(name=tag_name)
         MachineTag.objects.create(serial_number=em.serial_number, tag=tag)
     return em
+
+
+def force_munki_state(serial_number=None):
+    return MunkiState.objects.create(
+        machine_serial_number=serial_number or get_random_string(12),
+        munki_version="6.5.1",
+        user_agent="Zentral/munkipostflight 0.14",
+    )

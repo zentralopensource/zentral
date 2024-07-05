@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
+  <li class="breadcrumb-item active">Machines</li>
+  <li class="breadcrumb-item active">{{ machine.serial_number }}</li>
+  <li class="breadcrumb-item active">Force full sync</li>
+</ol>
+
+<h3>Force full machine sync</h3>
+
+<p>Do you really want to force a full machine sync during the next Munki run?</p>
+
+<form method="POST">{% csrf_token %}
+  <a href="{{ machine.get_absolute_url }}" class="btn btn-outline-secondary">No</a>
+  <button type="submit" class="btn btn-danger">Yes</button>
+</form>
+{% endblock %}

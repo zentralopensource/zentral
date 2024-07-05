@@ -5,4 +5,4 @@ class ZentralMunkiAppConfig(ZentralAppConfig):
     name = "zentral.contrib.munki"
     default = True
     verbose_name = "Zentral Munki contrib app"
-    permission_models = ("configuration", "enrollment", "scriptcheck")
+    permission_models = ("configuration", "enrollment", "munkistate", "scriptcheck")
