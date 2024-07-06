@@ -127,7 +127,7 @@ def get_script_check_data(
     sca = {
         "name": f'[mSCP] - {section_data["name"]} - {title}',
         "description": discussion,
-        "source": escape_terraform_string(source),
+        "source": source,
     }
     # type
     raw_expected_result = False
