@@ -63,8 +63,11 @@ def get_rule_custom_data(repository, custom_dir, rule):
             return load(f, Loader=SafeLoader)
 
 
-def escape_terraform_string(s):
-    return s.replace("${", "$${").replace("%{", "%%{").replace('"', '\\"')
+def escape_terraform_string(s, double_quotes=True):
+    s = s.replace("${", "$${").replace("%{", "%%{")
+    if double_quotes:
+        s = s.replace('"', '\\"')
+    return s
 
 
 def set_odv(s, odv):
@@ -127,7 +130,7 @@ def get_script_check_data(
     sca = {
         "name": f'[mSCP] - {section_data["name"]} - {title}',
         "description": discussion,
-        "source": escape_terraform_string(source),
+        "source": escape_terraform_string(source, double_quotes=False),
     }
     # type
     raw_expected_result = False
