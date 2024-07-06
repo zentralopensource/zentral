@@ -62,7 +62,7 @@ backend "http" {
 <p>The other arguments can be specified via the <code>init</code> command line:</p>
 
 {% codeexample 'bash' %}
-tofu init \
+terraform init \
   -backend-config="username=$ZTL_USERNAME" \
   -backend-config="password=$ZTL_API_TOKEN"
 {% endcodeexample %}
