@@ -40,7 +40,6 @@ def get_rule_data(repository, rule):
         for filename in filenames:
             if filename.startswith(rule):
                 filepath = os.path.join(
-                    repository,
                     dirpath,
                     filename
                 )
@@ -228,13 +227,32 @@ def main():
         description='Takes a mSCP guideline YAML file '
                     'and build the Terraform Munki script checks resources.',
     )
-    parser.add_argument("guidance_file")
-    parser.add_argument("repository")
-    parser.add_argument("output_file")
-    parser.add_argument("--custom-dir")
+    parser.add_argument(
+        "guidance_file",
+        help="Path of the mSCP guidance file, usually in the `build/guidances` "
+             "subfolder of the cloned mSCP repository"
+    )
+    parser.add_argument(
+        "repository",
+        help="Path of the mSCP cloned repository"
+    )
+    parser.add_argument(
+        "output_file",
+        help="Path of the Terraform output file"
+    )
     parser.add_argument("--min-os-version", default="")
     parser.add_argument("--max-os-version", default="")
-    parser.add_argument("--default-odv-source", default="recommended")
+    parser.add_argument(
+        "--custom-dir",
+        help="Path of the folder containing the custom ODVs. "
+             "Defaults to the `custom` subfolder of the cloned mSCP repository"
+    )
+    parser.add_argument(
+        "--default-odv-source",
+        default="recommended",
+        help="Key of the default ODV values to choose in the rule definition file, "
+             "if no custom value is found. Defaults to `recommended`"
+    )
     args = parser.parse_args()
     generate_terraform_resources(
         args.guidance_file,
