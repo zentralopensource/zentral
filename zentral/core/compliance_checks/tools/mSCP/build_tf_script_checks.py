@@ -87,17 +87,21 @@ def get_script_check_data(
     source = rule_data["check"].strip()
 
     try:
-        string_result = str(result["string"])
-    except KeyError:
-        string_result = ""
-    try:
         base64_result = str(result["base64"])
     except KeyError:
         base64_result = ""
+    try:
+        integer_result = str(result["integer"])
+    except KeyError:
+        integer_result = ""
+    try:
+        string_result = str(result["string"])
+    except KeyError:
+        string_result = ""
     # $ODV
     if any(
         "$ODV" in s
-        for s in (title, discussion, source, string_result, base64_result)
+        for s in (title, discussion, source, base64_result, integer_result, string_result)
     ):
         odv = None
         try:
@@ -114,8 +118,9 @@ def get_script_check_data(
             title = set_odv(title, odv)
             discussion = set_odv(discussion, odv)
             source = set_odv(source, odv)
-            string_result = set_odv(string_result, odv)
             base64_result = set_odv(base64_result, odv)
+            integer_result = set_odv(integer_result, odv)
+            string_result = set_odv(string_result, odv)
         else:
             print("  🔥 Missing $ODV!")
             return
@@ -131,7 +136,7 @@ def get_script_check_data(
         sc_expected_result = escape_terraform_string(string_result)
     elif "integer" in result:
         sc_type = "ZSH_INT"
-        sc_expected_result = str(rule_data["result"]["integer"])
+        sc_expected_result = escape_terraform_string(integer_result)
     elif "boolean" in result:
         sc_type = "ZSH_BOOL"
         sc_expected_result = str(rule_data["result"]["boolean"])
