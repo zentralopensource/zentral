@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load bootstrap inventory_extras %}
+{% load bootstrap base_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -15,7 +15,7 @@
   <dt class="col-sm-3 text-md-end">Name</dt>
   <dd class="col-sm-9">{{ machine.computer_name|default:"-" }}</dd>
   <dt class="col-sm-3 text-md-end">Serial number</dt>
-  <dd class="col-sm-9">{{ machine.serial_number }}</dd>
+  <dd class="col-sm-9">{{ machine.serial_number|privacywrapper }}</dd>
   <dt class="col-sm-3 text-md-end">Tags</dt>
   <dd class="col-sm-9">
     {% for tag in machine.tags %}

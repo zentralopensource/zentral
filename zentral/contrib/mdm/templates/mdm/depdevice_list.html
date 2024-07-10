@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
+{% load base_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -48,7 +48,7 @@
         {% for dep_device in object_list %}
         <tr>
         <td>
-            <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.serial_number }}</a>
+            <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.serial_number|privacywrapper }}</a>
             {% if dep_device.is_deleted %}
             <span class="label label-danger">DELETED</span>
             {% endif %}

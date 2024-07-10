@@ -1,11 +1,12 @@
 {% extends 'base.html' %}
+{% load base_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
-  <li class="breadcrumb-item"><a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device.udid|privacywrapper }}</a></li>
   <li class="breadcrumb-item active">Create {{ command_class_display }} command</li>
 </ol>
 

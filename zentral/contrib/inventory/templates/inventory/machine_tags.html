@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load base_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-  <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ machine.serial_number|privacywrapper }}</a></li>
   <li class="breadcrumb-item active">Tags</li>
 </ol>
 

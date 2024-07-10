@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load incidents_extras inventory_extras ui_extras %}
+{% load base_extras incidents_extras inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -302,7 +302,7 @@
         {% base_machine_type_icon machine_snapshot.type %}
         {% base_machine_platform_icon machine_snapshot.platform %}
 	    <a href="{% url 'inventory:machine' machine_snapshot.urlsafe_serial_number %}">
-          {{ serial_number }}
+          {{ serial_number|privacywrapper }}
         </a>
         </td>
         <td rowspan="{{ machine_snapshots|length }}">

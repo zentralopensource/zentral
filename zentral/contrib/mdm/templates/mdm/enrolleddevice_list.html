@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
+{% load base_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -51,9 +51,9 @@
             {% with enrolled_device.get_urlsafe_serial_number as urlsafe_serial_number %}
             {% if urlsafe_serial_number %}
             {% if perms.inventory.view_machinsnapshot %}
-            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ enrolled_device.serial_number|default:"-" }}</a>
+            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ enrolled_device.serial_number|default:"-"|privacywrapper }}</a>
             {% else %}
-            {{ enrolled_device.serial_number|default:"-" }}
+            {{ enrolled_device.serial_number|default:"-"|privacywrapper }}
             {% endif %}
             {% else %}
             -
@@ -61,7 +61,7 @@
             {% endwith %}
         </td>
         <td>
-            <a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device.udid }}</a>
+            <a href="{% url 'mdm:enrolled_device' enrolled_device.pk %}">{{ enrolled_device.udid|privacywrapper }}</a>
         </td>
         <td>{{ enrolled_device.model|default:"-" }}</td>
         <td>{{ enrolled_device.name|default:"-" }}</td>

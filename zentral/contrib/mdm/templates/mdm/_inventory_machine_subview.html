@@ -1,3 +1,4 @@
+{% load base_extras %}
 {% if enrolled_devices %}
 <h3>MDM</h3>
 {% if err_message %}
@@ -8,9 +9,9 @@
   <dt class="col-sm-3 text-md-end">Device</dt>
   <dd class="col-sm-9">
     {% if can_view_device %}
-    <a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a>
+    <a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device.udid|privacywrapper }}</a>
     {% else %}
-    {{ enrolled_device }}
+    {{ enrolled_device.udid|privacywrapper }}
     {% endif %}
   </dd>
   <dt class="col-sm-3 text-md-end">User{{ users|pluralize }}</dt>

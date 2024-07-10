@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
-{% load incidents_extras inventory_extras %}
+{% load base_extras incidents_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
     <li class="breadcrumb-item"><a href="/">Home</a></li>
     <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-    <li class="breadcrumb-item active">{{ serial_number }}</li>
+    <li class="breadcrumb-item active">{{ serial_number|privacywrapper }}</li>
 </ol>
 
 <div class="row">
@@ -13,7 +13,7 @@
     <h2>
       {% machine_type_icon machine %}
       {% machine_platform_icon machine %}
-      {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}{{ serial_number }}
+      {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}{{ serial_number|privacywrapper }}
     </h2>
 
     <p>
@@ -137,7 +137,7 @@
         {% endif %}
         {% if system_info.hardware_serial %}
         <dt class="col-sm-3 text-md-end">Hardware serial</dt>
-        <dd class="col-sm-9">{{ system_info.hardware_serial }}</dd>
+        <dd class="col-sm-9">{{ system_info.hardware_serial|privacywrapper }}</dd>
         {% endif %}
         {% if system_info.cpu_brand %}
         <dt class="col-sm-3 text-md-end">CPU brand</dt>

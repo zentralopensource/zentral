@@ -1,17 +1,17 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
+{% load base_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
-  <li class="breadcrumb-item active">{{ object }}</li>
+  <li class="breadcrumb-item active">{{ object.udid|privacywrapper }}</li>
 </ol>
 
 <div class="object-details">
     <div class="d-flex align-items-center mb-1">
-        <h2 class="m-0">{{ object }}</h2>
+        <h2 class="m-0">{{ object.udid|privacywrapper }}</h2>
     </div>
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Device</h3>
@@ -21,7 +21,7 @@
     <tbody>
         <tr>
         <th style="width:220px">UDID</th>
-        <td><code>{{ object.udid }}</code></th>
+        <td><code>{{ object.udid|privacywrapper }}</code></th>
         </tr>
         <tr>
         <th>Serial number</th>
@@ -29,9 +29,9 @@
             {% with object.get_urlsafe_serial_number as urlsafe_serial_number %}
             {% if urlsafe_serial_number %}
             {% if perms.inventory.view_machinesnapshot %}
-            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number }}</a>
+            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number|privacywrapper }}</a>
             {% else %}
-            {{ object.serial_number }}
+            {{ object.serial_number|privacywrapper }}
             {% endif %}
             {% else %}
             -

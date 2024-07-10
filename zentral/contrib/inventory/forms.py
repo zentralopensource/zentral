@@ -167,9 +167,10 @@ class AddTagForm(forms.Form):
         new_tag_name = cleaned_data.get("new_tag_name")
         if not existing_tag:
             if not new_tag_name or not new_tag_name.strip():
-                msg = "You must select an existing tag or enter a name for a new tag"
-                self.add_error('existing_tag', msg)
-                self.add_error('new_tag_name', msg)
+                if not self.has_error("existing_tag"):
+                    msg = "You must select an existing tag or enter a name for a new tag"
+                    self.add_error('existing_tag', msg)
+                    self.add_error('new_tag_name', msg)
             else:
                 t = Tag(name=new_tag_name, slug=slugify(new_tag_name))
                 try:

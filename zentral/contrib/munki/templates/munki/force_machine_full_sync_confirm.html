@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load base_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'munki:index' %}">Munki</a></li>
   <li class="breadcrumb-item active">Machines</li>
-  <li class="breadcrumb-item active">{{ machine.serial_number }}</li>
+  <li class="breadcrumb-item active">{{ machine.serial_number|privacywrapper }}</li>
   <li class="breadcrumb-item active">Force full sync</li>
 </ol>
 

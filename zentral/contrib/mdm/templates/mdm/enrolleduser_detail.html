@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
+{% load base_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
-  <li class="breadcrumb-item"><a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device.udid|privacywrapper }}</a></li>
   <li class="breadcrumb-item active">User {{ object }}</li>
 </ol>
 
@@ -22,7 +22,7 @@
     <tbody>
         <tr>
         <th style="width:160px">User ID</th>
-        <td><code>{{ object.user_id }}</code></th>
+        <td><code>{{ object.user_id|privacywrapper }}</code></th>
         </tr>
         <tr>
         <th>Short name</th>
@@ -36,9 +36,9 @@
         <th>Device</th>
         <td>
             {% if perms.mdm.view_enrolleddevice %}
-            <a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a>
+            <a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device.udid|privacywrapper }}</a>
             {% else %}
-            {{ enrolled_device }}
+            {{ enrolled_device.udid|privacywrapper }}
             {% endif %}
         </td>
     </tbody>

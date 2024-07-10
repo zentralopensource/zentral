@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
+{% load base_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -148,9 +148,9 @@
         <tr id="{{ device.serial_number }}" class="data-row">
           <td>
             {% if perms.mdm.view_depdevice %}
-            <a href="{{ device.get_absolute_url }}">{{ device }}</a>
+            <a href="{{ device.get_absolute_url }}">{{ device.serial_number|privacywrapper }}</a>
             {% else %}
-            {{ device }}
+            {{ device.serial_number|privacywrapper }}
             {% endif %}
             {% if device.is_deleted %} <span class="label label-danger">DELETED</span>{% endif %}</td>
           <td>

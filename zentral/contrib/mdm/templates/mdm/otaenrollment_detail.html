@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras ui_extras %}
+{% load base_extras inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -123,7 +123,7 @@
     <tbody>
         <tr>
         <th style="width:160px">Serial number{{ secret.serial_numbers|length|pluralize }}</th>
-        <td>{% for serial_number, urlsafe_serial_number in secret.urlsafe_serial_numbers %}{{ serial_number }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
+        <td>{% for serial_number, urlsafe_serial_number in secret.urlsafe_serial_numbers %}{{ serial_number|privacywrapper }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
         </tr>
         <tr>
         <th>UDID{{ secret.udids|length|pluralize }}</th>
@@ -197,9 +197,9 @@
         {% with s.get_serial_number as sn %}
         {% if sn %}
         {% if perms.mdm.view_enrolleddevice and s.enrolled_device %}
-        <a href="{% url 'mdm:enrolled_device' s.enrolled_device.pk %}">{{ sn }}</a>
+        <a href="{% url 'mdm:enrolled_device' s.enrolled_device.pk %}">{{ sn|privacywrapper }}</a>
         {% else %}
-        {{ sn }}
+        {{ sn|privacywrapper }}
         {% endif %}
         {% else %}
         -

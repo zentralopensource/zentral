@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
+{% load base_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:dep_devices' %}">DEP devices</a></li>
-  <li class="breadcrumb-item active">{{ object }}</li>
+  <li class="breadcrumb-item active">{{ object.serial_number|privacywrapper }}</li>
 </ol>
 
 <div class="object-details">
@@ -35,9 +35,9 @@
         <td>
             {% with object.get_urlsafe_serial_number as urlsafe_serial_number %}
             {% if perms.inventory.view_machinesnapshot %}
-            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number }}</a>
+            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number|privacywrapper }}</a>
             {% else %}
-            {{ object.serial_number }}
+            {{ object.serial_number|privacywrapper }}
             {% endif %}
             {% endwith %}
         </td>
@@ -81,7 +81,7 @@
         </tr>
         <tr>
         <th>Assigned by</th>
-        <td>{{ object.device_assigned_by|default:"-" }}</td>
+        <td>{{ object.device_assigned_by|default:"-"|privacywrapper }}</td>
         </tr>
         <tr>
         <th>Assign time</th>

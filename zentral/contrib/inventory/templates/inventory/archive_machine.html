@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
+{% load base_extras inventory_extras %}
 
 {% block content %}
 <div class="row">
@@ -7,14 +7,14 @@
     <ol class="breadcrumb">
       <li class="breadcrumb-item"><a href="/">Home</a></li>
       <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
-      <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a></li>
+      <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ machine.serial_number|privacywrapper }}</a></li>
       <li class="breadcrumb-item active">archive</li>
     </ol>
 
     <h2>
       {% machine_type_icon machine %}
       {% machine_platform_icon machine %}
-      {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}{{ machine.serial_number }}
+      {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}{{ machine.serial_number|privacywrapper }}
     </h2>
 
     <p>

@@ -1,3 +1,4 @@
+{% load base_extras %}
 {% if enrolled_machine %}
 <h3>Santa</h3>
 {% if err_message %}
@@ -12,7 +13,7 @@
   <dd class="col-sm-9">{{ enrolled_machine.primary_user|default:"-" }}</dd>
   {% if enrolled_machine.hardware_uuid %}
   <dt class="col-sm-3 text-md-end">UUID</dt>
-  <dd class="col-sm-9">{{ enrolled_machine.hardware_uuid }}</dd>
+  <dd class="col-sm-9">{{ enrolled_machine.hardware_uuid|privacywrapper }}</dd>
   {% endif %}
   <dt class="col-sm-3 text-md-end">Client mode</dt>
   <dd class="col-sm-9">{{ enrolled_machine.get_client_mode_display }}</dd>

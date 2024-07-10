@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
-{% load ui_extras %}
+{% load base_extras inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -203,7 +202,7 @@
         <td>
             <ul>
             {% for serial_number in rule.serial_numbers %}
-            <li>{{ serial_number }}</li>
+            <li>{{ serial_number|privacywrapper }}</li>
             {% endfor %}
             </ul>
         </td>
@@ -215,7 +214,7 @@
         <td>
             <ul>
             {% for serial_number in rule.excluded_serial_numbers %}
-            <li>{{ serial_number }}</li>
+            <li>{{ serial_number|privacywrapper }}</li>
             {% endfor %}
             </ul>
         </td>

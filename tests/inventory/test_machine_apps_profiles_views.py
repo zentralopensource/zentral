@@ -11,7 +11,7 @@ from accounts.models import User
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
-class MachineAppsViewsTestCase(TestCase):
+class MachineAppsProfilesViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # user
@@ -85,6 +85,36 @@ class MachineAppsViewsTestCase(TestCase):
                          }
                      }
                  }}
+            ],
+            'profiles': [
+                {'display_name': 'Zentral - FileVault configuration',
+                 'encrypted': False,
+                 'has_removal_passcode': False,
+                 'identifier': 'com.zentral.mdm.fv',
+                 'payloads': [{'identifier': 'com.zentral.mdm.fv.escrow',
+                               'type': 'com.apple.security.FDERecoveryKeyEscrow',
+                               'uuid': '6cc2b5a5-d48c-46cf-9f08-59207b9b61f3'},
+                              {'identifier': 'com.zentral.mdm.fv.options',
+                               'type': 'com.apple.MCX',
+                               'uuid': 'dcddb0ec-5429-4148-9054-ad49f12256e7'},
+                              {'identifier': 'com.zentral.mdm.fv.configuration',
+                               'type': 'com.apple.MCX.FileVault2',
+                               'uuid': '3bac4ab2-835b-4786-a538-a36ba8175e32'},
+                              {'identifier': 'com.zentral.mdm.fv.certificate',
+                               'type': 'com.apple.security.pkcs1',
+                               'uuid': '5328b541-893e-4a5d-bb91-84900062fd9f'}],
+                 'removal_disallowed': False,
+                 'signed_by': {'common_name': 'yolo.example.com',
+                               'sha_1': '1111111111111111111111111111111111111111',
+                               'signed_by': {'common_name': 'E5',
+                                             'organization': "Let's Encrypt",
+                                             'sha_1': '5f28d9c589ee4bf31a11b78c72b8d13f079ddc45',
+                                             'valid_from': '2024-03-13T00:00:00',
+                                             'valid_until': '2027-03-12T23:59:59'},
+                               'valid_from': '2024-06-01T13:29:01',
+                               'valid_until': '2024-09-01T13:29:00'},
+                 'uuid': '0b0d3f67-977d-4d3f-bfc8-0db5fdf6c391',
+                 'verified': True}
             ],
             "program_instances": [
                 {"program": {"name": "program_1", "version": "1.1"},
@@ -188,6 +218,23 @@ class MachineAppsViewsTestCase(TestCase):
         self.assertContains(response, "macOS apps", status_code=200)
         self.assertContains(response, "Baller.app")
         self.assertContains(response, "io.zentral.baller")
+
+    # Profiles
+
+    def test_machine_profiles_redirect(self):
+        self._login_redirect(reverse("inventory:machine_profiles", args=(self.ms.serial_number,)))
+
+    def test_machine_profiles_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("inventory:machine_profiles", args=(self.ms.serial_number,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_machine_profiles(self):
+        self._login("inventory.view_machinesnapshot")
+        response = self.client.get(reverse("inventory:machine_profiles", args=(self.ms.serial_number,)))
+        self.assertTemplateUsed(response, "inventory/machine_profiles.html")
+        self.assertContains(response, "Profiles", status_code=200)
+        self.assertContains(response, "Zentral - FileVault configuration")
 
     # Programs
 

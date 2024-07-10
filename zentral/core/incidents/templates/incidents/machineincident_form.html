@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% load incidents_extras inventory_extras %}
+{% load base_extras incidents_extras inventory_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'incidents:index' %}">Incidents</a>
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ incident.name }}</a></li>
-  <li class="breadcrumb-item active">{{ object.serial_number }}</li>
+  <li class="breadcrumb-item active">{{ object.serial_number|privacywrapper }}</li>
   <li class="breadcrumb-item active">update</li>
 </ol>
 
@@ -15,7 +15,7 @@
 <p>{% incident_severity incident.severity %}</p>
 <dl class="row">
   <dt class="col-sm-3 text-md-end">Machine</dt>
-  <dd class="col-sm-9"><a href="{% machine_url object.serial_number %}">{{ object.serial_number }}</a></dd>
+  <dd class="col-sm-9"><a href="{% machine_url object.serial_number %}">{{ object.serial_number|privacywrapper }}</a></dd>
   <dt class="col-sm-3 text-md-end">Current status</dt>
   <dd class="col-sm-9">{{ object.get_status_display }}</dd>
   <dt class="col-sm-3 text-md-end">Created at</dt>

@@ -82,17 +82,5 @@ class InventoryLoginRedirectTestCase(TestCase):
     def test_business_units_detach_bu(self):
         self.login_redirect("detach_bu", self.mbu_id, self.bu_id)
 
-    def test_machine_events(self):
-        self.login_redirect("machine_events", self.ms.serial_number)
-
-    def test_machine_tags(self):
-        self.login_redirect("machine_tags", self.ms.serial_number)
-
-    def test_remove_machine_tag(self):
-        self.login_redirect("remove_machine_tag", self.ms.serial_number, self.tag1.id)
-
-    def test_archive_machine(self):
-        self.login_redirect("archive_machine", self.ms.serial_number)
-
     def test_machine(self):
         self.login_redirect("machine", self.ms.serial_number)

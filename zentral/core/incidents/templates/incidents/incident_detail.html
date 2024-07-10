@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load ui_extras incidents_extras inventory_extras %}
+{% load base_extras incidents_extras inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -96,9 +96,9 @@
     <tr class="data-row">
       <td id="{{ machine_incident.pk }}">
         {% if perms.inventory.view_machinesnapshot %}
-        <a href="{% machine_url machine_incident.serial_number %}">{{ machine_incident.serial_number }}</a>
+        <a href="{% machine_url machine_incident.serial_number %}">{{ machine_incident.serial_number|privacywrapper }}</a>
         {% else %}
-        {{ machine_incident.serial_number }}
+        {{ machine_incident.serial_number|privacywrapper }}
         {% endif %}
       </td>
       <td>{{ machine_incident.get_status_display }}</td>

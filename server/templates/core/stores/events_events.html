@@ -12,9 +12,9 @@
       {% machine_type_icon  machine %}
       {% machine_platform_icon machine %}
       {% if perms.inventory.view_machinesnapshot %}
-      <a href="{{ machine.get_absolute_url }}">{{ machine.serial_number }}</a>
+      <a href="{{ machine.get_absolute_url }}">{{ machine.serial_number|privacywrapper }}</a>
       {% else %}
-      {{ machine.serial_number }}
+      {{ machine.serial_number|privacywrapper }}
       {% endif %}
     </p>
     {% endif %}

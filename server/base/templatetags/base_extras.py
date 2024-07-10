@@ -7,6 +7,7 @@ from django.template.defaultfilters import stringfilter
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from pygments import lexers, highlight
 from pygments.formatters import HtmlFormatter
@@ -203,3 +204,9 @@ def duration_repr(val):
 @register.simple_tag
 def get_latest_open_incidents(latest=10):
     return Incident().get_open(latest=latest)
+
+
+@register.filter()
+def privacywrapper(val):
+    escaped_val = escape(val)
+    return mark_safe(f'<span class="private-content">{escaped_val}</span>')

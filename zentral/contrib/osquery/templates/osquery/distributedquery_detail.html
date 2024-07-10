@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
-{% load ui_extras %}
+{% load base_extras inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -67,7 +66,13 @@
       </tr>
       <tr>
         <td>Serial number{{ object.serial_numbers|length|pluralize }}</td>
-        <td>{{ object.serial_numbers|default:"-"|join:", " }}</td>
+        <td>
+          {% for serial_number in object.serial_numbers %}
+          {{ serial_number|privacywrapper }}{% if not forloop.last %}, {% endif %}
+          {% empty %}
+          -
+          {% endfor %}
+        </td>
       </tr>
       <tr>
         <td>Tag{{ object.tags.count|pluralize }}</td>

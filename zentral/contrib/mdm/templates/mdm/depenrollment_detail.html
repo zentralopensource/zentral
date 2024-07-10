@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras %}
-{% load ui_extras %}
+{% load base_extras inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -265,7 +264,7 @@
     {% for device in object.depdevice_set.all %}
     <tr>
       <td>
-        <a name="{{ device.serial_number }}" href="{{ device.get_absolute_url }}">{{ device.serial_number }}</a>
+        <a name="{{ device.serial_number }}" href="{{ device.get_absolute_url }}">{{ device.serial_number|privacywrapper }}</a>
         {% if device.is_deleted %}
         <span class="label label-danger">DELETED</span>
         {% endif %}
@@ -301,9 +300,9 @@
         {% with s.get_serial_number as sn %}
         {% if sn %}
         {% if perms.mdm.view_enrolleddevice and s.enrolled_device %}
-        <a href="{% url 'mdm:enrolled_device' s.enrolled_device.pk %}">{{ sn }}</a>
+        <a href="{% url 'mdm:enrolled_device' s.enrolled_device.pk %}">{{ sn|privacywrapper }}</a>
         {% else %}
-        {{ sn }}
+        {{ sn|privacywrapper }}
         {% endif %}
         {% else %}
         -

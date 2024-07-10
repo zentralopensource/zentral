@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras ui_extras %}
+{% load base_extras inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -81,7 +81,7 @@
           {% for serial_number, row in rows %}
           <tr>
             <th style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-              <a href="{% machine_url serial_number %}">{{ serial_number }}</a>
+              <a href="{% machine_url serial_number %}">{{ serial_number|privacywrapper }}</a>
             </th>
             {% for cell in row %}
             <td>{{ cell|default:"-" }}</td>
@@ -96,7 +96,7 @@
     <table class="table table-striped align-middle">
       <thead>
         <tr>
-          <th colspan="2"><a href="{% machine_url object.serial_number %}">{{ object.serial_number }}</a></th>
+          <th colspan="2"><a href="{% machine_url object.serial_number %}">{{ object.serial_number|privacywrapper }}</a></th>
         </tr>
       </thead>
       <tbody>
