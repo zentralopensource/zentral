@@ -27,7 +27,7 @@ cryptography==42.0.8
 decorator==5.1.1
 defusedxml==0.7.1
 Deprecated==1.2.14
-Django==4.2.13
+Django==4.2.14
 django-bootstrap-form==3.4
 django-celery-results==2.4.0
 django-filter==24.2
