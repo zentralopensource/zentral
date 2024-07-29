@@ -54,7 +54,7 @@ class SantaAPIViewsTestCase(TestCase):
 
     # preflight
 
-    def _get_preflight_data(self, version=None, enrolled=False):
+    def _get_preflight_data(self, version=None, enrolled=False, legacy=False):
         if version is None:
             version = datetime.utcnow().strftime("%Y.2")
         if enrolled:
@@ -69,7 +69,8 @@ class SantaAPIViewsTestCase(TestCase):
             "hostname": "hostname",
             "os_version": "11.1",
             "client_mode": "LOCKDOWN",
-            "serial_num": serial_number,
+            "serial_number": serial_number,
+            "machine_id": str(hardware_uuid),
             "primary_user": "mark.torpedo@example.com",
             "binary_rule_count": 0,
             "cdhash_rule_count": 0,
@@ -79,6 +80,10 @@ class SantaAPIViewsTestCase(TestCase):
             "teamid_rule_count": 0,
             "transitive_rule_count": 0,
         }
+        if legacy:
+            # pre 2024.6
+            del data["machine_id"]
+            data["serial_num"] = data.pop("serial_number")
         return data, serial_number, hardware_uuid
 
     def test_preflight_bad_secret(self):
@@ -91,7 +96,7 @@ class SantaAPIViewsTestCase(TestCase):
 
     def test_preflight_missing_serial_num(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
-        data.pop("serial_num")
+        data.pop("serial_number")
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 400)
 
@@ -169,6 +174,17 @@ class SantaAPIViewsTestCase(TestCase):
         ms = MachineSnapshot.objects.get(serial_number=serial_number)
         self.assertEqual(ms.source.name, "Santa")
         self.assertIsNone(ms.system_info.hardware_model)
+
+    def test_legacy_preflight(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data(legacy=True)
+        response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
+        self.assertEqual(json_response["full_sync_interval"], Configuration.DEFAULT_FULL_SYNC_INTERVAL)
+        self.assertEqual(json_response["sync_type"], "clean")
+        self.assertTrue(json_response["blocked_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
+        self.assertTrue(json_response["allowed_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
 
     def test_deprecated_preflight(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()

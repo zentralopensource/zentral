@@ -128,10 +128,12 @@ class PreflightView(BaseSyncView):
         return None
 
     def _get_serial_number(self):
-        serial_number = self.request_data.get("serial_num")
-        if not serial_number:
-            raise SuspiciousOperation("Missing or empty serial_num")
-        return serial_number
+        for key in ("serial_number", "serial_num"):
+            if key in self.request_data:
+                serial_num = self.request_data[key]
+                if serial_num:
+                    return serial_num
+        raise SuspiciousOperation("Missing or empty serial number")
 
     def _get_enrolled_machine_defaults(self):
         serial_number = self._get_serial_number()
