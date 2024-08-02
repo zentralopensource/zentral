@@ -313,6 +313,7 @@ class EnrolledMachine(models.Model):
         }
         ok = True
         for target_type, attr in ((Target.BINARY, "binary_rule_count"),
+                                  (Target.CDHASH, "cdhash_rule_count"),
                                   (Target.CERTIFICATE, "certificate_rule_count"),
                                   (Target.SIGNING_ID, "signingid_rule_count"),
                                   (Target.TEAM_ID, "teamid_rule_count")):

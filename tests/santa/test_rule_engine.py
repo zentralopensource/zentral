@@ -173,6 +173,28 @@ class SantaRuleEngineTestCase(TestCase):
         self.enrolled_machine.teamid_rule_count = 1
         self.assertFalse(self.enrolled_machine.sync_ok())
 
+    def test_multiple_rules_missing_cdhash_sync_not_ok(self):
+        for target_type, count in ((Target.BINARY, 2), (Target.CDHASH, 1),):
+            for i in range(count):
+                # create rule
+                target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=target_type)
+                # sync rule
+                if target_type == Target.CDHASH:
+                    continue
+                MachineRule.objects.create(
+                    enrolled_machine=self.enrolled_machine,
+                    target=target,
+                    policy=rule.policy,
+                    version=rule.version,
+                    cursor=None
+                )
+        self.enrolled_machine.binary_rule_count = 2
+        self.enrolled_machine.cdhash_rule_count = 1
+        self.enrolled_machine.certificate_rule_count = 0
+        self.enrolled_machine.signingid_rule_count = 0
+        self.enrolled_machine.teamid_rule_count = 0
+        self.assertFalse(self.enrolled_machine.sync_ok())
+
     def test_multiple_rules_cursor_sync_not_ok(self):
         for target_type, count in ((Target.BINARY, 4),
                                    (Target.CDHASH, 3),
