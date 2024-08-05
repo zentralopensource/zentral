@@ -6,22 +6,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit,
 from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
                                           MachineRule, Rule, Target, translate_rule_policy)
 from zentral.contrib.santa.forms import test_cdhash, test_signing_id_identifier
-
-
-def new_cdhash():
-    return get_random_string(length=40, allowed_chars='abcdef0123456789')
-
-
-def new_sha256():
-    return get_random_string(length=64, allowed_chars='abcdef0123456789')
-
-
-def new_team_id():
-    return get_random_string(10, allowed_chars="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-
-def new_signing_id_identifier():
-    return ":".join((new_team_id(), get_random_string(10, allowed_chars="abcdefghij")))
+from .utils import new_cdhash, new_sha256, new_team_id, new_signing_id_identifier
 
 
 class SantaRuleEngineTestCase(TestCase):
