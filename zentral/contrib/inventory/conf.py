@@ -247,7 +247,7 @@ def macos_version_from_build(build):
             if build in ("21A558", "21A559", "21D62", "21E258", "21G83", "21G217", "21G920",
                          "22A400", "22D68", "22E261", "22E772610a", "22F82", "22F770820b", "22F770820d",
                          "22G90", "22G313",
-                         "23B81", "23B2082", "23C71", "23D60"):
+                         "23B81", "23B2082", "23C71", "23D60", "23G93"):
                 patch = 1
             elif build in ("21G309", "21G320", "21G1974",
                            "22G91", "22G320",
@@ -255,21 +255,21 @@ def macos_version_from_build(build):
                 patch = 2
             elif build in ("21G417", "21G419", "21H1015", "22G436"):
                 patch = 3
-            elif build in ("21G526", "22G513", "21H1123"):
+            elif build in ("21G526", "21H1123", "22G513"):
                 patch = 4
-            elif build in ("21G531", "22G621"):
+            elif build in ("21G531", "21H1222", "22G621"):
                 patch = 5
-            elif build == "21G646":
+            elif build in ("21G646", "21H1320", "22G630"):
                 patch = 6
-            elif build == "21G651":
+            elif build in ("21G651", "22G720"):
                 patch = 7
-            elif build == "21G725":
+            elif build in ("21G725", "22G820"):
                 patch = 8
             elif build == "21G726":
                 patch = 9
             else:
                 patch = 0
-            if patch_letter >= "G" and patch_number >= 816:
+            if patch_letter >= "G" and major == 12 and patch_number >= 816:
                 minor = 7
             elif patch_letter >= "G" and patch_number >= 115:
                 minor = 6
