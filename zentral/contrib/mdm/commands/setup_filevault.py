@@ -107,6 +107,7 @@ def build_payload(enrolled_device):
 class SetupFileVault(Command):
     request_type = "InstallProfile"
     db_name = "SetupFileVault"
+    reschedule_notnow = True
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
