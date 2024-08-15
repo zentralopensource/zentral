@@ -1311,6 +1311,15 @@ class MDMEnrollment(models.Model):
         else:
             raise ValueError(f"{self.__class__.__name__} {self.pk} cannot be deleted")
 
+    def serialize_for_event(self):
+        return {
+            "pk": self.pk,
+            "name": self.name,
+            "realm": self.realm.serialize_for_events(keys_only=True) if self.realm else None,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        }
+
 
 # OTA Enrollment
 
@@ -1328,10 +1337,7 @@ class OTAEnrollment(MDMEnrollment):
         return self.name
 
     def serialize_for_event(self):
-        d = {"pk": self.pk,
-             "name": self.name,
-             "created_at": self.created_at,
-             "updated_at": self.updated_at}
+        d = super().serialize_for_event()
         d.update(self.enrollment_secret.serialize_for_event())
         return d
 

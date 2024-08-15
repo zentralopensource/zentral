@@ -62,6 +62,29 @@ class Realm(models.Model):
                            "custom_attr_1", "custom_attr_2"):
             yield user_claim, getattr(self, "{}_claim".format(user_claim))
 
+    def serialize_for_events(self, keys_only=False):
+        d = {"pk": str(self.pk),
+             "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "enabled_for_login": self.enabled_for_login,
+            "login_session_expiry": self.login_session_expiry,
+            "backend": self.backend,
+            "config": self.config,
+            "username_claim": self.username_claim,
+            "email_claim": self.email_claim,
+            "first_name_claim": self.first_name_claim,
+            "last_name_claim": self.last_name_claim,
+            "full_name_claim": self.full_name_claim,
+            "custom_attr_1_claim": self.custom_attr_1_claim,
+            "custom_attr_2_claim": self.custom_attr_2_claim,
+            "scim_enabled": self.scim_enabled,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
+
 
 class RealmGroup(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)

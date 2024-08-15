@@ -11,7 +11,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import OTAEnrollment
 from zentral.core.events.base import AuditEvent
 from .utils import (force_blueprint, force_ota_enrollment, force_ota_enrollment_session,
-                    force_push_certificate, force_scep_config)
+                    force_push_certificate, force_realm, force_scep_config)
 
 
 class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
@@ -87,7 +87,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_list_ota_enrollments(self):
-        oe = force_ota_enrollment()
+        realm = force_realm()
+        oe = force_ota_enrollment(realm=realm)
         self.set_permissions("mdm.view_otaenrollment")
         response = self.get(reverse("mdm_api:ota_enrollments"))
         self.assertEqual(response.status_code, 200)
@@ -109,7 +110,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
               'id': oe.pk,
               'name': oe.name,
               'push_certificate': oe.push_certificate.pk,
-              'realm': None,
+              'realm': str(realm.pk),
               'scep_config': oe.scep_config.pk,
               'scep_verification': False,
               'updated_at': oe.updated_at.isoformat()}]
@@ -217,6 +218,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
         name = get_random_string(12)
         blueprint = force_blueprint()
         push_certificate = force_push_certificate()
+        realm = force_realm()
         scep_config = force_scep_config()
         tags = sorted((Tag.objects.create(name=get_random_string(12)) for _ in range(2)), key=lambda t: t.pk)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -228,6 +230,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
                                   },
                                   "name": name,
                                   "push_certificate": push_certificate.pk,
+                                  "realm": str(realm.pk),
                                   "scep_config": scep_config.pk})
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(callbacks), 1)
@@ -261,7 +264,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
              'id': oe.pk,
              'name': name,
              'push_certificate': push_certificate.pk,
-             'realm': None,
+             'realm': str(realm.pk),
              'scep_config': scep_config.pk,
              'scep_verification': False,
              'updated_at': oe.updated_at.isoformat()}
@@ -290,6 +293,10 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
                      },
                      'name': oe.name,
                      'pk': oe.pk,
+                     'realm': {
+                         'pk': str(realm.pk),
+                         'name': realm.name,
+                     },
                      'updated_at': oe.updated_at,
                  }
              }}
@@ -391,6 +398,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
                      },
                      'name': new_name,
                      'pk': oe.pk,
+                     'realm': None,
                      'updated_at': oe.updated_at,
                  },
                  "prev_value": prev_value,
