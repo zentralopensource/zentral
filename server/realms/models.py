@@ -1,4 +1,5 @@
 from datetime import datetime
+from functools import partial
 import logging
 from importlib import import_module
 import uuid
@@ -52,6 +53,16 @@ class Realm(models.Model):
         backend_class = backend_classes.get(self.backend)
         if backend_class:
             return backend_class(self)
+
+    def _get_BACKEND_config(self, backend):
+        if self.backend == backend:
+            return self.config
+
+    def __getattr__(self, name):
+        for backend in backend_classes:
+            if name == f"get_{backend}_config":
+                return partial(self._get_BACKEND_config, backend)
+        raise AttributeError
 
     def get_absolute_url(self):
         return reverse("realms:view", args=(self.uuid,))

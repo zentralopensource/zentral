@@ -27,7 +27,12 @@ class RealmModelsTestCase(TestCase):
         self.assertEqual(
             realm.serialize_for_events(),
             {'backend': 'ldap',
-             'config': {},
+             'config': {
+                 'bind_dn': 'uid=zentral,ou=Users,o=yolo,dc=example,dc=com',
+                 'bind_password': 'yolo',
+                 'host': 'ldap.example.com',
+                 'users_base_dn': 'ou=Users,o=yolo,dc=example,dc=com'
+             },
              'created_at': realm.created_at,
              'custom_attr_1_claim': '',
              'custom_attr_2_claim': '',

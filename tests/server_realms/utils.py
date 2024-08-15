@@ -7,10 +7,32 @@ from realms.models import (Realm, RealmEmail, RealmGroup, RealmGroupMapping, Rea
 from zentral.contrib.inventory.models import Tag
 
 
-def force_realm(enabled_for_login=False):
+def force_realm(backend="ldap", enabled_for_login=False):
+    if backend == "ldap":
+        config = {
+            "host": "ldap.example.com",
+            "bind_dn": "uid=zentral,ou=Users,o=yolo,dc=example,dc=com",
+            "bind_password": "yolo",
+            "users_base_dn": 'ou=Users,o=yolo,dc=example,dc=com',
+        }
+    elif backend == "openidc":
+        config = {
+            "client_id": "yolo",
+            "client_secret": "fomo",
+            "discovery_url": "https://zentral.example.com/.well-known/openid-configuration",
+            "extra_scopes": ["profile"],
+        }
+    elif backend == "saml":
+        config = {
+            'default_relay_state': "29eb0205-3572-4901-b773-fc82bef847ef",
+            'idp_metadata': "<md></md>"
+        }
+    else:
+        raise ValueError("Unknown backend")
     return Realm.objects.create(
         name=get_random_string(12),
-        backend="ldap",
+        backend=backend,
+        config=config,
         username_claim="username",
         email_claim="email",
         enabled_for_login=enabled_for_login,
