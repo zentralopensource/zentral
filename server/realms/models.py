@@ -9,7 +9,6 @@ from django.db.models import Q
 import django.dispatch
 from django.urls import reverse
 from django.utils.functional import cached_property
-from zentral.contrib.inventory.models import Tag
 from accounts.models import User
 from .backends.registry import backend_classes
 
@@ -353,7 +352,7 @@ class RealmTagMapping(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     realm = models.ForeignKey(Realm, on_delete=models.CASCADE)
     group_name = models.CharField(max_length=255)
-    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
+    tag = models.ForeignKey("inventory.Tag", on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
