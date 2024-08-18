@@ -9,9 +9,9 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from realms.utils import build_password_hash_dict
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import DEPDevice, DEPEnrollment
+from zentral.utils.passwords import build_password_hash_dict
 from .utils import (force_dep_enrollment, force_dep_device, force_dep_virtual_server,
                     force_push_certificate, force_realm, force_scep_config)
 

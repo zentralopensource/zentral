@@ -2,12 +2,12 @@ import plistlib
 from unittest.mock import Mock
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from realms.utils import serialize_password_hash_dict
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import AccountConfiguration
 from zentral.contrib.mdm.commands.scheduling import _configure_dep_enrollment_accounts
 from zentral.contrib.mdm.models import Channel, Command, DEPEnrollment, Platform, RequestStatus
+from zentral.utils.passwords import serialize_password_hash_dict
 from .utils import force_dep_enrollment_session, force_enrolled_user, force_ota_enrollment_session
 
 

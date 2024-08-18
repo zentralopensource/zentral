@@ -6,9 +6,9 @@ from dateutil import parser
 from django import forms
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
-from realms.utils import build_password_hash_dict
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.os_version import make_comparable_os_version
+from zentral.utils.passwords import build_password_hash_dict
 from .app_manifest import read_package_info, validate_configuration
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts

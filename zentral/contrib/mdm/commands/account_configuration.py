@@ -1,7 +1,7 @@
 import logging
-from realms.utils import serialize_password_hash_dict
 from zentral.contrib.mdm.models import Channel, Platform, DEPEnrollmentSession
 from zentral.contrib.mdm.payloads import substitute_variables
+from zentral.utils.passwords import serialize_password_hash_dict
 from .base import register_command, Command
 
 

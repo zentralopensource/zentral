@@ -4,8 +4,8 @@ from django.urls import reverse
 import ldap
 from realms.backends.base import BaseBackend
 from realms.exceptions import RealmUserError
-from realms.utils import build_password_hash_dict
 from zentral.utils.json import remove_null_character
+from zentral.utils.passwords import build_password_hash_dict
 
 
 logger = logging.getLogger("zentral.realms.backends.ldap")
