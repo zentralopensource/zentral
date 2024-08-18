@@ -401,7 +401,13 @@
         <dt class="col-sm-3 text-md-end">Source</dt>
         <dd class="col-sm-9">{{ principal_user.source.get_type_display }}</dd>
         <dt class="col-sm-3 text-md-end">Unique ID</dt>
-        <dd class="col-sm-9">{{ principal_user.unique_id }}</dd>
+        <dd class="col-sm-9">
+          {% if principal_user.realm_user and perms.realms.view_realmuser %}
+          <a href="{{ principal_user.realm_user.get_absolute_url }}">{{ principal_user.unique_id }}</a>
+          {% else %}
+          {{ principal_user.unique_id }}
+          {% endif %}
+        </dd>
         <dt class="col-sm-3 text-md-end">Principal name</dt>
         <dd class="col-sm-9">{{ principal_user.principal_name }}</dd>
         {% if principal_user.display_name %}
