@@ -20,6 +20,7 @@ from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
+from realms.models import RealmUser
 from zentral.conf import settings
 from zentral.core.compliance_checks.utils import get_machine_compliance_check_statuses
 from zentral.core.incidents.models import MachineIncident, Status
@@ -499,6 +500,14 @@ class PrincipalUser(AbstractMTObject):
     unique_id = models.TextField(db_index=True)
     principal_name = models.TextField(db_index=True)
     display_name = models.TextField(blank=True, null=True)
+
+    @cached_property
+    def realm_user(self):
+        if self.source.type == PrincipalUserSource.INVENTORY:
+            try:
+                return RealmUser.objects.get(pk=self.unique_id)
+            except RealmUser.DoesNotExist:
+                pass
 
 
 class Payload(AbstractMTObject):

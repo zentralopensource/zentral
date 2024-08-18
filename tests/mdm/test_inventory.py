@@ -135,6 +135,7 @@ class MDMInventoryTestCase(TestCase):
              "principal_name": realm_user.username,
              "display_name": realm_user.get_full_name()}
         )
+        self.assertEqual(ms.principal_user.realm_user, realm_user)
 
     # realm tags
 
