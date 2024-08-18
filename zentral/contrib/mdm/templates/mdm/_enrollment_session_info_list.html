@@ -52,7 +52,15 @@
       </td>
       {% endif %}
       <td>
-        {% if session.realm_username %}{{ session.realm_username }}{% else %}-{% endif %}
+        {% if session.realm_username %}
+        {% if perms.realms.view_realmuser %}
+        <a href="{% url 'realms:user' session.realm_user_id %}">{{ session.realm_username }}</a>
+        {% else %}
+        {{ session.realm_username }}
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
       </td>
       <td>
         <span 

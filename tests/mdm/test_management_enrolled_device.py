@@ -167,6 +167,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, "Enrollment session (1)")
         self.assertContains(response, session.get_enrollment().name)
         self.assertContains(response, session.realm_user.username)
+        self.assertNotContains(response, session.realm_user.get_absolute_url())
         self.assertNotContains(response, reverse("mdm:user_enrollment", args=(session.get_enrollment().pk,)))
         self.assertEqual(response.context["commands_count"], 0)
         self.assertNotContains(response, "See all commands")
@@ -182,6 +183,14 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, "Enrollment session (1)")
         self.assertContains(response, session.get_enrollment().name)
         self.assertContains(response, reverse("mdm:ota_enrollment", args=(session.get_enrollment().pk,)))
+
+    def test_enrolled_device_realm_user_link(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "realms.view_realmuser")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, session.realm_user.get_absolute_url())
 
     def test_enrolled_device_no_block_link(self):
         session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)
