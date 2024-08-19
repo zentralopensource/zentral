@@ -14,6 +14,28 @@ To authenticate the OTA enrollments, Zentral needs the SCEP CA issuer certificat
 
 Zentral is expecting the client certificate in PEM form in the `X-SSL-Client-Cert` header, and the client certificate subject DN in the `X-SSL-Client-S-DN` header. If this is not possible, you can set `mtls_proxy` to `false` in the `zentral.contrib.mdm` section. In that case, the Apple devices will be configured to add a header containing the payload signature in each HTTP request. See the [Apple documentation](https://developer.apple.com/documentation/devicemanagement/implementing_device_management/managing_certificates_for_mdm_servers_and_devices#3677960). This adds approximately 2KB of data to each message.
 
+## Variable substitution
+
+It is possible to use variable substitution to customize [configuration profiles](https://developer.apple.com/documentation/devicemanagement/configuring_multiple_devices_using_profiles) and application configurations (see [InstallApplication](https://developer.apple.com/documentation/devicemanagement/installapplicationcommand/command/configuration) and [InstallEnterpriseApplication](https://developer.apple.com/documentation/devicemanagement/installenterpriseapplicationcommand/command/configuration) MDM commands) with device or user attributes. The following variables are available:
+
+|Name|Description|
+|---|---|
+|`$ENROLLED_DEVICE.UDID`|UDID of the enrolled device|
+|`$ENROLLED_DEVICE.SERIAL_NUMBER`|Serial number of the enrolled device|
+|`$ENROLLED_USER.LONG_NAME`|Long name of the user reported by the MDM|
+|`$ENROLLED_USER.SHORT_NAME`|Short name of the user reported by the MDM|
+|`$REALM_USER.USERNAME`|Username of the realm user|
+|`$REALM_USER.DEVICE_USERNAME`|Device username (first part of the username split on `@`, with `.` removed) of the realm user|
+|`$REALM_USER.EMAIL_PREFIX`|first part of the email split on `@` of the realm user|
+|`$REALM_USER.EMAIL`|email of the realm user|
+|`$REALM_USER.FIRST_NAME`|first name of the realm user|
+|`$REALM_USER.LAST_NAME`|last name of the realm user|
+|`$REALM_USER.FULL_NAME`|full name of the realm user|
+|`$REALM_USER.CUSTOM_ATTR_1`|first custom attribute of the realm user|
+|`$REALM_USER.CUSTOM_ATTR_2`|second custom attribute of the realm user|
+
+NB: the realm user variables are only available when a realm authentication is configured in the enrollment.
+
 ## Push certificates
 
 To be able to send notifications to the devices, Zentral needs a push certificate (aka. APNS certificate). To get one, you first need to generate an MDM vendor certificate. An Apple [Developer Enterprise Account](https://developer.apple.com/programs/enterprise/) with the ability to generate MDM CSRs is required. You can then use this vendor certificate to sign an APNS certificate request. The `mdmcerts` Zentral management command can be used to help with this process.
