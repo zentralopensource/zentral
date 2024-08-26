@@ -537,6 +537,9 @@ class Target:
                 status = TargetArtifact.Status.FAILED
             extra_info = {"active": configuration["active"],
                           "valid": configuration["valid"]}
+            reasons = configuration.get("reasons")
+            if reasons:
+                extra_info["reasons"] = reasons
             unique_install_identifier = configuration["server-token"]
             target_artifacts_info[artifact_version_pk] = (status, extra_info, unique_install_identifier)
         seen_artifact_pks = []

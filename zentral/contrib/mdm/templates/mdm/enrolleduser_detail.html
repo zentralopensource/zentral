@@ -79,7 +79,17 @@
         {{ artifact_version.version }}
         {% endif %}
       </td>
-      <td>{{ target_artifact.get_status_display }}</td>
+      <td>
+        {{ target_artifact.get_status_display }}
+        {% if target_artifact.extra_info.reasons %}
+        <a data-bs-toggle="collapse" href="#mi-{{ target_artifact.pk }}">more info</a>
+        <div  class="collapse" id="mi-{{ target_artifact.pk }}">
+          {% for reason in target_artifact.extra_info.reasons %}
+          {{ reason|pythonprettyprint }}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </td>
       <td>
         {{ target_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}
       </td>

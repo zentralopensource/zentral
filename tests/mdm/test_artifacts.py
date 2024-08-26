@@ -244,13 +244,16 @@ class TestMDMArtifacts(TestCase):
         )
         configurations = status_report["StatusItems"]["management"]["declarations"]["configurations"]
         configurations.pop()
-        for artifact_version, valid, active in extra_configurations:
-            configurations.append({
+        for artifact_version, valid, active, reasons in extra_configurations:
+            configuration = {
                 "valid": "valid" if valid else "invalid",
                 "active": active,
                 "identifier": f"zentral.legacy-profile.{artifact_version.artifact.pk}",
                 "server-token": str(artifact_version.pk),
-            })
+            }
+            if reasons:
+                configuration["reasons"] = reasons
+            configurations.append(configuration)
         return status_report
 
     # default platforms
@@ -1260,7 +1263,7 @@ class TestMDMArtifacts(TestCase):
     def test_update_target_artifacts_from_status_report_installed(self, patched_datetime):
         patched_datetime.utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
-        status_report = self._build_status_report([(profile_av, True, True)])
+        status_report = self._build_status_report([(profile_av, True, True, None)])
         self.enrolled_device.os_version = "10.5.2"
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
@@ -1274,7 +1277,7 @@ class TestMDMArtifacts(TestCase):
     def test_update_target_artifacts_from_status_report_uninstalled(self, patched_datetime):
         patched_datetime.utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
-        status_report = self._build_status_report([(profile_av, True, False)])
+        status_report = self._build_status_report([(profile_av, True, False, None)])
         self.enrolled_device.os_version = "10.5.2"
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
@@ -1288,7 +1291,10 @@ class TestMDMArtifacts(TestCase):
     def test_update_target_artifacts_from_status_report_failed(self, patched_datetime):
         patched_datetime.utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
-        status_report = self._build_status_report([(profile_av, False, False)])
+        reasons = [{"details": {"Error": "Yolo Fomo"},
+                    "description": "Configuration cannot be applied",
+                    "code": "Error.ConfigurationCannotBeApplied"}]
+        status_report = self._build_status_report([(profile_av, False, True, reasons)])
         self.enrolled_device.os_version = "10.5.2"
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
@@ -1296,6 +1302,12 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(
             serialized_av,
             (TargetArtifact.Status.FAILED, None, (0, 0, 0))
+        )
+        self.assertEqual(
+            DeviceArtifact.objects.get(artifact_version=profile_av).extra_info,
+            {"reasons": reasons,
+             "valid": "invalid",
+             "active": True}
         )
 
     def test_update_target_artifacts_from_status_report_cleanup(self):

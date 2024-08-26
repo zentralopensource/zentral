@@ -11,7 +11,8 @@ from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import CustomCommand
-from .utils import force_dep_enrollment_session, force_enrolled_user
+from zentral.contrib.mdm.models import Channel, TargetArtifact, UserArtifact
+from .utils import force_artifact, force_dep_enrollment_session, force_enrolled_user
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -127,6 +128,47 @@ class EnrolledUserManagementViewsTestCase(TestCase):
             response,
             reverse("mdm:download_enrolled_device_command_result", args=(second_command.db_command.uuid,))
         )
+
+    # test enrolled user target artifacts
+
+    def test_enrolled_user_target_artifact_installed(self):
+        enrolled_user, enrolled_device = self._force_enrolled_user()
+        artifact, (profile_av,) = force_artifact(channel=Channel.USER)
+        ua = UserArtifact.objects.create(
+            enrolled_user=enrolled_user,
+            artifact_version=profile_av,
+            status=TargetArtifact.Status.INSTALLED,
+            extra_info={"valid": "valid", "active": True}
+        )
+        self._login("mdm.view_enrolleduser")
+        response = self.client.get(reverse("mdm:enrolled_user", args=(enrolled_device.pk, enrolled_user.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleduser_detail.html")
+        self.assertContains(response, artifact.name)
+        self.assertNotContains(response, f"mi-{ua.pk}")
+
+    def test_enrolled_user_target_artifact_failed(self):
+        enrolled_user, enrolled_device = self._force_enrolled_user()
+        artifact, (profile_av,) = force_artifact(channel=Channel.USER)
+        error = get_random_string(12)
+        ua = UserArtifact.objects.create(
+            enrolled_user=enrolled_user,
+            artifact_version=profile_av,
+            status=TargetArtifact.Status.INSTALLED,
+            extra_info={"valid": "valid", "active": True,
+                        "reasons": [{"details": {"Error": error},
+                                     "description": "Configuration cannot be applied",
+                                     "code": "Error.ConfigurationCannotBeApplied"}]}
+        )
+        self._login("mdm.view_enrolleduser")
+        response = self.client.get(reverse("mdm:enrolled_user", args=(enrolled_device.pk, enrolled_user.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleduser_detail.html")
+        self.assertContains(response, artifact.name)
+        self.assertContains(response, f"mi-{ua.pk}")
+        self.assertContains(response, error)
+        self.assertContains(response, "Configuration cannot be applied")
+        self.assertContains(response, "Error.ConfigurationCannotBeApplied")
 
     # test enrolled user commands
 
