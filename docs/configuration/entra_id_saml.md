@@ -9,11 +9,11 @@ We will start by setting up an Entra ID Enterprise Application with the Basic SA
 
 ## Create an Entra ID  application
 
-Follow along the Entra documentation available [here](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/add-application-portal-setup-sso).
+Follow along with the Entra documentation available [here](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/add-application-portal-setup-sso).
 
 ### Create the app
 
-Browse to Entra ID `Enterprise Applications`, select `Create your own application` and opt for `Non-gallery application`, set a name and click `create`, this will take you to a newly created app. 
+Browse to Entra ID `Enterprise Applications`, select `Create your own application` and opt for `Non-gallery application`, set a name and click `Create`, this will take you to a newly created app. 
 
 Select the `Single Sign-On` option in the tiles or in the menu to start the setup, select the `SAML` option for editing the configuration.
 
@@ -21,7 +21,7 @@ Select the `Single Sign-On` option in the tiles or in the menu to start the setu
 
 #### General
 
-⚠️ The Zentral URLs for the SAML integration are only available after the realm has been saved. In order to be able to save the realm, we need the metadata from the Entra ID Enterprise App. This is a chicken-egg kind of problem. That's why we suggest to first use temporary dummy values for some of the `required` fields in Entra ID initially and update them later.
+⚠️ The Zentral URLs for the SAML integration are only available after the realm has been saved. In order to be able to save the realm, we need the metadata from the Entra ID Enterprise App. This is a chicken-egg kind of problem. That's why we suggest first use temporary dummy values for some of the `required` fields in Entra ID initially and update them later.
 
 1. Set dummy values for the `Identifier (Entity ID)` and `Reply URL (Assertion Consumer Service URL)` required fields. Note that the URL must include `https://` even for dummy values. 
 2.  Keep the default settings for the `Attributes & Claims` section.
@@ -47,7 +47,7 @@ Download the `Federation Metadata XML` file from the `SAML Certificates` section
 
 In Zentral, go to `Setup > Realms`, click on `Create realm` and select `SAML realm`.
 
-Fill up the form:
+Fill out the form:
 
  - Pick a name for the Realm config
  - Select `Enabled for login` if you want to use this realm as login realm
@@ -72,7 +72,7 @@ You can check that everything is working by clicking the 'Test' button (icon to 
 
 ## Optional: Group mappings
 
-You can map some Entra ID claim/value pairs to Zentral groups, see details [here](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/how-to-connect-fed-group-claims) 
+You can map Entra ID claim/value pairs to Zentral groups, see details [here](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/how-to-connect-fed-group-claims) 
 This allows you to manage the group memberships from Entra ID.
 
 In the Zentral realm detail page, click on the `Create` button under `Group mapping`. Pick a claim, a value, and a group. Please note that the claim for groups in the SAML claims returned can be a full-length URL, such as 'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups'. The corresponding value of a desired group is usually the EntraID `Object ID`, which is the UUID for the group.
