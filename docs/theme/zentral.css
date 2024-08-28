@@ -1,11 +1,105 @@
-.wy-side-nav-search {
-  background-color: rgb(225, 113, 97);
+/* default color Zentral Blutrazid */
+
+body {
+  color: #2b2a36;
 }
-.wy-nav-top {
-  background-color: rgb(225, 113, 97);
+
+/* default links Zentral Red */
+
+a, a:visited, a:hover, a:active {
+  color: #ea5165;
 }
-.wy-menu-vertical header, .wy-menu-vertical p.caption {
-  color: #9b9b9b;
-}
+
+/* table spacing */
+
 table {margin-bottom: 24px;}
 td, th {padding: 12px;}
+
+/* hide hr without changing the margins (Putty) */
+
+hr {
+  border-color: #fafafa;
+}
+
+/* default nav background Putty */
+
+.wy-side-nav-search {
+  background-color: #fafafa;
+}
+
+.wy-nav-content-wrap {
+  background-color: #fafafa;
+}
+
+.wy-grid-for-nav {
+  background-color: #fafafa;
+}
+
+.wy-nav-content {
+  background-color: #fafafa;
+}
+
+.wy-grid-for-nav nav {
+  background-color: #fafafa;
+}
+
+.wy-menu-vertical li.toctree-l2>a {
+  background-color: #fafafa;
+}
+
+.wy-menu-vertical li.toctree-l2.current li.toctree-l3>a {
+  background-color: #fafafa;
+}
+
+.wy-menu-vertical li.toctree-l3.current li.toctree-l4>a {
+  background-color: #fafafa;
+}
+
+/* left menu hover Foggy Blue */
+
+.wy-menu-vertical a:hover, .wy-menu-vertical li.current a:hover {
+  background: #f5f4ff;
+}
+
+.wy-menu-vertical li.toctree-l2.current li.toctree-l3>a:hover {
+  background-color: #f5f4ff;
+}
+
+.wy-menu-vertical li.toctree-l3.current li.toctree-l4>a:hover {
+  background-color: #f5f4ff;
+}
+
+/* current first level menu Zentral Cyan */
+
+.wy-menu-vertical li.current a {
+  border-right: none;
+  border-left: 6px solid #79c6bc;
+}
+
+.wy-menu-vertical li.toctree-l1.current>a {
+  border-right: none;
+  border-bottom: none;
+  border-top: none;
+  border-left: 6px solid #79c6bc;
+}
+
+.wy-menu-vertical li.toctree-l2.current>a {
+  border-left: 6px solid #79c6bc;
+  background-color: rgba(121, 198, 188, .2);
+}
+
+/* nav color Zentral Blutrazid */
+
+.wy-side-nav-search .wy-dropdown>a, .wy-side-nav-search>a {
+  color: #2b2a36;
+}
+
+.wy-menu-vertical header, .wy-menu-vertical a, .wy-menu-vertical p.caption {
+  color: #2b2a36;
+}
+
+/* GitHub revisions background color Zentral Blutrazid */
+
+.rst-versions {
+  background: #2b2a36;
+}
