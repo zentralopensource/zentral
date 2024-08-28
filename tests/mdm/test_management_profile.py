@@ -381,7 +381,7 @@ class ProfileManagementViewsTestCase(TestCase):
 
     def test_download_profile(self):
         _, _, profile = self._force_profile(channel=Channel.DEVICE)
-        self._login("mdm.view_artifact")
+        self._login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -394,7 +394,7 @@ class ProfileManagementViewsTestCase(TestCase):
         _, _, profile = self._force_profile(channel=Channel.DEVICE)
         profile.filename = ""
         profile.save()
-        self._login("mdm.view_artifact")
+        self._login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(

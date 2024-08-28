@@ -22,6 +22,10 @@
                 {% url 'mdm:download_profile' object.pk as url %}
                 {% button 'DOWNLOAD' url "Download Profile" %}
             {% endif %}
+            {% if artifact.type == "Enterprise App" %}
+                {% url 'mdm:download_enterprise_app' object.pk as url %}
+                {% button 'DOWNLOAD' url "Download Enterprise App" %}
+            {% endif %}
             {% if perms.mdm.change_artifactversion %}
                 {% url 'mdm:update_artifact_version' artifact.pk object.pk as url %}
                 {% button 'UPDATE' url "Edit Scope" %}

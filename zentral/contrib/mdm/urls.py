@@ -174,6 +174,9 @@ urlpatterns = [
     path('profiles/<uuid:artifact_version_pk>/download/',
          views.DownloadProfileView.as_view(),
          name="download_profile"),
+    path('enterprise_apps/<uuid:artifact_version_pk>/download',
+         views.DownloadEnterpriseAppView.as_view(),
+         name="download_enterprise_app"),
 
     # assets
     path('assets/',

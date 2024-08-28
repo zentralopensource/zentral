@@ -7,6 +7,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmUser
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
@@ -638,11 +639,13 @@ def force_artifact(
                 payload_description=payload_description
             )
         elif artifact_type == Artifact.Type.ENTERPRISE_APP:
+            filename = "{}.pkg".format(get_random_string(17))
             EnterpriseApp.objects.create(
                 artifact_version=artifact_version,
                 package_sha256=64 * "0",
-                package_size=123,
-                filename="{}.pkg".format(get_random_string(17)),
+                package_size=8,
+                package=SimpleUploadedFile(name=filename, content=b"yolofomo"),
+                filename=filename,
                 product_id="{}.{}.{}".format(get_random_string(2), get_random_string(4), get_random_string(8)),
                 product_version="17",
                 manifest={"items": [{"assets": [{}]}]}

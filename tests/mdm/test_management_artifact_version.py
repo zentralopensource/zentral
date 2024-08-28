@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
-from zentral.contrib.mdm.models import DeviceArtifact, TargetArtifact
+from zentral.contrib.mdm.models import Artifact, DeviceArtifact, TargetArtifact
 from .utils import force_artifact, force_blueprint_artifact, force_dep_enrollment_session
 
 
@@ -52,7 +52,7 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 403)
 
-    def test_artifact_version_get_no_perms_no_links(self):
+    def test_profile_artifact_version_get_no_perms_no_links(self):
         artifact, (profile_av,) = force_artifact()
         self._login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
@@ -60,8 +60,20 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
         self.assertContains(response, artifact.name)
         self.assertContains(response, profile_av.profile.payload_identifier)
+        self.assertContains(response, reverse("mdm:download_profile", args=(profile_av.pk,)))
         self.assertNotContains(response, reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av.pk,)))
         self.assertNotContains(response, reverse("mdm:update_artifact_version", args=(artifact.pk, profile_av.pk,)))
+
+    def test_enterprise_app_artifact_version_get_no_perms_no_links(self):
+        artifact, (app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
+        self._login("mdm.view_artifactversion")
+        response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, app_av.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
+        self.assertContains(response, artifact.name)
+        self.assertContains(response, reverse("mdm:download_enterprise_app", args=(app_av.pk,)))
+        self.assertNotContains(response, reverse("mdm:delete_artifact_version", args=(artifact.pk, app_av.pk,)))
+        self.assertNotContains(response, reverse("mdm:update_artifact_version", args=(artifact.pk, app_av.pk,)))
 
     def test_artifact_version_get_delete_perm_link(self):
         artifact, (profile_av,) = force_artifact()
@@ -70,6 +82,7 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
+        self.assertContains(response, reverse("mdm:download_profile", args=(profile_av.pk,)))
         self.assertContains(response, reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av.pk,)))
         self.assertNotContains(response, reverse("mdm:update_artifact_version", args=(artifact.pk, profile_av.pk,)))
 
@@ -79,6 +92,7 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
+        self.assertContains(response, reverse("mdm:download_profile", args=(profile_av.pk,)))
         self.assertNotContains(response, reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av.pk,)))
         self.assertContains(response, reverse("mdm:update_artifact_version", args=(artifact.pk, profile_av.pk,)))
 
