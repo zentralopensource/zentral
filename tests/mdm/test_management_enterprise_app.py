@@ -2,6 +2,7 @@ from functools import lru_cache, reduce
 from io import BytesIO
 import operator
 import plistlib
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Q
@@ -15,7 +16,10 @@ from zentral.contrib.mdm.models import Artifact, Channel
 from .utils import force_artifact, force_blueprint_artifact
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+@override_settings(
+    STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage',
+    STORAGES={"default": {"BACKEND": "django.core.files.storage.InMemoryStorage"}}
+)
 class EnterpriseAppManagementViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -252,3 +256,48 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
             set(str(av["pk"]) for av in blueprint.serialized_artifacts[artifact_pk]["versions"]),
             {str(enterprise_app_av1.pk), str(enterprise_app_av2.pk)}
         )
+
+    # download enterprise_app
+
+    def test_download_enterprise_app_login_redirect(self):
+        _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
+        self._login_redirect(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
+
+    def test_download_enterprise_app_permission_denied(self):
+        _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
+        self._login()
+        response = self.client.get(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_download_enterprise_app(self):
+        _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
+        self._login("mdm.view_artifactversion")
+        response = self.client.get(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            f'attachment; filename="{enterprise_app_av.enterprise_app.filename}"'
+        )
+        self.assertEqual(b"".join(response.streaming_content), b"yolofomo")
+
+    @patch("zentral.contrib.mdm.views.management.file_storage_has_signed_urls")
+    def test_download_enterprise_app_redirect(self, file_storage_has_signed_urls):
+        file_storage_has_signed_urls.return_value = True
+        _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
+        self._login("mdm.view_artifactversion")
+        response = self.client.get(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
+        self.assertEqual(response.status_code, 302)
+
+    def test_download_enterprise_app_no_name(self):
+        _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
+        enterprise_app = enterprise_app_av.enterprise_app
+        enterprise_app.filename = ""
+        enterprise_app.save()
+        self._login("mdm.view_artifactversion")
+        response = self.client.get(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            f'attachment; filename="enterprise_app_{ enterprise_app_av.pk }.pkg"'
+        )
+        self.assertEqual(b"".join(response.streaming_content), b"yolofomo")

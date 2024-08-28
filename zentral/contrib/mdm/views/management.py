@@ -4,11 +4,13 @@ from uuid import uuid4
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Count, Max
 from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
+from django.utils.functional import cached_property
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
@@ -51,6 +53,7 @@ from zentral.contrib.mdm.scep.static import StaticChallengeForm
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
+from zentral.utils.storage import file_storage_has_signed_urls
 
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
@@ -844,7 +847,7 @@ class DeleteArtifactVersionView(PermissionRequiredMixin, DeleteView):
 
 
 class DownloadProfileView(PermissionRequiredMixin, View):
-    permission_required = "mdm.view_artifact"
+    permission_required = "mdm.view_artifactversion"
 
     def get(self, request, **kwargs):
         profile = get_object_or_404(Profile, artifact_version__pk=kwargs["artifact_version_pk"])
@@ -854,6 +857,26 @@ class DownloadProfileView(PermissionRequiredMixin, View):
             as_attachment=True,
             filename=profile.filename or f"profile_{profile.artifact_version.pk}.mobileconfig"
         )
+
+
+class DownloadEnterpriseAppView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_artifactversion"
+
+    @cached_property
+    def _redirect_to_files(self):
+        return file_storage_has_signed_urls()
+
+    def get(self, request, **kwargs):
+        enterprise_app = get_object_or_404(EnterpriseApp, artifact_version__pk=kwargs["artifact_version_pk"])
+        package_file = enterprise_app.package
+        if self._redirect_to_files:
+            return HttpResponseRedirect(default_storage.url(package_file.name))
+        else:
+            return FileResponse(
+                default_storage.open(package_file.name),
+                filename=enterprise_app.filename or f"enterprise_app_{enterprise_app.artifact_version.pk}.pkg",
+                as_attachment=True
+            )
 
 
 # Assets
