@@ -336,3 +336,9 @@ td > p:last-child, td > table:last-child {
 .code-example {
     margin: 24px 0;
 }
+
+// MDM enrolled device secrets
+
+.ed-secret {
+    font-family: var(--bs-font-monospace);
+}
