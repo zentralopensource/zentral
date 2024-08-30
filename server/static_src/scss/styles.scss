@@ -184,14 +184,28 @@ td > p:last-child, td > table:last-child {
 }
 
 .search-form {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+
   @media screen and (max-width: 992px) {
     flex-direction: column !important;
     width: 100% !important;
 
-    .form-floating {
+    .form-floating, .form-checkbox, button {
         width: 100%;
     }
   }
+
+  .form-label {
+    margin-bottom: 0;
+  }
+}
+
+// to make sure that empty dropdowns are wide enough
+.form-floating {
+  min-width: 8vw;
 }
 
 .sidebar {
