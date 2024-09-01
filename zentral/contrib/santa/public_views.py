@@ -35,6 +35,8 @@ class BaseSyncView(View):
                 return self.kwargs["enrollment_secret"]
             except KeyError:
                 logger.error("No authentication credentials found")
+        except ValueError:
+            logger.error("Invalid Authorization header")
         else:
             if scheme != "Bearer":
                 logger.error("Wrong Authorization header scheme")

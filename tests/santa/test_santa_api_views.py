@@ -86,6 +86,22 @@ class SantaAPIViewsTestCase(TestCase):
             data["serial_num"] = data.pop("serial_number")
         return data, serial_number, hardware_uuid
 
+    def test_preflight_bad_auth_header_structure(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        response = self.client.post(reverse("santa_public:preflight", args=(hardware_uuid,)),
+                                    data=data,
+                                    content_type="application/json",
+                                    headers={"Zentral-Authorization": "nobearer"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_preflight_bad_auth_header_scheme(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        response = self.client.post(reverse("santa_public:preflight", args=(hardware_uuid,)),
+                                    data=data,
+                                    content_type="application/json",
+                                    headers={"Zentral-Authorization": f"Token {self.enrollment_secret.secret}"})
+        self.assertEqual(response.status_code, 401)
+
     def test_preflight_bad_secret(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         response = self.client.post(reverse("santa_public:preflight", args=(hardware_uuid,)),
