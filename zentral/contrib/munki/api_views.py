@@ -1,7 +1,9 @@
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import generics
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.views import APIView
+from accounts.api_authentication import APITokenAuthentication
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
                                ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from .models import Configuration, Enrollment, ScriptCheck
@@ -47,6 +49,7 @@ class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class EnrollmentPackage(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "munki.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
 

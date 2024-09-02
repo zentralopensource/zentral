@@ -6,11 +6,13 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import generics, status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
+from accounts.api_authentication import APITokenAuthentication
 from zentral.contrib.inventory.models import File, Tag
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
@@ -75,6 +77,7 @@ class EnrollmentConfiguration(APIView):
     """
     base enrollment configuration class. To be subclassed.
     """
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "santa.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
 

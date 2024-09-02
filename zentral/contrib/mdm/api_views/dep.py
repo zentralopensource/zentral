@@ -1,14 +1,17 @@
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from accounts.api_authentication import APITokenAuthentication
 from zentral.contrib.mdm.models import DEPVirtualServer
 from zentral.contrib.mdm.tasks import sync_dep_virtual_server_devices_task
 from zentral.utils.drf import DjangoPermissionRequired
 
 
 class DEPVirtualServerSyncDevicesView(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "mdm.view_depvirtualserver"
     permission_classes = [DjangoPermissionRequired]
 

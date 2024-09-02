@@ -2,9 +2,11 @@ from uuid import uuid4
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.generics import ListAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from accounts.api_authentication import APITokenAuthentication
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import EraseDevice, DeviceLock
 from zentral.contrib.mdm.events import post_filevault_prk_viewed_event, post_recovery_password_viewed_event
@@ -83,6 +85,7 @@ class LockEnrolledDevice(CreateEnrolledDeviceCommandView):
 
 
 class EnrolledDeviceFileVaultPRK(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "mdm.view_filevault_prk"
     permission_classes = [DjangoPermissionRequired]
 
@@ -99,6 +102,7 @@ class EnrolledDeviceFileVaultPRK(APIView):
 
 
 class EnrolledDeviceRecoveryPassword(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "mdm.view_recovery_password"
     permission_classes = [DjangoPermissionRequired]
 

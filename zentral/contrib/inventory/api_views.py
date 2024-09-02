@@ -3,10 +3,12 @@ from django.urls import reverse
 from django.utils import timezone
 from django_filters import rest_framework as filters
 from rest_framework import generics, status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from accounts.api_authentication import APITokenAuthentication
 from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
                                ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
@@ -179,6 +181,7 @@ class PruneMachines(APIView):
 
 
 class MachinesExport(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "inventory.view_machinesnapshot"
     permission_classes = [DjangoPermissionRequired]
 
@@ -195,6 +198,7 @@ class MachinesExport(APIView):
 
 
 class BaseAppsExport(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = None
     permission_classes = [DjangoPermissionRequired]
     form_class = None

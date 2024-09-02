@@ -109,10 +109,10 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("intune_api:tenants"))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_tenants_login_permission_denied(self):
+    def test_get_tenants_login_unauthorized(self):
         self.login()
         response = self.client.get(reverse("intune_api:tenants"))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)
 
     def test_get_tenants(self):
         tenant = self.force_tenant()
@@ -145,11 +145,11 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("intune_api:tenant", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_tenant_login_permission_denied(self):
+    def test_get_tenant_login_unauthorized(self):
         tenant = self.force_tenant()
         self.login()
         response = self.client.get(reverse("intune_api:tenant", args=(tenant.tenant_id,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)
 
     def test_get_tenant(self):
         tenant = self.force_tenant()
@@ -182,11 +182,11 @@ class APIViewsTestCase(TestCase):
         response = self.post(reverse("intune_api:start_tenant_sync", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_start_sync_login_permission_denied(self):
+    def test_start_sync_login_unauthorized(self):
         tenant = self.force_tenant()
         self.login()
         response = self.client.post(reverse("intune_api:start_tenant_sync", args=(tenant.tenant_id,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)
 
     def test_start_sync_wrong_method(self):
         tenant = self.force_tenant()

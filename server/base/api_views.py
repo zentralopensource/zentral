@@ -6,14 +6,18 @@ from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from accounts.api_authentication import APITokenAuthentication
 
 
 logger = logging.getLogger("server.base.api_views")
 
 
 class TaskResultView(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
+
     def get(self, request, *args, **kwargs):
         task_id = str(kwargs["task_id"])
         try:
@@ -41,6 +45,8 @@ class TaskResultView(APIView):
 
 
 class TaskResultFileDownloadView(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
+
     def get(self, request, *args, **kwargs):
         task_result = get_object_or_404(TaskResult, task_id=str(kwargs["task_id"]), status="SUCCESS")
         result = json.loads(task_result.result)

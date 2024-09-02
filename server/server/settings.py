@@ -80,7 +80,6 @@ INSTALLED_APPS = [
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'accounts.api_authentication.APITokenAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ),
     # disable the Browsable API Renderer
     'DEFAULT_RENDERER_CLASSES': (

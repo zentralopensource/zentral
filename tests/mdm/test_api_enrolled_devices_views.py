@@ -670,6 +670,12 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("mdm_api:enrolled_device_filevault_prk", args=(self.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 403)
 
+    def test_enrolled_device_filevault_prk_login_permission_denied(self):
+        self.login()
+        response = self.get(reverse("mdm_api:enrolled_device_filevault_prk", args=(self.enrolled_device.pk,)),
+                            include_token=False)
+        self.assertEqual(response.status_code, 403)
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_enrolled_device_filevault_prk_null(self, post_event):
         self.set_permissions("mdm.view_filevault_prk")
@@ -699,6 +705,24 @@ class APIViewsTestCase(TestCase):
         self.assertIsInstance(event, FileVaultPRKViewedEvent)
         self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_filevault_prk_login(self, post_event):
+        self.enrolled_device.set_filevault_prk("123456")
+        self.enrolled_device.save()
+        self.login("mdm.view_filevault_prk")
+        response = self.get(reverse("mdm_api:enrolled_device_filevault_prk", args=(self.enrolled_device.pk,)),
+                            include_token=False)
+        self.assertEqual(
+            response.json(),
+            {"id": self.enrolled_device.pk,
+             "serial_number": self.enrolled_device.serial_number,
+             "filevault_prk": "123456"}
+        )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, FileVaultPRKViewedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+
     # enrolled device recovery password
 
     def test_enrolled_device_recovery_password_unauthorized(self):
@@ -708,6 +732,12 @@ class APIViewsTestCase(TestCase):
 
     def test_enrolled_device_recovery_password_permission_denied(self):
         response = self.get(reverse("mdm_api:enrolled_device_recovery_password", args=(self.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrolled_device_recovery_password_login_permission_denied(self):
+        self.login()
+        response = self.get(reverse("mdm_api:enrolled_device_recovery_password", args=(self.enrolled_device.pk,)),
+                            include_token=False)
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -728,6 +758,24 @@ class APIViewsTestCase(TestCase):
         self.enrolled_device.save()
         self.set_permissions("mdm.view_recovery_password")
         response = self.get(reverse("mdm_api:enrolled_device_recovery_password", args=(self.enrolled_device.pk,)))
+        self.assertEqual(
+            response.json(),
+            {"id": self.enrolled_device.pk,
+             "serial_number": self.enrolled_device.serial_number,
+             "recovery_password": "123456"}
+        )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, RecoveryPasswordViewedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_recovery_password_login(self, post_event):
+        self.enrolled_device.set_recovery_password("123456")
+        self.enrolled_device.save()
+        self.login("mdm.view_recovery_password")
+        response = self.get(reverse("mdm_api:enrolled_device_recovery_password", args=(self.enrolled_device.pk,)),
+                            include_token=False)
         self.assertEqual(
             response.json(),
             {"id": self.enrolled_device.pk,

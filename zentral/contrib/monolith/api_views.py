@@ -2,11 +2,13 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import generics
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer
 from rest_framework.views import APIView
+from accounts.api_authentication import APITokenAuthentication
 from base.notifier import notifier
 from zentral.utils.drf import (DjangoPermissionRequired, DefaultDjangoModelPermissions,
                                ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
@@ -179,6 +181,7 @@ class EnrollmentConfiguration(APIView):
     """
     base enrollment configuration class. To be subclassed.
     """
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "monolith.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
 

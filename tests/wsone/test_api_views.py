@@ -86,10 +86,10 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("wsone_api:instances"))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_instances_login_permission_denied(self):
+    def test_get_instances_login_unauthorized(self):
         self.login()
         response = self.client.get(reverse("wsone_api:instances"))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)
 
     def test_get_instances(self):
         instance = self.force_instance(excluded_groups_count=1)
@@ -120,11 +120,11 @@ class APIViewsTestCase(TestCase):
         response = self.get(reverse("wsone_api:instance", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_get_instance_login_permission_denied(self):
+    def test_get_instance_login_unauthorized(self):
         instance = self.force_instance()
         self.login()
         response = self.client.get(reverse("wsone_api:instance", args=(instance.pk,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)
 
     def test_get_instance(self):
         instance = self.force_instance()
@@ -155,11 +155,11 @@ class APIViewsTestCase(TestCase):
         response = self.post(reverse("wsone_api:start_instance_sync", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_start_sync_login_permission_denied(self):
+    def test_start_sync_login_unauthorized(self):
         instance = self.force_instance()
         self.login()
         response = self.client.post(reverse("wsone_api:start_instance_sync", args=(instance.pk,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)
 
     def test_start_sync_wrong_method(self):
         instance = self.force_instance()

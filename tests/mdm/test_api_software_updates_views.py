@@ -77,17 +77,11 @@ class SoftwareUpdatesAPIViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm_api:sync_software_updates"))
         self.assertEqual(response.status_code, 401)
 
-    def test_user_sync_software_updates_permission_denied(self):
-        self.login("mdm.add_softwareupdate")
-        response = self.client.post(reverse("mdm_api:sync_software_updates"))
-        self.assertEqual(response.status_code, 403)
-
-    def test_user_sync_software_updates(self):
+    def test_user_sync_software_updates_with_perms_unauthorized(self):
         self.login(
             "mdm.add_softwareupdate",
             "mdm.change_softwareupdate",
             "mdm.delete_softwareupdate",
         )
         response = self.client.post(reverse("mdm_api:sync_software_updates"))
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(sorted(response.json().keys()), ['task_id', 'task_result_url'])
+        self.assertEqual(response.status_code, 401)
