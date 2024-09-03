@@ -746,6 +746,11 @@ class APIViewsTestCase(TestCase):
                                     HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, 403)
 
+    def test_targets_export_permission_denied_login(self):
+        self.login()
+        response = self.client.post(reverse("santa_api:targets_export"))
+        self.assertEqual(response.status_code, 403)
+
     def test_targets_export_no_format(self):
         self.set_permissions("santa.view_target")
         response = self.client.post(reverse("santa_api:targets_export"),
@@ -757,6 +762,13 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("santa.view_target")
         response = self.client.post(reverse("santa_api:targets_export") + "?export_format=xlsx",
                                     HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)
+
+    def test_targets_export_login(self):
+        self.login("santa.view_target")
+        response = self.client.post(reverse("santa_api:targets_export") + "?export_format=xlsx")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)

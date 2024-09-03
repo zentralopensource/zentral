@@ -386,6 +386,7 @@ class RuleSetUpdate(APIView):
 
 
 class TargetsExport(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "santa.view_target"
     permission_classes = [DjangoPermissionRequired]
 
