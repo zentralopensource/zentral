@@ -138,10 +138,12 @@ def update_or_create_targets(configuration, targets):
     with connection.cursor() as cursor:
         result = psycopg2.extras.execute_values(
             cursor, query,
-            ((target_type, target_identifier, configuration.id,
+            sorted(
+             (target_type, target_identifier, configuration.id,
               val["blocked_incr"], val["collected_incr"], val["executed_incr"],
               datetime.utcnow())
-             for (target_type, target_identifier), val in targets.items()),
+             for (target_type, target_identifier), val in targets.items()
+            ),
             fetch=True
         )
         columns = [c.name for c in cursor.description]
