@@ -38,11 +38,34 @@ NB: the realm user variables are only available when a realm authentication is c
 
 ## Push certificates
 
-To be able to send notifications to the devices, Zentral needs a push certificate (aka. APNS certificate). To get one, you first need to generate an MDM vendor certificate. An Apple [Developer Enterprise Account](https://developer.apple.com/programs/enterprise/) with the ability to generate MDM CSRs is required. You can then use this vendor certificate to sign an APNS certificate request. The `mdmcerts` Zentral management command can be used to help with this process.
+To be able to send notifications to the devices, Zentral requires a push certificate (also known as an APNS certificate). You have two options to obtain this:
 
-### MDM vendor certificate
+* Use our signed Certificate Signing Request (CSR): Since Zentral is an approved vendor, you can directly use our provided signed CSR in Zentral Cloud (SaaS) instances.
 
-Run the following command to setup a working directory with a vendor certificate request:
+* Generate your own MDM vendor certificate: An Apple [Developer Enterprise Account](https://developer.apple.com/programs/enterprise/) with the ability to generate MDM CSRs is required. You can then use this vendor certificate to sign an APNS certificate request. The `mdmcerts` Zentral management command can be used to help with this process.
+
+
+### Configure Apple Push Notification Service (APNS)
+
+To configure the Apple Push Notification Service (APNS) for Zentral Cloud, follow these steps. 
+
+* Navigate to the Zentral *MDM > Overview > Push certificates* section.
+* Open the `Zentral Cloud` certificate detail page.
+* Click on the button to download a signed CSR `push_certificate_signed_csr.b64` file.
+* Sign in to the [Apple Push Certificate Portal](https://identity.apple.com).
+* Upload the `push_certificate_signed_csr.b64` signed certificate request file.
+* Download the generated APNs certificate.
+* Return to the Zentral *MDM > Overview > Push certificates > Zentral Cloud* certificate detail page. 
+* Upload the generated APNs certificate.
+
+This configuration is now ready for Zentral MDM push capabilities. To renew an existing push certificate, repeat those steps. 
+
+**IMPORTANT** do not let the push/APNS certificates expire! Remember to renew them ahead of their expiry!
+
+To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it is important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button.
+
+### MDM vendor certificate (Developer Enterprise Account required)
+To generate your own MDM vendor certificate, run the following command to setup a working directory with a vendor certificate request:
 
 ```bash
 python server/manage.py mdmcerts -d the_working_directory init
@@ -90,7 +113,7 @@ Navigate to the Zentral *MDM > Push certificates* section, and either select an 
 
 **IMPORTANT** do not let the push/APNS certificates expire! Remember to renew them ahead of their expiry!
 
-To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it it important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button. In the Zentral *MDM > Push certificates* section, find the certificate and click on the *Update* button, and do not *Add* a new certificate.
+To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it is important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button. In the Zentral *MDM > Push certificates* section, find the certificate and click on the *Update* button, and do not *Add* a new certificate.
 
 ## HTTP API
 
