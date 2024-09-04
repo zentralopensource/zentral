@@ -50,6 +50,7 @@ To be able to send notifications to the devices, Zentral requires a push certifi
 To configure the Apple Push Notification Service (APNS) for Zentral Cloud, follow these steps. 
 
 * Navigate to the Zentral *MDM > Overview > Push certificates* section.
+* Open the `Zentral Cloud` certificate detail page.
 * Click on the button to download a signed CSR `push_certificate_signed_csr.b64` file.
 * Sign in to the [Apple Push Certificate Portal](https://identity.apple.com).
 * Upload the `push_certificate_signed_csr.b64` signed certificate request file.
