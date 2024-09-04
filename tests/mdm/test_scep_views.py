@@ -31,10 +31,12 @@ class SCEPViewsTestCase(TestCase):
                 serial_number = session.enrollment_secret.serial_numbers[0]
             else:
                 serial_number = get_random_string(12)
-        privkey = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=512
-        )  # lgtm[py/weak-crypto-key]
+        with patch('cryptography.hazmat.primitives.asymmetric.rsa._verify_rsa_parameters') as _verify_rsa_parameters:
+            _verify_rsa_parameters.return_value = True
+            privkey = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=512
+            )  # lgtm[py/weak-crypto-key]
         if session:
             cn = session.get_common_name()
             org = session.get_organization()

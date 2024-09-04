@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from unittest.mock import patch
 import uuid
 from cryptography import x509
 from cryptography.x509.oid import NameOID
@@ -8,10 +9,12 @@ from django.utils.crypto import get_random_string
 
 
 def build_self_signed_cert(name):
-    key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-    )
+    with patch('cryptography.hazmat.primitives.asymmetric.rsa._verify_rsa_parameters') as _verify_rsa_parameters:
+        _verify_rsa_parameters.return_value = True
+        key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=512,
+        )
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, name),
     ])

@@ -2,6 +2,7 @@ from datetime import date, datetime, time, timedelta
 import hashlib
 import os.path
 import plistlib
+from unittest.mock import patch
 import uuid
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -62,10 +63,12 @@ def force_push_certificate_material(topic=None, reduced_key_size=True, encrypt_k
     if privkey_bytes:
         privkey = serialization.load_pem_private_key(privkey_bytes, None)
     else:
-        privkey = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=512 if reduced_key_size else 2048,
-        )  # lgtm[py/weak-crypto-key]
+        with patch('cryptography.hazmat.primitives.asymmetric.rsa._verify_rsa_parameters') as _verify_rsa_parameters:
+            _verify_rsa_parameters.return_value = True  # to allow reduced_key_size !!!
+            privkey = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=512 if reduced_key_size else 2048,
+            )  # lgtm[py/weak-crypto-key]
     builder = x509.CertificateBuilder()
     name = get_random_string(12)
     if topic is None:

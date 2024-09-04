@@ -63,10 +63,14 @@ class MDMViewsTestCase(TestCase):
                 enrollment_type = "USER"
             cn = f"MDM${enrollment_type}${secret}"
             o = f"MBU${self.mbu.pk}"
-            privkey = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=512,  # faster
-            )
+            with patch(
+                'cryptography.hazmat.primitives.asymmetric.rsa._verify_rsa_parameters'
+            ) as _verify_rsa_parameters:
+                _verify_rsa_parameters.return_value = True
+                privkey = rsa.generate_private_key(
+                    public_exponent=65537,
+                    key_size=512,  # faster
+                )
             builder = x509.CertificateBuilder()
             builder = builder.subject_name(x509.Name([
                 x509.NameAttribute(NameOID.COMMON_NAME, cn),
