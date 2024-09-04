@@ -55,10 +55,14 @@ To configure the Apple Push Notification Service (APNS) for Zentral Cloud, follo
 * Sign in to the [Apple Push Certificate Portal](https://identity.apple.com).
 * Upload the `push_certificate_signed_csr.b64` signed certificate request file.
 * Download the generated APNs certificate.
-* Return to the Zentral *MDM > Overview > Push certificates* section. 
-* Upload the generated APNs certificate to your MDM push certificate configuration.
+* Return to the Zentral *MDM > Overview > Push certificates > Zentral Cloud* certificate detail page. 
+* Upload the generated APNs certificate.
 
-This configuration is now ready for Zentral MDM push capabilities. To renew an existing push certificate, repeat the steps to download the signed CSR file.
+This configuration is now ready for Zentral MDM push capabilities. To renew an existing push certificate, repeat those steps. 
+
+**IMPORTANT** do not let the push/APNS certificates expire! Remember to renew them ahead of their expiry!
+
+To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it is important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button.
 
 ### MDM vendor certificate (Developer Enterprise Account required)
 To generate your own MDM vendor certificate, run the following command to setup a working directory with a vendor certificate request:
@@ -109,7 +113,7 @@ Navigate to the Zentral *MDM > Push certificates* section, and either select an 
 
 **IMPORTANT** do not let the push/APNS certificates expire! Remember to renew them ahead of their expiry!
 
-To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it it important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button. In the Zentral *MDM > Push certificates* section, find the certificate and click on the *Update* button, and do not *Add* a new certificate.
+To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it is important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button. In the Zentral *MDM > Push certificates* section, find the certificate and click on the *Update* button, and do not *Add* a new certificate.
 
 ## HTTP API
 
