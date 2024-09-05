@@ -132,14 +132,13 @@ For detailed instructions on general ABM/ASM usage, refer to the [Apple Business
 
 To set up Automated Device Enrollment (ADE) to work with Zentral, follow these steps:
 
-* Navigate to the Zentral *MDM > Overview > DEP Virtual Servers* section. If no DEP Virtual Servers exist, click the *Add* button to create one.
+* Navigate to the Zentral *MDM > Overview > DEP Virtual Servers* section and click the *Connect* button. Do not close this section during the process.
 * Download the new public key.
 * In ABM/ASM go to the *Preferences > Your MDM Servers > MDM Server Settings* section.
 * Add a new MDM Server or click *Edit* on an existing MDM Server to replace the public key.
 * Download the `MDM server token` from the *MDM Server Information* section in ABM/ASM.
-* Return to the Zentral *MDM > Overview > DEP Virtual Servers* section.
-* Upload the server token.
-* When an *Enrollment* profile has been created (see section below) it can be assigned as the default enrollment for this token.
+* Return to Zentral and upload the `MDM server token` in the *MDM > Overview > DEP Virtual Servers* section.
+* Once an *Enrollment* profile has been created (see the section below), you can assign it as the default enrollment for this token.
 
 To fully utilize ADE, you need to create an *Enrollment* in the *MDM > Overview > Enrollment* section and select the appropriate *Virtual Server* during the setup process (see below). The assigned *Enrollment* will be reflected in the *MDM > DEP Virtual Servers > [Instance Name] > Profile* section, and the devices assigned in ABM/ASM will appear in the *MDM > DEP Virtual Servers > [Instance Name] > Devices* section.
 
@@ -162,6 +161,31 @@ To set up an Automated Device Enrollment (ADE) in Zentral, you need to create an
 **Note:** After creating the *Enrollment*, it’s important to test and review the profile settings. You can edit the enrollment profile anytime by navigating to the *MDM > Enrollment* section in Zentral. Regular testing and revisit for updates are recommended, especially as new major OS versions can introduce additional configurations. To verify that your changes are synced with ABM/ADE, use the *Test* button to download and check the DEP profile from ABM.
 
 Device syncing occurs at scheduled intervals. If the device assignments from ABM/ASM are not reflected in Zentral, go to the *MDM > DEP Virtual Servers > [Instance Name]* section and manually click the `Synchronize` button.
+
+
+## Apps and Books
+
+To manage and distribute apps from the Mac App Store or iOS/iPadOS App Store through Zentral, a Content Token is required to sync with Apple Business Manager (ABM) or Apple School Manager (ASM).
+
+### Prerequisites
+
+- Access to Apple Business Manager (ABM) or Apple School Manager (ASM).
+- A Content Token for syncing with ABM/ASM.
+
+For detailed instructions on general ABM/ASM usage, refer to the [Apple Business Manager User Guide](https://support.apple.com/en-ca/guide/apple-business-manager/welcome/web).
+
+
+### Configure Apps and Books (formerly Apple Volume Purchasing/VPP)
+
+To set up *Apps and Books* to work with Zentral, follow these steps:
+
+* Navigate to the *ABM / ASM Preferences > Payments and Billing > Apps and Books* section.
+* In the Content Tokens section, locate the desired token and download it.
+* Navigate to the Zentral *MDM > Overview > Locations* section.
+* Click the `Add` button to create a new location.
+* Upload the content token (*.vpptoken) you previously downloaded from ASM/ABM.
+
+Content in ASM/ABM *Apps and Books > "AppName" > Manage Licenses* that is assigned or removed from the content token will sync and automatically populate. You will see the total apps and licenses available reflected in Zentral Cloud in the *MDM > Overview > Store apps* section.
 
 ## HTTP API
 
