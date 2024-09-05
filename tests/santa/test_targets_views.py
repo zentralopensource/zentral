@@ -8,8 +8,8 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from zentral.contrib.santa.models import Bundle, Target, TargetCounter, TargetState
 from zentral.contrib.inventory.models import Source, File
+from zentral.contrib.santa.models import Target, TargetCounter, TargetState
 from zentral.core.stores.conf import frontend_store
 from .utils import add_file_to_test_class, force_ballot, force_configuration, force_realm_user, new_sha256
 
@@ -44,18 +44,6 @@ class SantaSetupViewsTestCase(TestCase):
         else:
             self.group.permissions.clear()
         self.client.force_login(self.user)
-
-    def _force_bundle(self):
-        bundle_target = Target.objects.create(type=Target.Type.BUNDLE, identifier=new_sha256())
-        return Bundle.objects.create(
-            target=bundle_target,
-            executable_rel_path=get_random_string(12),
-            bundle_id=self.file.bundle.bundle_id,
-            name=self.file_bundle_name,
-            version=self.file.bundle.bundle_version,
-            version_str=self.file.bundle.bundle_version_str,
-            binary_count=1
-        )
 
     # targets
 
@@ -491,30 +479,26 @@ class SantaSetupViewsTestCase(TestCase):
     # bundle target
 
     def test_bundle_target_redirect(self):
-        bundle = self._force_bundle()
-        self._login_redirect(reverse("santa:bundle", args=(bundle.target.identifier,)))
+        self._login_redirect(reverse("santa:bundle", args=(self.bundle_target.identifier,)))
 
     def test_bundle_target_permission_denied(self):
-        bundle = self._force_bundle()
         self._login()
-        response = self.client.get(reverse("santa:bundle", args=(bundle.target.identifier,)))
+        response = self.client.get(reverse("santa:bundle", args=(self.bundle_target.identifier,)))
         self.assertEqual(response.status_code, 403)
 
     def test_bundle_target_configuration_no_add_rule_perm(self):
-        bundle = self._force_bundle()
         configuration = force_configuration()
         self._login("santa.view_target")
-        response = self.client.get(reverse("santa:bundle", args=(bundle.target.identifier,)))
+        response = self.client.get(reverse("santa:bundle", args=(self.bundle_target.identifier,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
-        self.assertContains(response, bundle.target.identifier)
+        self.assertContains(response, self.bundle_target.identifier)
         self.assertNotContains(response, "createRule")
         self.assertNotContains(response, configuration.name)
 
     def test_bundle_target_configuration_add_rule_perm(self):
-        bundle = self._force_bundle()
         self._login("santa.view_target", "santa.add_rule")
-        response = self.client.get(reverse("santa:bundle", args=(bundle.target.identifier,)))
+        response = self.client.get(reverse("santa:bundle", args=(self.bundle_target.identifier,)))
         self.assertNotContains(response, "createRule")
 
     # metabundle target
