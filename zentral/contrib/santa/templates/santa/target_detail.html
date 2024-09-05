@@ -57,6 +57,48 @@
         </td>
       </tr>
       <tr>
+        <td>State{{ target_states|length|pluralize }}</td>
+        <td>
+          {% if target_states %}
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Configuration</th>
+                <th>State</th>
+                <th>Score</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for target_state, reset_link in target_states %}
+              <tr>
+                <td>
+                  {% if perms.santa.view_configuration %}
+                  <a href="{{ target_state.configuration.get_absolute_url }}">{{ target_state.configuration }}</a>
+                  {% else %}
+                  {{ target_state.configuration }}
+                  {% endif %}
+                </td>
+                <td>
+                  {{ target_state.get_state_display }}
+                </td>
+                <td>
+                  {{ target_state.score }}
+                </td>
+                <td>
+                  {% if reset_link %}
+                  <a href="{{ reset_link }}" class="btn btn-danger btn-sm">Reset</a>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      <tr>
     <tbody>
   </table>
 </div>

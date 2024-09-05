@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.santa.ballot_box import (AnonymousVoter, BallotBox, DuplicateVoteError,
-                                              Voter, VotingError, VotingNotAllowedError)
+                                              ResetNotAllowedError, Voter, VotingError, VotingNotAllowedError)
 from zentral.contrib.santa.models import Rule, Target, TargetState
 from .utils import (add_file_to_test_class, force_ballot, force_configuration, force_enrolled_machine,
                     force_realm_user, force_target, force_voting_group)
@@ -619,3 +619,49 @@ class SantaBallotBoxTestCase(TestCase):
         self.assertEqual(rule.target.identifier, self.file_signing_id)
         self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST)
         self.assertEqual(len(rule.primary_users), 0)
+
+    # target state reset
+
+    def test_ballot_box_target_state_reset_not_allowed(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        force_voting_group(configuration, realm_user, can_unflag_target=True)
+        ballot_box = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
+        with self.assertRaises(ResetNotAllowedError):
+            ballot_box.reset_target_state(configuration)
+
+    def test_ballot_box_target_state_reset(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        rules_qs = configuration.rule_set.all()
+        self.assertEqual(rules_qs.count(), 0)
+        votes_qs = configuration.vote_set.all()
+        self.assertEqual(votes_qs.count(), 0)
+        force_voting_group(configuration, realm_user,
+                           ballot_target_types=[Target.Type.BINARY],
+                           can_reset_target=True, voting_weight=100)
+        ballot_box = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
+        ballot_box.cast_default_votes(False, None)
+        self.assertEqual(rules_qs.count(), 1)
+        rule = rules_qs.first()
+        self.assertEqual(rule.target, self.file_target)
+        self.assertEqual(rule.policy, Rule.Policy.BLOCKLIST)
+        self.assertEqual(votes_qs.count(), 1)
+        vote = votes_qs.first()
+        self.assertEqual(vote.weight, 100)
+        self.assertFalse(vote.was_yes_vote)
+        ballot_box = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
+        ts = ballot_box.target_states[configuration]
+        self.assertEqual(ts.state, TargetState.State.BANNED)
+        self.assertTrue(ts.flagged)
+        self.assertEqual(ts.score, -100)
+        self.assertIsNone(ts.reset_at)
+        ballot_box.reset_target_state(configuration)
+        ts.refresh_from_db()
+        self.assertEqual(ts.state, TargetState.State.UNTRUSTED)
+        self.assertFalse(ts.flagged)
+        self.assertEqual(ts.score, 0)
+        self.assertIsNotNone(ts.reset_at)
+        self.assertEqual(rules_qs.count(), 0)
+        self.assertEqual(votes_qs.count(), 1)
+        self.assertEqual(votes_qs.first(), vote)

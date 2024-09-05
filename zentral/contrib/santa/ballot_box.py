@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from django.db import connection
 from django.db.models import Q
@@ -9,7 +10,15 @@ from .utils import target_related_targets
 logger = logging.getLogger("zentral.contrib.santa.ballot_box")
 
 
-class VotingError(Exception):
+class BallotBoxError(Exception):
+    pass
+
+
+class ResetNotAllowedError(BallotBoxError):
+    pass
+
+
+class VotingError(BallotBoxError):
     pass
 
 
@@ -209,7 +218,7 @@ class BallotBox:
     def existing_ballot(self):
         if self.voter.is_anonymous:
             return None
-        #TODO decide what happens if we only have the user_uid
+        # TODO decide what happens if we only have the user_uid
         try:
             return Ballot.objects.get(target=self.target, realm_user=self.voter.realm_user, replaced_by__isnull=True)
         except Ballot.DoesNotExist:
@@ -263,7 +272,7 @@ class BallotBox:
                 configuration,
                 (Target.Type.CERTIFICATE, Target.Type.TEAM_ID)
             ):
-                #TODO better perm?
+                # TODO better perm?
                 if (
                     rel_target_state["state"] == TargetState.State.BANNED
                     and not self.voter.can_reset_target(configuration)
@@ -409,6 +418,16 @@ class BallotBox:
                 target_state.state = TargetState.State.UNTRUSTED
                 return True
         return False
+
+    def reset_target_state(self, configuration):
+        if not self.voter.can_reset_target(configuration):
+            raise ResetNotAllowedError
+        target_state = self.target_states[configuration]
+        target_state.score = 0
+        target_state.flagged = False
+        self._update_target_state_state(target_state, 0)
+        target_state.reset_at = datetime.utcnow()
+        target_state.save()
 
     # rules
 

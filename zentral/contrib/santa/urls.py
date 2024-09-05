@@ -31,6 +31,9 @@ urlpatterns = [
     path('configurations/<int:pk>/enrollments/create/',
          views.CreateEnrollmentView.as_view(),
          name='create_enrollment'),
+    path('configurations/<int:configuration_pk>/target_states/<int:pk>/reset/',
+         views.ResetTargetStateView.as_view(),
+         name='reset_target_state'),
 
     # voting groups
     path('configurations/<int:configuration_pk>/voting_groups/create/',

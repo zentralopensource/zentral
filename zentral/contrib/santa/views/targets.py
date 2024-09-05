@@ -1,13 +1,14 @@
 import logging
 import math
 from urllib.parse import urlencode
+from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import Certificate, File
-from zentral.contrib.santa.ballot_box import BallotBox
-from zentral.contrib.santa.models import Bundle, Configuration, MetaBundle, Rule, Target
+from zentral.contrib.santa.ballot_box import BallotBox, ResetNotAllowedError
+from zentral.contrib.santa.models import Bundle, Configuration, MetaBundle, Rule, Target, TargetState
 from zentral.contrib.santa.forms import BallotSearchForm, TargetSearchForm
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
@@ -143,10 +144,21 @@ class TargetView(PermissionRequiredMixin, TemplateView):
                     "cols": [l for _, l in keys],
                     "rows": [[obj.get(k) for k, l in keys] for obj in objects]}
 
+        # infos
         try:
             ctx["prepared_objects"] = prepare_objects(ballot_box.target_info()["objects"])
         except (TypeError, KeyError):
             pass
+
+        # target states
+        ctx["target_states"] = []
+        for configuration, target_state in ballot_box.target_states.items():
+            reset_url = None
+            configuration = target_state.configuration
+            if ballot_box.voter.can_reset_target(configuration):
+                reset_url = reverse("santa:reset_target_state", args=(configuration.pk, target_state.pk))
+            ctx["target_states"].append((target_state, reset_url))
+        ctx["target_states"].sort(key=lambda t: t[0].configuration.name)
 
         # related targets
         ctx["related_targets"] = []
@@ -431,3 +443,43 @@ class FetchTeamIDEventsView(EventsMixin, FetchEventsView):
 class TeamIDEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
     target_type = Target.Type.TEAM_ID
     object_key = "apple_team_id"
+
+
+class ResetTargetStateView(PermissionRequiredMixin, TemplateView):
+    permission_required = "santa.view_target"
+    template_name = "santa/targetstate_reset.html"
+
+    def load_state(self, lock_target):
+        self.target_state = get_object_or_404(
+            TargetState.objects.select_related("configuration", "target"),
+            pk=self.kwargs["pk"],
+            configuration__pk=self.kwargs["configuration_pk"],
+        )
+        self.configuration = self.target_state.configuration
+        self.target = self.target_state.target
+        self.ballot_box = BallotBox.for_realm_user(
+            self.target,
+            self.request.realm_authentication_session.user,
+            lock_target=lock_target,
+            all_configurations=True,
+        )
+
+    def get_context_data(self, **kwargs):
+        self.load_state(lock_target=False)
+        ctx = super().get_context_data(**kwargs)
+        ctx["target_state"] = self.target_state
+        ctx["configuration"] = self.configuration
+        ctx["target"] = self.target
+        ctx["ballot_box"] = self.ballot_box
+        ctx["reset_allowed"] = self.ballot_box.voter.can_reset_target(self.configuration)
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self.load_state(lock_target=True)
+        try:
+            self.ballot_box.reset_target_state(self.configuration)
+        except ResetNotAllowedError:
+            messages.error(request, "Target state reset not allowed")
+        else:
+            messages.info(request, "Target state reset")
+        return redirect(self.target)

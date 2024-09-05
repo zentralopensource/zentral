@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:targets' %}">Targets</a></li>
+  <li class="breadcrumb-item"><a href="{{ target.get_absolute_url }}">{{ target.get_type_display }} {{ target.identifier }}</a></li>
+  <li class="breadcrumb-item active">Reset</li>
+</ol>
+
+<h2>Reset Target State</h2>
+
+<form method="POST">{% csrf_token %}
+  <p>Do you really want to reset this target state in <i>{{ configuration }}</i> configuration?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ target.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" id="reset-target-state" type="submit"{% if not reset_allowed %} disabled{% endif %}>Reset</button>
+  </p>
+</form>
+
+{% endblock %}

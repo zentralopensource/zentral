@@ -38,10 +38,10 @@
         {{ ballot.user_uid }}
         {% endif %}
       </td>
-      <td {% if ballot.replaced_by_id %} style="background-color: var(--bs-danger-bg-subtle)"{% endif %}>
+      <td{% if ballot.replaced_by_id %} style="background-color: var(--bs-danger-bg-subtle)"{% endif %}>
         <ul>
           {% for vote in ballot.votes %}
-          <li>
+          <li{% if vote.reset %} style="background-color: var(--bs-warning-bg-subtle)"{% endif %}>
             {% if perms.santa.view_configuration %}
             <a href="{% url 'santa:configuration' vote.cfg_pk %}">{{ vote.cfg_name }}</a>
             {% else %}

@@ -1,17 +1,24 @@
 from datetime import datetime, timedelta
 from functools import reduce
+from importlib import import_module
 import operator
 from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
+from django.conf import settings
 from django.db.models import Q
+from django.http import HttpRequest
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from accounts.models import User
+from realms.backends.views import finalize_session
+from realms.models import RealmAuthenticationSession
 from zentral.contrib.inventory.models import Source, File
 from zentral.contrib.santa.models import Target, TargetCounter, TargetState
 from zentral.core.stores.conf import frontend_store
-from .utils import add_file_to_test_class, force_ballot, force_configuration, force_realm_user, new_sha256
+from .utils import (add_file_to_test_class, force_ballot, force_configuration,
+                    force_realm, force_realm_user, force_voting_group,
+                    new_sha256)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -22,6 +29,8 @@ class SantaSetupViewsTestCase(TestCase):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
+        cls.realm = force_realm(enabled_for_login=True)
+        _, cls.realm_user = force_realm_user(realm=cls.realm, username=cls.user.username, email=cls.user.email)
         # file tree
         add_file_to_test_class(cls)
 
@@ -31,7 +40,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(url)
         self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
 
-    def _login(self, *permissions):
+    def _login(self, *permissions, realm_user=False):
         if permissions:
             permission_filter = reduce(operator.or_, (
                 Q(content_type__app_label=app_label, codename=codename)
@@ -43,7 +52,36 @@ class SantaSetupViewsTestCase(TestCase):
             self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
         else:
             self.group.permissions.clear()
-        self.client.force_login(self.user)
+        if not realm_user:
+            self.client.force_login(self.user)
+        else:
+            # see https://github.com/django/django/blob/705066d186ce880bf64142e47084f3d8df3c2352/django/test/client.py#L785  # NOQA
+            request = HttpRequest()
+            # HACK
+            # see https://github.com/django/django/blob/705066d186ce880bf64142e47084f3d8df3c2352/django/contrib/auth/__init__.py#L141-L142  # NOQA
+            # so that the user is attached to the request. The realm callback expects a user on the request!
+            request.user = None
+            if self.client.session:
+                request.session = self.client.session
+            else:
+                engine = import_module(settings.SESSION_ENGINE)
+                request.session = engine.SessionStore()
+            ras = RealmAuthenticationSession.objects.create(
+                realm=self.realm,
+                callback="realms.utils.login_callback",
+            )
+            finalize_session(ras, request, self.realm_user)
+            request.session.save()
+            session_cookie = settings.SESSION_COOKIE_NAME
+            self.client.cookies[session_cookie] = request.session.session_key
+            cookie_data = {
+                "max-age": None,
+                "path": "/",
+                "domain": settings.SESSION_COOKIE_DOMAIN,
+                "secure": settings.SESSION_COOKIE_SECURE or None,
+                "expires": None,
+            }
+            self.client.cookies[session_cookie].update(cookie_data)
 
     # targets
 
@@ -809,3 +847,64 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:signingid_events_store_redirect", args=(self.file_signing_id,)),
                                    {"es": frontend_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
+
+    # reset target state
+
+    def test_reset_target_state_redirect(self):
+        configuration = force_configuration()
+        ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
+        self._login_redirect(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)))
+
+    def test_reset_target_state_permission_denied(self):
+        configuration = force_configuration()
+        ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
+        self._login()
+        response = self.client.get(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_reset_target_state_get_not_allowed(self):
+        configuration = force_configuration()
+        ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
+        self._login("santa.view_target", realm_user=True)
+        response = self.client.get(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/targetstate_reset.html")
+        self.assertEqual(response.context["configuration"], configuration)
+        self.assertContains(response, 'id="reset-target-state" type="submit" disabled>')
+
+    def test_reset_target_state_get_allowed(self):
+        configuration = force_configuration()
+        ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
+        self._login("santa.view_target", realm_user=True)
+        force_voting_group(configuration, self.realm_user, can_reset_target=True)
+        response = self.client.get(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/targetstate_reset.html")
+        self.assertEqual(response.context["configuration"], configuration)
+        self.assertContains(response, 'id="reset-target-state" type="submit">')
+
+    def test_rest_target_state_post_not_allowed(self):
+        configuration = force_configuration()
+        ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
+        self._login("santa.view_target", realm_user=True)
+        response = self.client.post(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/target_detail.html")
+        self.assertContains(response, "Target state reset not allowed")
+        ts.refresh_from_db()
+        self.assertIsNone(ts.reset_at)
+
+    def test_rest_target_state_post_allowed(self):
+        configuration = force_configuration()
+        ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
+        self._login("santa.view_target", realm_user=True)
+        force_voting_group(configuration, self.realm_user, can_reset_target=True)
+        response = self.client.post(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/target_detail.html")
+        self.assertContains(response, "Target state reset")
+        self.assertNotContains(response, "Target state reset not allowed")
+        ts.refresh_from_db()
+        self.assertIsNotNone(ts.reset_at)
