@@ -6,10 +6,12 @@ from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils.functional import cached_property
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
+from zentral.utils.storage import file_storage_has_signed_urls
 
 
 logger = logging.getLogger("server.base.api_views")
@@ -47,19 +49,29 @@ class TaskResultView(APIView):
 class TaskResultFileDownloadView(APIView):
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
 
+    @cached_property
+    def _redirect_to_files(self):
+        return file_storage_has_signed_urls()
+
     def get(self, request, *args, **kwargs):
         task_result = get_object_or_404(TaskResult, task_id=str(kwargs["task_id"]), status="SUCCESS")
-        result = json.loads(task_result.result)
-        filepath = result["filepath"]
-        if not default_storage.exists(filepath):
+        try:
+            result = json.loads(task_result.result)
+        except (TypeError, ValueError):
+            logger.exception("Could not load task result")
             raise Http404
         try:
-            filepath = default_storage.path(filepath)
-        except NotImplementedError:
-            url = default_storage.url(filepath)
-            return redirect(url)
+            filepath = result["filepath"]
+            assert isinstance(filepath, str) and len(filepath) > 0
+        except (AssertionError, KeyError):
+            logger.error("No file found in task %s result", task_result.task_id)
+            raise Http404
+        if self._redirect_to_files:
+            return redirect(default_storage.url(filepath))
         else:
-            response = FileResponse(open(filepath, "rb"))
+            if not default_storage.exists(filepath):
+                raise Http404
+            response = FileResponse(default_storage.open(filepath))
             for k, v in result.get("headers").items():
                 response[k] = v
             return response
