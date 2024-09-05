@@ -9,6 +9,7 @@ from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.santa.models import Bundle, Target, TargetCounter, TargetState
+from zentral.contrib.inventory.models import Source, File
 from zentral.core.stores.conf import frontend_store
 from .utils import add_file_to_test_class, force_ballot, force_configuration, force_realm_user, new_sha256
 
@@ -79,6 +80,23 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, self.file_signing_id)
         self.assertContains(response, self.bundle_sha256)
         self.assertContains(response, self.metabundle_sha256)
+
+    def test_bad_target_identifier_no_url(self):
+        # create bad CDHASH File & Target
+        bad_cdhash_identifier = ""
+        File.objects.create(
+            source=Source.objects.get(module="zentral.contrib.santa", name="Santa events"),
+            sha_256=new_sha256(),
+            cdhash=bad_cdhash_identifier
+        )
+        Target.objects.create(type=Target.Type.CDHASH, identifier=bad_cdhash_identifier)
+        self._login("santa.view_target")
+        response = self.client.get(reverse("santa:targets"))
+        for target in response.context["targets"]:
+            if target["target_type"] == Target.Type.CDHASH and target["identifier"] == bad_cdhash_identifier:
+                self.assertNotIn("url", target)
+            else:
+                self.assertTrue(isinstance(target["url"], str))
 
     def test_binary_targets(self):
         self._login("santa.view_target")

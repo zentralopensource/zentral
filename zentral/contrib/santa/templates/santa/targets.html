@@ -59,7 +59,11 @@
       {% with target.object as obj %}
       <tr>
         <td>
+          {% if target.url %}
           <a href="{{ target.url }}">{{ target.target_type_for_display }}<br><code>{{ target.identifier }}</code></a>
+          {% else %}
+          {{ target.identifier|default:"-" }}
+          {% endif %}
           {% if target.target_type == "BINARY" %}
           <br>{{ obj.name }}
           {% if obj.cert_sha256 %}

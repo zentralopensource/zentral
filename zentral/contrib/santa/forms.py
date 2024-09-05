@@ -6,7 +6,7 @@ from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
 from django.db import connection, transaction
 from django.db.models import Count, F
-from django.urls import reverse
+from django.urls import reverse, NoReverseMatch
 from zentral.conf import settings
 from zentral.contrib.inventory.models import Tag
 from .events import post_santa_rule_update_event
@@ -860,7 +860,11 @@ class TargetSearchForm(forms.Form):
                 result["object"] = obj
                 result["target_type"] = target_type = Target.Type(result.pop("target_type"))
                 result["target_type_for_display"] = target_type.label
-                result["url"] = reverse(target_type.url_name, args=(result["identifier"],))
+                try:
+                    result["url"] = reverse(target_type.url_name, args=(result["identifier"],))
+                except NoReverseMatch:
+                    logger.error("Could not file target URL. Bad %s identifier? '%s'",
+                                 target_type, result["identifier"])
                 result["min_state"] = TargetState.State(result.pop("min_state"))
                 result["max_state"] = TargetState.State(result.pop("max_state"))
                 results.append(result)
