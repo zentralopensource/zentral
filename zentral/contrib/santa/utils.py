@@ -127,6 +127,7 @@ def update_or_create_targets(configuration, targets):
         '), updated_targets as ('
         '  insert into santa_target(type, identifier, created_at)'
         '  select type, identifier, ts from observations'
+        '  order by type, identifier'
         '  on conflict (type, identifier) do nothing'
         '  returning *'
         '), observed_targets as ('
@@ -140,6 +141,7 @@ def update_or_create_targets(configuration, targets):
         '  )'
         '  select ot.id, o.configuration_id, o.blocked_incr, o.collected_incr, o.executed_incr, o.ts, o.ts'
         '  from observed_targets ot join observations o on (o.type = ot.type and o.identifier = ot.identifier)'
+        '  order by ot.id, o.configuration_id'
         '  on conflict (target_id, configuration_id) do update'
         '  set blocked_count = santa_targetcounter.blocked_count + excluded.blocked_count,'
         '  collected_count = santa_targetcounter.collected_count + excluded.collected_count,'
@@ -150,12 +152,10 @@ def update_or_create_targets(configuration, targets):
     with connection.cursor() as cursor:
         result = psycopg2.extras.execute_values(
             cursor, query,
-            sorted(
-             (target_type.value, target_identifier, configuration.id,
+            ((target_type.value, target_identifier, configuration.id,
               val["blocked_incr"], val["collected_incr"], val["executed_incr"],
               datetime.utcnow())
-             for (target_type, target_identifier), val in targets.items()
-            ),
+             for (target_type, target_identifier), val in targets.items()),
             fetch=True
         )
         columns = [c.name for c in cursor.description]
