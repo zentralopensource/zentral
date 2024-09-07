@@ -38,7 +38,7 @@ def create_repository(apps, schema_editor):
         else:
             backend = RepositoryBackend.VIRTUAL
             backend_kwargs = {}
-        from zentral.contrib.monolith.models import Repository
+        Repository = apps.get_model("monolith", "Repository")
         repository = Repository.objects.create(
             name="Default",
             meta_business_unit=None,
