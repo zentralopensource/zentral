@@ -285,6 +285,13 @@ class SantaBallotsViewsTestCase(TestCase):
     def test_ballots_todo_filter(self):
         _, realm_user2 = force_realm_user(realm=self.realm)
         self._login("santa.view_ballot")
+        TargetState.objects.create(
+            target=self.file_target,
+            configuration=self.configuration,
+            state=TargetState.State.UNTRUSTED,
+            score=0,
+            reset_at=datetime.now() - timedelta(days=1)
+        )
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         force_ballot(self.metabundle_target, realm_user2, [(self.configuration, False, 934)])
         response = self.client.get(reverse("santa:ballots"), {"todo": "on"})

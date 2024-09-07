@@ -593,8 +593,8 @@ class TargetSearchForm(forms.Form):
         else:
             bi_where = ce_where = bu_where = mbu_where = ""
             ti_where = "where c.organizational_unit ~ '[A-Z0-9]{10}'"
-            ch_where = "where f.cdhash IS NOT NULL"
-            si_where = "where f.signing_id IS NOT NULL"
+            ch_where = "where (f.cdhash = '') IS FALSE"
+            si_where = "where (f.signing_id = '') IS FALSE"
         wheres = []
         havings = []
         # target state
@@ -629,15 +629,19 @@ class TargetSearchForm(forms.Form):
             )
         # no votes from user
         if username or email:
-            todo_cfg_where = ""
+            todo_cfg_where = "and (nets.reset_at is null or nets.reset_at < nev.created_at)"
             if configuration_pk:
-                todo_cfg_where = "and nev.configuration_id = %(configuration_pk)s"
+                todo_cfg_where = f"{todo_cfg_where} and nev.configuration_id = %(configuration_pk)s"
             wheres.append(
                 "not exists ("
                 "  select * from santa_vote nev"
                 "  join santa_ballot neb on (nev.ballot_id = neb.id)"
+                "  left join santa_targetstate nets on ("
+                "    neb.target_id = nets.target_id"
+                "    and nev.configuration_id = nets.configuration_id"
+                "  )"
                 "  left join realms_realmuser neu on (neb.realm_user_id = neu.uuid)"
-                "  where neb.target_id = t.id "
+                "  where neb.target_id = t.id and neb.replaced_by_id is null"
                 "  and (neb.user_uid = %(username)s or neu.username = %(username)s"
                 "       or neb.user_uid = %(email)s or neu.username = %(email)s)"
                 f" {todo_cfg_where}"
@@ -936,15 +940,19 @@ class BallotSearchForm(forms.Form):
             where_list.append("(ts.reset_at is null or v.created_at is null or v.created_at > ts.reset_at)")
         todo = self.cleaned_data.get("todo")
         if todo:
-            todo_cfg_where = ""
+            todo_cfg_where = "and (nets.reset_at is null or nets.reset_at < nev.created_at)"
             if configuration:
-                todo_cfg_where = "and nev.configuration_id = %(configuration_pk)s"
+                todo_cfg_where = f"{todo_cfg_where} and nev.configuration_id = %(configuration_pk)s"
             where_list.append(
                 "not exists ("
                 "  select * from santa_vote nev"
                 "  join santa_ballot neb on (nev.ballot_id = neb.id)"
+                "  join santa_targetstate nets on ("
+                "    neb.target_id = nets.target_id"
+                "    and nev.configuration_id = nets.configuration_id"
+                "  )"
                 "  left join realms_realmuser neu on (neb.realm_user_id = neu.uuid)"
-                "  where neb.target_id = t.id "
+                "  where neb.target_id = t.id and neb.replaced_by_id is null"
                 "  and (neb.user_uid = %(current_username)s or neu.username = %(current_username)s"
                 "       or neb.user_uid = %(current_email)s or neu.username = %(current_email)s)"
                 f" {todo_cfg_where}"
