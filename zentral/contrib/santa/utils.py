@@ -150,6 +150,9 @@ def update_or_create_targets(configuration, targets):
         ') select * from observed_targets;'
     )
     with connection.cursor() as cursor:
+        # To avoid deadlocks between transactions updating the same counters we need to lock the table.
+        # TODO find a better way.
+        cursor.execute("LOCK TABLE ONLY santa_targetcounter IN SHARE ROW EXCLUSIVE MODE")
         result = psycopg2.extras.execute_values(
             cursor, query,
             ((target_type.value, target_identifier, configuration.id,
