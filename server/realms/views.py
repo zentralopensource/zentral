@@ -7,14 +7,14 @@ from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
 from zentral.conf import settings as zentral_settings
 from zentral.utils.views import UserPaginationListView
 from .backends.registry import backend_classes
-from .forms import RealmGroupMappingForm, RealmGroupSearchForm, RealmTagMappingForm, RealmUserSearchForm
-from .models import (realm_tagging_change,
-                     Realm, RealmAuthenticationSession, RealmGroup, RealmGroupMapping, RealmTagMapping,
+from .forms import RealmGroupSearchForm, RealmUserSearchForm
+from .models import (Realm, RealmAuthenticationSession,
+                     RealmGroup, RealmGroupMapping, RoleMapping,
                      RealmUser, RealmUserGroupMembership)
 from .utils import get_realm_user_mapped_groups
 
@@ -81,20 +81,37 @@ class RealmView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        group_mappings = self.object.realmgroupmapping_set.all().order_by("claim", "value", "group__name")
-        ctx["group_mappings"] = group_mappings
-        ctx["group_mapping_count"] = group_mappings.count()
-        tag_mappings = self.object.realmtagmapping_set.all().order_by("group_name", "tag__name")
-        ctx["tag_mappings"] = tag_mappings
-        ctx["tag_mapping_count"] = tag_mappings.count()
+        realm_group_mappings = (
+            RealmGroupMapping.objects.select_related("realm_group")
+                                     .filter(realm_group__realm=self.object)
+                                     .order_by("claim", "value", "realm_group__display_name")
+        )
+        ctx["realm"] = self.object
         if self.object.scim_enabled:
             ctx["scim_root_url"] = 'https://{}{}'.format(
                 zentral_settings["api"]["fqdn"],
                 reverse("realms_public:scim_resource_types", args=(self.object.pk,)).replace("/ResourceTypes", "/")
             )
+        # realm group mappings
+        ctx["realm_group_mappings"] = realm_group_mappings
+        ctx["realm_group_mapping_count"] = realm_group_mappings.count()
+        if self.request.user.has_perm("realms.add_realmgroupmapping"):
+            ctx["create_realm_group_mapping_url"] = reverse("realms:create_realm_group_mapping")
+        # role mappings
+        role_mappings = (
+            RoleMapping.objects.select_related("realm_group__realm", "group")
+                               .filter(realm_group__realm=self.object)
+                               .order_by("realm_group__display_name")
+        )
+        ctx["role_mappings"] = role_mappings
+        ctx["role_mapping_count"] = role_mappings.count()
+        if self.request.user.has_perm("realms.add_rolemapping"):
+            ctx["create_role_mapping_url"] = reverse("realms:create_role_mapping")
+        # realm groups
         ctx["group_count"] = self.object.realmgroup_set.count()
         if ctx["group_count"] and self.request.user.has_perm("realms.view_realmgroup"):
             ctx["groups_url"] = reverse("realms:groups") + f"?realm={ self.object.pk }"
+        # realm users
         ctx["user_count"] = self.object.realmuser_set.count()
         if ctx["user_count"] and self.request.user.has_perm("realms.view_realmuser"):
             ctx["users_url"] = reverse("realms:users") + f"?realm={ self.object.pk }"
@@ -153,11 +170,43 @@ class RealmGroupView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        ctx["realm"] = self.object.realm
         ctx["children"] = list(self.object.realmgroup_set.all().order_by("display_name"))
         ctx["user_count"] = RealmUserGroupMembership.objects.filter(group=self.object).count()
         if ctx["user_count"] and self.request.user.has_perm("realms.view_realmuser"):
             ctx["users_url"] = reverse("realms:users") + f"?realm={self.object.realm.pk}&realm_group={self.object.pk}"
+        ctx["realm_group_mappings"] = self.object.realmgroupmapping_set.all().order_by("claim", "value")
+        ctx["realm_group_mapping_count"] = ctx["realm_group_mappings"].count()
+        if self.request.user.has_perm("realms.add_realmgroupmapping"):
+            ctx["create_realm_group_mapping_url"] = reverse("realms:create_realm_group_mapping")
+        ctx["role_mappings"] = self.object.rolemapping_set.all().order_by("group__name")
+        ctx["role_mapping_count"] = ctx["role_mappings"].count()
+        if self.request.user.has_perm("realms.add_rolemapping"):
+            ctx["create_role_mapping_url"] = reverse("realms:create_role_mapping")
         return ctx
+
+
+class CreateRealmGroupView(PermissionRequiredMixin, CreateView):
+    permission_required = "realms.add_realmgroup"
+    model = RealmGroup
+    fields = ("realm", "display_name",)
+
+
+class UpdateRealmGroupView(PermissionRequiredMixin, UpdateView):
+    permission_required = "realms.change_realmgroup"
+    model = RealmGroup
+    fields = ("display_name",)
+
+    def get_queryset(self):
+        return RealmGroup.objects.for_update()
+
+
+class DeleteRealmGroupView(PermissionRequiredMixin, DeleteView):
+    permission_required = "realms.delete_realmgroup"
+    success_url = reverse_lazy("realms:groups")
+
+    def get_queryset(self):
+        return RealmGroup.objects.for_deletion()
 
 
 # realm users
@@ -207,128 +256,74 @@ class RealmUserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-# group mappings
+# realm group mappings
+
+
+class RealmGroupMappingListView(PermissionRequiredMixin, ListView):
+    permission_required = "realms.view_realmgroupmapping"
+    model = RealmGroupMapping
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data()
+        ctx["realm_group_mappings"] = ctx["object_list"]
+        ctx["realm_group_mapping_count"] = ctx["object_list"].count()
+        if self.request.user.has_perm("realms.add_realmgroupmapping"):
+            ctx["create_realm_group_mapping_url"] = reverse("realms:create_realm_group_mapping")
+        return ctx
 
 
 class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView):
     permission_required = "realms.add_realmgroupmapping"
     model = RealmGroupMapping
-    form_class = RealmGroupMappingForm
-
-    def dispatch(self, request, *args, **kwargs):
-        self.realm = get_object_or_404(Realm, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["realm"] = self.realm
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["realm"] = self.realm
-        return ctx
-
-    def get_success_url(self):
-        return "{}#{}".format(self.realm.get_absolute_url(), self.object.pk)
+    fields = "__all__"
+    success_url = reverse_lazy("realms:realm_group_mappings")
 
 
 class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
     permission_required = "realms.change_realmgroupmapping"
     model = RealmGroupMapping
-    pk_url_kwarg = "gm_pk"
-    form_class = RealmGroupMappingForm
-
-    def dispatch(self, request, *args, **kwargs):
-        self.realm = get_object_or_404(Realm, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["realm"] = self.realm
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["realm"] = self.realm
-        return ctx
-
-    def get_success_url(self):
-        return "{}#{}".format(self.realm.get_absolute_url(), self.object.pk)
+    fields = "__all__"
+    success_url = reverse_lazy("realms:realm_group_mappings")
 
 
 class DeleteRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteView):
     permission_required = "realms.delete_realmgroupmapping"
     model = RealmGroupMapping
-    pk_url_kwarg = "gm_pk"
-
-    def get_success_url(self):
-        return self.object.realm.get_absolute_url()
+    success_url = reverse_lazy("realms:realm_group_mappings")
 
 
-# tag mappings
+# role mappings
 
 
-class CreateRealmTagMappingView(PermissionRequiredMixin, CreateView):
-    permission_required = "realms.add_realmtagmapping"
-    model = RealmTagMapping
-    form_class = RealmTagMappingForm
-
-    def dispatch(self, request, *args, **kwargs):
-        self.realm = get_object_or_404(Realm, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["realm"] = self.realm
-        return kwargs
+class RoleMappingListView(PermissionRequiredMixin, ListView):
+    permission_required = "realms.view_rolemapping"
+    model = RoleMapping
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["realm"] = self.realm
+        ctx["role_mappings"] = ctx["object_list"]
+        ctx["role_mapping_count"] = ctx["object_list"].count()
+        if self.request.user.has_perm("realms.add_rolemapping"):
+            ctx["create_role_mapping_url"] = reverse("realms:create_role_mapping")
         return ctx
 
-    def get_success_url(self):
-        return "{}#{}".format(self.realm.get_absolute_url(), self.object.pk)
+
+class CreateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "realms.add_rolemapping"
+    model = RoleMapping
+    fields = ("realm_group", "group",)
 
 
-class UpdateRealmTagMappingView(PermissionRequiredMixin, UpdateView):
-    permission_required = "realms.change_realmtagmapping"
-    model = RealmTagMapping
-    pk_url_kwarg = "tm_pk"
-    form_class = RealmTagMappingForm
-
-    def dispatch(self, request, *args, **kwargs):
-        self.realm = get_object_or_404(Realm, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["realm"] = self.realm
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["realm"] = self.realm
-        return ctx
-
-    def get_success_url(self):
-        return "{}#{}".format(self.realm.get_absolute_url(), self.object.pk)
+class UpdateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = "realms.change_rolemapping"
+    model = RoleMapping
+    fields = ("realm_group", "group",)
 
 
-class DeleteRealmTagMappingView(PermissionRequiredMixin, DeleteView):
-    permission_required = "realms.delete_realmtagmapping"
-    model = RealmTagMapping
-    pk_url_kwarg = "tm_pk"
-
-    def get_success_url(self):
-        return self.object.realm.get_absolute_url()
-
-    def form_valid(self, form):
-        realm = self.object.realm
-        response = super().form_valid(form)
-        realm_tagging_change.send_robust(self.__class__, realm=realm)
-        return response
+class DeleteRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = "realms.delete_rolemapping"
+    model = RoleMapping
+    success_url = reverse_lazy("realms:role_mappings")
 
 
 # SSO Test views

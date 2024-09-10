@@ -26,11 +26,11 @@ urlpatterns = [
          name="delete_user_api_token"),
 
     # manage groups
-    path('groups/', views.GroupsView.as_view(), name="groups"),
-    path('groups/create/', views.CreateGroupView.as_view(), name="create_group"),
-    path('groups/<int:pk>/', views.GroupView.as_view(), name="group"),
-    path('groups/<int:pk>/update/', views.UpdateGroupView.as_view(), name="update_group"),
-    path('groups/<int:pk>/delete/', views.DeleteGroupView.as_view(), name="delete_group"),
+    path('roles/', views.GroupsView.as_view(), name="groups"),
+    path('roles/create/', views.CreateGroupView.as_view(), name="create_group"),
+    path('roles/<int:pk>/', views.GroupView.as_view(), name="group"),
+    path('roles/<int:pk>/update/', views.UpdateGroupView.as_view(), name="update_group"),
+    path('roles/<int:pk>/delete/', views.DeleteGroupView.as_view(), name="delete_group"),
 
     # user views
     path('settings/profile/', views.ProfileView.as_view(), name="profile"),

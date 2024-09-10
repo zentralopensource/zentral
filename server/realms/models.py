@@ -103,6 +103,14 @@ class Realm(models.Model):
         return d
 
 
+class RealmGroupManager(models.Manager):
+    def for_deletion(self):
+        return self.filter(scim_external_id__isnull=True)
+
+    def for_update(self):
+        return self.filter(scim_external_id__isnull=True)
+
+
 class RealmGroup(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
@@ -115,6 +123,8 @@ class RealmGroup(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = RealmGroupManager()
 
     class Meta:
         unique_together = (("realm", "display_name"),
@@ -139,6 +149,15 @@ class RealmGroup(models.Model):
             "updated_at": self.updated_at,
         })
         return d
+
+    def can_be_deleted(self):
+        return RealmGroup.objects.for_deletion().filter(pk=self.pk).exists()
+
+    def can_be_updated(self):
+        return RealmGroup.objects.for_update().filter(pk=self.pk).exists()
+
+    def scim_managed(self):
+        return self.scim_external_id is not None
 
 
 class RealmUser(models.Model):
@@ -215,7 +234,7 @@ class RealmUser(models.Model):
 
     # groups
 
-    def scim_groups(self):
+    def iter_raw_groups(self):
         sql = (
             "WITH RECURSIVE groups(value, display, type, parent_id) AS ("
             "  SELECT rg.uuid, rg.display_name, 'direct' type, rg.parent_id"
@@ -235,35 +254,20 @@ class RealmUser(models.Model):
             yield dict(zip(columns, result))
 
     def groups_with_types(self):
-        scim_groups = {sg["value"]: sg["type"] for sg in self.scim_groups()}
+        raw_groups = {sg["value"]: sg["type"] for sg in self.iter_raw_groups()}
         groups_with_types = []
-        for realm_group in RealmGroup.objects.filter(pk__in=scim_groups.keys()).order_by("display_name"):
-            groups_with_types.append((realm_group, scim_groups[realm_group.pk]))
+        for realm_group in RealmGroup.objects.filter(pk__in=raw_groups.keys()).order_by("display_name"):
+            groups_with_types.append((realm_group, raw_groups[realm_group.pk]))
         return groups_with_types
-
-    def iter_group_names(self):
-        for scim_group in self.scim_groups():
-            yield scim_group["display"]
-
-    def mapped_tags(self):
-        group_names = [  # not a set, because the number should be small
-            group_name.lower()
-            for group_name in self.iter_group_names()
-        ]
-        tags_to_add = []
-        tags_to_remove = []
-        for tm in self.realm.realmtagmapping_set.select_related("tag").all():
-            if tm.group_name.lower() in group_names:
-                tags_to_add.append(tm.tag)
-            else:
-                tags_to_remove.append(tm.tag)
-        return tags_to_add, tags_to_remove
 
 
 class RealmUserGroupMembership(models.Model):
     user = models.ForeignKey(RealmUser, on_delete=models.CASCADE)
     group = models.ForeignKey(RealmGroup, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+realm_group_members_updated = django.dispatch.Signal()
 
 
 class RealmEmail(models.Model):
@@ -357,28 +361,34 @@ class RealmAuthenticationSession(models.Model):
 
 class RealmGroupMapping(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    realm = models.ForeignKey(Realm, on_delete=models.CASCADE)
     claim = models.CharField(max_length=255)
     separator = models.CharField(max_length=64, blank=True)
     value = models.CharField(max_length=255)
-    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    realm_group = models.ForeignKey(RealmGroup, on_delete=models.CASCADE, verbose_name="Group")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("realm", "claim", "value", "group"),)
+        unique_together = (("claim", "value", "realm_group"),)
+
+    def __str__(self):
+        return f"{self.claim} → {self.realm_group}"
+
+    def get_absolute_url(self):
+        return reverse("realms:realm_group_mappings") + f"#{str(self.pk)}"
 
 
-class RealmTagMapping(models.Model):
+class RoleMapping(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    realm = models.ForeignKey(Realm, on_delete=models.CASCADE)
-    group_name = models.CharField(max_length=255)
-    tag = models.ForeignKey("inventory.Tag", on_delete=models.CASCADE)
+    realm_group = models.ForeignKey(RealmGroup, on_delete=models.CASCADE, verbose_name="Group")
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, verbose_name="Role")
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("realm", "group_name", "tag"),)
+        unique_together = (("realm_group", "group"),)
 
+    def __str__(self):
+        return f"{self.realm_group} → {self.group}"
 
-realm_tagging_change = django.dispatch.Signal()
+    def get_absolute_url(self):
+        return reverse("realms:role_mappings") + f"#{str(self.pk)}"

@@ -16,6 +16,12 @@
 
 <div class="d-flex justify-content-between mb-3">
     <h2 class="m-0">Group{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
+    <div class="ms-auto">
+    {% if perms.realms.add_realmgroup %}
+      {% url 'realms:create_group' as url %}
+      {% button 'CREATE' url "Create new realm group" %}
+    {% endif %}
+    </div>
 </div>
 
 <div class="d-flex flex-wrap align-items-center mb-1">
@@ -35,10 +41,11 @@
   <thead>
     <th>Realm</th>
     <th>Name</th>
+    <th></th>
   </thead>
   <tbody>
     {% for obj in object_list %}
-    <tr>
+    <tr class="data-row">
       <td>
         {% if perms.realms.view_realm %}
         <a href="{{ obj.realm.get_absolute_url }}">{{ obj.realm }}</a>
@@ -47,6 +54,16 @@
         {% endif %}
       </td>
       <td><a href="{{ obj.get_absolute_url }}">{{ obj }}</a></td>
+      <td class="text-end py-0">
+        {% if perms.realms.change_realmgroup and obj.can_be_updated %}
+          {% url 'realms:update_group' obj.pk as url %}
+          {% button 'UPDATE' url "Edit group" %}
+        {% endif %}
+        {% if perms.realms.delete_realmgroupmapping and obj.can_be_deleted %}
+          {% url 'realms:delete_group' obj.pk as url %}
+          {% button 'DELETE' url "Delete group" %}
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

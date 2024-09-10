@@ -24,7 +24,8 @@ class GroupsView(PermissionRequiredMixin, ListView):
             "(select count(*) from accounts_user u "
             " join accounts_user_groups ug on (ug.user_id = u.id) "
             " where ug.group_id=g.id and is_service_account = FALSE) user_count,"
-            "(select count(*) from realms_realmgroupmapping where group_id=g.id) realm_group_mapping_count "
+            "(select count(*) from realms_rolemapping rrm"
+            " where rrm.group_id=g.id) role_mapping_count "
             "from auth_group g order by g.name"
         )
 
@@ -62,13 +63,14 @@ class GroupView(PermissionRequiredMixin, DetailView):
         service_accounts = qs.filter(is_service_account=True)
         ctx["service_accounts"] = service_accounts
         ctx["service_account_count"] = service_accounts.count()
-        realm_group_mappings = (
-            self.object.realmgroupmapping_set.all()
-                       .select_related("realm")
-                       .order_by(Lower("claim"), Lower("value"))
+        # role mappings
+        role_mappings = (
+            self.object.rolemapping_set.all()
+                       .select_related("realm_group")
+                       .order_by(Lower("realm_group__display_name"))
         )
-        ctx["realm_group_mappings"] = realm_group_mappings
-        ctx["realm_group_mapping_count"] = realm_group_mappings.count()
+        ctx["role_mappings"] = role_mappings
+        ctx["role_mapping_count"] = role_mappings.count()
         return ctx
 
 

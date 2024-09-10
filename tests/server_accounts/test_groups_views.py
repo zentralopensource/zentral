@@ -105,7 +105,7 @@ class AccountUsersViewsTestCase(TestCase):
         self.login("auth.add_group")
         response = self.client.get(reverse("accounts:create_group"))
         self.assertTemplateUsed(response, "accounts/group_form.html")
-        self.assertContains(response, "Groups")
+        self.assertContains(response, "Roles")
         self.assertContains(response, "Create")
 
     def test_create_group_error(self):
@@ -169,4 +169,4 @@ class AccountUsersViewsTestCase(TestCase):
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/group_list.html")
         self.assertNotContains(response, group_name)
-        self.assertContains(response, "Groups (2)")
+        self.assertContains(response, "Roles (2)")

@@ -14,7 +14,7 @@ from cryptography.x509.oid import NameOID
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from realms.models import RealmGroup, RealmTagMapping, RealmUserGroupMembership
+from realms.models import RealmGroup, RealmUserGroupMembership
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.crypto import verify_signed_payload
@@ -23,6 +23,7 @@ from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Blueprint, BlueprintArtifact,
                                         Channel, DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
                                         OTAEnrollmentSession, Platform,
+                                        RealmGroupTagMapping,
                                         Profile, UserEnrollmentSession, ReEnrollmentSession)
 from .utils import (force_dep_enrollment_session,
                     force_enrolled_user,
@@ -317,19 +318,13 @@ class MDMViewsTestCase(TestCase):
         MachineTag.objects.create(serial_number=serial_number, tag=unmanaged_tag)
         # managed tag to add
         tag_to_add = Tag.objects.create(name=get_random_string(12))
-        RealmTagMapping.objects.create(
-            realm=session.realm_user.realm,
-            group_name=realm_group.display_name,  # match
-            tag=tag_to_add
-        )
+        RealmGroupTagMapping.objects.create(realm_group=realm_group, tag=tag_to_add)
         self.assertFalse(MachineTag.objects.filter(serial_number=serial_number, tag=tag_to_add).exists())
         # managed tag to remove
         tag_to_remove = Tag.objects.create(name=get_random_string(12))
-        RealmTagMapping.objects.create(
-            realm=session.realm_user.realm,
-            group_name=get_random_string(12),  # no match
-            tag=tag_to_remove
-        )
+        non_matching_realm_group = RealmGroup.objects.create(realm=session.realm_user.realm,
+                                                             display_name=get_random_string(12))
+        RealmGroupTagMapping.objects.create(realm_group=non_matching_realm_group, tag=tag_to_remove)
         MachineTag.objects.create(serial_number=serial_number, tag=tag_to_remove)
 
         payload = {

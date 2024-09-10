@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="breadcrumb-item active">Role mapping{{ role_mappings_count|pluralize }} ({{ role_mapping_count }})</li>
+</ol>
+
+{% include "realms/_role_mappings.html" %}
+
+{% endblock %}

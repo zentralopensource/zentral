@@ -17,7 +17,7 @@ from django.utils.functional import cached_property
 from django.utils.text import slugify
 from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
-from realms.models import Realm, RealmUser
+from realms.models import Realm, RealmGroup, RealmUser
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaMachine, Tag
 from zentral.core.incidents.models import Severity
@@ -1272,6 +1272,20 @@ class EnrollmentSession(models.Model):
     @property
     def device_enrolled_at(self):
         return self.created_at
+
+
+class RealmGroupTagMapping(models.Model):
+    realm_group = models.ForeignKey(RealmGroup, on_delete=models.CASCADE, verbose_name="Group")
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = (("realm_group", "tag"),)
+
+    def __str__(self):
+        return f"{self.realm_group} → {self.tag}"
+
+    def get_absolute_url(self):
+        return reverse("mdm:realm_group_tag_mappings") + f"#rgtm-{self.pk}"
 
 
 # Abstract MDM enrollment model

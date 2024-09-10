@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item "><a href="{% url 'mdm:realm_group_tag_mappings' %}">Group → Tag mappings</a></li>
+  <li class="breadcrumb-item "><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">delete</li>
+</ol>
+
+<h3>Delete Group → Tag mapping</h3>
+
+<form method="post">{% csrf_token %}
+  <p>Do you really want to delete this Group → Tag mapping?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <button type="submit" class="btn btn-danger">Delete</button>
+  </p>
+</form>
+{% endblock %}

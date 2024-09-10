@@ -5,15 +5,15 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'realms:realm_group_mappings' %}">Group mappings</a></li>
-  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
-  <li class="breadcrumb-item active">Delete</li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:groups' %}">Groups</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</li>
 </ol>
 
-<h2>Delete group mapping</h2>
+<h2>Delete group</h2>
 
 <form method="post" class="form" >{% csrf_token %}
-  <p>Do you really want to delete this group mapping?</p>
+  <p>Do you really want to delete this group?</p>
   <p>
     <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">
       Cancel

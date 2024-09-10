@@ -3,7 +3,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'accounts:groups' %}">Groups</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:groups' %}">Roles</a></li>
   {% if object %}
   <li class="breadcrumb-item"><a href="{% url 'accounts:group' object.pk %}">{{ object }}</a></li>
   <li class="breadcrumb-item active">Update</li>
@@ -12,7 +12,7 @@
   {% endif %}
 </ol>
 
-<h3 class="mb-3">Create Group</h3>
+<h3 class="mb-3">{% if object %}Update{% else %}Create{% endif %} Role</h3>
 
 <form class="update-form" method="POST">{% csrf_token %}
   {{ form }}

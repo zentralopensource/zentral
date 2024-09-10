@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="breadcrumb-item active">Group mapping{{ realm_group_mappings_count|pluralize }} ({{ realm_group_mapping_count }})</li>
+</ol>
+
+{% include "realms/_realm_group_mappings.html" %}
+
+{% endblock %}

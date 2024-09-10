@@ -1,28 +1,24 @@
 from django.test import TestCase
-from .utils import force_realm, force_realm_group, force_realm_tag_mapping, force_realm_user
+from .utils import force_realm, force_realm_group
 
 
 class RealmModelsTestCase(TestCase):
     maxDiff = None
 
-    def test_no_tag_mapping_no_mapped_tags(self):
-        group = force_realm_group()
-        _, user = force_realm_user(realm=group.realm, group=group)
-        tta, ttr = user.mapped_tags()
-        self.assertEqual(len(tta), 0)
-        self.assertEqual(len(ttr), 0)
+    def test_realm_iter_user_claim_mappings(self):
+        realm = force_realm()
+        self.assertEqual(
+            list(realm.iter_user_claim_mappings()),
+            [('username', 'username'),
+             ('email', 'email'),
+             ('first_name', ''),
+             ('last_name', ''),
+             ('full_name', ''),
+             ('custom_attr_1', ''),
+             ('custom_attr_2', '')]
+        )
 
-    def test_group_mappings_one_tag_to_add_one_tag_to_remove(self):
-        group = force_realm_group(display_name="YoLo")
-        sub_group = force_realm_group(parent=group)
-        _, user = force_realm_user(realm=group.realm, group=sub_group)
-        _, tm1 = force_realm_tag_mapping(realm=group.realm, group_name="yolo")
-        _, tm2 = force_realm_tag_mapping(realm=group.realm, group_name="fomo")
-        tta, ttr = user.mapped_tags()
-        self.assertEqual(tta, [tm1.tag])
-        self.assertEqual(ttr, [tm2.tag])
-
-    def test_serialize_for_event(self):
+    def test_realm_serialize_for_event(self):
         realm = force_realm()
         self.assertEqual(
             realm.serialize_for_event(),
@@ -47,4 +43,24 @@ class RealmModelsTestCase(TestCase):
              'scim_enabled': False,
              'updated_at': realm.updated_at,
              'username_claim': 'username'}
+        )
+
+    def test_realm_group_serialize_for_event(self):
+        parent_realm_group = force_realm_group()
+        realm_group = force_realm_group(realm=parent_realm_group.realm, parent=parent_realm_group)
+        self.assertEqual(
+            realm_group.serialize_for_event(),
+            {'created_at': realm_group.created_at,
+             'display_name': realm_group.display_name,
+             'parent': {'display_name': parent_realm_group.display_name,
+                        'pk': str(parent_realm_group.pk),
+                        'realm': {
+                            'name': realm_group.realm.name,
+                            'pk': str(realm_group.realm.pk),
+                        }},
+             'pk': str(realm_group.pk),
+             'realm': {'name': realm_group.realm.name,
+                       'pk': str(realm_group.realm.pk)},
+             'scim_external_id': None,
+             'updated_at': realm_group.updated_at}
         )

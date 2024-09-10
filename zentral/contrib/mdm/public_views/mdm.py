@@ -13,7 +13,7 @@ from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirec
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.views.generic import View
-from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit
+from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.base import get_command
@@ -24,7 +24,7 @@ from zentral.contrib.mdm.declarations import (build_legacy_profile,
                                               build_target_management_status_subscriptions,
                                               load_legacy_profile_token)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.inventory import ms_tree_from_payload
+from zentral.contrib.mdm.inventory import ms_tree_from_payload, update_realm_user_machine_tags
 from zentral.contrib.mdm.models import (ArtifactVersion,
                                         Channel, RequestStatus, DeviceCommand, EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
@@ -276,16 +276,7 @@ class CheckinView(MDMView):
 
         # initial machine tagging
         if not is_reenrollment and self.enrollment_session.realm_user:
-            tags_to_add, tags_to_remove = self.enrollment_session.realm_user.mapped_tags()
-            # add the tags
-            if tags_to_add:
-                MachineTag.objects.bulk_create((
-                    MachineTag(serial_number=self.serial_number, tag=tag_to_add)
-                    for tag_to_add in tags_to_add
-                ), ignore_conflicts=True)
-            # remove the other ones that are automatically managed
-            if tags_to_remove:
-                MachineTag.objects.filter(serial_number=self.serial_number, tag__in=tags_to_remove).delete()
+            update_realm_user_machine_tags(self.enrollment_session.realm_user, self.serial_number)
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)

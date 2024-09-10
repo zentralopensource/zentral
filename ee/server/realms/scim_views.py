@@ -13,7 +13,7 @@ from accounts.api_authentication import APITokenAuthentication
 from realms.models import Realm, RealmGroup, RealmUser
 from zentral.conf import settings
 from zentral.utils.drf import DefaultDjangoModelPermissions
-from .models import realm_tagging_change
+from .models import realm_group_members_updated
 from .scim import SCIMUser, SCIMException, SCIMGroup
 
 
@@ -341,7 +341,7 @@ class UserMixin:
                 "value": email.email
             })
         # groups
-        for group in resource.scim_groups():
+        for group in resource.iter_raw_groups():
             group["$ref"] = self.get_location("scim_group", group["value"])
             data["groups"].append(group)
         return data
@@ -410,5 +410,5 @@ class GroupsView(GroupMixin, MultipleResourcesSCIMView):
 class GroupView(GroupMixin, SingleResourceSCIMView):
     def delete(self, request, *args, **kwargs):
         self.resource.delete()
-        realm_tagging_change.send_robust(self.__class__, realm=self.realm)
+        realm_group_members_updated.send_robust(self.__class__, realm=self.realm)
         return HttpResponse(status=204)

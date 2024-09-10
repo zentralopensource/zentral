@@ -1,8 +1,8 @@
 import logging
 from django.db import connection
-from zentral.contrib.inventory.models import PrincipalUserSource
+from zentral.contrib.inventory.models import MachineTag, PrincipalUserSource
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.contrib.mdm.models import Blueprint, Command, DeviceCommand, Platform
+from zentral.contrib.mdm.models import Blueprint, Command, DeviceCommand, Platform, RealmGroupTagMapping
 
 
 logger = logging.getLogger("zentral.contrib.mdm.inventory")
@@ -149,7 +149,7 @@ def update_realm_tags(realm):
       "WITH RECURSIVE groups_tag(group_pk, tag_pk) AS ("
       "  SELECT g.uuid, tm.tag_id"
       "  FROM realms_realmgroup g"
-      "  JOIN realms_realmtagmapping tm ON (LOWER(tm.group_name) = LOWER(g.display_name))"
+      "  JOIN mdm_realmgrouptagmapping tm on (tm.realm_group_id = g.uuid)"
       "  WHERE g.realm_id = %(realm_pk)s"
       "  UNION"
       "  SELECT cg.uuid, gt.tag_pk"
@@ -199,7 +199,10 @@ def update_realm_tags(realm):
       "), deleted_tags AS ("
       "  DELETE FROM inventory_machinetag mt"
       "  WHERE tag_id IN ("
-      "    SELECT tag_id FROM realms_realmtagmapping WHERE realm_id = %(realm_pk)s"
+      "    SELECT tag_id"
+      "    FROM mdm_realmgrouptagmapping tm"
+      "    JOIN realms_realmgroup g on (tm.realm_group_id = g.uuid)"
+      "    WHERE realm_id = %(realm_pk)s"
       "  ) AND serial_number IN ("
       "    SELECT ed.serial_number"
       "    FROM mdm_enrolleddevice ed"
@@ -218,12 +221,33 @@ def update_realm_tags(realm):
         yield dict(zip(columns, result))
 
 
-def realm_tagging_change_receiver(sender, **kwargs):
+def realm_group_members_updated_receiver(sender, **kwargs):
     try:
         realm = kwargs["realm"]
     except KeyError:
-        logger.error("Realm tagging change signal received from %s without realm", sender)
+        logger.error("Realm group members updated signal received from %s without realm", sender)
         return
-    logger.info("Realm tagging change signal received from %s", sender)
+    logger.info("Realm group members updated signal received from %s", sender)
     for op in update_realm_tags(realm):
         logger.info("Tag %s, Serial number %s, Operation %s", op["tag_id"], op["serial_number"], op["op"])
+
+
+def update_realm_user_machine_tags(realm_user, serial_number):
+    realm_user_groups = set(g for (g, _) in realm_user.groups_with_types())
+    tags_to_add = []
+    tags_to_remove = []
+    for rgtm in (
+        RealmGroupTagMapping.objects.select_related("realm_group__realm", "tag")
+                                    .filter(realm_group__realm=realm_user.realm)
+    ):
+        if rgtm.realm_group in realm_user_groups:
+            tags_to_add.append(rgtm.tag)
+        else:
+            tags_to_remove.append(rgtm.tag)
+    if tags_to_add:
+        MachineTag.objects.bulk_create((
+            MachineTag(serial_number=serial_number, tag=tag_to_add)
+            for tag_to_add in tags_to_add
+        ), ignore_conflicts=True)
+    if tags_to_remove:
+        MachineTag.objects.filter(serial_number=serial_number, tag__in=tags_to_remove).delete()

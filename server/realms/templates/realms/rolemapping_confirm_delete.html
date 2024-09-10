@@ -5,16 +5,17 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
-  <li class="breadcrumb-item"><a href="{{ realm.get_absolute_url }}">{{ realm }}</a></li>
-  <li class="breadcrumb-item active">Delete tag mapping</li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:role_mappings' %}">Role mappings</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Delete</li>
 </ol>
 
-<h2>Delete tag mapping</h2>
+<h2>Delete role mapping</h2>
 
 <form method="post" class="form" >{% csrf_token %}
-  <p>Do you really want to delete this tag mapping?</p>
+  <p>Do you really want to delete this role mapping?</p>
   <p>
-    <a class="btn btn-outline-secondary" href="{{ realm.get_absolute_url }}#{{ object.pk }}">
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">
       Cancel
     </a>
     <button class="btn btn-danger" type="submit">Delete</button>

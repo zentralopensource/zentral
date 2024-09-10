@@ -10,8 +10,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils.crypto import get_random_string
-from realms.models import Realm, RealmUser
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from realms.models import Realm, RealmGroup, RealmUser
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.crypto import load_push_certificate_and_key
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
@@ -22,6 +22,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         EnterpriseApp, FileVaultConfig, Location, LocationAsset,
                                         OTAEnrollment, OTAEnrollmentSession,
                                         Profile, PushCertificate, RecoveryPasswordConfig, SCEPConfig,
+                                        RealmGroupTagMapping,
                                         SoftwareUpdate, SoftwareUpdateDeviceID, SoftwareUpdateEnforcement,
                                         StoreApp,
                                         UserEnrollment, UserEnrollmentSession)
@@ -55,6 +56,25 @@ def force_realm_user(realm=None, username=None, email=None):
     )
     return realm, realm_user
 
+
+def force_realm_group(realm=None, parent=None):
+    if realm is None:
+        realm = force_realm()
+    return RealmGroup.objects.create(
+        realm=realm,
+        display_name=get_random_string(12),
+    )
+
+
+def force_realm_group_tag_mapping(realm=None, realm_group=None, tag=None):
+    if realm_group is None:
+        realm_group = force_realm_group(realm=realm)
+    if tag is None:
+        tag = Tag.objects.create(name=get_random_string(12))
+    return RealmGroupTagMapping.objects.create(
+        realm_group=realm_group,
+        tag=tag,
+    )
 
 # push certificate
 

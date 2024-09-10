@@ -43,7 +43,7 @@
         </a>
         <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="{% url 'accounts:users' %}">Users</a></li>
-            <li><a class="dropdown-item" href="{% url 'accounts:groups' %}">Groups</a></li>
+            <li><a class="dropdown-item" href="{% url 'accounts:groups' %}">Roles</a></li>
             <li><a class="dropdown-item" href="{% url 'realms:list' %}">Realms</a></li>
             {% if perms.terraform.view_state %}
             <li><a class="dropdown-item" href="{% url 'terraform:index' %}">Terraform</a></li>

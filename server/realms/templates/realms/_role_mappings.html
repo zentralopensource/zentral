@@ -1,0 +1,82 @@
+{% load ui_extras %}
+
+{% if perms.realms.view_rolemapping %}
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Role mapping{{ role_mapping_count|pluralize }} ({{ role_mapping_count }})</h3>
+    <div class="ms-auto">
+      {% if create_role_mapping_url %}
+      {% button 'CREATE' create_role_mapping_url "Create new role mapping" %}
+      {% endif %}
+    </div>
+</div>
+
+{% if role_mapping_count %}
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
+    <thead>
+      {% if not hide_realm %}
+      <th>Realm</th>
+      {% endif %}
+      {% if not hide_realm_group %}
+      <th>Group</th>
+      {% endif %}
+      {% if not hide_role %}
+      <th>Role</th>
+      {% endif %}
+      <th></th>
+    </thead>
+    <tbody>
+      {% for role_mapping in role_mappings %}
+      <tr id="{{ role_mapping.pk }}" class="data-row">
+        {% if not hide_realm %}
+        {% with role_mapping.realm_group.realm as realm %}
+        <td>
+          {% if perms.realms.view_realm %}
+          <a href="{{ realm.get_absolute_url }}">{{ realm }}</a>
+          {% else %}
+          {{ realm }}
+          {% endif %}
+        </td>
+        {% endwith %}
+        {% endif %}
+        {% if not hide_realm_group %}
+        {% with role_mapping.realm_group as realm_group %}
+        <td>
+          {% if perms.realms.view_realmgroup %}
+          <a href="{{ realm_group.get_absolute_url }}">{{ realm_group }}</a>
+          {% else %}
+          {{ realm_group }}
+          {% endif %}
+        </td>
+        {% endwith %}
+        {% endif %}
+        {% if not hide_role %}
+        {% with role_mapping.group as group %}
+        <td>
+          {% if perms.auth.view_group %}
+          <a href="{% url 'accounts:group'  role_mapping.group.pk %}">{{ role_mapping.group }}</a>
+          {% else %}
+          {{ group }}
+          {% endif %}
+        </td>
+        {% endwith %}
+        {% endif %}
+        <td class="text-end py-0">
+          {% if not request.realm_authentication_session.is_remote %}
+            {% if perms.realms.change_rolemapping %}
+              {% url 'realms:update_role_mapping' role_mapping.pk as url %}
+              {% button 'UPDATE' url "Edit role mapping" %}
+            {% endif %}
+            {% if perms.realms.delete_rolemapping %}
+              {% url 'realms:delete_role_mapping' role_mapping.pk as url %}
+              {% button 'DELETE' url "Delete role mapping" %}
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}

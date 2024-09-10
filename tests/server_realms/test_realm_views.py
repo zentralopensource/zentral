@@ -9,10 +9,11 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from realms.models import Realm, RealmAuthenticationSession
-from zentral.contrib.inventory.models import Tag
-from .utils import (force_realm, force_realm_group, force_realm_group_mapping,
-                    force_realm_tag_mapping, force_realm_user, force_user)
+from realms.backends.registry import backend_classes
+from realms.models import Realm, RealmAuthenticationSession, RealmGroupMapping, RoleMapping
+from .utils import (force_group, force_realm, force_realm_group,
+                    force_realm_group_mapping, force_role_mapping,
+                    force_realm_user, force_user)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -66,13 +67,44 @@ class RealmViewsTestCase(TestCase):
         response = self.client.get(reverse("realms:list"))
         self.assertEqual(response.status_code, 403)
 
-    def test_realm_list(self):
-        realm = force_realm()
+    def test_realm_list_local_no_perms_no_create_links(self):
         self.login("realms.view_realm")
+        realm = force_realm()
         response = self.client.get(reverse("realms:list"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_list.html")
         self.assertContains(response, realm.name)
+        slugs = sorted(backend_classes.keys())
+        self.assertEqual(slugs, ['ldap', 'openidc', 'saml'])
+        for slug in backend_classes.keys():
+            self.assertNotContains(response, reverse("realms:create", args=(slug,)))
+
+    @patch("realms.middlewares.get_session")
+    def test_realm_list_remote_perms_no_create_links(self, get_session):
+        realm, realm_user = force_realm_user()
+        ras = RealmAuthenticationSession.objects.create(realm=realm, user=realm_user, callback="")
+        get_session.return_value = ras
+        self.login("realms.view_realm", "realms.add_realm")
+        response = self.client.get(reverse("realms:list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_list.html")
+        self.assertContains(response, realm.name)
+        slugs = sorted(backend_classes.keys())
+        self.assertEqual(slugs, ['ldap', 'openidc', 'saml'])
+        for slug in backend_classes.keys():
+            self.assertNotContains(response, reverse("realms:create", args=(slug,)))
+
+    def test_realm_list_local_perms_create_links(self):
+        self.login("realms.view_realm", "realms.add_realm")
+        realm = force_realm()
+        response = self.client.get(reverse("realms:list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_list.html")
+        self.assertContains(response, realm.name)
+        slugs = sorted(backend_classes.keys())
+        self.assertEqual(slugs, ['ldap', 'openidc', 'saml'])
+        for slug in backend_classes.keys():
+            self.assertContains(response, reverse("realms:create", args=(slug,)))
 
     # create realm
 
@@ -201,12 +233,35 @@ class RealmViewsTestCase(TestCase):
         response = self.client.get(reverse("realms:view", args=(realm.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_view_realm(self):
+    def test_view_realm_no_link(self):
         realm = force_realm()
         self.login("realms.view_realm")
         response = self.client.get(reverse("realms:view", args=(realm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_detail.html")
+        self.assertNotContains(response, reverse("realms:create_realm_group_mapping"))
+        self.assertNotContains(response, reverse("realms:create_role_mapping"))
+
+    def test_view_realm_all_links(self):
+        realm = force_realm()
+        rmg = force_realm_group_mapping(realm=realm)
+        rm = force_role_mapping(realm=realm)
+        self.login(
+            "realms.view_realm",
+            "realms.add_realmgroupmapping",
+            "realms.view_realmgroupmapping",
+            "realms.add_rolemapping",
+            "realms.view_rolemapping",
+            "realms.change_realmgroupmapping",
+            "realms.change_rolemapping",
+        )
+        response = self.client.get(reverse("realms:view", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_detail.html")
+        self.assertContains(response, reverse("realms:create_realm_group_mapping"))
+        self.assertContains(response, reverse("realms:update_realm_group_mapping", args=(rmg.pk,)))
+        self.assertContains(response, reverse("realms:update_role_mapping", args=(rm.pk,)))
+        self.assertContains(response, reverse("realms:create_role_mapping"))
 
     # update realm
 
@@ -322,276 +377,403 @@ class RealmViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "realms/realm_form.html")
         self.assertFormError(response.context["form"], "bind_password", "Fomo")
 
-    # create group mapping
+    # realm group mappings
 
-    def test_create_group_mapping_redirect(self):
-        realm = force_realm()
-        self.login_redirect("create_group_mapping", realm.pk)
+    def test_realm_group_mappings_redirect(self):
+        self.login_redirect("realm_group_mappings")
 
-    def test_create_group_mapping_permission_denied(self):
-        realm = force_realm()
+    def test_realm_group_mappings_permission_denied(self):
         self.login()
-        response = self.client.get(reverse("realms:create_group_mapping", args=(realm.pk,)))
+        response = self.client.get(reverse("realms:realm_group_mappings"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_realm_group_mappings(self):
+        rgm = force_realm_group_mapping()
+        self.login("realms.view_realmgroupmapping")
+        response = self.client.get(reverse("realms:realm_group_mappings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroupmapping_list.html")
+        self.assertContains(response, rgm.realm_group.realm.name)
+        self.assertContains(response, rgm.realm_group.display_name)
+        self.assertNotContains(response, rgm.realm_group.realm.get_absolute_url())
+        self.assertNotContains(response, rgm.realm_group.get_absolute_url())
+        self.assertNotContains(response, reverse("realms:create_realm_group_mapping"))
+        self.assertNotContains(response, reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
+        self.assertNotContains(response, reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)))
+
+    def test_realm_group_mappings_all_perms(self):
+        rgm = force_realm_group_mapping()
+        self.login(
+            "realms.view_realmgroupmapping",
+            "realms.add_realmgroupmapping",
+            "realms.change_realmgroupmapping",
+            "realms.delete_realmgroupmapping",
+            "realms.view_realm",
+            "realms.view_realmgroup",
+        )
+        response = self.client.get(reverse("realms:realm_group_mappings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroupmapping_list.html")
+        self.assertContains(response, rgm.realm_group.realm.name)
+        self.assertContains(response, rgm.realm_group.display_name)
+        self.assertContains(response, rgm.realm_group.realm.get_absolute_url())
+        self.assertContains(response, rgm.realm_group.get_absolute_url())
+        self.assertContains(response, reverse("realms:create_realm_group_mapping"))
+        self.assertContains(response, reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
+        self.assertContains(response, reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)))
+
+    # create realm group mapping
+
+    def test_create_realm_group_mapping_redirect(self):
+        self.login_redirect("create_realm_group_mapping")
+
+    def test_create_realm_group_mapping_permission_denied(self):
+        self.login()
+        response = self.client.get(reverse("realms:create_realm_group_mapping"))
         self.assertEqual(response.status_code, 403)
 
     @patch("realms.middlewares.get_session")
-    def test_create_group_mapping_remote_user_permission_denied(self, get_session):
+    def test_create_realm_group_mapping_remote_user_permission_denied(self, get_session):
         realm, realm_user = force_realm_user()
         ras = RealmAuthenticationSession.objects.create(realm=realm, user=realm_user, callback="")
         get_session.return_value = ras
         self.login("realms.add_realmgroupmapping")
-        response = self.client.get(reverse("realms:create_group_mapping", args=(realm.pk,)))
+        response = self.client.get(reverse("realms:create_realm_group_mapping"))
         self.assertEqual(response.status_code, 403)
 
-    def test_create_group_mapping_get(self):
-        realm = force_realm()
+    def test_create_realm_group_mapping_get(self):
         self.login("realms.add_realmgroupmapping")
-        response = self.client.get(reverse("realms:create_group_mapping", args=(realm.pk,)))
+        response = self.client.get(reverse("realms:create_realm_group_mapping"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realmgroupmapping_form.html")
 
-    def test_create_group_mapping_post_no_separator_no_view_perm(self):
-        realm = force_realm()
-        self.login("realms.add_realmgroupmapping", "realms.view_realm")
-        group = Group.objects.create(name=get_random_string(12))
+    def test_create_realm_group_mapping_post_no_separator_no_view_perm(self):
+        realm_group = force_realm_group()
+        self.login("realms.add_realmgroupmapping", "realms.view_realmgroupmapping")
         response = self.client.post(
-            reverse("realms:create_group_mapping", args=(realm.pk,)),
-            {"realm": realm.pk,
-             "claim": "Yolo",
+            reverse("realms:create_realm_group_mapping"),
+            {"claim": "Yolo",
              "value": "Fomo",
-             "group": group.pk},
+             "realm_group": realm_group.pk},
             follow=True
         )
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realm_detail.html")
-        self.assertEqual(realm.realmgroupmapping_set.count(), 1)
-        rgm = realm.realmgroupmapping_set.first()
-        self.assertEqual(rgm.group, group)
+        self.assertTemplateUsed(response, "realms/realmgroupmapping_list.html")
+        rgm_qs = RealmGroupMapping.objects.all()
+        self.assertEqual(rgm_qs.count(), 1)
+        rgm = rgm_qs.first()
+        self.assertEqual(rgm.realm_group, realm_group)
         self.assertEqual(rgm.separator, "")
-        self.assertNotContains(response, group.name)  # not displayed
+        self.assertContains(response, realm_group.realm.name)
+        self.assertContains(response, realm_group.display_name)
+        self.assertNotContains(response, reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
+        self.assertNotContains(response, realm_group.realm.get_absolute_url())
+        self.assertNotContains(response, realm_group.get_absolute_url())
 
-    def test_create_group_mapping_post_separator_view_perm(self):
-        realm = force_realm()
-        self.login("realms.add_realmgroupmapping", "realms.view_realm", "realms.view_realmgroupmapping")
-        group = Group.objects.create(name=get_random_string(12))
+    def test_create_realm_group_mapping_post_separator_view_perm(self):
+        self.login(
+            "realms.add_realmgroupmapping",
+            "realms.change_realmgroupmapping",
+            "realms.view_realm",
+            "realms.view_realmgroup",
+            "realms.view_realmgroupmapping"
+        )
+        realm_group = force_realm_group()
         separator = get_random_string(13)
         response = self.client.post(
-            reverse("realms:create_group_mapping", args=(realm.pk,)),
-            {"realm": realm.pk,
-             "claim": "Yolo",
+            reverse("realms:create_realm_group_mapping"),
+            {"claim": "Yolo",
              "separator": separator,
              "value": "Fomo",
-             "group": group.pk},
+             "realm_group": realm_group.pk},
             follow=True
         )
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realm_detail.html")
-        self.assertEqual(realm.realmgroupmapping_set.count(), 1)
-        rgm = realm.realmgroupmapping_set.first()
-        self.assertEqual(rgm.group, group)
+        self.assertTemplateUsed(response, "realms/realmgroupmapping_list.html")
+        rgm_qs = RealmGroupMapping.objects.all()
+        self.assertEqual(rgm_qs.count(), 1)
+        rgm = rgm_qs.first()
+        self.assertEqual(rgm.realm_group, realm_group)
         self.assertEqual(rgm.separator, separator)
-        self.assertContains(response, group.name)  # displayed
-        self.assertContains(response, separator)  # displayed
+        self.assertContains(response, realm_group.realm.name)
+        self.assertContains(response, realm_group.display_name)
+        self.assertContains(response, reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
+        self.assertContains(response, realm_group.realm.get_absolute_url())
+        self.assertContains(response, realm_group.get_absolute_url())
 
-    # update group mapping
+    # update realm group mapping
 
-    def test_update_group_mapping_redirect(self):
-        realm, rgm = force_realm_group_mapping()
-        self.login_redirect("update_group_mapping", realm.pk, rgm.pk)
+    def test_update_realm_group_mapping_redirect(self):
+        rgm = force_realm_group_mapping()
+        self.login_redirect("update_realm_group_mapping", rgm.pk)
 
-    def test_update_group_mapping_permission_denied(self):
-        realm, rgm = force_realm_group_mapping()
+    def test_update_realm_group_mapping_permission_denied(self):
+        rgm = force_realm_group_mapping()
         self.login()
-        response = self.client.get(reverse("realms:update_group_mapping", args=(realm.pk, rgm.pk)))
+        response = self.client.get(reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_update_group_mapping_remote_user_permission_denied(self):
-        realm, rgm = force_realm_group_mapping()
+    def test_update_realm_group_mapping_remote_user_permission_denied(self):
+        rgm = force_realm_group_mapping()
         self.ui_user.is_remote = True
         self.ui_user.save()
         self.login("realms.change_realmgroupmapping")
-        response = self.client.get(reverse("realms:update_group_mapping", args=(realm.pk, rgm.pk)))
+        response = self.client.get(reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_update_group_mapping_get(self):
-        realm, rgm = force_realm_group_mapping()
+    def test_update_realm_group_mapping_get(self):
+        rgm = force_realm_group_mapping()
         self.login("realms.change_realmgroupmapping")
-        response = self.client.get(reverse("realms:update_group_mapping", args=(realm.pk, rgm.pk)))
+        response = self.client.get(reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realmgroupmapping_form.html")
 
-    def test_update_group_mapping_post(self):
-        realm, rgm = force_realm_group_mapping()
-        self.login("realms.change_realmgroupmapping", "realms.view_realm", "realms.view_realmgroupmapping")
-        group = Group.objects.create(name=get_random_string(12))
+    def test_update_realm_group_mapping_post(self):
+        rgm = force_realm_group_mapping()
+        self.login(
+            "realms.change_realmgroupmapping",
+            "realms.view_realmgroupmapping"
+        )
+        realm_group = force_realm_group()
         separator = get_random_string(13)
         response = self.client.post(
-            reverse("realms:update_group_mapping", args=(realm.pk, rgm.pk)),
-            {"realm": realm.pk,
-             "claim": "Yolo",
+            reverse("realms:update_realm_group_mapping", args=(rgm.pk,)),
+            {"claim": "Yolo",
              "separator": separator,
              "value": "Fomo",
-             "group": group.pk},
+             "realm_group": realm_group.pk},
             follow=True
         )
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realm_detail.html")
-        self.assertEqual(realm.realmgroupmapping_set.count(), 1)
-        self.assertEqual(realm.realmgroupmapping_set.first(), rgm)
+        self.assertTemplateUsed(response, "realms/realmgroupmapping_list.html")
+        rgm_qs = RealmGroupMapping.objects.all()
+        self.assertEqual(rgm_qs.count(), 1)
+        self.assertEqual(rgm_qs.first(), rgm)
         rgm.refresh_from_db()
-        self.assertEqual(rgm.group, group)
+        self.assertEqual(rgm.realm_group, realm_group)
         self.assertEqual(rgm.separator, separator)
 
-    # delete group mapping
+    # delete realm group mapping
 
-    def test_delete_group_mapping_redirect(self):
-        realm, rgm = force_realm_group_mapping()
-        self.login_redirect("delete_group_mapping", realm.pk, rgm.pk)
+    def test_delete_realm_group_mapping_redirect(self):
+        rgm = force_realm_group_mapping()
+        self.login_redirect("delete_realm_group_mapping", rgm.pk)
 
-    def test_delete_group_mapping_permission_denied(self):
-        realm, rgm = force_realm_group_mapping()
+    def test_delete_realm_group_mapping_permission_denied(self):
+        rgm = force_realm_group_mapping()
         self.login()
-        response = self.client.get(reverse("realms:delete_group_mapping", args=(realm.pk, rgm.pk)))
+        response = self.client.get(reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_group_mapping_remote_user_permission_denied(self):
-        realm, rgm = force_realm_group_mapping()
+    def test_delete_realm_group_mapping_remote_user_permission_denied(self):
+        rgm = force_realm_group_mapping()
         self.ui_user.is_remote = True
         self.ui_user.save()
         self.login("realms.delete_realmgroupmapping")
-        response = self.client.get(reverse("realms:update_group_mapping", args=(realm.pk, rgm.pk)))
+        response = self.client.get(reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_group_mapping_get(self):
-        realm, rgm = force_realm_group_mapping()
+    def test_delete_realm_group_mapping_get(self):
+        rgm = force_realm_group_mapping()
         self.login("realms.delete_realmgroupmapping")
-        response = self.client.get(reverse("realms:delete_group_mapping", args=(realm.pk, rgm.pk)))
+        response = self.client.get(reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realmgroupmapping_confirm_delete.html")
 
-    def test_delete_group_mapping_post(self):
-        realm, rgm = force_realm_group_mapping()
-        self.login("realms.delete_realmgroupmapping", "realms.view_realm")
-        response = self.client.post(reverse("realms:delete_group_mapping", args=(realm.pk, rgm.pk)), follow=True)
+    def test_delete_realm_group_mapping_post(self):
+        rgm = force_realm_group_mapping()
+        self.login("realms.delete_realmgroupmapping", "realms.view_realmgroupmapping")
+        response = self.client.post(reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realm_detail.html")
-        self.assertEqual(realm.realmgroupmapping_set.count(), 0)
+        self.assertTemplateUsed(response, "realms/realmgroupmapping_list.html")
+        rgm_qs = RealmGroupMapping.objects.all()
+        self.assertEqual(rgm_qs.count(), 0)
 
-    # create tag mapping
+    # role mappings
 
-    def test_create_tag_mapping_redirect(self):
-        realm = force_realm()
-        self.login_redirect("create_tag_mapping", realm.pk)
+    def test_role_mappings_redirect(self):
+        self.login_redirect("role_mappings")
 
-    def test_create_tag_mapping_permission_denied(self):
-        realm = force_realm()
+    def test_role_mappings_permission_denied(self):
         self.login()
-        response = self.client.get(reverse("realms:create_tag_mapping", args=(realm.pk,)))
+        response = self.client.get(reverse("realms:role_mappings"))
         self.assertEqual(response.status_code, 403)
 
-    def test_create_tag_mapping_get(self):
-        realm = force_realm()
-        self.login("realms.add_realmtagmapping")
-        response = self.client.get(reverse("realms:create_tag_mapping", args=(realm.pk,)))
+    def test_role_mappings(self):
+        rm = force_role_mapping()
+        self.login("realms.view_rolemapping")
+        response = self.client.get(reverse("realms:role_mappings"))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realmtagmapping_form.html")
+        self.assertTemplateUsed(response, "realms/rolemapping_list.html")
+        self.assertContains(response, rm.realm_group.realm.name)
+        self.assertContains(response, rm.realm_group.display_name)
+        self.assertContains(response, rm.group.name)
+        self.assertNotContains(response, rm.realm_group.realm.get_absolute_url())
+        self.assertNotContains(response, rm.realm_group.get_absolute_url())
+        self.assertNotContains(response, reverse("accounts:group", args=(rm.group.pk,)))
+        self.assertNotContains(response, reverse("realms:create_role_mapping"))
+        self.assertNotContains(response, reverse("realms:update_role_mapping", args=(rm.pk,)))
+        self.assertNotContains(response, reverse("realms:delete_role_mapping", args=(rm.pk,)))
 
-    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
-    def test_create_tag_mapping_post(self, update_realm_tags):
-        realm = force_realm()
-        group_name = get_random_string(12)
-        tag = Tag.objects.create(name=get_random_string(12))
-        self.login("realms.add_realmtagmapping", "realms.view_realm", "realms.view_realmtagmapping")
+    def test_role_mappings_all_perms(self):
+        rm = force_role_mapping()
+        self.login(
+            "auth.view_group",
+            "realms.view_rolemapping",
+            "realms.add_rolemapping",
+            "realms.change_rolemapping",
+            "realms.delete_rolemapping",
+            "realms.view_realm",
+            "realms.view_realmgroup",
+        )
+        response = self.client.get(reverse("realms:role_mappings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/rolemapping_list.html")
+        self.assertContains(response, rm.realm_group.realm.name)
+        self.assertContains(response, rm.realm_group.display_name)
+        self.assertContains(response, rm.group.name)
+        self.assertContains(response, rm.realm_group.realm.get_absolute_url())
+        self.assertContains(response, rm.realm_group.get_absolute_url())
+        self.assertContains(response, reverse("accounts:group", args=(rm.group.pk,)))
+        self.assertContains(response, reverse("realms:create_role_mapping"))
+        self.assertContains(response, reverse("realms:update_role_mapping", args=(rm.pk,)))
+        self.assertContains(response, reverse("realms:delete_role_mapping", args=(rm.pk,)))
+
+    # create role mapping
+
+    def test_create_role_mapping_redirect(self):
+        self.login_redirect("create_role_mapping")
+
+    def test_create_role_mapping_permission_denied(self):
+        self.login()
+        response = self.client.get(reverse("realms:create_role_mapping"))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("realms.middlewares.get_session")
+    def test_create_role_mapping_remote_user_permission_denied(self, get_session):
+        realm, realm_user = force_realm_user()
+        ras = RealmAuthenticationSession.objects.create(realm=realm, user=realm_user, callback="")
+        get_session.return_value = ras
+        self.login("realms.add_rolemapping")
+        response = self.client.get(reverse("realms:create_role_mapping"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_role_mapping_get(self):
+        self.login("realms.add_rolemapping")
+        response = self.client.get(reverse("realms:create_role_mapping"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/rolemapping_form.html")
+
+    def test_create_role_mapping_no_view_perm(self):
+        group = force_group()
+        realm_group = force_realm_group()
+        self.login("realms.add_rolemapping", "realms.view_rolemapping")
         response = self.client.post(
-            reverse("realms:create_tag_mapping", args=(realm.pk,)),
-            {"realm": realm.pk,
-             "group_name": group_name,
-             "tag": tag.pk},
+            reverse("realms:create_role_mapping"),
+            {"group": group.pk,
+             "realm_group": realm_group.pk},
             follow=True
         )
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realm_detail.html")
-        self.assertEqual(realm.realmtagmapping_set.count(), 1)
-        rtm = realm.realmtagmapping_set.first()
-        self.assertEqual(rtm.group_name, group_name)
-        self.assertEqual(rtm.tag, tag)
-        self.assertContains(response, rtm.group_name)
-        self.assertContains(response, tag.name)
-        update_realm_tags.assert_called_once_with(realm)
+        self.assertTemplateUsed(response, "realms/rolemapping_list.html")
+        rm_qs = RoleMapping.objects.all()
+        self.assertEqual(rm_qs.count(), 1)
+        rm = rm_qs.first()
+        self.assertEqual(rm.group, group)
+        self.assertEqual(rm.realm_group, realm_group)
+        self.assertContains(response, realm_group.realm.name)
+        self.assertContains(response, realm_group.display_name)
+        self.assertContains(response, group.name)
+        self.assertNotContains(response, reverse("realms:update_role_mapping", args=(rm.pk,)))
+        self.assertNotContains(response, realm_group.realm.get_absolute_url())
+        self.assertNotContains(response, realm_group.get_absolute_url())
+        self.assertNotContains(response, reverse("accounts:group", args=(group.pk,)))
 
-    # update tag mapping
+    # update role mapping
 
-    def test_update_tag_mapping_redirect(self):
-        realm, rtm = force_realm_tag_mapping()
-        self.login_redirect("update_tag_mapping", realm.pk, rtm.pk)
+    def test_update_role_mapping_redirect(self):
+        rm = force_role_mapping()
+        self.login_redirect("update_role_mapping", rm.pk)
 
-    def test_update_tag_mapping_permission_denied(self):
-        realm, rtm = force_realm_tag_mapping()
-        self.login("realms.add_realmtagmapping")
-        response = self.client.get(reverse("realms:update_tag_mapping", args=(realm.pk, rtm.pk)))
+    def test_update_role_mapping_permission_denied(self):
+        rm = force_role_mapping()
+        self.login()
+        response = self.client.get(reverse("realms:update_role_mapping", args=(rm.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_update_tag_mapping_get(self):
-        realm, rtm = force_realm_tag_mapping()
-        self.login("realms.change_realmtagmapping")
-        response = self.client.get(reverse("realms:update_tag_mapping", args=(realm.pk, rtm.pk)))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realmtagmapping_form.html")
+    def test_update_role_mapping_remote_user_permission_denied(self):
+        rm = force_role_mapping()
+        self.ui_user.is_remote = True
+        self.ui_user.save()
+        self.login("realms.change_rolemapping")
+        response = self.client.get(reverse("realms:update_role_mapping", args=(rm.pk,)))
+        self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
-    def test_update_tag_mapping_post(self, update_realm_tags):
-        realm, rtm = force_realm_tag_mapping()
-        group_name = get_random_string(12)
-        tag = Tag.objects.create(name=get_random_string(12))
-        self.login("realms.change_realmtagmapping", "realms.view_realm", "realms.view_realmtagmapping")
+    def test_update_role_mapping_get(self):
+        rm = force_role_mapping()
+        self.login("realms.change_rolemapping")
+        response = self.client.get(reverse("realms:update_role_mapping", args=(rm.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/rolemapping_form.html")
+
+    def test_update_role_mapping_post(self):
+        rm = force_role_mapping()
+        self.login(
+            "realms.change_rolemapping",
+            "realms.view_rolemapping"
+        )
+        group = force_group()
+        realm_group = force_realm_group()
         response = self.client.post(
-            reverse("realms:update_tag_mapping", args=(realm.pk, rtm.pk)),
-            {"realm": realm.pk,
-             "group_name": group_name,
-             "tag": tag.pk},
+            reverse("realms:update_role_mapping", args=(rm.pk,)),
+            {"group": group.pk,
+             "realm_group": realm_group.pk},
             follow=True
         )
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realm_detail.html")
-        self.assertEqual(realm.realmtagmapping_set.count(), 1)
-        rtm = realm.realmtagmapping_set.first()
-        self.assertEqual(rtm.group_name, group_name)
-        self.assertEqual(rtm.tag, tag)
-        self.assertContains(response, rtm.group_name)
-        self.assertContains(response, tag.name)
-        update_realm_tags.assert_called_once_with(realm)
+        self.assertTemplateUsed(response, "realms/rolemapping_list.html")
+        rm_qs = RoleMapping.objects.all()
+        self.assertEqual(rm_qs.count(), 1)
+        self.assertEqual(rm_qs.first(), rm)
+        rm.refresh_from_db()
+        self.assertEqual(rm.group, group)
+        self.assertEqual(rm.realm_group, realm_group)
 
-    # delete tag mapping
+    # delete role mapping
 
-    def test_delete_tag_mapping_redirect(self):
-        realm, rtm = force_realm_tag_mapping()
-        self.login_redirect("delete_tag_mapping", realm.pk, rtm.pk)
+    def test_delete_role_mapping_redirect(self):
+        rm = force_role_mapping()
+        self.login_redirect("delete_role_mapping", rm.pk)
 
-    def test_delete_tag_mapping_permission_denied(self):
-        realm, rtm = force_realm_tag_mapping()
-        self.login("realms.add_realmtagmapping")
-        response = self.client.get(reverse("realms:delete_tag_mapping", args=(realm.pk, rtm.pk)))
+    def test_delete_role_mapping_permission_denied(self):
+        rm = force_role_mapping()
+        self.login()
+        response = self.client.get(reverse("realms:delete_role_mapping", args=(rm.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_tag_mapping_get(self):
-        realm, rtm = force_realm_tag_mapping()
-        self.login("realms.delete_realmtagmapping")
-        response = self.client.get(reverse("realms:delete_tag_mapping", args=(realm.pk, rtm.pk)))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realmtagmapping_confirm_delete.html")
+    def test_delete_role_mapping_remote_user_permission_denied(self):
+        rm = force_role_mapping()
+        self.ui_user.is_remote = True
+        self.ui_user.save()
+        self.login("realms.delete_rolemapping")
+        response = self.client.get(reverse("realms:delete_role_mapping", args=(rm.pk,)))
+        self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.contrib.mdm.inventory.update_realm_tags")
-    def test_delete_tag_mapping_post(self, update_realm_tags):
-        realm, rtm = force_realm_tag_mapping()
-        tag = Tag.objects.create(name=get_random_string(12))
-        self.login("realms.delete_realmtagmapping", "realms.view_realm", "realms.view_realmtagmapping")
-        response = self.client.post(reverse("realms:delete_tag_mapping", args=(realm.pk, rtm.pk)), follow=True)
+    def test_delete_role_mapping_get(self):
+        rm = force_role_mapping()
+        self.login("realms.delete_rolemapping")
+        response = self.client.get(reverse("realms:delete_role_mapping", args=(rm.pk,)))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realm_detail.html")
-        self.assertEqual(realm.realmtagmapping_set.count(), 0)
-        self.assertNotContains(response, rtm.group_name)
-        self.assertNotContains(response, tag.name)
-        update_realm_tags.assert_called_once_with(realm)
+        self.assertTemplateUsed(response, "realms/rolemapping_confirm_delete.html")
+
+    def test_delete_role_mapping_post(self):
+        rm = force_role_mapping()
+        self.login("realms.delete_rolemapping", "realms.view_rolemapping")
+        response = self.client.post(reverse("realms:delete_role_mapping", args=(rm.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/rolemapping_list.html")
+        rm_qs = RoleMapping.objects.all()
+        self.assertEqual(rm_qs.count(), 0)
 
     # realm groups
 
@@ -698,6 +880,100 @@ class RealmViewsTestCase(TestCase):
         self.assertContains(response, "Children (0)")
         self.assertContains(response, "User (1)")
         self.assertNotContains(response, reverse("realms:users") + f"?realm={group.realm.pk}&realm_group={group.pk}")
+
+    # create realm group
+
+    def test_create_realm_group_redirect(self):
+        self.login_redirect("create_group")
+
+    def test_create_realm_group_permission_denied(self):
+        self.login("realms.view_realmuser")
+        response = self.client.get(reverse("realms:create_group"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_realm_group_get(self):
+        self.login("realms.add_realmgroup")
+        response = self.client.get(reverse("realms:create_group"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_form.html")
+        self.assertContains(response, "Create group")
+
+    def test_create_realm_group_post(self):
+        realm = force_realm()
+        display_name = get_random_string(12)
+        self.login("realms.add_realmgroup", "realms.view_realmgroup")
+        response = self.client.post(
+            reverse("realms:create_group"),
+            {"realm": realm.pk,
+             "display_name": display_name},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_detail.html")
+        self.assertContains(response, display_name)
+
+    # update realm group
+
+    def test_update_realm_group_redirect(self):
+        realm_group = force_realm_group()
+        self.login_redirect("update_group", realm_group.pk)
+
+    def test_update_realm_group_permission_denied(self):
+        realm_group = force_realm_group()
+        self.login("realms.view_realmuser")
+        response = self.client.get(reverse("realms:update_group", args=(realm_group.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_realm_group_get(self):
+        realm_group = force_realm_group()
+        self.login("realms.change_realmgroup")
+        response = self.client.get(reverse("realms:update_group", args=(realm_group.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_form.html")
+        self.assertContains(response, "Update group")
+
+    def test_update_realm_group_post(self):
+        realm_group = force_realm_group()
+        new_display_name = get_random_string(12)
+        self.login("realms.change_realmgroup", "realms.view_realmgroup")
+        response = self.client.post(
+            reverse("realms:update_group", args=(realm_group.pk,)),
+            {"display_name": new_display_name},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_detail.html")
+        self.assertContains(response, new_display_name)
+        realm_group.refresh_from_db()
+        self.assertEqual(realm_group.display_name, new_display_name)
+
+    # delete realm group
+
+    def test_delete_realm_group_redirect(self):
+        realm_group = force_realm_group()
+        self.login_redirect("delete_group", realm_group.pk)
+
+    def test_delete_realm_group_permission_denied(self):
+        realm_group = force_realm_group()
+        self.login("realms.change_realmgroup")
+        response = self.client.get(reverse("realms:delete_group", args=(realm_group.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_realm_group_get(self):
+        realm_group = force_realm_group()
+        self.login("realms.delete_realmgroup")
+        response = self.client.get(reverse("realms:delete_group", args=(realm_group.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_confirm_delete.html")
+        self.assertContains(response, "Delete group")
+
+    def test_delete_realm_group_post(self):
+        realm_group = force_realm_group()
+        self.login("realms.delete_realmgroup", "realms.view_realmgroup")
+        response = self.client.post(reverse("realms:delete_group", args=(realm_group.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_list.html")
+        self.assertNotContains(response, realm_group.display_name)
 
     # realm users
 

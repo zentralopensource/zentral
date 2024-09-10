@@ -41,6 +41,9 @@
 {% if perms.mdm.view_scepconfig %}
 <p><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></p>
 {% endif %}
+{% if perms.mdm.view_realmgrouptagmapping %}
+<p><a href="{% url 'mdm:realm_group_tag_mappings' %}">Group → Tag mappings</a></p>
+{% endif %}
 
 <div class="d-flex align-items-center mb-1">
     <h3 class="m-0">Setup</h3>

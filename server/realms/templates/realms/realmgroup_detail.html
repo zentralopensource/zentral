@@ -14,7 +14,17 @@
     <h2 class="m-0">{{ object }}</h2>
   </div>
   <div class="d-flex align-items-center mb-3">
-    <h3 class="m-0 fs-5 text-secondary">Realm Group</i></h3>
+    <h3 class="m-0 fs-5 text-secondary">Group</i></h3>
+    <div class="ms-auto">
+      {% if perms.realms.change_realmgroup and object.can_be_updated %}
+        {% url 'realms:update_group' object.pk as url %}
+        {% button 'UPDATE' url "Edit group" %}
+      {% endif %}
+      {% if perms.realms.delete_realmgroup and object.can_be_deleted %}
+        {% url 'realms:delete_group' object.pk as url %}
+        {% button 'DELETE' url "Delete group" %}
+      {% endif %}
+    </div>
   </div>
   <div class="table-responsive mb-3">
   <table class="table-object-properties">
@@ -32,6 +42,10 @@
           {{ object.realm }}
           {% endif %}
         </td>
+      </tr>
+      <tr>
+        <td>SCIM managed?</td>
+        <td>{{ object.scim_managed|yesno }}</td>
       </tr>
       <tr>
         <td>Display name</td>
@@ -75,4 +89,9 @@
   </table>
   {% created_updated_at object %}
 </div>
+
+{% include "realms/_realm_group_mappings.html" with hide_realm="True" hide_realm_group="True" %}
+
+{% include "realms/_role_mappings.html" with hide_realm="True" hide_realm_group="True" %}
+
 {% endblock %}

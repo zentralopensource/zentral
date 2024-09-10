@@ -1,0 +1,75 @@
+{% load ui_extras %}
+
+{% if perms.realms.view_realmgroupmapping %}
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0">Group mapping{{ realm_group_mapping_count|pluralize }} ({{ realm_group_mapping_count }})</h3>
+
+    <div class="ms-auto">
+      {% if create_realm_group_mapping_url %}
+      {% button 'CREATE' create_realm_group_mapping_url "Create new group mapping" %}
+      {% endif %}
+    </div>
+</div>
+
+{% if realm_group_mapping_count %}
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
+    <thead>
+      {% if not hide_realm %}
+      <th>Realm</th>
+      {% endif %}
+      <th>Claim</th>
+      <th>Separator</th>
+      <th>Value</th>
+      {% if not hide_realm_group %}
+      <th>Group</th>
+      {% endif %}
+      <th></th>
+    </thead>
+    <tbody>
+      {% for realm_group_mapping in realm_group_mappings %}
+      <tr id="{{ realm_group_mapping.pk }}" class="data-row">
+        {% if not hide_realm %}
+        {% with realm_group_mapping.realm_group.realm as realm %}
+        <td>
+          {% if perms.realms.view_realm %}
+          <a href="{{ realm.get_absolute_url }}">{{ realm }}</a>
+          {% else %}
+          {{ realm }}
+          {% endif %}
+        </td>
+        {% endwith %}
+        {% endif %}
+        <td>{{ realm_group_mapping.claim }}</td>
+        <td>{{ realm_group_mapping.separator|default:"∅" }}</td>
+        <td>{{ realm_group_mapping.value }}</td>
+        {% if not hide_realm_group %}
+        {% with realm_group_mapping.realm_group as realm_group %}
+        <td>
+          {% if perms.realms.view_realmgroup %}
+          <a href="{{ realm_group.get_absolute_url }}">{{ realm_group }}</a>
+          {% else %}
+          {{ realm_group }}
+          {% endif %}
+        </td>
+        {% endwith %}
+        {% endif %}
+        <td class="text-end py-0">
+          {% if not request.realm_authentication_session.is_remote %}
+            {% if perms.realms.change_realmgroupmapping %}
+              {% url 'realms:update_realm_group_mapping' realm_group_mapping.pk as url %}
+              {% button 'UPDATE' url "Edit group mapping" %}
+            {% endif %}
+            {% if perms.realms.delete_realmgroupmapping %}
+              {% url 'realms:delete_realm_group_mapping' realm_group_mapping.pk as url %}
+              {% button 'DELETE' url "Delete group mapping" %}
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}

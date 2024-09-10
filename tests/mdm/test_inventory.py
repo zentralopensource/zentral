@@ -4,14 +4,15 @@ import plistlib
 from unittest.mock import call, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from realms.models import RealmGroup, RealmTagMapping, RealmUserGroupMembership
+from realms.models import RealmGroup, RealmUserGroupMembership
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, MetaMachine, Tag
 from zentral.contrib.mdm.commands.certificate_list import CertificateList
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.installed_application_list import InstalledApplicationList
 from zentral.contrib.mdm.commands.profile_list import ProfileList
-from zentral.contrib.mdm.inventory import ms_tree_from_payload, realm_tagging_change_receiver, update_realm_tags
-from zentral.contrib.mdm.models import Blueprint
+from zentral.contrib.mdm.inventory import (ms_tree_from_payload, realm_group_members_updated_receiver,
+                                           update_realm_tags)
+from zentral.contrib.mdm.models import Blueprint, RealmGroupTagMapping
 from .utils import force_dep_enrollment_session
 
 
@@ -154,29 +155,19 @@ class MDMInventoryTestCase(TestCase):
         RealmUserGroupMembership.objects.create(user=self.realm_user, group=sub_group)
         # tag to add because of a matching tag mapping
         tag_to_add = Tag.objects.create(name=get_random_string(12))
-        RealmTagMapping.objects.create(
-            realm=self.realm,
-            group_name=group.display_name,  # match on the group
-            tag=tag_to_add
-        )
+        RealmGroupTagMapping.objects.create(realm_group=group, tag=tag_to_add)
         # tag already present
         tag_already_present = Tag.objects.create(name=get_random_string(12))
-        RealmTagMapping.objects.create(
-            realm=self.realm,
-            group_name=sub_group.display_name,  # match on the sub group
-            tag=tag_already_present
-        )
+        RealmGroupTagMapping.objects.create(realm_group=group, tag=tag_already_present)
         MachineTag.objects.create(serial_number=serial_number, tag=tag_already_present)
         # tag not managed via the mappings
         unmanaged_tag = Tag.objects.create(name=get_random_string(12))
         MachineTag.objects.create(serial_number=serial_number, tag=unmanaged_tag)
         # tag to remove
         tag_to_remove = Tag.objects.create(name=get_random_string(12))
-        RealmTagMapping.objects.create(
-            realm=self.realm,
-            group_name=get_random_string(12),  # no match
-            tag=tag_to_remove
-        )
+        non_matching_group = RealmGroup.objects.create(realm=self.realm,
+                                                       display_name=get_random_string(12))
+        RealmGroupTagMapping.objects.create(realm_group=non_matching_group, tag=tag_to_remove)
         MachineTag.objects.create(serial_number=serial_number, tag=tag_to_remove)
 
         self.assertEqual(
@@ -194,15 +185,15 @@ class MDMInventoryTestCase(TestCase):
         self.assertFalse(mt_qs.filter(tag=tag_to_remove).exists())
 
     @patch("zentral.contrib.mdm.inventory.logger.error")
-    def test_realm_tagging_change_receiver_error(self, logger_error):
+    def test_realm_group_members_updated_receiver_error(self, logger_error):
         sentinel = object()
-        realm_tagging_change_receiver(sentinel)
+        realm_group_members_updated_receiver(sentinel)
         logger_error.assert_called_once_with(
-            "Realm tagging change signal received from %s without realm", sentinel
+            "Realm group members updated signal received from %s without realm", sentinel
         )
 
     @patch("zentral.contrib.mdm.inventory.logger.info")
-    def test_realm_tagging_change_receiver_info(self, logger_info):
+    def test_realm_group_members_updated_receiver_info(self, logger_info):
         serial_number = self.enrolled_device.serial_number
         mt_qs = MachineTag.objects.filter(serial_number=serial_number)
         self.assertFalse(mt_qs.exists())
@@ -217,15 +208,11 @@ class MDMInventoryTestCase(TestCase):
         RealmUserGroupMembership.objects.create(user=self.realm_user, group=sub_group)
         # tag to add because of a matching tag mapping
         tag_to_add = Tag.objects.create(name=get_random_string(12))
-        RealmTagMapping.objects.create(
-            realm=self.realm,
-            group_name=group.display_name,  # match on the group
-            tag=tag_to_add
-        )
+        RealmGroupTagMapping.objects.create(realm_group=group, tag=tag_to_add)
 
         sentinel = object()
-        realm_tagging_change_receiver(sentinel, realm=self.realm)
+        realm_group_members_updated_receiver(sentinel, realm=self.realm)
         logger_info.assert_has_calls([
-            call("Realm tagging change signal received from %s", sentinel),
+            call("Realm group members updated signal received from %s", sentinel),
             call("Tag %s, Serial number %s, Operation %s", tag_to_add.pk, serial_number, "c")
         ])

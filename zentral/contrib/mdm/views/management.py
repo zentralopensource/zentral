@@ -32,6 +32,7 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        UserEnrollmentForm,
                                        UpgradeEnterpriseAppForm, UpgradeProfileForm, UpgradeStoreAppForm,
                                        UploadEnterpriseAppForm, UploadProfileForm)
+from zentral.contrib.mdm.inventory import update_realm_tags
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Asset, Blueprint, BlueprintArtifact,
                                         Channel,
@@ -40,6 +41,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         FileVaultConfig,
                                         OTAEnrollment,
+                                        RealmGroupTagMapping,
                                         RecoveryPasswordConfig,
                                         SCEPConfig,
                                         SoftwareUpdateEnforcement,
@@ -505,6 +507,66 @@ class UpdateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
                 self.get_context_data(user_enrollment_form=user_enrollment_form,
                                       enrollment_secret_form=enrollment_secret_form)
             )
+
+
+# Realm Group Tag Mappings
+
+
+class RealmGroupTagMappingListView(PermissionRequiredMixin, UserPaginationListView):
+    permission_required = "mdm.view_realmgrouptagmapping"
+
+    def get_queryset(self):
+        return (
+            RealmGroupTagMapping.objects.select_related("realm_group__realm", "tag__taxonomy")
+                                        .order_by("realm_group__realm__name", "realm_group__display_name")
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        page = ctx["page_obj"]
+        if page.number > 1:
+            qd = self.request.GET.copy()
+            qd.pop('page', None)
+            ctx['reset_link'] = "?{}".format(qd.urlencode())
+        return ctx
+
+
+class CreateRealmGroupTagMappingView(PermissionRequiredMixin, CreateView):
+    permission_required = "mdm.add_realmgrouptagmapping"
+    model = RealmGroupTagMapping
+    fields = "__all__"
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        update_realm_tags(self.object.realm_group.realm)
+        return response
+
+
+class UpdateRealmGroupTagMappingView(PermissionRequiredMixin, UpdateView):
+    permission_required = "mdm.change_realmgrouptagmapping"
+    model = RealmGroupTagMapping
+    fields = "__all__"
+
+    def form_valid(self, form):
+        old_realm = self.get_object().realm_group.realm  # self.object is already updated
+        response = super().form_valid(form)
+        update_realm_tags(old_realm)
+        new_realm = self.object.realm_group.realm
+        if new_realm != old_realm:
+            update_realm_tags(new_realm)
+        return response
+
+
+class DeleteRealmGroupTagMappingView(PermissionRequiredMixin, DeleteView):
+    permission_required = "mdm.delete_realmgrouptagmapping"
+    model = RealmGroupTagMapping
+    success_url = reverse_lazy("mdm:realm_group_tag_mappings")
+
+    def form_valid(self, form):
+        realm = self.object.realm_group.realm
+        response = super().form_valid(form)
+        update_realm_tags(realm)
+        return response
 
 
 # Artifacts

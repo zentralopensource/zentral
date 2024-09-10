@@ -1,7 +1,7 @@
 import logging
 from rest_framework import serializers, status
 from rest_framework.exceptions import APIException
-from .models import realm_tagging_change, RealmEmail, RealmGroup, RealmUser, RealmUserGroupMembership
+from .models import realm_group_members_updated, RealmEmail, RealmGroup, RealmUser, RealmUserGroupMembership
 
 
 logger = logging.getLogger("zentral.realms.scim")
@@ -107,7 +107,7 @@ class SCIMGroup(serializers.Serializer):
             )
             members_updated |= users_removed > 0
         if members_updated:
-            realm_tagging_change.send_robust(self.__class__, realm=self.realm)
+            realm_group_members_updated.send_robust(self.__class__, realm=self.realm)
 
     def save(self):
         self.resource = RealmGroup.objects.create(

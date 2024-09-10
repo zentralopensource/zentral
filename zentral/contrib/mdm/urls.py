@@ -123,6 +123,20 @@ urlpatterns = [
          views.UpdateUserEnrollmentView.as_view(),
          name='update_user_enrollment'),
 
+    # realm group tag mappings
+    path('group_tag_mappings/',
+         views.RealmGroupTagMappingListView.as_view(),
+         name='realm_group_tag_mappings'),
+    path('group_tag_mappings/create/',
+         views.CreateRealmGroupTagMappingView.as_view(),
+         name='create_realm_group_tag_mapping'),
+    path('group_tag_mappings/<int:pk>/update/',
+         views.UpdateRealmGroupTagMappingView.as_view(),
+         name='update_realm_group_tag_mapping'),
+    path('group_tag_mappings/<int:pk>/delete/',
+         views.DeleteRealmGroupTagMappingView.as_view(),
+         name='delete_realm_group_tag_mapping'),
+
     # artifacts
     path('artifacts/',
          views.ArtifactListView.as_view(),

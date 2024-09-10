@@ -3,6 +3,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from realms.exceptions import RealmUserError
 from realms.models import RealmUser
+from realms.utils import apply_realm_group_mappings
 
 
 logger = logging.getLogger("zentral.realms.backends.views")
@@ -16,6 +17,7 @@ def finalize_session(session, request, realm_user, expires_at=None):
     session.user = realm_user
     session.expires_at = expires_at
     session.save()
+    apply_realm_group_mappings(realm_user)
     callback_function = session.get_callback_function()
     if callback_function:
         response = None

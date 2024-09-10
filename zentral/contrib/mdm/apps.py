@@ -24,6 +24,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "profile",
         "pushcertificate",
         "otaenrollment",
+        "realmgrouptagmapping",
         "recoverypasswordconfig",
         "scepconfig",
         "softwareupdate",
@@ -35,6 +36,6 @@ class ZentralMDMAppConfig(ZentralAppConfig):
 
     def ready(self):
         super().ready()
-        from realms.models import realm_tagging_change
-        from .inventory import realm_tagging_change_receiver
-        realm_tagging_change.connect(realm_tagging_change_receiver)
+        from realms.models import realm_group_members_updated
+        from .inventory import realm_group_members_updated_receiver
+        realm_group_members_updated.connect(realm_group_members_updated_receiver)

@@ -4,18 +4,24 @@ from django.contrib.auth import authenticate, login
 from django.urls import reverse
 from accounts.events import post_group_membership_updates
 from .middlewares import SESSION_KEY
+from .models import RealmGroupMapping
 
 
 logger = logging.getLogger("zentral.realms.utils")
 
 
-def get_realm_user_mapped_groups(realm_user):
-    mapped_groups = set([])
+def get_realm_user_mapped_realm_groups(realm_user):
+    mapped_realm_groups = None
     claims = realm_user.claims
     if "ava" in claims:
         # special case for SAML
         claims = claims["ava"]
-    for realm_group_mapping in realm_user.realm.realmgroupmapping_set.select_related("group").all():
+    for realm_group_mapping in (
+        RealmGroupMapping.objects.select_related("realm_group")
+                                 .filter(realm_group__realm=realm_user.realm)
+    ):
+        if mapped_realm_groups is None:
+            mapped_realm_groups = set()
         claim_values = claims.get(realm_group_mapping.claim)
         if not isinstance(claim_values, list):
             claim_values = [claim_values]
@@ -27,12 +33,29 @@ def get_realm_user_mapped_groups(realm_user):
             else:
                 values = [claim_value]
             if realm_group_mapping.value in values:
-                mapped_groups.add(realm_group_mapping.group)
+                mapped_realm_groups.add(realm_group_mapping.realm_group)
                 break
+    return mapped_realm_groups
+
+
+def apply_realm_group_mappings(realm_user):
+    mapped_realm_groups = get_realm_user_mapped_realm_groups(realm_user)
+    if mapped_realm_groups is None:
+        return
+    current_realm_groups = set(realm_user.groups.all())
+    if current_realm_groups != mapped_realm_groups:
+        realm_user.groups.set(mapped_realm_groups)
+
+
+def get_realm_user_mapped_groups(realm_user):
+    mapped_groups = set()
+    for realm_group, _ in realm_user.groups_with_types():
+        for role_mapping in realm_group.rolemapping_set.select_related("group").all():
+            mapped_groups.add(role_mapping.group)
     return mapped_groups
 
 
-def _update_remote_user_groups(request, realm_user):
+def apply_role_mappings(request, realm_user):
     user = request.user
     if not user.is_remote:
         return
@@ -60,8 +83,8 @@ def login_callback(request, realm_authentication_session, next_url=None):
     login(request, user)
     request.session.set_expiry(realm_authentication_session.computed_expiry())
 
-    # apply realm group mappings
-    _update_remote_user_groups(request, realm_user)
+    # update the Zentral user groups (roles)
+    apply_role_mappings(request, realm_user)
 
     return next_url or settings.LOGIN_REDIRECT_URL
 

@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% load inventory_extras ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">Group → Tag mappings</li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Group → Tag mapping{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+    <div class="ms-auto">
+        {% if perms.mdm.add_scepconfig %}
+            {% url 'mdm:create_realm_group_tag_mapping' as url %}
+            {% button 'CREATE' url "Create new group → tag mapping" %}
+        {% endif %}  
+    </div>
+</div>
+
+{% if object_list %}
+
+{% pagination next_url previous_url %}
+
+<table class="table table-striped align-middle table-hover">
+  <thead>
+    <tr>
+      <th>Realm</th>
+      <th>Group</th>
+      <th>Tag</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for realm_group_tag_mapping in object_list %}
+    {% with realm_group_tag_mapping.realm_group as realm_group %}
+    {% with realm_group.realm as realm %}
+    {% with realm_group_tag_mapping.tag as tag %}
+    <tr id="rgtm-{{ realm_group_tag_mapping.pk }}" class="data-row">
+      <td>
+        {% if perms.realms.view_realm %}
+        <a href="{{ realm.get_absolute_url }}">{{ realm }}</a>
+        {% else %}
+        {{ realm }}
+        {% endif %}
+      </td>
+      <td>
+        {% if perms.realms.view_realmgroup %}
+        <a href="{{ realm_group.get_absolute_url }}">{{ realm_group }}</a>
+        {% else %}
+        {{ realm_group }}
+        {% endif %}
+      </td>
+      <td>
+        {% inventory_tag tag %}
+      </td>
+      <td>
+        {% if perms.mdm.change_realmgrouptagmapping %}
+        {% url 'mdm:update_realm_group_tag_mapping' realm_group_tag_mapping.pk as url %}
+        {% button 'UPDATE' url "Edit group → tag mapping" %}
+        {% endif %}
+        {% if perms.mdm.delete_realmgroupmapping %}
+        {% url 'mdm:delete_realm_group_tag_mapping' realm_group_tag_mapping.pk as url %}
+        {% button 'DELETE' url "Delete group → tag mapping" %}
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endwith %}
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+
+{% pagination next_url previous_url %}
+
+{% else %}
+
+{% if perms.mdm.add_scepconfig %}
+  {% url 'mdm:create_realm_group_tag_mapping' as link %}
+  {% no_entities 'Group → Tag mappings' link %}
+{% else %}
+  {% no_entities 'Group → Tags' %}
+{% endif %}
+
+{% endif %}
+
+{% endblock %}

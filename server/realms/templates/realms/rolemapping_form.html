@@ -4,7 +4,7 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'realms:realm_group_mappings' %}">Group mappings</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:role_mappings' %}">Role mappings</a></li>
   {% if object %}
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
   <li class="breadcrumb-item active">Update</li>
@@ -13,12 +13,12 @@
   {% endif %}
 </ol>
 
-<h2>{% if object %}Update{% else %}Create{% endif %} group mapping</h2>
+<h2>{% if object %}Update{% else %}Create{% endif %} role mapping</h2>
 
 <form method="post" class="update-form">{% csrf_token %}
   {{ form }}
   <p>
-    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{% url 'realms:role_mappings' %}">Cancel</a>
     <button class="btn btn-primary" type="submit">Save</button>
   </p>
 </form>
