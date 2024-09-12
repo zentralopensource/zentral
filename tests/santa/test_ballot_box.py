@@ -5,7 +5,7 @@ from zentral.contrib.santa.ballot_box import (AnonymousVoter, BallotBox, Duplica
                                               ResetNotAllowedError, Voter, VotingError, VotingNotAllowedError)
 from zentral.contrib.santa.models import Rule, Target, TargetState
 from .utils import (add_file_to_test_class, force_ballot, force_configuration, force_enrolled_machine,
-                    force_realm_user, force_target, force_voting_group)
+                    force_realm_group, force_realm_user, force_target, force_voting_group)
 
 
 class SantaBallotBoxTestCase(TestCase):
@@ -21,6 +21,17 @@ class SantaBallotBoxTestCase(TestCase):
         _, realm_user = force_realm_user()
         voter = Voter(realm_user)
         self.assertEqual(voter.realm_groups, [])
+
+    def test_voter_realm_nested_groups(self):
+        _, realm_user = force_realm_user()
+        parent = force_realm_group(realm=realm_user.realm)
+        child = force_realm_group(realm=parent.realm, parent=parent)
+        realm_user.groups.add(child)
+        voter = Voter(realm_user)
+        self.assertEqual(
+            sorted(voter.realm_groups, key=lambda rg: rg.created_at),
+            [parent, child]
+        )
 
     def test_voter_enrolled_machines(self):
         _, realm_user = force_realm_user()

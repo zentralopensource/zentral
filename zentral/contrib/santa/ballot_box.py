@@ -40,7 +40,7 @@ class Voter:
 
     @cached_property
     def realm_groups(self):
-        return list(self.realm_user.groups.all())
+        return [g for g, _ in self.realm_user.groups_with_types()]
 
     @cached_property
     def enrolled_machines(self):

@@ -39,6 +39,14 @@ def force_realm_user(realm=None, username=None, email=None):
     return realm, realm_user
 
 
+def force_realm_group(realm=None, parent=None):
+    return RealmGroup.objects.create(
+        realm=realm or force_realm(),
+        display_name=get_random_string(12),
+        parent=parent,
+    )
+
+
 def force_voting_group(
     configuration,
     realm_user,
@@ -48,7 +56,7 @@ def force_voting_group(
     can_unflag_target=False,
     can_reset_target=False,
 ):
-    realm_group = RealmGroup.objects.create(realm=realm_user.realm, display_name=get_random_string(12))
+    realm_group = force_realm_group(realm=realm_user.realm)
     realm_user.groups.add(realm_group)
     if ballot_target_types is None:
         ballot_target_types = [Target.Type.METABUNDLE, Target.Type.SIGNING_ID]
