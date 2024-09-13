@@ -13,22 +13,21 @@
   <dd>{{ object.name }}</dd>
   <dt>Version</dt>
   <dd>{{ object.version }}</dd>
-  {% if publisher_info %}
-  <dt>Publisher</dt>
-  <dd>
-    <dl>
-      {% if publisher_info.team_id %}
-      <dt>Team ID</dt>
-      <dd>{{ publisher_info.team_id }}</dd>
-      {% endif %}
-      {% if publisher_info.name %}
-      <dt>Name</dt>
-      <dd>{{ publisher_info.name }}</dd>
-      {% endif %}
-    </dl>
-  </dd>
+</dl>
+
+{% if publisher_info %}
+<h3>Publisher</h3>
+<dl>
+  {% if publisher_info.team_id %}
+  <dt>Team ID</dt>
+  <dd>{{ publisher_info.team_id }}</dd>
+  {% endif %}
+  {% if publisher_info.name %}
+  <dt>Name</dt>
+  <dd>{{ publisher_info.name }}</dd>
   {% endif %}
 </dl>
+{% endif %}
 {% endfor %}
 
 {% if ballot_box %}
@@ -64,10 +63,10 @@
 <h3>{% if vote %}Update your{% else %}Cast a{% endif %} vote for this application</h3>
 <form method="POST">{% csrf_token %}
   {% if ballot_box.is_upvoting_allowed %}
-  <p><button type="submit" name="yes_vote" value="oui">Vote to allowlist this</button></p>
+  <p><button class="btn" type="submit" name="yes_vote" value="oui">👍 Vote to allowlist this</button></p>
   {% endif %}
   {% if ballot_box.is_downvoting_allowed %}
-  <p><button type="submit" name="yes_vote" value="non">Vote to blocklist this</button></p>
+  <p><button class="btn" type="submit" name="yes_vote" value="non">👎 Vote to blocklist this</button></p>
   {% endif %}
 </form>
 {% endif %}

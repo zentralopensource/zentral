@@ -7,9 +7,9 @@
   <header class="main-head">
     <h1 class="logo"><a href="{% url 'realms_public:up_index' realm.pk %}">User Portal</a></h1>
     {% if realm_user %}
-    {{ realm_user }}
+    <div class="user-id">{{ realm_user }}</div>
     <form action="{% url 'realms_public:up_logout' realm.pk %}" method="POST" style="display:inline-block">{% csrf_token %}
-      <button type="submit">Logout</button>
+      <button type="submit" class="btn">Logout</button>
     </form>
     {% endif %}
   </header>

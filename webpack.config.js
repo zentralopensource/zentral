@@ -9,6 +9,7 @@ module.exports = {
   entry: {
     main: './server/static_src/js/main.js',
     theme: './server/static_src/js/theme.js',
+    user_portal: './server/static_src/js/user_portal.js',
   },
   output: {
     filename: '[name].js',
