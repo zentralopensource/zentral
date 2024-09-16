@@ -547,8 +547,8 @@ class TargetSearchForm(forms.Form):
                  ('90', '90 days')],
     )
     configuration = forms.ModelChoiceField(queryset=Configuration.objects.all(), empty_label="…")
-    has_yes_votes = forms.BooleanField(label="Yes votes")
-    has_no_votes = forms.BooleanField(label="No votes")
+    has_yes_votes = forms.BooleanField(label="Has upvotes")
+    has_no_votes = forms.BooleanField(label="Has downvotes")
     todo = forms.BooleanField(label="Waiting for my ballot only", required=False, initial=False)
     order_by = forms.ChoiceField(
         label="Order by",
