@@ -14,6 +14,7 @@ from accounts.models import User
 from realms.backends.views import finalize_session
 from realms.models import RealmAuthenticationSession
 from zentral.contrib.santa.ballot_box import DuplicateVoteError, VotingNotAllowedError
+from zentral.contrib.santa.events import SantaBallotEvent, SantaTargetStateUpdateEvent
 from zentral.contrib.santa.models import Ballot, Target, TargetState
 from .utils import add_file_to_test_class, force_ballot, force_configuration, force_realm, force_realm_user
 
@@ -32,6 +33,7 @@ class SantaBallotsViewsTestCase(TestCase):
         cls.configuration = force_configuration(
             voting_realm=cls.realm,
             default_ballot_target_types=[Target.Type.METABUNDLE, Target.Type.BUNDLE, Target.Type.BINARY],
+            default_voting_weight=1,
         )
 
     # utility methods
@@ -387,18 +389,31 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertContains(response, "The ballot was rejected")
         self.assertEqual(ballot_qs.count(), 0)
 
-    def test_cast_ballot_post_yes(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_cast_ballot_post_yes(self, post_event):
         ballot_qs = Ballot.objects.filter(target=self.metabundle_target)
         self.assertEqual(ballot_qs.count(), 0)
         self._login("santa.add_ballot", "santa.view_target", realm_user=True)
-        response = self.client.post(reverse("santa:cast_ballot")
-                                    + f"?target_type=METABUNDLE&target_identifier={self.metabundle_sha256}",
-                                    {f"cfg-{self.configuration.pk}-yes_no": "YES"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("santa:cast_ballot")
+                                        + f"?target_type=METABUNDLE&target_identifier={self.metabundle_sha256}",
+                                        {f"cfg-{self.configuration.pk}-yes_no": "YES"},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, "Your ballot has been cast")
         self.assertEqual(ballot_qs.count(), 1)
+        self.assertEqual(len(post_event.call_args_list), 3)
+        event1 = post_event.call_args_list[1].args[0]
+        self.assertIsInstance(event1, SantaBallotEvent)
+        self.assertEqual(len(event1.payload["votes"]), 1)
+        self.assertTrue(event1.payload["votes"][0]["was_yes_vote"])
+        self.assertEqual(event1.payload["votes"][0]["weight"], 1)
+        event2 = post_event.call_args_list[2].args[0]
+        self.assertIsInstance(event2, SantaTargetStateUpdateEvent)
+        self.assertEqual(event2.payload["new_value"]["score"], 1)
+        self.assertEqual(event2.payload["prev_value"]["score"], 0)
 
     def test_cast_ballot_post_no(self):
         ballot_qs = Ballot.objects.filter(target=self.file_target)

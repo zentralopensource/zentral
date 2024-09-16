@@ -1,8 +1,11 @@
 from datetime import datetime
 import logging
+import uuid
 from django.db import connection
 from django.db.models import Q
 from django.utils.functional import cached_property
+from zentral.core.events.base import EventMetadata, EventRequest
+from .events import SantaBallotEvent, SantaTargetStateUpdateEvent
 from .models import Ballot, Configuration, EnrolledMachine, Rule, Target, TargetState, Vote, VotingGroup
 from .utils import target_related_targets
 
@@ -148,6 +151,7 @@ class BallotBox:
             self.target = target
         self.voter = voter
         self._set_target_states()
+        self._events = []
 
     def _set_target_states(self):
         self.target_states = {}
@@ -361,6 +365,7 @@ class BallotBox:
                 was_yes_vote=yes_vote,
                 weight=self.voter.voting_weight(configuration)
             )
+        self._events.append((SantaBallotEvent, ballot.serialize_for_event()))
         return ballot
 
     def _update_target_states(self, votes):
@@ -380,8 +385,22 @@ class BallotBox:
             new_score = result[0] or 0
             self._update_target_state(configuration, new_score, was_yes_vote)
 
+    def _queue_target_state_update_event(self, pre_update_state, target_state):
+        prev_value = {}
+        new_value = {}
+        post_update_state = target_state.serialize_for_event()
+        for attr in ("flagged", "reset_at", "score", "state", "state_display"):
+            prev_value[attr] = pre_update_state.get(attr)
+            new_value[attr] = post_update_state.pop(attr)
+        if prev_value != new_value:
+            event_payload = post_update_state
+            event_payload["new_value"] = new_value
+            event_payload["prev_value"] = prev_value
+            self._events.append((SantaTargetStateUpdateEvent, event_payload))
+
     def _update_target_state(self, configuration, score, was_yes_vote):
         target_state = self.target_states[configuration]
+        pre_update_state = target_state.serialize_for_event()
         if was_yes_vote:
             if target_state.flagged and self.voter.can_unflag_target(configuration):
                 target_state.flagged = False
@@ -394,6 +413,7 @@ class BallotBox:
                 target_state.state = TargetState.State.SUSPECT
         target_state.score = score
         target_state.save()
+        self._queue_target_state_update_event(pre_update_state, target_state)
 
     def _update_target_state_state(self, target_state, score):
         configuration = target_state.configuration
@@ -423,11 +443,13 @@ class BallotBox:
         if not self.voter.can_reset_target(configuration):
             raise ResetNotAllowedError
         target_state = self.target_states[configuration]
+        pre_update_state = target_state.serialize_for_event()
         target_state.score = 0
         target_state.flagged = False
         self._update_target_state_state(target_state, 0)
         target_state.reset_at = datetime.utcnow()
         target_state.save()
+        self._queue_target_state_update_event(pre_update_state, target_state)
 
     # rules
 
@@ -481,3 +503,17 @@ class BallotBox:
 
     def _ensure_no_rules(self, configuration):
         Rule.objects.filter(configuration=configuration, target__in=self._iter_rule_targets()).delete()
+
+    # events
+
+    def post_events(self, request, machine_serial_number=None):
+        event_request = EventRequest.build_from_request(request)
+        event_uuid = uuid.uuid4()
+        for index, (event_class, event_payload) in enumerate(self._events):
+            event_metadata = EventMetadata(
+                uuid=event_uuid, index=index,
+                request=event_request,
+                machine_serial_number=machine_serial_number,
+            )
+            event = event_class(event_metadata, event_payload)
+            event.post()

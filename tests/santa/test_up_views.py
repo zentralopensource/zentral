@@ -1,5 +1,6 @@
 from datetime import datetime
 from importlib import import_module
+from unittest.mock import patch
 import uuid
 from django.conf import settings
 from django.http import HttpRequest
@@ -8,6 +9,7 @@ from django.test import TestCase, override_settings
 from realms.backends.views import finalize_session
 from realms.models import RealmAuthenticationSession
 from zentral.contrib.santa.ballot_box import BallotBox
+from zentral.contrib.santa.events import SantaBallotEvent, SantaTargetStateUpdateEvent
 from zentral.contrib.santa.models import Ballot, Target
 from .utils import add_file_to_test_class, force_configuration, force_enrolled_machine, force_realm, force_realm_user
 
@@ -20,6 +22,7 @@ class SantaSetupViewsTestCase(TestCase):
         cls.configuration = force_configuration(
             voting_realm=cls.realm,
             default_ballot_target_types=[Target.Type.METABUNDLE, Target.Type.SIGNING_ID],
+            default_voting_weight=1,
         )
         cls.em = force_enrolled_machine(
             configuration=cls.configuration,
@@ -227,14 +230,17 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(ballot_box.target.type, Target.Type.METABUNDLE)
         self.assertEqual(ballot_box.target.identifier, self.metabundle_sha256)
 
-    def test_target_post_bundle_metabundle_ballot_box_yes(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_target_post_bundle_metabundle_ballot_box_yes(self, post_event):
         self._login()
-        response = self.client.post(
-            reverse("realms_public:santa_up:target",
-                    args=(self.realm.pk, "bundle", self.bundle_sha256)),
-            {"yes_vote": "oui"},
-            follow=True
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("realms_public:santa_up:target",
+                        args=(self.realm.pk, "bundle", self.bundle_sha256)),
+                {"yes_vote": "oui"},
+                follow=True
+            )
+        self.assertEqual(len(callbacks), 1)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "user_portal/santa_target_detail.html")
         self.assertContains(response, "Your ballot has been cast")
@@ -243,6 +249,42 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(
             response.context["existing_votes"],
             [(self.configuration, True)],
+        )
+        self.assertEqual(len(post_event.call_args_list), 2)
+        event1 = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event1, SantaBallotEvent)
+        self.assertEqual(len(event1.payload["votes"]), 1)
+        self.assertEqual(event1.payload["votes"][0]["weight"], 1)
+        self.assertEqual(
+            event1.metadata.serialize()["objects"],
+            {"metabundle": [f'sha256|{self.metabundle_sha256}'],
+             "realm_user": [str(self.realm_user.pk)],
+             "santa_configuration": [str(self.configuration.pk)]}
+        )
+        event2 = post_event.call_args_list[1].args[0]
+        self.assertIsInstance(event2, SantaTargetStateUpdateEvent)
+        event2.payload.pop("created_at")
+        event2.payload.pop("updated_at")
+        self.assertEqual(
+            event2.payload,
+            {'configuration': {'name': self.configuration.name, 'pk': self.configuration.pk},
+             'new_value': {'flagged': False,
+                           'reset_at': None,
+                           'score': 1,
+                           'state': 0,
+                           'state_display': 'UNTRUSTED'},
+             'prev_value': {'flagged': False,
+                            'reset_at': None,
+                            'score': 0,
+                            'state': 0,
+                            'state_display': 'UNTRUSTED'},
+             'target': {'sha256': self.metabundle_sha256,
+                        'type': 'METABUNDLE'}}
+        )
+        self.assertEqual(
+            event2.metadata.serialize()["objects"],
+            {"metabundle": [f'sha256|{self.metabundle_sha256}'],
+             "santa_configuration": [str(self.configuration.pk)]}
         )
 
     def test_target_post_bundle_metabundle_ballot_box_yolo(self):

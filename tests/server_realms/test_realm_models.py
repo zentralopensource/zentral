@@ -1,5 +1,5 @@
 from django.test import TestCase
-from .utils import force_realm, force_realm_group
+from .utils import force_realm, force_realm_group, force_realm_user
 
 
 class RealmModelsTestCase(TestCase):
@@ -63,4 +63,27 @@ class RealmModelsTestCase(TestCase):
                        'pk': str(realm_group.realm.pk)},
              'scim_external_id': None,
              'updated_at': realm_group.updated_at}
+        )
+
+    def test_realm_user_serialize_for_event_keys_only(self):
+        realm, realm_user = force_realm_user()
+        self.assertEqual(
+            realm_user.serialize_for_event(keys_only=True),
+            {'pk': str(realm_user.pk),
+             'realm': {'name': realm.name,
+                       'pk': str(realm.pk)},
+             'username': realm_user.username}
+        )
+
+    def test_realm_user_serialize_for_event(self):
+        realm, realm_user = force_realm_user()
+        self.assertEqual(
+            realm_user.serialize_for_event(),
+            {'pk': str(realm_user.pk),
+             'realm': {'name': realm.name,
+                       'pk': str(realm.pk)},
+             'username': realm_user.username,
+             'email': realm_user.email,
+             'first_name': realm_user.first_name,
+             'last_name': realm_user.last_name}
         )

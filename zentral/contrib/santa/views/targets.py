@@ -3,6 +3,7 @@ import math
 from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import TemplateView
@@ -482,4 +483,10 @@ class ResetTargetStateView(PermissionRequiredMixin, TemplateView):
             messages.error(request, "Target state reset not allowed")
         else:
             messages.info(request, "Target state reset")
+
+            def on_commit_callback():
+                self.ballot_box.post_events(self.request)
+
+            transaction.on_commit(on_commit_callback)
+
         return redirect(self.target)

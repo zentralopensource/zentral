@@ -336,6 +336,20 @@ class TargetState(models.Model):
     class Meta:
         unique_together = (("target", "configuration"),)
 
+    def serialize_for_event(self):
+        state = self.State(self.state)
+        return {
+            "target": self.target.serialize_for_event(),
+            "configuration": self.configuration.serialize_for_event(keys_only=True),
+            "flagged": self.flagged,
+            "state": state.value,
+            "state_display": state.name,
+            "score": self.score,
+            "reset_at": self.reset_at,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
 
 class MetaBundle(models.Model):
     target = models.OneToOneField(Target, on_delete=models.PROTECT)
@@ -824,6 +838,26 @@ class Ballot(models.Model):
     class Meta:
         unique_together = (("target", "realm_user", "user_uid", "replaced_by"),)
 
+    def serialize_for_event(self, keys_only=False):
+        d = {
+            "pk": str(self.id),
+        }
+        if keys_only:
+            return d
+        d.update({
+            "target": self.target.serialize_for_event(),
+            "event_target": self.event_target.serialize_for_event() if self.event_target else None,
+            "realm_user": self.realm_user.serialize_for_event(keys_only=True),
+            "user_uid": self.user_uid,
+            "replaced_by": self.replaced_by.serialize_for_event(keys_only=True) if self.replaced_by else None,
+            "votes": [
+                vote.serialize_for_event()
+                for vote in self.vote_set.all()
+            ],
+            "created_at": self.created_at,
+        })
+        return d
+
 
 class Vote(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -835,6 +869,15 @@ class Vote(models.Model):
 
     class Meta:
         unique_together = (("ballot", "configuration"),)
+
+    def serialize_for_event(self):
+        return {
+            "pk": str(self.id),
+            "configuration": self.configuration.serialize_for_event(keys_only=True),
+            "was_yes_vote": self.was_yes_vote,
+            "weight": self.weight,
+            "created_at": self.created_at,
+        }
 
 
 class RuleSet(models.Model):

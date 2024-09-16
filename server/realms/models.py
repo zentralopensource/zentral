@@ -260,6 +260,26 @@ class RealmUser(models.Model):
             groups_with_types.append((realm_group, raw_groups[realm_group.pk]))
         return groups_with_types
 
+    def serialize_for_event(self, keys_only=False):
+        d = {
+            "pk": str(self.uuid),
+            "realm": self.realm.serialize_for_event(keys_only=True),
+            "username": self.username,
+        }
+        if keys_only:
+            return d
+        for attr in ("username",
+                     "email",
+                     "first_name",
+                     "last_name",
+                     "full_name",
+                     "custom_attr_1",
+                     "custom_attr_2"):
+            val = getattr(self, attr)
+            if val:
+                d[attr] = val
+        return d
+
 
 class RealmUserGroupMembership(models.Model):
     user = models.ForeignKey(RealmUser, on_delete=models.CASCADE)

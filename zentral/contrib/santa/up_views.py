@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import View
 from realms.up_views import UPLoginRequiredMixin, UPTemplateView
@@ -66,20 +67,28 @@ class TargetDetailView(UPTemplateView):
             self.current_machine_id = None
         return super().dispatch(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["machines"] = []
-        ctx["target"] = self.target
-        ballot_box = BallotBox.for_realm_user(self.target, self.realm_user, lock_target=False)
-        for em, last_seen in ballot_box.voter.enrolled_machines:
+    def get_ballot_box_and_machines(self):
+        self.ballot_box = BallotBox.for_realm_user(self.target, self.realm_user, lock_target=False)
+        self.machines = []
+        self.current_machine = None
+        self.current_configuration = None
+        for em, last_seen in self.ballot_box.voter.enrolled_machines:
             mm = MetaMachine(em.serial_number)
             if em.hardware_uuid == self.current_machine_id:
-                ctx["current_machine"] = mm
-                ctx["current_configuration"] = em.enrollment.configuration
-            ctx["machines"].append(mm)
-        ctx["target_info"] = ballot_box.target_info()
-        ctx["publisher_info"] = ballot_box.publisher_info()
-        ctx["ballot_box"] = ballot_box.best_ballot_box()
+                self.current_machine = mm
+                self.current_configuration = em.enrollment.configuration
+            self.machines.append(mm)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["target"] = self.target
+        self.get_ballot_box_and_machines()
+        ctx["machines"] = self.machines
+        ctx["current_machine"] = self.current_machine
+        ctx["current_configuration"] = self.current_configuration
+        ctx["target_info"] = self.ballot_box.target_info()
+        ctx["publisher_info"] = self.ballot_box.publisher_info()
+        ctx["ballot_box"] = self.ballot_box.best_ballot_box()
         if ctx["ballot_box"]:
             ctx["states"] = sorted(
                 ctx["ballot_box"].target_states.items(),
@@ -107,13 +116,23 @@ class TargetDetailView(UPTemplateView):
             except Exception:
                 logger.error("Could not find event target in DB")
                 event_target = None
-            ballot_box = BallotBox.for_realm_user(self.target, self.realm_user, lock_target=False)
+
+            self.get_ballot_box_and_machines()
             try:
-                ballot_box.best_ballot_box(lock_target=True).cast_default_votes(yes_vote == "oui", event_target)
+                best_ballot_box = self.ballot_box.best_ballot_box(lock_target=True)
+                best_ballot_box.cast_default_votes(yes_vote == "oui", event_target)
             except DuplicateVoteError:
                 messages.error(request, "You cannot cast the same ballot twice")
             else:
                 messages.info(request, "Your ballot has been cast")
+
+                def on_commit_callback():
+                    best_ballot_box.post_events(
+                        self.request,
+                        self.current_machine.serial_number if self.current_machine else None,
+                    )
+
+                transaction.on_commit(on_commit_callback)
         return redirect("realms_public:santa_up:target",
                         realm_pk=self.realm.pk,
                         type=Target.Type(self.target.type).value.lower(),

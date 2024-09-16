@@ -3,6 +3,7 @@ import math
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import TemplateView
 from zentral.utils.views import UserPaginationMixin
@@ -135,6 +136,12 @@ class CastBallotView(PermissionRequiredMixin, TemplateView):
                     messages.error(request, "The ballot was rejected")
                 else:
                     messages.info(request, "Your ballot has been cast")
+
+                    def on_commit_callback():
+                        ballot_box.post_events(self.request)
+
+                    transaction.on_commit(on_commit_callback)
+
                     return redirect(self.target)
         else:
             messages.error(request, "Invalid ballot")

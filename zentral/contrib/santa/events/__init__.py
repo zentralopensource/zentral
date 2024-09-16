@@ -154,12 +154,50 @@ class SantaRuleSetUpdateEvent(BaseEvent):
 register_event_type(SantaRuleSetUpdateEvent)
 
 
-class SantaRuleUpdateEvent(BaseEvent):
+class TargetEventMixin:
+    def add_target_to_linked_objects_keys(self, keys, attr="target"):
+        target = self.payload
+        for payload_key in attr.split("."):
+            target = target.get(payload_key)
+            if not target:
+                return
+        target_type = target.get("type")
+        if not target_type:
+            return
+        try:
+            target_type = Target.Type(target_type)
+        except (ValueError, TypeError):
+            logger.error("Invalid target type")
+            return
+        if target_type == Target.Type.CDHASH:
+            cdhash = target.get("cdhash")
+            if cdhash:
+                keys.setdefault("file", []).append(("cdhash", cdhash))
+        elif target_type == Target.Type.SIGNING_ID:
+            signing_id = target.get("signing_id")
+            if signing_id:
+                keys.setdefault("file", []).append(("apple_signing_id", signing_id))
+        elif target_type == Target.Type.TEAM_ID:
+            team_id = target.get("team_id")
+            if team_id:
+                keys.setdefault("apple_team_id", []).append((team_id,))
+        else:
+            sha256 = target.get("sha256")
+            if sha256:
+                if target_type == Target.Type.BINARY:
+                    key_attr = "file"
+                else:
+                    key_attr = target_type.name.lower()
+                keys.setdefault(key_attr, []).append(("sha256", sha256))
+
+
+class SantaRuleUpdateEvent(TargetEventMixin, BaseEvent):
     event_type = "santa_rule_update"
     tags = ["santa"]
 
     def get_linked_objects_keys(self):
         keys = {}
+        self.add_target_to_linked_objects_keys(keys, attr="rule.target")
         rule = self.payload.get("rule")
         if not rule:
             return keys
@@ -169,42 +207,45 @@ class SantaRuleUpdateEvent(BaseEvent):
         ruleset = rule.get("ruleset")
         if ruleset:
             keys["santa_ruleset"] = [(ruleset.get("pk"),)]
-        target = rule.get("target")
-        if not target:
-            return keys
-        target_type = target.get("type")
-        if not target_type:
-            return keys
-        try:
-            target_type = Target.Type(target_type)
-        except (ValueError, TypeError):
-            logger.error("Invalid target type")
-            return keys
-        if target_type == Target.Type.CDHASH:
-            cdhash = target.get("cdhash")
-            if cdhash:
-                keys["file"] = [("cdhash", cdhash)]
-        elif target_type == Target.Type.SIGNING_ID:
-            signing_id = target.get("signing_id")
-            if signing_id:
-                keys["file"] = [("apple_signing_id", signing_id)]
-        elif target_type == Target.Type.TEAM_ID:
-            team_id = target.get("team_id")
-            if team_id:
-                keys["apple_team_id"] = [(team_id,)]
-        else:
-            sha256 = target.get("sha256")
-            if sha256:
-                if target_type == Target.Type.BINARY:
-                    keys["file"] = [("sha256", sha256)]
-                elif target_type == Target.Type.CERTIFICATE:
-                    keys["certificate"] = [("sha256", sha256)]
-                elif target_type == Target.Type.BUNDLE:
-                    keys["bundle"] = [("sha256", sha256)]
         return keys
 
 
 register_event_type(SantaRuleUpdateEvent)
+
+
+class SantaBallotEvent(TargetEventMixin, BaseEvent):
+    event_type = "santa_ballot"
+    tags = ["santa"]
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        for attr in ("target", "event_target"):
+            self.add_target_to_linked_objects_keys(keys, attr)
+        realm_user = self.payload.get("realm_user")
+        if realm_user:
+            keys["realm_user"] = [(realm_user["pk"],)]
+        for vote in self.payload.get("votes", []):
+            keys["santa_configuration"] = [(vote["configuration"]["pk"],)]
+        return keys
+
+
+register_event_type(SantaBallotEvent)
+
+
+class SantaTargetStateUpdateEvent(TargetEventMixin, BaseEvent):
+    event_type = "santa_target_state_update"
+    tags = ["santa"]
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        self.add_target_to_linked_objects_keys(keys)
+        configuration = self.payload.get("configuration")
+        if configuration:
+            keys["santa_configuration"] = [(configuration["pk"],)]
+        return keys
+
+
+register_event_type(SantaTargetStateUpdateEvent)
 
 
 def _build_certificate_tree_from_santa_event_cert(in_d):

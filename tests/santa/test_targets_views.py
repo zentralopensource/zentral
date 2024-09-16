@@ -895,16 +895,44 @@ class SantaSetupViewsTestCase(TestCase):
         ts.refresh_from_db()
         self.assertIsNone(ts.reset_at)
 
-    def test_rest_target_state_post_allowed(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_rest_target_state_post_allowed(self, post_event):
         configuration = force_configuration()
         ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
         self._login("santa.view_target", realm_user=True)
         force_voting_group(configuration, self.realm_user, can_reset_target=True)
-        response = self.client.post(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "santa/target_detail.html")
         self.assertContains(response, "Target state reset")
         self.assertNotContains(response, "Target state reset not allowed")
         ts.refresh_from_db()
         self.assertIsNotNone(ts.reset_at)
+        self.assertEqual(len(post_event.call_args_list), 2)
+        event = post_event.call_args_list[1].args[0]
+        self.assertEqual(
+            event.payload,
+            {'configuration': {'name': configuration.name, 'pk': configuration.pk},
+             'created_at': ts.created_at,
+             'new_value': {'flagged': False,
+                           'reset_at': ts.reset_at,
+                           'score': 0,
+                           'state': 0,
+                           'state_display': 'UNTRUSTED'},
+             'prev_value': {'flagged': False,
+                            'reset_at': None,
+                            'score': 0,
+                            'state': 0,
+                            'state_display': 'UNTRUSTED'},
+             'target': {'sha256': self.file_sha256,
+                        'type': 'BINARY'},
+             'updated_at': ts.updated_at}
+        )
+        self.assertEqual(
+            event.metadata.serialize()["objects"],
+            {'file': [f'sha256|{self.file_sha256}'],
+             'santa_configuration': [str(configuration.pk)]},
+        )
