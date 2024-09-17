@@ -16,11 +16,22 @@ from .models import Configuration, Enrollment, Rule, RuleSet, Target, TargetStat
 logger = logging.getLogger("zentral.contrib.santa.forms")
 
 
+class TargetTypesWidget(forms.CheckboxSelectMultiple):
+    def __init__(self, attrs=None, choices=()):
+        super().__init__(attrs, choices=Target.Type.choices)
+
+    def format_value(self, value):
+        if isinstance(value, str) and value:
+            value = [v.strip() for v in value.split(",")]
+        return super().format_value(value)
+
+
 class ConfigurationForm(forms.ModelForm):
     class Meta:
         model = Configuration
         fields = '__all__'
         widgets = {
+            "default_ballot_target_types": TargetTypesWidget,
             "event_detail_url": forms.Textarea(attrs={"cols": "40", "rows": "3"}),
             "allowed_path_regex": forms.Textarea(attrs={"cols": "40", "rows": "3"}),
             "blocked_path_regex": forms.Textarea(attrs={"cols": "40", "rows": "3"})
@@ -73,6 +84,7 @@ class VotingGroupForm(forms.ModelForm):
             "ballot_target_types",
             "voting_weight"
         )
+        widgets = {"ballot_target_types": TargetTypesWidget}
 
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration")
@@ -1023,7 +1035,7 @@ class BallotSearchForm(forms.Form):
 
         for key, display_str in Target.objects.get_targets_display_strings(targets.keys()).items():
             for idx in targets[key]:
-                results[idx][f"target_display_str"] = display_str
+                results[idx]["target_display_str"] = display_str
 
         return results
 

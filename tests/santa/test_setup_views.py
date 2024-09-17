@@ -384,7 +384,7 @@ class SantaSetupViewsTestCase(TestCase):
                                          "remount_usb_mode": "rdonly, noexec",
                                          "voting_realm": realm.pk,
                                          "banned_threshold": -50,
-                                         "default_ballot_target_types": "METABUNDLE,SIGNINGID",
+                                         "default_ballot_target_types": ["METABUNDLE", "SIGNINGID"],
                                          "default_voting_weight": 1,
                                          "globally_allowlisted_threshold": 500,
                                          "partially_allowlisted_threshold": 100,
