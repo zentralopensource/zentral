@@ -7,13 +7,13 @@
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
   <li class="breadcrumb-item"><a href="{% url 'santa:targets' %}">Targets</a></li>
-  <li class="breadcrumb-item"><a href="{{ target_url }}">{{ target_type_display }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ target_url }}">{{ target_type.label }}</a></li>
   <li class="breadcrumb-item active">Events</a></li>
 </ol>
 
 <div class="sticky-top bg-body z-1">
   <h3 style="margin:-10px 0 10px 0">
-    {{ target_type_display }} - Events
+    {{ target_type.label }} - Events
   </h3>
   <table class="table table-condensed">
     <tbody>
