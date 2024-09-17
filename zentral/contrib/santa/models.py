@@ -213,6 +213,60 @@ class TargetManager(models.Manager):
         nt_signingid = namedtuple('SigningID', [col[0] for col in cursor.description])
         return [nt_signingid(*row) for row in cursor.fetchall()]
 
+    def get_targets_display_strings(self, targets):
+        queries = {
+            "CDHASH": "select f.name display_str, f.cdhash identifier "
+                    "from inventory_file f "
+                    "join inventory_source s on (f.source_id = s.id) "
+                    "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+                    "and cdhash in %(CDHASH)s",
+            "BINARY": "select f.name display_str, f.sha_256 identifier "
+                    "from inventory_file f "
+                    "join inventory_source s on (f.source_id = s.id) "
+                    "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+                    "and sha_256 in %(BINARY)s",
+            "SIGNINGID": "select f.name display_str, f.signing_id identifier "
+                    "from inventory_file f "
+                    "join inventory_source s on (f.source_id = s.id) "
+                    "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+                    "and signing_id in %(SIGNINGID)s",
+            "BUNDLE": "select b.name || ' ' || b.version display_str, t.identifier "
+                      "from santa_bundle b "
+                      "join santa_target t on (b.target_id = t.id) "
+                      "and t.identifier in %(BUNDLE)s",
+            "CERTIFICATE": "select c.organization display_str, c.sha_256 identifier "
+                           "from inventory_certificate c "
+                           "where c.sha_256 in %(CERTIFICATE)s",
+            "TEAMID": "select c.organization display_str, c.organizational_unit identifier "
+                      "from inventory_certificate c "
+                      "where c.organizational_unit in %(TEAMID)s",
+            "METABUNDLE": "select max(b.name) display_str, t.identifier "
+                          "from santa_metabundle mb "
+                          "join santa_bundle b on (b.metabundle_id = mb.id) "
+                          "join santa_target t on (mb.target_id = t.id) "
+                          "where t.identifier in %(METABUNDLE)s "
+                          "group by t.identifier",
+        }
+        kwargs = {}
+        query_keys = set()
+        for target_type, target_identifier in targets:
+            query_keys.add(target_type.value)
+            kwargs.setdefault(target_type, set()).add(target_identifier)
+        query = " UNION ".join(queries[key] for key in query_keys)
+        found_targets = {}
+        if not query:
+            return found_targets
+        with connection.cursor() as cursor:
+            cursor.execute(query, {k: tuple(v) for k, v in kwargs.items()})
+            columns = [c.name for c in cursor.description]
+            for row in cursor.fetchall():
+                result = dict(zip(columns, row))
+                for target_type, target_identifier in targets:
+                    if target_identifier == result["identifier"]:
+                        found_targets[(target_type, target_identifier)] = result["display_str"]
+                        break
+        return found_targets
+
 
 class Target(models.Model):
     class Type(models.TextChoices):

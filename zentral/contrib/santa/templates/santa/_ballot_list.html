@@ -4,7 +4,7 @@
 <thead>
     <tr>
         {% if show_target %}
-        <th>Target</th>
+        <th colspan="2">Target</th>
         {% endif %}
         <th>Event target</th>
         <th>User</th>
@@ -16,8 +16,9 @@
     {% for ballot in ballots %}
     <tr>
       {% if show_target %}
+      <td>{{ ballot.target_type.label }}</td>
       <td>
-        <a href="{{ ballot.target_url }}">{{ ballot.target_type.label }}</a>
+        <a href="{{ ballot.target_url }}">{{ ballot.target_display_str|default:"Unknown" }}</a>
       </td>
       {% endif %}
       <td>

@@ -1002,10 +1002,12 @@ class BallotSearchForm(forms.Form):
             "order by b.created_at desc offset %(offset)s limit %(limit)s"
         )
         results = []
+        targets = {}
         with connection.cursor() as cursor:
             cursor.execute(query, kwargs)
             columns = [col[0] for col in cursor.description]
-            for row in cursor.fetchall():
+            for idx, row in enumerate(cursor.fetchall()):
+                # result
                 result = dict(zip(columns, row))
                 result["votes"] = [v for v in json.loads(result.pop("votes")) if v["cfg_pk"] is not None]
                 result["target_type"] = Target.Type(result.pop("target_type"))
@@ -1015,6 +1017,14 @@ class BallotSearchForm(forms.Form):
                     result["event_target_url"] = reverse(Target.Type.BINARY.url_name,
                                                          args=(result["event_target_identifier"],))
                 results.append(result)
+                # target keys
+                ballot_target_key = (result["target_type"], result["target_identifier"])
+                targets.setdefault(ballot_target_key, []).append(idx)
+
+        for key, display_str in Target.objects.get_targets_display_strings(targets.keys()).items():
+            for idx in targets[key]:
+                results[idx][f"target_display_str"] = display_str
+
         return results
 
 
