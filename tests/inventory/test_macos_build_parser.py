@@ -104,6 +104,8 @@ class MacOSBuildTestCase(TestCase):
            ("23D60", ("macOS", 14, 3, 1, None), "macOS 14.3.1 (23D60)"),
            ("23E214", ("macOS", 14, 4, 0, None), "macOS 14.4 (23E214)"),
            ("23G93", ("macOS", 14, 6, 1, None), "macOS 14.6.1 (23G93)"),
+           ("23H124", ("macOS", 14, 7, 0, None), "macOS 14.7 (23H124)"),
+           ("24A335", ("macOS", 15, 0, 0, None), "macOS 15.0 (24A335)"),
         ):
             expected_version_d = {
                 "name": name,
