@@ -579,20 +579,25 @@ class TargetSearchForm(forms.Form):
         # q
         if q:
             kwargs["q"] = "%{}%".format(connection.ops.prep_for_like_query(q))
-            bi_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
-            ce_where = ("where upper(c.common_name) like upper(%(q)s) "
-                        "or upper(c.organizational_unit) like upper(%(q)s) "
-                        "or upper(c.sha_256) like upper(%(q)s)")
+            bi_where = ("where upper(f.name) like upper(%(q)s)"
+                        " or upper(f.identifier) like upper(%(q)s)")
+            ce_where = ("where upper(c.common_name) like upper(%(q)s)"
+                        " or upper(c.organizational_unit) like upper(%(q)s)"
+                        " or upper(c.sha_256) like upper(%(q)s)")
             ti_where = ("where upper(f.name) like upper(%(q)s)"
                         " or upper(f.team_id) like upper(%(q)s)"
                         " or upper(c.organization) like upper(%(q)s)")
-            ch_where = "where upper(name) like upper(%(q)s) or upper(f.cdhash) like upper(%(q)s)"
-            si_where = "where upper(f.signing_id) like upper(%(q)s)"
-            bu_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
-            mbu_where = "where upper(b.name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
+            ch_where = ("where upper(f.name) like upper(%(q)s)"
+                        " or upper(f.cdhash) like upper(%(q)s)")
+            si_where = ("where upper(f.name) like upper(%(q)s)"
+                        " or upper(f.signing_id) like upper(%(q)s)")
+            bu_where = ("where upper(b.name) like upper(%(q)s)"
+                        " or upper(t.identifier) like upper(%(q)s)")
+            mbu_where = ("where upper(b.name) like upper(%(q)s)"
+                         " or upper(t.identifier) like upper(%(q)s)")
         else:
             bi_where = ce_where = bu_where = mbu_where = ""
-            ti_where = "where c.organizational_unit ~ '[A-Z0-9]{10}'"
+            ti_where = "where f.team_id IS NOT NULL"
             ch_where = "where (f.cdhash = '') IS FALSE"
             si_where = "where (f.signing_id = '') IS FALSE"
         wheres = []
