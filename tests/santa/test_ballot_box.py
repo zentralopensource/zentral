@@ -231,6 +231,13 @@ class SantaBallotBoxTestCase(TestCase):
         ballot = force_ballot(self.file_target, realm_user, ((configuration, True, 17),))
         self.assertEqual(BallotBox.for_realm_user(self.file_target, realm_user).existing_ballot, ballot)
 
+    def test_ballot_box_existing_replacing_ballot(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        replacing_ballot = force_ballot(self.file_target, realm_user, ((configuration, True, 17),))
+        force_ballot(self.file_target, realm_user, ((configuration, True, 1),), replaced_by=replacing_ballot)
+        self.assertEqual(BallotBox.for_realm_user(self.file_target, realm_user).existing_ballot, replacing_ballot)
+
     def test_ballot_box_existing_votes_empty(self):
         self.assertEqual(BallotBox.for_realm_user(self.file_target, None).existing_votes, set())
 
@@ -238,8 +245,27 @@ class SantaBallotBoxTestCase(TestCase):
         realm, realm_user = force_realm_user()
         configuration = force_configuration(voting_realm=realm)
         force_ballot(self.file_target, realm_user, ((configuration, True, 17),))
-        self.assertEqual(BallotBox.for_realm_user(self.file_target, realm_user).existing_votes,
-                         {(configuration, True)})
+        self.assertEqual(
+            BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True).existing_votes,
+            {(configuration, True)}
+        )
+
+    def test_ballot_box_existing_votes_reset_no_existing_votes(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        force_ballot(self.file_target, realm_user, ((configuration, True, 1),))
+        # simulate reset
+        TargetState.objects.update_or_create(
+            target=self.file_target,
+            configuration=configuration,
+            score=0,
+            state=TargetState.State.UNTRUSTED,
+            reset_at=datetime.utcnow(),
+        )
+        self.assertEqual(
+            BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True).existing_votes,
+            set()
+        )
 
     def test_ballot_box_check_voting_allowed_for_configuration_anonymous_voter(self):
         ballot_box = BallotBox.for_realm_user(self.file_target, None)

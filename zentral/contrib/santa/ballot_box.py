@@ -234,7 +234,14 @@ class BallotBox:
         if not self.existing_ballot:
             return votes
         for vote in self.existing_ballot.vote_set.select_related("configuration").all():
-            votes.add((vote.configuration, vote.was_yes_vote))
+            try:
+                target_state = self.target_states[vote.configuration]
+            except KeyError:
+                # existing vote on a configuration that is not linked to this voter/ballot box
+                pass
+            else:
+                if target_state.reset_at is None or vote.created_at > target_state.reset_at:
+                    votes.add((vote.configuration, vote.was_yes_vote))
         return votes
 
     def check_voting_allowed_for_configuration(self, configuration, yes_vote):
