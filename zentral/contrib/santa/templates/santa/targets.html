@@ -83,7 +83,9 @@
           <br>{{ obj.valid_from|date:"Y-m-d" }} → {{ obj.valid_until|date:"Y-m-d" }}
           {% endif %}
           {% if target.target_type == "TEAMID" %}
-          <br>{{ obj.organization }}
+          {% if obj.organizations %}
+          <br>Cert Org{{ obj.organizations|length|pluralize }}: {{ obj.organizations|join:", "}}
+          {% endif %}
           {% endif %}
           {% if target.target_type == "CDHASH" or target.target_type == "SIGNINGID" %}
           <br>Filename{{ obj.file_names|length|pluralize }}: {{ obj.file_names|join:", " }}

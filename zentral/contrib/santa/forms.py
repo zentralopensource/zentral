@@ -583,9 +583,9 @@ class TargetSearchForm(forms.Form):
             ce_where = ("where upper(c.common_name) like upper(%(q)s) "
                         "or upper(c.organizational_unit) like upper(%(q)s) "
                         "or upper(c.sha_256) like upper(%(q)s)")
-            ti_where = ("where c.organizational_unit ~ '[A-Z0-9]{10}' and ("
-                        "upper(c.organization) like upper(%(q)s) "
-                        "or upper(c.organizational_unit) like upper(%(q)s))")
+            ti_where = ("where upper(f.name) like upper(%(q)s)"
+                        " or upper(f.team_id) like upper(%(q)s)"
+                        " or upper(c.organization) like upper(%(q)s)")
             ch_where = "where upper(name) like upper(%(q)s) or upper(f.cdhash) like upper(%(q)s)"
             si_where = "where upper(f.signing_id) like upper(%(q)s)"
             bu_where = "where upper(name) like upper(%(q)s) or upper(identifier) like upper(%(q)s)"
@@ -690,15 +690,16 @@ class TargetSearchForm(forms.Form):
                 f"{ce_where} "
                 "group by target_type, c.sha_256, c.common_name, c.organizational_unit, c.valid_from, c.valid_until",
             "TEAMID":
-                "select 'TEAMID' as target_type, c.organizational_unit as identifier, c.organization as sort_str,"
+                "select 'TEAMID' as target_type, f.team_id as identifier, f.team_id as sort_str,"
                 "jsonb_build_object("
-                " 'organizational_unit', c.organizational_unit,"
-                " 'organization', c.organization"
+                " 'organizational_units', jsonb_agg(c.organizational_unit),"
+                " 'organizations', jsonb_agg(c.organization)"
                 ") as object "
-                "from inventory_certificate as c "
-                "join collected_files as f on (c.id = f.signed_by_id) "
+                "from collected_files as f "
+                "left join inventory_certificate as c on "
+                "(f.signed_by_id = c.id and f.team_id = c.organizational_unit) "
                 f"{ti_where} "
-                "group by target_type, c.organizational_unit, c.organization",
+                "group by target_type, f.team_id",
             "CDHASH":
                 "select 'CDHASH' as target_type, f.cdhash as identifier, f.cdhash as sort_str,"
                 "jsonb_build_object("
@@ -754,7 +755,9 @@ class TargetSearchForm(forms.Form):
             primary_order_by = ""
         query = (
             "with collected_files as ("
-            "  select f.sha_256 as identifier, f.cdhash, f.signed_by_id, f.signing_id, f.name"
+            "  select f.sha_256 as identifier, f.cdhash, f.signed_by_id, f.signing_id, f.name,"
+            "  case when (signing_id = '') is false and not starts_with(signing_id, 'platform') "
+            "  then split_part(signing_id, ':', 1) else null end team_id"
             "  from inventory_file as f"
             "  join inventory_source as s on (f.source_id = s.id)"
             "  where s.module='zentral.contrib.santa' and s.name = 'Santa events'"
@@ -1023,7 +1026,7 @@ class BallotSearchForm(forms.Form):
 
         for key, display_str in Target.objects.get_targets_display_strings(targets.keys()).items():
             for idx in targets[key]:
-                results[idx][f"target_display_str"] = display_str
+                results[idx]["target_display_str"] = display_str
 
         return results
 
