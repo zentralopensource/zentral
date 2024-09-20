@@ -332,7 +332,7 @@ class BallotBox:
             allowed_votes.append((configuration, cfg_allowed_votes))
         return allowed_votes
 
-    def cast_votes(self, votes):
+    def verify_votes(self, votes):
         # known voter?
         if self.voter.is_anonymous:
             raise VotingError("Anonymous voters cannot vote")
@@ -345,6 +345,9 @@ class BallotBox:
                 raise VotingNotAllowedError(
                     f"Voting upvote? {yes_vote} on configuration {configuration} is not allowed"
                 )
+
+    def cast_votes(self, votes):
+        self.verify_votes(votes)
         self._cast_verified_votes(votes)
 
     def _cast_verified_votes(self, votes, event_target=None):

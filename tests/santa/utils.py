@@ -212,10 +212,12 @@ def force_target_counter(target_type, blocked_count=0, collected_count=0, execut
 def force_rule(
     target_type=Target.Type.SIGNING_ID,
     target_identifier=None,
+    target=None,
     configuration=None,
     policy=Rule.Policy.BLOCKLIST,
 ):
-    target = force_target(target_type, target_identifier)
+    if not target:
+        target = force_target(target_type, target_identifier)
     if configuration is None:
         configuration = force_configuration()
     return Rule.objects.create(configuration=configuration, target=target, policy=policy)
