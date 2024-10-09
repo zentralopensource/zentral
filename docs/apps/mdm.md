@@ -115,6 +115,77 @@ Navigate to the Zentral *MDM > Push certificates* section, and either select an 
 
 To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it is important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button. In the Zentral *MDM > Push certificates* section, find the certificate and click on the *Update* button, and do not *Add* a new certificate.
 
+## Automated Device Enrollment
+
+To use modern automated device enrollment with Zentral, you need to ensure proper synchronization with Apple Business Manager (ABM) or Apple School Manager (ASM). This synchronization requires an MDM server token.
+
+### Prerequisites
+
+- Access to Apple Business Manager (ABM) or Apple School Manager (ASM).
+- An MDM server token for syncing with ABM/ASM.
+
+For detailed instructions on general ABM/ASM usage, refer to the [Apple Business Manager User Guide](https://support.apple.com/en-ca/guide/apple-business-manager/welcome/web).
+
+
+### Configure Automated Device Enrollment (formerly known as DEP)
+
+To set up Automated Device Enrollment (ADE) to work with Zentral, follow these steps:
+
+* Navigate to the Zentral *MDM > Overview > DEP Virtual Servers* section and click the *Connect* button. Do not close this section during the process.
+* Download the new public key.
+* In ABM/ASM go to the *Preferences > Your MDM Servers > MDM Server Settings* section.
+* Add a new MDM Server or click *Edit* on an existing MDM Server to replace the public key.
+* Download the `MDM server token` from the *MDM Server Information* section in ABM/ASM.
+* Return to Zentral and upload the `MDM server token` in the *MDM > Overview > DEP Virtual Servers* section.
+* Once an *Enrollment* profile has been created (see the section below), you can assign it as the default enrollment for this token.
+
+To fully utilize ADE, you need to create an *Enrollment* in the *MDM > Overview > Enrollment* section and select the appropriate *Virtual Server* during the setup process (see below). The assigned *Enrollment* will be reflected in the *MDM > DEP Virtual Servers > [Instance Name] > Profile* section, and the devices assigned in ABM/ASM will appear in the *MDM > DEP Virtual Servers > [Instance Name] > Devices* section.
+
+The device assignments will sync automatically. If the existing device assignments in ABM/ASM are not reflected in Zentral, go to the *MDM > DEP Virtual Servers > [Instance Name]* section and manually click the `Synchronize` button. The devices will also be visible in the *MDM > Overview > DEP Devices* section.
+
+### Setup an Enrollment Profile
+
+To set up an Automated Device Enrollment (ADE) in Zentral, you need to create an *Enrollment*. Follow these steps:
+
+* Navigate to the Zentral *MDM > Enrollment* section.
+* Check if there is an existing enrollment entry under *DEP Enrollment*. If none exists, click the *Add* button to create a new enrollment profile.
+* Fill in or update the required details. Select **Push Certificate**, **SCEP Config**, **Blueprint**, and choose the appropriate *Virtual Server* from the dropdown menu to associate this enrollment with a DEP Virtual Server. Set a **Name** to identify the profile.
+* Configure device management options according to your organization’s needs. This includes settings like **Allow Pairing**, **Is Supervised**, and **Is MDM Removable**.
+* Enter additional settings, such as **Support Phone Number**, **Support Email Address**, **Language**, and **Region** to provide users with the necessary contact and localization details.
+* If applicable, configure user and realm-specific settings. These include **Realm**, **Use Realm User**, **Username Pattern**, and whether the **Realm User is Admin**.
+* Review and customize the Setup Assistant settings, choosing which steps to skip during device setup, such as **Skip Apple ID Setup**, **Skip Touch ID/Face ID Setup**, and **Skip iCloud Setup**.
+* Once all settings are configured, click *Save* to create the enrollment profile.
+
+
+**Note:** After creating the *Enrollment*, it’s important to test and review the profile settings. You can edit the enrollment profile anytime by navigating to the *MDM > Enrollment* section in Zentral. Regular testing and revisit for updates are recommended, especially as new major OS versions can introduce additional configurations. To verify that your changes are synced with ABM/ADE, use the *Test* button to download and check the DEP profile from ABM.
+
+Device syncing occurs at scheduled intervals. If the device assignments from ABM/ASM are not reflected in Zentral, go to the *MDM > DEP Virtual Servers > [Instance Name]* section and manually click the `Synchronize` button.
+
+
+## Apps and Books
+
+To manage and distribute apps from the Mac App Store or iOS/iPadOS App Store through Zentral, a Content Token is required to sync with Apple Business Manager (ABM) or Apple School Manager (ASM).
+
+### Prerequisites
+
+- Access to Apple Business Manager (ABM) or Apple School Manager (ASM).
+- A Content Token for syncing with ABM/ASM.
+
+For detailed instructions on general ABM/ASM usage, refer to the [Apple Business Manager User Guide](https://support.apple.com/en-ca/guide/apple-business-manager/welcome/web).
+
+
+### Configure Apps and Books (formerly Apple Volume Purchasing/VPP)
+
+To set up *Apps and Books* to work with Zentral, follow these steps:
+
+* Navigate to the *ABM / ASM Preferences > Payments and Billing > Apps and Books* section.
+* In the Content Tokens section, locate the desired token and download it.
+* Navigate to the Zentral *MDM > Overview > Locations* section.
+* Click the `Add` button to create a new location.
+* Upload the content token (*.vpptoken) you previously downloaded from ASM/ABM.
+
+Content in ASM/ABM *Apps and Books > "AppName" > Manage Licenses* that is assigned or removed from the content token will sync and automatically populate. You will see the total apps and licenses available reflected in Zentral Cloud in the *MDM > Overview > Store apps* section.
+
 ## HTTP API
 
 ### `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`
