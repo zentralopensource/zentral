@@ -1236,15 +1236,17 @@ class IncidentSeverityFilter(BaseMSFilter):
     severities_dict = dict(Severity.choices())
 
     def joins(self):
+        open_values = tuple(Status.open_values())
         yield (
-            "left join ("
-            "select mi.serial_number as serial_number, max(i.severity) as max_incident_severity "
-            "from incidents_machineincident as mi "
-            "join incidents_incident as i on (i.id = mi.incident_id) "
-            "where i.status in ({}) "
-            "group by mi.serial_number"
-            ") as mis on (mis.serial_number = ms.serial_number)"
-        ).format(",".join("'{}'".format(s) for s in Status.open_values()))
+            ("left join ("
+             "select mi.serial_number as serial_number, max(i.severity) as max_incident_severity "
+             "from incidents_machineincident as mi "
+             "join incidents_incident as i on (i.id = mi.incident_id) "
+             "where i.status in %s and mi.status in %s "
+             "group by mi.serial_number"
+             ") as mis on (mis.serial_number = ms.serial_number)"),
+            [open_values, open_values]
+        )
 
     def wheres(self):
         if self.value:
