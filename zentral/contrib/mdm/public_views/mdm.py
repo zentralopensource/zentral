@@ -24,7 +24,7 @@ from zentral.contrib.mdm.declarations import (build_legacy_profile,
                                               build_target_management_status_subscriptions,
                                               load_legacy_profile_token)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.inventory import ms_tree_from_payload, update_realm_user_machine_tags
+from zentral.contrib.mdm.inventory import ms_tree_from_payload, update_realm_user_machine_tags, MachineTag
 from zentral.contrib.mdm.models import (ArtifactVersion,
                                         Channel, RequestStatus, DeviceCommand, EnrolledDevice, EnrolledUser,
                                         DEPEnrollmentSession, OTAEnrollmentSession,
@@ -275,8 +275,17 @@ class CheckinView(MDMView):
             enrolled_device.purge_state(full=True)
 
         # initial machine tagging
-        if not is_reenrollment and self.enrollment_session.realm_user:
-            update_realm_user_machine_tags(self.enrollment_session.realm_user, self.serial_number)
+        if not is_reenrollment:
+            # enrollment tags
+            enrollment_tags = list(self.enrollment_session.enrollment_secret.tags.all())
+            if enrollment_tags:
+                MachineTag.objects.bulk_create((
+                    MachineTag(serial_number=self.serial_number, tag=enrollment_tag)
+                    for enrollment_tag in enrollment_tags
+                ), ignore_conflicts=True)
+            # realm group tag mappings
+            if self.enrollment_session.realm_user:
+                update_realm_user_machine_tags(self.enrollment_session.realm_user, self.serial_number)
 
         # update enrollment session
         self.enrollment_session.set_authenticated_status(enrolled_device)

@@ -246,9 +246,12 @@ def force_dep_device(
 # enrollments
 
 
-def force_dep_enrollment(mbu, push_certificate=None, display_name=None):
+def force_dep_enrollment(mbu, push_certificate=None, display_name=None, tags=None):
     if push_certificate is None:
         push_certificate = force_push_certificate()
+    enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=mbu)
+    if tags:
+        enrollment_secret.tags.set(tags)
     return DEPEnrollment.objects.create(
         display_name=display_name or get_random_string(12),
         name=get_random_string(12),
@@ -256,7 +259,7 @@ def force_dep_enrollment(mbu, push_certificate=None, display_name=None):
         push_certificate=push_certificate,
         scep_config=force_scep_config(),
         virtual_server=force_dep_virtual_server(),
-        enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu),
+        enrollment_secret=enrollment_secret,
         skip_setup_items=[k for k, _ in skippable_setup_panes],
     )
 
@@ -345,8 +348,9 @@ def force_dep_enrollment_session(
     realm_user_email=None,
     realm_user_username=None,
     enrollment_display_name=None,
+    tags=None
 ):
-    dep_enrollment = force_dep_enrollment(mbu, push_certificate, display_name=enrollment_display_name)
+    dep_enrollment = force_dep_enrollment(mbu, push_certificate, display_name=enrollment_display_name, tags=tags)
     if realm_user:
         dep_enrollment.use_realm_user = True
         dep_enrollment.username_pattern = DEPEnrollment.UsernamePattern.DEVICE_USERNAME

@@ -304,7 +304,8 @@ class MDMViewsTestCase(TestCase):
         self._assertAbort(post_event, "Invalid header signature")
 
     def test_authenticate_dep_enrollment_session_ios(self, post_event):
-        session, udid, serial_number = force_dep_enrollment_session(self.mbu, realm_user=True)
+        enrollment_tag = Tag.objects.create(name=get_random_string(12))
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, realm_user=True, tags=[enrollment_tag])
         self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
         self.assertIsNone(session.enrolled_device)
 
@@ -353,6 +354,7 @@ class MDMViewsTestCase(TestCase):
         self.assertIsNone(session.enrolled_device.user_approved_enrollment)
         self.assertTrue(session.enrolled_device.supervised)
         # tags
+        self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag=enrollment_tag).exists())
         self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag=unmanaged_tag).exists())
         self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag=tag_to_add).exists())
         self.assertFalse(MachineTag.objects.filter(serial_number=serial_number, tag=tag_to_remove).exists())
