@@ -813,8 +813,8 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "registration/password_reset_done.html")
         self.assertEqual(len(mail.outbox), 1)
         email = mail.outbox[0]
-        self.assertEqual(email.subject, "Password reset on Zentral")
-        self.assertIn(f"Your username, in case you've forgotten: {self.ui_user.username}", email.body)
+        self.assertEqual(email.subject, "Password reset for Zentral")
+        self.assertIn(f"Your username, just in case: {self.ui_user.username}", email.body)
 
     # password change
 

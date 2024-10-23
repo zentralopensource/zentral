@@ -32,8 +32,8 @@ class PasswordResetTestCase(TestCase):
         handler.send_password_reset(self.user)
         self.assertEqual(len(mail.outbox), 1)
         email = mail.outbox[0]
-        self.assertEqual(email.subject, "Password reset on Zentral")
-        self.assertIn(f"Your username, in case you've forgotten: {self.user.username}", email.body)
+        self.assertEqual(email.subject, "Password reset for Zentral")
+        self.assertIn(f"Your username, just in case: {self.user.username}", email.body)
 
     def test_email_send_invitation(self):
         handler = EmailPasswordResetHandler({})
