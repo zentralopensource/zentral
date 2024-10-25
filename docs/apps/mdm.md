@@ -49,18 +49,22 @@ To be able to send notifications to the devices, Zentral requires a push certifi
 
 To configure the Apple Push Notification Service (APNS) for Zentral Cloud, follow these steps. 
 
-* Navigate to the Zentral *MDM > Overview > Push certificates* section.
-* Open the `Zentral Cloud` certificate detail page.
-* Click on the button to download a signed CSR `push_certificate_signed_csr.b64` file.
+* From the sidebar or three-line menu in the top-right corner, navigate to the Zentral *MDM > Overview > Push certificates* section.
+* Click the `Zentral Cloud` link under the Name column to go to the certificate detail page.
+* In the top right corner, click the 'down-arrow' button to download a signed CSR `push_certificate_1_signed_csr.b64` file.
 * Sign in to the [Apple Push Certificate Portal](https://identity.apple.com).
-* Upload the `push_certificate_signed_csr.b64` signed certificate request file.
-* Download the generated APNs certificate.
+* On the "Get Started" page, click the "Create a Certificate" green shiny button
+* Click the checkbox to the left of the "I have read and agree to these terms and conditions." text and click the Accept button
+* On the "Create a Push Certificate" page, optionally enter a note, click the "Choose File" button and navigate to the `push_certificate_1_signed_csr.b64` signed certificate request file, and then click the "Upload" button.
+* On the "Confirmation" page, click the "Download" button.
 * Return to the Zentral *MDM > Overview > Push certificates > Zentral Cloud* certificate detail page. 
-* Upload the generated APNs certificate.
+* From the top right corner, click the "Upload Push Certificate" "up-arrow" button to go to the upload page
+* Click the "Choose File" button and navigate to the "MDM_ Zentral Pro Services GmbH & Co. KG_Certificate.pem" certificate and click the Open button in the filepicker.
+• Click the green Save button.
 
-This configuration is now ready for Zentral MDM push capabilities. To renew an existing push certificate, repeat those steps. 
+As you can now see the certificate details filled in above, this configuration is now ready for Zentral MDM push capabilities. To renew an existing push certificate, repeat those steps. 
 
-**IMPORTANT** do not let the push/APNS certificates expire! Remember to renew them ahead of their expiry!
+**IMPORTANT** do not let the push/APNS certificates expire! Set a reminder and renew it before the "Not after" date listed, or at a regular interval more frequent than the lifetime of the certificate.
 
 To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it is important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button.
 
@@ -111,7 +115,7 @@ Navigate to the Zentral *MDM > Push certificates* section, and either select an 
 
 ### Renewing a Push/APNS certificate
 
-**IMPORTANT** do not let the push/APNS certificates expire! Remember to renew them ahead of their expiry!
+**IMPORTANT** do not let the push/APNS certificates expire! Set a reminder and renew it before the "Not after" date listed in the column, or at a regular interval more frequent than the lifetime of the certificate.
 
 To be able to keep sending notifications to enrolled devices, it is important to renew the existing certificates, and not generate new ones (it is important that the *topic* of a push certificate stays the same). In the [Apple Push Certificate Portal](https://identity.apple.com), look for the existing certificate and click on the `Renew` button, and not on the `Create a Certificate` button. In the Zentral *MDM > Push certificates* section, find the certificate and click on the *Update* button, and do not *Add* a new certificate.
 
@@ -131,12 +135,13 @@ For detailed instructions on general ABM/ASM usage, refer to the [Apple Business
 
 To set up Automated Device Enrollment (ADE) to work with Zentral, follow these steps:
 
-* Navigate to the Zentral *MDM > Overview > DEP Virtual Servers* section and click the *Connect* button. Do not close this section during the process.
-* Download the new public key.
-* In ABM/ASM go to the *Preferences > Your MDM Servers > MDM Server Settings* section.
-* Add a new MDM Server or click *Edit* on an existing MDM Server to replace the public key.
-* Download the `MDM server token` from the *MDM Server Information* section in ABM/ASM.
-* Return to Zentral and upload the `MDM server token` in the *MDM > Overview > DEP Virtual Servers* section.
+* Navigate to the Zentral *MDM > Overview > DEP Virtual Servers* section and click the *Connect* "power-plug" button in the top right. Do not close this section during the process.
+* Next to the text that says "Download the new public key", click the "down-arrow", "Download public key" button.
+* In ABM/ASM go to the *Preferences* and look for the *Your MDM Servers* section in the middle column.
+* Add a new MDM Server by clicking the "plus-circle" with 'Add' below it at the top of that section (or click *Edit* after clicking on an existing MDM Server)
+* Upload the <your_zentral_domain_name>.zentral.cloud_public_key_1_<datetimestamp>.pem public key in the 'well' section on the page.
+* Click the `Download MDM Server Token` button at the top of the window.
+* Return to Zentral and click the "Choose File" button to upload the MDM server token in the *MDM > Overview > DEP Virtual Servers* section.
 * Once an *Enrollment* profile has been created (see the section below), you can assign it as the default enrollment for this token.
 
 To fully utilize ADE, you need to create an *Enrollment* in the *MDM > Overview > Enrollment* section and select the appropriate *Virtual Server* during the setup process (see below). The assigned *Enrollment* will be reflected in the *MDM > DEP Virtual Servers > [Instance Name] > Profile* section, and the devices assigned in ABM/ASM will appear in the *MDM > DEP Virtual Servers > [Instance Name] > Devices* section.
