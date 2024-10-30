@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% load inventory_extras ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">SSO</li>
+</ol>
+
+<h2>Single Sign-On</h2>
+
+{% if perms.realms.view_realm %}
+<p><a href="{% url 'realms:list' %}">Realms</a></p>
+{% endif %}
+{% if perms.realms.view_realmgroup %}
+<p><a href="{% url 'realms:groups' %}">Groups</a></p>
+{% endif %}
+{% if perms.realms.view_realmuser %}
+<p><a href="{% url 'realms:users' %}">Users</a></p>
+{% endif %}
+{% if perms.realms.view_realmgroupmapping %}
+<p><a href="{% url 'realms:realm_group_mappings' %}">Group mappings</a></p>
+{% endif %}
+{% if perms.realms.view_rolemapping %}
+<p><a href="{% url 'realms:role_mappings' %}">Role mappings</a></p>
+{% endif %}
+{% endblock %}

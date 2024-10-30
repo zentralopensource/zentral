@@ -47,7 +47,7 @@
         {% with realm_group_mapping.realm_group as realm_group %}
         <td>
           {% if perms.realms.view_realmgroup %}
-          <a href="{{ realm_group.get_absolute_url }}">{{ realm_group }}</a>
+          <a href="{{ realm_group.get_absolute_url }}">{{ realm_group.display_name }}</a>
           {% else %}
           {{ realm_group }}
           {% endif %}

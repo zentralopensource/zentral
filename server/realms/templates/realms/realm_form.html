@@ -3,6 +3,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:index' %}">SSO</a></li>
   <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
   {% if object %}
   <li class="breadcrumb-item"><a href="{% url 'realms:view' object.pk %}">{{ object }}</a></li>

@@ -131,7 +131,7 @@ class RealmGroup(models.Model):
                            ("realm", "scim_external_id"),)
 
     def __str__(self):
-        return self.display_name
+        return f"{self.realm} / {self.display_name}"
 
     def get_absolute_url(self):
         return reverse("realms:group", args=(self.pk,))

@@ -4,63 +4,80 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:index' %}">SSO</a></li>
   <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
   <li class="breadcrumb-item"><a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a></li>
   <li class="breadcrumb-item active">{{ realm_user }}</li>
 </ol>
 
-<h2>Realm user <i>{{ realm_user }}</i></h2>
+<h3>Realm user <i>{{ realm_user }}</i></h3>
 
 {% if realm_user.realm.enabled_for_login %}
-<h3>Login session expiry</h3>
+<h4 class="mt-4 mb-2">Login session expiry</h3>
 
-<dl class="row">
-  <dt class="col-sm-3 text-md-end">IDP</dt>
-  <dd class="col-sm-9">{{ object.expires_at|default:"-" }}{% if idp_expiry_age %} — ~{{ idp_expiry_age }} seconds{% endif %}</dd>
-  <dt class="col-sm-3 text-md-end">User’s session cookie</dt>
-  <dd class="col-sm-9">
+<dl>
+  <dt>IdP</dt>
+  <dd>{{ object.expires_at|default:"-" }}{% if idp_expiry_age %} — ~{{ idp_expiry_age }} seconds{% endif %}</dd>
+  <dt>User’s session cookie</dt>
+  <dd>
     {% if login_session_expire_at_browser_close %}
     The user’s session cookie will expire when the user’s Web browser is closed.
     {% else %}
     {% if object.realm.login_session_expiry %}
     {{ computed_expiry }} seconds
     {% else %}
-    same as IDP
+    same as IdP
     {% endif %}
     {% endif %}
   </dd>
 </dl>
 {% endif %}
 
-<h3>Orginal claims</h3>
+<h4 class="mt-4 mb-2">Orginal claims</h3>
 
 {{ realm_user.claims|pythonprettyprint }}
 
-<h3>Mapped claims</h3>
+<h4 class="mt-4 mb-2">Mapped claims</h3>
 
 {% if error %}
 <p class="text-danger">{{ error }}</p>
 {% endif %}
 
-<dl class="row">
-  <dt class="col-sm-3 text-md-end">Username</dt>
-  <dd class="col-sm-9">{{ realm_user.username }}</dd>
-  <dt class="col-sm-3 text-md-end">Email</dt>
-  <dd class="col-sm-9">{{ realm_user.email|default:"-" }}</dd>
-  <dt class="col-sm-3 text-md-end">First name</dt>
-  <dd class="col-sm-9">{{ realm_user.first_name|default:"-" }}</dd>
-  <dt class="col-sm-3 text-md-end">Last name</dt>
-  <dd class="col-sm-9">{{ realm_user.last_name|default:"-" }}</dd>
-  <dt class="col-sm-3 text-md-end">Full name</dt>
-  <dd class="col-sm-9">{{ realm_user.full_name|default:"-" }}</dd>
-  <dt class="col-sm-3 text-md-end">Custom attr. 1</dt>
-  <dd class="col-sm-9">{{ realm_user.custom_attr_1|default:"-" }}</dd>
-  <dt class="col-sm-3 text-md-end">Custom attr. 2</dt>
-  <dd class="col-sm-9">{{ realm_user.custom_attr_2|default:"-" }}</dd>
+<dl>
+  <dt>Username</dt>
+  <dd>{{ realm_user.username }}</dd>
+  <dt>Email</dt>
+  <dd>{{ realm_user.email|default:"-" }}</dd>
+  <dt>First name</dt>
+  <dd>{{ realm_user.first_name|default:"-" }}</dd>
+  <dt>Last name</dt>
+  <dd>{{ realm_user.last_name|default:"-" }}</dd>
+  <dt>Full name</dt>
+  <dd>{{ realm_user.full_name|default:"-" }}</dd>
+  <dt>Custom attr. 1</dt>
+  <dd>{{ realm_user.custom_attr_1|default:"-" }}</dd>
+  <dt>Custom attr. 2</dt>
+  <dd>{{ realm_user.custom_attr_2|default:"-" }}</dd>
 </dl>
 
+<h4 class="mt-4 mb-2">{{ mapped_realm_group_count }} Mapped group{{mapped_realm_group_count|pluralize }}</h3>
+
+{% if mapped_realm_group_count %}
+<ul>
+  {% for realm_group in mapped_realm_groups %}
+  <li>
+    {% if perms.realms.view_realmgroup %}
+    <a href="{{ realm_group.get_absolute_url }}">{{ realm_group.display_name }}</a>
+    {% else %}
+    {{ realm_group.display_name }}
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
 {% if perms.auth.view_group %}
-<h3>{{ mapped_group_count }} Mapped group{{ mapped_group_count|pluralize }}</h3>
+<h4 class="mt-4 mb-2">{{ mapped_group_count }} Mapped role{{ mapped_group_count|pluralize }}</h3>
 
 {% if mapped_group_count %}
 <ul>

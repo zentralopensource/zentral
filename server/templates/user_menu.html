@@ -42,9 +42,18 @@
             <i class="bi bi-three-dots-vertical" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Platform settings"></i>
         </a>
         <ul class="dropdown-menu dropdown-menu-end">
+            {% if perms.accounts.view_user %}
             <li><a class="dropdown-item" href="{% url 'accounts:users' %}">Users</a></li>
+            {% endif %}
+            {% if perms.accounts.view_group %}
             <li><a class="dropdown-item" href="{% url 'accounts:groups' %}">Roles</a></li>
+            {% endif %}
+            {% if perms.realms.view_realm %}
             <li><a class="dropdown-item" href="{% url 'realms:list' %}">Realms</a></li>
+            {% endif %}
+            {% if perms.realms.view_realmgroup %}
+            <li><a class="dropdown-item" href="{% url 'realms:groups' %}">Groups</a></li>
+            {% endif %}
             {% if perms.terraform.view_state %}
             <li><a class="dropdown-item" href="{% url 'terraform:index' %}">Terraform</a></li>
             {% endif %}

@@ -2,13 +2,13 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import REDIRECT_FIELD_NAME
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
 from zentral.conf import settings as zentral_settings
 from zentral.utils.views import UserPaginationListView
 from .backends.registry import backend_classes
@@ -16,10 +16,20 @@ from .forms import RealmGroupSearchForm, RealmUserSearchForm
 from .models import (Realm, RealmAuthenticationSession,
                      RealmGroup, RealmGroupMapping, RoleMapping,
                      RealmUser, RealmUserGroupMembership)
-from .utils import get_realm_user_mapped_groups
+from .utils import get_realm_user_mapped_groups, get_realm_user_mapped_realm_groups
 
 
 logger = logging.getLogger("zentral.realms.views")
+
+
+class IndexView(LoginRequiredMixin, TemplateView):
+    template_name = "realms/index.html"
+
+    def get_context_data(self, **kwargs):
+        if not self.request.user.has_module_perms("realms"):
+            raise PermissionDenied("Not allowed")
+        ctx = super().get_context_data(**kwargs)
+        return ctx
 
 
 class LocalUserRequiredMixin:
@@ -110,11 +120,11 @@ class RealmView(PermissionRequiredMixin, DetailView):
         # realm groups
         ctx["group_count"] = self.object.realmgroup_set.count()
         if ctx["group_count"] and self.request.user.has_perm("realms.view_realmgroup"):
-            ctx["groups_url"] = reverse("realms:groups") + f"?realm={ self.object.pk }"
+            ctx["groups_url"] = reverse("realms:groups") + f"?realm={self.object.pk}"
         # realm users
         ctx["user_count"] = self.object.realmuser_set.count()
         if ctx["user_count"] and self.request.user.has_perm("realms.view_realmuser"):
-            ctx["users_url"] = reverse("realms:users") + f"?realm={ self.object.pk }"
+            ctx["users_url"] = reverse("realms:users") + f"?realm={self.object.pk}"
         return ctx
 
 
@@ -369,8 +379,18 @@ class RealmAuthenticationSessionView(LocalUserRequiredMixin, PermissionRequiredM
         if not realm_user.email:
             ctx["error"] = "Missing email. Cannot be used for Zentral login."
 
+        # realm groups
+        ctx["mapped_realm_groups"] = sorted(
+            get_realm_user_mapped_realm_groups(realm_user),
+            key=lambda g: g.display_name
+        )
+        ctx["mapped_realm_group_count"] = len(ctx["mapped_realm_groups"])
+
         # groups
-        ctx["mapped_groups"] = sorted(get_realm_user_mapped_groups(realm_user), key=lambda g: g.name)
+        ctx["mapped_groups"] = sorted(
+            get_realm_user_mapped_groups(realm_user),
+            key=lambda g: g.name
+        )
         ctx["mapped_group_count"] = len(ctx["mapped_groups"])
 
         return ctx

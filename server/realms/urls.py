@@ -4,7 +4,8 @@ from . import views
 
 app_name = "realms"
 urlpatterns = [
-    path('', views.RealmListView.as_view(), name='list'),
+    # index
+    path('', views.IndexView.as_view(), name='index'),
 
     # users
     path('users/', views.RealmUserListView.as_view(), name='users'),
@@ -46,9 +47,10 @@ urlpatterns = [
          name='delete_role_mapping'),
 
     # realms
-    path('<slug:backend>/create/', views.CreateRealmView.as_view(), name='create'),
-    path('<uuid:pk>/', views.RealmView.as_view(), name='view'),
-    path('<uuid:pk>/update/', views.UpdateRealmView.as_view(), name='update'),
+    path('realms/', views.RealmListView.as_view(), name='list'),
+    path('realms/<slug:backend>/create/', views.CreateRealmView.as_view(), name='create'),
+    path('realms/<uuid:pk>/', views.RealmView.as_view(), name='view'),
+    path('realms/<uuid:pk>/update/', views.UpdateRealmView.as_view(), name='update'),
 
     # SSO test views
     path('<uuid:pk>/test/', views.TestRealmView.as_view(), name='test'),

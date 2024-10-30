@@ -57,6 +57,38 @@ class RealmViewsTestCase(TestCase):
             self.ui_group.permissions.clear()
         self.client.force_login(self.ui_user)
 
+    # index
+
+    def test_index_redirect(self):
+        self.login_redirect("index")
+
+    def test_index_permission_denied(self):
+        self.login()
+        response = self.client.get(reverse("realms:index"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_index_zero_links(self):
+        self.login("realms.add_realm")
+        response = self.client.get(reverse("realms:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/index.html")
+        for view_name in ("list", "groups", "users", "realm_group_mappings", "role_mappings"):
+            self.assertNotContains(response, reverse(f"realms:{view_name}"))
+
+    def test_index_all_links(self):
+        self.login(
+            "realms.view_realm",
+            "realms.view_realmgroup",
+            "realms.view_realmuser",
+            "realms.view_realmgroupmapping",
+            "realms.view_rolemapping"
+        )
+        response = self.client.get(reverse("realms:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/index.html")
+        for view_name in ("list", "groups", "users", "realm_group_mappings", "role_mappings"):
+            self.assertContains(response, reverse(f"realms:{view_name}"))
+
     # realm list
 
     def test_realm_list_redirect(self):

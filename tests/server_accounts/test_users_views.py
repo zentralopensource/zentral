@@ -525,7 +525,7 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_self_create_api_token(self):
-        self.login()
+        self.login("accounts.view_user")
         response = self.client.post(reverse("accounts:create_user_api_token", args=(self.ui_user.id,)))
         self.assertTemplateUsed(response, "accounts/user_api_token.html")
         user = response.context["object"]

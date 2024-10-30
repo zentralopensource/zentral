@@ -4,7 +4,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:index' %}">SSO</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
   <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
@@ -53,7 +53,7 @@
         {{ obj.realm }}
         {% endif %}
       </td>
-      <td><a href="{{ obj.get_absolute_url }}">{{ obj }}</a></td>
+      <td><a href="{{ obj.get_absolute_url }}">{{ obj.display_name }}</a></td>
       <td class="text-end py-0">
         {% if perms.realms.change_realmgroup and obj.can_be_updated %}
           {% url 'realms:update_group' obj.pk as url %}
