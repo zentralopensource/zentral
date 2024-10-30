@@ -16,6 +16,16 @@ from .models import Configuration, Enrollment, Rule, RuleSet, Target, TargetStat
 logger = logging.getLogger("zentral.contrib.santa.forms")
 
 
+class TargetTypesWidget(forms.CheckboxSelectMultiple):
+    def __init__(self, attrs=None, choices=()):
+        super().__init__(attrs, choices=Target.Type.choices)
+
+    def format_value(self, value):
+        if isinstance(value, str) and value:
+            value = [v.strip() for v in value.split(",")]
+        return super().format_value(value)
+
+
 class ConfigurationForm(forms.ModelForm):
     class Meta:
         model = Configuration
@@ -23,7 +33,8 @@ class ConfigurationForm(forms.ModelForm):
         widgets = {
             "event_detail_url": forms.Textarea(attrs={"cols": "40", "rows": "3"}),
             "allowed_path_regex": forms.Textarea(attrs={"cols": "40", "rows": "3"}),
-            "blocked_path_regex": forms.Textarea(attrs={"cols": "40", "rows": "3"})
+            "blocked_path_regex": forms.Textarea(attrs={"cols": "40", "rows": "3"}),
+            "default_ballot_target_types": TargetTypesWidget,
         }
 
     def clean(self):
@@ -73,10 +84,16 @@ class VotingGroupForm(forms.ModelForm):
             "ballot_target_types",
             "voting_weight"
         )
+        widgets = {"ballot_target_types": TargetTypesWidget}
 
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration")
         super().__init__(*args, **kwargs)
+        vg_rg_pks_to_exclude = [vg.realm_group.pk for vg in self.configuration.votinggroup_set.all()]
+        if self.instance.pk and self.instance.realm_group.pk:
+            # we allow the existing realm group of the voting group being updated
+            vg_rg_pks_to_exclude.remove(self.instance.realm_group.pk)
+        self.fields["realm_group"].queryset = self.fields["realm_group"].queryset.exclude(pk__in=vg_rg_pks_to_exclude)
 
     def save(self, *args, **kwargs):
         self.instance.configuration = self.configuration

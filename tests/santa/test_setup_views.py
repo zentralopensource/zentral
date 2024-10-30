@@ -14,7 +14,9 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, File, Tag
 from zentral.contrib.santa.models import Bundle, Enrollment, Rule, Target
 from zentral.core.events.base import AuditEvent
-from .utils import force_configuration, force_realm, new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
+from .utils import (force_configuration,
+                    force_realm, force_realm_group, force_realm_user, force_voting_group,
+                    new_cdhash, new_sha256, new_signing_id_identifier, new_team_id)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -384,7 +386,7 @@ class SantaSetupViewsTestCase(TestCase):
                                          "remount_usb_mode": "rdonly, noexec",
                                          "voting_realm": realm.pk,
                                          "banned_threshold": -50,
-                                         "default_ballot_target_types": "METABUNDLE,SIGNINGID",
+                                         "default_ballot_target_types": ["METABUNDLE", "SIGNINGID"],
                                          "default_voting_weight": 1,
                                          "globally_allowlisted_threshold": 500,
                                          "partially_allowlisted_threshold": 100,
@@ -598,6 +600,182 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
+
+    # create voting group
+
+    def test_create_voting_group_redirect(self):
+        configuration = force_configuration()
+        self._login_redirect(reverse("santa:create_voting_group", args=(configuration.pk,)))
+
+    def test_create_voting_group_permission_denied(self):
+        configuration = force_configuration()
+        self._login()
+        response = self.client.get(reverse("santa:create_voting_group", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_voting_group_get(self):
+        configuration = force_configuration()
+        realm_group = force_realm_group()
+        self._login("santa.add_votinggroup")
+        response = self.client.get(reverse("santa:create_voting_group", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/votinggroup_form.html")
+        self.assertContains(response, realm_group.realm.name)
+        self.assertContains(response, realm_group.display_name)
+
+    def test_create_voting_group_post(self):
+        configuration = force_configuration()
+        realm_group = force_realm_group()
+        self._login("santa.add_votinggroup", "santa.view_configuration", "santa.view_votinggroup")
+        response = self.client.post(reverse("santa:create_voting_group", args=(configuration.pk,)),
+                                    {"realm_group": realm_group.pk,
+                                     "can_unflag_target": "on",
+                                     "can_mark_malware": "on",
+                                     "can_reset_target": "on",
+                                     "ballot_target_types": ["METABUNDLE", "SIGNINGID"],
+                                     "voting_weight": 5},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertContains(response, realm_group.display_name)
+        self.assertEqual(configuration.votinggroup_set.count(), 1)
+        voting_group = configuration.votinggroup_set.first()
+        self.assertTrue(voting_group.can_unflag_target)
+        self.assertTrue(voting_group.can_mark_malware)
+        self.assertTrue(voting_group.can_reset_target)
+        self.assertEqual(sorted(voting_group.ballot_target_types), ["METABUNDLE", "SIGNINGID"])
+        self.assertEqual(voting_group.voting_weight, 5)
+
+    def test_create_voting_group_post_realm_group_conflict(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        self._login("santa.add_votinggroup", "santa.view_configuration", "santa.view_votinggroup")
+        response = self.client.post(reverse("santa:create_voting_group", args=(configuration.pk,)),
+                                    {"realm_group": voting_group.realm_group.pk,  # conflict
+                                     "can_unflag_target": "on",
+                                     "can_mark_malware": "on",
+                                     "can_reset_target": "on",
+                                     "ballot_target_types": ["SIGNINGID"],
+                                     "voting_weight": 17},
+                                    follow=True,
+                                    )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/votinggroup_form.html")
+        self.assertFormError(response.context["form"], "realm_group",
+                             "Select a valid choice. That choice is not one of the available choices.")
+
+    # update voting group
+
+    def test_update_voting_group_redirect(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        self._login_redirect(reverse("santa:update_voting_group", args=(configuration.pk, voting_group.pk)))
+
+    def test_update_voting_group_permission_denied(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        self._login()
+        response = self.client.get(reverse("santa:update_voting_group", args=(configuration.pk, voting_group.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_voting_group_get(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        self._login("santa.change_votinggroup")
+        response = self.client.get(reverse("santa:update_voting_group", args=(configuration.pk, voting_group.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/votinggroup_form.html")
+
+    def test_update_voting_group_post(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        realm_group = voting_group.realm_group
+        self._login("santa.change_votinggroup", "santa.view_configuration", "santa.view_votinggroup")
+        response = self.client.post(reverse("santa:update_voting_group", args=(configuration.pk, voting_group.pk)),
+                                    {"realm_group": realm_group.pk,
+                                     "can_unflag_target": "on",
+                                     "can_mark_malware": "on",
+                                     "can_reset_target": "on",
+                                     "ballot_target_types": ["SIGNINGID"],
+                                     "voting_weight": 17},
+                                    follow=True,
+                                    )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertContains(response, realm_group.display_name)
+        self.assertEqual(configuration.votinggroup_set.count(), 1)
+        voting_group_2 = configuration.votinggroup_set.first()
+        self.assertEqual(voting_group, voting_group_2)
+        voting_group.refresh_from_db()
+        self.assertTrue(voting_group.can_unflag_target)
+        self.assertTrue(voting_group.can_mark_malware)
+        self.assertTrue(voting_group.can_reset_target)
+        self.assertEqual(sorted(voting_group.ballot_target_types), ["SIGNINGID"])
+        self.assertEqual(voting_group.voting_weight, 17)
+
+    def test_update_voting_group_post_realm_group_conflict(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        realm2, realm_user2 = force_realm_user()
+        voting_group_2 = force_voting_group(configuration, realm_user2)
+        self._login("santa.change_votinggroup", "santa.view_configuration", "santa.view_votinggroup")
+        response = self.client.post(reverse("santa:update_voting_group", args=(configuration.pk, voting_group.pk)),
+                                    {"realm_group": voting_group_2.realm_group.pk,  # conflict
+                                     "can_unflag_target": "on",
+                                     "can_mark_malware": "on",
+                                     "can_reset_target": "on",
+                                     "ballot_target_types": ["SIGNINGID"],
+                                     "voting_weight": 17},
+                                    follow=True,
+                                    )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/votinggroup_form.html")
+        self.assertFormError(response.context["form"], "realm_group",
+                             "Select a valid choice. That choice is not one of the available choices.")
+
+    # delete voting group
+
+    def test_delete_voting_group_redirect(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        self._login_redirect(reverse("santa:delete_voting_group", args=(configuration.pk, voting_group.pk)))
+
+    def test_delete_voting_group_permission_denied(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        self._login()
+        response = self.client.get(reverse("santa:delete_voting_group", args=(configuration.pk, voting_group.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_voting_group_get(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        self._login("santa.delete_votinggroup")
+        response = self.client.get(reverse("santa:delete_voting_group", args=(configuration.pk, voting_group.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/votinggroup_confirm_delete.html")
+
+    def test_delete_voting_group_post(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        voting_group = force_voting_group(configuration, realm_user)
+        self.assertTrue(configuration.votinggroup_set.filter(pk=voting_group.pk).exists())
+        self._login("santa.delete_votinggroup", "santa.view_configuration", "santa.view_votinggroup")
+        response = self.client.post(reverse("santa:delete_voting_group", args=(configuration.pk, voting_group.pk)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertFalse(configuration.votinggroup_set.filter(pk=voting_group.pk).exists())
+        self.assertNotContains(response, voting_group.realm_group.display_name)
 
     # configuration rules
 
