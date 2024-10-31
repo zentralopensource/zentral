@@ -11,8 +11,8 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from realms.backends.registry import backend_classes
 from realms.models import Realm, RealmAuthenticationSession, RealmGroupMapping, RoleMapping
-from .utils import (force_group, force_realm, force_realm_group,
-                    force_realm_group_mapping, force_role_mapping,
+from .utils import (force_group, force_realm, force_realm_authentication_session,
+                    force_realm_group, force_realm_group_mapping, force_role_mapping,
                     force_realm_user, force_user)
 
 
@@ -1138,3 +1138,38 @@ class RealmViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "realms/realmuser_detail.html")
         self.assertNotContains(response, user.get_absolute_url())
         self.assertContains(response, "Zentral user (1)")
+
+    # test realm
+
+    def test_realm_permission_denied(self):
+        realm = force_realm(enabled_for_login=True)
+        self.login()
+        response = self.client.post(reverse("realms:test", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_realm(self):
+        realm = force_realm(enabled_for_login=True)
+        self.login("realms.view_realm")
+        response = self.client.post(reverse("realms:test", args=(realm.pk,)))
+        ras = realm.realmauthenticationsession_set.first()
+        self.assertRedirects(response, reverse("realms_public:ldap_login", args=(realm.pk, ras.pk)))
+
+    # authentication session
+
+    def test_authentication_session_login_redirect(self):
+        ras = force_realm_authentication_session()
+        self.login_redirect("test", ras.realm.pk)
+
+    def test_authentication_session_permission_denied(self):
+        ras = force_realm_authentication_session()
+        self.login()
+        response = self.client.get(reverse("realms:authentication_session", args=(ras.realm.pk, ras.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_authentication_session(self):
+        ras = force_realm_authentication_session()
+        self.login("realms.view_realm")
+        response = self.client.get(reverse("realms:authentication_session", args=(ras.realm.pk, ras.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmauthenticationsession_detail.html")
+        self.assertContains(response, "IdP claims")

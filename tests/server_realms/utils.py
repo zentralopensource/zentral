@@ -2,7 +2,8 @@ import uuid
 from django.contrib.auth.models import Group
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from realms.models import (Realm, RealmEmail, RealmGroup, RealmGroupMapping,
+from realms.models import (Realm, RealmAuthenticationSession,
+                           RealmEmail, RealmGroup, RealmGroupMapping,
                            RealmUser, RealmUserGroupMembership, RoleMapping)
 
 
@@ -123,3 +124,13 @@ def force_user(username=None, email=None, active=True, remote=False, service_acc
     user.set_password(get_random_string(12))
     user.save()
     return user
+
+
+def force_realm_authentication_session(callback="realms.utils.test_callback"):
+    realm = force_realm(enabled_for_login=True)
+    _, realm_user = force_realm_user(realm=realm)
+    return RealmAuthenticationSession.objects.create(
+        realm=realm,
+        user=realm_user,
+        callback=callback,
+    )

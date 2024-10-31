@@ -381,7 +381,7 @@ class RealmAuthenticationSessionView(LocalUserRequiredMixin, PermissionRequiredM
 
         # realm groups
         ctx["mapped_realm_groups"] = sorted(
-            get_realm_user_mapped_realm_groups(realm_user),
+            get_realm_user_mapped_realm_groups(realm_user) or [],
             key=lambda g: g.display_name
         )
         ctx["mapped_realm_group_count"] = len(ctx["mapped_realm_groups"])

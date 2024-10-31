@@ -53,7 +53,7 @@ urlpatterns = [
     path('realms/<uuid:pk>/update/', views.UpdateRealmView.as_view(), name='update'),
 
     # SSO test views
-    path('<uuid:pk>/test/', views.TestRealmView.as_view(), name='test'),
-    path('<uuid:pk>/sessions/<uuid:ras_pk>/', views.RealmAuthenticationSessionView.as_view(),
+    path('realms/<uuid:pk>/test/', views.TestRealmView.as_view(), name='test'),
+    path('realms/<uuid:pk>/sessions/<uuid:ras_pk>/', views.RealmAuthenticationSessionView.as_view(),
          name='authentication_session'),
 ]
