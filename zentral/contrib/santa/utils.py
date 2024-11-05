@@ -417,7 +417,7 @@ def target_related_targets(target):
         "  select 'TEAMID' type, identifier, objects "
         "  from team_ids"
         ") "
-        "select st.type, st.identifier, st.objects,"
+        "select st.type, st.identifier, st.objects, t.id, "
         "jsonb_agg("
         "  jsonb_build_object("
         "    'pk', c.id,"
@@ -431,13 +431,14 @@ def target_related_targets(target):
         "left join santa_target t on (t.type=st.type and t.identifier=st.identifier) "
         "left join santa_targetstate ts on (t.id = ts.target_id) "
         "left join santa_configuration c on (ts.configuration_id = c.id) "
-        "group by st.type, st.identifier, st.objects"
+        "group by st.type, st.identifier, st.objects, t.id"
     )
     targets = {}
     with connection.cursor() as cursor:
         cursor.execute(query, args)
-        for target_type, target_identifier, objects, states in cursor.fetchall():
+        for target_type, target_identifier, objects, pk, states in cursor.fetchall():
             targets.setdefault(target_type, {})[target_identifier] = {
+                "pk": pk,
                 "url": reverse(f"santa:{target_type.lower()}", args=(target_identifier,)),
                 "identifier": target_identifier,
                 "objects": json.loads(objects),

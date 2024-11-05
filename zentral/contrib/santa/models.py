@@ -216,20 +216,20 @@ class TargetManager(models.Manager):
     def get_targets_display_strings(self, targets):
         queries = {
             "CDHASH": "select f.name display_str, f.cdhash identifier "
-                    "from inventory_file f "
-                    "join inventory_source s on (f.source_id = s.id) "
-                    "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-                    "and cdhash in %(CDHASH)s",
+                      "from inventory_file f "
+                      "join inventory_source s on (f.source_id = s.id) "
+                      "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+                      "and cdhash in %(CDHASH)s",
             "BINARY": "select f.name display_str, f.sha_256 identifier "
-                    "from inventory_file f "
-                    "join inventory_source s on (f.source_id = s.id) "
-                    "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-                    "and sha_256 in %(BINARY)s",
+                      "from inventory_file f "
+                      "join inventory_source s on (f.source_id = s.id) "
+                      "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+                      "and sha_256 in %(BINARY)s",
             "SIGNINGID": "select f.name display_str, f.signing_id identifier "
-                    "from inventory_file f "
-                    "join inventory_source s on (f.source_id = s.id) "
-                    "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
-                    "and signing_id in %(SIGNINGID)s",
+                         "from inventory_file f "
+                         "join inventory_source s on (f.source_id = s.id) "
+                         "where s.module = 'zentral.contrib.santa' and s.name = 'Santa events' "
+                         "and signing_id in %(SIGNINGID)s",
             "BUNDLE": "select b.name || ' ' || b.version display_str, t.identifier "
                       "from santa_bundle b "
                       "join santa_target t on (b.target_id = t.id) "
@@ -972,6 +972,7 @@ class Rule(models.Model):
     custom_msg = models.TextField(blank=True)
     description = models.TextField(blank=True)
     version = models.PositiveIntegerField(default=1)
+    is_voting_rule = models.BooleanField(default=False, editable=False)
 
     # scope
     serial_numbers = ArrayField(models.TextField(), blank=True, default=list)

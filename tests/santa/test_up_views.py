@@ -5,12 +5,13 @@ import uuid
 from django.conf import settings
 from django.http import HttpRequest
 from django.urls import reverse
+from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from realms.backends.views import finalize_session
 from realms.models import RealmAuthenticationSession
 from zentral.contrib.santa.ballot_box import BallotBox
 from zentral.contrib.santa.events import SantaBallotEvent, SantaTargetStateUpdateEvent
-from zentral.contrib.santa.models import Ballot, Target
+from zentral.contrib.santa.models import Ballot, Rule, Target
 from .utils import add_file_to_test_class, force_configuration, force_enrolled_machine, force_realm, force_realm_user
 
 
@@ -321,3 +322,23 @@ class SantaSetupViewsTestCase(TestCase):
             response.context["existing_votes"],
             [(self.configuration, True)],
         )
+
+    def test_target_get_conflicting_rule_ballot_box(self):
+        self._login()
+        rule = Rule.objects.create(  # conflicting rule
+            configuration=self.configuration,
+            policy=Rule.Policy.BLOCKLIST,
+            target=self.team_id_target,
+            custom_msg=get_random_string(12),
+        )
+        response = self.client.get(
+            reverse("realms_public:santa_up:target",
+                    args=(self.realm.pk, "bundle", self.bundle_sha256))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "user_portal/santa_target_detail.html")
+        self.assertNotContains(response, "Vote to allowlist")
+        self.assertContains(response, rule.custom_msg)
+        ballot_box = response.context["ballot_box"]
+        self.assertEqual(ballot_box.target.type, Target.Type.METABUNDLE)
+        self.assertEqual(ballot_box.target.identifier, self.metabundle_sha256)

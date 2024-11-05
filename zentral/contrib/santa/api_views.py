@@ -188,12 +188,19 @@ class RuleDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (DefaultDjangoModelPermissions,)
     serializer_class = RuleSerializer
 
-    def delete(self, request, *args, **kwargs):
-        instance = self.get_object()
-        transaction.on_commit(lambda: post_santa_rule_update_event(request,
-                                                                   {"rule": instance.serialize_for_event(),
+    def perform_destroy(self, instance):
+        if instance.is_voting_rule:
+            raise ValidationError("A voting rule cannot be directly deleted")
+        serialized_rule = instance.serialize_for_event()
+        transaction.on_commit(lambda: post_santa_rule_update_event(self.request,
+                                                                   {"rule": serialized_rule,
                                                                     "result": "deleted"}))
-        return super().delete(request, *args, **kwargs)
+        return super().perform_destroy(instance)
+
+    def perform_update(self, serializer):
+        if serializer.instance.is_voting_rule:
+            raise ValidationError("A voting rule cannot be directly updated")
+        return super().perform_update(serializer)
 
 
 class RuleSetUpdate(APIView):

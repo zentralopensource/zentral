@@ -214,11 +214,17 @@ def force_rule(
     target_identifier=None,
     configuration=None,
     policy=Rule.Policy.BLOCKLIST,
+    is_voting_rule=False,
 ):
     target = force_target(target_type, target_identifier)
     if configuration is None:
         configuration = force_configuration()
-    return Rule.objects.create(configuration=configuration, target=target, policy=policy)
+    return Rule.objects.create(
+        configuration=configuration,
+        target=target,
+        policy=policy,
+        is_voting_rule=is_voting_rule
+    )
 
 
 # file
@@ -287,12 +293,16 @@ def add_file_to_test_class(cls):
     uploaded_bundles = _create_bundle_binaries(events)
     _commit_files(events)
     update_metabundles(uploaded_bundles)
+    cls.cdhash_target = Target.objects.get(type=Target.Type.CDHASH, identifier=cls.cdhash)
     cls.file_target = Target.objects.get(type=Target.Type.BINARY, identifier=cls.file_sha256)
     cls.file = File.objects.get(sha_256=cls.file_sha256)
     cls.bundle_target = Target.objects.get(type=Target.Type.BUNDLE, identifier=cls.bundle_sha256)
     cls.bundle = cls.bundle_target.bundle
     cls.metabundle_target = cls.bundle.metabundle.target
     cls.metabundle_sha256 = cls.bundle.metabundle.target.identifier
+    cls.cert_target = Target.objects.get(type=Target.Type.CERTIFICATE, identifier=cls.file_cert_sha256)
+    cls.signing_id_target = Target.objects.get(type=Target.Type.SIGNING_ID, identifier=cls.file_signing_id)
+    cls.team_id_target = Target.objects.get(type=Target.Type.TEAM_ID, identifier=cls.file_team_id)
 
 
 # ballot

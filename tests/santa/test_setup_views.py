@@ -15,7 +15,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit,
 from zentral.contrib.santa.models import Bundle, Enrollment, Rule, Target
 from zentral.core.events.base import AuditEvent
 from .utils import (force_configuration,
-                    force_realm, force_realm_group, force_realm_user, force_voting_group,
+                    force_realm, force_realm_group, force_realm_user, force_rule, force_voting_group,
                     new_cdhash, new_sha256, new_signing_id_identifier, new_team_id)
 
 
@@ -810,6 +810,58 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("santa:configuration_rules",
                                                  args=(rule.configuration.pk,)) + '">all the items')
 
+    def test_configuration_rules_no_links(self):
+        rule = self._force_rule(target_type=Target.Type.BINARY)
+        voting_rule = force_rule(configuration=rule.configuration, is_voting_rule=True)
+        self._login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, rule.target.identifier)
+        self.assertContains(response, voting_rule.target.identifier)
+        self.assertNotContains(
+            response,
+            reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk))
+        )
+        self.assertNotContains(
+            response,
+            reverse("santa:delete_configuration_rule", args=(rule.configuration.pk, rule.pk))
+        )
+        self.assertNotContains(
+            response,
+            reverse("santa:update_configuration_rule", args=(voting_rule.configuration.pk, voting_rule.pk))
+        )
+        self.assertNotContains(
+            response,
+            reverse("santa:delete_configuration_rule", args=(voting_rule.configuration.pk, voting_rule.pk))
+        )
+
+    def test_configuration_rules_links(self):
+        rule = self._force_rule(target_type=Target.Type.BINARY)
+        voting_rule = force_rule(configuration=rule.configuration, is_voting_rule=True)
+        self._login("santa.change_rule", "santa.delete_rule", "santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, rule.target.identifier)
+        self.assertContains(response, voting_rule.target.identifier)
+        self.assertContains(
+            response,
+            reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk))
+        )
+        self.assertContains(
+            response,
+            reverse("santa:delete_configuration_rule", args=(rule.configuration.pk, rule.pk))
+        )
+        self.assertNotContains(
+            response,
+            reverse("santa:update_configuration_rule", args=(voting_rule.configuration.pk, voting_rule.pk))
+        )
+        self.assertNotContains(
+            response,
+            reverse("santa:delete_configuration_rule", args=(voting_rule.configuration.pk, voting_rule.pk))
+        )
+
     def test_configuration_rules_no_result(self):
         rule = self._force_rule(target_type=Target.Type.BINARY)
         self._login("santa.view_rule")
@@ -1232,6 +1284,12 @@ class SantaSetupViewsTestCase(TestCase):
                                        'excluded_primary_users': ["'fomo' both included and excluded"],
                                        'excluded_tags': [f"'{tags[0].name}' both included and excluded"]})
 
+    def test_update_configuration_rule_voting_rule_error(self):
+        self._login("santa.change_rule")
+        rule = force_rule(is_voting_rule=True)
+        response = self.client.get(reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)))
+        self.assertEqual(response.status_code, 404)
+
     # delete configuration rule
 
     def test_delete_configuration_rule(self):
@@ -1258,6 +1316,12 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/configuration_rules.html")
         self.assertFalse(any(rule.target.identifier == binary_hash for rule in response.context["object_list"]))
+
+    def test_delete_configuration_rule_voting_rule_error(self):
+        self._login("santa.delete_rule")
+        rule = force_rule(is_voting_rule=True)
+        response = self.client.get(reverse("santa:delete_configuration_rule", args=(rule.configuration.pk, rule.pk)))
+        self.assertEqual(response.status_code, 404)
 
     # pick rule binary
 

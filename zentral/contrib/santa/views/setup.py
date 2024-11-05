@@ -364,7 +364,8 @@ class UpdateConfigurationRuleView(PermissionRequiredMixin, UpdateView):
             Rule.objects.select_related("configuration", "target"),
             pk=self.kwargs["pk"],
             configuration__pk=self.kwargs["configuration_pk"],
-            ruleset__isnull=True
+            ruleset__isnull=True,
+            is_voting_rule=False,
         )
 
     def get_context_data(self, **kwargs):
@@ -392,7 +393,8 @@ class DeleteConfigurationRuleView(PermissionRequiredMixin, DeleteView):
             Rule.objects.select_related("configuration", "target"),
             pk=self.kwargs["pk"],
             configuration__pk=self.kwargs["configuration_pk"],
-            ruleset__isnull=True
+            ruleset__isnull=True,
+            is_voting_rule=False,
         )
 
     def get_context_data(self, **kwargs):

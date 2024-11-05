@@ -244,6 +244,56 @@ class BallotBox:
                     votes.add((vote.configuration, vote.was_yes_vote))
         return votes
 
+    @cached_property
+    def conflicting_non_voting_rules(self):
+        excluded_target_types = []
+        if self.target.type in (Target.Type.SIGNING_ID, Target.Type.METABUNDLE):
+            excluded_target_types = [
+                Target.Type.CDHASH,
+                Target.Type.BINARY
+            ]
+        elif self.target.type == Target.Type.CERTIFICATE:
+            excluded_target_types = [
+                Target.Type.CDHASH,
+                Target.Type.BINARY,
+                Target.Type.SIGNING_ID
+            ]
+        elif self.target.type == Target.Type.TEAM_ID:
+            excluded_target_types = [
+                Target.Type.CDHASH,
+                Target.Type.BINARY,
+                Target.Type.SIGNING_ID,
+                Target.Type.CERTIFICATE
+            ]
+        related_target_pks = []
+        for target_type in (t for t in Target.Type if (t.is_native and t not in excluded_target_types)):
+            for target_info in self.related_targets.get(target_type, {}).values():
+                target_pk = target_info["pk"]
+                if target_pk:
+                    related_target_pks.append(target_pk)
+        rules = {}
+        for rule in Rule.objects.select_related("configuration", "target").filter(
+            configuration__in=self.voter.configurations,
+            target__pk__in=related_target_pks,
+            is_voting_rule=False,
+        ):
+            rules.setdefault(rule.configuration, []).append(rule)
+        return rules
+
+    @cached_property
+    def conflicting_non_voting_rule_custom_messages(self):
+        messages = set()
+        add_default = False
+        for rules in self.conflicting_non_voting_rules.values():
+            for rule in rules:
+                if rule.custom_msg:
+                    messages.add(rule.custom_msg)
+                else:
+                    add_default = True
+        if add_default and not messages:
+            messages.add("Voting is not allowed on this app.")
+        return sorted(messages)
+
     def check_voting_allowed_for_configuration(self, configuration, yes_vote):
         if self.voter.is_anonymous:
             return "Anonymous voter"
@@ -292,6 +342,9 @@ class BallotBox:
         # cannot downvote a BUNDLE or METABUNDLE
         if self.target.type in (Target.Type.BUNDLE, Target.Type.METABUNDLE) and not yes_vote:
             return f"A {self.target.type} cannot be downvoted"
+        # conflicting non-voting rule
+        if self.conflicting_non_voting_rules.get(configuration):
+            return "Conflicting non-voting rule"
 
     def _get_default_votes(self, yes_vote):
         votes = set()
@@ -477,6 +530,7 @@ class BallotBox:
                     policy=policy,
                     primary_users=primary_users if primary_users else [],
                     excluded_primary_users=[],
+                    is_voting_rule=True,
                 ) for target in self._iter_rule_targets()
             ],
             update_conflicts=True,
@@ -509,7 +563,11 @@ class BallotBox:
         self._update_or_create_rules(configuration, Rule.Policy.BLOCKLIST)
 
     def _ensure_no_rules(self, configuration):
-        Rule.objects.filter(configuration=configuration, target__in=self._iter_rule_targets()).delete()
+        Rule.objects.filter(
+            configuration=configuration,
+            target__in=self._iter_rule_targets(),
+            is_voting_rule=True,
+        ).delete()
 
     # events
 

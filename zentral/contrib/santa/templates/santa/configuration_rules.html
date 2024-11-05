@@ -77,7 +77,7 @@
                     </span>
                 </div>
                 <div class="flex-shrink-1">
-                {% if not rule.ruleset %}
+                {% if not rule.ruleset and not rule.is_voting_rule %}
                 {% if perms.santa.change_rule or perms.santa.delete_rule %}
                     <div class="btn-group" role="group">
                     {% if perms.santa.change_rule %}
@@ -93,6 +93,10 @@
                 {% endif %}
                 </div>
             </td>
+        </tr>
+        <tr>
+          <td>Voting rule?</td>
+          <td>{{ rule.is_voting_rule|yesno }}</td>
         </tr>
         <tr>
             <td>{{ target.get_type_display }}</td>

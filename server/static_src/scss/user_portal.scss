@@ -1,6 +1,7 @@
 :root {
     --main-color: #040203;
     --background-color: #fafafa;
+    --danger-color: #ea5165;
     --default-weight: 400;
     --bold-weight: 700;
     --btn-border: 2px;
@@ -27,6 +28,10 @@ dt {
 
 dd {
     margin: 0 0 .5rem 0;
+}
+
+p.danger {
+    color: var(--danger-color);
 }
 
 /* Grid */

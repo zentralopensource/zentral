@@ -17,7 +17,7 @@ from zentral.contrib.santa.events import SantaRuleUpdateEvent
 from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment
 from zentral.core.events.base import AuditEvent
 from zentral.utils.payloads import get_payload_identifier
-from .utils import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
+from .utils import force_rule, new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
 class APIViewsTestCase(TestCase):
@@ -1047,6 +1047,7 @@ class APIViewsTestCase(TestCase):
             "excluded_serial_numbers": [get_random_string(12)],
             "tags": [t.id for t in self.force_tags(1)],
             "excluded_tags": [t.id for t in self.force_tags(1)],
+            "is_voting_rule": True,  # Read Only!!!
         }
         with self.captureOnCommitCallbacks(execute=True):
             response = self.post_json_data(reverse("santa_api:rules"), data)
@@ -1062,6 +1063,7 @@ class APIViewsTestCase(TestCase):
             "description": "Description",
             "custom_msg": '',
             "ruleset": None,
+            "is_voting_rule": False,
             "primary_users": data["primary_users"],
             "excluded_primary_users": data["excluded_primary_users"],
             "serial_numbers": data["serial_numbers"],
@@ -1081,6 +1083,7 @@ class APIViewsTestCase(TestCase):
             "description": rule.description,
             "primary_users": rule.primary_users,
             "ruleset": None,
+            "is_voting_rule": rule.is_voting_rule,
             "custom_msg": '',
             "excluded_primary_users": rule.excluded_primary_users,
             "serial_numbers": rule.serial_numbers,
@@ -1629,6 +1632,19 @@ class APIViewsTestCase(TestCase):
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), {}, include_token=False)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_update_rule_voting_rule_error(self):
+        self.set_permissions("santa.change_rule")
+        rule = force_rule(is_voting_rule=True)
+        response = self.put_json_data(
+            reverse("santa_api:rule", args=(rule.pk,)),
+            {"configuration": rule.configuration.pk,
+             "policy": rule.policy,
+             "target_identifier": rule.target.identifier,
+             "target_type": rule.target.type}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), ['A voting rule cannot be directly updated'])
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_rule(self, post_event):
         configuration = self.force_configuration()
@@ -1662,6 +1678,7 @@ class APIViewsTestCase(TestCase):
             "description": "new description",
             "custom_msg": "new custom block message",
             "ruleset": None,
+            "is_voting_rule": False,
             "primary_users": data["primary_users"],
             "excluded_primary_users": data["excluded_primary_users"],
             "serial_numbers": data["serial_numbers"],
@@ -1778,6 +1795,13 @@ class APIViewsTestCase(TestCase):
         rule = self.force_rule(configuration=configuration)
         response = self.delete(reverse("santa_api:rule", args=(rule.pk,)))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_rule_delete_voting_rule_error(self):
+        self.set_permissions("santa.delete_rule")
+        rule = force_rule(is_voting_rule=True)
+        response = self.delete(reverse("santa_api:rule", args=(rule.pk,)))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), ['A voting rule cannot be directly deleted'])
 
     # list configuration
 

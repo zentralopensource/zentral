@@ -267,6 +267,108 @@ class SantaBallotBoxTestCase(TestCase):
             set()
         )
 
+    def test_ballot_box_no_conflicting_rule(self):
+        realm, realm_user = force_realm_user()
+        force_configuration(voting_realm=realm)
+        ballot_box = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
+        self.assertEqual(ballot_box.conflicting_non_voting_rules, {})
+        self.assertEqual(ballot_box.conflicting_non_voting_rule_custom_messages, [])
+
+    def test_ballot_box_cdhash_conflicting_rule(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        ballot_box = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
+        rule = Rule.objects.create(
+            configuration=configuration,
+            policy=Rule.Policy.BLOCKLIST,
+            target=self.cdhash_target
+        )
+        ballot_box.conflicting_non_voting_rules
+        self.assertEqual(
+            ballot_box.conflicting_non_voting_rules,
+            {configuration: [rule]}
+        )
+        self.assertEqual(ballot_box.conflicting_non_voting_rule_custom_messages,
+                         ["Voting is not allowed on this app."])
+
+    def test_ballot_box_binary_conflicting_rule(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        ballot_box = BallotBox.for_realm_user(self.cdhash_target, realm_user, all_configurations=True)
+        rule = Rule.objects.create(
+            configuration=configuration,
+            policy=Rule.Policy.BLOCKLIST,
+            target=self.file_target,
+        )
+        ballot_box.conflicting_non_voting_rules
+        self.assertEqual(
+            ballot_box.conflicting_non_voting_rules,
+            {configuration: [rule]}
+        )
+
+    def test_ballot_box_signing_id_conflicting_rule(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        ballot_box = BallotBox.for_realm_user(self.metabundle_target, realm_user, all_configurations=True)
+        Rule.objects.create(  # not a conflict, because more precise
+            configuration=configuration,
+            policy=Rule.Policy.BLOCKLIST,
+            target=self.file_target
+        )
+        rule = Rule.objects.create(  # conflict
+            configuration=configuration,
+            policy=Rule.Policy.BLOCKLIST,
+            target=self.signing_id_target,
+            custom_msg="YOLO FOMO",
+        )
+        ballot_box.conflicting_non_voting_rules
+        self.assertEqual(
+            ballot_box.conflicting_non_voting_rules,
+            {configuration: [rule]}
+        )
+        self.assertEqual(ballot_box.conflicting_non_voting_rule_custom_messages,
+                         ["YOLO FOMO"])
+
+    def test_ballot_box_certificate_conflicting_rule(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        ballot_box = BallotBox.for_realm_user(self.cert_target, realm_user, all_configurations=True)
+        Rule.objects.create(  # not a conflict, because more precise
+            configuration=configuration,
+            policy=Rule.Policy.BLOCKLIST,
+            target=self.signing_id_target,
+        )
+        rule = Rule.objects.create(  # conflict
+            configuration=configuration,
+            policy=Rule.Policy.BLOCKLIST,
+            target=self.team_id_target,
+        )
+        ballot_box.conflicting_non_voting_rules
+        self.assertEqual(
+            ballot_box.conflicting_non_voting_rules,
+            {configuration: [rule]}
+        )
+
+    def test_ballot_box_team_id_conflicting_rule(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        ballot_box = BallotBox.for_realm_user(self.team_id_target, realm_user, all_configurations=True)
+        Rule.objects.create(  # not a conflict, because more precise
+            configuration=configuration,
+            policy=Rule.Policy.BLOCKLIST,
+            target=self.cert_target,
+        )
+        rule = Rule.objects.create(  # conflict
+            configuration=configuration,
+            policy=Rule.Policy.BLOCKLIST,
+            target=self.team_id_target,
+        )
+        ballot_box.conflicting_non_voting_rules
+        self.assertEqual(
+            ballot_box.conflicting_non_voting_rules,
+            {configuration: [rule]}
+        )
+
     def test_ballot_box_check_voting_allowed_for_configuration_anonymous_voter(self):
         ballot_box = BallotBox.for_realm_user(self.file_target, None)
         self.assertEqual(ballot_box.check_voting_allowed_for_configuration(None, True),
@@ -392,6 +494,19 @@ class SantaBallotBoxTestCase(TestCase):
         ballot_box = BallotBox.for_realm_user(self.bundle_target, realm_user, all_configurations=True)
         self.assertEqual(ballot_box.check_voting_allowed_for_configuration(configuration, False),
                          "A BUNDLE cannot be downvoted")
+
+    def test_ballot_box_check_voting_allowed_for_configuration_conflicting_rule(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm, default_ballot_target_types=[Target.Type.BUNDLE])
+        Rule.objects.create(
+            configuration=configuration,
+            target=self.file_target,
+            policy=Rule.Policy.BLOCKLIST,
+            custom_msg=get_random_string(12)
+        )
+        ballot_box = BallotBox.for_realm_user(self.bundle_target, realm_user, all_configurations=True)
+        self.assertEqual(ballot_box.check_voting_allowed_for_configuration(configuration, True),
+                         "Conflicting non-voting rule")
 
     def test_ballot_box_get_default_votes(self):
         realm, realm_user = force_realm_user()

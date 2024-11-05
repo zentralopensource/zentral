@@ -31,6 +31,13 @@
 {% endfor %}
 
 {% if ballot_box %}
+{% if ballot_box.conflicting_non_voting_rule_custom_messages %}
+{% for custom_msg in ballot_box.conflicting_non_voting_rule_custom_messages %}
+<p class="danger">
+  {{ custom_msg }}
+</p>
+{% endfor %}
+{% else %}
 <h3>Status</h3>
 {% for configuration, target_state in states %}
 <dl>
@@ -70,5 +77,6 @@
   {% endif %}
 </form>
 {% endif %}
-{% endif %}
+{% endif %}{% comment %}conflicting_non_voting_rules{% endcomment %}
+{% endif %}{% comment %}ballot_box{% endcomment %}
 {% endblock %}
