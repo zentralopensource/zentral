@@ -67,7 +67,7 @@ class MetricsView(BasePrometheusMetricsView):
                   registry=self.registry)
         for r in os_version_count(sources):
             labels = {
-                k: r[k] or ""
+                k: "" if r[k] is None else r[k]
                 for k in ('name',
                           'major', 'minor', 'patch',
                           'build', 'version',
