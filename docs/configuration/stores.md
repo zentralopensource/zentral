@@ -297,7 +297,7 @@ In this example, a separate index is setup to receive the Osquery events. You co
 
 ## Panther backend options
 
-Zentral can send events to a Panther HTTP log source, with Bearer authentication. A custom schema must be configured in Panther – use [`schema.yaml`](https://github.com/zentralopensource/zentral/tree/main/ee/zentral/core/stores/backends/panther/schema.yaml) from the Zentral repository.
+Zentral can send events to a Panther HTTP log source, with Bearer authentication. A custom schema must be configured in Panther – use [`schema.yml`](https://github.com/zentralopensource/zentral/tree/main/ee/zentral/core/stores/backends/panther/schema.yml) from the Zentral repository.
 
 ### `endpoint_url`
 
