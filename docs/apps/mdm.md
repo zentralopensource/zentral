@@ -167,6 +167,51 @@ To set up an Automated Device Enrollment (ADE) in Zentral, you need to create an
 Device syncing occurs at scheduled intervals. If the device assignments from ABM/ASM are not reflected in Zentral, go to the *MDM > DEP Virtual Servers > [Instance Name]* section and manually click the `Synchronize` button.
 
 
+## MDM Blueprints
+
+Blueprints in Zentral are templates that group MDM settings and configurations. They determine which profiles, settings, and apps are applied to managed devices, enabling consistent and standardized management through simple assignment. Apple dv
+
+
+### How MDM Blueprints Work 
+
+Blueprints include essential settings for inventory collection and interval of collection, as well as connect settings for `FileVault`, `Recovery password`, and `Software Update Enforcement`, which are assigned to a device. They are typically assigned during enrollment, with the option to be modified later.
+
+- **Single assignment**: A device can only be assigned to one blueprint at a time to prevent conflicts.
+- **Default enrollment**: Blueprints are typically set initially as the default assignment during Automated Device Enrollment (ADE) when devices are enrolled via Apple Business Manager (ABM) for automatic application of settings. The blueprint can be changed as needed.
+- **Transitioning**: When a device is switched from one blueprint to another, the new blueprint’s configurations are applied, and any previous settings not included are removed.
+- **Inventory collection**: Inventory data is collected at specified intervals, managed through the MDM protocol. The information is stored and updated as part of a device’s inventory records. The interval can range from a minimum of 4 hours to a maximum of 7 days, with a default of 1 day.
+
+- **Artifacts**: Configuration profiles, Enterprise Apps, and VPP Apps are considered artifacts. When assigned to a Blueprint, they are listed with details such as type, version, platforms, exclusion tags, default shard, and tag shards. Clicking on an artifact allows you to view and edit its details.
+
+- **Enrollment info**: Displays the connected Automated Device Enrollment (DEP) or Over-The-Air (OTA) enrollment configurations. You can click the link to view detailed enrollment information.
+
+
+### Create a Blueprint
+
+1. Go to *MDM > Overview > Blueprints* in the Zentral interface.
+2. Click the *Add* button to create a new blueprint.
+3. Enter a *Name* for the blueprint.
+4. Set an *Inventory Interval* to determine the frequency of inventory collection.
+5. Configure data collection options:
+   - *Collect apps*: Select *Yes* or *No*.
+   - *Collect certificates**: Select *Yes* or *No*.
+   - *Collect profiles**: Select *Yes* or *No*.
+6. Click *Save* to create the blueprint.
+
+### Modify a Blueprint
+
+1. Go to *MDM > Overview > Blueprints* and select the blueprint you want to modify.
+2. Update fields such as *Name*, *Inventory Interval*, or data collection options as needed.
+3. Click *Save* to apply the changes.
+
+### Connect a Blueprint to an Enrollment
+
+1. Go to *MDM > Overview > Enrollments* and select or create an enrollment profile.
+2. In the *Blueprint* dropdown menu, select the blueprint you want to link.
+3. Click *Save* on the enrollment profile to complete the connection.
+
+For more details on configuring Automated Device Enrollment (ADE), refer to the [Setup an Enrollment Profile](#setup-an-enrollment-profile) section.
+
 ## Apps and Books
 
 To manage and distribute apps from the Mac App Store or iOS/iPadOS App Store through Zentral, a Content Token is required to sync with Apple Business Manager (ABM) or Apple School Manager (ASM).
