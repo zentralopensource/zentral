@@ -166,11 +166,9 @@ To set up an Automated Device Enrollment (ADE) in Zentral, you need to create an
 
 Device syncing occurs at scheduled intervals. If the device assignments from ABM/ASM are not reflected in Zentral, go to the *MDM > DEP Virtual Servers > [Instance Name]* section and manually click the `Synchronize` button.
 
-
 ## MDM Blueprints
 
 Blueprints in Zentral are templates that group MDM settings and configurations. They determine which profiles, settings, and apps are applied to managed devices, enabling consistent and standardized management through simple assignment. Apple dv
-
 
 ### How MDM Blueprints Work 
 
@@ -184,7 +182,6 @@ Blueprints include essential settings for inventory collection and interval of c
 - **Artifacts**: Configuration profiles, Enterprise Apps, and VPP Apps are considered artifacts. When assigned to a Blueprint, they are listed with details such as type, version, platforms, exclusion tags, default shard, and tag shards. Clicking on an artifact allows you to view and edit its details.
 
 - **Enrollment info**: Displays the connected Automated Device Enrollment (DEP) or Over-The-Air (OTA) enrollment configurations. You can click the link to view detailed enrollment information.
-
 
 ### Create a Blueprint
 
