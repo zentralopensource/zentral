@@ -231,6 +231,13 @@ class SantaBallotBoxTestCase(TestCase):
         ballot = force_ballot(self.file_target, realm_user, ((configuration, True, 17),))
         self.assertEqual(BallotBox.for_realm_user(self.file_target, realm_user).existing_ballot, ballot)
 
+    def test_ballot_box_existing_ballot_different_realm_same_username(self):
+        realm, realm_user = force_realm_user()
+        _, realm_user2 = force_realm_user(username=realm_user.username)
+        configuration = force_configuration(voting_realm=realm)
+        ballot = force_ballot(self.file_target, realm_user, ((configuration, True, 17),))
+        self.assertEqual(BallotBox.for_realm_user(self.file_target, realm_user2).existing_ballot, ballot)
+
     def test_ballot_box_existing_replacing_ballot(self):
         realm, realm_user = force_realm_user()
         configuration = force_configuration(voting_realm=realm)

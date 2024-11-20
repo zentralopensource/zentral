@@ -222,11 +222,14 @@ class BallotBox:
     def existing_ballot(self):
         if self.voter.is_anonymous:
             return None
-        # TODO decide what happens if we only have the user_uid
-        try:
-            return Ballot.objects.get(target=self.target, realm_user=self.voter.realm_user, replaced_by__isnull=True)
-        except Ballot.DoesNotExist:
-            pass
+        return Ballot.objects.filter(
+            # same realm user
+            Q(realm_user=self.voter.realm_user)
+            # same realm user username (if different realms are configured)
+            | Q(realm_user__username=self.voter.realm_user.username),
+            target=self.target,
+            replaced_by__isnull=True
+        ).order_by("-created_at").first()  # TODO filter, ordering & first needed because of the migration. Remove ?
 
     @cached_property
     def existing_votes(self):
