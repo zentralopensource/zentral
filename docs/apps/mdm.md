@@ -168,11 +168,13 @@ Device syncing occurs at scheduled intervals. If the device assignments from ABM
 
 ## MDM Blueprints
 
-Blueprints in Zentral are templates that group MDM settings and configurations. They determine which profiles, settings, and apps are applied to managed devices, enabling consistent and standardized management through simple assignment. Apple dv
+Blueprints in Zentral are templates that group MDM settings and configurations. They determine which profiles, settings, and apps are applied to managed devices, enabling consistent and standardized management through simple assignment.
 
 ### How MDM Blueprints Work 
 
-Blueprints include essential settings for inventory collection and interval of collection, as well as connect settings for `FileVault`, `Recovery password`, and `Software Update Enforcement`, which are assigned to a device. They are typically assigned during enrollment, with the option to be modified later.
+Blueprints include essential settings for inventory collection and its interval, as well as configurations for `FileVault`, `Recovery password`, which are applied in a 1:1 relationship. For `Software Update Enforcement` one or more configurations can be used within a Blueprint, and by applying tags in a multiple-configuration scenario, different enforcement levels can be scoped to tagged device cohorts, enabling fine-grained update strategies across device groups.
+
+These configurations are typically applied by assigning a dedicated blueprint during enrollment, and can be adjusted later if needed.
 
 - **Single assignment**: A device can only be assigned to one blueprint at a time to prevent conflicts.
 - **Default enrollment**: Blueprints are typically set initially as the default assignment during Automated Device Enrollment (ADE) when devices are enrolled via Apple Business Manager (ABM) for automatic application of settings. The blueprint can be changed as needed.
