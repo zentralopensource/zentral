@@ -211,6 +211,45 @@ These configurations are typically applied by assigning a dedicated blueprint du
 
 For more details on configuring Automated Device Enrollment (ADE), refer to the [Setup an Enrollment Profile](#setup-an-enrollment-profile) section.
 
+## FileVault Configuration
+
+Zentral manages FileVault settings for full disk encryption on macOS devices via MDM. Using a dedicated configuration, it allows the creation and assignment of an individual FileVault configuration to one or more MDM Blueprints. This approach provides centralized control over FileVault application, user experience, and key management, ensuring compliance with the organization’s data encryption policies.
+
+Enforcing FileVault during the Setup Assistant is supported starting from macOS 14.4 and later.
+
+### FileVault Key Escrow
+
+FileVault key escrow ensures that Personal Recovery Keys (PRKs) are securely stored and accessible:
+
+- **Escrow**: Zentral automatically escrows the PRK when FileVault is enabled and enforced via MDM on a device. Zentral deploys the certificate required to asymmetrically encrypt the recovery key for escrow.
+- **Authorized Retrieval**: The PRK can be accessed through the Zentral interface for device recovery, with each retrieval action audited in the *FileVault PRK Viewed* log for the device.
+
+### Configure FileVault Configuration
+
+To set up a FileVault configuration in Zentral, follow these steps:
+
+1. Navigate to *MDM > Overview > FileVault Configuration*.
+2. Configure the following options:
+   - *Name*: Enter a display name for the configuration.
+   - *PRK Escrow Location Display Name*: Information shown to the end-user indicating where the PRK is stored.
+   - *Defer Enablement at Login Only*: Enable FileVault only during login to avoid prompts at logout.
+   - *Max Bypass Attempts at Login*: Set the number of times users can bypass FileVault enablement at login.
+   - *Show Recovery Key*: Choose whether to display the PRK to users when FileVault is enabled.
+   - *Destroy Key on Standby*: Enable this to require a FileVault unlock after hibernation.
+   - *PRK Rotation Interval (days)*: Specify an interval for automatic PRK rotation and escrow to Zentral. A value of 0 means no rotation.
+3. Click *Save* to apply the configuration.
+
+### Using FileVault Configuration Across Blueprints
+
+A single FileVault configuration can be assigned to multiple blueprints, ensuring consistent encryption settings across various device groups.
+
+### Linking a FileVault Configuration to a Blueprint
+
+1. Navigate to *MDM > Overview > Blueprints*.
+2. Select or create a blueprint.
+3. Choose the desired FileVault configuration from the *FileVault Configuration* dropdown.
+4. Click *Save* to link the configuration to the blueprint.
+
 ## Apps and Books
 
 To manage and distribute apps from the Mac App Store or iOS/iPadOS App Store through Zentral, a Content Token is required to sync with Apple Business Manager (ABM) or Apple School Manager (ASM).
