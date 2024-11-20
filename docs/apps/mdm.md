@@ -193,8 +193,8 @@ These configurations are typically applied by assigning a dedicated blueprint du
 4. Set an *Inventory Interval* to determine the frequency of inventory collection.
 5. Configure data collection options:
    - *Collect apps*: Select *Yes* or *No*.
-   - *Collect certificates**: Select *Yes* or *No*.
-   - *Collect profiles**: Select *Yes* or *No*.
+   - *Collect certificates*: Select *Yes* or *No*.
+   - *Collect profiles*: Select *Yes* or *No*.
 6. Click *Save* to create the blueprint.
 
 ### Modify a Blueprint
