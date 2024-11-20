@@ -221,8 +221,8 @@ Enforcing FileVault during the Setup Assistant is supported starting from macOS 
 
 FileVault key escrow ensures that Personal Recovery Keys (PRKs) are securely stored and accessible:
 
-- **Escrow**: Zentral automatically escrows the PRK when FileVault is enabled and enforced via MDM on a device. Zentral deploys the certificate required to asymmetrically encrypt the recovery key for escrow.
-- **Authorized Retrieval**: The PRK can be accessed through the Zentral interface for device recovery, with each retrieval action audited in the *FileVault PRK Viewed* log for the device.
+- **Escrow**: Zentral automatically escrows the PRK when FileVault is enabled and enforced via MDM on a device. Zentral deploys a device-specific certificate to encrypt the PRK, ensuring a secure procedure.
+- **Authorized Retrieval**: The PRK can be accessed via the Zentral web interface or HTTP API for device recovery. Each retrieval action is audited in the *FileVault PRK Viewed* log, captured per device and transaction.
 
 ### Configure FileVault Configuration
 
