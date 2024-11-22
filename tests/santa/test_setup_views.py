@@ -209,7 +209,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("santa:configuration_events_store_redirect",
                                                  args=(configuration.pk,)))
 
-    def test_configuration_with_event_links(self):
+    def test_configuration_some_links(self):
         configuration = force_configuration()
         self._login("santa.view_configuration",
                     "santa.view_enrollment",
@@ -219,6 +219,28 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertContains(response, reverse("santa:configuration_events",
+                                              args=(configuration.pk,)))
+        self.assertNotContains(response, reverse("santa:update_configuration",
+                                                 args=(configuration.pk,)))
+        self.assertNotContains(response, reverse("santa:delete_configuration",
+                                                 args=(configuration.pk,)))
+
+    def test_configuration_all_links(self):
+        configuration = force_configuration()
+        self._login("santa.view_configuration",
+                    "santa.change_configuration",
+                    "santa.delete_configuration",
+                    "santa.view_enrollment",
+                    "santa.view_rule",
+                    "santa.view_ruleset")
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertContains(response, reverse("santa:configuration_events",
+                                              args=(configuration.pk,)))
+        self.assertContains(response, reverse("santa:update_configuration",
+                                              args=(configuration.pk,)))
+        self.assertContains(response, reverse("santa:delete_configuration",
                                               args=(configuration.pk,)))
 
     def test_configuration_events_redirect(self):
@@ -481,6 +503,76 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/configuration_form.html")
         self.assertFormError(response.context["form"],
                              "remount_usb_mode", "'Block USB mount' must be set to use this option")
+
+    # delete configuration
+
+    def test_delete_configuration_redirect(self):
+        configuration = force_configuration()
+        self._login_redirect(reverse("santa:delete_configuration", args=(configuration.pk,)))
+
+    def test_post_delete_configuration_view_permission_denied(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
+        configuration = force_configuration()
+        response = self.client.post(reverse("santa:delete_configuration", args=(configuration.pk,)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 403)
+
+    def test_post_delete_configuration_cannot_be_deleted(self):
+        _, enrollment = self._force_enrollment()
+        self._login("santa.delete_configuration", "santa.view_configuration")
+        response = self.client.post(reverse("santa:delete_configuration", args=(enrollment.configuration.pk,)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_delete_configuration_view(self, post_event):
+        configuration = force_configuration()
+        configuration_pk = configuration.pk
+        self._login("santa.delete_configuration", "santa.view_configuration")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("santa:delete_configuration", args=(configuration.pk,)),
+                                        follow=True)
+        self.assertTemplateUsed(response, "santa/configuration_list.html")
+        self.assertEqual(len(callbacks), 1)
+        self.assertNotContains(response, configuration.name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "santa.configuration",
+                 "pk": str(configuration_pk),
+                 "prev_value": {
+                     "pk": configuration_pk,
+                     "name": configuration.name,
+                     "client_mode": "Monitor",
+                     "client_certificate_auth": False,
+                     "batch_size": 50,
+                     "full_sync_interval": 600,
+                     "enable_bundles": False,
+                     "enable_transitive_rules": False,
+                     "allowed_path_regex": "",
+                     "blocked_path_regex": "",
+                     "block_usb_mount": False,
+                     "remount_usb_mode": [],
+                     "allow_unknown_shard": 100,
+                     "enable_all_event_upload_shard": 0,
+                     "sync_incident_severity": 0,
+                     "voting_realm": None,
+                     "banned_threshold": -26,
+                     "default_ballot_target_types": [],
+                     "default_voting_weight": 0,
+                     "globally_allowlisted_threshold": 50,
+                     "partially_allowlisted_threshold": 5,
+                     "created_at": configuration.created_at,
+                     "updated_at": configuration.updated_at
+                 },
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"santa_configuration": [str(configuration_pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
     # enrollment
 

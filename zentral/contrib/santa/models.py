@@ -484,6 +484,14 @@ class ConfigurationManager(models.Manager):
         columns = [c.name for c in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+    def for_deletion(self):
+        return self.annotate(
+            # no enrollments
+            enrollment_count=Count("enrollment")
+        ).filter(
+            enrollment_count=0
+        )
+
 
 class Configuration(models.Model):
     MONITOR_MODE = 1
@@ -731,7 +739,7 @@ class Configuration(models.Model):
         return d
 
     def can_be_deleted(self):
-        return self.enrollment_set.all().count() == 0
+        return Configuration.objects.for_deletion().filter(pk=self.pk).exists()
 
 
 class VotingGroup(models.Model):

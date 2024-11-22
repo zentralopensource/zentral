@@ -36,6 +36,10 @@
                 {% url 'santa:update_configuration' object.pk as url %}
                 {% button 'UPDATE' url "Edit Configuration" %}
             {% endif %}
+            {% if perms.santa.delete_configuration and object.can_be_deleted %}
+                {% url 'santa:delete_configuration' object.pk as url %}
+                {% button 'DELETE' url "Delete Configuration" %}
+            {% endif %}
         </div>
     </div>
 

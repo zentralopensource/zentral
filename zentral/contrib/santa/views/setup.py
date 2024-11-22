@@ -4,7 +4,7 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, TemplateView, View
 from django.views.generic.edit import DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
@@ -141,6 +141,15 @@ class UpdateConfigurationView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "santa.change_configuration"
     model = Configuration
     form_class = ConfigurationForm
+
+
+class DeleteConfigurationView(PermissionRequiredMixin, DeleteViewWithAudit):
+    permission_required = "santa.delete_configuration"
+    model = Configuration
+    success_url = reverse_lazy("santa:configuration_list")
+
+    def get_queryset(self):
+        return self.model.objects.for_deletion()
 
 
 # voting groups
