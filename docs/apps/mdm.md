@@ -193,8 +193,8 @@ These configurations are typically applied by assigning a dedicated blueprint du
 4. Set an *Inventory Interval* to determine the frequency of inventory collection.
 5. Configure data collection options:
    - *Collect apps*: Select *Yes* or *No*.
-   - *Collect certificates**: Select *Yes* or *No*.
-   - *Collect profiles**: Select *Yes* or *No*.
+   - *Collect certificates*: Select *Yes* or *No*.
+   - *Collect profiles*: Select *Yes* or *No*.
 6. Click *Save* to create the blueprint.
 
 ### Modify a Blueprint
@@ -210,6 +210,45 @@ These configurations are typically applied by assigning a dedicated blueprint du
 3. Click *Save* on the enrollment profile to complete the connection.
 
 For more details on configuring Automated Device Enrollment (ADE), refer to the [Setup an Enrollment Profile](#setup-an-enrollment-profile) section.
+
+## FileVault Configuration
+
+Zentral manages FileVault settings for full disk encryption on macOS devices via MDM. Using a dedicated configuration, it allows the creation and assignment of an individual FileVault configuration to one or more MDM Blueprints. This approach provides centralized control over FileVault application, user experience, and key management, ensuring compliance with the organization’s data encryption policies.
+
+Enforcing FileVault during the Setup Assistant is supported starting from macOS 14.4 and later.
+
+### FileVault Key Escrow
+
+FileVault key escrow ensures that Personal Recovery Keys (PRKs) are securely stored and accessible:
+
+- **Escrow**: Zentral automatically escrows the PRK when FileVault is enabled and enforced via MDM on a device. Zentral deploys a device-specific certificate to encrypt the PRK, ensuring a secure procedure.
+- **Authorized Retrieval**: The PRK can be accessed via the Zentral web interface or HTTP API for device recovery. Each retrieval action is audited in the *FileVault PRK Viewed* log, captured per device and transaction.
+
+### Configure FileVault Configuration
+
+To set up a FileVault configuration in Zentral, follow these steps:
+
+1. Navigate to *MDM > Overview > FileVault Configuration*.
+2. Configure the following options:
+   - *Name*: Enter a display name for the configuration.
+   - *PRK Escrow Location Display Name*: Information shown to the end-user indicating where the PRK is stored.
+   - *Defer Enablement at Login Only*: Enable FileVault only during login to avoid prompts at logout.
+   - *Max Bypass Attempts at Login*: Set the number of times users can bypass FileVault enablement at login.
+   - *Show Recovery Key*: Choose whether to display the PRK to users when FileVault is enabled.
+   - *Destroy Key on Standby*: Enable this to require a FileVault unlock after hibernation.
+   - *PRK Rotation Interval (days)*: Specify an interval for automatic PRK rotation and escrow to Zentral. A value of 0 means no rotation.
+3. Click *Save* to apply the configuration.
+
+### Using FileVault Configuration Across Blueprints
+
+A single FileVault configuration can be assigned to multiple blueprints, ensuring consistent encryption settings across various device groups.
+
+### Linking a FileVault Configuration to a Blueprint
+
+1. Navigate to *MDM > Overview > Blueprints*.
+2. Select or create a blueprint.
+3. Choose the desired FileVault configuration from the *FileVault Configuration* dropdown.
+4. Click *Save* to link the configuration to the blueprint.
 
 ## Apps and Books
 
