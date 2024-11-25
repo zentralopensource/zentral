@@ -824,3 +824,61 @@ class SantaBallotBoxTestCase(TestCase):
         self.assertEqual(rules_qs.count(), 0)
         self.assertEqual(votes_qs.count(), 1)
         self.assertEqual(votes_qs.first(), vote)
+
+    # update target states
+
+    def test_update_target_states(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        force_ballot(
+            self.file_target, realm_user,
+            [(configuration, True, configuration.partially_allowlisted_threshold)]
+        )
+        target_state, _ = TargetState.objects.update_or_create(
+            target=self.file_target,
+            configuration=configuration,
+            state=TargetState.State.UNTRUSTED,
+            reset_at=datetime.utcnow()
+        )
+        configuration2 = force_configuration(voting_realm=realm)
+        # second target state in unrelated configurations must not interfere
+        TargetState.objects.update_or_create(
+            target=self.file_target,
+            configuration=configuration2,
+            score=configuration2.partially_allowlisted_threshold,
+            state=TargetState.State.PARTIALLY_ALLOWLISTED,
+        )
+        ballot_box = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
+        ballot_box._update_target_states([(configuration, True)])
+        target_state.refresh_from_db()
+        self.assertEqual(target_state.score, 0)
+
+    # partially allowlist
+
+    def test_partially_allowlist_rules(self):
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        force_ballot(
+            self.file_target, realm_user,
+            [(configuration, True, configuration.partially_allowlisted_threshold)]
+        )
+        target_state, _ = TargetState.objects.update_or_create(
+            target=self.file_target,
+            configuration=configuration,
+            state=TargetState.State.UNTRUSTED,
+            reset_at=datetime.utcnow()
+        )
+        self.assertEqual(configuration.rule_set.count(), 0)
+        configuration2 = force_configuration(voting_realm=realm)
+        # second target state in unrelated configurations must not interfere
+        TargetState.objects.update_or_create(
+            target=self.file_target,
+            configuration=configuration2,
+            score=configuration2.partially_allowlisted_threshold,
+            state=TargetState.State.PARTIALLY_ALLOWLISTED,
+        )
+        ballot_box = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
+        with self.assertRaises(AssertionError) as cm:
+            ballot_box._partially_allowlist(configuration)
+        self.assertEqual(cm.exception.args[0], "No primary users found")
+        self.assertEqual(configuration.rule_set.count(), 0)

@@ -438,7 +438,10 @@ class BallotBox:
                     "select sum(v.weight * (case when v.was_yes_vote then 1 else -1 end)) "
                     "from santa_vote v "
                     "join santa_ballot b on (v.ballot_id = b.id) "
-                    "left join santa_targetstate ts on (b.target_id = ts.target_id) "
+                    "left join santa_targetstate ts on ("
+                    "  b.target_id = ts.target_id"
+                    "  and v.configuration_id = ts.configuration_id"
+                    ") "
                     "where b.target_id = %s and b.replaced_by_id is null "
                     "and (ts.reset_at is null or v.created_at > ts.reset_at) "
                     "and v.configuration_id = %s",
@@ -551,7 +554,10 @@ class BallotBox:
                 "from santa_ballot b "
                 "left join realms_realmuser u on (b.realm_user_id = u.uuid) "
                 "join santa_vote v on (b.id = v.ballot_id) "
-                "join santa_targetstate ts on (b.target_id = ts.target_id) "
+                "join santa_targetstate ts on ("
+                "  b.target_id = ts.target_id"
+                "  and v.configuration_id = ts.configuration_id"
+                ") "
                 "where b.target_id = %s "
                 "and b.replaced_by_id is null "
                 "and v.configuration_id = %s "
@@ -560,6 +566,7 @@ class BallotBox:
                 [self.target.pk, configuration.pk]
             )
             primary_users = list(r[0] for r in cursor.fetchall() if r)
+            assert len(primary_users) > 0, "No primary users found"
         self._update_or_create_rules(configuration, Rule.Policy.ALLOWLIST, primary_users)
 
     def _blocklist(self, configuration):
