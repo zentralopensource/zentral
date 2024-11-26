@@ -5,9 +5,9 @@ from django.db import connection
 from django.db.models import Q
 from django.utils.functional import cached_property
 from zentral.core.events.base import EventMetadata, EventRequest
-from .events import SantaBallotEvent, SantaTargetStateUpdateEvent
+from .events import SantaBallotEvent, SantaRuleUpdateEvent, SantaTargetStateUpdateEvent
 from .models import Ballot, Configuration, EnrolledMachine, Rule, Target, TargetState, Vote, VotingGroup
-from .utils import target_related_targets
+from .utils import target_related_targets, update_voting_rules
 
 
 logger = logging.getLogger("zentral.contrib.santa.ballot_box")
@@ -406,6 +406,7 @@ class BallotBox:
     def _cast_verified_votes(self, votes, event_target=None):
         self._create_or_update_ballot(votes, event_target)
         self._update_target_states(votes)
+        self._update_voting_rules([configuration for configuration, _ in votes])
 
     def _create_or_update_ballot(self, votes, event_target):
         if not isinstance(votes, set):
@@ -464,6 +465,12 @@ class BallotBox:
             event_payload["prev_value"] = prev_value
             self._events.append((SantaTargetStateUpdateEvent, event_payload))
 
+    def _update_voting_rules(self, configurations):
+        self._events.extend(
+            (SantaRuleUpdateEvent, payload)
+            for payload in update_voting_rules(configurations)
+        )
+
     def _update_target_state(self, configuration, score, was_yes_vote):
         target_state = self.target_states[configuration]
         pre_update_state = target_state.serialize_for_event()
@@ -484,22 +491,18 @@ class BallotBox:
     def _update_target_state_state(self, target_state, score):
         configuration = target_state.configuration
         if score >= configuration.globally_allowlisted_threshold:
-            self._globally_allowlist(configuration)
             if target_state.state != TargetState.State.GLOBALLY_ALLOWLISTED:
                 target_state.state = TargetState.State.GLOBALLY_ALLOWLISTED
                 return True
         elif score >= configuration.partially_allowlisted_threshold:
-            self._partially_allowlist(configuration)
             if target_state.state != TargetState.State.PARTIALLY_ALLOWLISTED:
                 target_state.state = TargetState.State.PARTIALLY_ALLOWLISTED
                 return True
         elif score <= configuration.banned_threshold:
-            self._blocklist(configuration)
             if target_state.state != TargetState.State.BANNED:
                 target_state.state = TargetState.State.BANNED
                 return True
         else:
-            self._ensure_no_rules(configuration)
             if target_state.state != TargetState.State.UNTRUSTED:
                 target_state.state = TargetState.State.UNTRUSTED
                 return True
@@ -516,68 +519,7 @@ class BallotBox:
         target_state.reset_at = datetime.utcnow()
         target_state.save()
         self._queue_target_state_update_event(pre_update_state, target_state)
-
-    # rules
-
-    def _iter_rule_targets(self):
-        if self.target.type == Target.Type.METABUNDLE:
-            yield from self.target.metabundle.signing_id_targets.all()
-        elif self.target.type == Target.Type.BUNDLE:
-            yield from self.target.bundle.binary_targets.all()
-        else:
-            yield self.target
-
-    def _update_or_create_rules(self, configuration, policy, primary_users=None):
-        Rule.objects.bulk_create(
-            [
-                Rule(
-                    configuration=configuration,
-                    target=target,
-                    policy=policy,
-                    primary_users=primary_users if primary_users else [],
-                    excluded_primary_users=[],
-                    is_voting_rule=True,
-                ) for target in self._iter_rule_targets()
-            ],
-            update_conflicts=True,
-            unique_fields=["configuration", "target"],
-            update_fields=["policy", "primary_users", "excluded_primary_users"]
-        )
-
-    def _globally_allowlist(self, configuration):
-        self._update_or_create_rules(configuration, Rule.Policy.ALLOWLIST)
-
-    def _partially_allowlist(self, configuration):
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "select distinct coalesce(u.username, b.user_uid) "
-                "from santa_ballot b "
-                "left join realms_realmuser u on (b.realm_user_id = u.uuid) "
-                "join santa_vote v on (b.id = v.ballot_id) "
-                "join santa_targetstate ts on ("
-                "  b.target_id = ts.target_id"
-                "  and v.configuration_id = ts.configuration_id"
-                ") "
-                "where b.target_id = %s "
-                "and b.replaced_by_id is null "
-                "and v.configuration_id = %s "
-                "and v.was_yes_vote = 't' "
-                "and (ts.reset_at is null or b.created_at > ts.reset_at)",
-                [self.target.pk, configuration.pk]
-            )
-            primary_users = list(r[0] for r in cursor.fetchall() if r)
-            assert len(primary_users) > 0, "No primary users found"
-        self._update_or_create_rules(configuration, Rule.Policy.ALLOWLIST, primary_users)
-
-    def _blocklist(self, configuration):
-        self._update_or_create_rules(configuration, Rule.Policy.BLOCKLIST)
-
-    def _ensure_no_rules(self, configuration):
-        Rule.objects.filter(
-            configuration=configuration,
-            target__in=self._iter_rule_targets(),
-            is_voting_rule=True,
-        ).delete()
+        self._update_voting_rules([configuration])
 
     # events
 

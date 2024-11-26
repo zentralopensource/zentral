@@ -2,12 +2,12 @@ from datetime import datetime
 import json
 import plistlib
 from dateutil import parser
-from django.db import connection
+from django.db import connection, transaction
 from django.urls import reverse
 import psycopg2.extras
 from zentral.conf import settings
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload
-from .models import Target
+from .models import Rule, Target
 
 
 def build_santa_enrollment_configuration(enrollment):
@@ -446,3 +446,168 @@ def target_related_targets(target):
                 "self": target_type == target.type and target_identifier == target.identifier,
             }
     return targets
+
+
+def update_voting_rules(configurations):
+    """Update the voting rules for multiple configurations
+
+    Applies the target states of multiple configurations, and inserts, updates or deletes the voting rules.
+    Non-voting rules are left untouched.
+    """
+    query = (
+        "with configuration_locks as ("
+        " select * from santa_configuration"
+        " where id in %(configuration_ids)s"
+        " for update"
+        "), target_states as ("
+        "  select ts.target_id, ts.configuration_id, ts.state, coalesce(u.username, b.user_uid) user"
+        "  from santa_targetstate ts"
+        "  join santa_ballot b on (b.target_id = ts.target_id)"
+        "  join santa_vote v on (v.ballot_id = b.id and v.configuration_id = ts.configuration_id)"
+        "  join realms_realmuser u on (b.realm_user_id = u.uuid)"
+        "  where v.was_yes_vote = 't'"
+        "  and ts.state >= 50 or ts.state <= -100"  # only those states will generate rules
+        "  and b.replaced_by_id is null"
+        "  and (ts.reset_at is null or b.created_at > ts.reset_at)"
+        "  and v.configuration_id in %(configuration_ids)s"
+        "), rule_target_states as ("
+        # target direct rules
+        "  select ts.target_id, ts.configuration_id, ts.state, ts.user"
+        "  from target_states ts"
+        "  join santa_target t on (ts.target_id = t.id)"
+        "  where t.type in ('CDHASH', 'BINARY', 'SIGNINGID', 'CERTIFICATE', 'TEAMID')"
+        "  union"
+        # metabundle target → signing id rules
+        "  select mt.target_id, ts.configuration_id, ts.state, ts.user"
+        "  from target_states ts"
+        "  join santa_metabundle m on (m.target_id = ts.target_id)"
+        "  join santa_metabundle_signing_id_targets mt on (mt.metabundle_id = m.id)"
+        "  union"
+        # bundle target → binary rules
+        "  select bt.target_id, ts.configuration_id, ts.state, ts.user user"
+        "  from target_states ts"
+        "  join santa_bundle b on (b.target_id = ts.target_id)"
+        "  join santa_bundle_binary_targets bt on (bt.bundle_id = b.id)"
+        "), aggregated_rule_target_states as ("
+        "  select rts.target_id, rts.configuration_id, max(rts.state) state,"
+        "  array_agg(distinct rts.user order by rts.user asc) users"
+        "  from rule_target_states rts"
+        "  group by rts.target_id, rts.configuration_id"
+        "), rules as ("
+        "  select target_id, configuration_id,"
+        # ALLOWLIST or BLOCKLIST
+        "  case when state >= 50 then 1 else 2 end policy,"
+        # primary_users only for PARTIALLY_ALLOWLISTED
+        "  case when state = 50 then users else array[]::text[] end primary_users"
+        "  from aggregated_rule_target_states"
+        "), inserted as ("
+        " insert into santa_rule"
+        '  ("target_id", "configuration_id", "policy",'
+        '   "primary_users", "excluded_primary_users",'
+        '   "serial_numbers", "excluded_serial_numbers",'
+        '   "custom_msg", "description", "is_voting_rule",'
+        '   "version", "created_at", "updated_at")'
+        "  select target_id, configuration_id, policy,"
+        "  primary_users, array[]::text[] excluded_primary_users,"
+        "  array[]::text[] serial_numbers, array[]::text[] excluded_serial_numbers,"
+        "  '' custom_msg, '' description, TRUE is_voting_rule,"
+        "  1 version, transaction_timestamp() created_at, transaction_timestamp() updated_at"
+        "  from rules"
+        '  on conflict ("target_id", "configuration_id") do update'
+        "  set policy = excluded.policy,"
+        "  primary_users = excluded.primary_users, excluded_primary_users = excluded.excluded_primary_users,"
+        "  custom_msg = excluded.custom_msg, version = santa_rule.version + 1,"
+        "  updated_at = clock_timestamp()"
+        "  where santa_rule.is_voting_rule = 't' and ("
+        "    excluded.policy != santa_rule.policy"
+        "    or excluded.primary_users != santa_rule.primary_users"
+        "    or excluded.excluded_primary_users != santa_rule.excluded_primary_users"
+        "    or excluded.custom_msg != santa_rule.custom_msg"
+        "  ) returning *"
+        "), replaced as ("
+        "  select * from santa_rule where id in (select id from inserted)"
+        "), deleted as ("
+        "  delete from santa_rule where"
+        "  is_voting_rule = 't'"
+        "  and configuration_id in %(configuration_ids)s"
+        "  and not exists ("
+        "    select * from rules r"
+        "    where r.target_id = santa_rule.target_id"
+        "    and r.configuration_id = santa_rule.configuration_id"
+        "  ) returning *"
+        "), results as ("
+        "  select case when version > 1 then 'updated' else 'created' end _op, * from inserted"
+        "  union"
+        "  select 'replaced' _op, * from replaced"
+        "  union"
+        "  select 'deleted' _op, * from deleted"
+        ") select r.*,"
+        "t.type target_type, t.identifier target_identifier,"
+        "c.name configuration_name, c.id configuration_pk "
+        "from results r "
+        "left join santa_target t on (r.target_id = t.id) "
+        "left join santa_configuration c on (r.configuration_id = c.id)"
+    )
+    replaced_rules = {}
+    changed_rules = []
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(query, {"configuration_ids": tuple(c.pk for c in configurations)})
+            columns = [c.name for c in cursor.description]
+            for t in cursor.fetchall():
+                result = dict(zip(columns, t))
+                op = result.pop("_op")
+                if op == "replaced":
+                    replaced_rules[result["id"]] = result
+                else:
+                    changed_rules.append((op, result))
+
+    def result_to_serialized_rule(result):
+        configuration = {"pk": result.pop("configuration_pk"),
+                         "name": result.pop("configuration_name")}
+        target = {"type": result.pop("target_type")}
+        target_identifier = result.pop("target_identifier")
+        if target["type"] == Target.Type.CDHASH:
+            target["cdhash"] = target_identifier
+        elif target["type"] == Target.Type.SIGNING_ID:
+            target["signing_id"] = target_identifier
+        elif target["type"] == Target.Type.TEAM_ID:
+            target["team_id"] = target_identifier
+        else:
+            target["sha256"] = target_identifier
+        sr = {
+            "configuration": configuration,
+            "target": target,
+            "policy": Rule.Policy(result["policy"]).name,
+            "is_voting_rule": result["is_voting_rule"],
+        }
+        if result["primary_users"]:
+            sr["primary_users"] = sorted(result["primary_users"])
+        return sr
+
+    for op, result in changed_rules:
+        payload = {
+            "rule": result_to_serialized_rule(result),
+            "result": op,
+        }
+        if op == "updated":
+            old_result = replaced_rules[result["id"]]
+            # updates
+            rule_updates = {}
+            if old_result["policy"] != result["policy"]:
+                rule_updates.setdefault("removed", {})["policy"] = Rule.Policy(old_result["policy"])
+                rule_updates.setdefault("added", {})["policy"] = Rule.Policy(result["policy"])
+            or_pu_s = set(old_result["primary_users"])
+            r_pu_s = set(result["primary_users"])
+            if or_pu_s != r_pu_s:
+                rpus = or_pu_s - r_pu_s
+                if rpus:
+                    rule_updates.setdefault("removed", {})["primary_users"] = sorted(rpus)
+                apus = r_pu_s - or_pu_s
+                if apus:
+                    rule_updates.setdefault("added", {})["primary_users"] = sorted(apus)
+            if old_result["custom_msg"] != result["custom_msg"]:
+                rule_updates.setdefault("removed", {})["custom_msg"] = old_result["custom_msg"]
+                rule_updates.setdefault("added", {})["custom_msg"] = result["custom_msg"]
+            payload["updates"] = rule_updates
+        yield payload
