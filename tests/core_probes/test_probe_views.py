@@ -79,7 +79,9 @@ class ProbeViewsTestCase(TestCase):
         response = self.client.post(reverse("probes:create"),
                                     {"name": name,
                                      "event_types": ["zentral_login",
-                                                     "zentral_logout"]},
+                                                     "zentral_logout"],
+                                     "event_tags": ["heartbeat"],
+                                     "event_routing_keys": "un,deux"},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "probes/probe.html")
@@ -91,6 +93,11 @@ class ProbeViewsTestCase(TestCase):
         self.assertEqual(probe.name, name)
         self.assertEqual(probe_source.name, name)
         self.assertEqual(probe_source.pk, probe.pk)
+        self.assertEqual(len(probe.metadata_filters), 1)
+        f = probe.metadata_filters[0]
+        self.assertEqual(f.event_types, {"zentral_login", "zentral_logout"})
+        self.assertEqual(f.event_tags, {"heartbeat"})
+        self.assertEqual(f.event_routing_keys,  {"un", "deux"})
 
     # update probe
 

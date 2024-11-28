@@ -119,6 +119,48 @@ class EventDeserializationTestCase(TestCase):
         self.assertEqual(list(updated_event.metadata.iter_loaded_probes()), [self.probe])
         self.assertEqual(updated_event.metadata.incident_updates, expected_incident_updates)
 
+    def test_metadata_tag_filter(self):
+        serialized_event = {
+            '_zentral': {
+                'created_at': '2021-02-18T20:55:00',
+                'id': 'ff4db218-d5b4-4c2c-b40b-1b7fdee00dfc',
+                'index': 0,
+                'tags': ["daslkjdaklasdj", "a-match-haha"],
+                'type': 'yolo',
+            },
+            "yolo": "fomo",
+        }
+        event = event_from_event_d(serialized_event)
+        probe_source = ProbeSource.objects.create(
+            model="BaseProbe",
+            name=get_random_string(12),
+            status=ProbeSource.ACTIVE,
+            body={"filters": {"metadata": [{"event_tags": ["daslkjdaklasdj", "not-a-match"]}]}}
+        )
+        probe = probe_source.load()
+        self.assertTrue(probe.test_event(event))
+
+    def test_routing_key_filter(self):
+        serialized_event = {
+            '_zentral': {
+                'created_at': '2021-02-18T20:55:00',
+                'id': 'ff4db218-d5b4-4c2c-b40b-1b7fdee00dfc',
+                'index': 0,
+                'routing_key': "edlkjdlqkjdqe",
+                'type': 'yolo',
+            },
+            "yolo": "fomo",
+        }
+        event = event_from_event_d(serialized_event)
+        probe_source = ProbeSource.objects.create(
+            model="BaseProbe",
+            name=get_random_string(12),
+            status=ProbeSource.ACTIVE,
+            body={"filters": {"metadata": [{"event_routing_keys": ["not-a-match", "edlkjdlqkjdqe"]}]}}
+        )
+        probe = probe_source.load()
+        self.assertTrue(probe.test_event(event))
+
     def test_event_probes_with_probe_incident(self):
         event = event_from_event_d(serialized_event)
         if self.probe_with_incident.test_event(event):

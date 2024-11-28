@@ -91,11 +91,17 @@ class MetadataFilter(object):
         if event_tags is None:
             event_tags = []
         self.event_tags = set(event_tags)
+        event_routing_keys = data.get("event_routing_keys")
+        if event_routing_keys is None:
+            event_routing_keys = []
+        self.event_routing_keys = set(event_routing_keys)
 
     def test_event_metadata(self, metadata):
         if self.event_types and metadata.event_type not in self.event_types:
             return False
         if self.event_tags and not metadata.all_tags & self.event_tags:
+            return False
+        if self.event_routing_keys and metadata.routing_key not in self.event_routing_keys:
             return False
         return True
 
@@ -119,6 +125,9 @@ class MetadataFilter(object):
         return ", ".join(sorted(t.replace("_", " ")
                                 for t in self.event_tags))
 
+    def get_event_routing_keys_display(self):
+        return ", ".join(sorted(self.event_routing_keys))
+
 
 class MetadataFiltersSerializer(serializers.Serializer):
     event_types = serializers.ListField(
@@ -126,6 +135,10 @@ class MetadataFiltersSerializer(serializers.Serializer):
         required=False
     )
     event_tags = serializers.ListField(
+        child=serializers.CharField(),
+        required=False
+    )
+    event_routing_keys = serializers.ListField(
         child=serializers.CharField(),
         required=False
     )

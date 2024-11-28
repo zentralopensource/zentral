@@ -217,7 +217,7 @@
   <table class="table-probe table-object-properties">
     {% if metadata_filter.event_tags %}
     <tr>
-      <td>tags</td>
+      <td>tag{{ metadata_filter.event_tags|length|pluralize }}</td>
       <td>
           {{ metadata_filter.get_event_tags_display }}
       </td>
@@ -225,9 +225,17 @@
     {% endif %}
     {% if metadata_filter.event_types %}
     <tr>
-      <td>type</td>
+      <td>type{{ metadata_filter.event_types|length|pluralize }}</td>
       <td>
           {{ metadata_filter.get_event_types_display }}
+      </td>
+    </tr>
+    {% endif %}
+    {% if metadata_filter.event_routing_keys %}
+    <tr>
+      <td>routing key{{ metadata_filter.event_routing_keys|length|pluralize }}</td>
+      <td>
+          {{ metadata_filter.get_event_routing_keys_display }}
       </td>
     </tr>
     {% endif %}

@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.postgres.forms import SimpleArrayField
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
@@ -96,6 +97,8 @@ class MetadataFilterForm(forms.Form):
     event_tags = forms.MultipleChoiceField(label="Event tags", choices=[], required=False)
     event_types = forms.MultipleChoiceField(label="Event types", choices=[], required=False,
                                             widget=forms.SelectMultiple(attrs={"size": 10}))
+    event_routing_keys = SimpleArrayField(forms.CharField(), label="Event routing keys", required=False,
+                                          help_text="Comma separated list of event routing keys.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -110,13 +113,14 @@ class MetadataFilterForm(forms.Form):
         cleaned_data = self.cleaned_data
         event_type = cleaned_data.get("event_types")
         event_tags = cleaned_data.get("event_tags")
-        if not event_type and not event_tags:
-            raise forms.ValidationError("Choose at least one event type or one tag.")
+        event_routing_keys = cleaned_data.get("event_routing_keys")
+        if not event_type and not event_tags and not event_routing_keys:
+            raise forms.ValidationError("Choose at least one event type or one tag or one routing key.")
         return cleaned_data
 
     def get_serialized_filter(self):
         filter_d = {}
-        for attr in ("event_tags", "event_types"):
+        for attr in ("event_tags", "event_types", "event_routing_keys"):
             value = self.cleaned_data.get(attr)
             if value:
                 filter_d[attr] = value
@@ -125,7 +129,7 @@ class MetadataFilterForm(forms.Form):
     @staticmethod
     def get_initial(metadata_filter):
         initial_d = {}
-        for attr in ("event_tags", "event_types"):
+        for attr in ("event_tags", "event_types", "event_routing_keys"):
             val = getattr(metadata_filter, attr, None)
             if val:
                 if isinstance(val, set):
