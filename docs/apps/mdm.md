@@ -250,6 +250,46 @@ A single FileVault configuration can be assigned to multiple blueprints, ensurin
 3. Choose the desired FileVault configuration from the *FileVault Configuration* dropdown.
 4. Click *Save* to link the configuration to the blueprint.
 
+## Software Update Enforcement Configuration
+
+Zentral’s software update enforcements use DDM-based configurations to manage updates across multiple Apple platforms, including macOS, iOS, iPadOS, and tvOS. These settings support time-based deferrals, simplifying automated update management. Once set up, updates are automatically applied when they become available. A single configuration can be used in multiple blueprints, and tags on configurations allow updates to be scoped to different device groups, supporting cohort-based management and phased rollouts.
+
+### Configuring Software Update Enforcement
+
+To create and manage software update enforcement settings in Zentral, follow these steps:
+
+1. **Navigate to**: **MDM > Overview > Software Update Enforcements**.
+2. **Create a New Configuration**:
+   - Click *the + sign to create new software update enforcement*.
+3. **Configure the Following Details**:
+   - *Name*: Enter a descriptive name for the configuration.
+   - *Details URL*: Optionally, provide a URL with additional information about the enforced update.
+   - *Platforms*: Select the platforms to which the enforcement applies (iOS, iPadOS, macOS, tvOS).
+   - *Tags*: Add tags to specify which devices or groups the configuration will apply to.
+   - *Type*:
+     - **One-time**: Enforce the update a single time.
+       - *Target OS Version*: Specify the target OS version for the update.
+       - *Target Build Version*: Enter the target build version (e.g., 20A242).
+       - *Target Local Date Time*: Set the deadline for the update. If the user doesn’t trigger the update before this time, the device will force install it.
+     - **Latest**: Continuously enforce updates as they become available.
+       - *Maximum Target OS Version*: Set the maximum OS version for updates.
+       - *Delay in Days*: Set the number of days after an update is released before it is force-installed.
+       - *Target Local Time*: Specify the local time when the software update will be enforced on devices.
+4. *Save* the configuration to apply it.
+
+Zentral’s software update enforcement configuration automatically manages OS updates using Apple DDM features along with additional logic. The **Latest** option calculates device-specific details to ensure devices are updated to a specified version within a defined delay and local time, allowing users to install updates before the enforcement deadline.
+
+This utilizes the Apple OS mechanisms outlined in the [Enforcing Software Updates](https://support.apple.com/en-gb/guide/deployment/depd30715cbb/1/web/1.0) section of the Apple Platform Deployment Guide.
+
+For more details on enforcing software updates, see the [Enforce Software Updates Dictionary Keys](https://support.apple.com/en-gb/guide/deployment/dep0578d8b8a/1/web/1.0#dep0d1ed5077).
+
+
+### Enforcing Updates on Different Schedules
+
+To ensure consistent software update enforcement across all devices, a single configuration can be assigned to multiple blueprints. For more granular control, multiple configurations within a single blueprint allow organizations to tailor update strategies for different device groups. Tags must be applied when using multiple configurations to ensure they are scoped to the appropriate devices or groups.
+
+This method enables gradual rollouts of updates at set intervals (also known as "update rings"), ensuring that different device groups receive updates on a pre-defined schedule. Regardless of the method, the update enforcement configuration removes the need for manual adjustments with each new Apple OS release.
+
 ## Apps and Books
 
 To manage and distribute apps from the Mac App Store or iOS/iPadOS App Store through Zentral, a Content Token is required to sync with Apple Business Manager (ABM) or Apple School Manager (ASM).
