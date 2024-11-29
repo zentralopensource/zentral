@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object.configuration }}</a></li>
+  <li class="breadcrumb-item active">Delete enrollment</li>
+</ol>
+
+<h2>Delete Santa enrollment</h2>
+
+<form method="post" class="update-form">{% csrf_token %}
+  <p>Do you really want to delete this Santa enrollment?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">
+      Cancel
+    </a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endblock %}

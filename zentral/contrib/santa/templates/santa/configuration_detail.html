@@ -232,6 +232,9 @@
             <th scope="col">Version</th>
             <th scope="col">Distributor</th>
             <th scope="col"></th>
+            {% if perms.santa.delete_enrollment %}
+            <th scope="col"></th>
+            {% endif %}
         </tr>
         </thead>
         <tbody>
@@ -280,6 +283,14 @@
                     <span class="text-danger">Enrollment used up.</span>
                 {% endif %}
             </td>
+            {% if perms.santa.delete_enrollment %}
+            <td>
+              {% if enrollment.can_be_deleted %}
+              {% url 'santa:delete_enrollment' object.pk enrollment.pk as url %}
+              {% button 'DELETE' url "Delete enrollment" %}
+              {% endif %}
+            </td>
+            {% endif %}
         </tr>
         {% endwith %}
         {% endwith %}

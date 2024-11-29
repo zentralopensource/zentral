@@ -2,7 +2,7 @@ import logging
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import transaction
-from django.http import HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, TemplateView, View
@@ -16,7 +16,7 @@ from zentral.contrib.santa.forms import (BinarySearchForm,
                                          ConfigurationForm, EnrollmentForm,
                                          VotingGroupForm,
                                          RuleForm, RuleSearchForm, UpdateRuleForm)
-from zentral.contrib.santa.models import Configuration, Rule, Target, VotingGroup
+from zentral.contrib.santa.models import Configuration, Enrollment, Rule, Target, VotingGroup
 from zentral.contrib.santa.terraform import iter_resources
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
@@ -246,6 +246,27 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_valid(secret_form, enrollment_form)
         else:
             return self.forms_invalid(secret_form, enrollment_form)
+
+
+class DeleteEnrollmentView(PermissionRequiredMixin, DeleteViewWithAudit):
+    permission_required = "santa.delete_enrollment"
+    model = Enrollment
+
+    def get_queryset(self):
+        return self.model.objects.select_related(
+            "configuration"
+        ).filter(
+            configuration__pk=self.kwargs["configuration_pk"]
+        )
+
+    def get_object(self):
+        obj = super().get_object()
+        if not obj.can_be_deleted():
+            raise Http404
+        return obj
+
+    def get_success_url(self):
+        return self.object.configuration.get_absolute_url()
 
 
 # rules

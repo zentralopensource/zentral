@@ -783,13 +783,16 @@ class Enrollment(BaseEnrollment):
     def get_description_for_distributor(self):
         return "Santa configuration: {}".format(self.configuration)
 
+    def get_absolute_url(self):
+        return "{}#enrollment_{}".format(reverse("santa:configuration", args=(self.configuration.pk,)), self.pk)
+
     def serialize_for_event(self):
         enrollment_dict = super().serialize_for_event()
         enrollment_dict["configuration"] = self.configuration.serialize_for_event(keys_only=True)
         return enrollment_dict
 
-    def get_absolute_url(self):
-        return "{}#enrollment_{}".format(reverse("santa:configuration", args=(self.configuration.pk,)), self.pk)
+    def linked_objects_keys_for_event(self):
+        return {"santa_configuration": ((self.configuration.pk,),)}
 
 
 class EnrolledMachineManager(models.Manager):

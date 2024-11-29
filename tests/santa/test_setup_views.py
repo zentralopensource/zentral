@@ -693,6 +693,74 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
 
+    # delete enrollment
+
+    def test_delete_enrollment_redirect(self):
+        configuration, enrollment = self._force_enrollment()
+        self._login_redirect(reverse("santa:delete_enrollment", args=(configuration.pk, enrollment.pk)))
+
+    def test_delete_enrollment_permission_denied(self):
+        configuration, enrollment = self._force_enrollment()
+        self._login()
+        response = self.client.get(reverse("santa:delete_enrollment", args=(configuration.pk, enrollment.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_enrollment_get(self):
+        configuration, enrollment = self._force_enrollment()
+        self._login("santa.delete_enrollment")
+        response = self.client.get(reverse("santa:delete_enrollment", args=(configuration.pk, enrollment.pk)))
+        self.assertTemplateUsed(response, "santa/enrollment_confirm_delete.html")
+        self.assertContains(response, "Delete enrollment")
+        self.assertContains(response, configuration.name)
+
+    @patch("zentral.contrib.inventory.models.BaseEnrollment.can_be_deleted")
+    def test_delete_enrollment_cannot_be_deleted_get(self, can_be_deleted):
+        can_be_deleted.return_value = False
+        configuration, enrollment = self._force_enrollment()
+        self.assertFalse(enrollment.can_be_deleted())
+        self._login("santa.delete_enrollment")
+        response = self.client.get(reverse("santa:delete_enrollment", args=(configuration.pk, enrollment.pk)))
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_enrollment_post(self, post_event):
+        configuration, enrollment = self._force_enrollment()
+        enrollment_pk = enrollment.pk
+        enrollment_secret = enrollment.secret
+        mbu = enrollment_secret.meta_business_unit
+        self._login("santa.delete_enrollment", "santa.view_configuration")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("santa:delete_enrollment", args=(configuration.pk, enrollment.pk)),
+                                        follow=True)
+        self.assertTemplateUsed(response, "santa/configuration_detail.html")
+        self.assertContains(response, configuration.name)
+        self.assertEqual(configuration.enrollment_set.count(), 0)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "santa.enrollment",
+                 "pk": str(enrollment_pk),
+                 'prev_value': {'configuration': {'name': configuration.name, 'pk': configuration.pk},
+                                'created_at': enrollment.created_at,
+                                'enrollment_secret': {'created_at': enrollment_secret.created_at,
+                                                      'is_expired': False,
+                                                      'is_revoked': False,
+                                                      'is_used_up': False,
+                                                      'meta_business_unit': {'name': mbu.name,
+                                                                             'pk': mbu.pk},
+                                                      'pk': enrollment_secret.pk,
+                                                      'request_count': 0},
+                                'pk': enrollment.pk}
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"santa_configuration": [str(configuration.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
+
     # create voting group
 
     def test_create_voting_group_redirect(self):
