@@ -1,4 +1,5 @@
 import base64
+import logging
 import os
 from django.core.files import File
 from django.db import transaction
@@ -10,8 +11,10 @@ from zentral.utils.ssl import ensure_bytes
 from .app_manifest import download_package, read_package_info, validate_configuration
 from .artifacts import update_blueprint_serialized_artifacts
 from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
+from .dep import assign_dep_device_profile, DEPClientError
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
+                     DEPDevice, DEPEnrollment,
                      DeviceCommand,
                      EnrolledDevice, EnterpriseApp, FileVaultConfig,
                      Location, LocationAsset,
@@ -23,6 +26,9 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
 from .payloads import get_configuration_profile_info
 from .scep.microsoft_ca import MicrosoftCAChallengeSerializer, OktaCAChallengeSerializer
 from .scep.static import StaticChallengeSerializer
+
+
+logger = logging.getLogger("zentral.contrib.mdm.serializers")
 
 
 class DeviceCommandSerializer(serializers.ModelSerializer):
@@ -111,6 +117,45 @@ class FileVaultConfigSerializer(serializers.ModelSerializer):
         elif bypass_attempts > -1:
             raise serializers.ValidationError({"bypass_attempts": "Must be -1 when at_login_only is False"})
         return data
+
+
+class DEPDeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DEPDevice
+        fields = [
+            "id",
+            "virtual_server", "serial_number",
+            "asset_tag", "color",
+            "description", "device_family",
+            "model", "os",
+            "device_assigned_by", "device_assigned_date",
+            "last_op_type", "last_op_date",
+            "profile_status", "profile_uuid", "profile_push_time",
+            "enrollment",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "virtual_server", "serial_number",
+            "asset_tag", "color",
+            "description", "device_family",
+            "model", "os",
+            "device_assigned_by", "device_assigned_date",
+            "last_op_type", "last_op_date",
+            "profile_status", "profile_uuid", "profile_push_time",
+            "created_at", "updated_at",
+        ]
+
+    def update(self, instance, validated_data):
+        enrollment = validated_data.pop("enrollment")
+        try:
+            assign_dep_device_profile(instance, enrollment)
+        except DEPClientError:
+            logger.exception("Could not assign enrollment to device")
+            raise serializers.ValidationError({"enrollment": "Could not assign enrollment to device"})
+        else:
+            instance.enrollment = enrollment
+        return super().update(instance, validated_data)
 
 
 class OTAEnrollmentSerializer(serializers.ModelSerializer):

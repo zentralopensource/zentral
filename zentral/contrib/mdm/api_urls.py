@@ -3,6 +3,7 @@ from rest_framework.urlpatterns import format_suffix_patterns
 from .api_views import (ArtifactDetail, ArtifactList,
                         BlueprintDetail, BlueprintList,
                         BlueprintArtifactDetail, BlueprintArtifactList,
+                        DEPDeviceDetail, DEPDeviceList,
                         EnterpriseAppDetail, EnterpriseAppList,
                         EnrolledDeviceList,
                         LocationList, LocationAssetList,
@@ -52,6 +53,8 @@ urlpatterns = [
 
     path('dep/virtual_servers/<int:pk>/sync_devices/',
          DEPVirtualServerSyncDevicesView.as_view(), name="dep_virtual_server_sync_devices"),
+    path('dep/devices/', DEPDeviceList.as_view(), name="dep_devices"),
+    path('dep/devices/<int:pk>/', DEPDeviceDetail.as_view(), name="dep_device"),
     path('devices/', EnrolledDeviceList.as_view(), name="enrolled_devices"),
     path('devices/<int:pk>/block/', BlockEnrolledDevice.as_view(), name="block_enrolled_device"),
     path('devices/<int:pk>/unblock/', UnblockEnrolledDevice.as_view(), name="unblock_enrolled_device"),

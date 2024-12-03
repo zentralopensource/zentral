@@ -1,16 +1,22 @@
 from functools import reduce
 import operator
+from unittest.mock import patch
+from urllib.parse import urlencode
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import APIToken, User
-from .utils import force_dep_virtual_server
+from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.dep_client import DEPClientError
+from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class APIViewsTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         cls.service_account = User.objects.create(
@@ -23,6 +29,8 @@ class APIViewsTestCase(TestCase):
         cls.service_account.groups.set([cls.group])
         cls.user.groups.set([cls.group])
         cls.api_key = APIToken.objects.update_or_create_for_user(cls.service_account)
+        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        cls.mbu.create_enrollment_business_unit()
 
     # utility methods
 
@@ -47,11 +55,23 @@ class APIViewsTestCase(TestCase):
         response = self.client.get(url)
         self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
 
-    def post(self, url, include_token=True):
+    def _make_query(self, verb, url, data=None, include_token=True):
         kwargs = {}
+        if data is not None:
+            kwargs["content_type"] = "application/json"
+            kwargs["data"] = data
         if include_token:
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.post(url, **kwargs)
+        return getattr(self.client, verb)(url, **kwargs)
+
+    def get(self, url, include_token=True):
+        return self._make_query("get", url, include_token=include_token)
+
+    def post(self, url, include_token=True):
+        return self._make_query("post", url, include_token=include_token)
+
+    def put(self, url, data=None, include_token=True):
+        return self._make_query("put", url, data=data, include_token=include_token)
 
     # dep_virtual_server_sync_devices
 
@@ -90,3 +110,259 @@ class APIViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm_api:dep_virtual_server_sync_devices", args=(dep_server.pk,)))
         self.assertEqual(response.status_code, 201)
         self.assertEqual(sorted(response.json().keys()), ['task_id', 'task_result_url'])
+
+    # list dep devices
+
+    def test_list_dep_devices_unauthorized(self):
+        response = self.get(reverse("mdm_api:dep_devices"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_dep_devices_permission_denied(self):
+        response = self.get(reverse("mdm_api:dep_devices"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_list_dep_devices_by_enrollment(self):
+        self.set_permissions("mdm.view_depdevice")
+        force_dep_device()  # filtered out
+        dep_device = force_dep_device()
+        dep_device.enrollment = force_dep_enrollment(self.mbu)
+        dep_device.save()
+        response = self.get(reverse("mdm_api:dep_devices")
+                            + "?" + urlencode({"enrollment": dep_device.enrollment.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'asset_tag': dep_device.asset_tag,
+                  'color': 'SPACE GRAY',
+                  'created_at': dep_device.created_at.isoformat(),
+                  'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+                  'device_assigned_by': 'support@zentral.com',
+                  'device_assigned_date': dep_device.device_assigned_date.isoformat(),
+                  'device_family': 'iPhone',
+                  'enrollment': dep_device.enrollment.pk,
+                  'id': dep_device.pk,
+                  'last_op_date': dep_device.last_op_date.isoformat(),
+                  'last_op_type': 'added',
+                  'model': 'iPhone X',
+                  'os': 'iOS',
+                  'profile_push_time': None,
+                  'profile_status': 'empty',
+                  'profile_uuid': None,
+                  'serial_number': dep_device.serial_number,
+                  'updated_at': dep_device.updated_at.isoformat(),
+                  'virtual_server': dep_device.virtual_server.pk}
+             ]}
+        )
+
+    def test_list_dep_devices_by_serial_number(self):
+        self.set_permissions("mdm.view_depdevice")
+        force_dep_device()  # filtered out
+        dep_device = force_dep_device()
+        response = self.get(reverse("mdm_api:dep_devices")
+                            + "?" + urlencode({"serial_number": dep_device.serial_number}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'asset_tag': dep_device.asset_tag,
+                  'color': 'SPACE GRAY',
+                  'created_at': dep_device.created_at.isoformat(),
+                  'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+                  'device_assigned_by': 'support@zentral.com',
+                  'device_assigned_date': dep_device.device_assigned_date.isoformat(),
+                  'device_family': 'iPhone',
+                  'enrollment': None,
+                  'id': dep_device.pk,
+                  'last_op_date': dep_device.last_op_date.isoformat(),
+                  'last_op_type': 'added',
+                  'model': 'iPhone X',
+                  'os': 'iOS',
+                  'profile_push_time': None,
+                  'profile_status': 'empty',
+                  'profile_uuid': None,
+                  'serial_number': dep_device.serial_number,
+                  'updated_at': dep_device.updated_at.isoformat(),
+                  'virtual_server': dep_device.virtual_server.pk}
+             ]}
+        )
+
+    def test_list_dep_devices_by_virtual_server(self):
+        self.set_permissions("mdm.view_depdevice")
+        force_dep_device()  # filtered out
+        dep_device = force_dep_device()
+        response = self.get(reverse("mdm_api:dep_devices")
+                            + "?" + urlencode({"virtual_server": dep_device.virtual_server.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'asset_tag': dep_device.asset_tag,
+                  'color': 'SPACE GRAY',
+                  'created_at': dep_device.created_at.isoformat(),
+                  'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+                  'device_assigned_by': 'support@zentral.com',
+                  'device_assigned_date': dep_device.device_assigned_date.isoformat(),
+                  'device_family': 'iPhone',
+                  'enrollment': None,
+                  'id': dep_device.pk,
+                  'last_op_date': dep_device.last_op_date.isoformat(),
+                  'last_op_type': 'added',
+                  'model': 'iPhone X',
+                  'os': 'iOS',
+                  'profile_push_time': None,
+                  'profile_status': 'empty',
+                  'profile_uuid': None,
+                  'serial_number': dep_device.serial_number,
+                  'updated_at': dep_device.updated_at.isoformat(),
+                  'virtual_server': dep_device.virtual_server.pk}
+             ]}
+        )
+
+    def test_list_dep_devices_ordering(self):
+        self.set_permissions("mdm.view_depdevice")
+        force_dep_device()  # filtered out
+        dep_device = force_dep_device()
+        force_dep_device()  # filtered out
+        response = self.get(reverse("mdm_api:dep_devices")
+                            + "?" + urlencode({"ordering": "-created_at",
+                                               "limit": 1,
+                                               "offset": 1}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'count': 3,
+             'next': 'http://testserver/api/mdm/dep/devices/?limit=1&offset=2&ordering=-created_at',
+             'previous': 'http://testserver/api/mdm/dep/devices/?limit=1&ordering=-created_at',
+             'results': [
+                 {'asset_tag': dep_device.asset_tag,
+                  'color': 'SPACE GRAY',
+                  'created_at': dep_device.created_at.isoformat(),
+                  'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+                  'device_assigned_by': 'support@zentral.com',
+                  'device_assigned_date': dep_device.device_assigned_date.isoformat(),
+                  'device_family': 'iPhone',
+                  'enrollment': None,
+                  'id': dep_device.pk,
+                  'last_op_date': dep_device.last_op_date.isoformat(),
+                  'last_op_type': 'added',
+                  'model': 'iPhone X',
+                  'os': 'iOS',
+                  'profile_push_time': None,
+                  'profile_status': 'empty',
+                  'profile_uuid': None,
+                  'serial_number': dep_device.serial_number,
+                  'updated_at': dep_device.updated_at.isoformat(),
+                  'virtual_server': dep_device.virtual_server.pk}
+             ]}
+        )
+
+    # get dep device
+
+    def test_get_dep_device_unauthorized(self):
+        dep_device = force_dep_device()
+        response = self.get(reverse("mdm_api:dep_device", args=(dep_device.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_dep_device_permission_denied(self):
+        dep_device = force_dep_device()
+        response = self.get(reverse("mdm_api:dep_device", args=(dep_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_dep_device(self):
+        dep_device = force_dep_device()
+        self.set_permissions("mdm.view_depdevice")
+        response = self.get(reverse("mdm_api:dep_device", args=(dep_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'asset_tag': dep_device.asset_tag,
+             'color': 'SPACE GRAY',
+             'created_at': dep_device.created_at.isoformat(),
+             'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+             'device_assigned_by': 'support@zentral.com',
+             'device_assigned_date': dep_device.device_assigned_date.isoformat(),
+             'device_family': 'iPhone',
+             'enrollment': None,
+             'id': dep_device.pk,
+             'last_op_date': dep_device.last_op_date.isoformat(),
+             'last_op_type': 'added',
+             'model': 'iPhone X',
+             'os': 'iOS',
+             'profile_push_time': None,
+             'profile_status': 'empty',
+             'profile_uuid': None,
+             'serial_number': dep_device.serial_number,
+             'updated_at': dep_device.updated_at.isoformat(),
+             'virtual_server': dep_device.virtual_server.pk}
+        )
+
+    # update dep device
+
+    def test_update_dep_device_unauthorized(self):
+        dep_device = force_dep_device()
+        response = self.put(reverse("mdm_api:dep_device", args=(dep_device.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_dep_device_permission_denied(self):
+        dep_device = force_dep_device()
+        response = self.put(reverse("mdm_api:dep_device", args=(dep_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.mdm.serializers.assign_dep_device_profile")
+    def test_update_dep_device(self, assign_dep_device_profile):
+        dep_device = force_dep_device()
+        enrollment = force_dep_enrollment(self.mbu)
+        self.set_permissions("mdm.change_depdevice")
+        response = self.put(reverse("mdm_api:dep_device", args=(dep_device.pk,)),
+                            data={"enrollment": enrollment.pk})
+        self.assertEqual(response.status_code, 200)
+        dep_device.refresh_from_db()
+        self.assertEqual(
+            response.json(),
+            {'asset_tag': dep_device.asset_tag,
+             'color': 'SPACE GRAY',
+             'created_at': dep_device.created_at.isoformat(),
+             'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+             'device_assigned_by': 'support@zentral.com',
+             'device_assigned_date': dep_device.device_assigned_date.isoformat(),
+             'device_family': 'iPhone',
+             'enrollment': enrollment.pk,
+             'id': dep_device.pk,
+             'last_op_date': dep_device.last_op_date.isoformat(),
+             'last_op_type': 'added',
+             'model': 'iPhone X',
+             'os': 'iOS',
+             'profile_push_time': None,
+             'profile_status': 'empty',
+             'profile_uuid': None,
+             'serial_number': dep_device.serial_number,
+             'updated_at': dep_device.updated_at.isoformat(),
+             'virtual_server': dep_device.virtual_server.pk}
+        )
+        assign_dep_device_profile.assert_called_once_with(dep_device, enrollment)
+
+    @patch("zentral.contrib.mdm.serializers.assign_dep_device_profile")
+    def test_update_dep_device_error(self, assign_dep_device_profile):
+        assign_dep_device_profile.side_effect = DEPClientError("YOLO")
+        dep_device = force_dep_device()
+        enrollment = force_dep_enrollment(self.mbu)
+        self.set_permissions("mdm.change_depdevice")
+        response = self.put(reverse("mdm_api:dep_device", args=(dep_device.pk,)),
+                            data={"enrollment": enrollment.pk})
+        self.assertEqual(response.status_code, 400)
+        dep_device.refresh_from_db()
+        self.assertEqual(
+            response.json(),
+            {'enrollment': 'Could not assign enrollment to device'},
+        )
+        assign_dep_device_profile.assert_called_once_with(dep_device, enrollment)

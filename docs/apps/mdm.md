@@ -276,6 +276,146 @@ Content in ASM/ABM *Apps and Books > "AppName" > Manage Licenses* that is assign
 
 ## HTTP API
 
+### `/api/mdm/dep/devices/`
+
+ * method: `GET`
+ * required permission: `mdm.view_depdevice`
+ * available filters:
+    * `device_family`
+    * `enrollment`
+    * `profile_status`
+    * `profile_uuid`
+    * `serial_number`
+    * `virtual_server`
+ * available orderings:
+    * `created_at`
+    * `last_op_date`
+    * `updated_at`
+ * pagination:
+    * `limit` (max `500`, `50` by default)
+    * `offset`
+
+Use this endpoint to list the DEP devices.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/mdm/dep/devices/?last_op_type=added&ordering=-last_op_date" \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 14,
+            "virtual_server": 7,
+            "serial_number": "XXXXXXXXXXXX",
+            "asset_tag": "",
+            "color": "SPACE GRAY",
+            "description": "MBP 13.3 SPG/8C CPU/8C GPU",
+            "device_family": "Mac",
+            "model": "MacBook Pro 13\"",
+            "os": "OSX",
+            "device_assigned_by": "admin@example.com",
+            "device_assigned_date": "2024-12-02T16:52:49",
+            "last_op_type": "modified",
+            "last_op_date": "2024-12-02T16:52:49",
+            "profile_status": "pushed",
+            "profile_uuid": "464921fa-a370-4bad-9a6f-9e3a8a73d94a",
+            "profile_push_time": "2024-12-02T16:02:47",
+            "enrollment": 4,
+            "created_at": "2024-07-29T19:13:12.160287",
+            "updated_at": "2024-12-03T16:46:26.703479"
+        }
+    ]
+}
+```
+
+### `/api/mdm/dep/devices/<int:pk>/`
+
+ * methods: `GET`, `PUT`
+ * required permission: `mdm.view_depdevice`, `mdm.change_depdevice`
+
+Use this endpoint to get a DEP device detail information and change its enrollment.
+
+Example to get the DEP device detail information:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/dep/devices/14/ \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 14,
+    "virtual_server": 7,
+    "serial_number": "XXXXXXXXXXXX",
+    "asset_tag": "",
+    "color": "SPACE GRAY",
+    "description": "MBP 13.3 SPG/8C CPU/8C GPU",
+    "device_family": "Mac",
+    "model": "MacBook Pro 13\"",
+    "os": "OSX",
+    "device_assigned_by": "admin@example.com",
+    "device_assigned_date": "2024-12-02T16:52:49",
+    "last_op_type": "modified",
+    "last_op_date": "2024-12-02T16:52:49",
+    "profile_status": "pushed",
+    "profile_uuid": "464921fa-a370-4bad-9a6f-9e3a8a73d94a",
+    "profile_push_time": "2024-12-02T16:02:47",
+    "enrollment": 4,
+    "created_at": "2024-07-29T19:13:12.160287",
+    "updated_at": "2024-12-03T16:46:26.703479"
+}
+```
+
+Example to assign an enrollment/profile:
+
+```bash
+curl -XPUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" -d '{"enrollment": 4}' \
+  https://$ZTL_FQDN/api/mdm/dep/devices/14/ \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 14,
+    "virtual_server": 7,
+    "serial_number": "XXXXXXXXXXXX",
+    "asset_tag": "",
+    "color": "SPACE GRAY",
+    "description": "MBP 13.3 SPG/8C CPU/8C GPU",
+    "device_family": "Mac",
+    "model": "MacBook Pro 13\"",
+    "os": "OSX",
+    "device_assigned_by": "admin@example.com",
+    "device_assigned_date": "2024-12-02T16:52:49",
+    "last_op_type": "modified",
+    "last_op_date": "2024-12-02T16:52:49",
+    "profile_status": "pushed",
+    "profile_uuid": "464921fa-a370-4bad-9a6f-9e3a8a73d94a",
+    "profile_push_time": "2024-12-02T16:02:47",
+    "enrollment": 4,
+    "created_at": "2024-07-29T19:13:12.160287",
+    "updated_at": "2024-12-03T16:46:26.703479"
+}
+```
+
+
 ### `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`
 
  * method: `POST`
