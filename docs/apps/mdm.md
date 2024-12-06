@@ -250,6 +250,41 @@ A single FileVault configuration can be assigned to multiple blueprints, ensurin
 3. Choose the desired FileVault configuration from the *FileVault Configuration* dropdown.
 4. Click *Save* to link the configuration to the blueprint.
 
+## Recovery Password Configuration
+
+Recovery password configurations in Zentral manage recoveryOS password protection for Apple Silicon Macs and firmware password configurations for Intel-based Macs via MDM. These configurations help prevent unauthorized access to macOS devices when started in system recovery mode. Recovery and firmware password settings created in Zentral can be applied across multiple blueprints and will automatically adjust to the platform type (Intel or Apple Silicon).
+
+### Configuring a Recovery Password in Zentral
+
+To create and manage recovery passwords:
+
+1. Navigate to *MDM > Recovery Password Configurations*.
+2. Click *Create* and complete the following fields:
+   - *Name*: Enter a descriptive name for the configuration.
+   - *Dynamic Password*: Choose *Yes* or *No* to enable or disable automatic generation of unique passwords for each computer.
+   - *Static Password*: Optionally, provide a static password for consistent use across devices.
+   - *Rotation Interval (days)*: Specify the number of days for automatic password rotation. A value of `0` disables automatic rotation.
+   - *Rotate Firmware Password*: Select *Yes* or *No* to indicate if firmware passwords should be rotated (only applicable to Intel-based Macs).
+3. Link the recovery password configuration to a blueprint by navigating to *MDM > Blueprints*, selecting a blueprint, and adding the recovery password configuration.
+
+### Background Information
+
+The management of recovery passwords and startup security policies differs between Intel-based Macs and Macs with Apple Silicon. Here’s an brief overview:
+
+#### Apple Silicon Macs
+
+- **Startup Security Policies**: These are specific to each installed macOS version. Changes that impact system security, such as enabling kernel extensions or modifying System Integrity Protection (SIP), require the user to restart into recoveryOS.
+- **recoveryOS Password**: Configured through MDM using the `SetRecoveryLock` command, this password restricts access to recovery options without authorization. See details in the [SetRecoveryLock](https://github.com/apple/device-management/blob/b6202ca2fbd31286a52eb160b67a4db7b4fe1f1f/mdm/commands/passcode.recovery.set.yaml#L4) reference.
+- **Important Note**: The recoveryOS password does not prevent the device from being restored via DFU mode, which securely erases all existing data.
+
+#### Intel-Based Macs
+
+- **Startup Security Utility**: This tool, accessible through recoveryOS, allows configuration of security policies such as Full Security, Medium Security, and No Security. It also supports firmware password protection for enhanced security.
+- **Firmware Passwords**: These are set and managed via MDM using the `SetFirmwarePassword` command and can help prevent unauthorized access to alternative boot modes. Firmware passwords can also be managed through command-line tools or the Firmware Password Utility. See details in the [SetFirmwarePassword](https://github.com/apple/device-management/blob/b6202ca2fbd31286a52eb160b67a4db7b4fe1f1f/mdm/commands/passcode.firmware.set.yaml#L4) reference.
+
+For more details, see the [Apple's Deployment Guide](https://support.apple.com/en-ca/guide/deployment/dep5810e849c/1/web/1.0) and [Apple Platform Security](https://support.apple.com/guide/security/welcome/web) documentation.
+
+
 ## Apps and Books
 
 To manage and distribute apps from the Mac App Store or iOS/iPadOS App Store through Zentral, a Content Token is required to sync with Apple Business Manager (ABM) or Apple School Manager (ASM).
