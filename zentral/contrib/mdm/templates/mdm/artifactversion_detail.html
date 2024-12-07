@@ -13,11 +13,15 @@
 
 <div class="object-details">
     <div class="d-flex align-items-center mb-1">
-        <h2 class="m-0">Artifact version v{{ object.version }}</h2>
+      <h2 class="m-0">{{ artifact }} v{{ object.version }}</h2>
     </div>
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Artifact version</h3>
         <div class="ms-auto">
+            {% if artifact.type == "Data Asset" %}
+                {% url 'mdm:download_data_asset' object.pk as url %}
+                {% button 'DOWNLOAD' url "Download Data Asset" %}
+            {% endif %}
             {% if artifact.type == "Profile" %}
                 {% url 'mdm:download_profile' object.pk as url %}
                 {% button 'DOWNLOAD' url "Download Profile" %}
@@ -39,6 +43,12 @@
 
     <table class="table-object-properties">
         <tbody>
+        {% if data_asset %}
+        {% include "mdm/_data_asset_detail.html" %}
+        {% endif %}
+        {% if declaration %}
+        {% include "mdm/_declaration_detail.html" %}
+        {% endif %}
         {% if enterprise_app %}
         {% include "mdm/_enterprise_app_detail.html" %}
         {% endif %}

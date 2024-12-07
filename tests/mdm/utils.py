@@ -1,8 +1,11 @@
 from datetime import date, datetime, time, timedelta
 import hashlib
+import io
+import json
 import os.path
 import plistlib
 from unittest.mock import patch
+import zipfile
 import uuid
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -14,9 +17,10 @@ from realms.models import Realm, RealmGroup, RealmUser
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.crypto import load_push_certificate_and_key
+from zentral.contrib.mdm.declarations import get_declaration_info
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         Blueprint, BlueprintArtifact,
-                                        Channel, Platform,
+                                        Channel, DataAsset, Declaration, DeclarationRef, Platform,
                                         DEPDevice, DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
                                         EnterpriseApp, FileVaultConfig, Location, LocationAsset,
@@ -607,6 +611,30 @@ def force_location_asset(asset=None, location=None):
     )
 
 
+def build_plistfile(filename=None):
+    if filename is None:
+        filename = "{}.plist".format(get_random_string(17))
+    plist_buffer = io.BytesIO()
+    plistlib.dump({"un": 2}, plist_buffer)
+    plist_buffer.name = filename
+    plist_buffer.seek(0)
+    return plist_buffer
+
+
+def build_zipfile(filename=None, random=False):
+    extra = ""
+    if random:
+        extra = get_random_string(12)
+    if filename is None:
+        filename = "{}.zip".format(get_random_string(17))
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+        zip_file.writestr("etc/sudoers", f"Defaults log_allowed\nDefaults timestamp_timeout=0{extra}")
+    zip_buffer.name = filename
+    zip_buffer.seek(0)
+    return zip_buffer
+
+
 def force_artifact(
     version_count=1,
     artifact_type=Artifact.Type.PROFILE,
@@ -615,6 +643,9 @@ def force_artifact(
     install_during_setup_assistant=False,
     auto_update=True,
     requires=None,
+    decl_identifier=None,
+    decl_type=None,
+    decl_payload=None,
 ):
     if platforms is None:
         platforms = [Platform.MACOS]
@@ -682,6 +713,35 @@ def force_artifact(
                 artifact_version=artifact_version,
                 location_asset=force_location_asset(),
             )
+        elif artifact_type == Artifact.Type.DATA_ASSET:
+            zipfile = build_zipfile()
+            content = zipfile.getvalue()
+            DataAsset.objects.create(
+                artifact_version=artifact_version,
+                type=DataAsset.Type.ZIP,
+                file=SimpleUploadedFile(name=zipfile.name, content=content),
+                filename=zipfile.name,
+                file_size=len(content),
+                file_sha256=hashlib.sha256(content).hexdigest(),
+            )
+        elif artifact_type.is_raw_declaration:
+            if decl_payload is None:
+                decl_payload = {"Restrictions": {"ExternalStorage": "Disallowed", "NetworkStorage": "Disallowed"}}
+            declaration = Declaration.objects.create(
+                artifact_version=artifact_version,
+                type=decl_type or "com.apple.configuration.diskmanagement.settings",
+                identifier=decl_identifier or str(uuid.uuid4()),
+                server_token=str(uuid.uuid4()),
+                payload=decl_payload or decl_payload
+            )
+            try:
+                info = get_declaration_info(json.dumps(declaration.get_full_dict()), channel, platforms)
+            except ValueError:
+                # because of the tests, it might not always work!
+                pass
+            else:
+                for path, ref_artifact in info["refs"].items():
+                    DeclarationRef.objects.create(declaration=declaration, key=path, artifact=ref_artifact)
     return artifact, artifact_versions
 
 
@@ -694,6 +754,9 @@ def force_blueprint_artifact(
     auto_update=True,
     requires=None,
     blueprint=None,
+    decl_identifier=None,
+    decl_type=None,
+    decl_payload=None,
 ):
     artifact, artifact_versions = force_artifact(
         version_count,
@@ -703,6 +766,9 @@ def force_blueprint_artifact(
         install_during_setup_assistant,
         auto_update,
         requires,
+        decl_identifier,
+        decl_type,
+        decl_payload,
     )
     if not blueprint:
         blueprint = force_blueprint()

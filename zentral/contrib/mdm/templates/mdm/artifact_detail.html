@@ -31,7 +31,11 @@
     <table class="table-object-properties">
     <tbody>
         <tr>
-        <th style="width:33vw">Type</th>
+          <th style="width:33vw">ID</th>
+          <td><code>{{ object.pk }}</code></td>
+        </tr>
+        <tr>
+        <th>Type</th>
         <td>{{ object.get_type_display }}</td>
         </tr>
         <tr>
@@ -74,6 +78,36 @@
         <th>Reinstall on OS update</th>
         <td>{{ object.get_reinstall_on_os_update_display }}</td>
         </tr>
+
+        {% if declaration_refs_count %}
+        <tr>
+          <th>Referenced by</th>
+          <td>
+            <table>
+              {% for ref in declaration_refs %}
+              {% with ref.declaration.artifact_version as av %}
+              <tr>
+                <td>{{ ref.key|join:"." }}</td>
+                <td><a href="{{ av.get_absolute_url }}">{{ av }}</a></td>
+              </tr>
+              {% endwith %}
+              {% endfor %}
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+
+        {% if dataasset_list %}
+        {% with dataasset_list|first as data_asset %}
+        {% include "mdm/_data_asset_detail.html" %}
+        {% endwith %}
+        {% endif %}
+
+        {% if declaration_list %}
+        {% with declaration_list|first as declaration %}
+        {% include "mdm/_declaration_detail.html" %}
+        {% endwith %}
+        {% endif %}
 
         {% if enterpriseapp_list %}
         {% with enterpriseapp_list|first as enterprise_app %}
@@ -164,13 +198,17 @@
       </td>
       <td class="text-end py-0">
         {% if perms.mdm.view_artifactversion %}
-        {% if artifact.type == "Profile" %}
-            {% url 'mdm:download_profile' av.pk as url %}
-            {% button 'DOWNLOAD' url "Download Profile" %}
+        {% if artifact.type == "Data Asset" %}
+            {% url 'mdm:download_data_asset' av.pk as url %}
+            {% button 'DOWNLOAD' url "Download Data Asset" %}
         {% endif %}
         {% if artifact.type == "Enterprise App" %}
             {% url 'mdm:download_enterprise_app' av.pk as url %}
             {% button 'DOWNLOAD' url "Download Enterprise App" %}
+        {% endif %}
+        {% if artifact.type == "Profile" %}
+            {% url 'mdm:download_profile' av.pk as url %}
+            {% button 'DOWNLOAD' url "Download Profile" %}
         {% endif %}
         {% endif %}
         {% if perms.mdm.change_artifactversion %}
@@ -188,7 +226,7 @@
 </table>
 {% endif %}
 
-
+{% if object.get_type.can_be_linked_to_blueprint %}
 <div class="d-flex justify-content-between mb-3">
     <h3>Blueprint{{ blueprint_artifacts_count|pluralize }} ({{ blueprint_artifacts_count }})</h3>
     <div class="ms-auto">            
@@ -267,6 +305,7 @@
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 {% endif %}
 
 {% endblock %}

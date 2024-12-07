@@ -2,6 +2,7 @@ import copy
 from datetime import datetime, timedelta
 from functools import cached_property, lru_cache
 import hashlib
+from itertools import chain
 import logging
 from graphlib import TopologicalSorter
 from django.db import transaction
@@ -11,13 +12,15 @@ from zentral.utils.text import shard as compute_shard
 from .apns import send_enrolled_device_notification, send_enrolled_user_notification
 from .declarations import (build_specific_software_update_enforcement,
                            build_target_management_status_subscriptions,
-                           get_declaration_identifier,
-                           get_legacy_profile_identifier,
-                           get_legacy_profile_server_token,
-                           get_software_update_enforcement_specific_identifier)
+                           get_blueprint_declaration_identifier,
+                           get_artifact_identifier,
+                           get_artifact_version_server_token,
+                           get_software_update_enforcement_specific_identifier,
+                           get_status_report_target_artifacts_info)
 from .models import (Artifact, ArtifactVersion,
                      Blueprint, BlueprintArtifact,
                      Channel,
+                     DeclarationRef,
                      DeviceArtifact, DeviceCommand,
                      TargetArtifact,
                      UserArtifact, UserCommand)
@@ -63,6 +66,16 @@ def _add_artifact_to_serialization(artifact, artifacts, depth):
     if artifact_pk in artifacts:
         return
     required_artifacts = list(artifact.requires.all())
+    referenced_artifacts = []
+    if artifact.get_type().is_raw_declaration:
+        # TODO: optimize?
+        for ref in (
+            DeclarationRef.objects.select_related("artifact")
+                                  .prefetch_related("artifact__artifactversion_set")
+                                  .filter(declaration__artifact_version__artifact=artifact)
+        ):
+            if ref.artifact not in referenced_artifacts:
+                referenced_artifacts.append(ref.artifact)
     artifacts[artifact_pk] = {
         "_depth": depth,
         "pk": artifact_pk,
@@ -74,12 +87,14 @@ def _add_artifact_to_serialization(artifact, artifacts, depth):
         "reinstall_interval": artifact.reinstall_interval,
         "reinstall_on_os_update": artifact.reinstall_on_os_update,
         "requires": [str(ra.pk) for ra in required_artifacts],
+        "references": [str(ra.pk) for ra in referenced_artifacts],
         "versions": [
             _serialize_artifact_version(av)
             for av in artifact.artifactversion_set.all().order_by("-version")
         ],
     }
-    for ra in artifact.requires.all():
+    # required and referenced artifacts added with extra depth
+    for ra in chain(required_artifacts, referenced_artifacts):
         _add_artifact_to_serialization(ra, artifacts, depth + 1)
 
 
@@ -234,9 +249,10 @@ class Target:
 
         def _add_artifact_to_topological_sorter(artifact, ts, seen_artifacts):
             requires = artifact["requires"]
-            ts.add(artifact["pk"], *requires)
+            references = artifact.get("references", [])
+            ts.add(artifact["pk"], *requires, *references)
             seen_artifacts.add(artifact["pk"])
-            for r_pk in requires:
+            for r_pk in chain(requires, references):
                 if r_pk not in seen_artifacts:
                     r_artifact = self.blueprint.serialized_artifacts[r_pk]
                     _add_artifact_to_topological_sorter(r_artifact, ts, seen_artifacts)
@@ -257,6 +273,7 @@ class Target:
             # common blueprint item scoping
             if self._test_filtered_blueprint_item(artifact):
                 _add_artifact_to_topological_sorter(artifact, ts, seen_artifacts)
+
         ts.prepare()
         return ts
 
@@ -394,13 +411,20 @@ class Target:
         return self.all_to_install(included_types, only_first=True).first()
 
     @lru_cache
-    def all_installed_or_to_install_serialized(self, included_types):
+    def all_installed_or_to_install_serialized(self, included_types, done_types=None):
         artifacts = []
+        if done_types is None:
+            done_types = tuple()
 
         def all_installed_or_to_install_callback(artifact, artifact_version):
             if artifact["type"] not in included_types:
-                # if not the type, only mark as done if present
-                return False, self._serialized_target_artifacts.get(artifact["pk"], {}).get("present", False)
+                return (
+                    False,
+                    # if not the type, mark as done if present
+                    self._serialized_target_artifacts.get(artifact["pk"], {}).get("present", False)
+                    # or type in done_types
+                    or artifact["type"] in done_types
+                )
             else:
                 artifacts.append((artifact, artifact_version))
                 return False, True
@@ -519,29 +543,9 @@ class Target:
 
     def update_target_artifacts_with_status_report(self, status_report):
         target_updated = False
-        try:
-            configurations = status_report["StatusItems"]["management"]["declarations"]["configurations"]
-        except KeyError:
-            logger.warning("Could not find configurations in status report")
+        target_artifacts_info = get_status_report_target_artifacts_info(status_report)
+        if target_artifacts_info is None:
             return target_updated
-        target_artifacts_info = {}
-        for configuration in configurations:
-            if "legacy-profile" not in configuration["identifier"]:
-                continue
-            artifact_version_pk = configuration["server-token"].split(".")[0]
-            if configuration["active"] and configuration["valid"] == "valid":
-                status = TargetArtifact.Status.INSTALLED
-            elif configuration["valid"] == "valid":
-                status = TargetArtifact.Status.UNINSTALLED
-            else:
-                status = TargetArtifact.Status.FAILED
-            extra_info = {"active": configuration["active"],
-                          "valid": configuration["valid"]}
-            reasons = configuration.get("reasons")
-            if reasons:
-                extra_info["reasons"] = reasons
-            unique_install_identifier = configuration["server-token"]
-            target_artifacts_info[artifact_version_pk] = (status, extra_info, unique_install_identifier)
         seen_artifact_pks = []
         for artifact_version in (ArtifactVersion.objects.select_related("artifact")
                                                         .filter(pk__in=target_artifacts_info.keys())):
@@ -609,18 +613,31 @@ class Target:
 
         return selected_sue
 
+    def iter_configuration_artifacts(self):
+        """Iterate over the configuration artifacts to include in the managed activation"""
+        yield from self.all_installed_or_to_install_serialized(
+            included_types=tuple(
+                t for t in Artifact.Type
+                if t.is_configuration and t.can_be_linked_to_blueprint
+            ),
+            done_types=tuple(
+                t for t in Artifact.Type
+                if t.is_asset
+            )
+        )
+
     # https://developer.apple.com/documentation/devicemanagement/activationsimple
     @cached_property
     def activation(self):
         payload = {
             "StandardConfigurations": [
-                get_declaration_identifier(self.blueprint, "management-status-subscriptions"),
+                get_blueprint_declaration_identifier(self.blueprint, "management-status-subscriptions"),
             ]
         }
-        for artifact, _ in self.all_installed_or_to_install_serialized((Artifact.Type.PROFILE,)):
-            payload["StandardConfigurations"].append(get_legacy_profile_identifier(artifact))
         if self.software_update_enforcement:
             payload["StandardConfigurations"].append(get_software_update_enforcement_specific_identifier(self))
+        for artifact, _ in self.iter_configuration_artifacts():
+            payload["StandardConfigurations"].append(get_artifact_identifier(artifact))
         payload["StandardConfigurations"].sort()
         h = hashlib.sha1()
         for sc_id in payload["StandardConfigurations"]:
@@ -628,10 +645,14 @@ class Target:
         server_token = h.hexdigest()
         return {
             "Type": "com.apple.activation.simple",
-            "Identifier": get_declaration_identifier(self.blueprint, "activation"),
+            "Identifier": get_blueprint_declaration_identifier(self.blueprint, "activation"),
             "ServerToken": server_token,
             "Payload": payload,
         }
+
+    def iter_declaration_artifacts(self):
+        """Iterate over the declaration artifacts"""
+        yield from self.all_installed_or_to_install_serialized(tuple(t for t in Artifact.Type if t.is_declaration))
 
     # https://developer.apple.com/documentation/devicemanagement/declarationitemsresponse/manifestdeclarationitems
     @cached_property
@@ -649,16 +670,26 @@ class Target:
             ],
             "Management": []
         }
-        for artifact, artifact_version in self.all_installed_or_to_install_serialized((Artifact.Type.PROFILE,)):
-            declarations["Configurations"].append(
-               {"Identifier": get_legacy_profile_identifier(artifact),
-                "ServerToken": get_legacy_profile_server_token(self, artifact, artifact_version)}
-            )
-        software_update_enforcement_specific = build_specific_software_update_enforcement(self)
+        software_update_enforcement_specific = build_specific_software_update_enforcement(self, missing_ok=True)
         if software_update_enforcement_specific:
             declarations["Configurations"].append(
                 {"Identifier": software_update_enforcement_specific["Identifier"],
                  "ServerToken": software_update_enforcement_specific["ServerToken"]}
+            )
+        for artifact, artifact_version in self.iter_declaration_artifacts():
+            artifact_type = Artifact.Type(artifact["type"])  # TODO: necessary?
+            if artifact_type.is_activation:
+                key = "Activations"
+            elif artifact_type.is_asset:
+                key = "Assets"
+            elif artifact_type.is_configuration:
+                key = "Configurations"
+            else:
+                logger.error("Unknown artifact type: %s", artifact_type)
+                continue
+            declarations[key].append(
+               {"Identifier": get_artifact_identifier(artifact),
+                "ServerToken": get_artifact_version_server_token(self, artifact, artifact_version)}
             )
         h = hashlib.sha1()
         for key in sorted(declarations.keys()):

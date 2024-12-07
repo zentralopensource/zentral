@@ -1,0 +1,25 @@
+{% load base_extras %}
+<tr>
+  <th colspan="2"><h4>Declaration</h4></th>
+</tr>
+<tr>
+  <th>Source</th>
+  <td>{{ declaration.get_full_dict|jsonprettyprint }}</td>
+</tr>
+<tr>
+  {% with declaration.declarationref_set.all as declaration_refs %}
+  <th>Reference{{ declaration_refs.count|pluralize }}</th>
+  <td>
+    <table>
+      {% for ref in declaration_refs %}
+      {% with ref.artifact as artifact %}
+      <tr>
+        <td>{{ ref.key|join:"." }}</td>
+        <td><a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a></td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+    </table>
+  </td>
+  {% endwith %}
+</tr>

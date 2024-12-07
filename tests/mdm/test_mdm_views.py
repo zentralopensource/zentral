@@ -1,10 +1,12 @@
 import base64
 from datetime import date, datetime, time, timedelta
+import io
 import json
 import plistlib
 from unittest.mock import patch
 from urllib.parse import quote
 import uuid
+import zipfile
 import asn1crypto.cms
 import asn1crypto.util
 from cryptography import x509
@@ -18,14 +20,16 @@ from realms.models import RealmGroup, RealmUserGroupMembership
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.crypto import verify_signed_payload
-from zentral.contrib.mdm.declarations import dump_legacy_profile_token, load_legacy_profile_token
+from zentral.contrib.mdm.declarations import (dump_data_asset_token, load_data_asset_token,
+                                              dump_legacy_profile_token, load_legacy_profile_token)
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Blueprint, BlueprintArtifact,
                                         Channel, DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
                                         OTAEnrollmentSession, Platform,
                                         RealmGroupTagMapping,
                                         Profile, UserEnrollmentSession, ReEnrollmentSession)
-from .utils import (force_dep_enrollment_session,
+from .utils import (force_artifact, force_blueprint_artifact,
+                    force_dep_enrollment_session,
                     force_enrolled_user,
                     force_ota_enrollment_session,
                     force_software_update,
@@ -598,6 +602,8 @@ class MDMViewsTestCase(TestCase):
         session.enrolled_device.refresh_from_db()
         self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
 
+    # declaration items
+
     def test_declarative_management_declaration_items(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         self._add_blueprint(session)
@@ -611,6 +617,8 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         json_response = json.loads(response.content)
         self.assertEqual(json_response, Target(session.enrolled_device).declaration_items)
+
+    # legacy profile
 
     def test_declarative_management_legacy_profile_declaration_device(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
@@ -672,7 +680,20 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(t_session, session)
         self.assertEqual(t_user, enrolled_user)
 
-    def test_declarative_management_unknown_legacy_profile_declaration(self, post_event):
+    def test_declarative_management_legacy_profile_invalid_identifier(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration/configuration/zentral.legacy-profile."
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, "Invalid Profile Identifier",
+                          udid=udid, serial_number=serial_number)
+
+    def test_declarative_management_legacy_profile_not_found(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         profile = self._force_profile()  # this profile is not in the blueprint
         self._force_blueprint_profile(session)
@@ -682,11 +703,48 @@ class MDMViewsTestCase(TestCase):
             "Data": json.dumps({"un": 2}),
             "Endpoint": f"declaration/configuration/zentral.legacy-profile.{profile.artifact_version.artifact.pk}"
         }
-        response = self._put(reverse("mdm_public:checkin"), payload, session)
-        self.assertEqual(response.status_code, 404)
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, f"Could not find Profile artifact {profile.artifact_version.artifact.pk}",
+                          udid=udid, serial_number=serial_number)
 
-    def test_declarative_management_default_status_subscriptions_declaration(self, post_event):
+    # status subscriptions
+
+    def test_declarative_no_client_capabilities_default_status_subscriptions_declaration(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        self.assertIsNone(session.enrolled_device.client_capabilities)
+        blueprint = self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}.management-status-subscriptions"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'Identifier': f'zentral.blueprint.{blueprint.pk}.management-status-subscriptions',
+             'Payload': {'StatusItems': [{'Name': 'device.identifier.serial-number'},
+                                         {'Name': 'device.identifier.udid'},
+                                         {'Name': 'device.model.family'},
+                                         {'Name': 'device.model.identifier'},
+                                         {'Name': 'device.model.marketing-name'},
+                                         {'Name': 'device.operating-system.build-version'},
+                                         {'Name': 'device.operating-system.family'},
+                                         {'Name': 'device.operating-system.marketing-name'},
+                                         {'Name': 'device.operating-system.version'},
+                                         {'Name': 'management.client-capabilities'},
+                                         {'Name': 'management.declarations'}]},
+             'ServerToken': '0ed215547af3061ce18ea6cf7a69dac4a3d52f3f',
+             'Type': 'com.apple.configuration.management.status-subscriptions'}
+        )
+
+    def test_declarative_no_client_items_default_status_subscriptions_declaration(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        session.enrolled_device.client_capabilities = {
+            "supported-payloads": {}  # no status-items
+        }
+        session.enrolled_device.save()
         blueprint = self._add_blueprint(session)
         payload = {
             "UDID": udid,
@@ -762,6 +820,56 @@ class MDMViewsTestCase(TestCase):
              'Type': 'com.apple.configuration.management.status-subscriptions'}
         )
 
+    # activation
+
+    def test_declarative_management_activation_device_channel(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        blueprint = self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}.activation"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        response_json = response.json()
+        response_json.pop("ServerToken")  # always different
+        self.assertEqual(
+            response_json,
+            {'Identifier': f'zentral.blueprint.{blueprint.pk}.activation',
+             'Payload': {
+                 'StandardConfigurations': [f'zentral.blueprint.{blueprint.pk}.management-status-subscriptions']
+              },
+             'Type': 'com.apple.activation.simple'}
+        )
+
+    def test_declarative_management_activation_user_channel(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        blueprint = self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "UserID": enrolled_user.user_id,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}.activation"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        response_json = response.json()
+        response_json.pop("ServerToken")  # always different
+        self.assertEqual(
+            response_json,
+            {'Identifier': f'zentral.blueprint.{blueprint.pk}.activation',
+             'Payload': {
+                 'StandardConfigurations': [f'zentral.blueprint.{blueprint.pk}.management-status-subscriptions']
+              },
+             'Type': 'com.apple.activation.simple'}
+        )
+
+    # software update enforcement specific
+
     def test_declarative_management_softwareupdate_enforcement_specific_err(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         device_id = get_random_string(8)
@@ -782,7 +890,7 @@ class MDMViewsTestCase(TestCase):
                         "softwareupdate-enforcement-specific"
         }
         self._put(reverse("mdm_public:checkin"), payload, session)
-        self._assertAbort(post_event, "Could not build specific software update enforcement",
+        self._assertAbort(post_event, "No software enforcement found for target",
                           udid=udid, serial_number=serial_number)
 
     def test_declarative_management_softwareupdate_enforcement_specific_latest_no_build(self, post_event):
@@ -912,7 +1020,7 @@ class MDMViewsTestCase(TestCase):
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 400)
-        self._assertAbort(post_event, "Could not build specific software update enforcement",
+        self._assertAbort(post_event, "No software update available for target",
                           udid=udid, serial_number=serial_number)
 
     def test_declarative_management_softwareupdate_enforcement_specific_one_time(self, post_event):
@@ -950,6 +1058,213 @@ class MDMViewsTestCase(TestCase):
              'ServerToken': 'fe4df212271a9ca8f01cad718031d531c181cd78',
              'Type': 'com.apple.configuration.softwareupdate.enforcement.specific'}
         )
+
+    # data asset
+
+    def test_declarative_management_data_asset(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        bpa, artifact, (artifact_version,) = force_blueprint_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        session.enrolled_device.blueprint = bpa.blueprint
+        session.enrolled_device.save()
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/asset/zentral.data-asset.{artifact.pk}"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        declaration = json.loads(response.content)
+        url = declaration["Payload"]["Reference"].pop("DataURL")
+        data_asset = artifact_version.data_asset
+        self.assertEqual(
+            declaration,
+            {'Identifier': f'zentral.data-asset.{artifact.pk}',
+             'Payload': {
+                 "Reference": {
+                     "ContentType": "application/zip",
+                     "Size": data_asset.file_size,
+                     "Hash-SHA-256": data_asset.file_sha256,
+                 }
+             },
+             'ServerToken': str(artifact_version.pk),
+             'Type': 'com.apple.asset.data'}
+        )
+        token = url.removeprefix("https://zentral/public/mdm/data_assets/")
+        token = token.removesuffix("/")
+        t_data_asset, t_session, t_user = load_data_asset_token(token)
+        self.assertEqual(t_data_asset, data_asset)
+        self.assertEqual(t_session, session)
+        self.assertIsNone(t_user)
+
+    def test_declarative_management_data_asset_invalid_identifier(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration/asset/zentral.data-asset."
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, "Invalid DataAsset Identifier",
+                          udid=udid, serial_number=serial_number)
+
+    def test_declarative_management_data_asset_could_not_find(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration/asset/zentral.data-asset.00000000-0000-0000-0000-000000000000"
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, "Could not find DataAsset artifact 00000000-0000-0000-0000-000000000000",
+                          udid=udid, serial_number=serial_number)
+
+    def test_declarative_management_data_asset_does_not_exist(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        bpa, artifact, (artifact_version,) = force_blueprint_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        session.enrolled_device.blueprint = bpa.blueprint
+        session.enrolled_device.save()
+        artifact_version_pk = artifact_version.pk
+        artifact_version.data_asset.delete()  # create issue
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/asset/zentral.data-asset.{artifact.pk}"
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, f"DataAsset for artifact version {artifact_version_pk} does not exist",
+                          udid=udid, serial_number=serial_number)
+
+    # declaration
+
+    def test_declarative_management_declaration(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        # add a DataAsset not directly included in the blueprint
+        data_asset_artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        # add a Declaration that references the DataAsset and is included in the blueprint
+        bpa, artifact, (artifact_version,) = force_blueprint_artifact(
+            artifact_type=Artifact.Type.CONFIGURATION,
+            decl_type="com.apple.configuration.services.configuration-files",
+            decl_payload={
+                "YOLO": "$ENROLLED_DEVICE.SERIAL_NUMBER",  # just for this test!
+                "ServiceType": "com.apple.sudo",
+                "DataAssetReference": f"ztl:{data_asset_artifact.pk}",
+            },
+        )
+        session.enrolled_device.blueprint = bpa.blueprint
+        session.enrolled_device.save()
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.declaration.{artifact.pk}"
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        declaration = json.loads(response.content)
+        self.assertEqual(
+            declaration,
+            {'Identifier': f'zentral.declaration.{artifact.pk}',
+             'Payload': {
+                 'YOLO': serial_number,  # variable substitution
+                 'ServiceType': 'com.apple.sudo',
+                 'DataAssetReference': f'zentral.data-asset.{data_asset_artifact.pk}',  # ref substitution
+             },
+             'ServerToken': str(artifact_version.pk),
+             'Type': 'com.apple.configuration.services.configuration-files'}
+        )
+
+    def test_declarative_management_declaration_invalid_identifier(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration/asset/zentral.declaration."
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, "Invalid Declaration Identifier",
+                          udid=udid, serial_number=serial_number)
+
+    def test_declarative_management_declaration_could_not_find(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration/asset/zentral.declaration.00000000-0000-0000-0000-000000000000"
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, "Could not find Declaration artifact 00000000-0000-0000-0000-000000000000",
+                          udid=udid, serial_number=serial_number)
+
+    def test_declarative_management_declaration_does_not_exist(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        bpa, artifact, (artifact_version,) = force_blueprint_artifact(artifact_type=Artifact.Type.CONFIGURATION)
+        session.enrolled_device.blueprint = bpa.blueprint
+        session.enrolled_device.save()
+        artifact_version_pk = artifact_version.pk
+        artifact_version.declaration.delete()  # create issue
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.declaration.{artifact.pk}"
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, f"Declaration for artifact version {artifact_version_pk} does not exist",
+                          udid=udid, serial_number=serial_number)
+
+    def test_declarative_management_declaration_unknown_type(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        # add a DataAsset not directly included in the blueprint
+        data_asset_artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        # add a Declaration that references the DataAsset and is included in the blueprint
+        bpa, artifact, (artifact_version,) = force_blueprint_artifact(
+            artifact_type=Artifact.Type.CONFIGURATION,
+            decl_type="com.apple.configuration.services.configuration-files",
+            decl_payload={
+                "YOLO": "$ENROLLED_DEVICE.SERIAL_NUMBER",  # just for this test!
+                "ServiceType": "com.apple.sudo",
+                "DataAssetReference": f"ztl:{data_asset_artifact.pk}",
+            },
+        )
+        session.enrolled_device.blueprint = bpa.blueprint
+        session.enrolled_device.save()
+        # create the issue
+        artifact_version.declaration.type = "com.apple.does_not_exist"
+        artifact_version.declaration.save()
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.declaration.{artifact.pk}"
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, "Unknown declaration type com.apple.does_not_exist",
+                          udid=udid, serial_number=serial_number)
+
+    # unknown declaration
+
+    def test_declarative_management_unknown_declaration(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        self._add_blueprint(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration/asset/zentral.yolo.fomo"
+        }
+        self._put(reverse("mdm_public:checkin"), payload, session)
+        self._assertAbort(post_event, "Unknown declaration",
+                          udid=udid, serial_number=serial_number)
 
     # checking - checkout
 
@@ -1046,6 +1361,42 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(mdm_payload["IdentityCertificateUUID"], scep_payload["PayloadUUID"])
         self.assertEqual(scep_payload["PayloadContent"]["Subject"][0][0],
                          ["CN", f"MDM$RE${resession.enrollment_secret.secret}"])
+
+    # data asset download view
+
+    def test_data_asset_download_bad_token(self, post_event):
+        response = self.client.get(reverse("mdm_public:data_asset_download_view", args=("bad_token",)))
+        self.assertEqual(response.status_code, 400)
+
+    def test_data_asset_download_404(self, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        token = dump_data_asset_token(session, Target(session.enrolled_device), uuid.uuid4())
+        response = self.client.get(reverse("mdm_public:data_asset_download_view", args=(token,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_data_asset_download_view_device(self, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        bpa, _, (artifact_version,) = force_blueprint_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        session.enrolled_device.blueprint = bpa.blueprint
+        session.enrolled_device.save()
+        token = dump_data_asset_token(session, Target(session.enrolled_device), artifact_version.pk)
+        response = self.client.get(reverse("mdm_public:data_asset_download_view", args=(token,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['Content-Type'], "application/zip")
+        self.assertTrue(zipfile.is_zipfile(io.BytesIO(response.getvalue())))
+
+    def test_data_asset_download_view_user(self, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        bpa, _, (artifact_version,) = force_blueprint_artifact(artifact_type=Artifact.Type.DATA_ASSET,
+                                                               channel=Channel.USER)
+        session.enrolled_device.blueprint = bpa.blueprint
+        session.enrolled_device.save()
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        token = dump_data_asset_token(session, Target(session.enrolled_device, enrolled_user), artifact_version.pk)
+        response = self.client.get(reverse("mdm_public:data_asset_download_view", args=(token,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['Content-Type'], "application/zip")
+        self.assertTrue(zipfile.is_zipfile(io.BytesIO(response.getvalue())))
 
     # profile download view
 

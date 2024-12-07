@@ -11,6 +11,8 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "asset",
         "blueprint",
         "blueprintartifact",
+        "dataasset",
+        "declaration",
         "depdevice",
         "depenrollment",
         "depvirtualserver",

@@ -4,6 +4,8 @@
 
 #### MDM
 
+Support for custom DDM declarations.
+
 Support for DDM software updates, with automatic enforcement of the latest OS versions.
 
 Support for enforced software update to the latest OS versions during ADE.

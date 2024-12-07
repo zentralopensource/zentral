@@ -2,6 +2,8 @@ import datetime
 from functools import partial
 import hashlib
 import logging
+import mimetypes
+import os.path
 import plistlib
 import uuid
 from django.contrib.postgres.fields import ArrayField, DateRangeField
@@ -2221,12 +2223,14 @@ class ArtifactManager(models.Manager):
             ua_count=Count("artifactversion__userartifact"),
             dc_count=Count("artifactversion__devicecommand"),
             uc_count=Count("artifactversion__usercommand"),
+            ref_count=Count("declarationref"),
         ).filter(
             bpa_count=0,
             da_count=0,
             ua_count=0,
             dc_count=0,
             uc_count=0,
+            ref_count=0,
         )
 
 
@@ -2237,9 +2241,42 @@ class Artifact(models.Model):
         REMOVAL = "Removal"
 
     class Type(models.TextChoices):
+        ACTIVATION = "Activation"
+        ASSET = "Asset"
+        CONFIGURATION = "Configuration"
+        DATA_ASSET = "Data Asset"
         ENTERPRISE_APP = "Enterprise App"
+        MANUAL_CONFIGURATION = "Configuration (manual)"
         PROFILE = "Profile"
         STORE_APP = "Store App"
+
+        @property
+        def is_activation(self):
+            return self.value == self.ACTIVATION
+
+        @property
+        def is_asset(self):
+            return self.value in (self.ASSET, self.DATA_ASSET)
+
+        @property
+        def is_configuration(self):
+            return self.value in (self.CONFIGURATION, self.MANUAL_CONFIGURATION, self.PROFILE)
+
+        @property
+        def is_declaration(self):
+            return self.is_configuration or self.is_asset or self.is_activation
+
+        @property
+        def is_ddm_only(self):
+            return not self.value == self.PROFILE and self.is_declaration
+
+        @property
+        def is_raw_declaration(self):
+            return self.value in (self.ACTIVATION, self.ASSET, self.CONFIGURATION, self.MANUAL_CONFIGURATION)
+
+        @property
+        def can_be_linked_to_blueprint(self):
+            return not self.is_asset and not self.value == self.MANUAL_CONFIGURATION
 
     class ReinstallOnOSUpdate(models.TextChoices):
         NO = "No"
@@ -2283,6 +2320,9 @@ class Artifact(models.Model):
     def get_type(self):
         return self.Type(self.type)
 
+    def get_platforms(self):
+        return [Platform(p) for p in self.platforms]
+
     def get_channel(self):
         return Channel(self.channel)
 
@@ -2291,22 +2331,17 @@ class Artifact(models.Model):
         return self.get_type() in (self.Type.PROFILE, self.Type.STORE_APP)
 
     def blueprints(self):
-        return Blueprint.objects.filter(blueprintartifact__artifact=self)
+        # directly included
+        yield from Blueprint.objects.filter(
+            blueprintartifact__artifact=self
+        )
+        # referenced by a declaration
+        yield from Blueprint.objects.distinct().filter(
+            blueprintartifact__artifact__artifactversion__declaration__declarationref__artifact=self
+        )
 
     def can_be_deleted(self):
         return Artifact.objects.can_be_deleted().filter(pk=self.pk).count() == 1
-
-    @property
-    def is_enterprise_app(self):
-        return self.get_type() == self.Type.ENTERPRISE_APP
-
-    @property
-    def is_profile(self):
-        return self.get_type() == self.Type.PROFILE
-
-    @property
-    def is_store_app(self):
-        return self.get_type() == self.Type.STORE_APP
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": str(self.pk), "name": self.name}
@@ -2501,6 +2536,112 @@ class ArtifactVersionTag(FilteredBlueprintItemTag):
 
     class Meta:
         unique_together = (("artifact_version", "tag"),)
+
+
+class Declaration(models.Model):
+    artifact_version = models.OneToOneField(ArtifactVersion, related_name="declaration", on_delete=models.CASCADE)
+    type = models.TextField()
+    identifier = models.TextField(db_index=True)
+    server_token = models.TextField(unique=True)
+    payload = models.JSONField()
+
+    def __str__(self):
+        return self.identifier
+
+    def serialize_for_event(self):
+        d = self.artifact_version.serialize_for_event()
+        d.update({
+            "type": self.type,
+            "identifier": self.identifier,
+            "server_token": self.server_token,
+            "payload": self.payload,
+        })
+        return d
+
+    def delete(self, *args, **kwargs):
+        self.artifact_version.delete(*args, **kwargs)
+        super().delete(*args, **kwargs)
+
+    def get_export_filename(self):
+        slug = slugify(self.artifact_version.artifact.name)
+        return f"{slug}_{self.pk}_v{self.artifact_version.version}.json"
+
+    def get_full_dict(self):
+        return {
+            "Type": self.type,
+            "Identifier": self.identifier,
+            "ServerToken": self.server_token,
+            "Payload": self.payload
+        }
+
+
+class DeclarationRef(models.Model):
+    declaration = models.ForeignKey(Declaration, on_delete=models.CASCADE)
+    key = ArrayField(models.CharField(max_length=256, validators=[MinLengthValidator(1)]))
+    artifact = models.ForeignKey(Artifact, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = (("declaration", "key"),)
+
+
+def data_asset_path(instance, filename):
+    _, ext = os.path.splitext(filename)
+    return f"mdm/data_assets/{instance.artifact_version.artifact.pk}/{instance.artifact_version.pk}{ext}"
+
+
+# We override the default mimetype for the ".plist" extension.
+# Files can be stored in third party systems via django-storages. See:
+# https://github.com/jschneier/django-storages/blob/b79ea310201e7afd659fe47e2882fe59aae5b517/storages/backends/gcloud.py#L41  # NOQA
+# https://github.com/jschneier/django-storages/blob/b79ea310201e7afd659fe47e2882fe59aae5b517/storages/backends/s3.py#L630  # NOQA
+# This way, we make sure the correct mimetype is stored in the object metadata, and used in the Http response headers.
+PLIST_MIME_TYPE = "text/xml"
+mimetypes.add_type(PLIST_MIME_TYPE, ".plist")
+
+
+class DataAsset(models.Model):
+    class Type(models.TextChoices):
+        PLIST = "PLIST", _("PLIST (.plist)")
+        ZIP = "ZIP", _("ZIP archive (.zip)")
+
+    artifact_version = models.OneToOneField(ArtifactVersion, related_name="data_asset", on_delete=models.CASCADE)
+    type = models.CharField(max_length=256, choices=Type.choices)
+    file = models.FileField(upload_to=data_asset_path)
+    filename = models.TextField()
+    file_size = models.BigIntegerField(validators=[MinValueValidator(1)])
+    file_sha256 = models.CharField(max_length=64)
+
+    def __str__(self):
+        return self.filename
+
+    def serialize_for_event(self):
+        d = self.artifact_version.serialize_for_event()
+        d.update({
+            "type": self.type,
+            "filename": self.filename,
+            "file_size": self.file_size,
+            "file_sha256": self.file_sha256,
+        })
+        return d
+
+    def delete(self, *args, **kwargs):
+        self.artifact_version.delete(*args, **kwargs)
+        super().delete(*args, **kwargs)
+
+    def get_type(self):
+        return self.Type(self.type)
+
+    def get_content_type(self):
+        data_type = self.get_type()
+        if data_type == self.Type.PLIST:
+            return PLIST_MIME_TYPE
+        elif data_type == self.Type.ZIP:
+            return "application/zip"
+        logger.error("Unknown content type for type %s", data_type)
+
+    def get_export_filename(self):
+        slug = slugify(self.artifact_version.artifact.name)
+        _, ext = os.path.splitext(self.filename)
+        return f"{slug}_{self.pk}_v{self.artifact_version.version}{ext}"
 
 
 class Profile(models.Model):

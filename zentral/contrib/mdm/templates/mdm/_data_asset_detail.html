@@ -1,0 +1,20 @@
+<tr>
+  <th colspan="2"><h4>Data Asset</h4></th>
+</tr>
+<tr>
+  <th>Type</th>
+  <td>{{ data_asset.get_type.label }}</td>
+</tr>
+</tr>
+<tr>
+  <th>Filename</th>
+  <td>{{ data_asset.filename }}</td>
+</tr>
+<tr>
+  <th>File size</th>
+  <td>{{ data_asset.file_size|filesizeformat }}</td>
+</tr>
+<tr>
+  <th>File sha256</th>
+  <td><code>{{ data_asset.file_sha256 }}</code></td>
+</tr>

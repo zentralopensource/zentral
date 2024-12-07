@@ -233,9 +233,39 @@ class ArtifactManagementViewsTestCase(TestCase):
         self.assertContains(response, f"Update {artifact.name}")
         self.assertContains(response, artifact.name)
 
+    def test_update_artifact_get_cannot_be_linked_to_blueprint(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.MANUAL_CONFIGURATION)
+        self._login("mdm.change_artifact")
+        response = self.client.get(reverse("mdm:update_artifact", args=(artifact.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_form.html")
+        form = response.context["form"]
+        self.assertNotIn("requires", form.fields)
+        self.assertNotIn("install_during_setup_assistant", form.fields)
+
+    def test_update_artifact_get_is_ddm_only(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
+        self._login("mdm.change_artifact")
+        response = self.client.get(reverse("mdm:update_artifact", args=(artifact.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_form.html")
+        form = response.context["form"]
+        self.assertIn("requires", form.fields)
+        self.assertNotIn("install_during_setup_assistant", form.fields)
+
+    def test_update_artifact_get_profile(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.PROFILE)
+        self._login("mdm.change_artifact")
+        response = self.client.get(reverse("mdm:update_artifact", args=(artifact.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_form.html")
+        form = response.context["form"]
+        self.assertIn("requires", form.fields)
+        self.assertIn("install_during_setup_assistant", form.fields)
+
     def test_update_artifact_post(self):
         required_artifact, _ = force_artifact()
-        blueprint_artifact, artifact, _ = force_blueprint_artifact()
+        blueprint_artifact, artifact, _ = force_blueprint_artifact(artifact_type=Artifact.Type.PROFILE)
         self.assertTrue(artifact.auto_update)
         self.assertEqual(artifact.platforms, [Platform.MACOS])
         self.assertEqual(artifact.requires.count(), 0)
@@ -270,7 +300,7 @@ class ArtifactManagementViewsTestCase(TestCase):
         self.assertEqual(artifact2.requires.count(), 1)
         self.assertEqual(artifact2.requires.first(), required_artifact)
         self.assertTrue(artifact2.install_during_setup_assistant)
-        self.assertFalse(artifact2.auto_update)
+        self.assertTrue(artifact2.auto_update)  # it is a profile, it cannot be set to not auto update
         self.assertEqual(artifact2.reinstall_interval, 90)
         self.assertEqual(Artifact.ReinstallOnOSUpdate(artifact2.reinstall_on_os_update),
                          Artifact.ReinstallOnOSUpdate.PATCH)
@@ -280,9 +310,9 @@ class ArtifactManagementViewsTestCase(TestCase):
         serialized_artifact = serialized_artifacts[str(artifact.pk)]
         self.assertEqual(serialized_artifact["requires"], [str(required_artifact.pk)])
         self.assertTrue(serialized_artifact["install_during_setup_assistant"])
-        self.assertFalse(serialized_artifact["auto_update"])
+        self.assertTrue(serialized_artifact["auto_update"])
 
-    def test_update_store_app_artifact_no_platforms_change(self):
+    def test_update_store_app_artifact_post_no_platforms_change(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.STORE_APP)
         self.assertEqual(artifact.platforms, [Platform.MACOS])
         self._login("mdm.change_artifact", "mdm.view_artifact")
@@ -302,6 +332,54 @@ class ArtifactManagementViewsTestCase(TestCase):
         self.assertEqual(artifact2.name, new_name)
         # cannot change the platforms on a store app
         self.assertEqual(set(artifact2.platforms), set([Platform.MACOS]))
+
+    def test_update_artifact_post_cannot_be_linked_to_blueprint(self):
+        required_artifact, _ = force_artifact()
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.MANUAL_CONFIGURATION)
+        artifact.requires.add(required_artifact)
+        artifact.install_during_setup_assistant = True
+        artifact.save()
+        self._login("mdm.change_artifact", "mdm.view_artifact")
+        new_name = get_random_string(12)
+        response = self.client.post(reverse("mdm:update_artifact", args=(artifact.pk,)),
+                                    {"name": new_name,
+                                     "platforms": artifact.platforms,
+                                     "install_during_setup_assistant": True,
+                                     "reinstall_interval": 0,
+                                     "reinstall_on_os_update": Artifact.ReinstallOnOSUpdate.NO.value},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_detail.html")
+        artifact2 = response.context["object"]
+        self.assertEqual(artifact2, artifact)
+        self.assertEqual(artifact2.name, new_name)
+        # cannot be linked to blueprint, so no requirements and cannot be installed during setup assistant
+        self.assertEqual(artifact2.requires.count(), 0)
+        self.assertFalse(artifact2.install_during_setup_assistant)
+
+    def test_update_artifact_post_ddm_only(self):
+        required_artifact, _ = force_artifact()
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
+        artifact.install_during_setup_assistant = True
+        artifact.save()
+        self._login("mdm.change_artifact", "mdm.view_artifact")
+        new_name = get_random_string(12)
+        response = self.client.post(reverse("mdm:update_artifact", args=(artifact.pk,)),
+                                    {"name": new_name,
+                                     "platforms": artifact.platforms,
+                                     "requires": [required_artifact.pk],
+                                     "install_during_setup_assistant": True,
+                                     "reinstall_interval": 0,
+                                     "reinstall_on_os_update": Artifact.ReinstallOnOSUpdate.NO.value},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_detail.html")
+        artifact2 = response.context["object"]
+        self.assertEqual(artifact2, artifact)
+        self.assertEqual(artifact2.name, new_name)
+        # cannot be linked to blueprint, so no requirements OK but cannot be installed during setup assistant
+        self.assertEqual(artifact2.requires.count(), 1)
+        self.assertFalse(artifact2.install_during_setup_assistant)
 
     # delete artifact
 

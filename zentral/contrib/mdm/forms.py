@@ -2,6 +2,9 @@ import base64
 import hashlib
 import json
 import logging
+import os.path
+import plistlib
+import zipfile
 from dateutil import parser
 from django import forms
 from django.db import IntegrityError, transaction
@@ -14,11 +17,13 @@ from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
 from .commands.set_recovery_lock import validate_recovery_password
 from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
+from .declarations import get_declaration_info
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .payloads import get_configuration_profile_info
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag, Channel,
+                     DataAsset, Declaration, DeclarationRef,
                      DEPDevice, DEPOrganization, DEPEnrollment, DEPToken, DEPVirtualServer,
                      EnrolledDevice, EnterpriseApp, Platform,
                      FileVaultConfig, RecoveryPasswordConfig, SCEPConfig,
@@ -29,6 +34,16 @@ from .skip_keys import skippable_setup_panes
 
 
 logger = logging.getLogger("zentral.contrib.mdm.forms")
+
+
+class PlatformsWidget(forms.CheckboxSelectMultiple):
+    def __init__(self, attrs=None, choices=()):
+        super().__init__(attrs, choices=Platform.choices)
+
+    def format_value(self, value):
+        if isinstance(value, str) and value:
+            value = [v.strip() for v in value.split(",")]
+        return super().format_value(value)
 
 
 class OTAEnrollmentForm(forms.ModelForm):
@@ -662,6 +677,240 @@ class UpgradeEnterpriseAppForm(BaseEnterpriseAppForm):
         return super().save()
 
 
+class BaseDeclarationForm(forms.ModelForm):
+    artifact_type = None  # see subclasses
+    source = forms.CharField(required=True, widget=forms.Textarea)
+
+    class Meta:
+        model = Declaration
+        fields = []
+
+    def get_channel(self):
+        raise NotImplementedError
+
+    def get_platforms(self):
+        raise NotImplementedError
+
+    def verify_type(self, declaration_type):
+        if self.artifact_type.is_activation:
+            type_prefix = "com.apple.activation."
+        elif self.artifact_type.is_asset:
+            type_prefix = "com.apple.asset."
+        elif self.artifact_type.is_configuration:
+            type_prefix = "com.apple.configuration."
+        else:
+            # should never happen
+            raise RuntimeError("Unsupported artifact type")
+        if not declaration_type.startswith(type_prefix):
+            raise forms.ValidationError(f"Invalid declaration Type for {self.artifact_type}")
+
+    def verify_identifier(self, identifier):
+        pass
+
+    def verify_server_token(self, server_token):
+        if Declaration.objects.filter(server_token=server_token).exists():
+            raise forms.ValidationError("A declaration with this ServerToken already exists")
+
+    def verify_payload(self, payload):
+        pass
+
+    def clean(self):
+        source = self.cleaned_data.get("source")
+        channel = self.get_channel()
+        platforms = self.get_platforms()
+        if source and channel and platforms:
+            try:
+                info = get_declaration_info(source, channel, platforms, ensure_server_token=True)
+            except ValueError as e:
+                self.add_error("source", str(e))
+            else:
+                try:
+                    self.verify_type(info["type"])
+                    self.verify_identifier(info["identifier"])
+                    self.verify_server_token(info["server_token"])
+                    self.verify_payload(info["payload"])
+                except forms.ValidationError as e:
+                    self.add_error("source", e)
+                else:
+                    self.cleaned_data["refs"] = info.pop("refs")
+                    for attr, val in info.items():
+                        setattr(self.instance, attr, val)
+
+    def save_refs(self):
+        for path, ref_artifact in self.cleaned_data["refs"].items():
+            DeclarationRef.objects.create(declaration=self.instance, key=path, artifact=ref_artifact)
+
+
+class CreateDeclarationForm(BaseDeclarationForm):
+    name = forms.CharField(min_length=1, max_length=256, required=True)
+    channel = forms.ChoiceField(choices=Channel.choices, required=True)
+    platforms = forms.MultipleChoiceField(choices=Platform.choices, widget=PlatformsWidget, required=True)
+
+    def __init__(self, *args, **kwargs):
+        self.artifact_type = kwargs.pop("artifact_type")
+        super().__init__(*args, **kwargs)
+
+    def get_channel(self):
+        channel = self.cleaned_data.get("channel")
+        if channel:
+            return Channel(channel)
+
+    def get_platforms(self):
+        platforms = self.cleaned_data.get("platforms")
+        if platforms:
+            return [Platform(p) for p in platforms]
+        return []
+
+    def clean_name(self):
+        name = self.cleaned_data.get("name")
+        if name and Artifact.objects.filter(name=name).exists():
+            raise forms.ValidationError("An artifact with this name already exists")
+        return name
+
+    def verify_identifier(self, identifier):
+        super().verify_identifier(identifier)
+        if Declaration.objects.filter(identifier=identifier).exists():
+            raise forms.ValidationError("A declaration with this Identifier already exists")
+
+    def save(self):
+        artifact = Artifact.objects.create(name=self.cleaned_data["name"],
+                                           type=self.artifact_type,
+                                           channel=self.cleaned_data["channel"],
+                                           platforms=self.cleaned_data["platforms"])
+        self.instance.artifact_version = ArtifactVersion.objects.create(
+            artifact=artifact,
+            version=1,
+            **{platform.lower(): True for platform in self.cleaned_data["platforms"]}
+        )
+        super().save()
+        self.save_refs()
+        return artifact
+
+
+class UpgradeDeclarationForm(BaseDeclarationForm):
+    def __init__(self, *args, **kwargs):
+        self.artifact = kwargs.pop("artifact")
+        self.artifact_type = self.artifact.get_type()
+        super().__init__(*args, **kwargs)
+
+    def get_channel(self):
+        return self.artifact.get_channel()
+
+    def get_platforms(self):
+        return self.artifact.get_platforms()
+
+    def verify_type(self, declaration_type):
+        super().verify_type(declaration_type)
+        if not declaration_type == self.instance.type:
+            raise forms.ValidationError("The new declaration Type is different from the existing one")
+
+    def verify_identifier(self, identifier):
+        super().verify_identifier(identifier)
+        if not identifier == self.instance.identifier:
+            raise forms.ValidationError("The new declaration Identifier is different from the existing one")
+
+    def verify_payload(self, payload):
+        super().verify_payload(payload)
+        if payload == self.instance.payload:
+            raise forms.ValidationError("The new declaration Payload is the same as the latest one")
+
+    def save(self, artifact_version):
+        self.instance.id = None  # force insert
+        self.instance.artifact_version = artifact_version
+        declaration = super().save()
+        self.save_refs()
+        return declaration
+
+
+class BaseDataAssetForm(forms.ModelForm):
+    file = forms.FileField(required=True)
+
+    class Meta:
+        model = DataAsset
+        fields = ["type", "file"]
+
+    def clean(self):
+        data_asset_type = self.cleaned_data.get("type")
+        file = self.cleaned_data.get("file")
+        if not data_asset_type or not file:
+            return
+        # verify type + file
+        _, ext = os.path.splitext(file.name)
+        data_asset_type = DataAsset.Type(data_asset_type)
+        if data_asset_type == DataAsset.Type.PLIST:
+            if not ext == ".plist":
+                self.add_error("file", "File name must have a .plist extension")
+                return
+            try:
+                plistlib.load(file, fmt=plistlib.FMT_XML)  # Only XML files because of the mimetype
+            except Exception:
+                self.add_error("file", "Invalid PLIST file")
+                return
+            else:
+                file.seek(0)
+        elif data_asset_type == DataAsset.Type.ZIP:
+            if not ext == ".zip":
+                self.add_error("file", "File name must have a .zip extension")
+                return
+            if not zipfile.is_zipfile(file):
+                self.add_error("file", "Invalid ZIP file")
+                return
+        # update instance
+        self.instance.filename = file.name
+        self.instance.file_size = file.size
+        # calculate hash
+        h = hashlib.sha256()
+        for chunk in file.chunks():
+            h.update(chunk)
+        self.cleaned_data["file_sha256"] = h.hexdigest()
+
+
+class UploadDataAssetForm(BaseDataAssetForm):
+    name = forms.CharField(min_length=1, max_length=256, required=True)
+    platforms = forms.MultipleChoiceField(choices=Platform.choices, widget=PlatformsWidget, required=True)
+
+    def clean_name(self):
+        name = self.cleaned_data.get("name")
+        if name and Artifact.objects.filter(name=name).exists():
+            raise forms.ValidationError("An artifact with the same name already exists.")
+        return name
+
+    def save(self):
+        artifact = Artifact.objects.create(name=self.cleaned_data["name"],
+                                           type=Artifact.Type.DATA_ASSET,
+                                           channel=Channel.DEVICE,
+                                           platforms=self.cleaned_data["platforms"])
+        self.instance.type = self.cleaned_data["type"]
+        self.instance.file_sha256 = self.cleaned_data["file_sha256"]
+        self.instance.artifact_version = ArtifactVersion.objects.create(
+            artifact=artifact,
+            version=1,
+            **{platform.lower(): True for platform in self.cleaned_data["platforms"]}
+        )
+        super().save()
+        return artifact
+
+
+class UpgradeDataAssetForm(BaseDataAssetForm):
+    def __init__(self, *args, **kwargs):
+        self.artifact = kwargs.pop("artifact")
+        super().__init__(*args, **kwargs)
+        self.fields["type"].disabled = True
+
+    def clean(self):
+        super().clean()
+        if self.cleaned_data:
+            if self.instance.file_sha256 == self.cleaned_data["file_sha256"]:
+                self.add_error("file", "This file is not different from the latest one.")
+
+    def save(self, artifact_version):
+        self.instance.id = None  # force insert
+        self.instance.type = self.cleaned_data["type"]
+        self.instance.file_sha256 = self.cleaned_data["file_sha256"]
+        self.instance.artifact_version = artifact_version
+        return super().save()
+
+
 class BaseProfileForm(forms.ModelForm):
     source_file = forms.FileField(required=True,
                                   help_text="configuration profile file (.mobileconfig)")
@@ -741,16 +990,6 @@ class UpgradeProfileForm(BaseProfileForm):
         return super().save()
 
 
-class PlatformsWidget(forms.CheckboxSelectMultiple):
-    def __init__(self, attrs=None, choices=()):
-        super().__init__(attrs, choices=Platform.choices)
-
-    def format_value(self, value):
-        if isinstance(value, str) and value:
-            value = [v.strip() for v in value.split(",")]
-        return super().format_value(value)
-
-
 class UpdateArtifactForm(forms.ModelForm):
     class Meta:
         model = Artifact
@@ -759,11 +998,28 @@ class UpdateArtifactForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance.type in (Artifact.Type.STORE_APP,):
+        self.artifact_type = self.instance.get_type()
+        if self.artifact_type in (Artifact.Type.STORE_APP,):
             del self.fields["platforms"]
-        self.fields["requires"].queryset = self.fields["requires"].queryset.exclude(pk=self.instance.pk)
+        if not self.artifact_type.can_be_linked_to_blueprint:
+            del self.fields["requires"]
+            del self.fields["install_during_setup_assistant"]
+        else:
+            self.fields["requires"].queryset = self.fields["requires"].queryset.exclude(pk=self.instance.pk)
+            if self.artifact_type.is_ddm_only:
+                del self.fields["install_during_setup_assistant"]
+        if self.artifact_type.is_declaration:
+            self.fields["auto_update"].disabled = True
 
     def save(self):
+        if not self.artifact_type.can_be_linked_to_blueprint:
+            self.instance.requires.clear()
+            self.instance.install_during_setup_assistant = False
+        else:
+            if self.artifact_type.is_ddm_only:
+                self.instance.install_during_setup_assistant = False
+        if self.artifact_type.is_declaration:
+            self.instance.auto_update = True
         instance = super().save()
         for blueprint in instance.blueprints():
             update_blueprint_serialized_artifacts(blueprint)

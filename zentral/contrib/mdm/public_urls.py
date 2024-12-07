@@ -30,6 +30,10 @@ urlpatterns = [
     path('device_commands/<uuid:uuid>/enterprise_app/',
          public_views.EnterpriseAppDownloadView.as_view(),
          name="enterprise_app_download"),
+    # DDM
+    path('data_assets/<str:token>/',
+         public_views.DataAssetDownloadView.as_view(),
+         name="data_asset_download_view"),
     path('profiles/<str:token>/',
          public_views.ProfileDownloadView.as_view(),
          name="profile_download_view"),
