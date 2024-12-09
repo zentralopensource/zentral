@@ -6,7 +6,7 @@ from zentral.contrib.inventory.models import (EnrollmentSecret, File, MachineSna
 from zentral.contrib.santa.events import (_commit_files, _create_bundle_binaries, _create_missing_bundles,
                                           _update_targets)
 from zentral.contrib.santa.models import (Ballot, Configuration, EnrolledMachine, Enrollment,
-                                          Rule, Target, TargetCounter,
+                                          Rule, Target, TargetCounter, TargetState,
                                           Vote, VotingGroup)
 from zentral.contrib.santa.utils import update_metabundles
 
@@ -206,6 +206,17 @@ def force_target_counter(target_type, blocked_count=0, collected_count=0, execut
     )
 
 
+# target state
+
+
+def force_target_state(configuration=None, target=None, state=None):
+    return TargetState.objects.create(
+        configuration=configuration or force_configuration(),
+        target=target or force_target(),
+        state=state or TargetState.State.UNTRUSTED,
+    )
+
+
 # rule
 
 
@@ -215,6 +226,10 @@ def force_rule(
     configuration=None,
     policy=Rule.Policy.BLOCKLIST,
     is_voting_rule=False,
+    primary_users=None,
+    serial_numbers=None,
+    excluded_primary_users=None,
+    excluded_serial_numbers=None,
 ):
     target = force_target(target_type, target_identifier)
     if configuration is None:
@@ -223,7 +238,11 @@ def force_rule(
         configuration=configuration,
         target=target,
         policy=policy,
-        is_voting_rule=is_voting_rule
+        is_voting_rule=is_voting_rule,
+        primary_users=primary_users or [],
+        serial_numbers=serial_numbers or [],
+        excluded_primary_users=excluded_primary_users or [],
+        excluded_serial_numbers=excluded_serial_numbers or [],
     )
 
 

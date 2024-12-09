@@ -2,7 +2,7 @@ import logging
 from django.db import connection
 from prometheus_client import Gauge
 from zentral.utils.prometheus import BasePrometheusMetricsView
-from .models import Configuration, Rule
+from .models import Configuration, Rule, TargetState
 
 
 logger = logging.getLogger("zentral.contrib.santa.metrics_views")
@@ -55,29 +55,43 @@ class MetricsView(BasePrometheusMetricsView):
 
     def add_rules_gauge(self):
         g = Gauge('zentral_santa_rules_total', 'Zentral Santa Rules',
-                  ['cfg_pk', 'ruleset', 'target_type', 'policy', 'voting'], registry=self.registry)
+                  ['cfg_pk', 'ruleset', 'target_type', 'policy', 'voting',
+                   'users', 'machines', 'excluded_users', 'excluded_machines'],
+                  registry=self.registry)
         query = (
-            "select r.configuration_id, s.name, t.type, r.policy, r.is_voting_rule, count(*) "
+            "select r.configuration_id cfg_pk, s.name ruleset, t.type target_type, r.policy, r.is_voting_rule,"
+            "cardinality(primary_users) > 0 users,"
+            "cardinality(serial_numbers) > 0 machines,"
+            "cardinality(excluded_primary_users) > 0 excluded_users,"
+            "cardinality(excluded_serial_numbers) > 0 excluded_machines,"
+            "count(*) "
             "from santa_rule as r "
             "left join santa_ruleset as s on (r.ruleset_id = s.id) "
             "join santa_target as t on (r.target_id = t.id) "
-            "group by r.configuration_id, s.name, t.type, r.policy, r.is_voting_rule"
+            "group by r.configuration_id, s.name, t.type, r.policy, r.is_voting_rule,"
+            "users, machines, excluded_users, excluded_machines"
         )
         with connection.cursor() as cursor:
             cursor.execute(query)
-            for cfg_pk, ruleset, target_type, policy, is_voting_rule, count in cursor.fetchall():
+            columns = [c.name for c in cursor.description]
+            for result in cursor.fetchall():
+                result_d = dict(zip(columns, result))
                 try:
-                    policy_label = Rule.Policy(policy).name
+                    policy_label = Rule.Policy(result_d["policy"]).name
                 except ValueError:
-                    logger.error("Unknown rule policy: %s", policy)
+                    logger.error("Unknown rule policy: %s", result_d["policy"])
                     continue
                 g.labels(
-                    cfg_pk=cfg_pk,
-                    ruleset=ruleset if ruleset else "_",
-                    target_type=target_type,
+                    cfg_pk=result_d["cfg_pk"],
+                    ruleset=result_d["ruleset"] if result_d["ruleset"] else "_",
+                    target_type=result_d["target_type"],
                     policy=policy_label,
-                    voting=str(is_voting_rule).lower(),
-                ).set(count)
+                    voting=str(result_d["is_voting_rule"]).lower(),
+                    users=str(result_d["users"]).lower(),
+                    machines=str(result_d["machines"]).lower(),
+                    excluded_users=str(result_d["excluded_users"]).lower(),
+                    excluded_machines=str(result_d["excluded_machines"]).lower(),
+                ).set(result_d["count"])
 
     def add_targets_gauges(self):
         totals = ("total", "blocked_total", "executed_total", "collected_total", "rules_total")
@@ -87,7 +101,7 @@ class MetricsView(BasePrometheusMetricsView):
             gauges[total] = Gauge(
                 f'zentral_santa_targets_{total}',
                 f'Zentral Santa Targets {total_for_display}'.strip(),
-                ["cfg_pk", "type"],
+                ["cfg_pk", "type", "state"],
                 registry=self.registry,
             )
         query = (
@@ -95,15 +109,16 @@ class MetricsView(BasePrometheusMetricsView):
             "  select t.id target_id, t.type target_type, c.id cfg_pk"
             "  from santa_target t, santa_configuration c"
             ")"
-            "select tcp.target_type, tcp.cfg_pk, count(*) total, "
+            "select tcp.target_type, tcp.cfg_pk, coalesce(ts.state, 0) state, count(*) total, "
             "coalesce(sum(tc.blocked_count), 0) as blocked_total,"
             "coalesce(sum(tc.collected_count), 0) as collected_total,"
             "coalesce(sum(tc.executed_count), 0) as executed_total,"
             "sum(case when r.id is null then 0 else 1 end) rules_total "
             "from target_config_product tcp "
+            "left join santa_targetstate ts on (ts.target_id = tcp.target_id and ts.configuration_id = tcp.cfg_pk) "
             "left join santa_targetcounter tc on (tc.target_id = tcp.target_id and tc.configuration_id = tcp.cfg_pk) "
             "left join santa_rule r on (r.target_id = tcp.target_id and r.configuration_id = tcp.cfg_pk) "
-            "group by tcp.target_type, tcp.cfg_pk"
+            "group by tcp.target_type, tcp.cfg_pk, ts.state"
         )
         with connection.cursor() as cursor:
             cursor.execute(query)
@@ -111,9 +126,15 @@ class MetricsView(BasePrometheusMetricsView):
             for result in cursor.fetchall():
                 result_d = dict(zip(columns, result))
                 for total in totals:
+                    try:
+                        state = TargetState.State(result_d["state"]).name
+                    except ValueError:
+                        logger.error("Unknown target state: %s", result_d["state"])
+                        continue
                     gauges[total].labels(
                         cfg_pk=result_d["cfg_pk"],
-                        type=result_d["target_type"]
+                        type=result_d["target_type"],
+                        state=state,
                     ).set(result_d[total])
 
     def add_votes_gauge(self):
