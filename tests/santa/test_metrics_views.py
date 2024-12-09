@@ -4,7 +4,8 @@ from django.test import TestCase
 from prometheus_client.parser import text_string_to_metric_families
 from zentral.contrib.santa.models import Rule, Target
 from zentral.conf import settings
-from .utils import force_configuration, force_enrolled_machine, force_rule, force_target_counter
+from .utils import (force_ballot, force_configuration, force_enrolled_machine, force_realm_user, force_rule,
+                    force_target, force_target_counter)
 
 
 class SantaMetricsViewsTestCase(TestCase):
@@ -57,6 +58,7 @@ class SantaMetricsViewsTestCase(TestCase):
             [],  # 2nd call for the enrolled machines gauge
             [],  # 3rd call for the rules gauge
             [],  # 4th call for the targets gauge
+            [],  # 5th call for the votes gauge
         ]
         response = self._make_authenticated_request()
         family_count = 0
@@ -69,7 +71,7 @@ class SantaMetricsViewsTestCase(TestCase):
         self.assertEqual(family_count, 1)
         self.assertEqual(sample_count, 0)
         warning.assert_called_once_with("Unknown santa configuration mode: %s", 42)
-        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(4)])
+        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(5)])
 
     def test_enrolled_machines(self):
         em_m = force_enrolled_machine(lockdown=False, santa_version="2024.5")
@@ -78,20 +80,19 @@ class SantaMetricsViewsTestCase(TestCase):
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
             if family.name != "zentral_santa_enrolled_machines_total":
                 continue
-            else:
-                self.assertEqual(len(family.samples), 2)
-                for sample in family.samples:
-                    self.assertEqual(sample.value, 1)
-                    cfg_pk = int(sample.labels["cfg_pk"])
-                    if cfg_pk == em_m.enrollment.configuration.pk:
-                        self.assertEqual(sample.labels["mode"], "MONITOR")
-                        self.assertEqual(sample.labels["santa_version"], "2024.5")
-                    elif cfg_pk == em_l.enrollment.configuration.pk:
-                        self.assertEqual(sample.labels["mode"], "LOCKDOWN")
-                        self.assertEqual(sample.labels["santa_version"], "2024.6")
-                    else:
-                        raise AssertionError("Unknown enrolled machine")
-                break
+            self.assertEqual(len(family.samples), 2)
+            for sample in family.samples:
+                self.assertEqual(sample.value, 1)
+                cfg_pk = int(sample.labels["cfg_pk"])
+                if cfg_pk == em_m.enrollment.configuration.pk:
+                    self.assertEqual(sample.labels["mode"], "MONITOR")
+                    self.assertEqual(sample.labels["santa_version"], "2024.5")
+                elif cfg_pk == em_l.enrollment.configuration.pk:
+                    self.assertEqual(sample.labels["mode"], "LOCKDOWN")
+                    self.assertEqual(sample.labels["santa_version"], "2024.6")
+                else:
+                    raise AssertionError("Unknown enrolled machine")
+            break
         else:
             raise AssertionError("could not find expected metric family")
         self.assertEqual(response.status_code, 200)
@@ -105,6 +106,7 @@ class SantaMetricsViewsTestCase(TestCase):
             [(1, 42, "2024.5", 1)],  # 2nd call for the enrolled machines gauge
             [],  # 3rd call for the rules gauge
             [],  # 4th call for the targets gauge
+            [],  # 5th call for the votes gauge
         ]
         response = self._make_authenticated_request()
         family_count = 0
@@ -117,17 +119,17 @@ class SantaMetricsViewsTestCase(TestCase):
         self.assertEqual(family_count, 1)
         self.assertEqual(sample_count, 0)
         warning.assert_called_once_with("Unknown santa configuration mode: %s", 42)
-        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(4)])
+        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(5)])
 
     def test_rules(self):
         rules = {}
-        for target_type, policy in (
-            (Target.Type.BINARY, Rule.Policy.ALLOWLIST),
-            (Target.Type.BUNDLE, Rule.Policy.BLOCKLIST),
-            (Target.Type.CDHASH, Rule.Policy.ALLOWLIST_COMPILER),
-            (Target.Type.CERTIFICATE, Rule.Policy.SILENT_BLOCKLIST),
-            (Target.Type.TEAM_ID, Rule.Policy.ALLOWLIST),
-            (Target.Type.SIGNING_ID, Rule.Policy.BLOCKLIST),
+        for target_type, policy, is_voting_rule in (
+            (Target.Type.BINARY, Rule.Policy.ALLOWLIST, False),
+            (Target.Type.BUNDLE, Rule.Policy.BLOCKLIST, False),
+            (Target.Type.CDHASH, Rule.Policy.ALLOWLIST_COMPILER, False),
+            (Target.Type.CERTIFICATE, Rule.Policy.SILENT_BLOCKLIST, False),
+            (Target.Type.TEAM_ID, Rule.Policy.ALLOWLIST, True),
+            (Target.Type.SIGNING_ID, Rule.Policy.BLOCKLIST, False),
         ):
             rule = force_rule(target_type=target_type, policy=policy)
             rules[str(rule.configuration.pk)] = rule
@@ -135,15 +137,15 @@ class SantaMetricsViewsTestCase(TestCase):
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
             if family.name != "zentral_santa_rules_total":
                 continue
-            else:
-                self.assertEqual(len(family.samples), 6)
-                for sample in family.samples:
-                    self.assertEqual(sample.value, 1)
-                    self.assertEqual(sample.labels["ruleset"], "_")
-                    rule = rules[sample.labels["cfg_pk"]]
-                    self.assertEqual(sample.labels["policy"], rule.policy.name)
-                    self.assertEqual(sample.labels["target_type"], rule.target.type)
-                break
+            self.assertEqual(len(family.samples), 6)
+            for sample in family.samples:
+                self.assertEqual(sample.value, 1)
+                self.assertEqual(sample.labels["ruleset"], "_")
+                rule = rules[sample.labels["cfg_pk"]]
+                self.assertEqual(sample.labels["policy"], rule.policy.name)
+                self.assertEqual(sample.labels["target_type"], rule.target.type)
+                self.assertEqual(sample.labels["voting"], str(rule.is_voting_rule).lower())
+            break
         else:
             raise AssertionError("could not find expected metric family")
         self.assertEqual(response.status_code, 200)
@@ -155,8 +157,9 @@ class SantaMetricsViewsTestCase(TestCase):
         mocked_fetchall.side_effect = [
             [],  # 1st call for the configurations info
             [],  # 2nd call for the enrolled machines gauge
-            [(1, None, "BUNDLE", 42, 1)],  # 3rd call with unknown policy
+            [(1, None, "BUNDLE", 42, False, 1)],  # 3rd call with unknown policy
             [],  # 4th call for the targets gauge
+            [],  # 5th call for the votes gauge
         ]
         response = self._make_authenticated_request()
         family_count = 0
@@ -169,7 +172,7 @@ class SantaMetricsViewsTestCase(TestCase):
         self.assertEqual(family_count, 1)
         self.assertEqual(sample_count, 0)
         warning.assert_called_once_with("Unknown rule policy: %s", 42)
-        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(4)])
+        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(5)])
 
     def test_targets(self):
         target_counters = {}
@@ -221,3 +224,26 @@ class SantaMetricsViewsTestCase(TestCase):
             total_keys,
             {"total", "blocked_total", "collected_total", "executed_total", "rules_total"}
         )
+
+    def test_votes(self):
+        target = force_target()
+        realm, realm_user = force_realm_user()
+        configuration = force_configuration(voting_realm=realm)
+        force_ballot(target, realm_user, [(configuration, True, 1)])
+        response = self._make_authenticated_request()
+        self.assertEqual(response.status_code, 200)
+        for family in text_string_to_metric_families(response.content.decode("utf-8")):
+            if family.name != "zentral_santa_votes_total":
+                continue
+            self.assertEqual(len(family.samples), 1)
+            for sample in family.samples:
+                self.assertEqual(sample.value, 1)
+                self.assertEqual(sample.labels["cfg_pk"], str(configuration.pk))
+                self.assertEqual(sample.labels["event_target_type"], "_")
+                self.assertEqual(sample.labels["realm"], realm.name)
+                self.assertEqual(sample.labels["target_type"], target.type)
+                self.assertEqual(sample.labels["weight"], "1")
+                self.assertEqual(sample.labels["yes"], "true")
+            break
+        else:
+            raise AssertionError("could not find expected metric family")

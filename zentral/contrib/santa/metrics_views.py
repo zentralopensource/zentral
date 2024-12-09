@@ -55,17 +55,17 @@ class MetricsView(BasePrometheusMetricsView):
 
     def add_rules_gauge(self):
         g = Gauge('zentral_santa_rules_total', 'Zentral Santa Rules',
-                  ['cfg_pk', 'ruleset', 'target_type', 'policy'], registry=self.registry)
+                  ['cfg_pk', 'ruleset', 'target_type', 'policy', 'voting'], registry=self.registry)
         query = (
-            "select r.configuration_id, s.name, t.type, r.policy, count(*) "
+            "select r.configuration_id, s.name, t.type, r.policy, r.is_voting_rule, count(*) "
             "from santa_rule as r "
             "left join santa_ruleset as s on (r.ruleset_id = s.id) "
             "join santa_target as t on (r.target_id = t.id) "
-            "group by r.configuration_id, s.name, t.type, r.policy"
+            "group by r.configuration_id, s.name, t.type, r.policy, r.is_voting_rule"
         )
         with connection.cursor() as cursor:
             cursor.execute(query)
-            for cfg_pk, ruleset, target_type, policy, count in cursor.fetchall():
+            for cfg_pk, ruleset, target_type, policy, is_voting_rule, count in cursor.fetchall():
                 try:
                     policy_label = Rule.Policy(policy).name
                 except ValueError:
@@ -76,6 +76,7 @@ class MetricsView(BasePrometheusMetricsView):
                     ruleset=ruleset if ruleset else "_",
                     target_type=target_type,
                     policy=policy_label,
+                    voting=str(is_voting_rule).lower(),
                 ).set(count)
 
     def add_targets_gauges(self):
@@ -115,8 +116,34 @@ class MetricsView(BasePrometheusMetricsView):
                         type=result_d["target_type"]
                     ).set(result_d[total])
 
+    def add_votes_gauge(self):
+        g = Gauge('zentral_santa_votes_total', 'Zentral Santa Votes',
+                  ['cfg_pk', 'realm', 'yes', 'weight', 'target_type', 'event_target_type'], registry=self.registry)
+        query = (
+            "select v.configuration_id, r.name, v.was_yes_vote, v.weight, t.type, et.type, count(*) "
+            "from santa_vote v "
+            "join santa_ballot b on (v.ballot_id = b.id) "
+            "left join realms_realmuser u on (b.realm_user_id = u.uuid) "
+            "left join realms_realm r on (u.realm_id = r.uuid) "
+            "join santa_target t on (b.target_id = t.id) "
+            "left join santa_target et on (b.event_target_id = et.id) "
+            "group by v.configuration_id, r.name, v.was_yes_vote, v.weight, t.type, et.type;"
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            for cfg_pk, realm_name, was_yes_vote, weight, target_type, event_target_type, count in cursor.fetchall():
+                g.labels(
+                    cfg_pk=cfg_pk,
+                    realm=realm_name if realm_name else "_",
+                    yes=str(was_yes_vote).lower(),
+                    weight=weight,
+                    target_type=target_type,
+                    event_target_type=event_target_type if event_target_type else "_",
+                ).set(count)
+
     def populate_registry(self):
         self.add_configurations_info()
         self.add_enrolled_machines_gauge()
         self.add_rules_gauge()
         self.add_targets_gauges()
+        self.add_votes_gauge()
