@@ -274,6 +274,75 @@ To set up *Apps and Books* to work with Zentral, follow these steps:
 
 Content in ASM/ABM *Apps and Books > "AppName" > Manage Licenses* that is assigned or removed from the content token will sync and automatically populate. You will see the total apps and licenses available reflected in Zentral Cloud in the *MDM > Overview > Store apps* section.
 
+## Software Update Enforcement Configuration
+
+Zentral uses Declarative Device Management (DDM) to configure policies for enforcing software updates across Apple platforms (macOS, iOS, iPadOS, tvOS). These policies ensure that devices update to a specific OS version by a defined target date and time, while allowing users to install the update at a time convenient for them (prior to the enforcement date). 
+
+The configuration allows an optional *Details URL* setting, which is displayed in update messages on the device. This can provide a link to additional information (e.g., internal or public documentation) for end users.
+
+Zentral offers two variants for setting up a Software Update Enforcement configuration:
+
+- **One-Time**
+
+    This type is standard DDM to specify the **Target OS version** (e.g.,`15.2`), optionally the **Target build version** (e.g., `24C101`), and a **Target local date and time** (e.g., `2024-12-17 09:30:00`) as a single policy to enforce the update. When new OS versions become available that need to be enforced, this configuration requires manual updates.
+
+
+- **Latest**
+
+  This type automatically enforces the latest available OS version up to a **Maximum target OS version**. Zentral will use the *device identifier* and match information from the *Apple Software Lookup Service* to return the latest OS version (e.g., `16` to install all macOS 15 updates on your fleet, but to stop before installing 16). Set the **Delay in days** following the software release and a **Target local time** to configure the enforcement time (e.g.`7` for 7 days and `09:30:00` for 9:30 a.m.).
+  
+In both types, if a user does not install the update by the specified deadline, it is automatically enforced. Enforcement times are based on the device's local time zone, allowing a single configuration to work seamlessly across different regions.
+
+To read more about Apple's logic for enforcing software updates, refer to the [Apple Platform Deployment Guide](https://support.apple.com/en-gb/guide/deployment/depd30715cbb/1/web/1.0).
+
+
+### Configuring Software Update Enforcement
+
+To create and manage software update enforcement settings in Zentral, follow these steps:
+
+1. Navigate to *MDM > Overview > Software Update Enforcements*.
+2. Click *the + sign to create new software update enforcement*
+3. Complete the following options:
+   - *Name*: Enter a display name for the configuration.
+   - *Details URL*: (Optional) A URL link, to provide info for end users.
+   - *Platforms*: Select the platforms to which the enforcement applies (iOS, iPadOS, macOS, tvOS).
+   - *Tags*: Add tags to specify which devices or groups the configuration will apply to.
+   - *Type*: Choose the direction of how the enforcement schedule is set (as outlined above): 
+        - **One-Time**: Set the *Target OS version*, *Target build version* (optional), and *Target local date and time*.
+        - **Latest**: Set the *Maximum target OS version*, *Delay in days*, and *Target local time*.
+4. Click *Save* to store the configuration.
+
+### Linking a Software Update Enforcements Configuration to a Blueprint
+
+1. Navigate to *MDM > Overview > Blueprints*.
+2. Select or create a Blueprint.
+3. Select the desired Software Update Enforcements configuration from the *Software Update Enforcements* list.
+4. Click *Save* to link the configuration(s) to the Blueprint.
+
+### Enforcing Updates on Different Schedules
+
+Multiple configurations for enforcing software updates can be used within a single blueprint, each targeting specific device groups based on tags. This setup enables gradual rollouts with enforcement based on predefined schedules for different groups of tagged devices. When combined with *Latest Mode*, this approach eliminates the need for manual adjustments with each Apple OS release while maintaining the predefined schedules.
+
+### Using a Software Update Enforcement configuration in multiple Blueprints
+
+A single Software Update Enforcement configuration can be assigned to multiple blueprints, ensuring a consistent enforcement schedule and user experience across the devices and Apple platforms (macOS, iOS, iPadOS, tvOS).
+
+### Update a Software Update Enforcement Configuration
+
+To update an existing configuration:
+
+1. Navigate to *MDM > Overview > Software Update Enforcements*.
+2. In the list of configurations, click the *Edit button* right hand to the software update enforcement you want to modify.
+3. Make the necessary adjustments as described in the configuration steps above.
+4. Click *Save* to store the updated configuration.
+
+### Removing a Software Update Enforcement Configuration
+
+A Software Update Enforcement configuration can only be deleted if it is no longer linked to any blueprint. If the delete button is not visible, check the associated blueprints to ensure the configuration is no longer in use.
+
+1. Navigate to *MDM > Overview > Software Update Enforcements*.
+2. Click the configuration name to review its settings before deleting and use the *Delete button* next to the configuration. Alternatively, you see a delete button already in the list right to the name.
+
 ## HTTP API
 
 ### `/api/mdm/dep/devices/`
