@@ -107,20 +107,17 @@
     <td>
       {% if pkg_info.local %}
       {% if perms.monolith.change_pkginfo %}
-      <a class="btn btn-outline-secondary" href="{% url 'monolith:update_package' pkg_info.pk %}">
-        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-      </a>
+      {% url 'monolith:update_package' pkg_info.pk as url %}
+      {% button 'UPDATE' url "Edit PkgInfo" %}
       {% endif %}
       {% if perms.monolith.delete_pkginfo %}
-      <a class="btn btn-danger" href="{% url 'monolith:delete_pkg_info' pkg_info.pk %}">
-        <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
-      </a>
+      {% url 'monolith:delete_pkg_info' pkg_info.pk as url %}
+      {% button 'DELETE' url "Delete PkgInfo" %}
       {% endif %}
       {% else %}
       {% if perms.monolith.change_pkginfo and pkg_info.local %}
-      <a class="btn btn-outline-secondary" href="{% url 'monolith:update_pkg_info_catalog' pkg_info.pk %}">
-        <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-      </a>
+      {% url 'monolith:update_pkg_info_catalog' pkg_info.pk as url %}
+      {% button 'UPDATE' url "Change PkgInfo catalogs" %}
       {% endif %}
       {% endif %}
     </td>
