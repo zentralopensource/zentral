@@ -24,7 +24,7 @@
         {% if object.archived_at %}
         <tr>
             <th class="border-0 p-0 pe-3 text-secondary">Archived at</th>
-            <td class="border-0 p-0 text-secondary">{{ object.archived_at|default:"-" }}</td>
+            <td class="border-0 p-0 text-secondary">{{ object.archived_at|date:'r' }}</td>
         </tr>
         {% endif %}
     </tbody></table>
