@@ -257,7 +257,7 @@ class BaseRepository:
         # archive old catalogs
         for c in (Catalog.objects.annotate(pkginfo_count=Count("pkginfo",
                                                                filter=Q(pkginfo__archived_at__isnull=True)))
-                                 .filter(archived_at__isnull=True, pkginfo_count=0)
+                                 .filter(repository=self.repository, archived_at__isnull=True, pkginfo_count=0)
                                  .exclude(pk__in=found_catalog_pks)):
             self._archive_catalog(c, audit_callback)
         # update repository
