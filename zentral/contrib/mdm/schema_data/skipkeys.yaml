@@ -103,6 +103,19 @@ payloadkeys:
   presence: optional
   content: The key to skip biometric setup. This key is available in iOS 8.1 and later,
     and macOS 10.12.4 and later.
+- key: CameraButton
+  title: Skips Camera Control pane
+  supportedOS:
+    iOS:
+      introduced: '18.0'
+    macOS:
+      introduced: n/a
+    tvOS:
+      introduced: n/a
+  type: <string>
+  presence: optional
+  content: The key to skip the Camera Button pane. This key is available in iOS 18
+    and later.
 - key: DeviceToDeviceMigration
   title: Skip Device To Device Migration pane
   supportedOS:
@@ -149,7 +162,7 @@ payloadkeys:
   type: <string>
   presence: optional
   content: The key to skip the Lockdown Mode pane if an Apple Account is set up. Available
-    in macOS 14 and later, and iOS 17.1 and later.
+    in iOS 17.1 and later, and macOS 14 and later.
 - key: FileVault
   title: Skip configuration of FileVault
   supportedOS:
@@ -242,9 +255,9 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: If the key is included in the SkipSetup array the Keyboard pane will be
-    skipped. This pane isn't always skippable because it appears before the device
-    retrieves the Cloud Configuration from the server.
+  content: The key to skip the Keyboard pane. This pane isn't always skippable because
+    it appears before the device retrieves the Cloud Configuration from the server.
+    This key is available in iOS 13 and later.
 - key: Location
   title: Disables Location Services
   supportedOS:
@@ -422,9 +435,9 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: If the key is included in the SkipSetup array the Dictation pane will be
-    skipped. This pane isn't always skippable because it appears before the device
-    retrieves the Cloud Configuration from the server.
+  content: The key to skip the Dictation pane. This pane isn't always skippable because
+    it appears before the device retrieves the Cloud Configuration from the server.
+    This key is available in iOS 13 and later.
 - key: TapToSetup
   title: Skips simplified tap setup
   supportedOS:
@@ -539,6 +552,19 @@ payloadkeys:
   presence: optional
   content: The key to skip the screen for watch migration. This key is available in
     iOS 11 and later.
+- key: WebContentFiltering
+  title: Skip web content filtering pane
+  supportedOS:
+    iOS:
+      introduced: '18.2'
+    macOS:
+      introduced: n/a
+    tvOS:
+      introduced: n/a
+  type: <string>
+  presence: optional
+  content: If the key is included in the SkipSetup array the Web Content Filtering
+    pane will be skipped.
 - key: Welcome
   title: Skip Get Started pane
   supportedOS:
@@ -551,7 +577,7 @@ payloadkeys:
   type: <string>
   presence: optional
   content: The key to skip the Get Started pane. This key is available in iOS 13 and
-    later.
+    later and macOS 15 and later.
 - key: Zoom
   title: Skips setting zoom configuration
   supportedOS:
