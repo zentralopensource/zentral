@@ -343,6 +343,51 @@ A Software Update Enforcement configuration can only be deleted if it is no long
 1. Navigate to *MDM > Overview > Software Update Enforcements*.
 2. Click the configuration name to review its settings before deleting and use the *Delete button* next to the configuration. Alternatively, you see a delete button already in the list right to the name.
 
+## Recovery Password Configuration
+
+Recovery Password Configuration manages both **recoveryOS password protection** for Apple Silicon Macs and **firmware password protection** for Intel-based Macs via MDM. This prevents unauthorized access when Macs are started in recovery mode.
+
+There are two types of passwords, static passwords, which set the same password for all devices, and dynamic passwords, which generate unique passwords for each device. A password rotation can be set only for dynamic passwords, the password rotation interval can be set in days (a value of `0` disables rotation). For Intel-based Macs, there is an extra checkbox to enable firmware password rotation, as Zentral needs to send a reboot command via MDM to apply the new password.
+
+### Configuring a Recovery Password
+
+1. Navigate to *MDM > Recovery Password Configurations*.  
+2. Click the *Add* button to create a new configuration.  
+3. Complete the following options:  
+   - **Name**: Enter a display name for the configuration.  
+   - **Dynamic Password**: Enable to generate unique passwords for each device.  
+   - **Static Password**: Provide a static password for all devices *(only available when Dynamic Password is disabled)*.  
+   - **Rotation Interval (days)**: Set the interval for automatic password rotation. Enter `0` to disable rotation.  
+   - **Rotate Firmware Password**: Enable firmware password rotation *(only for Intel-based Macs; a reboot is required to apply the new password)*.  
+4. Click *Save* to apply the configuration.  
+
+### Linking a Recovery Password Configuration to a Blueprint
+
+1. Navigate to *MDM > Overview > Blueprints*.
+2. Select or create a Blueprint to edit.
+3. Add the recovery password configuration to the blueprint.
+4. Click *Save* to link the configuration to the Blueprint.
+
+A recovery password configuration can be applied to multiple blueprints.
+
+### Update a Recovery Password Configuration
+
+To update an existing configuration:
+
+1. Navigate to *MDM > Overview > Recovery Password Configurations*.  
+2. Locate the desired configuration and click the *Edit* button next to it.  
+3. Adjust the settings as needed (refer to the configuration steps for guidance).  
+4. Click *Save* to apply the changes.  
+
+### Remove a Recovery Password Configuration
+
+A Recovery Password Configuration can only be deleted if it is not linked to any Blueprint. If the *Delete* button is unavailable, check associated Blueprints and ensure the configuration is no longer in use.
+
+1. Navigate to *MDM > Overview > Recovery Password Configurations*.  
+2. Review the configuration by clicking its name.  
+3. Use the *Delete* button in the list view or on the configuration details page.  
+4. Confirm the deletion when prompted.  
+
 ## HTTP API
 
 ### `/api/mdm/dep/devices/`
