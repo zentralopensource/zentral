@@ -1,0 +1,60 @@
+title: Legacy Profile
+description: Specifies an MDMv1 profile to download and install
+payload:
+  declarationtype: com.apple.configuration.legacy
+  supportedOS:
+    iOS:
+      introduced: '15.0'
+      allowed-enrollments:
+      - supervised
+      - device
+      - user
+      - local
+      allowed-scopes:
+      - system
+      sharedipad:
+        allowed-scopes:
+        - system
+        - user
+    macOS:
+      introduced: '13.0'
+      allowed-enrollments:
+      - supervised
+      - user
+      - local
+      allowed-scopes:
+      - system
+      - user
+    tvOS:
+      introduced: '16.0'
+      allowed-enrollments:
+      - supervised
+      - device
+      - local
+      allowed-scopes:
+      - system
+    visionOS:
+      introduced: '1.1'
+      allowed-enrollments:
+      - supervised
+      - device
+      - user
+      - local
+      allowed-scopes:
+      - system
+    watchOS:
+      introduced: '10.0'
+      allowed-enrollments:
+      - supervised
+      - local
+      allowed-scopes:
+      - system
+  apply: multiple
+payloadkeys:
+- key: ProfileURL
+  title: Profile's URL.
+  type: <string>
+  presence: required
+  content: |-
+    The URL of the profile to download and install, which needs to start with 'https://', and must be hosted by the MDM server.
+    If a user enrollment triggers this configuration, the system silently ignores any MDM 1 payloads in macOS where the User Enrollment Mode setting is 'forbidden'. In iOS and tvOS, the system rejects the entire profile.

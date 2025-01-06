@@ -1,9 +1,13 @@
 # Apple MDM schema data
 
-In this folder, we copy some of the files from the Apple GitHub repository that we use to automate some functionalities related to the MDM.
+Some of the folders and files from the [Apple device management GitHub repository](https://github.com/apple/device-management) are vendored in this folder. They are used to validate inputs and automate forms.
+
+To update them when there is a new release, use the [`update.sh`](./update.sh) script. The current git reference is written to [`reference.txt`](./reference.txt).
+
+## Declarations
+
+The definitions of the DDM declarations are used to validate the *activations* → *configurations* → *assets* references.
 
 ## SkipKeys
 
-We start with the SkipKeys that can be used to configure which panes to skip in the Setup Assistant.
-
-URL: https://github.com/apple/device-management/blob/1fa842739c8f19db5b62f3ac6aed261cc378e5b8/other/skipkeys.yaml
+The ADE profile skipkeys options are loaded from the [`skipkeys.yaml`](./other/skipkeys.yaml) file.

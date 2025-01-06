@@ -1,0 +1,96 @@
+title: Security:Identity
+description: Use this configuration to install an identity on the device.
+payload:
+  declarationtype: com.apple.configuration.security.identity
+  supportedOS:
+    iOS:
+      introduced: '17.0'
+      allowed-enrollments:
+      - supervised
+      - device
+      - user
+      - local
+      allowed-scopes:
+      - system
+      sharedipad:
+        allowed-scopes:
+        - system
+        - user
+    macOS:
+      introduced: '14.0'
+      allowed-enrollments:
+      - supervised
+      - user
+      - local
+      allowed-scopes:
+      - system
+      - user
+    tvOS:
+      introduced: '17.0'
+      allowed-enrollments:
+      - supervised
+      - device
+      - local
+      allowed-scopes:
+      - system
+    visionOS:
+      introduced: '1.1'
+      allowed-enrollments:
+      - supervised
+      - device
+      - user
+      - local
+      allowed-scopes:
+      - system
+    watchOS:
+      introduced: '10.0'
+      allowed-enrollments:
+      - supervised
+      - local
+      allowed-scopes:
+      - system
+  apply: multiple
+payloadkeys:
+- key: CredentialAssetReference
+  title: Credential asset reference
+  type: <string>
+  assettypes:
+  - com.apple.asset.credential.identity
+  - com.apple.asset.credential.scep
+  - com.apple.asset.credential.acme
+  presence: required
+  content: The identifier of an asset declaration that contains the identity to install.
+- key: AllowAllAppsAccess
+  title: Allow all apps access
+  supportedOS:
+    iOS:
+      introduced: n/a
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: n/a
+    watchOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: false
+  content: If 'true', apps can access the private key.
+- key: KeyIsExtractable
+  title: Key is extractable
+  supportedOS:
+    iOS:
+      introduced: n/a
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: n/a
+    watchOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  content: If 'true', the private key is extractable in the keychain.
+related-status-items:
+- status-items:
+  - security.certificate.list
+  note: Each configuration will have a corresponding status item.
