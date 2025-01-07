@@ -60,15 +60,9 @@ RUN set -eux ; \
     cd .. ; rm -rf bomutils-*
 RUN set -eux ; \
     \
-    curl -fsSL https://github.com/mackyle/xar/archive/xar-1.6.1.tar.gz | tar xvz; \
+    curl -fsSL https://github.com/zentralopensource/xar/archive/zentral.tar.gz | tar xvz; \
     cd xar-*/xar ; \
-    sed -i 's/OpenSSL_add_all_ciphers/CRYPTO_new_ex_data/' configure.ac ; \
-    curl -L -o config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' ; \
     ./autogen.sh && ./configure --with-bzip2 ; \
-    if [ "$(arch)" = "aarch64" ] ; then \
-      sed -i 's/CPPFLAGS :=/CPPFLAGS := -fsigned-char/' Makefile ; \
-      sed -i 's/CFLAGS :=/CFLAGS := -fsigned-char/' Makefile ; \
-    fi ; \
     make ; make install ; \
     cd ../.. ; rm -rf xar-*
 
