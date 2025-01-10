@@ -451,6 +451,174 @@ class OsqueryAPIViewsTestCase(TestCase):
                         'removed': False}}}}
         )
 
+    def test_config_disable_carver_true_str(self):
+        self.configuration.options = {"disable_carver": "true"}
+        self.configuration.save()
+        self.assertEqual(
+            self.configuration.get_all_flags(),
+            {'config_plugin': 'tls',
+             'config_refresh': 1200,
+             'config_tls_endpoint': '/public/osquery/config',
+             'disable_carver': 'true',
+             'disable_distributed': False,
+             'disable_enrollment': False,
+             'distributed_interval': 60,
+             'distributed_plugin': 'tls',
+             'distributed_tls_read_endpoint': '/public/osquery/distributed/read',
+             'distributed_tls_write_endpoint': '/public/osquery/distributed/write',
+             'enroll_tls_endpoint': '/public/osquery/enroll',
+             'logger_plugin': 'tls',
+             'logger_tls_compress': True,
+             'logger_tls_endpoint': '/public/osquery/log',
+             'logger_tls_period': 60,
+             'pack_delimiter': '/',
+             'tls_hostname': 'zentral'}
+        )
+        em = self.force_enrolled_machine()
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        config = response.json()
+        # carve options are cli only flags
+        self.assertEqual(
+            config["options"],
+            {'disable_distributed': False,
+             'distributed_interval': 60,
+             'distributed_plugin': 'tls',
+             'distributed_tls_read_endpoint': '/public/osquery/distributed/read',
+             'distributed_tls_write_endpoint': '/public/osquery/distributed/write',
+             'logger_tls_compress': True,
+             'logger_tls_endpoint': '/public/osquery/log',
+             'logger_tls_period': 60,
+             'pack_delimiter': '/'}
+        )
+
+    def test_config_carver_disable_function_true_bool(self):
+        self.configuration.options = {"carver_disable_function": True}
+        self.configuration.save()
+        self.assertEqual(
+            self.configuration.get_all_flags(),
+            {'carver_disable_function': True,
+             'config_plugin': 'tls',
+             'config_refresh': 1200,
+             'config_tls_endpoint': '/public/osquery/config',
+             'disable_distributed': False,
+             'disable_enrollment': False,
+             'distributed_interval': 60,
+             'distributed_plugin': 'tls',
+             'distributed_tls_read_endpoint': '/public/osquery/distributed/read',
+             'distributed_tls_write_endpoint': '/public/osquery/distributed/write',
+             'enroll_tls_endpoint': '/public/osquery/enroll',
+             'logger_plugin': 'tls',
+             'logger_tls_compress': True,
+             'logger_tls_endpoint': '/public/osquery/log',
+             'logger_tls_period': 60,
+             'pack_delimiter': '/',
+             'tls_hostname': 'zentral'}
+        )
+        em = self.force_enrolled_machine()
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        config = response.json()
+        # carve options are cli only flags
+        self.assertEqual(
+            config["options"],
+            {'disable_distributed': False,
+             'distributed_interval': 60,
+             'distributed_plugin': 'tls',
+             'distributed_tls_read_endpoint': '/public/osquery/distributed/read',
+             'distributed_tls_write_endpoint': '/public/osquery/distributed/write',
+             'logger_tls_compress': True,
+             'logger_tls_endpoint': '/public/osquery/log',
+             'logger_tls_period': 60,
+             'pack_delimiter': '/'}
+        )
+
+    def test_config_disable_carver_false_bool(self):
+        self.configuration.options = {"disable_carver": False}
+        self.configuration.save()
+        self.assertEqual(
+            self.configuration.get_all_flags(),
+            {'carver_compression': False,
+             'carver_continue_endpoint': '/public/osquery/carver/continue',
+             'carver_disable_function': False,
+             'carver_start_endpoint': '/public/osquery/carver/start',
+             'config_plugin': 'tls',
+             'config_refresh': 1200,
+             'config_tls_endpoint': '/public/osquery/config',
+             'disable_carver': False,
+             'disable_distributed': False,
+             'disable_enrollment': False,
+             'distributed_interval': 60,
+             'distributed_plugin': 'tls',
+             'distributed_tls_read_endpoint': '/public/osquery/distributed/read',
+             'distributed_tls_write_endpoint': '/public/osquery/distributed/write',
+             'enroll_tls_endpoint': '/public/osquery/enroll',
+             'logger_plugin': 'tls',
+             'logger_tls_compress': True,
+             'logger_tls_endpoint': '/public/osquery/log',
+             'logger_tls_period': 60,
+             'pack_delimiter': '/',
+             'tls_hostname': 'zentral'}
+        )
+        em = self.force_enrolled_machine()
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        config = response.json()
+        # carve options are cli only flags
+        self.assertEqual(
+            config["options"],
+            {'disable_distributed': False,
+             'distributed_interval': 60,
+             'distributed_plugin': 'tls',
+             'distributed_tls_read_endpoint': '/public/osquery/distributed/read',
+             'distributed_tls_write_endpoint': '/public/osquery/distributed/write',
+             'logger_tls_compress': True,
+             'logger_tls_endpoint': '/public/osquery/log',
+             'logger_tls_period': 60,
+             'pack_delimiter': '/'}
+        )
+
+    def test_config_disable_carver_false_str(self):
+        self.configuration.options = {"disable_carver": "FaLse"}
+        self.configuration.save()
+        self.assertEqual(
+            self.configuration.get_all_flags(),
+            {'carver_compression': False,
+             'carver_continue_endpoint': '/public/osquery/carver/continue',
+             'carver_disable_function': False,
+             'carver_start_endpoint': '/public/osquery/carver/start',
+             'config_plugin': 'tls',
+             'config_refresh': 1200,
+             'config_tls_endpoint': '/public/osquery/config',
+             'disable_carver': False,
+             'disable_distributed': False,
+             'disable_enrollment': False,
+             'distributed_interval': 60,
+             'distributed_plugin': 'tls',
+             'distributed_tls_read_endpoint': '/public/osquery/distributed/read',
+             'distributed_tls_write_endpoint': '/public/osquery/distributed/write',
+             'enroll_tls_endpoint': '/public/osquery/enroll',
+             'logger_plugin': 'tls',
+             'logger_tls_compress': True,
+             'logger_tls_endpoint': '/public/osquery/log',
+             'logger_tls_period': 60,
+             'pack_delimiter': '/',
+             'tls_hostname': 'zentral'}
+        )
+        em = self.force_enrolled_machine()
+        response = self.post_as_json("config", {"node_key": em.node_key})
+        config = response.json()
+        # carve options are cli only flags
+        self.assertEqual(
+            config["options"],
+            {'disable_distributed': False,
+             'distributed_interval': 60,
+             'distributed_plugin': 'tls',
+             'distributed_tls_read_endpoint': '/public/osquery/distributed/read',
+             'distributed_tls_write_endpoint': '/public/osquery/distributed/write',
+             'logger_tls_compress': True,
+             'logger_tls_endpoint': '/public/osquery/log',
+             'logger_tls_period': 60,
+             'pack_delimiter': '/'}
+        )
+
     def test_os_version_with_build_numbers_cleanup(self):
         tree = {}
         snapshot = self.get_default_inventory_query_snapshot("macos")

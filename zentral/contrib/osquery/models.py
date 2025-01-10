@@ -439,7 +439,19 @@ class Configuration(models.Model):
             "logger_tls_compress": True,
         }
         flags.update(self.options)
-        if not flags.get("disable_carver", True) or not flags.get("carver_disable_function", True):
+
+        def check_bool_flag(v):
+            if isinstance(v, bool):
+                return v
+            elif isinstance(v, str):
+                return v.upper() == "TRUE"
+            else:
+                return False
+
+        if (
+            not check_bool_flag(flags.get("disable_carver", True))
+            or not check_bool_flag(flags.get("carver_disable_function", True))
+        ):
             flags.update({
                 "carver_disable_function": False,
                 "disable_carver": False,
