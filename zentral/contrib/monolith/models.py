@@ -244,7 +244,7 @@ class PkgInfoCategoryManager(models.Manager):
 
 class PkgInfoCategory(models.Model):
     repository = models.ForeignKey(Repository, on_delete=models.CASCADE)
-    name = models.CharField(max_length=256, unique=True)
+    name = models.CharField(max_length=256)
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = PkgInfoCategoryManager()
@@ -424,7 +424,7 @@ class PkgInfoManager(models.Manager):
                 if isinstance(tag_shards, dict):
                     pi_opts["shards"]["tags"] = [
                         (seen_tags[tag_name], shard)
-                        for tag_name, shard in sorted(tag_shards.items(), key=lambda t:t[0].lower())
+                        for tag_name, shard in sorted(tag_shards.items(), key=lambda t: t[0].lower())
                         if tag_name in seen_tags
                     ]
         return name_c, info_c, pkg_name_list
@@ -455,10 +455,7 @@ class PkgInfo(models.Model):
 
     class Meta:
         ordering = ('name', 'version')
-        unique_together = (('name', 'version'),)
-
-    def get_key(self):
-        return (self.name.name, self.version)
+        unique_together = (('repository', 'name', 'version'),)
 
     def __str__(self):
         return "{} {}".format(self.name, self.version)

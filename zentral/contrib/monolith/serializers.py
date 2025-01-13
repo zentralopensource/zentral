@@ -7,10 +7,12 @@ from .conf import monolith_conf
 from .models import (Catalog, Condition, Enrollment, Manifest, ManifestCatalog, ManifestSubManifest,
                      ManifestEnrollmentPackage, PkgInfoName, Repository, RepositoryBackend,
                      SubManifest, SubManifestPkgInfo)
+from .repository_backends.azure import AzureRepositorySerializer
 from .repository_backends.s3 import S3RepositorySerializer
 
 
 class RepositorySerializer(serializers.ModelSerializer):
+    azure_kwargs = AzureRepositorySerializer(source="get_azure_kwargs", required=False)
     s3_kwargs = S3RepositorySerializer(source="get_s3_kwargs", required=False)
 
     class Meta:
@@ -19,6 +21,7 @@ class RepositorySerializer(serializers.ModelSerializer):
             "id",
             "provisioning_uid",
             "backend",
+            "azure_kwargs",
             "s3_kwargs",
             "name",
             "meta_business_unit",
@@ -41,7 +44,11 @@ class RepositorySerializer(serializers.ModelSerializer):
     def validate(self, data):
         data = super().validate(data)
         backend = data.get("backend")
-        if backend == RepositoryBackend.S3:
+        if backend == RepositoryBackend.AZURE:
+            data["backend_kwargs"] = data.pop("get_azure_kwargs")
+            if not data["backend_kwargs"]:
+                raise serializers.ValidationError({"azure_kwargs": "This field is required."})
+        elif backend == RepositoryBackend.S3:
             data["backend_kwargs"] = data.pop("get_s3_kwargs")
             if not data["backend_kwargs"]:
                 raise serializers.ValidationError({"s3_kwargs": "This field is required."})

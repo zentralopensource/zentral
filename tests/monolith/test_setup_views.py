@@ -1,9 +1,11 @@
 import copy
 from datetime import datetime
 from functools import reduce
+import hashlib
 from io import BytesIO
 import operator
 from unittest.mock import patch
+import uuid
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
@@ -16,6 +18,7 @@ from zentral.contrib.monolith.events import MonolithSyncCatalogsRequestEvent
 from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, EnrolledMachine,
                                              PkgInfo, PkgInfoName)
 from zentral.contrib.monolith.repository_backends import load_repository_backend
+from zentral.contrib.monolith.repository_backends.azure import AzureRepository
 from zentral.contrib.monolith.repository_backends.s3 import S3Repository
 from zentral.contrib.monolith.repository_backends.virtual import VirtualRepository
 from zentral.contrib.munki.models import ManagedInstall
@@ -220,6 +223,53 @@ class MonolithSetupViewsTestCase(TestCase):
             response.context["s3_form"], "cloudfront_privkey_pem",
             "This field is required when configuring Cloudfront."
         )
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_azure_repository(self, post_event, send_notification):
+        self._login("monolith.add_repository", "monolith.view_repository")
+        name = get_random_string(12)
+        storage_account = get_random_string(12)
+        container = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:create_repository"),
+                                        {"r-name": name,
+                                         "r-backend": "AZURE",
+                                         "azure-storage_account": storage_account,
+                                         "azure-container": container},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, name)
+        repository = response.context["object"]
+        self.assertEqual(repository.name, name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "monolith.repository",
+                 "pk": str(repository.pk),
+                 "new_value": {
+                     "pk": repository.pk,
+                     "name": name,
+                     "backend": "AZURE",
+                     "backend_kwargs": {"storage_account": storage_account,
+                                        "container": container},
+                     "created_at": repository.created_at,
+                     "updated_at": repository.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+        repository_backend = load_repository_backend(repository)
+        self.assertIsInstance(repository_backend, AzureRepository)
+        self.assertEqual(repository_backend._credential_kwargs, {})
 
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -521,6 +571,84 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(repository_backend.cloudfront_domain, "yada.cloudfront.net")
         self.assertEqual(repository_backend.cloudfront_key_id, "YADA")
         self.assertEqual(repository_backend.cloudfront_privkey_pem, CLOUDFRONT_PRIVKEY_PEM)
+        manifest.refresh_from_db()
+        self.assertEqual(manifest.version, 2)  # only one bump
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_azure_repository(self, post_event, send_notification):
+        repository = force_repository()
+        manifest = force_manifest(mbu=self.mbu)
+        self.assertEqual(manifest.version, 1)
+        # two catalogs, only one manifest version bump!
+        force_catalog(repository=repository, manifest=manifest)
+        force_catalog(repository=repository, manifest=manifest)
+        prev_value = repository.serialize_for_event()
+        new_name = get_random_string(12)
+        storage_account = get_random_string(12)
+        container = get_random_string(12)
+        tenant_id = str(uuid.uuid4())
+        client_id = str(uuid.uuid4())
+        client_secret = get_random_string(12)
+        self._login("monolith.change_repository", "monolith.view_repository")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:update_repository", args=(repository.pk,)),
+                                        {"r-name": new_name,
+                                         "r-meta_business_unit": self.mbu.pk,
+                                         "r-backend": "AZURE",
+                                         "azure-storage_account": storage_account,
+                                         "azure-container": container,
+                                         "azure-prefix": "prefix",
+                                         "azure-tenant_id": tenant_id,
+                                         "azure-client_id": client_id,
+                                         "azure-client_secret": client_secret},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/repository_detail.html")
+        self.assertContains(response, new_name)
+        repository = response.context["object"]
+        self.assertEqual(repository.name, new_name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.repository",
+                 "pk": str(repository.pk),
+                 "prev_value": prev_value,
+                 "new_value": {
+                     "pk": repository.pk,
+                     "name": new_name,
+                     "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
+                     "backend": "AZURE",
+                     "backend_kwargs": {
+                         "storage_account": storage_account,
+                         "container": container,
+                         "prefix": "prefix",
+                         "tenant_id": tenant_id,
+                         "client_id": client_id,
+                         "client_secret_hash": hashlib.sha256(client_secret.encode("utf-8")).hexdigest(),
+                     },
+                     "created_at": repository.created_at,
+                     "updated_at": repository.updated_at,
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+        send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+        repository_backend = load_repository_backend(repository)
+        self.assertEqual(repository_backend.name, new_name)
+        self.assertEqual(repository_backend.storage_account, storage_account)
+        self.assertEqual(repository_backend.container, container)
+        self.assertEqual(repository_backend.prefix, "prefix")
+        self.assertEqual(repository_backend._credential_kwargs,
+                         {"client_id": client_id,
+                          "tenant_id": tenant_id,
+                          "client_secret": client_secret})
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)  # only one bump
 

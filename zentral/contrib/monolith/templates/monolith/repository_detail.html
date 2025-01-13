@@ -70,6 +70,31 @@
           <dt>Type</dt>
           <dd>{{ object.get_backend_display }}</dd>
           {% with object.get_backend_kwargs as kwargs %}
+          {% if object.backend == "AZURE" %}
+          <dt>Storage account</dt>
+          <dd>{{ kwargs.storage_account }}</dd>
+          <dt>Container</dt>
+          <dd>{{ kwargs.container }}</dd>
+          {% if kwargs.prefix %}
+          <dt>Prefix</dt>
+          <dd>{{ kwargs.prefix }}</dd>
+          {% endif %}
+          {% if kwargs.client_id %}
+          <dt>Client ID</dt>
+          <dd><code>{{ kwargs.client_id }}</code></dd>
+          {% endif %}
+          {% if kwargs.tenant_id %}
+          <dt>Tenant ID</dt>
+          <dd><code>{{ kwargs.tenant_id }}</code></dd>
+          {% endif %}
+          {% if kwargs.client_secret %}
+          <dt>Client secret</dt>
+          <dd>
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ kwargs.client_secret }}</span>
+          </dd>
+          {% endif %}
+          {% endif %}
           {% if object.backend == "S3" %}
           <dt>Bucket</dt>
           <dd>{{ kwargs.bucket }}</dd>

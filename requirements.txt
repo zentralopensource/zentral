@@ -2,6 +2,7 @@
 
 asn1crypto                      # MDM, mTLS, SCEP
 azure-identity
+azure-storage-blob
 boto3                           # conf, monolith, events (kinesis, sns/sqs)
 celery<6
 django-celery-results==2.4.0

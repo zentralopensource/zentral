@@ -17,6 +17,9 @@
 
 <form method="post" class="update-form">{% csrf_token %}
   {{ form }}
+  <div class="backend" id="AZURE" style="display:none">
+    {{ azure_form }}
+  </div>
   <div class="backend" id="S3" style="display:none">
     {{ s3_form }}
   </div>

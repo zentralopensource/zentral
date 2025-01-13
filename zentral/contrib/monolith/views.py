@@ -39,6 +39,7 @@ from .models import (Catalog, CacheServer,
                      Repository,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestPkgInfo)
 from .repository_backends import load_repository_backend, RepositoryBackend
+from .repository_backends.azure import AzureRepositoryForm
 from .repository_backends.s3 import S3RepositoryForm
 from .terraform import iter_resources
 from .utils import test_monolith_object_inclusion, test_pkginfo_catalog_inclusion
@@ -113,6 +114,10 @@ class CreateRepositoryView(PermissionRequiredMixin, TemplateView):
         if not form:
             form = RepositoryForm(prefix="r")
         context["form"] = form
+        azure_form = kwargs.get("azure_form")
+        if not azure_form:
+            azure_form = AzureRepositoryForm(prefix="azure")
+        context["azure_form"] = azure_form
         s3_form = kwargs.get("s3_form")
         if not s3_form:
             s3_form = S3RepositoryForm(prefix="s3")
@@ -121,11 +126,14 @@ class CreateRepositoryView(PermissionRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         form = RepositoryForm(request.POST, prefix="r")
+        azure_form = AzureRepositoryForm(request.POST, prefix="azure")
         s3_form = S3RepositoryForm(request.POST, prefix="s3")
         if form.is_valid():
             backend = RepositoryBackend(form.cleaned_data["backend"])
             backend_form = None
-            if backend == RepositoryBackend.S3:
+            if backend == RepositoryBackend.AZURE:
+                backend_form = azure_form
+            elif backend == RepositoryBackend.S3:
                 backend_form = s3_form
             if backend_form is None or backend_form.is_valid():
                 repository = form.save(commit=False)
@@ -143,7 +151,7 @@ class CreateRepositoryView(PermissionRequiredMixin, TemplateView):
                 transaction.on_commit(post_event_and_notify)
                 return redirect(repository)
         return self.render_to_response(
-            self.get_context_data(form=form, s3_form=s3_form)
+            self.get_context_data(form=form, azure_form=azure_form, s3_form=s3_form)
         )
 
 
@@ -173,6 +181,17 @@ class UpdateRepositoryView(PermissionRequiredMixin, TemplateView):
         if not form:
             form = RepositoryForm(prefix="r", instance=self.repository)
         context["form"] = form
+        azure_form = kwargs.get("azure_form")
+        if not azure_form:
+            azure_form = AzureRepositoryForm(
+                prefix="azure",
+                initial=(
+                    self.repository.get_backend_kwargs()
+                    if self.backend == RepositoryBackend.AZURE
+                    else None
+                )
+            )
+        context["azure_form"] = azure_form
         s3_form = kwargs.get("s3_form")
         if not s3_form:
             s3_form = S3RepositoryForm(
@@ -193,6 +212,15 @@ class UpdateRepositoryView(PermissionRequiredMixin, TemplateView):
             prefix="r",
             instance=self.repository
         )
+        azure_form = AzureRepositoryForm(
+            request.POST,
+            prefix="azure",
+            initial=(
+                self.repository.get_backend_kwargs()
+                if self.backend == RepositoryBackend.AZURE
+                else None
+            )
+        )
         s3_form = S3RepositoryForm(
             request.POST,
             prefix="s3",
@@ -205,7 +233,9 @@ class UpdateRepositoryView(PermissionRequiredMixin, TemplateView):
         if form.is_valid():
             backend = RepositoryBackend(form.cleaned_data["backend"])
             backend_form = None
-            if backend == RepositoryBackend.S3:
+            if backend == RepositoryBackend.AZURE:
+                backend_form = azure_form
+            elif backend == RepositoryBackend.S3:
                 backend_form = s3_form
             if backend_form is None or backend_form.is_valid():
                 repository = form.save(commit=False)
@@ -226,7 +256,7 @@ class UpdateRepositoryView(PermissionRequiredMixin, TemplateView):
                 transaction.on_commit(post_event_and_notify)
                 return redirect(repository)
         return self.render_to_response(
-            self.get_context_data(form=form, s3_form=s3_form)
+            self.get_context_data(form=form, azure_form=azure_form, s3_form=s3_form)
         )
 
 
