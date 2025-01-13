@@ -68,6 +68,36 @@ Once you have a sub-manifest, add it to the manifest (from the manifest, click o
 
 Two important notes to remember is that you should not have the same package as a managed_install and managed_uninstall on the same 'product' key, just like you would see warnings if you add a product to a sub-manifest before it's available to all of the applicable catalogs. (You can use [Conditions](https://github.com/munki/munki/wiki/Conditional-Items) with the built-in-to-munki `catalog` NSPredicate logic to 'mute'/avoid those warnings.) Also, you cannot add a product as both a managed_update and optional_install in the same sub-manifest, it is recommended to use an additional, separate sub-manifest if that is required.
 
+## PkgInfo sharding
+
+With Zentral Monolith, it is possible to progressively distribute newer versions of packages. It is called *sharding*. Zentral supports an extra key in the PkgInfo `zentral_monolith`. Here is an example:
+
+```xml
+<key>zentral_monolith</key>
+<dict>
+    <key>excluded_tags</key>
+    <array>
+        <string>Server</string>
+    </array>
+    <key>shards</key>
+    <dict>
+        <key>modulo</key>
+        <integer>10</integer>
+        <key>default</key>
+        <integer>0</integer>
+        <key>tags</key>
+        <dict>
+            <key>Canary</key>
+            <integer>10</integer>
+        </dict>
+    </dict>
+</dict>
+```
+
+First Zentral checks the `excluded_tags`. If a machine has any one of the tags listed in this array, the PkgInfo will not be distributed to the machine. In this example, machines with the *Server* tag will not get this PkgInfo. Then, the `shards` dictionnary is used. `modulo` defines the total number of *shards*. In that example, we have `10` shards (defaults to `100`). The `default` number indicates the default number of shards for which the package is made available. In this example, it is `0` (defaults to `100`), so in that case, by default, no machines will get this PkgInfo. Under the `tags` key, shard values can be specified for different tags. They take precendence over the default value. In this example, machines with the *Canary* tag have a shard value of `10`, meaning that all machines with the *Canary* tag will get this PkgInfo – `10` out of `10` (see `modulo`). To make this PkgInfo available to only 20% of the machine with the *Canary* tag, we would have set the value to `2` – `2` out of `10`. If a machine has multiple tags, and different shard values are defined in the PkgInfo for these tags, it is sufficient that one machine shard value for one of the tags exceeds the threshold defined in the PkgInfo to make the PkgInfo available for this machine.
+
+**IMPORTANT** Make sure that the tags used in the PkgInfo exist in Zentral **before** the repository is synced.
+
 ## HTTP API
 
 ### Requests
