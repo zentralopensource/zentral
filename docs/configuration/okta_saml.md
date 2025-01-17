@@ -67,14 +67,8 @@ In the `General` tab of the app, update the SAML settings:
 |Audience URI (SP Entity ID)|Entity ID|
 |Default RelayState|Default RelayState (only if realm setup for IdP initiated login)|
 
-You can check if everything is working using the 🕶 button in the Zentral realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
+You can check if everything is working using the test button in the Zentral Realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
 
-## Optional: Group mappings
+## Role Base Access Control (RBAC)
 
-You can map some Okta claim/value pairs to Zentral groups. This allows you to manage the group memberships from Okta.
-
-In the Zentral realm detail page, click on the `Create` button under `Group mapping`. Pick a claim, a value, and a group.
-
-When users log in and their claim matches, they will be added to the group. If the claim does not match, they will be removed from the group.
-
-The mappings can be tested with the 🕶 button.
+See [Realm Group and Roles setup](/configuration/sso/#realm-groups) for more information.

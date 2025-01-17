@@ -70,13 +70,6 @@ In the Entra ID Enterprise app, update the SAML settings in the `Basic SAML Conf
 
 You can check that everything is working by clicking the 'Test' button (icon to the right of the realm name) on the Zentral realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
 
-## Optional: Group mappings
+## Role Base Access Control (RBAC)
 
-You can map Entra ID claim/value pairs to Zentral groups, see details [here](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/how-to-connect-fed-group-claims) 
-This allows you to manage the group memberships from Entra ID.
-
-In the Zentral realm detail page, click on the `Create` button under `Group mapping`. Pick a claim, a value, and a group. Please note that the claim for groups in the SAML claims returned can be a full-length URL, such as 'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups'. The corresponding value of a desired group is usually the EntraID `Object ID`, which is the UUID for the group.
-
-When users log in and their claim matches, they will be added to the group. If the claim does not match, they will be removed from the group.
-
-The mappings can be tested with the 'Test' button (icon to the right of the realm name).
+See [Realm Group and Roles setup](/configuration/sso/#realm-groups) for more information.
