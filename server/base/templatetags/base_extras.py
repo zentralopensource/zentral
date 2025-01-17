@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from importlib import import_module
+import json
 import logging
 import pprint
 from django import template
@@ -132,6 +133,14 @@ def pinned_menu(context):
 def pythonprettyprint(val):
     s = pprint.pformat(val)
     lexer = lexers.get_lexer_by_name('python')
+    formatter = HtmlFormatter()
+    return mark_safe(highlight(s, lexer, formatter))
+
+
+@register.filter()
+def jsonprettyprint(val):
+    s = json.dumps(val, indent=2)
+    lexer = lexers.get_lexer_by_name('json')
     formatter = HtmlFormatter()
     return mark_safe(highlight(s, lexer, formatter))
 
