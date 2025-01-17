@@ -1,4 +1,4 @@
-# Okta - SCIM integration
+# Okta - SCIM Setup
 
 This is a quick guide to help synchronize [Okta](https://www.okta.com/) users and groups with Zentral using [SCIM](https://developer.okta.com/docs/concepts/scim/).
 

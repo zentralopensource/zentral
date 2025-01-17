@@ -1,11 +1,6 @@
-# Microsoft Entra ID - SAML integration
-
-This is a quick guide to help integrate Zentral with [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/add-application-portal-setup-sso) using SAML for single sign-on.  
-  
-In Zentral, identity providers (IdP) are configured using realms. There are three kinds of realm: SAML, OIDC, and LDAP. In this case, we will use a SAML realm.
+# Microsoft Entra ID - SAML Setup
 
 We will start by setting up an Entra ID Enterprise Application with the Basic SAML Configuration. We will then configure a Zentral realm for this application. Finally, we will update the Entra ID application configuration.
-
 
 ## Create an Entra ID  application
 

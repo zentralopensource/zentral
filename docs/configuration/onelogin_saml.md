@@ -1,13 +1,8 @@
-# OneLogin - SAML integration
-
-This is a quick guide to help integrate [OneLogin](https://www.onelogin.com/) with Zentral.
-
-In Zentral, identity providers (IdP) are configured using realms. There are three kinds of realm: SAML, OIDC, and LDAP. In this case, we will use a SAML realm.
+# OneLogin - SAML Setup
 
 We will start by setting up an OneLogin application. We will then configure a Zentral realm for this application. Finally, we will update the OneLogin application configuration, and configure the Zentral mappings.
 
 ## Create a OneLogin application
-
 
 ### SAML application
 
