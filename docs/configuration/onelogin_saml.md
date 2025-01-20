@@ -73,7 +73,7 @@ Set the following fields in the `Parameters` tab of the OneLogin app:
 
 In Zentral, click on the `Update` button in the realm detail view, and upload the metadata file.
 
-You can check if everything is working using the test button in the Zentral Realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
+Check that everything works: click the 'Test' button (icon to the right of the realm name) on the Zentral Realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
 
 ## Role Base Access Control (RBAC)
 
