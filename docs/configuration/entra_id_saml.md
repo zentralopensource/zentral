@@ -16,7 +16,7 @@ Select the `Single Sign-On` option in the tiles or in the menu to start the setu
 
 #### General
 
-⚠️ The Zentral URLs for the SAML integration are only available after the realm has been saved. In order to be able to save the realm, we need the metadata from the Entra ID Enterprise App. This is a chicken-egg kind of problem. That's why we suggest first use temporary dummy values for some of the `required` fields in Entra ID initially and update them later.
+⚠️ You will only know the Zentral URLs for the SAML integration once the realm has been saved. To save the realm, you need the metadata from the Entra ID Enterprise App. This is a chicken-egg problem. We have to use dummy values for the fields first, and update them later.
 
 1. Set dummy values for the `Identifier (Entity ID)` and `Reply URL (Assertion Consumer Service URL)` required fields. Note that the URL must include `https://` even for dummy values. 
 2.  Keep the default settings for the `Attributes & Claims` section.
@@ -63,7 +63,7 @@ In the Entra ID Enterprise app, update the SAML settings in the `Basic SAML Conf
 | Reply URL (Assertion Consumer Service URL)      | Assertion Consumer Service URL                                   |
 
 
-You can check that everything is working by clicking the 'Test' button (icon to the right of the realm name) on the Zentral realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
+Check that everything works: click the 'Test' button (icon to the right of the realm name) on the Zentral Realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
 
 ## Role Base Access Control (RBAC)
 
