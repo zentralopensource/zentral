@@ -14,7 +14,7 @@ In the next view, pick an app name, a logo, …
 
 #### General
 
-⚠️ The Zentral URLs for the SAML integration are known only once the realm has been saved, and in order to be able to save the realm, we need the metadata from Okta. This is a chicken-egg kind of problem. That's why we have to first use dummy values for some of the fields, and update them later.
+⚠️ You will only know the Zentral URLs for the SAML integration once the realm has been saved. To save the realm, you need the metadata from Okta. This is a chicken-egg problem. We have to use dummy values for the fields first, and update them later.
 
 1. Set dummy values for `Single sign on URL`, `Audience URI (SP Entity ID)`, and `Default RelayState`
 2. Set `Application username` to `Okta username`
@@ -63,7 +63,7 @@ In the `General` tab of the app, update the SAML settings:
 |Audience URI (SP Entity ID)|Entity ID|
 |Default RelayState|Default RelayState (only if realm setup for IdP initiated login)|
 
-You can check if everything is working using the test button in the Zentral Realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
+Check that everything works: click the 'Test' button (icon to the right of the realm name) on the Zentral Realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
 
 ## Role Base Access Control (RBAC)
 
