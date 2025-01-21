@@ -2,71 +2,62 @@
 
 We will start by setting up a Google Workspace app for SAML-based SSO. We will then configure a Zentral realm for this application. Finally, we will update the Google Workspace application configuration.
 
-### Create the app
+## Create a Google Workspace custom SAML app
 
 In the Google Admin console, go to the menu `Apps > Web and mobile apps`, click `Add App > Add custom SAML app`.
 
-In the next view, enter the app name, description ..., and click next.
+In the next view, enter the app name, description ..., and click “Continue”.
 
 ### Download the Google Workspace IdP metadata
 
-From the Google Identity Provider details download the `GoogleIDPMetadata.xml` file. 
+Select Option 1: download the IdP metadata file and save it for later use. Click “Continue”.
 
-### Configure the SAML settings
+### Configure the Service provider details
 
-#### General
+⚠️ You will only know the Zentral URLs for the SAML integration once the realm has been saved. To save the realm, you need the metadata from Google Workspace. This is a chicken-egg problem. We have to use dummy values for the fields first, and update them later.
 
-⚠️ The Zentral URLs for the SAML integration are known only once the realm has been saved, and in order to be able to save the realm, we need the metadata from Google Workspace. This is a chicken-egg kind of problem. That's why we have to first use dummy values for some of the fields, and update them later.
+1. Set dummy values for `ACS URL`, `Entity ID` in the Service provider details (eg. https://1.2.3.4).
+2. Do not check signed response.
+3. Stick to the defaults for Name ID as displayed, with Name ID format `UNSPECIFIED`, and Name ID set to `Basic Information > Primary email.`
+4. Click “Continue”.
 
-1. Set dummy values for `ACS URL`, `Entity ID` in the Service provider details.  
-2. Do not check signed response.  
-3. Stick to the defaults for Name ID as displayed, with Name ID format `UNSPECIFIED`, and Name ID set to `Basic Information > Primary email`
+### Configure the Attributes
 
-#### Attribute Statements
-
-Use the attribute mappings provided below when configuring the Zentral realm with Google Workspace app for SAML-based SSO.
-
-Add the following mappings:
-
+Add the Attributes mappings below:
 
 | Google directory attributes | App attributes  |
 | :---- | :---- |
-| Primary Email | username |
-| Primary Email | email |
-| First Name | first\_name |
-| Last Name | last\_name |
+| Primary Email | **email** |
+| First Name | **first\_name** |
+| Last Name | **last\_name** |
 
-
-
+Click “Finish”.
 
 ## Create the Zentral realm
 
-In Zentral, go to `Setup > Realms`, click on `Create realm` and select `SAML realm`.
+1. In Zentral, go to `Platform settings > Realms (top right corner)`
+2. Click on the `+` icon to create a new Realm, select SAML Realm and set a name.
+3. Give Access:
+    * For Zentral admins, check “Enable for login”, and set “Login session expiry” (e.g. 3600)
+    * For the MDM Enrollment, leave “enable for login” unchecked. Optional: check “User Portal”, if active
+4. Use `email` (for the username), `email`, `first_name`, `last_name` (see [section above](#attribute-statements)) for the claims
+5. Leave `Full name claim` empty
+6. Upload the metadata file that you have just saved (see above)
+7. If you want to allow logins initiated by the IDP, tick the box
+8. Click save. You should see an overview of the Realm.
+9. ⚠️ Note the details for `Assertion Consumer Service URL` and  `Entity ID`.
 
-Fill up the form:
+## Update the Google Workspace custom SAML app
 
-- Pick a name  
-- Select `Enabled for login` if you want to use this realm as login realm  
-- Pick a login session expiry (can be left empty, see help text)  
-- Use `email`, `email`, `first_name`, `last_name` (see [section above](#attribute-statements)) for the claims  
-- Leave `Full name claim` empty  
-- Upload the metadata file that you have just saved (see above)  
-- If you want to allow logins initiated by the IDP, tick the box
+Return to the custom SAML app view in the Google Admin console. In the `Service provider details` block, update the SAML settings and save them.
 
-## Update the Google Workspace application
+| Google Workspace SAML | Zentral realm |
+| :---- | :---- |
+| ACS URL | Assertion Consumer Service URL |
+| Entity ID | Entity ID |
+| Start URL | Default RelayState (only if realm setup for IdP initiated login) |
 
-
-Now you have all the values to finish configuring the Google Workspace SAML application.
-
-In the `General` tab of the app, update the SAML settings:
-
-|Google Workspace SAML|Zentral realm|
-|---|---|
-|ACS URL|Assertion Consumer Service URL|
-|Entity ID|Entity ID|
-|Start URL|Default RelayState (only if realm setup for IdP initiated login)|
-
-Set up `User access` to turn on the SAML app and select a group or organisational unit to make SAML login available to selected users.
+⚠️ 	In the `User access` view, make sure `service status` is “ON for everyone” for the required Organizational Units. For more information about this, refer to the [Google docs](https://support.google.com/a/answer/6087519?hl=en#zippy=%2Cstep-turn-on-your-saml-app).
 
 Check that everything works: click the 'Test' button (icon to the right of the realm name) on the Zentral Realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
 
