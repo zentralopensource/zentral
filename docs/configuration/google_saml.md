@@ -40,7 +40,7 @@ Click “Finish”.
 3. Give Access:
     * For Zentral admins, check “Enable for login”, and set “Login session expiry” (e.g. 3600)
     * For the MDM Enrollment, leave “enable for login” unchecked. Optional: check “User Portal”, if active
-4. Use `email` (for the username), `email`, `first_name`, `last_name` (see [section above](#attribute-statements)) for the claims
+4. Use `email` (for the username), `email`, `first_name`, `last_name` (see [section above](#configure-the-attributes)) for the claims
 5. Leave `Full name claim` empty
 6. Upload the metadata file that you have just saved (see above)
 7. If you want to allow logins initiated by the IDP, tick the box
