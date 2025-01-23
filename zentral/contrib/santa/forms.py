@@ -1015,7 +1015,7 @@ class BallotSearchForm(forms.Form):
             "left join realms_realmuser u on (b.realm_user_id = u.uuid) "
             "left join santa_vote v on (v.ballot_id = b.id) "
             "left join santa_configuration c on (v.configuration_id = c.id) "
-            "left join santa_targetstate ts on (ts.target_id = t.id) "
+            "left join santa_targetstate ts on (ts.configuration_id = c.id and ts.target_id = t.id) "
             "left join inventory_file f on (f.sha_256 = et.identifier) "
             "left join inventory_source s on (f.source_id = s.id) "
             f"{wheres}"
