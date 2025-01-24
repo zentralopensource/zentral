@@ -933,10 +933,12 @@ class SantaBallotBoxTestCase(TestCase):
                            can_reset_target=True, voting_weight=100)
         ballot_box = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
         ballot_box.cast_default_votes(False, None)
+        ts = TargetState.objects.get(target=self.file_target, configuration=configuration)
         self.assertEqual(rules_qs.count(), 1)
         rule = rules_qs.first()
         self.assertEqual(rule.target, self.file_target)
         self.assertEqual(rule.policy, Rule.Policy.BLOCKLIST)
+        self.assertEqual(len(rule.primary_users), 0)
         self.assertEqual(votes_qs.count(), 1)
         vote = votes_qs.first()
         self.assertEqual(vote.weight, 100)
@@ -982,6 +984,39 @@ class SantaBallotBoxTestCase(TestCase):
         self.assertEqual(rules_qs.count(), 0)
         self.assertEqual(votes_qs.count(), 1)
         self.assertEqual(votes_qs.first(), vote)
+
+    def test_ballot_box_partially_allowlist_post_reset(self):
+        realm, realm_user = force_realm_user()
+        _, realm_user2 = force_realm_user(realm=realm)
+        configuration = force_configuration(
+            voting_realm=realm,
+            default_ballot_target_types=[Target.Type.BINARY],
+            default_voting_weight=1,
+            partially_allowlisted_threshold=2,
+        )
+        ballot_box = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
+        ballot_box.cast_default_votes(True, self.file_target)
+        ballot_box2 = BallotBox.for_realm_user(self.file_target, realm_user2, all_configurations=True)
+        ballot_box2.cast_default_votes(True, self.file_target)
+        rule_qs = configuration.rule_set.all()
+        self.assertEqual(rule_qs.count(), 1)
+        rule = rule_qs.first()
+        self.assertEqual(set(rule.primary_users), set(u.username for u in (realm_user, realm_user2)))
+        # simulate reset
+        ts = TargetState.objects.get(target=self.file_target, configuration=configuration)
+        ts.score = 0
+        ts.state = TargetState.State.UNTRUSTED
+        ts.reset_at = datetime.utcnow()
+        ts.save()
+        configuration.default_voting_weight = 3
+        configuration.save()
+        ballot_box3 = BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True)
+        ballot_box3.cast_default_votes(True, self.file_target)
+        rule_qs = configuration.rule_set.all()
+        self.assertEqual(rule_qs.count(), 1)
+        rule = rule_qs.first()
+        # only the user with a vote post reset
+        self.assertEqual(set(rule.primary_users), set(u.username for u in (realm_user,)))
 
     # update target states
 
