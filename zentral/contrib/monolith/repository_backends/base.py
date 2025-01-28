@@ -251,7 +251,7 @@ class BaseRepository:
         # archive unknown non-local pkg_infos
         for pkg_info in (PkgInfo.objects.prefetch_related("catalogs", "requires", "update_for")
                                         .select_related("category", "name")
-                                        .filter(archived_at__isnull=True)
+                                        .filter(repository=self.repository, archived_at__isnull=True)
                                         .exclude(Q(local=True) | Q(pk__in=found_pkg_info_pks))):
             self._archive_pkg_info(pkg_info, audit_callback)
         # archive old catalogs
