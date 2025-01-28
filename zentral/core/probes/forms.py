@@ -140,18 +140,22 @@ class MetadataFilterForm(forms.Form):
 
 class PayloadFilterItemForm(forms.Form):
     attribute = forms.CharField(
-        widget=forms.TextInput(attrs={'placeholder': 'Name of the payload attribute',
-                                      'size': '33%'}))
+        label="Payload attribute",
+        widget=forms.TextInput(attrs={'size': '40'}),
+    )
     operator = forms.ChoiceField(
         choices=PayloadFilter.operator_choices,
         initial=PayloadFilter.IN
     )
     values = CommaSeparatedQuotedStringField(
-        widget=forms.TextInput(attrs={'placeholder': 'Comma separated value list',
-                                      'size': '33%'}))
+        label="Comma separated list of values",
+        widget=forms.TextInput(attrs={'size': '50'}),
+    )
 
 
 class BasePayloadFilterFormSet(forms.BaseFormSet):
+    deletion_widget = forms.HiddenInput
+
     def get_serialized_filter(self):
         filter_l = []
         for item_cleaned_data in self.cleaned_data:

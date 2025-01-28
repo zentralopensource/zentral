@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load bootstrap %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -10,37 +9,21 @@
 </ol>
 
 <h2>{% if add_filter %}Add{% else %}Update{% endif %} {{ section }} filter</h2>
-<div class="item-form empty-itemform" style="display:none">
-  <div class="form-group">
-    {{ form.empty_form.attribute.label_tag }}
-    {{ form.empty_form.attribute|bootstrap_inline }}
-    {{ form.empty_form.operator|bootstrap_inline }}
+<div style="display:none">
+  <div class="item-form empty-itemform d-flex align-items-center gap-3">
+    {{ form.empty_form }}
+    <a href="#" class="btn btn-danger delete-filter-item mt-3">
+      <span class="bi bi-trash" aria-hidden="true"></span>
+    </a>
   </div>
-  <div class="form-group">
-    {{ form.empty_form.values.label_tag }}
-    {{ form.empty_form.values|bootstrap_inline }}
-  </div>
-  <input type="hidden" id="id_form-__prefix__-DELETE" name="form-__prefix__-DELETE">
-  <a href="#" class="btn btn-danger delete-filter-item">
-    <span class="bi bi-trash" aria-hidden="true"></span>
-  </a>
 </div>
 <form method="POST" class="form form-inline">{% csrf_token %}
   {{ form.management_form }}
   <div id="item-forms">
     {% for itemform in form %}
-    <div class="item-form">
-      <div class="form-group">
-        {{ itemform.attribute.label_tag }}
-        {{ itemform.attribute|bootstrap_inline }}
-        {{ itemform.operator|bootstrap_inline }}
-      </div>
-      <div class="form-group">
-        {{ itemform.values.label_tag }}
-        {{ itemform.values|bootstrap_inline }}
-      </div>
-      <input type="hidden" id="id_{{ itemform.prefix }}-DELETE" name="{{ itemform.prefix }}-DELETE">
-      <a href="#" class="btn btn-danger delete-filter-item">
+    <div class="item-form d-flex align-items-center gap-3">
+      {{ itemform }}
+      <a href="#" class="btn btn-danger delete-filter-item mt-3">
         <span class="bi bi-trash" aria-hidden="true"></span>
       </a>
     </div>
@@ -90,8 +73,9 @@
   }
 
   function delete_filter_item(btn) {
+    console.log("DELETE", btn);
     btn.prev().val(1);
-    btn.parent().hide();
+    btn.parent().hide().removeClass("d-flex");
     toggle_delete_buttons();
   }
   
