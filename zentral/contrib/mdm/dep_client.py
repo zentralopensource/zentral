@@ -62,9 +62,9 @@ class DEPClient(object):
     def from_dep_virtual_server(cls, dep_virtual_server, batch_request_limit=100):
         token = dep_virtual_server.token
         if not token:
-            raise ValueError("DEP virtual server has no token")
+            raise DEPClientError("DEP virtual server has no token")
         elif token.has_expired():
-            raise ValueError("DEP virtual server token has expired")
+            raise DEPClientError("DEP virtual server token has expired")
         else:
             return cls.from_dep_token(token)
 

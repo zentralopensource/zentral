@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime, timedelta
 from functools import reduce
 import operator
 from unittest.mock import Mock, patch
@@ -216,6 +217,54 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertFormError(response.context["dep_enrollment_form"],
                              "username_pattern",
                              "This field can only be used if the 'use realm user' option is ticked")
+
+    def test_create_dep_enrollment_no_token(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        display_name = get_random_string(12)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        dep_virtual_server.token = None
+        dep_virtual_server.save()
+        realm = force_realm()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-display_name": display_name,
+                                     "de-realm": realm.pk,
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "es-meta_business_unit": self.mbu.pk,
+                                     "de-is_supervised": "on"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["form"], None, "DEP virtual server has no token")
+
+    def test_create_dep_enrollment_token_expired(self):
+        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        name = get_random_string(64)
+        display_name = get_random_string(12)
+        push_certificate = force_push_certificate()
+        scep_config = force_scep_config()
+        dep_virtual_server = force_dep_virtual_server()
+        dep_virtual_server.token.access_token_expiry = datetime.utcnow() - timedelta(seconds=10)
+        dep_virtual_server.token.save()
+        realm = force_realm()
+        response = self.client.post(reverse("mdm:create_dep_enrollment"),
+                                    {"de-name": name,
+                                     "de-display_name": display_name,
+                                     "de-realm": realm.pk,
+                                     "de-scep_config": scep_config.pk,
+                                     "de-push_certificate": push_certificate.pk,
+                                     "de-virtual_server": dep_virtual_server.pk,
+                                     "es-meta_business_unit": self.mbu.pk,
+                                     "de-is_supervised": "on"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
+        self.assertFormError(response.context["form"], None, "DEP virtual server token has expired")
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_create_dep_enrollment_post(self, from_dep_virtual_server):
