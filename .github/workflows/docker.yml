@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         app_env: ["dev", "aws", "gcp"]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
