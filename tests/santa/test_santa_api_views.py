@@ -325,6 +325,18 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response["sync_type"], "clean")
 
+    def test_preflight_no_enrollment_no_rule_counts(self):
+        # no enrollment, no rule counts, no clean sync requested → sync type clean
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        for k in list(data.keys()):
+            if k.endswith("_rule_count"):
+                del data[k]
+        data["request_clean_sync"] = False
+        response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["sync_type"], "clean")
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_sync_not_ok_conf_without_severity_no_incident_update(self, post_event):
         # add one synced rule

@@ -137,6 +137,10 @@ class PreflightView(BaseSyncView):
                     return serial_num
         raise SuspiciousOperation("Missing or empty serial number")
 
+    def _iter_rule_count_keys(self):
+        for prefix in ("binary", "cdhash", "certificate", "compiler", "signingid", "transitive", "teamid"):
+            yield f"{prefix}_rule_count"
+
     def _get_enrolled_machine_defaults(self):
         serial_number = self._get_serial_number()
         defaults = {
@@ -146,8 +150,7 @@ class PreflightView(BaseSyncView):
             'santa_version': self.request_data['santa_version'],
         }
         # cleanup rule counts
-        for prefix in ("binary", "cdhash", "certificate", "compiler", "signingid", "transitive", "teamid"):
-            key = f"{prefix}_rule_count"
+        for key in self._iter_rule_count_keys():
             val = self.request_data.get(key)
             if isinstance(val, int):
                 if val > 2147483648:
@@ -296,7 +299,13 @@ class PreflightView(BaseSyncView):
         )
 
         # clean sync?
-        clean_sync = self.request_data.get("request_clean_sync") or self.enrollment_action is not None
+        clean_sync = (
+            self.request_data.get("request_clean_sync")
+            # enrollment
+            or self.enrollment_action is not None
+            # all rule count keys are missing
+            or all(k not in self.request_data for k in self._iter_rule_count_keys())
+        )
         if clean_sync:
             MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).delete()
             if comparable_santa_version < (2024, 1):
