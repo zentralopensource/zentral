@@ -1,6 +1,6 @@
 # Zentral
 
-![Tests](https://github.com/zentralopensource/zentral/workflows/Tests/badge.svg?branch=main)
+[![Tests](https://github.com/zentralopensource/zentral/actions/workflows/tests.yml/badge.svg)](https://github.com/zentralopensource/zentral/actions/workflows/tests.yml)
 [![Coverage Status](https://coveralls.io/repos/github/zentralopensource/zentral/badge.svg?branch=main)](https://coveralls.io/github/zentralopensource/zentral?branch=main)
 [![Documentation Status](https://readthedocs.org/projects/zentral/badge/?version=latest)](https://docs.zentral.io)
 
