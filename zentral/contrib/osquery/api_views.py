@@ -231,6 +231,7 @@ class PackView(APIView):
 
 
 class ExportDistributedQueryResults(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = ("osquery.view_distributedqueryresult",)
     permission_classes = [DjangoPermissionRequired]
 

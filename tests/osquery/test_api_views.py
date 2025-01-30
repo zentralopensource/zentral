@@ -2460,17 +2460,29 @@ class APIViewsTestCase(TestCase):
                              include_token=False)
         self.assertEqual(response.status_code, 401)
 
-    def test_export_distributed_query_results_403(self):
+    def test_export_distributed_query_results_token_403(self):
         dq = self._force_distributed_query()
         response = self.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)),
                              include_token=True)
         self.assertEqual(response.status_code, 403)
 
-    def test_export_distributed_query_results_ok(self):
+    def test_export_distributed_query_results_user_403(self):
+        dq = self._force_distributed_query()
+        self.login()
+        response = self.client.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_export_distributed_query_results_token_ok(self):
         dq = self._force_distributed_query()
         self.set_permissions("osquery.view_distributedqueryresult")
         response = self.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)),
                              include_token=True)
+        self.assertEqual(response.status_code, 201)
+
+    def test_export_distributed_query_results_user_ok(self):
+        dq = self._force_distributed_query()
+        self.login("osquery.view_distributedqueryresult")
+        response = self.client.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)))
         self.assertEqual(response.status_code, 201)
 
     def test_export_distributed_query_results_unknown_format(self):
