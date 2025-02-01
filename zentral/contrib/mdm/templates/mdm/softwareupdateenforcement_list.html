@@ -44,11 +44,11 @@
         <td class="text-end py-0">
             {% if perms.mdm.change_softwareupdateenforcement %}
                 {% url 'mdm:update_software_update_enforcement' software_update_enforcement.pk as url %}
-                {% button 'UPDATE' url "Edit Recovery Password Configuration" %}
+                {% button 'UPDATE' url "Edit software update enforcement" %}
             {% endif %}
             {% if perms.mdm.delete_softwareupdateenforcement and software_update_enforcement.can_be_deleted %}
                 {% url 'mdm:delete_software_update_enforcement' software_update_enforcement.pk as url %}
-                {% button 'DELETE' url "Delete Recovery Password Configuration" %}
+                {% button 'DELETE' url "Delete software update enforcement" %}
             {% endif %}
         </td>
         </tr>
