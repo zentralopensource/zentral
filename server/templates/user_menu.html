@@ -52,7 +52,7 @@
             <li><a class="dropdown-item" href="{% url 'realms:list' %}">Realms</a></li>
             {% endif %}
             {% if perms.realms.view_realmgroup %}
-            <li><a class="dropdown-item" href="{% url 'realms:groups' %}">Groups</a></li>
+            <li><a class="dropdown-item" href="{% url 'realms:groups' %}">Realm Groups</a></li>
             {% endif %}
             {% if perms.terraform.view_state %}
             <li><a class="dropdown-item" href="{% url 'terraform:index' %}">Terraform</a></li>
