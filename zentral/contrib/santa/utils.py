@@ -20,7 +20,7 @@ def build_santa_enrollment_configuration(enrollment):
         "SyncBaseURL": "{}/public/santa/sync/".format(settings["api"][base_url_key]),
         # See https://developer.apple.com/documentation/foundation/nsurlrequest#1776617
         # Authorization is reserved, so we use 'Zentral-Authorization'
-        # See also https://github.com/google/santa/blob/344a35aaf63c24a56f7a021ce18ecab090584da3/Source/common/SNTConfigurator.h#L418-L421  # NOQA
+        # See also https://github.com/northpolesec/santa/blob/344a35aaf63c24a56f7a021ce18ecab090584da3/Source/common/SNTConfigurator.h#L418-L421  # NOQA
         "SyncExtraHeaders": {"Zentral-Authorization": f"Bearer {enrollment.secret.secret}"},
     })
     realm = configuration.voting_realm
@@ -44,7 +44,7 @@ def build_configuration_plist(enrollment):
 def build_configuration_profile(enrollment):
     identifier = get_payload_identifier("santa_configuration")
     payload_content = {
-        "PayloadContent": {"com.google.santa": {"Forced": [
+        "PayloadContent": {"com.northpolesec.santa": {"Forced": [
             {"mcx_preference_settings": build_santa_enrollment_configuration(enrollment)}
         ]}},
         "PayloadEnabled": True,

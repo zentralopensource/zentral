@@ -1,6 +1,6 @@
 # Santa
 
-[Santa](https://santa.dev) is a binary authorization system for macOS. Zentral can act as a [sync server](https://santa.dev/introduction/syncing-overview.html) for Santa, to configure the rules, and collect the events.
+[Santa](https://northpole.dev) is a binary authorization system for macOS. Zentral can act as a [sync server](https://northpole.dev/introduction/syncing-overview.html) for Santa, to configure the rules, and collect the events.
 
 ## Zentral configuration
 
@@ -16,7 +16,7 @@ The Santa events have a `signing_chain` key that is an array of certificate obje
 
 ### Create a Santa agent configuration
 
-In Zentral, go to Setup > Santa configurations. Click on the [Create] button. The form mirrors the [Santa configuration keys](https://santa.dev/deployment/configuration.html) (some of them are omitted and will be set automatically by Zentral).
+In Zentral, go to Setup > Santa configurations. Click on the [Create] button. The form mirrors the [Santa configuration keys](https://northpole.dev/deployment/configuration.html) (some of them are omitted and will be set automatically by Zentral).
 
 **WARNING** be careful and do not configure Santa in lockdown mode unless you know what you are doing!!!
 
@@ -39,7 +39,7 @@ Enrollments can be restricted by machine serial numbers and UUIDs – all machin
 
 Save the enrollment form, you will be redirected to the configuration, and the new enrollment will be available. You can download two different versions of the enrollment:
 
- * a plist containing only the Santa specific configuration keys. This plist is can be uploaded to Jamf, to create a custom settings payload for the `com.google.santa` Preference Domain.
+ * a plist containing only the Santa specific configuration keys. This plist is can be uploaded to Jamf, to create a custom settings payload for the `com.northpolesec.santa` Preference Domain.
  * a configuration profile with a [ManagedPreferences](https://developer.apple.com/documentation/devicemanagement/managedpreferences) payload, that can be further customized or distributed as is.
 
 #### How it works
@@ -53,25 +53,25 @@ Each enrollment has a secret associated with it, and this secret is part of the 
 
 #### Main santa configuration
 
-This is the payload that is generated when creating an enrollment on a Zentral santa configuration (see previous section.) You can further customize this payload to add for example the `MachineOwner` [Santa configuration key](https://santa.dev/deployment/configuration.html) using [Jamf Payload Variables](https://docs.jamf.com/jamf-pro/administrator-guide/Computer_Configuration_Profiles.html).
+This is the payload that is generated when creating an enrollment on a Zentral santa configuration (see previous section.) You can further customize this payload to add for example the `MachineOwner` [Santa configuration key](https://northpole.dev/deployment/configuration.html) using [Jamf Payload Variables](https://docs.jamf.com/jamf-pro/administrator-guide/Computer_Configuration_Profiles.html).
 
 
 #### Privacy preference policy control
 
-Santa, the santa daemon, and the santa bundle service need access to all protected files, including system administration files. A [privacy preference policy control payload](https://developer.apple.com/documentation/devicemanagement/privacypreferencespolicycontrol) must be distributed to allow the *System Policy All Files* (`SystemPolicyAllFiles` key) [Service](https://support.apple.com/guide/mdm/privacy-preferences-policy-control-payload-mdm38df53c2a/1/web/1.0#mdm00b8cbaf5) for these three santa components, identified by their bundle IDs and code requirements.
+Santa, the santa daemon, and the santa bundle service need access to all protected files, including system administration files. A [privacy preference policy control payload](https://developer.apple.com/documentation/devicemanagement/privacypreferencespolicycontrol) must be distributed to allow the *System Policy All Files* (`SystemPolicyAllFiles` key) [Service](https://developer.apple.com/documentation/devicemanagement/privacypreferencespolicycontrol/services-data.dictionary) for these three santa components, identified by their bundle IDs and code requirements.
 
 |IdentifierType|Identifier|CodeRequirement|Allowed|
 |---|---|---|:---:|
-|bundleID|com.google.santa|identifier "com.google.santa" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = EQHXZ8M8AV|true|
-|bundleID|com.google.santa.daemon|identifier "com.google.santa.daemon" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = EQHXZ8M8AV|true|
-|bundleID|com.google.santa.bundleservice|identifier "com.google.santa.bundleservice" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = EQHXZ8M8AV|true|
+|bundleID|com.northpolesec.santa|identifier "com.northpolesec.santa" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = ZMCG7MLDV9|true|
+|bundleID|com.northpolesec.santa.daemon|identifier "com.northpolesec.santa.daemon" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = ZMCG7MLDV9|true|
+|bundleID|com.northpolesec.santa.bundleservice|identifier "com.northpolesec.santa.bundleservice" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = ZMCG7MLDV9|true|
 
 Code requirements can be validated using the following command:
 
 ```
 $ codesign -dr - \
   /Applications/Santa.app \
-  /Applications/Santa.app/Contents/Library/SystemExtensions/com.google.santa.daemon.systemextension/Contents/MacOS/com.google.santa.daemon \
+  /Applications/Santa.app/Contents/Library/SystemExtensions/com.northpolesec.santa.daemon.systemextension/Contents/MacOS/com.northpolesec.santa.daemon \
   /Applications/Santa.app/Contents/MacOS/santabundleservice
 ```
 
@@ -84,8 +84,8 @@ To listen for the [endpoint security](https://developer.apple.com/documentation/
 
 |Key|Team Identifier|Value|
 |---|---|---|
-|AllowedSystemExtensionTypes|EQHXZ8M8AV|EndpointSecurityExtension|
-|AllowedSystemExtensions|EQHXZ8M8AV|com.google.santa.daemon|
+|AllowedSystemExtensionTypes|ZMCG7MLDV9|EndpointSecurityExtension|
+|AllowedSystemExtensions|ZMCG7MLDV9|com.northpolesec.santa.daemon|
 
 The values can be validated using the following command:
 
@@ -106,7 +106,7 @@ The payload is an array of [NotificationSettingItem](https://developer.apple.com
 |---|---|
 |AlertType|1|
 |BadgesEnabled|true|
-|BundleIdentifier|com.google.santa|
+|BundleIdentifier|com.northpolesec.santa|
 |CriticalAlertEnabled|true|
 |NotificationsEnabled|true|
 |ShowInLockScreen|true|
@@ -134,7 +134,7 @@ On any Zentral configuration page (the one with the configuration information an
 
 You can filter the list using the search form at the top. From this list, you can edit or delete existing rules (if they are not part of a ruleset, see API section below), and add more rules. To add a rule, click on the [Add] button at the top, and select the kind of rule you want to add. We will start with a "Base rule".
 
-To get the necessary information about a binary or a certificate you want to block or allow, use the [`santactl fileinfo` command](https://santa.dev/details/santactl.html#fileinfo).
+To get the necessary information about a binary or a certificate you want to block or allow, use the [`santactl fileinfo` command](https://northpole.dev/binaries/santactl.html#fileinfo).
 
 Once you have set the rule type, the identifier and the policy, you can click on the [Save] button, and the rule will be added to the configuration for all the machines.
 
@@ -186,7 +186,7 @@ A full synchronization has 4 phases:
 
 ### Preflight
 
-The Santa agent sends some information about the system (os version, identifiers, …) and itself (version, number of rule for each rule types, …). Zentral responds with the updated [sync server provided configuration](https://santa.dev/deployment/configuration.html#sync-server-provided-configuration). Using this mechanism, some of the updated Zentral Santa configuration attributes will be applied without having to deploy new payloads. For example, it is possible to switch from Monitor to Lockdown mode, or to increase the full sync interval to 20min.
+The Santa agent sends some information about the system (os version, identifiers, …) and itself (version, number of rule for each rule types, …). Zentral responds with the updated [sync server provided configuration](https://northpole.dev/deployment/configuration.html#sync-server-provided-configuration). Using this mechanism, some of the updated Zentral Santa configuration attributes will be applied without having to deploy new payloads. For example, it is possible to switch from Monitor to Lockdown mode, or to increase the full sync interval to 20min.
 
 Zentral will also request a clean sync if the machine is new – never seen before or previonsly enrolled on a different configuration. Santa will delete all the existing rule in the local database during a clean sync.
 
@@ -536,7 +536,7 @@ $ curl -X DELETE \
 * method: POST
 * Content-Type: application/json
 
-This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://santa.dev/details/santactl.html#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to rules identifiers, and in the rule forms.
+This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://northpole.dev/binaries/santactl.html#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to rules identifiers, and in the rule forms.
 
 Example:
 
