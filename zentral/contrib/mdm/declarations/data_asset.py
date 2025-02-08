@@ -36,22 +36,25 @@ def build_data_asset(enrollment_session, target, declaration_identifier):
         artifact_pk = artifact_pk_from_identifier_and_model(declaration_identifier, DataAsset)
     except ValueError:
         raise DeclarationError('Invalid DataAsset Identifier')
-    data_asset_artifact_version = data_asset_artifact = None
-    for artifact, artifact_version in target.all_installed_or_to_install_serialized((Artifact.Type.DATA_ASSET,)):
+    da_artifact, da_artifact_version, da_retry_count = (None, None, 0)
+    for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
+        (Artifact.Type.DATA_ASSET,)
+    ):
         if artifact["pk"] == artifact_pk:
-            data_asset_artifact = artifact
-            data_asset_artifact_version = artifact_version
+            da_artifact = artifact
+            da_artifact_version = artifact_version
+            da_retry_count = retry_count
             break
-    if not data_asset_artifact_version:
+    if not da_artifact_version:
         raise DeclarationError(f'Could not find DataAsset artifact {artifact_pk}')
     try:
-        data_asset = DataAsset.objects.get(artifact_version__pk=data_asset_artifact_version["pk"])
+        data_asset = DataAsset.objects.get(artifact_version__pk=da_artifact_version["pk"])
     except DataAsset.DoesNotExist:
-        raise DeclarationError(f'DataAsset for artifact version {data_asset_artifact_version["pk"]} does not exist')
+        raise DeclarationError(f'DataAsset for artifact version {da_artifact_version["pk"]} does not exist')
     return {
         "Type": "com.apple.asset.data",
-        "Identifier": get_artifact_identifier(data_asset_artifact),
-        "ServerToken": get_artifact_version_server_token(target, data_asset_artifact, data_asset_artifact_version),
+        "Identifier": get_artifact_identifier(da_artifact),
+        "ServerToken": get_artifact_version_server_token(target, da_artifact, da_artifact_version, da_retry_count),
         "Payload": {
             "Reference": {
                 "DataURL": "https://{}{}".format(

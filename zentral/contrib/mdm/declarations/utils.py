@@ -21,6 +21,9 @@ __all__ = [
 logger = logging.getLogger("zentral.contrib.mdm.declarations.utils")
 
 
+MAX_DECLARATION_RETRIES = 3
+
+
 # declaration identifiers
 
 
@@ -70,8 +73,9 @@ def artifact_pk_from_identifier_and_model(identifier, model):
     raise ValueError("Invalid artifact identifier model")
 
 
-def get_artifact_version_server_token(target, artifact, artifact_version):
+def get_artifact_version_server_token(target, artifact, artifact_version, retry_count):
     elements = [artifact_version["pk"]]
+    # reinstall on OS updates
     reinstall_on_os_update = Artifact.ReinstallOnOSUpdate(artifact["reinstall_on_os_update"])
     if reinstall_on_os_update != Artifact.ReinstallOnOSUpdate.NO:
         slice_length = None
@@ -83,10 +87,14 @@ def get_artifact_version_server_token(target, artifact, artifact_version):
             slice_length = 3
         if slice_length:
             elements.append("ov-{}".format(".".join(str(i) for i in target.comparable_os_version[:slice_length])))
+    # reinstall interval
     reinstall_interval = artifact["reinstall_interval"]
     if reinstall_interval:
         install_num = int((datetime.utcnow() - target.target.created_at) / timedelta(seconds=reinstall_interval))
         elements.append(f"ri-{install_num}")
+    # retry count
+    if retry_count:
+        elements.append(f"rc-{retry_count}")
     return ".".join(elements)
 
 

@@ -33,11 +33,12 @@ class MDMDeclarationUtilsTestCase(TestCase):
             target,
             {"reinstall_on_os_update": str(Artifact.ReinstallOnOSUpdate.MAJOR),
              "reinstall_interval": 0},
-            {"pk": av_pk}
+            {"pk": av_pk},
+            0
         )
         self.assertEqual(server_token, f"{av_pk}.ov-15")
 
-    def test_get_artifact_version_server_token_reinstall_minor(self):
+    def test_get_artifact_version_server_token_reinstall_minor_one_retry_count(self):
         target = Mock()
         target.comparable_os_version = (15, 2, 1)
         av_pk = str(uuid.uuid4())
@@ -45,9 +46,10 @@ class MDMDeclarationUtilsTestCase(TestCase):
             target,
             {"reinstall_on_os_update": str(Artifact.ReinstallOnOSUpdate.MINOR),
              "reinstall_interval": 0},
-            {"pk": av_pk}
+            {"pk": av_pk},
+            1
         )
-        self.assertEqual(server_token, f"{av_pk}.ov-15.2")
+        self.assertEqual(server_token, f"{av_pk}.ov-15.2.rc-1")
 
     def test_get_artifact_version_server_token_reinstall_patch(self):
         target = Mock()
@@ -57,7 +59,8 @@ class MDMDeclarationUtilsTestCase(TestCase):
             target,
             {"reinstall_on_os_update": str(Artifact.ReinstallOnOSUpdate.PATCH),
              "reinstall_interval": 0},
-            {"pk": av_pk}
+            {"pk": av_pk},
+            0
         )
         self.assertEqual(server_token, f"{av_pk}.ov-15.2.1")
 
@@ -73,6 +76,7 @@ class MDMDeclarationUtilsTestCase(TestCase):
             target,
             {"reinstall_on_os_update": str(Artifact.ReinstallOnOSUpdate.NO),
              "reinstall_interval": 3600 * 24 * 90},
-            {"pk": av_pk}
+            {"pk": av_pk},
+            0
         )
         self.assertEqual(server_token, f"{av_pk}.ri-1")
