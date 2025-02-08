@@ -27,7 +27,8 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Blueprint, Bl
                                         Channel, DEPEnrollmentSession, DeviceCommand, EnrolledDevice,
                                         OTAEnrollmentSession, Platform,
                                         RealmGroupTagMapping,
-                                        Profile, UserEnrollmentSession, ReEnrollmentSession)
+                                        Profile, UserEnrollmentSession, ReEnrollmentSession,
+                                        TargetArtifact)
 from .utils import (force_artifact, force_blueprint_artifact,
                     force_dep_enrollment_session,
                     force_enrolled_user,
@@ -640,6 +641,37 @@ class MDMViewsTestCase(TestCase):
             {'Identifier': f'zentral.legacy-profile.{artifact.pk}',
              'Payload': {},
              'ServerToken': str(artifact_version.pk),
+             'Type': 'com.apple.configuration.legacy'}
+        )
+        token = url.removeprefix("https://zentral/public/mdm/profiles/")
+        token = token.removesuffix("/")
+        t_profile, t_session, t_user = load_legacy_profile_token(token)
+        self.assertEqual(t_profile, profile)
+        self.assertEqual(t_session, session)
+        self.assertIsNone(t_user)
+
+    def test_declarative_management_legacy_profile_declaration_device_retry(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        profile = self._force_blueprint_profile(session)
+        artifact_version = profile.artifact_version
+        artifact = artifact_version.artifact
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.legacy-profile.{artifact.pk}"
+        }
+        target = Target(session.enrolled_device)
+        target.update_target_artifact(artifact_version, TargetArtifact.Status.FAILED)  # force retry
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        declaration = json.loads(response.content)
+        url = declaration["Payload"].pop("ProfileURL")
+        self.assertEqual(
+            declaration,
+            {'Identifier': f'zentral.legacy-profile.{artifact.pk}',
+             'Payload': {},
+             'ServerToken': f"{artifact_version.pk}.rc-1",  # first retry
              'Type': 'com.apple.configuration.legacy'}
         )
         token = url.removeprefix("https://zentral/public/mdm/profiles/")

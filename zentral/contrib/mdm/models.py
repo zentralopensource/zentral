@@ -2831,6 +2831,7 @@ class TargetArtifact(models.Model):
         UNINSTALLED = "Uninstalled"
         FAILED = "Failed"
         REMOVAL_FAILED = "RemovalFailed"
+        FORCE_REINSTALL = "ForceReinstall"
 
         @property
         def present(self):
@@ -2850,6 +2851,9 @@ class TargetArtifact(models.Model):
     os_version_at_install_time = models.CharField(max_length=64, null=True)
     # to better identify reinstalls
     unique_install_identifier = models.CharField(max_length=256, default="")
+    install_count = models.IntegerField(default=0)
+    retry_count = models.IntegerField(default=0)
+    max_retry_count = models.IntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

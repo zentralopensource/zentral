@@ -67,7 +67,7 @@ class InstallEnterpriseApplication(Command):
             self.target.update_target_artifact(
                 self.artifact_version,
                 TargetArtifact.Status.ACKNOWLEDGED,
-                allow_reinstall=True,
+                unique_install_identifier=self.uuid,
             )
 
 

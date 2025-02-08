@@ -3,9 +3,13 @@ from datetime import datetime, timedelta
 from functools import cached_property, lru_cache
 import hashlib
 from itertools import chain
+import json
 import logging
 from graphlib import TopologicalSorter
-from django.db import transaction
+from django.db import connection, transaction
+from psycopg2 import sql
+import psycopg2.extras
+import uuid
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.text import shard as compute_shard
@@ -17,6 +21,7 @@ from .declarations import (build_specific_software_update_enforcement,
                            get_artifact_version_server_token,
                            get_software_update_enforcement_specific_identifier,
                            get_status_report_target_artifacts_info)
+from .events import post_target_artifact_update_events
 from .models import (Artifact, ArtifactVersion,
                      Blueprint, BlueprintArtifact,
                      Channel,
@@ -134,6 +139,8 @@ class Target:
 
     Used in the MDM views, mostly to be able to cache some of the data.
     """
+    # how often will the installation of a target artifact be retried
+    ARTIFACT_RETRIES = 2
 
     # constructors
 
@@ -327,7 +334,8 @@ class Target:
             current_artifact["versions"][artifact_version_pk] = (
                 target_artifact_status,
                 target_artifact.installed_at,
-                _prepare_os_version(target_artifact.os_version_at_install_time, (0, 0, 0))
+                _prepare_os_version(target_artifact.os_version_at_install_time, (0, 0, 0)),
+                target_artifact.retry_count,
             )
             if target_artifact_status.present:
                 current_artifact["present"] = True
@@ -341,9 +349,9 @@ class Target:
             # artifact never seen → install, not present
             return True
         # get artifact version status for the target, with a sane default value
-        av_status, av_installed_at, av_os_version = target_artifact["versions"].get(
+        av_status, av_installed_at, av_os_version, av_retry_count = target_artifact["versions"].get(
             artifact_version["pk"],
-            (TargetArtifact.Status.UNINSTALLED, None, (0, 0, 0))
+            (TargetArtifact.Status.UNINSTALLED, None, (0, 0, 0), 0)
         )
         if av_status.present:
             # reinstall on OS update
@@ -401,7 +409,9 @@ class Target:
 
     def all_to_install(self, included_types=None, only_first=False):
         artifact_version_to_install_pks = self._all_to_install_pks(included_types, only_first)
-        qs = ArtifactVersion.objects.select_related("artifact", "enterprise_app", "profile", "store_app")
+        qs = ArtifactVersion.objects.select_related(
+            "artifact", "declaration", "enterprise_app", "profile", "store_app"
+        )
         if artifact_version_to_install_pks:
             return qs.filter(pk__in=(t[1] for t in artifact_version_to_install_pks))
         else:
@@ -417,16 +427,21 @@ class Target:
             done_types = tuple()
 
         def all_installed_or_to_install_callback(artifact, artifact_version):
+            target_artifact = self._serialized_target_artifacts.get(artifact["pk"], {})
             if artifact["type"] not in included_types:
                 return (
                     False,
                     # if not the type, mark as done if present
-                    self._serialized_target_artifacts.get(artifact["pk"], {}).get("present", False)
+                    target_artifact.get("present", False)
                     # or type in done_types
                     or artifact["type"] in done_types
                 )
             else:
-                artifacts.append((artifact, artifact_version))
+                _, _, _, retry_count = target_artifact.get("versions", {}).get(
+                    artifact_version["pk"],
+                    (None, None, None, 0)
+                )
+                artifacts.append((artifact, artifact_version, retry_count))
                 return False, True
 
         self._walk_artifact_versions(all_installed_or_to_install_callback)
@@ -470,103 +485,241 @@ class Target:
         else:
             return UserArtifact, {"enrolled_user": self.target}
 
+    def update_target_artifacts(self, target_artifacts_info, artifact_types=None):
+        """
+        Update the target artifacts given a list of target artifacts info.
+
+        If artifact_types is not None, it is a list of Artifact Types for which the target artifacts info
+        is considered to be exhaustive. In that case, the target artifacts not mentionned in the list and
+        of the given types are removed.
+        """
+        target_updated = False
+        model, _ = self.get_target_artifact_model_and_kwargs()
+        if not target_artifacts_info:
+            if artifact_types:
+                # The list is empty and considered exhaustive, we remove all the target artifacts of the given types.
+                query = sql.SQL(
+                    "with to_be_deleted as ("
+                    "  select 'deleted' _op, ta.*, a.id a_pk, a.type a_type, a.name a_name, av.version av_version"
+                    "  from {table_name} ta"
+                    "  join mdm_artifactversion av on (av.id = ta.artifact_version_id)"
+                    "  join mdm_artifact a on (a.id = av.artifact_id)"
+                    "  where"
+                    "  ta.{target_column_name} = %(target_pk)s"
+                    "  and a.type in %(artifact_types)s"
+                    "),  deleted as ("
+                    "  delete from {table_name} where id in (select id from to_be_deleted)"
+                    ") select * from to_be_deleted"
+                )
+            else:
+                # NOOP
+                return target_updated
+        else:
+            cleanup_condition = ''
+            if artifact_types:
+                # The list is considered exhaustive for these types.
+                # The target artifacts of the given types for artifacts not present in the list are removed.
+                cleanup_condition = (
+                    'or ('
+                    '  a.type in %(artifact_types)s'
+                    '  and not exists ('
+                    '    select * from target_artifact_info tai'
+                    '    where tai.a_pk = a.id'
+                    '  )'
+                    ')'
+                )
+            # IMPORTANT: this query won't be processed by psycopg2 if the number of values is 0
+            query = sql.SQL(
+                "with target_artifact_info("
+                "  a_pk, av_pk, present, status, extra_info, unique_install_identifier"
+                ") as ("
+                "  values %%s"
+                "), upserted as ("
+                "  insert into {table_name}"
+                '  ({target_column_name}, "artifact_version_id", "status", "extra_info",'
+                '   "installed_at", "os_version_at_install_time",'
+                '   "unique_install_identifier", "install_count", "retry_count", "max_retry_count",'
+                '   "created_at", "updated_at")'
+                '  select %(target_pk)s, tai.av_pk, tai.status, tai.extra_info::jsonb,'
+                # if present, insert installed at timestamp
+                "  case when tai.present then %(now)s else null end,"
+                # if present, insert current os version
+                "  case when tai.present then %(os_version)s else null end,"
+                # if present, insert unique install identifier
+                "  case when tai.present then tai.unique_install_identifier else '' end,"
+                # if present, set install count
+                "  case when tai.present then 1 else 0 end,"
+                # if not present and not uninstalled and not awaiting confirmation, bump retry count
+                "  case when tai.present or tai.status in ('Uninstalled', 'AwaitingConfirmation') then 0 else 1 end,"
+                # set max retry count to the default value at insert
+                "  %(artifact_retries)s,"
+                '  %(now)s, %(now)s'
+                '  from target_artifact_info tai'
+                #  conflict
+                '  on conflict ({target_column_name}, "artifact_version_id") do update'
+                # always update status and extra info
+                '  set status = excluded.status, extra_info = excluded.extra_info,'
+                # update installed_at only if the uiid changed
+                '  installed_at = case when'
+                '  excluded.unique_install_identifier != {table_name}.unique_install_identifier'
+                '  then excluded.installed_at else {table_name}.installed_at end,'
+                # update os_version_at_install_time if the uiid changed
+                '  os_version_at_install_time = case when'
+                '  excluded.unique_install_identifier != {table_name}.unique_install_identifier'
+                '  then excluded.os_version_at_install_time else {table_name}.os_version_at_install_time end,'
+                # always update the uiid
+                '  unique_install_identifier = excluded.unique_install_identifier,'
+                # increment install_count only if the new one changed and the uiid changed
+                '  install_count = case when'
+                '  excluded.unique_install_identifier != {table_name}.unique_install_identifier '
+                '  then excluded.install_count + {table_name}.install_count else {table_name}.install_count end,'
+                # increment retry count if the new one changed
+                '  retry_count = least(excluded.retry_count + {table_name}.retry_count, {table_name}.max_retry_count),'
+                # increment max retry count if new one without retry count bump, for the next install
+                '  max_retry_count = case when'
+                '  excluded.retry_count = 0'
+                '  then {table_name}.retry_count + %(artifact_retries)s else {table_name}.max_retry_count end,'
+                '  updated_at = %(now)s'
+                '  where ('
+                # condition of the conflict
+                '    excluded.status != {table_name}.status'
+                '    or excluded.extra_info != {table_name}.extra_info'
+                '    or excluded.unique_install_identifier != {table_name}.unique_install_identifier'
+                '    or {table_name}.status in %(absent_statuses)s'
+                '    or excluded.status in %(absent_statuses)s'
+                '  ) returning *'
+                '), to_delete_enriched as ('
+                "  select 'deleted' _op, ta.*, a.id a_pk, a.type a_type, a.name a_name, av.version av_version"
+                '  from {table_name} ta'
+                '  join mdm_artifactversion av on (av.id = ta.artifact_version_id)'
+                '  join mdm_artifact a on (a.id = av.artifact_id)'
+                '  where ta.{target_column_name} = %(target_pk)s '
+                '  and not exists ('
+                '    select * from target_artifact_info tai'
+                '    where tai.av_pk = ta.artifact_version_id'
+                '  ) and ('
+                '     exists ('
+                #  there is a version of the artifact that is now present or uninstalled
+                '       select * from target_artifact_info tai'
+                '       where tai.a_pk = a.id'
+                "       and (tai.present or tai.status = 'Uninstalled')"
+                f'    ) {cleanup_condition}'  # cleanup only when the list is exhaustive for some types
+                '  )'
+                '), do_delete as ('
+                '  delete from {table_name}'
+                '  where id in (select id from to_delete_enriched)'
+                '  returning *'
+                "), upserted_enriched as ("
+                "  select case when u.created_at = %(now)s then 'created' else 'updated' end _op,"
+                "  u.*, a.id a_pk, a.type a_type, a.name a_name, av.version av_version"
+                "  from upserted u"
+                '  join mdm_artifactversion av on (av.id = u.artifact_version_id)'
+                '  join mdm_artifact a on (a.id = av.artifact_id)'
+                ") select * from upserted_enriched"
+                "  union"
+                "  select * from to_delete_enriched"
+            )
+        query = query.format(
+            # substitute the SQL identifiers
+            table_name=sql.Identifier(model._meta.db_table),
+            target_column_name=sql.Identifier("enrolled_device_id" if model == DeviceArtifact else "enrolled_user_id")
+        )
+
+        event_payloads = []
+
+        def queue_event_payload(result_d):
+            extra_info = result_d["extra_info"]
+            payload = {
+                "result": result_d["_op"],
+                "channel": str(self.channel),
+                "target_artifact": {
+                    "artifact_version": {
+                        "pk": str(result_d["artifact_version_id"]),
+                        "version": result_d["av_version"],
+                        "artifact": {
+                            "pk": str(result_d["a_pk"]),
+                            "type": result_d["a_type"],
+                            "name": result_d["a_name"],
+                        },
+                    },
+                    "status": result_d["status"],
+                    "extra_info": json.loads(extra_info) if extra_info else None,
+                    "installed_at": result_d["installed_at"],
+                    "os_version_at_install_time": result_d["os_version_at_install_time"],
+                    "unique_install_identifier": result_d["unique_install_identifier"],
+                    "install_count": result_d["install_count"],
+                    "retry_count": result_d["retry_count"],
+                    "max_retry_count": result_d["max_retry_count"],
+                    "created_at": result_d["created_at"],
+                    "updated_at": result_d["updated_at"],
+                }
+            }
+            if self.enrolled_user:
+                payload["enrolled_user"] = {
+                    "pk": self.enrolled_user.pk,
+                    "user_id": self.enrolled_user.user_id,
+                }
+            event_payloads.append(payload)
+
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                # substitute the common arguments
+                query = cursor.mogrify(
+                    query,
+                    {"target_pk": self.target.pk,
+                     "os_version": self.os_version,
+                     "absent_statuses": tuple(s.value for s in TargetArtifact.Status if not s.present),
+                     "artifact_retries": self.ARTIFACT_RETRIES,
+                     "artifact_types": artifact_types,
+                     "now": datetime.utcnow()},
+                )
+                if target_artifacts_info:
+                    results = psycopg2.extras.execute_values(
+                        cursor, query,
+                        ((uuid.UUID(a_pk) if not isinstance(a_pk, uuid.UUID) else a_pk,
+                          uuid.UUID(av_pk) if not isinstance(av_pk, uuid.UUID) else av_pk,
+                          status.present, status,
+                          psycopg2.extras.Json(extra_info), str(unique_install_identifier))
+                         for a_pk, av_pk, status, extra_info, unique_install_identifier
+                         in target_artifacts_info),
+                        fetch=True
+                    )
+                else:
+                    cursor.execute(query)
+                    results = cursor.fetchall()
+                if results:
+                    target_updated = True
+                    columns = [c.name for c in cursor.description]
+                    for t in results:
+                        queue_event_payload(dict(zip(columns, t)))
+
+        if event_payloads:
+            transaction.on_commit(lambda: post_target_artifact_update_events(self, event_payloads))
+
+        return target_updated
+
+    def update_target_artifacts_with_status_report(self, status_report):
+        target_artifacts_info = get_status_report_target_artifacts_info(status_report)
+        if target_artifacts_info is None:
+            return False
+        return self.update_target_artifacts(
+            target_artifacts_info,
+            # list exhaustive for all declarations
+            tuple(t for t in Artifact.Type if t.is_declaration),
+        )
+
     def update_target_artifact(
         self,
         artifact_version,
         status,
         extra_info=None,
-        allow_reinstall=False,
         unique_install_identifier=None,
     ):
-        """
-        Updates the status of an artifact/version for this target
-        """
-        target_updated = False
-        model, kwargs = self.get_target_artifact_model_and_kwargs()
-        defaults = {"status": status,
-                    "extra_info": extra_info or {},
-                    "installed_at": None,
-                    "os_version_at_install_time": None,
-                    "unique_install_identifier": ""}
-        if status.present:
-            # those 2 attributes can only be set for a successful install
-            defaults["installed_at"] = datetime.utcnow()
-            defaults["os_version_at_install_time"] = self.os_version
-            if unique_install_identifier:
-                defaults["unique_install_identifier"] = unique_install_identifier
-        with transaction.atomic():
-            obj, created = model.objects.select_for_update().get_or_create(
-                defaults=defaults,
-                artifact_version=artifact_version,
-                **kwargs
-            )
-            target_updated = created
-            if not created:
-                prev_status_present = TargetArtifact.Status(obj.status).present
-                uii_changed = unique_install_identifier and obj.unique_install_identifier != unique_install_identifier
-                # we update the target artifact if necessary
-                updated = False
-                for k, v in defaults.items():
-                    if getattr(obj, k) == v:
-                        # nothing to do
-                        continue
-                    if (
-                            # if new status is not present, we can override all attributes
-                            not status.present
-                            # if the previous status is not present, we can override all attributes
-                            or not prev_status_present
-                            # standard attributes can always be overriden
-                            or (k not in ("installed_at", "os_version_at_install_time", "unique_install_identifier"))
-                            # special attributes require more checks
-                            or (
-                                # explicitly allowed to override the special attibutes
-                                allow_reinstall or
-                                # the unique install identifier has changed
-                                uii_changed
-                            )
-                    ):
-                        setattr(obj, k, v)
-                        updated = True
-                if updated:
-                    target_updated = True
-                    obj.save()
-            # cleanup
-            if status.present or status == TargetArtifact.Status.UNINSTALLED:
-                deleted_count, _ = model.objects.filter(
-                    artifact_version__artifact=artifact_version.artifact,
-                    **kwargs
-                ).exclude(
-                    artifact_version=artifact_version
-                ).delete()
-                target_updated |= deleted_count > 0
-        return target_updated
-
-    def update_target_artifacts_with_status_report(self, status_report):
-        target_updated = False
-        target_artifacts_info = get_status_report_target_artifacts_info(status_report)
-        if target_artifacts_info is None:
-            return target_updated
-        seen_artifact_pks = []
-        for artifact_version in (ArtifactVersion.objects.select_related("artifact")
-                                                        .filter(pk__in=target_artifacts_info.keys())):
-            seen_artifact_pks.append(artifact_version.artifact.pk)
-            status, extra_info, unique_install_identifier = target_artifacts_info[str(artifact_version.pk)]
-            target_updated |= self.update_target_artifact(
-                artifact_version,
-                status,
-                extra_info,
-                unique_install_identifier=unique_install_identifier
-            )
-        # cleanup
-        model, kwargs = self.get_target_artifact_model_and_kwargs()
-        deleted_count, _ = model.objects.filter(
-            artifact_version__artifact__type=Artifact.Type.PROFILE,
-            **kwargs
-        ).exclude(
-            artifact_version__artifact__pk__in=seen_artifact_pks
-        ).delete()
-        target_updated |= deleted_count > 0
-        return target_updated
+        target_artifacts_info = [
+            (artifact_version.artifact.pk, artifact_version.pk,
+             status, extra_info or {}, unique_install_identifier or "")
+        ]
+        return self.update_target_artifacts(target_artifacts_info)
 
     # declarations
 
@@ -636,7 +789,7 @@ class Target:
         }
         if self.software_update_enforcement:
             payload["StandardConfigurations"].append(get_software_update_enforcement_specific_identifier(self))
-        for artifact, _ in self.iter_configuration_artifacts():
+        for artifact, _, _ in self.iter_configuration_artifacts():
             payload["StandardConfigurations"].append(get_artifact_identifier(artifact))
         payload["StandardConfigurations"].sort()
         h = hashlib.sha1()
@@ -676,7 +829,7 @@ class Target:
                 {"Identifier": software_update_enforcement_specific["Identifier"],
                  "ServerToken": software_update_enforcement_specific["ServerToken"]}
             )
-        for artifact, artifact_version in self.iter_declaration_artifacts():
+        for artifact, artifact_version, retry_count in self.iter_declaration_artifacts():
             artifact_type = Artifact.Type(artifact["type"])  # TODO: necessary?
             if artifact_type.is_activation:
                 key = "Activations"
@@ -687,9 +840,10 @@ class Target:
             else:
                 logger.error("Unknown artifact type: %s", artifact_type)
                 continue
+
             declarations[key].append(
                {"Identifier": get_artifact_identifier(artifact),
-                "ServerToken": get_artifact_version_server_token(self, artifact, artifact_version)}
+                "ServerToken": get_artifact_version_server_token(self, artifact, artifact_version, retry_count)}
             )
         h = hashlib.sha1()
         for key in sorted(declarations.keys()):

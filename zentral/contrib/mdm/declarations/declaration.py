@@ -19,8 +19,8 @@ def build_declaration(enrollment_session, target, declaration_identifier):
         artifact_pk = artifact_pk_from_identifier_and_model(declaration_identifier, Declaration)
     except ValueError:
         raise DeclarationError("Invalid Declaration Identifier")
-    declaration_artifact_version = declaration_artifact = None
-    for artifact, artifact_version in target.all_installed_or_to_install_serialized(
+    d_artifact, d_artifact_version, d_retry_count = (None, None, 0)
+    for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
         included_types=tuple(
             t for t in Artifact.Type if t.is_raw_declaration
         ),
@@ -29,16 +29,17 @@ def build_declaration(enrollment_session, target, declaration_identifier):
         )
     ):
         if artifact["pk"] == artifact_pk:
-            declaration_artifact = artifact
-            declaration_artifact_version = artifact_version
+            d_artifact = artifact
+            d_artifact_version = artifact_version
+            d_retry_count = retry_count
             break
-    if not declaration_artifact_version:
+    if not d_artifact_version:
         raise DeclarationError(f'Could not find Declaration artifact {artifact_pk}')
     try:
         declaration = (Declaration.objects.prefetch_related("declarationref_set__artifact")
-                                          .get(artifact_version__pk=declaration_artifact_version["pk"]))
+                                          .get(artifact_version__pk=d_artifact_version["pk"]))
     except Declaration.DoesNotExist:
-        raise DeclarationError(f'Declaration for artifact version {declaration_artifact_version["pk"]} does not exist')
+        raise DeclarationError(f'Declaration for artifact version {d_artifact_version["pk"]} does not exist')
     # prepare payload
     payload = declaration.payload
     # substitute references to other declarations
@@ -54,7 +55,7 @@ def build_declaration(enrollment_session, target, declaration_identifier):
     payload = substitute_variables(payload, enrollment_session, target.enrolled_user)
     return {
         "Type": declaration.type,
-        "Identifier": get_artifact_identifier(declaration_artifact),
-        "ServerToken": get_artifact_version_server_token(target, declaration_artifact, declaration_artifact_version),
+        "Identifier": get_artifact_identifier(d_artifact),
+        "ServerToken": get_artifact_version_server_token(target, d_artifact, d_artifact_version, d_retry_count),
         "Payload": payload,
     }
