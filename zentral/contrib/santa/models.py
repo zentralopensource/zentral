@@ -372,11 +372,11 @@ class TargetCounter(models.Model):
 
 class TargetState(models.Model):
     class State(models.IntegerChoices):
-        BANNED = -100
-        SUSPECT = -50
-        UNTRUSTED = 0
-        PARTIALLY_ALLOWLISTED = 50
-        GLOBALLY_ALLOWLISTED = 100
+        BANNED = -100, _("Banned")
+        SUSPECT = -50, _("Suspect")
+        UNTRUSTED = 0, _("Untrusted")
+        PARTIALLY_ALLOWLISTED = 50, _("Tolerated")
+        GLOBALLY_ALLOWLISTED = 100, _("Allowlisted")
 
     target = models.ForeignKey(Target, on_delete=models.CASCADE)
     configuration = models.ForeignKey("santa.Configuration", on_delete=models.CASCADE)
