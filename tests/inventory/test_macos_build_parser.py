@@ -96,6 +96,8 @@ class MacOSBuildTestCase(TestCase):
            ("22G830", ("macOS", 13, 6, 9, None), "macOS 13.6.9 (22G830)"),
            ("22H123", ("macOS", 13, 7, 0, None), "macOS 13.7 (22H123)"),
            ("22H221", ("macOS", 13, 7, 1, None), "macOS 13.7.1 (22H221)"),
+           ("22H313", ("macOS", 13, 7, 2, None), "macOS 13.7.2 (22H313)"),
+           ("22H417", ("macOS", 13, 7, 3, None), "macOS 13.7.3 (22H417)"),
            ("23A344", ("macOS", 14, 0, 0, None), "macOS 14.0 (23A344)"),
            ("23B5056e", ("macOS", 14, 1, 0, None), "macOS 14.1 (23B5056e)"),
            ("23B81", ("macOS", 14, 1, 1, None), "macOS 14.1.1 (23B81)"),
@@ -109,9 +111,12 @@ class MacOSBuildTestCase(TestCase):
            ("23G93", ("macOS", 14, 6, 1, None), "macOS 14.6.1 (23G93)"),
            ("23H124", ("macOS", 14, 7, 0, None), "macOS 14.7 (23H124)"),
            ("23H222", ("macOS", 14, 7, 1, None), "macOS 14.7.1 (23H222)"),
+           ("23H311", ("macOS", 14, 7, 2, None), "macOS 14.7.2 (23H311)"),
+           ("23H417", ("macOS", 14, 7, 3, None), "macOS 14.7.3 (23H417)"),
            ("24A335", ("macOS", 15, 0, 0, None), "macOS 15.0 (24A335)"),
            ("24A348", ("macOS", 15, 0, 1, None), "macOS 15.0.1 (24A348)"),
            ("24B91", ("macOS", 15, 1, 1, None), "macOS 15.1.1 (24B91)"),
+           ("24D70", ("macOS", 15, 3, 1, None), "macOS 15.3.1 (24D70)"),
         ):
             expected_version_d = {
                 "name": name,
