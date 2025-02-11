@@ -573,7 +573,11 @@ class TargetSearchForm(forms.Form):
         choices=[('', '…'),
                  ('-last_seen', '↓ Last seen'),
                  ('-executed', '↓ Executed count'),
-                 ('-blocked', '↓ Blocked count')]
+                 ('-blocked', '↓ Blocked count'),
+                 ('-min_score', '↓ Min score'),
+                 ('-max_score', '↓ Max score'),
+                 ('+min_score', '↑ Min score'),
+                 ('+max_score', '↑ Max score'),]
     )
 
     @classmethod
@@ -771,6 +775,14 @@ class TargetSearchForm(forms.Form):
             primary_order_by = "coalesce(sum(ac.executed_count), 0) desc,"
         elif order_by == "-blocked":
             primary_order_by = "coalesce(sum(ac.blocked_count), 0) desc,"
+        elif order_by == "-min_score":
+            primary_order_by = "coalesce(min(ts.score), 0) desc,"
+        elif order_by == "-max_score":
+            primary_order_by = "coalesce(max(ts.score), 0) desc,"
+        elif order_by == "+min_score":
+            primary_order_by = "coalesce(min(ts.score), 0) asc,"
+        elif order_by == "+max_score":
+            primary_order_by = "coalesce(max(ts.score), 0) asc,"
         else:
             if order_by:
                 logger.error("Unknown order by value: %s", order_by)

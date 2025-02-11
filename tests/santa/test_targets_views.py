@@ -440,6 +440,39 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(len(targets), 1)
         self.assertEqual(targets[0]["identifier"], self.file_sha256)
 
+    def test_search_target_order_by_score(self):
+        self._login("santa.view_target")
+        realm, realm_user = force_realm_user(username=self.user.username)
+        configuration = force_configuration(voting_realm=realm)
+        # vote on all targets except the binary
+        first_target = last_target = None
+        score = 1
+        for target in Target.objects.all():
+            if first_target is None:
+                first_target = target
+            last_target = target
+            force_ballot(target, realm_user, [(configuration, True, score)])
+            TargetState.objects.create(
+                configuration=configuration,
+                target=target,
+                flagged=False,
+                state=TargetState.State.UNTRUSTED,
+                score=score,
+            )
+            score += 1
+        response = self.client.get(reverse("santa:targets"), {"configuration": configuration.pk,
+                                                              "order_by": "-max_score"})
+        self.assertEqual(response.context["targets"][0]["id"], last_target.pk)
+        response = self.client.get(reverse("santa:targets"), {"configuration": configuration.pk,
+                                                              "order_by": "-min_score"})
+        self.assertEqual(response.context["targets"][0]["id"], last_target.pk)
+        response = self.client.get(reverse("santa:targets"), {"configuration": configuration.pk,
+                                                              "order_by": "+max_score"})
+        self.assertEqual(response.context["targets"][0]["id"], first_target.pk)
+        response = self.client.get(reverse("santa:targets"), {"configuration": configuration.pk,
+                                                              "order_by": "+min_score"})
+        self.assertEqual(response.context["targets"][0]["id"], first_target.pk)
+
     # binary target
 
     def test_binary_target_redirect(self):
