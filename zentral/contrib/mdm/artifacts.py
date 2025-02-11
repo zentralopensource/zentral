@@ -549,8 +549,8 @@ class Target:
                 "  case when tai.present then tai.unique_install_identifier else '' end,"
                 # if present, set install count
                 "  case when tai.present then 1 else 0 end,"
-                # if not present and not uninstalled, bump retry count
-                "  case when tai.present or tai.status = 'Uninstalled' then 0 else 1 end,"
+                # if not present and not uninstalled and not awaiting confirmation, bump retry count
+                "  case when tai.present or tai.status in ('Uninstalled', 'AwaitingConfirmation') then 0 else 1 end,"
                 # set max retry count to the default value at insert
                 "  %(artifact_retries)s,"
                 '  %(now)s, %(now)s'

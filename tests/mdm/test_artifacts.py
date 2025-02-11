@@ -249,8 +249,10 @@ class TestMDMArtifacts(TestCase):
         configurations = status_report["StatusItems"]["management"]["declarations"]["configurations"]
         configurations.pop()
         for artifact_version, valid, active, reasons in extra_configurations:
+            if isinstance(valid, bool):
+                valid = "valid" if valid else "invalid"
             configuration = {
-                "valid": "valid" if valid else "invalid",
+                "valid": valid,
                 "active": active,
                 "identifier": f"zentral.legacy-profile.{artifact_version.artifact.pk}",
                 "server-token": str(artifact_version.pk),
@@ -1600,6 +1602,19 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(
             serialized_av,
             (TargetArtifact.Status.UNINSTALLED, None, (0, 0, 0), 0)
+        )
+
+    @patch("zentral.contrib.mdm.artifacts.datetime")
+    def test_update_target_artifacts_from_status_report_valid_unknown_no_retry(self, patched_datetime):
+        patched_datetime.utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
+        _, profile_a, (profile_av,) = self._force_blueprint_artifact()
+        status_report = self._build_status_report([(profile_av, "unknown", True, None)])
+        target = Target(self.enrolled_device)
+        self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
+        serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
+        self.assertEqual(
+            serialized_av,
+            (TargetArtifact.Status.AWAITING_CONFIRMATION, None, (0, 0, 0), 0)
         )
 
     @patch("zentral.contrib.mdm.artifacts.datetime")

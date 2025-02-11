@@ -12,10 +12,16 @@ logger = logging.getLogger("zentral.contrib.mdm.declarations.status_report")
 def get_target_artifact_info(item):
     server_token = item["server-token"]
     artifact_version_pk = artifact_version_pk_from_server_token(server_token)
-    if item["active"] and item["valid"] == "valid":
-        status = TargetArtifact.Status.INSTALLED
-    elif item["valid"] == "valid":
-        status = TargetArtifact.Status.UNINSTALLED
+    if item["valid"] == "valid":
+        if item["active"]:
+            status = TargetArtifact.Status.INSTALLED
+        else:
+            status = TargetArtifact.Status.UNINSTALLED
+    elif item["valid"] == "unknown":
+        if item["active"]:
+            status = TargetArtifact.Status.AWAITING_CONFIRMATION
+        else:
+            status = TargetArtifact.Status.UNINSTALLED
     else:
         status = TargetArtifact.Status.FAILED
     extra_info = {"active": item["active"],
