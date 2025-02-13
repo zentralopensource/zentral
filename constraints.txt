@@ -25,7 +25,7 @@ click-didyoumean==0.3.1
 click-plugins==1.1.1
 click-repl==0.3.0
 coverage==7.6.4
-cryptography==43.0.3
+cryptography==44.0.1
 decorator==5.1.1
 defusedxml==0.7.1
 Deprecated==1.2.14
@@ -114,7 +114,7 @@ pycparser==2.22
 pycurl==7.45.3
 Pygments==2.18.0
 PyJWT==2.9.0
-pyOpenSSL==24.2.1
+pyOpenSSL==24.3.0
 pyotp==2.9.0
 pysaml2==7.5.0
 python-dateutil==2.9.0.post0
