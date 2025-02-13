@@ -189,8 +189,7 @@ WSGI_APPLICATION = 'server.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/2.2/ref/settings/#databases
-
+# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -198,15 +197,28 @@ DATABASES = {
         'CONN_MAX_AGE': 3600
     }
 }
-for key, default in (('HOST', None),
-                     ('PORT', None),
-                     ('NAME', 'zentral'),
-                     ('USER', 'zentral'),
-                     ('PASSWORD', None),):
-    config_key = 'POSTGRES_{}'.format(key)
-    val = django_zentral_settings.get(config_key, default)
-    if val:
-        DATABASES['default'][key] = val
+# Populate DATABASES with the following variables from the zentral conf:
+# POSTGRES_HOST (read-write default database)
+# POSTGRES_RO_HOST (optional read-only database)
+# POSTGRES_PORT
+# POSTGRES_NAME
+# POSTGRES_USER
+# POSTGRES_PASSWORD
+for database_key, host_key in (("default", "HOST"),
+                               ("ro", "RO_HOST")):
+    host = django_zentral_settings.get(f'POSTGRES_{host_key}')
+    if database_key != "default" and not host:
+        continue
+    database = DATABASES.setdefault(database_key, DATABASES["default"].copy())
+    if host:
+        database["HOST"] = host
+    for key, default in (('PORT', None),
+                         ('NAME', 'zentral'),
+                         ('USER', 'zentral'),
+                         ('PASSWORD', None),):
+        val = django_zentral_settings.get(f'POSTGRES_{key}', default)
+        if val:
+            database[key] = val
 
 # Django >= 3.2 have uses BigAutoField
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
