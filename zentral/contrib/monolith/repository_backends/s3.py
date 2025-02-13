@@ -198,10 +198,10 @@ class S3Repository(BaseRepository):
                 logger.info(*logging_args)
                 return None
             logger.exception(*logging_args)
-            raise RepositoryError
-        except Exception:
-            logger.exception("Could not download all catalog from repository %s", self.repository)
-            raise RepositoryError
+            raise RepositoryError(logging_args[0] % logging_args[1:])
+        except Exception as e:
+            logger.exception("Could not download key %s in repository %s", key, self.repository)
+            raise RepositoryError(str(e))
 
     def get_all_catalog_content(self):
         return self._get_resource("catalogs/all")
@@ -216,9 +216,9 @@ class S3Repository(BaseRepository):
             for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
                 for obj in page.get("Contents", []):
                     yield obj["Key"].removeprefix(prefix)
-        except Exception:
+        except Exception as e:
             logger.exception("Could not list client resources keys in repository %s", self.repository)
-            raise RepositoryError
+            raise RepositoryError(str(e))
 
     def make_munki_repository_response(self, section, name, cache_server=None):
         expires_in = 180  # 3 minutes TODO: hardcoded
