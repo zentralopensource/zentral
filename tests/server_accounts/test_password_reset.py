@@ -8,6 +8,8 @@ from accounts.password_reset import (get_password_reset_handler,
                                      EmailPasswordResetHandler,
                                      AWSSQSPasswordResetHandler,
                                      GCPPubSubPasswordResetHandler)
+from zentral.core.exceptions import ImproperlyConfigured
+from zentral.conf.config import ConfigDict
 
 
 class PasswordResetTestCase(TestCase):
@@ -26,6 +28,22 @@ class PasswordResetTestCase(TestCase):
     def test_get_email_password_reset_handler(self, settings_get):
         settings_get.return_value = {"backend": "accounts.password_reset.EmailPasswordResetHandler"}
         self.assertIsInstance(get_password_reset_handler(), EmailPasswordResetHandler)
+
+    @patch("accounts.password_reset.settings.get")
+    def test_get_email_password_reset_handler_default_context_not_a_dict(self, settings_get):
+        settings_get.return_value = {"backend": "accounts.password_reset.EmailPasswordResetHandler",
+                                     "default_context": 123}
+        with self.assertRaises(ImproperlyConfigured) as cm:
+            get_password_reset_handler()
+        self.assertEqual(cm.exception.args[0], "Default context is not a dict")
+
+    @patch("accounts.password_reset.settings.get")
+    def test_get_email_password_reset_handler_default_context_not_json_serializable(self, settings_get):
+        settings_get.return_value = {"backend": "accounts.password_reset.EmailPasswordResetHandler",
+                                     "default_context": {"y": object()}}
+        with self.assertRaises(ImproperlyConfigured) as cm:
+            get_password_reset_handler()
+        self.assertEqual(cm.exception.args[0], "Default context is not JSON serializable")
 
     def test_email_send_password_reset(self):
         handler = EmailPasswordResetHandler({})
@@ -59,7 +77,8 @@ class PasswordResetTestCase(TestCase):
         client = Mock()
         bc.return_value = client
         handler = AWSSQSPasswordResetHandler(
-            {"queue_url": "https://sqs.eu-central-1.amazonaws.com/000000000000/PasswordReset"}
+            {"queue_url": "https://sqs.eu-central-1.amazonaws.com/000000000000/PasswordReset",
+             "default_context": ConfigDict({"fqdn": "yolo",  "un": 1})}
         )
         handler.send_password_reset(self.user)
         self.assertEqual(len(client.send_message.call_args_list), 1)
@@ -73,7 +92,8 @@ class PasswordResetTestCase(TestCase):
             {"email": self.user.email,
              "username": self.user.username,
              "fqdn": "zentral",
-             "invitation": False}
+             "invitation": False,
+             "un": 1}
         )
         self.assertTrue(reset_url.startswith("https://"))
 

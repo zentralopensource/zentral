@@ -10,6 +10,8 @@ from django.utils.encoding import force_bytes
 from django.utils.functional import SimpleLazyObject
 from django.utils.http import urlsafe_base64_encode
 from zentral.conf import settings
+from zentral.conf.config import ConfigDict
+from zentral.core.exceptions import ImproperlyConfigured
 
 
 logger = logging.getLogger('zentral.accounts.password_reset')
@@ -17,7 +19,16 @@ logger = logging.getLogger('zentral.accounts.password_reset')
 
 class BasePasswordResetHandler:
     def __init__(self, config):
-        pass
+        default_context = config.get("default_context") or {}
+        if isinstance(default_context, ConfigDict):
+            default_context = default_context.serialize()
+        if not isinstance(default_context, dict):
+            raise ImproperlyConfigured("Default context is not a dict")
+        try:
+            json.dumps(default_context)
+        except Exception:
+            raise ImproperlyConfigured("Default context is not JSON serializable")
+        self.default_context = default_context
 
     @staticmethod
     def generate_password_reset_url(user):
@@ -30,15 +41,18 @@ class BasePasswordResetHandler:
             reverse('password_reset_confirm', args=(uid, token))
         )
 
-    @classmethod
-    def get_password_reset_context(cls, user, invitation=False):
-        return {
+    def get_password_reset_context(self, user, invitation=False):
+        ctx = {
             "email": getattr(user, user.get_email_field_name()),
             "username": user.get_username(),
             "fqdn": settings["api"]["fqdn"],
-            "reset_url": cls.generate_password_reset_url(user),
+            "reset_url": self.generate_password_reset_url(user),
             "invitation": invitation,
         }
+        for key, val in self.default_context.items():
+            if key not in ctx:
+                ctx[key] = val
+        return ctx
 
     def send_password_reset(self, user, invitation=False):
         context = self.get_password_reset_context(user, invitation)
@@ -76,6 +90,7 @@ class EmailPasswordResetHandler(BasePasswordResetHandler):
 
 class AWSSQSPasswordResetHandler(BasePasswordResetHandler):
     def __init__(self, config):
+        super().__init__(config)
         self.queue_url = config["queue_url"]
         pr = urlparse(self.queue_url)
         prefix, self.region_name, domain = pr.netloc.split(".", 2)
@@ -97,6 +112,7 @@ class AWSSQSPasswordResetHandler(BasePasswordResetHandler):
 
 class GCPPubSubPasswordResetHandler(BasePasswordResetHandler):
     def __init__(self, config):
+        super().__init__(config)
         self.topic = config["topic"]
         self._client = None
 
