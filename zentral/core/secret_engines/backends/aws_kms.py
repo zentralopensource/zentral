@@ -10,6 +10,7 @@ class SecretEngine(BaseSecretEngine):
         super().__init__(config_d)
         # key
         self.key_id = config_d["key_id"]
+
         # client config
         self.client_kwargs = {
             "config": Config(
@@ -19,11 +20,15 @@ class SecretEngine(BaseSecretEngine):
                 }
             )
         }
+        if self.key_id.startswith("arn:"):
+            self.client_kwargs["region_name"] = self.key_id.split(":")[3]
         for kwarg in ("region_name",
                       "endpoint_url",
                       "aws_access_key_id",
                       "aws_secret_access_key",
                       "aws_session_token"):
+            if kwarg in self.client_kwargs:
+                continue
             val = config_d.get(kwarg)
             if val:
                 self.client_kwargs[kwarg] = val
@@ -32,13 +37,15 @@ class SecretEngine(BaseSecretEngine):
     def kms_client(self):
         return boto3.client("kms", **self.client_kwargs)
 
-    @staticmethod
-    def _prepared_context(context):
+    def _prepared_context(self, context):
         prepared_context = {}
         for k, v in context.items():
             if not isinstance(v, str):
                 v = str(v)
             prepared_context[k] = v
+        for k, v in self.default_context.items():
+            if k not in prepared_context:
+                prepared_context[k] = v
         return prepared_context
 
     def encrypt(self, data, **context):

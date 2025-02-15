@@ -31,13 +31,15 @@ class SecretEngine(BaseSecretEngine):
     def _crc32c(data):
         return google_crc32c.value(data)
 
-    @staticmethod
-    def _prepared_context(context):
+    def _prepared_context(self, context):
         prepared_context = {}
         for k, v in context.items():
             if not isinstance(v, str):
                 v = str(v)
             prepared_context[k] = v
+        for k, v in self.default_context.items():
+            if k not in prepared_context:
+                prepared_context[k] = v
         return json.dumps(prepared_context, ensure_ascii=False, sort_keys=True).encode("utf-8")
 
     def encrypt(self, data, **context):
