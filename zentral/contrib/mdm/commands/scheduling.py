@@ -178,6 +178,8 @@ def _install_artifacts(target, enrollment_session, status):
     if target.declarative_management:
         # device profiles managed using declarative management
         included_types = (Artifact.Type.ENTERPRISE_APP, Artifact.Type.STORE_APP)
+    else:
+        included_types = (Artifact.Type.ENTERPRISE_APP, Artifact.Type.PROFILE, Artifact.Type.STORE_APP)
     artifact_version = target.next_to_install(included_types=included_types)
     if artifact_version:
         command_class = None
@@ -193,9 +195,6 @@ def _install_artifacts(target, enrollment_session, status):
             ):
                 # the association is already done, we can send the command
                 command_class = InstallApplication
-        else:
-            # should never happen
-            raise ValueError(f"Cannot install artifact type {artifact_version.artifact.type}")
         if command_class:
             return command_class.create_for_target(target, artifact_version)
 

@@ -36,18 +36,21 @@ def build_legacy_profile(enrollment_session, target, declaration_identifier):
         artifact_pk = artifact_pk_from_identifier_and_model(declaration_identifier, Profile)
     except ValueError:
         raise DeclarationError('Invalid Profile Identifier')
-    profile_artifact_version = profile_artifact = None
-    for artifact, artifact_version in target.all_installed_or_to_install_serialized((Artifact.Type.PROFILE,)):
+    p_artifact, p_artifact_version, p_retry_count = (None, None, 0)
+    for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
+        (Artifact.Type.PROFILE,)
+    ):
         if artifact["pk"] == artifact_pk:
-            profile_artifact = artifact
-            profile_artifact_version = artifact_version
+            p_artifact = artifact
+            p_artifact_version = artifact_version
+            p_retry_count = retry_count
             break
-    if not profile_artifact_version:
+    if not p_artifact_version:
         raise DeclarationError(f'Could not find Profile artifact {artifact_pk}')
     return {
         "Type": "com.apple.configuration.legacy",
-        "Identifier": get_artifact_identifier(profile_artifact),
-        "ServerToken": get_artifact_version_server_token(target, profile_artifact, profile_artifact_version),
+        "Identifier": get_artifact_identifier(p_artifact),
+        "ServerToken": get_artifact_version_server_token(target, p_artifact, p_artifact_version, p_retry_count),
         "Payload": {
             "ProfileURL": "https://{}{}".format(
                 settings["api"]["fqdn"],
