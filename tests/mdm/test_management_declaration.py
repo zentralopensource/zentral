@@ -11,10 +11,7 @@ from zentral.contrib.mdm.models import Artifact, Channel, Platform
 from .utils import force_artifact, force_blueprint_artifact
 
 
-@override_settings(
-    STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage',
-    STORAGES={"default": {"BACKEND": "django.core.files.storage.InMemoryStorage"}}
-)
+@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class MDMDeclarationManagementViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

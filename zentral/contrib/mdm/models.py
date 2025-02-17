@@ -28,6 +28,7 @@ from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
 from zentral.utils.iso_639_1 import ISO_639_1_CHOICES
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.payloads import get_payload_identifier
+from zentral.utils.storage import select_dist_storage
 from zentral.utils.time import naive_truncated_isoformat
 from .exceptions import EnrollmentSessionStatusError
 from .scep import SCEPChallengeType, get_scep_challenge, load_scep_challenge
@@ -2605,7 +2606,7 @@ class DataAsset(models.Model):
 
     artifact_version = models.OneToOneField(ArtifactVersion, related_name="data_asset", on_delete=models.CASCADE)
     type = models.CharField(max_length=256, choices=Type.choices)
-    file = models.FileField(upload_to=data_asset_path)
+    file = models.FileField(upload_to=data_asset_path, storage=select_dist_storage)
     filename = models.TextField()
     file_size = models.BigIntegerField(validators=[MinValueValidator(1)])
     file_sha256 = models.CharField(max_length=64)
@@ -2699,7 +2700,7 @@ def enterprise_application_package_path(instance, filename):
 
 class EnterpriseApp(models.Model):
     artifact_version = models.OneToOneField(ArtifactVersion, related_name="enterprise_app", on_delete=models.CASCADE)
-    package = models.FileField(upload_to=enterprise_application_package_path)
+    package = models.FileField(upload_to=enterprise_application_package_path, storage=select_dist_storage)
     package_uri = models.TextField(default="")
     package_sha256 = models.CharField(max_length=64)
     package_size = models.BigIntegerField()

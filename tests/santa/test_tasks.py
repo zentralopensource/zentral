@@ -1,11 +1,10 @@
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils.crypto import get_random_string
 from .utils import add_file_to_test_class
 from zentral.contrib.santa.models import Target
 from zentral.contrib.santa.tasks import _export_targets, _iter_targets
 
 
-@override_settings(STORAGES={"default": {"BACKEND": "django.core.files.storage.InMemoryStorage"}})
 class SantaTasksTestCase(TestCase):
     maxDiff = None
 

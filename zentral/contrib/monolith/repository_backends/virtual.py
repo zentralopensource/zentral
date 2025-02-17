@@ -1,8 +1,7 @@
 import logging
-from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.utils.functional import cached_property
-from zentral.utils.storage import file_storage_has_signed_urls
+from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 from .base import BaseRepository
 
 
@@ -15,13 +14,17 @@ class VirtualRepository(BaseRepository):
         return
 
     @cached_property
+    def _file_storage(self):
+        return select_dist_storage()
+
+    @cached_property
     def _redirect_to_files(self):
-        return file_storage_has_signed_urls()
+        return file_storage_has_signed_urls(self._file_storage)
 
     def make_munki_repository_response(self, section, name, cache_server=None):
         if section == "pkgs":
             if self._redirect_to_files:
-                return HttpResponseRedirect(default_storage.url(name))
-            elif default_storage.exists(name):
-                return FileResponse(default_storage.open(name))
+                return HttpResponseRedirect(self._file_storage.url(name))
+            elif self._file_storage.exists(name):
+                return FileResponse(self._file_storage.open(name))
         return HttpResponseNotFound("Munki asset not found!")

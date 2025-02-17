@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 from zentral.contrib.inventory.models import BaseEnrollment, MetaBusinessUnit, Tag
+from zentral.utils.storage import select_dist_storage
 from zentral.utils.text import get_version_sort_key
 from .conf import monolith_conf
 from .repository_backends import RepositoryBackend, get_repository_backend, load_repository_backend
@@ -446,7 +447,7 @@ class PkgInfo(models.Model):
     update_for = models.ManyToManyField(PkgInfoName, related_name="updated_by", blank=True)
     data = models.JSONField()
     local = models.BooleanField(default=False)
-    file = models.FileField(upload_to=pkg_info_path, blank=True)
+    file = models.FileField(upload_to=pkg_info_path, storage=select_dist_storage, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     archived_at = models.DateTimeField(blank=True, null=True)
@@ -1142,7 +1143,7 @@ class ManifestEnrollmentPackage(models.Model):
     builder = models.CharField(max_length=256)
     enrollment_pk = models.PositiveIntegerField(null=True)
 
-    file = models.FileField(upload_to=enrollment_package_path, blank=True)
+    file = models.FileField(upload_to=enrollment_package_path, storage=select_dist_storage, blank=True)
     pkg_info = models.JSONField(blank=True, null=True)
     version = models.PositiveSmallIntegerField(default=0)
 

@@ -4,7 +4,6 @@ from uuid import uuid4
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
-from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Count, Max
 from django.http import FileResponse, HttpResponseRedirect
@@ -58,7 +57,7 @@ from zentral.contrib.mdm.scep.static import StaticChallengeForm
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
-from zentral.utils.storage import file_storage_has_signed_urls
+from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 
 
 logger = logging.getLogger('zentral.contrib.mdm.views.management')
@@ -969,16 +968,20 @@ class DownloadDataAssetView(PermissionRequiredMixin, View):
     permission_required = "mdm.view_artifactversion"
 
     @cached_property
+    def _file_storage(self):
+        return select_dist_storage()
+
+    @cached_property
     def _redirect_to_files(self):
-        return file_storage_has_signed_urls()
+        return file_storage_has_signed_urls(self._file_storage)
 
     def get(self, request, **kwargs):
         data_asset = get_object_or_404(DataAsset, artifact_version__pk=kwargs["artifact_version_pk"])
         if self._redirect_to_files:
-            return HttpResponseRedirect(default_storage.url(data_asset.file.name))
+            return HttpResponseRedirect(self._file_storage.url(data_asset.file.name))
         else:
             return FileResponse(
-                default_storage.open(data_asset.file.name),
+                self._file_storage.open(data_asset.file.name),
                 filename=data_asset.filename or f"data_asset_{data_asset.artifact_version.pk}.zip",
                 as_attachment=True
             )
@@ -988,17 +991,21 @@ class DownloadEnterpriseAppView(PermissionRequiredMixin, View):
     permission_required = "mdm.view_artifactversion"
 
     @cached_property
+    def _file_storage(self):
+        return select_dist_storage()
+
+    @cached_property
     def _redirect_to_files(self):
-        return file_storage_has_signed_urls()
+        return file_storage_has_signed_urls(self._file_storage)
 
     def get(self, request, **kwargs):
         enterprise_app = get_object_or_404(EnterpriseApp, artifact_version__pk=kwargs["artifact_version_pk"])
         package_file = enterprise_app.package
         if self._redirect_to_files:
-            return HttpResponseRedirect(default_storage.url(package_file.name))
+            return HttpResponseRedirect(self._file_storage.url(package_file.name))
         else:
             return FileResponse(
-                default_storage.open(package_file.name),
+                self._file_storage.open(package_file.name),
                 filename=enterprise_app.filename or f"enterprise_app_{enterprise_app.artifact_version.pk}.pkg",
                 as_attachment=True
             )

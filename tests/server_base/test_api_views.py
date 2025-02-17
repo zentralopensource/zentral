@@ -7,12 +7,11 @@ from django.core.files.storage import default_storage
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from accounts.models import APIToken, User
 from .utils import force_task_result
 
 
-@override_settings(STORAGES={"default": {"BACKEND": "django.core.files.storage.InMemoryStorage"}})
 class BaseAPIViewsTestCase(TestCase):
     maxDiff = None
 

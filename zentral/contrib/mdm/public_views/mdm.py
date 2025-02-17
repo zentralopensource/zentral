@@ -8,7 +8,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
 from django.core import signing
 from django.core.exceptions import SuspiciousOperation
-from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
@@ -32,7 +31,7 @@ from zentral.contrib.mdm.models import (ArtifactVersion,
                                         ReEnrollmentSession, UserEnrollmentSession,
                                         PushCertificate)
 from zentral.utils.certificates import parse_dn
-from zentral.utils.storage import file_storage_has_signed_urls
+from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 from .base import PostEventMixin
 
 
@@ -460,8 +459,12 @@ class ConnectView(MDMView):
 
 class EnterpriseAppDownloadView(View):
     @cached_property
+    def _file_storage(self):
+        return select_dist_storage()
+
+    @cached_property
     def _redirect_to_files(self):
-        return file_storage_has_signed_urls()
+        return file_storage_has_signed_urls(self._file_storage)
 
     def get(self, response, *args, **kwargs):
         # TODO limit access
@@ -470,9 +473,9 @@ class EnterpriseAppDownloadView(View):
                                            name="InstallEnterpriseApplication", uuid=kwargs["uuid"])
         package_file = device_command.artifact_version.enterprise_app.package
         if self._redirect_to_files:
-            return HttpResponseRedirect(default_storage.url(package_file.name))
+            return HttpResponseRedirect(self._file_storage.url(package_file.name))
         else:
-            return FileResponse(default_storage.open(package_file.name), as_attachment=True)
+            return FileResponse(self._file_storage.open(package_file.name), as_attachment=True)
 
 
 # DDM
@@ -480,8 +483,12 @@ class EnterpriseAppDownloadView(View):
 
 class DataAssetDownloadView(View):
     @cached_property
+    def _file_storage(self):
+        return select_dist_storage()
+
+    @cached_property
     def _redirect_to_files(self):
-        return file_storage_has_signed_urls()
+        return file_storage_has_signed_urls(self._file_storage)
 
     def get(self, response, *args, **kwargs):
         # TODO DownloadDataAssetEvent with mdm namespace
@@ -492,9 +499,9 @@ class DataAssetDownloadView(View):
         except ArtifactVersion.DoesNotExist:
             raise Http404
         if self._redirect_to_files:
-            return HttpResponseRedirect(default_storage.url(data_asset.file.name))
+            return HttpResponseRedirect(self._file_storage.url(data_asset.file.name))
         else:
-            return FileResponse(default_storage.open(data_asset.file.name),
+            return FileResponse(self._file_storage.open(data_asset.file.name),
                                 as_attachment=True, content_type=data_asset.get_content_type())
 
 

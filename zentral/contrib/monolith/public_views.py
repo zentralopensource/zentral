@@ -3,7 +3,6 @@ import plistlib
 import random
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
-from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpResponseNotFound, HttpResponseRedirect
 from django.utils.functional import cached_property
 from django.views.generic import View
@@ -11,7 +10,7 @@ from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFai
 from zentral.contrib.inventory.models import MachineTag, MetaMachine
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.utils.http import user_agent_and_ip_address_from_request
-from zentral.utils.storage import file_storage_has_signed_urls
+from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 from .conf import monolith_conf
 from .events import post_monolith_enrollment_event, post_monolith_munki_request
 from .models import MunkiNameError, parse_munki_name, CacheServer, EnrolledMachine, ManifestEnrollmentPackage
@@ -239,8 +238,12 @@ class MRPackageView(MRNameView):
                 return
 
     @cached_property
+    def _file_storage(self):
+        return select_dist_storage()
+
+    @cached_property
     def _redirect_to_files(self):
-        return file_storage_has_signed_urls()
+        return file_storage_has_signed_urls(self._file_storage)
 
     def do_get(self, model, key, cache_key, event_payload):
         if model == "enrollment_pkg":
@@ -262,9 +265,9 @@ class MRPackageView(MRNameView):
             if filename:
                 event_payload["manifest_enrollment_package"]["filename"] = filename
                 if self._redirect_to_files:
-                    return HttpResponseRedirect(default_storage.url(filename))
+                    return HttpResponseRedirect(self._file_storage.url(filename))
                 else:
-                    return FileResponse(default_storage.open(filename))
+                    return FileResponse(self._file_storage.open(filename))
         elif model == "enrollment_pkg_icon":
             return HttpResponseNotFound("No icon available for this package!")
         elif model in ("icon", "installer_item", "uninstaller_item"):

@@ -16,10 +16,7 @@ from zentral.contrib.mdm.models import Artifact, Channel
 from .utils import force_artifact, force_blueprint_artifact
 
 
-@override_settings(
-    STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage',
-    STORAGES={"default": {"BACKEND": "django.core.files.storage.InMemoryStorage"}}
-)
+@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class EnterpriseAppManagementViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -298,6 +295,6 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response["Content-Disposition"],
-            f'attachment; filename="enterprise_app_{ enterprise_app_av.pk }.pkg"'
+            f'attachment; filename="enterprise_app_{enterprise_app_av.pk}.pkg"'
         )
         self.assertEqual(b"".join(response.streaming_content), b"yolofomo")
