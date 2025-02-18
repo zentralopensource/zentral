@@ -1,3 +1,4 @@
+from datetime import datetime
 import copy
 import os.path
 import plistlib
@@ -61,6 +62,8 @@ pkginfo_src = """<?xml version="1.0" encoding="UTF-8"?>
     <true/>
     <key>uninstall_method</key>
     <string>removepackages</string>
+    <key>force_install_after_date</key>
+    <date>2025-02-14T01:02:03Z</date>
 </dict>
 </plist>
 """
@@ -137,6 +140,7 @@ class MonolithAPIViewsTestCase(TestCase):
         data["version"] = version
         data["installs"][0]["CFBundleShortVersionString"] = version
         data["receipts"][0]["version"] = version
+        data["force_install_after_date"] = data["force_install_after_date"].isoformat()
         if zentral_monolith:
             data["zentral_monolith"] = zentral_monolith
         pkg_info_name, _ = PkgInfoName.objects.get_or_create(name=name)
@@ -173,6 +177,7 @@ class MonolithAPIViewsTestCase(TestCase):
         cat_pkg_info = catalog[0]
         self.assertEqual(cat_pkg_info["name"], pkg_info.name.name)
         self.assertEqual(cat_pkg_info["version"], pkg_info.version)
+        self.assertEqual(cat_pkg_info["force_install_after_date"], datetime(2025, 2, 14, 1, 2, 3))
 
     def test_get_catalog_two_pkgsinfo_no_shards(self):
         pkg_info1, catalog, sub_manifest = self._force_smpi()

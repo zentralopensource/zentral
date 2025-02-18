@@ -1,3 +1,4 @@
+from datetime import datetime
 import hashlib
 import logging
 import plistlib
@@ -160,6 +161,9 @@ def filter_catalog_data(catalog_data, serial_number, tag_names):
     filtered_catalog_data = []
     for pkginfo in catalog_data:
         if test_pkginfo_catalog_inclusion(pkginfo, serial_number, tag_names):
+            force_install_after_date = pkginfo.get("force_install_after_date")
+            if isinstance(force_install_after_date, str):
+                pkginfo["force_install_after_date"] = datetime.fromisoformat(force_install_after_date)
             filtered_catalog_data.append(pkginfo)
     return filtered_catalog_data
 
