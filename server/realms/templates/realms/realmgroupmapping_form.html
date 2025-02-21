@@ -18,7 +18,11 @@
 <form method="post" class="update-form">{% csrf_token %}
   {{ form }}
   <p>
+    {% if object %}
     <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    {% else %}
+    <a class="btn btn-outline-secondary" href="{% url 'realms:realm_group_mappings' %}">Cancel</a>
+    {% endif %}
     <button class="btn btn-primary" type="submit">Save</button>
   </p>
 </form>
