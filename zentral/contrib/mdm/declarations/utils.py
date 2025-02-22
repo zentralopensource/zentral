@@ -90,7 +90,7 @@ def get_artifact_version_server_token(target, artifact, artifact_version, retry_
     # reinstall interval
     reinstall_interval = artifact["reinstall_interval"]
     if reinstall_interval:
-        install_num = int((datetime.utcnow() - target.target.created_at) / timedelta(seconds=reinstall_interval))
+        install_num = int((datetime.utcnow() - target.target.created_at) / timedelta(days=reinstall_interval))
         elements.append(f"ri-{install_num}")
     # retry count
     if retry_count:

@@ -70,12 +70,12 @@ class MDMDeclarationUtilsTestCase(TestCase):
         patched_datetime.utcnow.return_value = now
         target = Mock()
         target.comparable_os_version = (15, 2, 1)
-        target.target.created_at = now - timedelta(seconds=3600 * 24 * 91)
+        target.target.created_at = now - timedelta(days=91)
         av_pk = str(uuid.uuid4())
         server_token = get_artifact_version_server_token(
             target,
             {"reinstall_on_os_update": str(Artifact.ReinstallOnOSUpdate.NO),
-             "reinstall_interval": 3600 * 24 * 90},
+             "reinstall_interval": 90},
             {"pk": av_pk},
             0
         )
