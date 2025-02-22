@@ -1322,6 +1322,7 @@ class RealmViewsTestCase(TestCase):
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
+        self.assertTrue(group.scim_managed is True)
         update_realm_tags.assert_not_called()
 
     @patch("zentral.contrib.mdm.inventory.update_realm_tags")
@@ -1359,6 +1360,7 @@ class RealmViewsTestCase(TestCase):
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
+        self.assertTrue(created_group.scim_managed is True)
         update_realm_tags.assert_called_once_with(self.realm)
 
     # update group put
@@ -1390,6 +1392,8 @@ class RealmViewsTestCase(TestCase):
     @patch("zentral.contrib.mdm.inventory.update_realm_tags")
     def test_update_group_put(self, update_realm_tags):
         group = force_realm_group(realm=self.realm)
+        group.scim_managed = False  # force False
+        group.save()
         display_name = get_random_string(12)
         self.set_permissions("realms.change_realmgroup")
         response = self.put(
@@ -1413,10 +1417,13 @@ class RealmViewsTestCase(TestCase):
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
+        self.assertTrue(group.scim_managed is True)
         update_realm_tags.assert_not_called()
 
     def test_update_group_put_no_external_id(self):
         group = force_realm_group(realm=self.realm)
+        group.scim_managed = False  # force False
+        group.save()
         external_id = group.scim_external_id
         self.assertIsNotNone(external_id)
         display_name = get_random_string(12)
@@ -1441,9 +1448,12 @@ class RealmViewsTestCase(TestCase):
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
+        self.assertTrue(group.scim_managed is True)
 
     def test_update_group_put_external_id_null(self):
         group = force_realm_group(realm=self.realm)
+        group.scim_managed = False  # force False
+        group.save()
         external_id = group.scim_external_id
         self.assertIsNotNone(external_id)
         display_name = get_random_string(12)
@@ -1469,6 +1479,7 @@ class RealmViewsTestCase(TestCase):
                       'resourceType': 'Group'},
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
+        self.assertTrue(group.scim_managed is True)
 
     def test_update_group_invalid_input(self):
         group = force_realm_group(realm=self.realm)

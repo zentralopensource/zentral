@@ -89,6 +89,7 @@ class RealmUtilsTestCase(TestCase):
         new_realm_group = force_realm_group(realm=realm)
         realm.scim_enabled = True
         scim_realm_group = force_realm_group(realm=realm)
+        self.assertTrue(scim_realm_group.scim_managed is True)
         self.assertIsNotNone(scim_realm_group.scim_external_id)
         realm_user.groups.add(old_realm_group)  # this one will be removed
         realm_user.groups.add(scim_realm_group)  # this one should not be affected

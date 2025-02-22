@@ -77,6 +77,7 @@ def force_realm_group(realm=None, parent=None, display_name=None):
         realm=realm,
         display_name=display_name or get_random_string(12),
         parent=parent,
+        scim_managed=realm.scim_enabled,
         scim_external_id=str(uuid.uuid4()).replace("-", "")[:10] if realm.scim_enabled else None,
     )
 

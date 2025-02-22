@@ -112,6 +112,7 @@ class SCIMGroup(serializers.Serializer):
     def save(self):
         self.resource = RealmGroup.objects.create(
             realm=self.realm,
+            scim_managed=True,
             scim_external_id=self.validated_data.get("externalId"),
             display_name=self.validated_data["displayName"],
         )
@@ -119,6 +120,7 @@ class SCIMGroup(serializers.Serializer):
         return self.resource
 
     def update(self):
+        self.resource.scim_managed = True
         external_id = self.validated_data.get("externalId")
         if external_id:
             self.resource.scim_external_id = external_id

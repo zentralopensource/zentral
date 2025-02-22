@@ -115,6 +115,7 @@ class RealmGroup(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
 
+    scim_managed = models.BooleanField(default=False)
     scim_external_id = models.CharField(max_length=255, null=True)
 
     display_name = models.CharField(max_length=255)
@@ -155,9 +156,6 @@ class RealmGroup(models.Model):
 
     def can_be_updated(self):
         return RealmGroup.objects.for_update().filter(pk=self.pk).exists()
-
-    def scim_managed(self):
-        return self.scim_external_id is not None
 
 
 class RealmUser(models.Model):
