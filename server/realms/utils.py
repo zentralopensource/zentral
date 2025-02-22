@@ -39,12 +39,14 @@ def get_realm_user_mapped_realm_groups(realm_user):
 
 
 def apply_realm_group_mappings(realm_user):
-    mapped_realm_groups = get_realm_user_mapped_realm_groups(realm_user)
-    if mapped_realm_groups is None:
+    new_realm_groups = get_realm_user_mapped_realm_groups(realm_user)
+    if new_realm_groups is None:
         return
     current_realm_groups = set(realm_user.groups.all())
-    if current_realm_groups != mapped_realm_groups:
-        realm_user.groups.set(mapped_realm_groups)
+    # we add any missing SCIM group because we do not want to interfere with SCIM
+    new_realm_groups.update(g for g in current_realm_groups if g.scim_managed())
+    if current_realm_groups != new_realm_groups:
+        realm_user.groups.set(new_realm_groups)
 
 
 def get_realm_user_mapped_groups(realm_user):

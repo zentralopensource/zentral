@@ -81,21 +81,27 @@ class RealmUtilsTestCase(TestCase):
         self.assertEqual(realm_user.groups.first(), realm_group)
 
     def test_apply_realm_group_mappings_set_one(self):
-        _, realm_user = force_realm_user()
+        realm, realm_user = force_realm_user()
         realm_user.claims = {"Yolo": "Fomo",
                              "Un": 1}
         realm_user.save()
-        self.assertEqual(realm_user.groups.count(), 0)
-        realm_group = force_realm_group(realm=realm_user.realm)
+        old_realm_group = force_realm_group(realm=realm)
+        new_realm_group = force_realm_group(realm=realm)
+        realm.scim_enabled = True
+        scim_realm_group = force_realm_group(realm=realm)
+        self.assertIsNotNone(scim_realm_group.scim_external_id)
+        realm_user.groups.add(old_realm_group)  # this one will be removed
+        realm_user.groups.add(scim_realm_group)  # this one should not be affected
+        self.assertEqual(realm_user.groups.count(), 2)
         RealmGroupMapping.objects.create(
             claim="Un",
             separator="",
             value="1",
-            realm_group=realm_group,
+            realm_group=new_realm_group,
         )
         apply_realm_group_mappings(realm_user)
-        self.assertEqual(realm_user.groups.count(), 1)
-        self.assertEqual(realm_user.groups.first(), realm_group)
+        self.assertEqual(realm_user.groups.count(), 2)
+        self.assertEqual(set(realm_user.groups.all()), {new_realm_group, scim_realm_group})
 
     # get_realm_user_mapped_realm_groups
 
