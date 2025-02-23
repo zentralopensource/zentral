@@ -14,7 +14,7 @@ The Realm configuration enables SSO authentication for:
 
 ### Realm Users & IdP Claims
 
-Your IdP provides user information to authenticate and log in to Zentral with SSO. In Zentral, IdP user attributes are called "Claims". IdP Claims are mapped to Realm User attributes. The Claims differ with IdPs and the IdP Claim for username could be something like “email”, “name” or “username”. You can also define custom attributes (e.g. “department”). Please refer to **[IdP Setup Guides](#idp-setup-guides)** for detailed instructions.
+Your IdP provides user information to authenticate and log in to Zentral with SSO. In Zentral, IdP user attributes are called "Claims". IdP Claims are mapped to Realm User attributes. The Claims differ with IdPs and the IdP Claim for username could be something like “email”, “name” or “username”. You can also define custom attributes (e.g. “department”). Please refer to **[SSO Setup Guides](#sso-setup-guides)** for detailed instructions.
 
 ### Realm Setup
 
@@ -29,7 +29,7 @@ It is good practice to separate users that will have access to the Zentral Web C
 2) For the MDM Enrollment, leave “enable for login” unchecked. Optional: check “User Portal”, if active   
 4. Map the Claims from your IdP to the Username, Email, First name, Last name fields and any custom attributes  
 5. If using, enable SCIM  
-6. Pull a meta-data file from our IdP and upload it to Zentral (please refer to **[IdP Setup Guides](#idp-setup-guides)** for detailed instructions)  
+6. Pull a meta-data file from our IdP and upload it to Zentral (please refer to **[SSO Setup Guides](#sso-setup-guides)** for detailed instructions)  
 7. Click save. You should see an overview of the Realm   
 8. Update the SAML config with the IdP: Copy the values for “Entity ID” and “Assertion Consumer Service URL” (ACL) over to your IdP  
    
@@ -93,7 +93,8 @@ A Role mapping assigns a Role to a Realm Group. Members of a Realm Group, inheri
 
 ## SSO Setup Guides
 
- * [Entra ID](https://docs.zentral.io/en/latest/configuration/entra_id_saml/#create-an-entra-id-application)
- * [Okta SAML](https://docs.zentral.io/en/latest/configuration/okta_saml/)
- * [Okta SCIM](https://docs.zentral.io/en/latest/configuration/okta_scim/)
- * [One Login](https://docs.zentral.io/en/latest/configuration/onelogin_saml/)
+ * [Entra ID](../entra_id_saml/)
+ * [Google Workspace](../google_saml/)
+ * [Okta SAML](../okta_saml/)
+ * [Okta SCIM](../okta_scim/)
+ * [One Login](../onelogin_saml/)
