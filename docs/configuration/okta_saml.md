@@ -67,4 +67,4 @@ Check that everything works: click the 'Test' button (icon to the right of the r
 
 ## Role Base Access Control (RBAC)
 
-See [Realm Group and Roles setup](/configuration/sso/#realm-groups) for more information.
+See [Realm Group and Roles setup](/configuration/sso#realm-groups) for more information.
