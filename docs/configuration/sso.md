@@ -93,7 +93,8 @@ A Role mapping assigns a Role to a Realm Group. Members of a Realm Group, inheri
 
 ## SSO Setup Guides
 
- * [Entra ID](https://docs.zentral.io/en/latest/configuration/entra_id_saml/#create-an-entra-id-application)
- * [Okta SAML](https://docs.zentral.io/en/latest/configuration/okta_saml/)
- * [Okta SCIM](https://docs.zentral.io/en/latest/configuration/okta_scim/)
- * [One Login](https://docs.zentral.io/en/latest/configuration/onelogin_saml/)
+ * [Entra ID](../entra_id_saml/)
+ * [Google Workspace](../google_saml/)
+ * [Okta SAML](../okta_saml/)
+ * [Okta SCIM](../okta_scim/)
+ * [One Login](../onelogin_saml/)
