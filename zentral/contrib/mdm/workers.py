@@ -30,6 +30,14 @@ class BaseAPNSWorker:
         except (TypeError, ValueError):
             raise ImproperlyConfigured("APNS minimum target age must be an integer")
         try:
+            # maximum command waiting time: 30s by default (min 10s, max 60min)
+            self.kwargs["max_command_waiting_time"] = min(
+                max(10, int(apns_conf.get("max_command_waiting_time", 30))),
+                3600
+            )
+        except (TypeError, ValueError):
+            raise ImproperlyConfigured("APNS maximum command waiting time must be an integer")
+        try:
             # acquire batches of 50 targets by default (min 1, max 1000)
             self.kwargs["batch_size"] = min(max(1, int(workers_conf.get("batch_size", 50))), 1000)
             # after 120 seconds by default, targets can be acquired by other workers (min 10s max 10min)
@@ -168,13 +176,21 @@ class DevicesAPNSWorker(BaseAPNSWorker):
         "  AND ("
         # never seen
         "    ed.last_seen_at IS NULL"
-        #  seen a while ago
+        # seen a while ago
         "    OR ed.last_seen_at < NOW() - interval '1 seconds' * %(default_period)s"
-        # has unsent command
         "    OR EXISTS ("
         "      SELECT 1 FROM mdm_devicecommand"
         "      WHERE enrolled_device_id = ed.id"
-        "      AND time IS NULL AND (not_before IS NULL OR not_before < NOW())"
+        "      AND ("
+        # has an unsent command
+        "        (time IS NULL AND (not_before IS NULL OR not_before < NOW()))"
+        # has a command without result
+        "        OR (time IS NOT NULL AND result_time IS NULL"
+        # … sent within the last default period
+        "            AND time > NOW() - interval '1 seconds' * %(default_period)s"
+        # … sent at least 30s ago
+        "            AND time < NOW() - interval '1 seconds' * %(max_command_waiting_time)s)"
+        "      )"
         "    )"
         "  )"
         # do not spam the target
@@ -240,13 +256,21 @@ class UsersAPNSWorker(BaseAPNSWorker):
         "  AND ("
         # never seen
         "    eu.last_seen_at IS NULL"
-        #  seen a while ago
+        # seen a while ago
         "    OR eu.last_seen_at < NOW() - interval '1 seconds' * %(default_period)s"
-        # has unsent command
         "    OR EXISTS ("
         "      SELECT 1 FROM mdm_usercommand"
         "      WHERE enrolled_user_id = eu.id"
-        "      AND time IS NULL AND (not_before IS NULL OR not_before < NOW())"
+        "      AND ("
+        # has an unsent command
+        "        (time IS NULL AND (not_before IS NULL OR not_before < NOW()))"
+        # has a command without result
+        "        OR (time IS NOT NULL AND result_time IS NULL"
+        # … sent within the last default period
+        "            AND time > NOW() - interval '1 seconds' * %(default_period)s"
+        # … sent at least 30s ago
+        "            AND time < NOW() - interval '1 seconds' * %(max_command_waiting_time)s)"
+        "      )"
         "    )"
         "  )"
         # do not spam the target

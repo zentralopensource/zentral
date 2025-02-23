@@ -33,6 +33,14 @@ class MDMWorkersTestCase(TestCase):
             DevicesAPNSWorker()
 
     @patch("zentral.contrib.mdm.workers.settings")
+    def test_bad_max_command_waiting_time_value_error(self, settings):
+        settings.__getitem__.return_value = ConfigDict({
+            "zentral.contrib.mdm": {"apns": {"max_command_waiting_time": "A"}}
+        })
+        with self.assertRaises(ImproperlyConfigured, msg="APNS maximum command waiting time must be an integer"):
+            DevicesAPNSWorker()
+
+    @patch("zentral.contrib.mdm.workers.settings")
     def test_min_target_age_min(self, settings):
         settings.__getitem__.return_value = ConfigDict({
             "zentral.contrib.mdm": {"apns": {"min_target_age": "0"}}
