@@ -404,7 +404,22 @@ class InstallProfileCommandTestCase(TestCase):
         self.assertIsInstance(cmd, InstallProfile)
         self.assertEqual(cmd.artifact_version, artifact_version1)
 
-    def test_install_device_profile_declarative_management_noop(self):
+    def test_install_device_profile_declarative_management_no_legacy_profiles(self):
+        self.enrolled_device.declarative_management = True
+        self.assertTrue(Artifact.Type.PROFILE not in Target(self.enrolled_device).ddm_managed_artifact_types())
+        artifact_version, _ = self._force_profile()
+        cmd = _install_artifacts(
+            Target(self.enrolled_device),
+            self.dep_enrollment_session,
+            RequestStatus.IDLE,
+        )
+        self.assertIsInstance(cmd, InstallProfile)
+        self.assertEqual(cmd.artifact_version, artifact_version)
+
+    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
+    def test_install_device_profile_declarative_management_noop(self, ddm_managed_artifact_types):
+        # force inclusion of the PROFILE
+        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
         self.enrolled_device.declarative_management = True
         artifact_version, _ = self._force_profile()
         self.assertIsNone(_install_artifacts(

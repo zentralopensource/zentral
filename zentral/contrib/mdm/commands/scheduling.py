@@ -174,12 +174,9 @@ def _trigger_declarative_management_sync(target, enrollment_session, status):
 def _install_artifacts(target, enrollment_session, status):
     if status == RequestStatus.NOT_NOW:
         return
-    included_types = None
+    included_types = (t for t in Artifact.Type if t.can_be_installed)
     if target.declarative_management:
-        # device profiles managed using declarative management
-        included_types = (Artifact.Type.ENTERPRISE_APP, Artifact.Type.STORE_APP)
-    else:
-        included_types = (Artifact.Type.ENTERPRISE_APP, Artifact.Type.PROFILE, Artifact.Type.STORE_APP)
+        included_types = tuple(t for t in included_types if t not in target.ddm_managed_artifact_types())
     artifact_version = target.next_to_install(included_types=included_types)
     if artifact_version:
         command_class = None
@@ -202,10 +199,9 @@ def _install_artifacts(target, enrollment_session, status):
 def _remove_artifacts(target, enrollment_session, status):
     if status == RequestStatus.NOT_NOW:
         return
-    included_types = None
+    included_types = (t for t in Artifact.Type if t.can_be_removed)
     if target.declarative_management:
-        # device profiles managed using declarative management
-        included_types = (Artifact.Type.STORE_APP,)
+        included_types = tuple(t for t in included_types if t not in target.ddm_managed_artifact_types())
     artifact_version = target.next_to_remove(included_types=included_types)
     if artifact_version:
         if artifact_version.artifact.type == Artifact.Type.PROFILE:

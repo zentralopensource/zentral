@@ -702,11 +702,7 @@ class Target:
         target_artifacts_info = get_status_report_target_artifacts_info(status_report)
         if target_artifacts_info is None:
             return False
-        return self.update_target_artifacts(
-            target_artifacts_info,
-            # list exhaustive for all declarations
-            tuple(t for t in Artifact.Type if t.is_declaration),
-        )
+        return self.update_target_artifacts(target_artifacts_info, self.ddm_managed_artifact_types())
 
     def update_target_artifact(
         self,
@@ -722,6 +718,12 @@ class Target:
         return self.update_target_artifacts(target_artifacts_info)
 
     # declarations
+
+    def ddm_managed_artifact_types(self):
+        # We do not include the PROFILEs, because of the issues in the OS implementation
+        # See FB16431103, FB16482722
+        # Later, we could test for a minimum OS version for a given platform
+        return tuple(t for t in Artifact.Type if t.is_ddm_only)
 
     def supports_software_update_enforcement_specific(self):
         if not self.is_device:
@@ -770,7 +772,7 @@ class Target:
         """Iterate over the configuration artifacts to include in the managed activation"""
         yield from self.all_installed_or_to_install_serialized(
             included_types=tuple(
-                t for t in Artifact.Type
+                t for t in self.ddm_managed_artifact_types()
                 if t.is_configuration and t.can_be_linked_to_blueprint
             ),
             done_types=tuple(
@@ -805,7 +807,7 @@ class Target:
 
     def iter_declaration_artifacts(self):
         """Iterate over the declaration artifacts"""
-        yield from self.all_installed_or_to_install_serialized(tuple(t for t in Artifact.Type if t.is_declaration))
+        yield from self.all_installed_or_to_install_serialized(self.ddm_managed_artifact_types())
 
     # https://developer.apple.com/documentation/devicemanagement/declarationitemsresponse/manifestdeclarationitems
     @cached_property

@@ -758,7 +758,10 @@ class TestMDMArtifacts(TestCase):
 
     # activation
 
-    def test_device_activation_enterprise_app_not_included(self):
+    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
+    def test_device_activation_enterprise_app_not_included(self, ddm_managed_artifact_types):
+        # force inclusion of the PROFILE
+        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
         self._force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         activation = Target(self.enrolled_device).activation
@@ -769,7 +772,20 @@ class TestMDMArtifacts(TestCase):
         self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
         self.assertIn(f"zentral.legacy-profile.{profile_a.pk}", scs)
 
-    def test_device_activation_required_profile_included(self):
+    def test_device_activation_enterprise_app_and_profile_not_included(self):
+        _, profile_a, (profile_av,) = self._force_blueprint_artifact()
+        self._force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
+        activation = Target(self.enrolled_device).activation
+        self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
+        self.assertEqual(sorted(activation["Payload"].keys()), ["StandardConfigurations"])
+        scs = activation["Payload"]["StandardConfigurations"]
+        self.assertEqual(len(scs), 1)
+        self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
+
+    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
+    def test_device_activation_required_profile_included(self, ddm_managed_artifact_types):
+        # force inclusion of the PROFILE
+        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
         profile_a, _ = self._force_artifact(
             artifact_type=Artifact.Type.PROFILE,
             version_count=1,
@@ -783,7 +799,10 @@ class TestMDMArtifacts(TestCase):
         self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
         self.assertIn(f"zentral.legacy-profile.{profile_a.pk}", scs)
 
-    def test_device_activation_required_enterprise_app_installed_profile_included(self):
+    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
+    def test_device_activation_required_enterprise_app_installed_profile_included(self, ddm_managed_artifact_types):
+        # force inclusion of the PROFILE
+        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
         ea_a, (ea_av,) = self._force_artifact(
             artifact_type=Artifact.Type.ENTERPRISE_APP,
             version_count=1,
@@ -888,7 +907,10 @@ class TestMDMArtifacts(TestCase):
 
     # declaration items
 
-    def test_user_declaration_items_enterprise_app_not_included(self):
+    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
+    def test_user_declaration_items_enterprise_app_not_included(self, ddm_managed_artifact_types):
+        # force inclusion of the PROFILE
+        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact(channel=Channel.USER)
         profile_a.reinstall_on_os_update = Artifact.ReinstallOnOSUpdate.PATCH
         profile_a.reinstall_interval = 100000
@@ -917,7 +939,10 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(configurations[1]["Identifier"], f"zentral.legacy-profile.{profile_a.pk}")
         self.assertEqual(configurations[1]["ServerToken"], f"{profile_av.pk}.ov-13.1.0.ri-0.rc-2")  # max rc = 2
 
-    def test_device_declaration_items_required_profile_included(self):
+    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
+    def test_device_declaration_items_required_profile_included(self, ddm_managed_artifact_types):
+        # force inclusion of the PROFILE
+        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
         profile_a, (profile_av,) = self._force_artifact(
             artifact_type=Artifact.Type.PROFILE,
             version_count=1,
@@ -1655,7 +1680,10 @@ class TestMDMArtifacts(TestCase):
              "active": True}
         )
 
-    def test_update_target_artifacts_from_status_report_cleanup(self):
+    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
+    def test_update_target_artifacts_from_status_report_cleanup(self, ddm_managed_artifact_types):
+        # force inclusion of the PROFILE
+        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
         target = Target(self.enrolled_device)
         target.update_target_artifact(profile_av, TargetArtifact.Status.INSTALLED)
@@ -1672,7 +1700,10 @@ class TestMDMArtifacts(TestCase):
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         self.assertEqual(DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device).count(), 0)
 
-    def test_update_target_artifacts_from_status_report_cleanup_two_then_one(self):
+    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
+    def test_update_target_artifacts_from_status_report_cleanup_two_then_one(self, ddm_managed_artifact_types):
+        # force inclusion of the PROFILE
+        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
         _, profile_b, (profile_bv,) = self._force_blueprint_artifact()
         # 2 installed

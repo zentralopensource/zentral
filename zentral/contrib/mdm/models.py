@@ -2279,6 +2279,14 @@ class Artifact(models.Model):
         def can_be_linked_to_blueprint(self):
             return not self.is_asset and not self.value == self.MANUAL_CONFIGURATION
 
+        @property
+        def can_be_installed(self):
+            return self.value in (self.ENTERPRISE_APP, self.PROFILE, self.STORE_APP)
+
+        @property
+        def can_be_removed(self):
+            return self.value in (self.PROFILE, self.STORE_APP)
+
     class ReinstallOnOSUpdate(models.TextChoices):
         NO = "No"
         MAJOR = "Major"
@@ -2329,7 +2337,7 @@ class Artifact(models.Model):
 
     @property
     def can_be_removed(self):
-        return self.get_type() in (self.Type.PROFILE, self.Type.STORE_APP)
+        return self.get_type().can_be_removed
 
     def blueprints(self):
         # directly included

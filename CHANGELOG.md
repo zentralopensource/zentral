@@ -78,6 +78,10 @@ New `zentral.core.stores.backends.panther` store backend for [Panther](https://p
 
 ### Backward incompatibilities
 
+#### 🧨 MDM Profiles *NOT* managed via DDM anymore
+
+The DDM implementation of the legacy profile declarations is not robust enough at the moment. Network disruptions might leave the device in an indesirable state that can only be fixed with a reboot. This is not good enough, especially during the MDM enrollment. We have decided to switch back to the InstallProfile command until this is fixed by Apple.
+
 #### 🧨 Santa bundle rules removed
 
 Zentral doesn't support rules with a Bundle as target anymore. A migration will translated those rules into Binary rules.

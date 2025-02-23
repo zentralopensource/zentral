@@ -1,4 +1,5 @@
 import plistlib
+from unittest.mock import patch
 import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -220,7 +221,7 @@ class RemoveProfileCommandTestCase(TestCase):
             )
         )
 
-    def test_remove_device_profile(self):
+    def test_remove_device_profile_no_declarative_management(self):
         self.assertFalse(self.enrolled_device.declarative_management)
         artifact_version, _ = self._force_profile(status=TargetArtifact.Status.INSTALLED)
         command = _remove_artifacts(
@@ -232,7 +233,22 @@ class RemoveProfileCommandTestCase(TestCase):
         self.assertEqual(command.channel, Channel.DEVICE)
         self.assertEqual(command.artifact_version, artifact_version)
 
-    def test_remove_device_profile_declarative_management_noop(self):
+    def test_remove_device_profile_declarative_management(self):
+        self.enrolled_device.declarative_management = True
+        artifact_version, _ = self._force_profile(status=TargetArtifact.Status.INSTALLED)
+        command = _remove_artifacts(
+            Target(self.enrolled_device),
+            self.dep_enrollment_session,
+            RequestStatus.IDLE,
+        )
+        self.assertIsInstance(command, RemoveProfile)
+        self.assertEqual(command.channel, Channel.DEVICE)
+        self.assertEqual(command.artifact_version, artifact_version)
+
+    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
+    def test_remove_device_profile_declarative_management_noop(self, ddm_managed_artifact_types):
+        # force inclusion of the PROFILE
+        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
         self.enrolled_device.declarative_management = True
         artifact_version, _ = self._force_profile(status=TargetArtifact.Status.INSTALLED)
         self.assertIsNone(_remove_artifacts(
