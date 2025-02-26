@@ -1,3 +1,4 @@
+from django.db import connection
 from prometheus_client import Gauge
 from zentral.utils.prometheus import BasePrometheusMetricsView
 from zentral.conf import settings
@@ -119,6 +120,24 @@ class MetricsView(BasePrometheusMetricsView):
             for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
                 g.labels(le=le, **labels).set(r[le])
 
+    def add_machine_tags(self):
+        g = Gauge('zentral_inventory_machine_tags', 'Zentral machine tags',
+                  ['taxonomy', 'tag'],
+                  registry=self.registry)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "select tx.name, t.name, count(*) "
+                "from inventory_machinetag mt "
+                "join inventory_tag t on (mt.tag_id = t.id) "
+                "left join inventory_taxonomy tx on (t.taxonomy_id = tx.id) "
+                "group by tx.name, t.name"
+            )
+            for taxonomy, tag, count in cursor.fetchall():
+                g.labels(
+                    taxonomy=taxonomy or "_",
+                    tag=tag,
+                ).set(count)
+
     def populate_registry(self):
         self.metrics_options = settings["apps"]["zentral.contrib.inventory"].get("metrics_options", {})
         self.all_source_names = set([])
@@ -129,3 +148,4 @@ class MetricsView(BasePrometheusMetricsView):
         self.add_osx_apps()
         self.add_programs()
         self.add_active_machines()
+        self.add_machine_tags()
