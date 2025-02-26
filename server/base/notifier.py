@@ -40,7 +40,7 @@ class Notifier:
             "host": parsed_url.hostname,
             "port": parsed_url.port,
             "db": db,
-            "ssl": parsed_url.scheme == "rediss",
+            "ssl": parsed_url.scheme in ("rediss", "valkeys"),
             "username": config.get("username"),
             "password": config.get("password"),
             "decode_responses": True,
