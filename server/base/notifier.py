@@ -2,6 +2,7 @@ import logging
 import random
 import threading
 from urllib.parse import urlparse
+import weakref
 from zentral.conf import settings
 from django.utils.functional import SimpleLazyObject
 import redis
@@ -78,9 +79,23 @@ class Notifier:
         if not callbacks:
             logger.error("Unknown channel: %s", channel)
             return
+        dead_weakrefs = []
         for callback in callbacks:
             logger.debug("Calling callback %s for channel %s", callback, channel)
-            callback(data)
+            if isinstance(callback, weakref.ref):
+                func = callback()
+                if func is None:
+                    logger.debug("Callback %s is a dead weakref for channel %s", callback, channel)
+                    dead_weakrefs.append(callback)
+                    continue
+            else:
+                func = callback
+            func(data)
+        if dead_weakrefs:
+            with self._lock:
+                for dead_weakref in dead_weakrefs:
+                    logger.debug("Remove dead weakref callback %s for channel %s", dead_weakref, channel)
+                    callbacks.remove(dead_weakref)
 
     def _reconnect(self):
         logger.info("Reconnect")
@@ -129,7 +144,7 @@ class Notifier:
                     self._schedule_reconnect()
             channel_callbacks.append(callback)
 
-    def send_notification(self, channel, data):
+    def send_notification(self, channel, data=""):
         try:
             self._get_client().publish(channel, data)
         except Exception:
