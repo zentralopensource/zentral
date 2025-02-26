@@ -182,7 +182,7 @@ def update_cache(instance):
     version = instance.version
     observer_dict = instance.observer_dict()
     value = (token_digest, version, observer_dict)
-    cache.set(cache_key, value)
+    cache.set(cache_key, value, timeout=604800)  # 7 days
     return value
 
 

@@ -152,7 +152,7 @@ class MRCatalogView(MRNameView):
             catalog_data = cache.get(cache_key)
             if not isinstance(catalog_data, list):
                 catalog_data = self.manifest.build_catalog(self.tags)
-                cache.set(cache_key, catalog_data, timeout=None)
+                cache.set(cache_key, catalog_data, timeout=604800)  # 7 days
             else:
                 event_payload["cache"]["hit"] = True
             return HttpResponse(
@@ -185,7 +185,7 @@ class MRManifestView(MRNameView):
             manifest_data = cache.get(cache_key)
             if manifest_data is None:
                 manifest_data = self.manifest.serialize(self.tags)
-                cache.set(cache_key, manifest_data, timeout=None)
+                cache.set(cache_key, manifest_data, timeout=604800)  # 7 days
             else:
                 event_payload["cache"]["hit"] = True
         elif model == "sub_manifest":
@@ -204,7 +204,7 @@ class MRManifestView(MRNameView):
                     sub_manifest_name = sub_manifest.name
                     sub_manifest_data = sub_manifest.build()
                 # set the cache value, even if sub_manifest_name and sub_manifest_data are None
-                cache.set(cache_key, (sub_manifest_name, sub_manifest_data), timeout=None)
+                cache.set(cache_key, (sub_manifest_name, sub_manifest_data), timeout=604800)  # 7 days
             else:
                 event_payload["cache"]["hit"] = True
             if sub_manifest_name:
@@ -259,7 +259,7 @@ class MRPackageView(MRNameView):
                 else:
                     filename = mep.file.name
                 # set the cache value, even if filename is None
-                cache.set(cache_key, filename, timeout=None)
+                cache.set(cache_key, filename, timeout=604800)  # 7 days
             else:
                 event_payload["cache"]["hit"] = True
             if filename:
