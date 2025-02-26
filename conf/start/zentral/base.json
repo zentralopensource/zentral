@@ -56,6 +56,9 @@
     }
   },
   "apps": {
+    "realms": {
+      "metrics": true
+    },
     "zentral.core.compliance_checks": {
       "metrics": true
     },
