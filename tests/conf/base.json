@@ -151,6 +151,7 @@
     },
     "zentral.contrib.jamf": {},
     "zentral.contrib.mdm": {
+      "metrics": true,
       "scep_ca_fullchain": "NOT_A_VALID_CERT",
       "push_csr_signer": {
         "backend": "zentral.contrib.mdm.push_csr_signers.ZentralSaaSPushCSRSigner",
