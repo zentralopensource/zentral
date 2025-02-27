@@ -40,8 +40,8 @@
         <th>UDID</th>
         <th>model</th>
         <th>name</th>
-        <th>created at</th>
-        <th>updated at</th>
+        <th>created</th>
+        <th>last seen</th>
         </tr>
     </thead>
     <tbody>
@@ -66,7 +66,7 @@
         <td>{{ enrolled_device.model|default:"-" }}</td>
         <td>{{ enrolled_device.name|default:"-" }}</td>
         <td>{{ enrolled_device.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-        <td>{{ enrolled_device.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        <td>{{ enrolled_device.last_seen_at|date:"SHORT_DATETIME_FORMAT" }}</td>
         </tr>
         {% endfor %}
     </tbody>

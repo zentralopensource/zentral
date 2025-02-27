@@ -12,7 +12,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import CustomCommand
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.models import Blueprint, DeviceArtifact, Platform, TargetArtifact
-from .utils import (force_artifact, force_blueprint,
+from .utils import (force_artifact, force_blueprint, force_blueprint_artifact,
                     force_dep_enrollment_session, force_ota_enrollment_session, force_user_enrollment_session)
 
 
@@ -139,6 +139,54 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, '<li class="breadcrumb-item active">Search</li>')
         self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
         self.assertContains(response, "Devices (2)")
+        self.assertContains(response, "page 1 of 1")
+        self.assertContains(response, serial_number1)
+        self.assertContains(response, serial_number2)
+        self.assertNotContains(response, serial_number3)
+
+    def test_enrolled_devices_artifact_search(self):
+        session1, _, serial_number1 = force_dep_enrollment_session(self.mbu, completed=True)
+        session2, _, serial_number2 = force_dep_enrollment_session(self.mbu, completed=True)
+        _, _, serial_number3 = force_dep_enrollment_session(self.mbu, completed=True)
+        _, artifact, (av,) = force_blueprint_artifact()
+        DeviceArtifact.objects.create(enrolled_device=session1.enrolled_device, artifact_version=av, status="Failed")
+        DeviceArtifact.objects.create(enrolled_device=session2.enrolled_device, artifact_version=av, status="Failed")
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_devices"), {"artifact": f"a_{artifact.pk}"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "page 1 of 1")
+        self.assertContains(response, serial_number1)
+        self.assertContains(response, serial_number2)
+        self.assertNotContains(response, serial_number3)
+
+    def test_enrolled_devices_artifact_version_search(self):
+        session1, _, serial_number1 = force_dep_enrollment_session(self.mbu, completed=True)
+        session2, _, serial_number2 = force_dep_enrollment_session(self.mbu, completed=True)
+        session3, _, serial_number3 = force_dep_enrollment_session(self.mbu, completed=True)
+        _, artifact, (av1, av2) = force_blueprint_artifact(version_count=2)
+        DeviceArtifact.objects.create(enrolled_device=session1.enrolled_device, artifact_version=av1, status="Failed")
+        DeviceArtifact.objects.create(enrolled_device=session2.enrolled_device, artifact_version=av1, status="Failed")
+        DeviceArtifact.objects.create(enrolled_device=session3.enrolled_device, artifact_version=av2, status="Failed")
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_devices"), {"artifact": f"av_{av1.pk}"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "page 1 of 1")
+        self.assertContains(response, serial_number1)
+        self.assertContains(response, serial_number2)
+        self.assertNotContains(response, serial_number3)
+
+    def test_enrolled_devices_artifact_status_search(self):
+        session1, _, serial_number1 = force_dep_enrollment_session(self.mbu, completed=True)
+        session2, _, serial_number2 = force_dep_enrollment_session(self.mbu, completed=True)
+        session3, _, serial_number3 = force_dep_enrollment_session(self.mbu, completed=True)
+        _, artifact, (av1, av2) = force_blueprint_artifact(version_count=2)
+        DeviceArtifact.objects.create(enrolled_device=session1.enrolled_device, artifact_version=av1, status="Failed")
+        DeviceArtifact.objects.create(enrolled_device=session2.enrolled_device, artifact_version=av1, status="Failed")
+        DeviceArtifact.objects.create(enrolled_device=session3.enrolled_device, artifact_version=av2,
+                                      status="Installed")
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_devices"), {"artifact_status": "Failed"})
+        self.assertEqual(response.status_code, 200)
         self.assertContains(response, "page 1 of 1")
         self.assertContains(response, serial_number1)
         self.assertContains(response, serial_number2)

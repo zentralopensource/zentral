@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime, timedelta
 import hashlib
 import json
 import logging
@@ -8,7 +9,7 @@ import zipfile
 from dateutil import parser
 from django import forms
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q, OuterRef, Exists
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.passwords import build_password_hash_dict
@@ -29,7 +30,8 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      FileVaultConfig, RecoveryPasswordConfig, SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
                      Profile, Location, LocationAsset, StoreApp,
-                     SoftwareUpdateEnforcement)
+                     SoftwareUpdateEnforcement,
+                     DeviceArtifact, TargetArtifact)
 from .skip_keys import skippable_setup_panes
 
 
@@ -203,20 +205,72 @@ class EnrolledDeviceSearchForm(forms.Form):
                         widget=forms.TextInput(attrs={"placeholder": "Serial number, UDID",
                                                       "autofocus": True}))
     platform = forms.ChoiceField(
-        choices=[("", "..."), ] + [(p.value, p.value) for p in Platform], required=False)
-    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="...")
+        choices=[("", "…"), ] + [(p.value, p.value) for p in Platform], required=False)
+    blueprint = forms.ModelChoiceField(queryset=Blueprint.objects.all(), required=False, empty_label="…")
+    artifact = forms.ChoiceField(label="Artifact/Version", choices=[])
+    artifact_status = forms.ChoiceField(label="Artifact status", choices=[])
+    last_seen = forms.ChoiceField(
+        choices=(("", "…"),
+                 ("1d", "24 hours"),
+                 ("7d", "7 days"),
+                 ("14d", "14 days"),
+                 ("30d", "30 days"),
+                 ("45d", "45 days"),
+                 ("90d", "90 days")),
+        initial="",
+        required=False,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["artifact_status"].choices = [("", "…")] + TargetArtifact.Status.choices
+        artifact_choices = self.fields["artifact"].choices
+        artifact_choices.append(("", "…"))
+        current_artifact = None
+        for artifact_version in (
+            ArtifactVersion.objects.select_related("artifact")
+                                   .all()
+                                   .order_by("artifact__name", "artifact__pk", "version")
+        ):
+            artifact = artifact_version.artifact
+            if current_artifact != artifact:
+                current_artifact = artifact
+                artifact_choices.append((f"a_{artifact.pk}", str(artifact)))
+            artifact_choices.append((f"av_{artifact_version.pk}", str(artifact_version)))
 
     def get_queryset(self):
-        qs = EnrolledDevice.objects.all().order_by("-updated_at")
+        qs = EnrolledDevice.objects.all().order_by(F("last_seen_at").desc(nulls_last=True))
+        # q
         q = self.cleaned_data.get("q")
         if q:
             qs = qs.filter(Q(serial_number__icontains=q) | Q(udid__icontains=q))
+        # platform
         platform = self.cleaned_data.get("platform")
         if platform:
             qs = qs.filter(platform=platform)
+        # blueprint
         blueprint = self.cleaned_data.get("blueprint")
         if blueprint:
             qs = qs.filter(blueprint=blueprint)
+        # artifact
+        da_subquery_kwargs = {}
+        artifact_choice = self.cleaned_data.get("artifact")
+        if artifact_choice:
+            act, pk = artifact_choice.split("_")
+            if act == "a":
+                da_subquery_kwargs["artifact_version__artifact__pk"] = pk
+            elif act == "av":
+                da_subquery_kwargs["artifact_version__pk"] = pk
+        artifact_status = self.cleaned_data.get("artifact_status")
+        if artifact_status:
+            da_subquery_kwargs["status"] = artifact_status
+        if da_subquery_kwargs:
+            qs = qs.filter(Exists(DeviceArtifact.objects.filter(enrolled_device=OuterRef("pk"), **da_subquery_kwargs)))
+        # last seen
+        last_seen = self.cleaned_data.get("last_seen")
+        if last_seen:
+            days = int(last_seen.removesuffix("d"))
+            qs = qs.filter(last_seen_at__gte=datetime.utcnow() - timedelta(days=days))
         return qs
 
     def get_redirect_to(self):

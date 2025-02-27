@@ -5,7 +5,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
-from django.db.models import Count, Max
+from django.db.models import Count, F, Func, Max, OuterRef, Subquery
 from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -39,6 +39,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Channel,
                                         DataAsset, Declaration,
                                         DEPDevice, DEPEnrollment,
+                                        DeviceArtifact, UserArtifact,
                                         DeviceCommand, UserCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         FileVaultConfig,
@@ -673,12 +674,39 @@ class ArtifactView(PermissionRequiredMixin, DetailView):
             )
         if upgrade_view and self.request.user.has_perm("mdm.add_artifactversion"):
             ctx["upgrade_link"] = reverse(f"mdm:{upgrade_view}", args=(self.object.pk,))
-        ctx["versions"] = (
+        version_qs = (
             ArtifactVersion.objects.select_related("artifact", "enterprise_app", "profile", "store_app")
                                    .filter(artifact=self.object)
                                    .order_by("-version")
         )
-        ctx["versions_count"] = ctx["versions"].count()
+        if self.object.get_channel() == Channel.USER:
+            version_qs = version_qs.annotate(
+                target_artifact_count=Subquery(UserArtifact.objects.filter(
+                    artifact_version__pk=OuterRef("pk")
+                ).annotate(
+                    count=Func(F('id'), function='Count')
+                ).values('count')),
+                command_count=Subquery(UserCommand.objects.filter(
+                    artifact_version__pk=OuterRef("pk")
+                ).annotate(
+                    count=Func(F('id'), function='Count')
+                ).values('count')),
+            )
+        else:
+            version_qs = version_qs.annotate(
+                target_artifact_count=Subquery(DeviceArtifact.objects.filter(
+                    artifact_version__pk=OuterRef("pk")
+                ).annotate(
+                    count=Func(F('id'), function='Count')
+                ).values('count')),
+                command_count=Subquery(DeviceCommand.objects.filter(
+                    artifact_version__pk=OuterRef("pk")
+                ).annotate(
+                    count=Func(F('id'), function='Count')
+                ).values('count')),
+            )
+        ctx["versions"] = version_qs
+        ctx["versions_count"] = version_qs.count()
         ctx["blueprint_artifacts"] = (self.object.blueprintartifact_set.select_related("blueprint")
                                                                        .order_by("blueprint__name"))
         ctx["blueprint_artifacts_count"] = ctx["blueprint_artifacts"].count()

@@ -151,6 +151,12 @@
       <th>Excl. tags</th>
       <th>Def. shard</th>
       <th>Tag shards</th>
+      {% if object.channel == "Device" %}
+      <th>Devices</th>
+      {% else %}
+      <th>Users</th>
+      {% endif %}
+      <th>Commands</th>
       <th></th>
     </tr>
   </thead>
@@ -195,6 +201,18 @@
         {% else %}
         -
         {% endif %}
+      </td>
+      <td>
+      {% if av.target_artifact_count and object.channel == "Device" and perms.mdm.view_enrolleddevice %}
+      <a href="{% url 'mdm:enrolled_devices' %}?artifact=av_{{ av.pk }}">
+        {{ av.target_artifact_count }}
+      </a>
+      {% else %}
+      {{ av.target_artifact_count }}
+      {% endif %}
+      </td>
+      <td>
+      {{ av.command_count }}
       </td>
       <td class="text-end py-0">
         {% if perms.mdm.view_artifactversion %}
