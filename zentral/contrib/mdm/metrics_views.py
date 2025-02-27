@@ -1,6 +1,6 @@
 import logging
 from django.db import connection
-from prometheus_client import Counter
+from prometheus_client import Counter, Gauge
 from zentral.utils.prometheus import BasePrometheusMetricsView
 
 
@@ -68,6 +68,48 @@ class MetricsView(BasePrometheusMetricsView):
                     version=str(version) if version is not None else "_"
                 ).inc(count)
 
+    def populate_enrolled_devices(self):
+        edg = Gauge(
+            'zentral_mdm_devices', 'Zentral MDM devices',
+            ['blueprint', 'platform', 'supervised', 'blocked', 'le'],
+            registry=self.registry,
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "with devices as ("
+                "  select b.name blueprint, d.platform, d.supervised,"
+                "  case when d.blocked_at is null then FALSE else TRUE end blocked,"
+                "  case when last_seen_at is not null"
+                "  then date_part('days', now() - last_seen_at)"
+                "  else null end age"
+                "  from mdm_enrolleddevice d"
+                "  left join mdm_blueprint b on (d.blueprint_id = b.id)"
+                ") "
+                "select blueprint, platform, supervised, blocked,"
+                'count(*) filter (where age is not null and age < 1) "1",'
+                'count(*) filter (where age is not null and age < 7) "7",'
+                'count(*) filter (where age is not null and age < 14) "14",'
+                'count(*) filter (where age is not null and age < 30) "30",'
+                'count(*) filter (where age is not null and age < 45) "45",'
+                'count(*) filter (where age is not null and age < 90) "90",'
+                'count(*) as "+Inf" '
+                'from devices '
+                'group by blueprint, platform, supervised, blocked'
+            )
+            columns = [c.name for c in cursor.description]
+            for row in cursor.fetchall():
+                row_d = dict(zip(columns, row))
+                supervised = row_d.pop("supervised")
+                default_labels = {
+                    "blueprint": row_d.pop("blueprint") or "_",
+                    "platform": row_d.pop("platform") or "_",
+                    "supervised": "_" if supervised is None else str(supervised).lower(),
+                    "blocked": str(row_d.pop("blocked")).lower(),
+                }
+                for le, val in row_d.items():
+                    edg.labels(le=le, **default_labels).set(val)
+
     def populate_registry(self):
         self.populate_enrollment_sessions()
         self.populate_commands()
+        self.populate_enrolled_devices()
