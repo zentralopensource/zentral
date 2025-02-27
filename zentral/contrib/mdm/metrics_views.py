@@ -1,6 +1,6 @@
 import logging
 from django.db import connection
-from prometheus_client import Gauge
+from prometheus_client import Counter
 from zentral.utils.prometheus import BasePrometheusMetricsView
 
 
@@ -9,7 +9,7 @@ logger = logging.getLogger("zentral.core.mdm.metrics_views")
 
 class MetricsView(BasePrometheusMetricsView):
     def populate_enrollment_sessions(self):
-        isg = Gauge(
+        isg = Counter(
             'zentral_mdm_enrollment_sessions', 'Zentral MDM enrollment sessions',
             ['type', 'status', 'realm'],
             registry=self.registry
@@ -35,7 +35,7 @@ class MetricsView(BasePrometheusMetricsView):
                     type=type,
                     status=status,
                     realm=realm or "_",
-                ).set(count)
+                ).inc(count)
 
     def populate_registry(self):
         self.populate_enrollment_sessions()

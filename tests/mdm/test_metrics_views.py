@@ -11,6 +11,8 @@ from .utils import force_dep_enrollment_session, force_ota_enrollment_session
     STATICFILES_STORAGE="django.contrib.staticfiles.storage.StaticFilesStorage"
 )
 class MDMMetricsViewsTestCase(TestCase):
+    maxDiff = None
+
     # utility methods
 
     def _make_authenticated_request(self):
@@ -21,7 +23,12 @@ class MDMMetricsViewsTestCase(TestCase):
 
     def _assertSamples(self, families, samples):
         d = {}
+        families_to_ignore = []
         for family in families:
+            if family.type == "counter":
+                families_to_ignore.append(f"{family.name}_created")
+            if family.name in families_to_ignore:
+                continue
             sample_dict = d.setdefault(family.name, {})
             for sample in family.samples:
                 serialized_sample_items = []
