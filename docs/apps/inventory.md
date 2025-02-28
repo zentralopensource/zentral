@@ -252,6 +252,56 @@ This boolean is used to toggle the inclusion of the principal user in the event 
 
 ## HTTP API
 
+### `/api/inventory/machines/<url_safe_serial_number>/meta/`
+
+* method: GET
+* required permission: `inventory.view_machinesnapshot`
+
+Use this endpoint to get general information about a machine.
+
+Example:
+
+```
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     https://$ZTL_FQDN/api/inventory/machines/ABCDEFGHIJKL/meta/
+```
+
+Result:
+
+```json
+{
+    "serial_number": "ABCDEFGHIJKL",
+    "urlsafe_serial_number": "ABCDEFGHIJKL",
+    "computer_name": "ThisIsATest",
+    "platform": "MACOS",
+    "type": "LAPTOP",
+    "tags": [
+        {
+            "id": 1,
+            "name": "test-device"
+        }
+    ]
+}
+```
+
+For convenience, this endpoint accepts serial numbers as URL path parameter. Standard machine serial numbers (like Apple devices serial numbers) do not have to be transformed, but some serial numbers cannot be used safely in a URL. To get the URL safe serial number:
+
+ * compute the URL safe base 64 representation of the serial number without the `=` padding
+     * if the result is equal to the serial number itself, you can use it
+     * if the result is different, prefix it with a `.` and use it
+
+Because the encoded serial numbers are prefixed with a `.`, serial numbers starting with a `.` also needs to be encoded.
+
+The same mechanism is used to produce user friendly machine URLs in the Zentral UI.
+
+Some examples:
+
+|Serial number|URL safe serial number|Comment|
+|---|---|---|
+|`ABCDEFGHIJKL`|`ABCDEFGHIJKL`|No need for encoding|
+|`.ABCDEFGHIJK`|`.LkFCQ0RFRkdISUpL`|Starts with a dot, requires encoding|
+|`l'été au soleil`|`.bCfDqXTDqSBhdSBzb2xlaWw`|Obviously requires encoding|
+
 ### `/api/inventory/machines/tags/`
 
 * method: POST

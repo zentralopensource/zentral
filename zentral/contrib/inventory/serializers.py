@@ -64,6 +64,21 @@ class MachineTagsUpdateSerializer(serializers.Serializer):
         return data
 
 
+# MetaMachine
+
+
+class MetaMachineSerializer(serializers.Serializer):
+    serial_number = serializers.CharField()
+    urlsafe_serial_number = serializers.CharField(source="get_urlsafe_serial_number")
+    computer_name = serializers.CharField()
+    platform = serializers.CharField()
+    type = serializers.CharField()
+    tags = serializers.SerializerMethodField()
+
+    def get_tags(self, obj):
+        return [{"id": pk, "name": name} for pk, name in obj.tag_pks_and_names]
+
+
 # Archive or prune machines
 
 

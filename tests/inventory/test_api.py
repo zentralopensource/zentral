@@ -9,7 +9,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSnapshot,
-                                              MachineSnapshotCommit, MetaBusinessUnit, Tag, Taxonomy)
+                                              MachineSnapshotCommit, MachineTag,
+                                              MetaBusinessUnit, Tag, Taxonomy)
 from zentral.core.events.base import AuditEvent
 
 
@@ -46,7 +47,7 @@ class InventoryAPITests(APITestCase):
         else:
             self.group.permissions.clear()
 
-    def commit_machine_snapshot(self, serial_number=None):
+    def commit_machine_snapshot(self, serial_number=None, computer_name=None):
         if serial_number is None:
             serial_number = get_random_string(12)
         source = {"module": "tests.zentral.io", "name": "Zentral Tests"}
@@ -62,7 +63,6 @@ class InventoryAPITests(APITestCase):
                         "source": source,
                         "links": [{"anchor_text": "group link",
                                    "url": "http://group-link.de"}]}],
-            "serial_number": serial_number,
             "os_version": {'name': 'OS X', 'major': 10, 'minor': 11, 'patch': 1},
             "osx_app_instances": [
                 {'app': {'bundle_id': 'io.zentral.baller',
@@ -70,10 +70,48 @@ class InventoryAPITests(APITestCase):
                          'bundle_version': '123',
                          'bundle_version_str': '1.2.3'},
                  'bundle_path': "/Applications/Baller.app"}
-            ]
+            ],
+            "serial_number": serial_number,
         }
+        if computer_name:
+            tree["system_info"] = {"computer_name": computer_name,
+                                   "hardware_model": "Mac15,13"}
         MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         return serial_number
+
+    # meta machines
+
+    def test_get_meta_machine_unauthorized(self):
+        response = self.client.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_meta_machine_wrong_permissions(self):
+        self._set_permissions("inventory.view_tag")
+        response = self.client.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_meta_machine_does_not_exist(self):
+        self._set_permissions("inventory.view_machinesnapshot")
+        response = self.client.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_meta_machine(self):
+        computer_name = get_random_string(12)
+        serial_number = self.commit_machine_snapshot(computer_name=computer_name)
+        tag_name = get_random_string(12)
+        tag = Tag.objects.create(name=tag_name)
+        MachineTag.objects.create(serial_number=serial_number, tag=tag)
+        self._set_permissions("inventory.view_machinesnapshot")
+        response = self.client.get(reverse('inventory_api:meta_machine', args=(serial_number,)))
+        self.assertEqual(
+            response.data,
+            {'serial_number': serial_number,
+             'urlsafe_serial_number': serial_number,
+             'computer_name': computer_name,
+             'platform': 'MACOS',
+             'type': 'LAPTOP',
+             'tags': [{"id": tag.pk, "name": tag.name}]}
+        )
 
     # archive machines
 

@@ -10,6 +10,7 @@ from .api_views import (ArchiveMachines,
                         MachineIOSAppsExport,
                         MachineProgramInstancesExport,
                         MachineSnapshotsExport,
+                        MetaMachineView,
                         JMESPathCheckDetail, JMESPathCheckList,
                         MetaBusinessUnitDetail, MetaBusinessUnitList,
                         PruneMachines,
@@ -22,6 +23,9 @@ app_name = "inventory_api"
 urlpatterns = [
     # machine mass tagging
     path('machines/tags/', UpdateMachineTags.as_view(), name="update_machine_tags"),
+
+    # meta machine
+    path('machines/<str:urlsafe_serial_number>/meta/', MetaMachineView.as_view(), name="meta_machine"),
 
     # archive or prune machines
     path('machines/archive/', ArchiveMachines.as_view(), name="archive_machines"),

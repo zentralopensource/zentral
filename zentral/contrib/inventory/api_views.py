@@ -1,4 +1,5 @@
 from django.db import connection, transaction
+from django.http import Http404
 from django.urls import reverse
 from django.utils import timezone
 from django_filters import rest_framework as filters
@@ -19,12 +20,14 @@ from .models import (CurrentMachineSnapshot,
                      MachineSnapshot,
                      MachineTag,
                      MetaBusinessUnit,
+                     MetaMachine,
                      Tag, Taxonomy)
 from .serializers import (CleanupInventorySerializer,
                           JMESPathCheckSerializer,
                           MachineSerialNumbersSerializer,
                           MachineTagsUpdateSerializer,
                           MetaBusinessUnitSerializer,
+                          MetaMachineSerializer,
                           TagSerializer, TaxonomySerializer)
 from .tasks import (cleanup_inventory,
                     export_inventory,
@@ -145,6 +148,21 @@ class UpdateMachineTags(APIView):
         return Response({"machines": {"found": found_machines},
                          "tags": {"added": total_added,
                                   "removed": total_removed}})
+
+
+# MetaMachine
+
+
+class MetaMachineView(APIView):
+    permission_required = "inventory.view_machinesnapshot"
+    permission_classes = [DjangoPermissionRequired]
+
+    def get(self, request, *args, **kwargs):
+        mm = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
+        if not mm.snapshots:
+            raise Http404
+        serializer = MetaMachineSerializer(mm)
+        return Response(serializer.data)
 
 
 # Archive or prune machines

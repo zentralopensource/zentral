@@ -570,9 +570,11 @@ class MachineSnapshotManager(MTObjectManager):
     def current(self):
         return (self.select_related('business_unit__meta_business_unit',
                                     'os_version',
+                                    'principal_user',
+                                    'puppet_node',
+                                    'source',
                                     'system_info',
-                                    'teamviewer',
-                                    'puppet_node')
+                                    'teamviewer')
                     .filter(currentmachinesnapshot__isnull=False))
 
     def current_platforms(self):
