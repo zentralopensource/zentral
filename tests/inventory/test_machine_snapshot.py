@@ -16,7 +16,7 @@ from zentral.contrib.inventory.models import (BusinessUnit,
                                               MetaMachine,
                                               Source,
                                               Tag, Taxonomy)
-from zentral.contrib.inventory.utils import inventory_events_from_machine_snapshot_commit
+from zentral.contrib.inventory.utils.db import inventory_events_from_machine_snapshot_commit
 from zentral.utils.mt_models import MTOError
 
 
