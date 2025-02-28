@@ -2748,7 +2748,7 @@ class MonolithAPIViewsTestCase(TestCase):
             data={
                 'sub_manifest': new_sub_manifest.pk,
                 'pkg_info_name': new_pkg_info_name.name,
-                'key': 'managed_installs',
+                'key': 'managed_updates',
                 'condition': new_condition.pk,
                 'excluded_tags': [excluded_tag.pk],
                 'shard_modulo': 42,
@@ -2765,7 +2765,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {
             'id': sub_manifest_pkg_info.pk,
             'sub_manifest': new_sub_manifest.pk,
-            'key': 'managed_installs',
+            'key': 'managed_updates',
             'pkg_info_name': new_pkg_info_name.name,
             'featured_item': False,
             'condition': new_condition.pk,
