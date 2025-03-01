@@ -798,7 +798,7 @@ Example:
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_FQDN$ZTL_FQDN/api/inventory/full_export/\
+  https://$ZTL_FQDN/api/inventory/full_export/\
   |python3 -m json.tool
 ```
 
