@@ -7,7 +7,7 @@ from django.core.files.storage import default_storage
 from django.db import connection
 from django.http import QueryDict
 import xlsxwriter
-from .cleanup import cleanup_inventory as do_cleanup_inventory, get_min_date
+from .utils import cleanup_inventory as do_cleanup_inventory, get_cleanup_max_date
 from .events import post_cleanup_finished_event, post_cleanup_started_event
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
 from .utils import (MSQuery,
@@ -21,8 +21,8 @@ from .utils import (MSQuery,
 
 @shared_task
 def cleanup_inventory(days, serialized_event_request):
-    min_date = get_min_date(days)
-    payload = {"days": days, "min_date": min_date}
+    max_date = get_cleanup_max_date(days)
+    payload = {"days": days, "max_date": max_date}
     post_cleanup_started_event(payload.copy(), serialized_event_request)
 
     payload["tables"] = {}
@@ -31,7 +31,7 @@ def cleanup_inventory(days, serialized_event_request):
         payload["tables"][key] = val
 
     with connection.cursor() as cursor:
-        payload["duration"] = do_cleanup_inventory(cursor, result_callback, min_date)
+        payload["duration"] = do_cleanup_inventory(cursor, result_callback, max_date)
 
     post_cleanup_finished_event(payload, serialized_event_request)
     return payload
@@ -63,7 +63,7 @@ def export_inventory(urlencoded_query_dict, filename):
 
 def export_apps(form_class, form_data, filename):
     form = form_class(form_data or {}, export=True)
-    assert(form.is_valid())
+    assert form.is_valid()
     _, extension = os.path.splitext(filename)
     filepath = os.path.join("exports", filename)
     headers = list(label for _, label in form.iter_export_headers())

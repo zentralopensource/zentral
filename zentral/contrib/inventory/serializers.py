@@ -1,7 +1,7 @@
 from django.db.models import F
 from rest_framework import serializers
 from zentral.core.compliance_checks.models import ComplianceCheck
-from .cleanup import get_default_snapshot_retention_days
+from .utils import get_default_snapshot_retention_days
 from .compliance_checks import InventoryJMESPathCheck
 from .models import EnrollmentSecret, JMESPathCheck, MetaBusinessUnit, Tag, Taxonomy
 

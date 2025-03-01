@@ -1,7 +1,9 @@
 import logging
 from django.core.management.base import BaseCommand
 from django.db import connection
-from zentral.contrib.inventory.cleanup import cleanup_inventory, get_default_snapshot_retention_days, get_min_date
+from zentral.contrib.inventory.utils import (cleanup_inventory,
+                                             get_default_snapshot_retention_days,
+                                             get_cleanup_max_date)
 
 
 logger = logging.getLogger("zentral.contrib.inventory.management.commands.cleanup_inventory_history")
@@ -21,14 +23,14 @@ class Command(BaseCommand):
 
     def set_options(self, **options):
         self.quiet = options["quiet"] or options["verbosity"] == 0
-        self.min_date = get_min_date(options["days"])
+        self.max_date = get_cleanup_max_date(options["days"])
         if not self.quiet:
-            self.stdout.write("min date: {}".format(self.min_date.isoformat()))
+            self.stdout.write("max date: {}".format(self.max_date.isoformat()))
 
     def handle(self, *args, **kwargs):
         self.set_options(**kwargs)
         with connection.cursor() as cursor:
-            cleanup_inventory(cursor, self.result_callback, self.min_date)
+            cleanup_inventory(cursor, self.result_callback, self.max_date)
 
     def result_callback(self, table, result):
         if self.quiet:

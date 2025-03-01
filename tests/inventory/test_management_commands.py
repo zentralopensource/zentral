@@ -8,7 +8,7 @@ class InventoryManagementCommandsTest(TestCase):
         out = StringIO()
         call_command('cleanup_inventory_history', stdout=out)
         result = out.getvalue()
-        self.assertIn('min date', result)
+        self.assertIn('max date', result)
         self.assertIn('machine_snapshot_commit', result)
 
     def test_cleanup_inventory_history_quiet_legacy(self):

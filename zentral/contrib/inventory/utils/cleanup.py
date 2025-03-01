@@ -5,7 +5,15 @@ from django.db import IntegrityError
 from django.utils import timezone
 from zentral.conf import settings
 
-logger = logging.getLogger("zentral.contrib.inventory.cleanup")
+
+__all__ = [
+    "get_default_snapshot_retention_days",
+    "get_cleanup_max_date",
+    "cleanup_inventory",
+]
+
+
+logger = logging.getLogger("zentral.contrib.inventory.utils.cleanup")
 
 
 DELETE_MACHINE_SNAPSHOT_COMMIT_QUERY = """
@@ -117,7 +125,7 @@ def get_default_snapshot_retention_days():
     return max(1, default_snapshot_retention_days)  # minimum 1 day
 
 
-def get_min_date(days=None):
+def get_cleanup_max_date(days=None):
     if days is None:
         days = get_default_snapshot_retention_days()
     else:
@@ -125,10 +133,10 @@ def get_min_date(days=None):
     return timezone.now() - timedelta(days=days)
 
 
-def cleanup_inventory(cursor, result_callback, min_date):
+def cleanup_inventory(cursor, result_callback, max_date):
     # delete older machine snapshot commits
     start_t = time.time()
-    cursor.execute(DELETE_MACHINE_SNAPSHOT_COMMIT_QUERY, [min_date])
+    cursor.execute(DELETE_MACHINE_SNAPSHOT_COMMIT_QUERY, [max_date])
     result_callback("machine_snapshot_commit", {"rowcount": cursor.rowcount,
                                                 "duration": time.time() - start_t,
                                                 "status": 0})
