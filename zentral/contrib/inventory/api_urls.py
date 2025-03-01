@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.urlpatterns import format_suffix_patterns
 from .api_views import (ArchiveMachines,
                         CleanupInventory,
+                        FullExport,
                         MachinesExport,
                         AndroidAppsExport, DebPackagesExport, IOSAppsExport, MacOSAppsExport, ProgramsExport,
                         MachineMacOSAppInstancesExport,
@@ -61,6 +62,9 @@ urlpatterns = [
 
     # cleanup
     path('cleanup/', CleanupInventory.as_view(), name="cleanup"),
+
+    # full export
+    path('full_export/', FullExport.as_view(), name="full_export"),
 
     # standard DRF views
     path('jmespath_checks/', JMESPathCheckList.as_view(), name="jmespath_checks"),

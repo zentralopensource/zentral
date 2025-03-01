@@ -7,10 +7,11 @@ from django.core.files.storage import default_storage
 from django.db import connection
 from django.http import QueryDict
 import xlsxwriter
-from .utils import cleanup_inventory as do_cleanup_inventory, get_cleanup_max_date
 from .events import post_cleanup_finished_event, post_cleanup_started_event
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
 from .utils import (MSQuery,
+                    cleanup_inventory as do_cleanup_inventory, get_cleanup_max_date,
+                    do_full_export,
                     export_machine_macos_app_instances as do_export_machine_macos_app_instances,
                     export_machine_android_apps as do_export_machine_android_apps,
                     export_machine_deb_packages as do_export_machine_deb_packages,
@@ -35,6 +36,11 @@ def cleanup_inventory(days, serialized_event_request):
 
     post_cleanup_finished_event(payload, serialized_event_request)
     return payload
+
+
+@shared_task
+def export_full_inventory():
+    return do_full_export()
 
 
 @shared_task

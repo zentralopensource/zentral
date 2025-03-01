@@ -31,6 +31,7 @@ from .serializers import (CleanupInventorySerializer,
                           TagSerializer, TaxonomySerializer)
 from .tasks import (cleanup_inventory,
                     export_inventory,
+                    export_full_inventory,
                     export_android_apps, export_deb_packages, export_ios_apps, export_macos_apps, export_programs,
                     export_machine_macos_app_instances,
                     export_machine_android_apps,
@@ -368,6 +369,20 @@ class CleanupInventory(APIView):
                             status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Full export
+
+
+class FullExport(APIView):
+    permission_required = "inventory.view_machinesnapshot"
+    permission_classes = [DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        result = export_full_inventory.apply_async()
+        return Response({"task_id": result.id,
+                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                        status=status.HTTP_201_CREATED)
 
 
 # Standard DRF views

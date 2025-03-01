@@ -361,6 +361,19 @@ class InventoryAPITests(APITestCase):
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
 
+    # full export
+
+    def test_full_export_unauthorized(self):
+        response = self.client.post(reverse('inventory_api:full_export'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_full_export(self):
+        self._set_permissions("inventory.view_machinesnapshot")
+        response = self.client.post(reverse('inventory_api:full_export'))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("task_id", response.data)
+        self.assertIn("task_result_url", response.data)
+
     # create meta business unit
 
     def test_create_meta_business_unit_unauthorized(self):

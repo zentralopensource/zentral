@@ -5,7 +5,9 @@ from django.core.files.storage import default_storage
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineSnapshotCommit
-from zentral.contrib.inventory.utils import export_machine_macos_app_instances, export_machine_snapshots
+from zentral.contrib.inventory.utils import (do_full_export,
+                                             export_machine_macos_app_instances,
+                                             export_machine_snapshots)
 
 
 class InventoryExportsTests(TestCase):
@@ -40,6 +42,29 @@ class InventoryExportsTests(TestCase):
         }
         MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         return serial_number
+
+    def test_full_export(self):
+        serial_number = self.commit_machine_snapshot()
+        result = do_full_export()
+        with default_storage.open(result["filepath"]) as f:
+            with zipfile.ZipFile(f) as zf:
+                self.assertEqual(
+                    sorted(zf.namelist()),
+                    ['zentral_business_unit_0001.jsonl',
+                     'zentral_machine_0001.jsonl',
+                     'zentral_machine_macos_app_instance_0001.jsonl',
+                     'zentral_macos_app_0001.jsonl',
+                     'zentral_macos_app_instance_0001.jsonl',
+                     'zentral_meta_business_unit_0001.jsonl',
+                     'zentral_os_version_0001.jsonl',
+                     'zentral_source_0001.jsonl']
+                )
+                with zf.open("zentral_machine_0001.jsonl") as jl:
+                    content = jl.read().decode("utf-8").splitlines()
+                    self.assertEqual(len(content), 1)
+                    machine_d = json.loads(content[0])
+                    self.assertEqual(machine_d["serial_number"], serial_number)
+        default_storage.delete(result["filepath"])
 
     def test_export_machine_snapshots(self):
         serial_number = self.commit_machine_snapshot()

@@ -146,7 +146,7 @@ def export_machine_snapshots(source_name=None, window_size=5000):
             zip_a.write(json_p, "{}.jsonl".format(slugify(source_name)))
             os.unlink(json_p)
 
-    filename = "machine_snapshots_{:%Y-%m-%d_%H-%M-%S}.zip".format(datetime.utcnow())
+    filename = "machine_snapshots-{:%Y-%m-%d_%H-%M-%S}.zip".format(datetime.utcnow())
     filepath = os.path.join("exports", filename)
     with os.fdopen(zip_fh, "rb") as zip_f:
         default_storage.save(filepath, zip_f)

@@ -377,7 +377,7 @@ Example:
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/inventory/cleanup/\
+  https://$ZTL_FQDN/api/inventory/cleanup/\
   |python3 -m json.tool
 ```
 
@@ -406,7 +406,7 @@ curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"serial_numbers": ["0123456789"]}' \
-  https://zentral.example.com/api/inventory/machines/archive/\
+  https://$ZTL_FQDN/api/inventory/machines/archive/\
   |python3 -m json.tool
 ```
 
@@ -432,7 +432,7 @@ curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"serial_numbers": ["0123456789"]}' \
-  https://zentral.example.com/api/inventory/machines/prune/\
+  https://$ZTL_FQDN/api/inventory/machines/prune/\
   |python3 -m json.tool
 ```
 
@@ -465,7 +465,7 @@ curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"display_name": "Chrome"}' \
-  https://zentral.example.com/api/inventory/android_apps/export/\
+  https://$ZTL_FQDN/api/inventory/android_apps/export/\
   |python3 -m json.tool
 ```
 
@@ -499,7 +499,7 @@ curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"name": "Firefox", "last_seen": "90d"}' \
-  https://zentral.example.com/api/inventory/deb_packages/export/\
+  https://$ZTL_FQDN/api/inventory/deb_packages/export/\
   |python3 -m json.tool
 ```
 
@@ -533,7 +533,7 @@ curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"name": "1Password", "last_seen": "1d"}' \
-  https://zentral.example.com/api/inventory/ios_apps/export/\
+  https://$ZTL_FQDN/api/inventory/ios_apps/export/\
   |python3 -m json.tool
 ```
 
@@ -568,7 +568,7 @@ curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"bundle_name": "1Password", "last_seen": "14d", "source": 4641}' \
-  https://zentral.example.com/api/inventory/macos_apps/export/\
+  https://$ZTL_FQDN/api/inventory/macos_apps/export/\
   |python3 -m json.tool
 ```
 
@@ -603,7 +603,7 @@ curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"name": "1Password", "export_format": "csv"}' \
-  https://zentral.example.com/api/inventory/programs/export/\
+  https://$ZTL_FQDN/api/inventory/programs/export/\
   |python3 -m json.tool
 ```
 
@@ -631,7 +631,7 @@ Example of an export limited to the `Workspace ONE` source:
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/inventory/machines/export_android_apps/?source_name=Workspace%20ONE" \
+  "https://$ZTL_FQDN/api/inventory/machines/export_android_apps/?source_name=Workspace%20ONE" \
   |python3 -m json.tool
 ```
 
@@ -658,7 +658,7 @@ Example:
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/inventory/machines/export_deb_packages/\
+  https://$ZTL_FQDN/api/inventory/machines/export_deb_packages/\
   |python3 -m json.tool
 ```
 
@@ -686,7 +686,7 @@ Example:
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/inventory/machines/export_ios_apps/\
+  https://$ZTL_FQDN/api/inventory/machines/export_ios_apps/\
   |python3 -m json.tool
 ```
 
@@ -715,7 +715,7 @@ Example:
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/inventory/machines/export_macos_app_instances/\
+  https://$ZTL_FQDN/api/inventory/machines/export_macos_app_instances/\
   |python3 -m json.tool
 ```
 
@@ -744,7 +744,7 @@ Example:
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/inventory/machines/export_program_instances/\
+  https://$ZTL_FQDN/api/inventory/machines/export_program_instances/\
   |python3 -m json.tool
 ```
 
@@ -772,7 +772,7 @@ Example:
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/inventory/machines/export_snapshots/\
+  https://$ZTL_FQDN/api/inventory/machines/export_snapshots/\
   |python3 -m json.tool
 ```
 
@@ -784,3 +784,30 @@ Response:
   "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd3/"
 }
 ```
+
+### `/api/inventory/full_export/`
+
+* method: POST
+* required permissions:
+	* `inventory.view_machinesnapshot`
+
+Use this endpoint to trigger a full inventory export (ZIP archive of `.jsonl`. files).
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN$ZTL_FQDN/api/inventory/full_export/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "5ecb057b-57cc-41e4-a07e-fcc357d7a5c7",
+  "task_result_url": "/api/task_result/5ecb057b-57cc-41e4-a07e-fcc357d7a5c7/"
+}
+```
+
