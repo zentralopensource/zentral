@@ -16,10 +16,15 @@ class MonolithConf:
 
     def __init__(self):
         self._lock = threading.Lock()
+        self._notifier_callback_registered = False
         self._repositories = {}
         self._repositories_last_loaded_at = None
 
-    def _reload_repositories(self, *args, **kwargs):
+    def _reset_repositories(self, *args, **kwargs):
+        logger.info("Reset repositories")
+        self._repositories_last_loaded_at = None
+
+    def _reload_repositories(self):
         logger.info("Reload repositories")
         # avoid circular dependencies
         from .models import Repository
@@ -33,10 +38,11 @@ class MonolithConf:
             for repository in repositories:
                 self._repositories[repository.pk] = load_repository_backend(repository)
                 logger.info("Repository %s loaded", repository)
-            if self._repositories_last_loaded_at is None:
-                # first time
-                notifier.add_callback("monolith.repository", self._reload_repositories)
             self._repositories_last_loaded_at = datetime.utcnow()
+            if not self._notifier_callback_registered:
+                # first time
+                notifier.add_callback("monolith.repository", self._reset_repositories)
+                self._notifier_callback_registered = True
 
     def get_repository(self, pk):
         if (
