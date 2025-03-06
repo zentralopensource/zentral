@@ -772,6 +772,15 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._post_json_data(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
         self.assertEqual(response.status_code, 403)
 
+    @patch("zentral.contrib.monolith.repository_backends.s3.S3Repository.sync_catalogs")
+    def test_sync_repository_internal_server_error(self, sync_catalogs):
+        sync_catalogs.side_effect = Exception("yolo")
+        repository = force_repository()
+        self._set_permissions("monolith.sync_repository")
+        response = self._post_json_data(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json(), {"status": 1, "error": "yolo"})
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.monolith.repository_backends.s3.S3Repository.get_all_catalog_content")
     @patch("zentral.contrib.monolith.repository_backends.s3.S3Repository.get_icon_hashes_content")

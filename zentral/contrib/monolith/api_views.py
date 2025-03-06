@@ -1,7 +1,8 @@
+import logging
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
@@ -26,6 +27,9 @@ from .serializers import (CatalogSerializer, ConditionSerializer,
                           RepositorySerializer,
                           SubManifestSerializer, SubManifestPkgInfoSerializer)
 from .utils import build_configuration_plist, build_configuration_profile
+
+
+logger = logging.getLogger("zentral.contrib.monolith.api_views")
 
 
 class CacheServerSerializer(ModelSerializer):
@@ -68,11 +72,23 @@ class SyncRepository(APIView):
     permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
-        self.db_repository = get_object_or_404(Repository, pk=kwargs["pk"])
-        post_monolith_sync_catalogs_request(request, self.db_repository)
-        repository = load_repository_backend(self.db_repository)
-        repository.sync_catalogs(request)
-        return Response({"status": 0})
+        db_repository = get_object_or_404(Repository, pk=kwargs["pk"])
+        post_monolith_sync_catalogs_request(request, db_repository)
+        repository = load_repository_backend(db_repository)
+        error = None
+        status_code = status.HTTP_200_OK
+        try:
+            repository.sync_catalogs(request)
+        except Exception as e:
+            logger.exception("Could not sync repository %s", db_repository.pk)
+            error = str(e)
+            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        response = {
+            "status": 0 if error is None else 1,
+        }
+        if error:
+            response["error"] = error
+        return Response(response, status=status_code)
 
 
 class RepositoryList(ListCreateAPIViewWithAudit):
