@@ -16,6 +16,7 @@ class MonolithConf:
 
     def __init__(self):
         self._lock = threading.Lock()
+        self._repositories = {}
         self._repositories_last_loaded_at = None
 
     def _reload_repositories(self, *args, **kwargs):
@@ -23,8 +24,13 @@ class MonolithConf:
         # avoid circular dependencies
         from .models import Repository
         with self._lock:
+            try:
+                repositories = list(Repository.objects.select_related("meta_business_unit").all())
+            except Exception:
+                logger.exception("Could not get repositories from DB")
+                return
             self._repositories = {}
-            for repository in Repository.objects.select_related("meta_business_unit").all():
+            for repository in repositories:
                 self._repositories[repository.pk] = load_repository_backend(repository)
                 logger.info("Repository %s loaded", repository)
             if self._repositories_last_loaded_at is None:
@@ -36,6 +42,7 @@ class MonolithConf:
         if (
             self._repositories_last_loaded_at is None
             or datetime.utcnow() - self._repositories_last_loaded_at > self.reload_interval
+            or pk not in self._repositories
         ):
             self._reload_repositories()
         with self._lock:
