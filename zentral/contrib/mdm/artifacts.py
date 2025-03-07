@@ -68,7 +68,10 @@ def _serialize_filtered_blueprint_item(item):
 
 def _add_artifact_to_serialization(artifact, artifacts, depth):
     artifact_pk = str(artifact.pk)
-    if artifact_pk in artifacts:
+    present_artifact = artifacts.get(artifact_pk)
+    if present_artifact:
+        if depth < present_artifact["_depth"]:
+            present_artifact["_depth"] = depth
         return
     required_artifacts = list(artifact.requires.all())
     referenced_artifacts = []
