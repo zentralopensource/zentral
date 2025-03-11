@@ -348,15 +348,22 @@ def convert_script_check_bool_result(result):
 
 def run_script_check(script_check, env):
     start_time = time.monotonic()
-    cp = subprocess.run(
-        ["/bin/zsh"],
-        input=script_check["source"],
-        capture_output=True,
-        encoding="utf-8",
-        timeout=SCRIPT_CHECK_TIMEOUT,
-        env=env,
-    )
+    timeout = False
+    try:
+        cp = subprocess.run(
+            ["/bin/zsh"],
+            input=script_check["source"],
+            capture_output=True,
+            encoding="utf-8",
+            timeout=SCRIPT_CHECK_TIMEOUT,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        timeout = True
     time_elapsed = time.monotonic() - start_time
+    if timeout:
+        print("Script check", script_check.get("pk"), script_check.get("version"), "timed out")
+        return SCRIPT_CHECK_STATUS_UNKNOWN, time_elapsed
     expected_result = script_check["expected_result"]
     result = cp.stdout.strip()
     if script_check["type"] == "ZSH_INT":
