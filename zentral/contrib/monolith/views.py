@@ -59,18 +59,16 @@ class InventoryMachineSubview:
 
     def __init__(self, serial_number, user):
         self.user = user
-        qs = (EnrolledMachine.objects.select_related("enrollment__manifest")
-                                     .filter(serial_number=serial_number).order_by("-created_at"))
-        count = qs.count()
-        if count > 1:
-            self.err_message = f"{count} machines found!!!"
-        if count > 0:
-            self.enrolled_machine = qs.first()
+        self.enrolled_machine = (
+            EnrolledMachine.objects.select_related("enrollment__manifest")
+                                   .filter(serial_number=serial_number)
+                                   .order_by("-created_at")
+                                   .first()
+        )
 
     def render(self):
         em = self.enrolled_machine
-        ctx = {"enrolled_machine": em,
-               "err_message": self.err_message}
+        ctx = {"enrolled_machine": em}
         if em and self.user.has_perms(ManifestMachineInfoView.permission_required):
             manifest = em.enrollment.manifest
             ctx["manifest"] = manifest
