@@ -841,10 +841,10 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
         serial_number = self.request.GET.get("serial_number")
         if not isinstance(serial_number, str):
             raise Http404
-        try:
-            enrolled_machine = EnrolledMachine.objects.get(enrollment__manifest=manifest, serial_number=serial_number)
-        except EnrolledMachine.DoesNotExist:
-            pass
+        enrolled_machine = EnrolledMachine.objects.filter(
+            enrollment__manifest=manifest,
+            serial_number=serial_number
+        ).order_by("-created_at").first()
         if enrolled_machine:
             ctx["enrolled_machine"] = enrolled_machine
             machine = MetaMachine(enrolled_machine.serial_number)
