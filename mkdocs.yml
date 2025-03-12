@@ -29,6 +29,7 @@ nav:
       - "Okta - SCIM": configuration/okta_scim.md
       - "OneLogin - SAML": configuration/onelogin_saml.md
   - Apps:
+      - Core: apps/core.md
       - Inventory: apps/inventory.md
       - MDM: apps/mdm.md
       - Monolith: apps/monolith.md
