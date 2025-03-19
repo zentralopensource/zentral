@@ -44,3 +44,23 @@ def post_recovery_password_viewed_event(request, enrolled_device):
     )
     event = RecoveryPasswordViewedEvent(event_metadata, {})
     event.post()
+
+
+# DEP device
+
+
+class DEPDeviceDisownedEvent(BaseEvent):
+    event_type = "dep_device_disowned"
+    tags = ["mdm"]
+
+
+register_event_type(DEPDeviceDisownedEvent)
+
+
+def post_dep_device_disowned_event(request, dep_device, payload):
+    event_metadata = EventMetadata(
+        machine_serial_number=dep_device.serial_number,
+        request=EventRequest.build_from_request(request),
+    )
+    event = DEPDeviceDisownedEvent(event_metadata, payload)
+    event.post()

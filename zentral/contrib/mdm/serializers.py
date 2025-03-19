@@ -14,7 +14,7 @@ from .crypto import generate_push_certificate_key_bytes, load_push_certificate_a
 from .dep import assign_dep_device_profile, DEPClientError
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
-                     DEPDevice, DEPEnrollment,
+                     DEPDevice,
                      DeviceCommand,
                      EnrolledDevice, EnterpriseApp, FileVaultConfig,
                      Location, LocationAsset,
@@ -132,7 +132,7 @@ class DEPDeviceSerializer(serializers.ModelSerializer):
             "last_op_type", "last_op_date",
             "profile_status", "profile_uuid", "profile_push_time",
             "enrollment",
-            "created_at", "updated_at",
+            "disowned_at", "created_at", "updated_at",
         ]
         read_only_fields = [
             "id",
@@ -143,7 +143,7 @@ class DEPDeviceSerializer(serializers.ModelSerializer):
             "device_assigned_by", "device_assigned_date",
             "last_op_type", "last_op_date",
             "profile_status", "profile_uuid", "profile_push_time",
-            "created_at", "updated_at",
+            "disowned_at", "created_at", "updated_at",
         ]
 
     def update(self, instance, validated_data):

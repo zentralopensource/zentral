@@ -219,6 +219,8 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         # sync
         if not fetch:
             op_type = device["op_type"]
+            if op_type != "deleted":
+                defaults["disowned_at"] = None
             op_date = parser.parse(device["op_date"])
             if timezone.is_aware(op_date):
                 op_date = timezone.make_naive(op_date)
@@ -232,6 +234,8 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
             else:
                 defaults["last_op_type"] = op_type
                 defaults["last_op_date"] = op_date
+        else:
+            defaults["disowned_at"] = None
 
         defaults.update(dep_device_update_dict(device, known_enrollments))
 
@@ -335,3 +339,18 @@ def refresh_dep_device(dep_device):
         for attr, val in dep_device_update_dict(devices[dep_device.serial_number]).items():
             setattr(dep_device, attr, val)
         dep_device.save()
+
+
+def disown_dep_device(dep_device):
+    dep_client = DEPClient.from_dep_virtual_server(dep_device.virtual_server)
+    disown_response = dep_client.disown_devices([dep_device.serial_number])
+    try:
+        result = disown_response["devices"][dep_device.serial_number]
+        assert result in ("SUCCESS", "NOT_ACCESSIBLE", "FAILED")
+    except KeyError:
+        raise DEPClientError("Could not find result for device")
+    except AssertionError:
+        raise DEPClientError("Unknown result")
+    if result == "SUCCESS":
+        DEPDevice.objects.filter(pk=dep_device.pk).update(disowned_at=datetime.datetime.utcnow())
+    return result

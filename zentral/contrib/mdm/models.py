@@ -1814,11 +1814,15 @@ class DEPDevice(models.Model):
     # Zentral enrollment/profile
     enrollment = models.ForeignKey(DEPEnrollment, on_delete=models.PROTECT, null=True)
 
+    disowned_at = models.DateTimeField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("serial_number",)
+        permissions = [
+            ("disown_depdevice", "Can disown a DEP device"),
+        ]
 
     def __str__(self):
         return self.serial_number

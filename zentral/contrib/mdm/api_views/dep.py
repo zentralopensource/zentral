@@ -9,6 +9,8 @@ from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
+from zentral.contrib.mdm.dep import disown_dep_device
+from zentral.contrib.mdm.events import post_dep_device_disowned_event
 from zentral.contrib.mdm.models import DEPDevice, DEPVirtualServer
 from zentral.contrib.mdm.tasks import sync_dep_virtual_server_devices_task
 from zentral.contrib.mdm.serializers import DEPDeviceSerializer
@@ -52,3 +54,19 @@ class DEPDeviceDetail(RetrieveUpdateAPIView):
     queryset = DEPDevice.objects.all()
     serializer_class = DEPDeviceSerializer
     permission_classes = [DefaultDjangoModelPermissions]
+
+
+class DisownDEPDevice(APIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
+    permission_required = "mdm.disown_depdevice"
+    permission_classes = [DjangoPermissionRequired]
+
+    def post(self, request, *args, **kwargs):
+        dep_device = get_object_or_404(DEPDevice, pk=kwargs["pk"])
+        response = {}
+        try:
+            response["result"] = disown_dep_device(dep_device)
+        except Exception as e:
+            response["error"] = str(e)
+        post_dep_device_disowned_event(request, dep_device, response)
+        return Response(response)

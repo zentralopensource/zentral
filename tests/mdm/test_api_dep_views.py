@@ -10,6 +10,7 @@ from django.test import TestCase, override_settings
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep_client import DEPClientError
+from zentral.contrib.mdm.events import DEPDeviceDisownedEvent
 from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
 
 
@@ -143,6 +144,7 @@ class APIViewsTestCase(TestCase):
                   'device_assigned_by': 'support@zentral.com',
                   'device_assigned_date': dep_device.device_assigned_date.isoformat(),
                   'device_family': 'iPhone',
+                  'disowned_at': None,
                   'enrollment': dep_device.enrollment.pk,
                   'id': dep_device.pk,
                   'last_op_date': dep_device.last_op_date.isoformat(),
@@ -178,6 +180,7 @@ class APIViewsTestCase(TestCase):
                   'device_assigned_by': 'support@zentral.com',
                   'device_assigned_date': dep_device.device_assigned_date.isoformat(),
                   'device_family': 'iPhone',
+                  'disowned_at': None,
                   'enrollment': None,
                   'id': dep_device.pk,
                   'last_op_date': dep_device.last_op_date.isoformat(),
@@ -213,6 +216,7 @@ class APIViewsTestCase(TestCase):
                   'device_assigned_by': 'support@zentral.com',
                   'device_assigned_date': dep_device.device_assigned_date.isoformat(),
                   'device_family': 'iPhone',
+                  'disowned_at': None,
                   'enrollment': None,
                   'id': dep_device.pk,
                   'last_op_date': dep_device.last_op_date.isoformat(),
@@ -251,6 +255,7 @@ class APIViewsTestCase(TestCase):
                   'device_assigned_by': 'support@zentral.com',
                   'device_assigned_date': dep_device.device_assigned_date.isoformat(),
                   'device_family': 'iPhone',
+                  'disowned_at': None,
                   'enrollment': None,
                   'id': dep_device.pk,
                   'last_op_date': dep_device.last_op_date.isoformat(),
@@ -292,6 +297,7 @@ class APIViewsTestCase(TestCase):
              'device_assigned_by': 'support@zentral.com',
              'device_assigned_date': dep_device.device_assigned_date.isoformat(),
              'device_family': 'iPhone',
+             'disowned_at': None,
              'enrollment': None,
              'id': dep_device.pk,
              'last_op_date': dep_device.last_op_date.isoformat(),
@@ -336,6 +342,7 @@ class APIViewsTestCase(TestCase):
              'device_assigned_by': 'support@zentral.com',
              'device_assigned_date': dep_device.device_assigned_date.isoformat(),
              'device_family': 'iPhone',
+             'disowned_at': None,
              'enrollment': enrollment.pk,
              'id': dep_device.pk,
              'last_op_date': dep_device.last_op_date.isoformat(),
@@ -366,3 +373,83 @@ class APIViewsTestCase(TestCase):
             {'enrollment': 'Could not assign enrollment to device'},
         )
         assign_dep_device_profile.assert_called_once_with(dep_device, enrollment)
+
+    # disown dep device
+
+    def test_disown_dep_device_unauthorized(self):
+        dep_device = force_dep_device()
+        response = self.post(reverse("mdm_api:disown_dep_device", args=(dep_device.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_disown_dep_device_permission_denied(self):
+        dep_device = force_dep_device()
+        response = self.post(reverse("mdm_api:disown_dep_device", args=(dep_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_disown_dep_device_login_permission_denied(self):
+        self.login()
+        dep_device = force_dep_device()
+        response = self.post(reverse("mdm_api:disown_dep_device", args=(dep_device.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_disown_dep_device_failed(self, send_request, post_event):
+        self.set_permissions("mdm.disown_depdevice")
+        dep_device = force_dep_device()
+        send_request.return_value = {"devices": {dep_device.serial_number: "FAILED"}}
+        response = self.post(reverse("mdm_api:disown_dep_device", args=(dep_device.pk,)))
+        self.assertEqual(response.json(), {"result": "FAILED"})
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, DEPDeviceDisownedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, dep_device.serial_number)
+        self.assertEqual(event.payload, {"result": "FAILED"})
+        dep_device.refresh_from_db()
+        self.assertIsNone(dep_device.disowned_at)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_disown_dep_device_serial_number_error(self, send_request, post_event):
+        self.set_permissions("mdm.disown_depdevice")
+        dep_device = force_dep_device()
+        send_request.return_value = {"devices": {"YOLO": "FAILED"}}
+        response = self.post(reverse("mdm_api:disown_dep_device", args=(dep_device.pk,)))
+        self.assertEqual(response.json(), {"error": "Could not find result for device"})
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, DEPDeviceDisownedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, dep_device.serial_number)
+        self.assertEqual(event.payload, {"error": "Could not find result for device"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_disown_dep_device_unknown_result_error(self, send_request, post_event):
+        self.set_permissions("mdm.disown_depdevice")
+        dep_device = force_dep_device()
+        send_request.return_value = {"devices": {dep_device.serial_number: "YOLO"}}
+        response = self.post(reverse("mdm_api:disown_dep_device", args=(dep_device.pk,)))
+        self.assertEqual(response.json(), {"error": "Unknown result"})
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, DEPDeviceDisownedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, dep_device.serial_number)
+        self.assertEqual(event.payload, {"error": "Unknown result"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_disown_dep_device_success(self, send_request, post_event):
+        self.set_permissions("mdm.disown_depdevice")
+        dep_device = force_dep_device()
+        send_request.return_value = {"devices": {dep_device.serial_number: "SUCCESS"}}
+        response = self.post(reverse("mdm_api:disown_dep_device", args=(dep_device.pk,)))
+        self.assertEqual(response.json(), {"result": "SUCCESS"})
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, DEPDeviceDisownedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, dep_device.serial_number)
+        self.assertEqual(event.payload, {"result": "SUCCESS"})
+        dep_device.refresh_from_db()
+        self.assertIsNotNone(dep_device.disowned_at)
+        self.assertEqual(send_request.call_args_list[0].args, ("devices/disown", "POST"))
+        self.assertEqual(send_request.call_args_list[0].kwargs, {'json': {'devices': [dep_device.serial_number]}})

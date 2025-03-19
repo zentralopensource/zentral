@@ -445,6 +445,7 @@ Response:
             "profile_uuid": "464921fa-a370-4bad-9a6f-9e3a8a73d94a",
             "profile_push_time": "2024-12-02T16:02:47",
             "enrollment": 4,
+            "disowned_at": null,
             "created_at": "2024-07-29T19:13:12.160287",
             "updated_at": "2024-12-03T16:46:26.703479"
         }
@@ -488,6 +489,7 @@ Response:
     "profile_uuid": "464921fa-a370-4bad-9a6f-9e3a8a73d94a",
     "profile_push_time": "2024-12-02T16:02:47",
     "enrollment": 4,
+    "disowned_at": null,
     "created_at": "2024-07-29T19:13:12.160287",
     "updated_at": "2024-12-03T16:46:26.703479"
 }
@@ -524,11 +526,35 @@ Response:
     "profile_uuid": "464921fa-a370-4bad-9a6f-9e3a8a73d94a",
     "profile_push_time": "2024-12-02T16:02:47",
     "enrollment": 4,
+    "disowned_at": null,
     "created_at": "2024-07-29T19:13:12.160287",
     "updated_at": "2024-12-03T16:46:26.703479"
 }
 ```
 
+### `/api/mdm/dep/devices/<int:pk>/disown/`
+
+ * methods: `POST`
+ * required permission: `mdm.disown_depdevice`
+
+Use this endpoint to get a DEP device detail information and change its enrollment.
+
+Example to get the DEP device detail information:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/dep/devices/14/disown/ \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "result": "SUCCESSFUL"
+}
+```
 
 ### `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`
 
