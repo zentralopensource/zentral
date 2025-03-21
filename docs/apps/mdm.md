@@ -552,7 +552,7 @@ Response:
 
 ```json
 {
-    "result": "SUCCESSFUL"
+    "result": "SUCCESS"
 }
 ```
 
