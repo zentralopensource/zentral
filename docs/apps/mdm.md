@@ -569,8 +569,7 @@ Use this endpoint to list the MDM enrolled devices.
 Example:
 
 ```bash
-curl -XPOST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
   https://$ZTL_FQDN/api/mdm/devices/?serial_number=012345678910
 ```
 
