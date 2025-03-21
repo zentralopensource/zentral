@@ -1791,11 +1791,11 @@ class DEPDevice(models.Model):
     # ABM info
     # device
     asset_tag = models.TextField(default="")
-    color = models.CharField(max_length=32, default="")
+    color = models.CharField(max_length=256, default="")
     description = models.CharField(max_length=256, default="")
-    device_family = models.CharField(max_length=32, default="")
-    model = models.CharField(max_length=32, default="")
-    os = models.CharField(max_length=32, default="")
+    device_family = models.CharField(max_length=256, default="")
+    model = models.CharField(max_length=256, default="")
+    os = models.CharField(max_length=256, default="")
     # assignment
     device_assigned_by = models.EmailField(editable=False)
     device_assigned_date = models.DateTimeField(editable=False)

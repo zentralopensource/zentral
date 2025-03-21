@@ -147,6 +147,8 @@ def dep_device_update_dict(device, known_enrollments=None):
                  "model",
                  "os"):
         update_d[attr] = device.get(attr) or ""
+        if attr != "asset_tag":
+            update_d[attr] = update_d[attr][:256]
 
     # standard nullable attibutes
     for attr in ("device_assigned_by",
@@ -167,6 +169,7 @@ def dep_device_update_dict(device, known_enrollments=None):
                         enrollment = DEPEnrollment.objects.get(uuid=val)
                     except DEPEnrollment.DoesNotExist:
                         logger.error("Unknown DEP profile %s", val)
+                        known_enrollments[val] = None
                 update_d["enrollment"] = enrollment
             update_d[attr] = val
 
