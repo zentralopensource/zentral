@@ -166,10 +166,21 @@ class MonolithAPIViewsTestCase(TestCase):
 
     # catalogs
 
+    # we want to use the cache for this test
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
     def test_get_catalog(self):
         pkg_info, catalog, _ = self._force_smpi()
+        # first request in a run is a machine manifest request
         response = self._make_munki_request(
-            reverse("monolith_public:repository_catalog", args=(self.manifest.get_catalog_munki_name(),))
+            reverse("monolith_public:repository_manifest", args=("12345678",)),
+            serial_number="12345678",
+        )
+        self.assertEqual(response.status_code, 200)
+        serialized_manifest = plistlib.loads(response.content)
+        # second one is a catalog request
+        response = self._make_munki_request(
+            reverse("monolith_public:repository_catalog", args=(serialized_manifest["catalogs"][0],)),
+            serial_number="12345678",  # same serial number to use the cache
         )
         self.assertEqual(response.status_code, 200)
         catalog = plistlib.loads(response.content)
@@ -341,6 +352,7 @@ class MonolithAPIViewsTestCase(TestCase):
         )
         response = self._make_munki_request(
             reverse("monolith_public:repository_manifest", args=("12345678",)),
+            serial_number="12345678",
         )
         self.assertEqual(response.status_code, 200)
         serialized_manifest = plistlib.loads(response.content)

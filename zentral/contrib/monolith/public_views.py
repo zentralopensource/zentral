@@ -67,13 +67,25 @@ class MRBaseView(View):
             post_monolith_enrollment_event(serial_number, self.user_agent, self.ip, {'action': "enrollment"})
         return enrolled_machine
 
-    def get_enrolled_machine_and_tags(self, request):
-        secret = self.get_secret(request)
-        serial_number = self.get_serial_number(request)
-        cache_key = "{}{}".format(secret, serial_number)
+    def force_enrolled_machine_cache_refresh(self, serial_number):
+        return False
+
+    def get_cached_enrolled_machine_and_tags(self, cache_key):
         try:
             enrolled_machine, tags = cache.get(cache_key)
         except TypeError:
+            return None, []
+        else:
+            return enrolled_machine, tags
+
+    def get_enrolled_machine_and_tags(self, request):
+        secret = self.get_secret(request)
+        serial_number = self.get_serial_number(request)
+        cache_key = f"{secret}{serial_number}"
+        enrolled_machine, tags = None, []
+        if not self.force_enrolled_machine_cache_refresh(serial_number):
+            enrolled_machine, tags = self.get_cached_enrolled_machine_and_tags(cache_key)
+        if enrolled_machine is None:
             try:
                 enrolled_machine = (EnrolledMachine.objects.select_related("enrollment__secret",
                                                                            "enrollment__manifest")
@@ -116,8 +128,11 @@ class MRNameView(MRBaseView):
             items.append(key)
         return ".".join(str(i) for i in items)
 
-    def get(self, request, *args, **kwargs):
+    def dispatch(self, request, *args, **kwargs):
         self.name = self.get_name(kwargs)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
         event_payload = {"type": self.event_payload_type,
                          "name": self.name}
         model, key = self.get_request_args()
@@ -178,6 +193,10 @@ class MRManifestView(MRNameView):
             model = "manifest"
             key = self.manifest.pk
         return model, key
+
+    def force_enrolled_machine_cache_refresh(self, serial_number):
+        # Force a cache refresh if this is the first request in a run
+        return self.name == serial_number
 
     def do_get(self, model, key, cache_key, event_payload):
         manifest_data = None
