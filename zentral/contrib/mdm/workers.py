@@ -190,6 +190,8 @@ class DevicesAPNSWorker(BaseAPNSWorker):
         "            AND time > NOW() - interval '1 seconds' * %(default_period)s"
         # … sent at least 30s ago
         "            AND time < NOW() - interval '1 seconds' * %(max_command_waiting_time)s)"
+        # … more recent than the device last seen
+        "            AND (ed.last_seen_at IS NULL OR ed.last_seen_at < time)"
         "      )"
         "    )"
         "  )"
@@ -270,6 +272,8 @@ class UsersAPNSWorker(BaseAPNSWorker):
         "            AND time > NOW() - interval '1 seconds' * %(default_period)s"
         # … sent at least 30s ago
         "            AND time < NOW() - interval '1 seconds' * %(max_command_waiting_time)s)"
+        # … more recent than the user last seen
+        "            AND (eu.last_seen_at IS NULL OR eu.last_seen_at < time)"
         "      )"
         "    )"
         "  )"
