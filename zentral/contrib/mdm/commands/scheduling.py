@@ -174,7 +174,7 @@ def _trigger_declarative_management_sync(target, enrollment_session, status):
 def _install_artifacts(target, enrollment_session, status):
     if status == RequestStatus.NOT_NOW:
         return
-    included_types = (t for t in Artifact.Type if t.can_be_installed)
+    included_types = tuple(t for t in Artifact.Type if t.can_be_installed)
     if target.declarative_management:
         included_types = tuple(t for t in included_types if t not in target.ddm_managed_artifact_types())
     artifact_version = target.next_to_install(included_types=included_types)
@@ -199,7 +199,7 @@ def _install_artifacts(target, enrollment_session, status):
 def _remove_artifacts(target, enrollment_session, status):
     if status == RequestStatus.NOT_NOW:
         return
-    included_types = (t for t in Artifact.Type if t.can_be_removed)
+    included_types = tuple(t for t in Artifact.Type if t.can_be_removed)
     if target.declarative_management:
         included_types = tuple(t for t in included_types if t not in target.ddm_managed_artifact_types())
     artifact_version = target.next_to_remove(included_types=included_types)

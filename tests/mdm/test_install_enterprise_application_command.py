@@ -2,15 +2,14 @@ import plistlib
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
+from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import InstalledApplicationList, InstallEnterpriseApplication
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.scheduling import _install_artifacts
-from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
-                                        Blueprint, BlueprintArtifact, Channel,
-                                        DeviceArtifact, DeviceCommand, EnterpriseApp,
+from zentral.contrib.mdm.models import (Artifact, Channel,
+                                        DeviceArtifact, DeviceCommand,
                                         Platform, RequestStatus, TargetArtifact)
-from .utils import force_dep_enrollment_session
+from .utils import force_artifact, force_blueprint_artifact, force_dep_enrollment_session
 
 
 class InstallEnterpriseApplicationCommandTestCase(TestCase):
@@ -27,55 +26,34 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
             realm_user=True
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
-        cls.blueprint = Blueprint.objects.create(name=get_random_string(12))
-        cls.enrolled_device.blueprint = cls.blueprint
+        pa, (pav0,) = force_artifact(
+            artifact_type=Artifact.Type.PROFILE,
+            version_count=1,
+        )
+        bpea, ea, (eav1, eav0) = force_blueprint_artifact(
+            artifact_type=Artifact.Type.ENTERPRISE_APP,
+            version_count=2,
+            install_during_setup_assistant=True,
+            requires=pa,
+        )
+        cls.blueprint = cls.enrolled_device.blueprint = bpea.blueprint
         cls.enrolled_device.save()
-        cls.artifact = Artifact.objects.create(
-            name=get_random_string(32),
-            type=Artifact.Type.ENTERPRISE_APP,
-            channel=Channel.DEVICE,
-            platforms=[Platform.MACOS],
-            auto_update=True,
+        cls.artifact = ea
+        cls.artifact_version0 = eav0
+        cls.artifact_version = eav1
+        # required profile is installed
+        DeviceArtifact.objects.create(
+            enrolled_device=cls.enrolled_device,
+            artifact_version=pav0,
+            status=TargetArtifact.Status.ACKNOWLEDGED,
         )
-        cls.artifact_version0 = ArtifactVersion.objects.create(
-            artifact=cls.artifact,
-            version=0,
-            macos=True,
-        )
-        cls.enterprise_app = EnterpriseApp.objects.create(
-            artifact_version=cls.artifact_version0,
-            package_sha256=64 * "0",
-            package_size=12345678,
-            filename="yolo.pkg",
-            product_id="com.example.enterprise-app",
-            product_version="0.0.0",
-            manifest={"items": [{"assets": [{}]}]}
-        )
+        # first version of the app is installed
         DeviceArtifact.objects.create(
             enrolled_device=cls.enrolled_device,
             artifact_version=cls.artifact_version0,
             status=TargetArtifact.Status.INSTALLED
         )
-        BlueprintArtifact.objects.get_or_create(
-            blueprint=cls.blueprint,
-            artifact=cls.artifact,
-            defaults={"macos": True},
-        )
-        cls.artifact_version = ArtifactVersion.objects.create(
-            artifact=cls.artifact,
-            version=1,
-            macos=True
-        )
-        cls.enterprise_app = EnterpriseApp.objects.create(
-            artifact_version=cls.artifact_version,
-            package_sha256=64 * "0",
-            package_size=12345678,
-            filename="yolo.pkg",
-            product_id="com.example.enterprise-app",
-            product_version="1.0.0",
-            manifest={"items": [{"assets": [{}]}]}
-        )
-        update_blueprint_serialized_artifacts(cls.blueprint)
+        cls.enterprise_app = eav1.enterprise_app
 
     # verify_channel_and_device
 
@@ -286,5 +264,18 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
             self.dep_enrollment_session,
             RequestStatus.IDLE,
         )
+        self.assertTrue(Target(self.enrolled_device).declarative_management is False)
+        self.assertIsInstance(cmd, InstallEnterpriseApplication)
+        self.assertEqual(cmd.artifact_version, self.artifact_version)
+
+    def test_install_artifacts_declarative_management(self):
+        cmd = _install_artifacts(
+            Target(self.enrolled_device),
+            self.dep_enrollment_session,
+            RequestStatus.IDLE,
+        )
+        self.enrolled_device.declarative_management = True
+        self.enrolled_device.save()
+        self.assertTrue(Target(self.enrolled_device).declarative_management is True)
         self.assertIsInstance(cmd, InstallEnterpriseApplication)
         self.assertEqual(cmd.artifact_version, self.artifact_version)

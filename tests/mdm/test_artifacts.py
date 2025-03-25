@@ -334,6 +334,24 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(set(Target(self.enrolled_device_awaiting_configuration).all_to_install()),
                          {artifact_versions[0]})
 
+    def test_blueprint_install_enterprise_application_awaiting_configuration_true(self):
+        _, pa, (pav,) = self._force_blueprint_artifact(artifact_type=Artifact.Type.PROFILE, version_count=1)
+        self.assertFalse(pa.install_during_setup_assistant)
+        _, _, (eav,) = self._force_blueprint_artifact(
+            artifact_type=Artifact.Type.ENTERPRISE_APP,
+            version_count=1,
+            install_during_setup_assistant=True,
+            requires=pa,
+        )
+        # first the profile
+        included_types = tuple(t for t in Artifact.Type if t.can_be_installed)
+        target = Target(self.enrolled_device_awaiting_configuration)
+        self.assertEqual(target.next_to_install(included_types=included_types), pav)
+        # then the enterprise app
+        target = Target(self.enrolled_device_awaiting_configuration)
+        target.update_target_artifact(pav, TargetArtifact.Status.ACKNOWLEDGED)
+        self.assertEqual(target.next_to_install(included_types=included_types), eav)
+
     def test_blueprint_install_one_user_profile(self):
         _, artifact, artifact_versions = self._force_blueprint_artifact(version_count=2, channel=Channel.USER)
         usr_target = Target(self.enrolled_device, self.enrolled_user)
