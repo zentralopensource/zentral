@@ -876,6 +876,100 @@ Response:
 }
 ```
 
+### `/api/mdm/devices/commands/`
+
+ * method: `GET`
+ * required permission: `mdm.view_devicecommand`
+ * available filters:
+     * `name`
+     * `enrolled_device`
+
+Fetches a list of MDM device commands.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/mdm/devices/commands/?name=SecurityInfo" | python -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "uuid": "e2ff6623-b3c6-4d69-8065-ded674088d5a",
+            "enrolled_device": 32,
+            "name": "SecurityInfo",
+            "artifact_version": null,
+            "artifact_operation": null,
+            "not_before": null,
+            "time": "2024-11-22T21:38:47.051656",
+            "result": null,
+            "result_time": "2024-11-22T21:38:47.283399",
+            "status": "Acknowledged",
+            "error_chain": null,
+            "created_at": "2024-10-27T14:36:07.027790",
+            "updated_at": "2024-11-22T21:38:47.283567"
+        },
+        {
+            "uuid": "4c7c4de6-0bb3-4b64-b1ef-d74910a73a7b",
+            "enrolled_device": 31,
+            "name": "SecurityInfo",
+            "artifact_version": null,
+            "artifact_operation": null,
+            "not_before": null,
+            "time": "2024-07-01T13:30:03.016001",
+            "result": null,
+            "result_time": "2024-07-01T13:30:03.313209",
+            "status": "Acknowledged",
+            "error_chain": null,
+            "created_at": "2024-07-01T13:30:03.016245",
+            "updated_at": "2024-07-01T13:30:03.313332"
+        }
+    ]
+}
+```
+
+### `/api/mdm/devices/commands/<uuid.uuid>/`
+
+ * method: `GET`
+ * required permission: `mdm.view_devicecommand`
+
+Fetches one MDM device command.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/mdm/devices/commands/e2ff6623-b3c6-4d69-8065-ded674088d51/" | python -m json.tool
+```
+
+Response:
+
+```json
+{
+    "uuid": "e2ff6623-b3c6-4d69-8065-ded674088d51",
+    "enrolled_device": 32,
+    "name": "SecurityInfo",
+    "artifact_version": null,
+    "artifact_operation": null,
+    "not_before": null,
+    "time": "2024-11-22T21:38:47.051656",
+    "result": null,
+    "result_time": "2024-11-22T21:38:47.283399",
+    "status": "Acknowledged",
+    "error_chain": null,
+    "created_at": "2024-10-27T14:36:07.027790",
+    "updated_at": "2024-11-22T21:38:47.283567"
+}
+```
+
+
 ### `/api/mdm/locations/`
 
  * method: `GET`
@@ -976,5 +1070,98 @@ Response:
 {
   "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd4",
   "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd4/"
+}
+```
+
+### `/api/mdm/users/commands/`
+
+ * method: `GET`
+ * required permission: `mdm.view_usercommand`
+ * available filters:
+     * `name`
+     * `enrolled_user`
+
+Fetches a list of MDM user commands.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/mdm/users/commands/?name=InstallProfile" | python -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "uuid": "c9e3829e-ce6a-4ee2-a286-4b83b574d04a",
+            "enrolled_user": 24,
+            "name": "InstallProfile",
+            "artifact_version": "fe4ed451-ad0b-4f32-8ff6-25614368bdb1",
+            "artifact_operation": "Installation",
+            "not_before": null,
+            "time": "2022-08-26T14:46:46.635801",
+            "result": null,
+            "result_time": "2022-08-26T14:46:48.906815",
+            "status": "Acknowledged",
+            "error_chain": null,
+            "created_at": "2022-08-26T14:46:46.636222",
+            "updated_at": "2022-08-26T14:46:48.906948"
+        },
+        {
+            "uuid": "c0c4c26f-1d97-41cc-b82d-ef65824cdeb8",
+            "enrolled_user": 23,
+            "name": "InstallProfile",
+            "artifact_version": "fe4ed451-ad0b-4f32-8ff6-25614368bdb1",
+            "artifact_operation": "Installation",
+            "not_before": null,
+            "time": "2022-08-26T14:42:56.311863",
+            "result": null,
+            "result_time": "2022-08-26T14:42:58.413435",
+            "status": "Acknowledged",
+            "error_chain": null,
+            "created_at": "2022-08-26T14:42:56.312212",
+            "updated_at": "2022-08-26T14:42:58.413625"
+        }
+    ]
+}
+```
+
+### `/api/mdm/users/commands/<uuid.uuid>/`
+
+ * method: `GET`
+ * required permission: `mdm.view_usercommand`
+
+Fetches one MDM user command.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/mdm/users/commands/c0c4c26f-1d97-41cc-b82d-ef65824cdeb8/" | python -m json.tool
+```
+
+Response:
+
+```json
+{
+    "uuid": "c0c4c26f-1d97-41cc-b82d-ef65824cdeb8",
+    "enrolled_user": 23,
+    "name": "InstallProfile",
+    "artifact_version": "fe4ed451-ad0b-4f32-8ff6-25614368bdb1",
+    "artifact_operation": "Installation",
+    "not_before": null,
+    "time": "2022-08-26T14:42:56.311863",
+    "result": null,
+    "result_time": "2022-08-26T14:42:58.413435",
+    "status": "Acknowledged",
+    "error_chain": null,
+    "created_at": "2022-08-26T14:42:56.312212",
+    "updated_at": "2022-08-26T14:42:58.413625"
 }
 ```

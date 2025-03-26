@@ -18,6 +18,8 @@ from .api_views import (ArtifactDetail, ArtifactList,
                         SoftwareUpdateEnforcementList, SoftwareUpdateEnforcementDetail,
                         DEPVirtualServerSyncDevicesView,
                         EnrolledDeviceFileVaultPRK, EnrolledDeviceRecoveryPassword,
+                        EnrolledDeviceCommand, EnrolledDeviceCommandList,
+                        EnrolledUserCommand, EnrolledUserCommandList,
                         SyncSoftwareUpdatesView)
 
 
@@ -65,6 +67,10 @@ urlpatterns = [
          name="enrolled_device_filevault_prk"),
     path('devices/<int:pk>/recovery_password/', EnrolledDeviceRecoveryPassword.as_view(),
          name="enrolled_device_recovery_password"),
+    path('devices/commands/', EnrolledDeviceCommandList.as_view(), name="enrolled_device_commands"),
+    path('devices/commands/<uuid:uuid>/', EnrolledDeviceCommand.as_view(), name="enrolled_device_command"),
+    path('users/commands/', EnrolledUserCommandList.as_view(), name="enrolled_user_commands"),
+    path('users/commands/<uuid:uuid>/', EnrolledUserCommand.as_view(), name="enrolled_user_command"),
     path('software_updates/sync/',
          SyncSoftwareUpdatesView.as_view(), name="sync_software_updates"),
 ]

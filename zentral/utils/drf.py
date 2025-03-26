@@ -2,8 +2,17 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django_filters import rest_framework as filters
 from rest_framework import generics
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, DjangoModelPermissions
 from zentral.core.events.base import AuditEvent
+
+
+# pagination
+
+
+class MaxLimitOffsetPagination(LimitOffsetPagination):
+    default_limit = 50
+    max_limit = 500
 
 
 # permissions

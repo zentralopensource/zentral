@@ -22,7 +22,8 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Platform, Profile, PushCertificate,
                      RecoveryPasswordConfig,
                      SCEPConfig,
-                     SoftwareUpdateEnforcement)
+                     SoftwareUpdateEnforcement,
+                     UserCommand)
 from .payloads import get_configuration_profile_info
 from .scep.microsoft_ca import MicrosoftCAChallengeSerializer, OktaCAChallengeSerializer
 from .scep.static import StaticChallengeSerializer
@@ -35,9 +36,28 @@ class DeviceCommandSerializer(serializers.ModelSerializer):
     class Meta:
         model = DeviceCommand
         fields = (
-            "id",
             "uuid",
             "enrolled_device",
+            "name",
+            "artifact_version",
+            "artifact_operation",
+            "not_before",
+            "time",
+            "result",
+            "result_time",
+            "status",
+            "error_chain",
+            "created_at",
+            "updated_at"
+        )
+
+
+class UserCommandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserCommand
+        fields = (
+            "uuid",
+            "enrolled_user",
             "name",
             "artifact_version",
             "artifact_operation",

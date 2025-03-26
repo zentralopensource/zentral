@@ -5,7 +5,6 @@ from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
-from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
@@ -14,7 +13,7 @@ from zentral.contrib.mdm.events import post_dep_device_disowned_event
 from zentral.contrib.mdm.models import DEPDevice, DEPVirtualServer
 from zentral.contrib.mdm.tasks import sync_dep_virtual_server_devices_task
 from zentral.contrib.mdm.serializers import DEPDeviceSerializer
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired, MaxLimitOffsetPagination
 
 
 class DEPVirtualServerSyncDevicesView(APIView):
@@ -28,11 +27,6 @@ class DEPVirtualServerSyncDevicesView(APIView):
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
-
-
-class MaxLimitOffsetPagination(LimitOffsetPagination):
-    default_limit = 50
-    max_limit = 500
 
 
 class DEPDeviceList(ListAPIView):
