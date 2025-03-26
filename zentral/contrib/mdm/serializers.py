@@ -130,7 +130,7 @@ class DEPDeviceSerializer(serializers.ModelSerializer):
             "model", "os",
             "device_assigned_by", "device_assigned_date",
             "last_op_type", "last_op_date",
-            "profile_status", "profile_uuid", "profile_push_time",
+            "profile_status", "profile_uuid", "profile_assign_time", "profile_push_time",
             "enrollment",
             "disowned_at", "created_at", "updated_at",
         ]
@@ -142,7 +142,7 @@ class DEPDeviceSerializer(serializers.ModelSerializer):
             "model", "os",
             "device_assigned_by", "device_assigned_date",
             "last_op_type", "last_op_date",
-            "profile_status", "profile_uuid", "profile_push_time",
+            "profile_status", "profile_uuid", "profile_assign_time", "profile_push_time",
             "disowned_at", "created_at", "updated_at",
         ]
 
