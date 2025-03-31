@@ -485,7 +485,12 @@ class MDMViewsTestCase(TestCase):
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
-        self._assertSuccess(post_event, token_type="device", device_created=False, user_created=False)
+        self._assertSuccess(
+            post_event,
+            token_type="device",
+            device_created=False, user_created=False,
+            awaiting_configuration=False,
+        )
         session.refresh_from_db()
         self.assertEqual(session.status, DEPEnrollmentSession.COMPLETED)
         self.assertEqual(session.enrolled_device.push_magic, push_magic)
@@ -534,7 +539,7 @@ class MDMViewsTestCase(TestCase):
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
-        self._assertSuccess(post_event)
+        self._assertSuccess(post_event, awaiting_configuration=False)
         session.refresh_from_db()
         self.assertEqual(session.enrolled_device.get_bootstrap_token(), bootstrap_token)
 

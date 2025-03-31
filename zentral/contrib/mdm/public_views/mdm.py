@@ -342,14 +342,15 @@ class CheckinView(MDMView):
                         token_type="user" if self.channel == Channel.USER else "device",
                         user_id=self.enrolled_user_id,
                         device_created=device_created,
-                        user_created=user_created)
+                        user_created=user_created,
+                        awaiting_configuration=self.payload.get("AwaitingConfiguration"),)
 
     def do_set_bootstrap_token(self):
         # https://developer.apple.com/documentation/devicemanagement/setbootstraptokenrequest
         self.enrolled_device.awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
         self.enrolled_device.set_bootstrap_token(self.payload.get("BootstrapToken", None))
         self.enrolled_device.save()
-        self.post_event("success")
+        self.post_event("success", awaiting_configuration=self.payload.get("AwaitingConfiguration"))
 
     def do_get_bootstrap_token(self):
         # https://developer.apple.com/documentation/devicemanagement/get_bootstrap_token
