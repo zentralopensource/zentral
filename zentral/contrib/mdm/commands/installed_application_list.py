@@ -10,6 +10,7 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.installed_application_l
 class InstalledApplicationList(Command):
     request_type = "InstalledApplicationList"
     reschedule_notnow = True
+    store_result = True
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
@@ -28,7 +29,6 @@ class InstalledApplicationList(Command):
         self.retries = self.db_command.kwargs.get("retries", 0)
         self.update_inventory = self.db_command.kwargs.get("update_inventory", False)
         self.apps_to_check = self.db_command.kwargs.get("apps_to_check", [])
-        self.store_result = not self.artifact_version and not self.apps_to_check
 
     def build_command(self):
         command = {"ManagedAppsOnly": self.managed_only,
