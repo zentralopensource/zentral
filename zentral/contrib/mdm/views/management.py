@@ -541,7 +541,7 @@ class CreateRealmGroupTagMappingView(PermissionRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        update_realm_tags(self.object.realm_group.realm)
+        update_realm_tags(self.object.realm_group.realm, self.request)
         return response
 
 
@@ -553,10 +553,10 @@ class UpdateRealmGroupTagMappingView(PermissionRequiredMixin, UpdateView):
     def form_valid(self, form):
         old_realm = self.get_object().realm_group.realm  # self.object is already updated
         response = super().form_valid(form)
-        update_realm_tags(old_realm)
+        update_realm_tags(old_realm, self.request)
         new_realm = self.object.realm_group.realm
         if new_realm != old_realm:
-            update_realm_tags(new_realm)
+            update_realm_tags(new_realm, self.request)
         return response
 
 
@@ -568,7 +568,7 @@ class DeleteRealmGroupTagMappingView(PermissionRequiredMixin, DeleteView):
     def form_valid(self, form):
         realm = self.object.realm_group.realm
         response = super().form_valid(form)
-        update_realm_tags(realm)
+        update_realm_tags(realm, self.request)
         return response
 
 

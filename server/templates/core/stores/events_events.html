@@ -30,6 +30,9 @@
       {% if observer_obj %}
       <br><small>{{ observer_obj }}</small>
       {% endif %}
+      {% if request.view %}
+      <br><small>{{ request.view }}</small>
+      {% endif %}
       {% if request %}
       <br><small>{{ request }}</small>
       {% if request.geo %}

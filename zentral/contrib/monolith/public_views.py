@@ -7,8 +7,8 @@ from django.http import FileResponse, HttpResponse, HttpResponseForbidden, HttpR
 from django.utils.functional import cached_property
 from django.views.generic import View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.models import MachineTag, MetaMachine
-from zentral.contrib.inventory.utils import verify_enrollment_secret
+from zentral.contrib.inventory.models import MetaMachine
+from zentral.contrib.inventory.utils import add_machine_tags, verify_enrollment_secret
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 from .conf import monolith_conf
@@ -62,8 +62,7 @@ class MRBaseView(View):
         )
         if enrolled_machine_created:
             # apply enrollment secret tags
-            for tag in es_request.enrollment_secret.tags.all():
-                MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
+            add_machine_tags(serial_number, es_request.enrollment_secret.tags.all(), request)
             post_monolith_enrollment_event(serial_number, self.user_agent, self.ip, {'action': "enrollment"})
         return enrolled_machine
 

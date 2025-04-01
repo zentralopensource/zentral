@@ -8,8 +8,10 @@ from django.http import JsonResponse
 from django.views.generic import View
 from zentral.contrib.inventory.conf import macos_version_from_build
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.models import MachineTag, MetaMachine, PrincipalUserSource
-from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events, verify_enrollment_secret
+from zentral.contrib.inventory.models import MetaMachine, PrincipalUserSource
+from zentral.contrib.inventory.utils import (add_machine_tags,
+                                             commit_machine_snapshot_and_trigger_events,
+                                             verify_enrollment_secret)
 from zentral.contrib.santa.events import post_enrollment_event, process_events, post_preflight_event
 from zentral.contrib.santa.incidents import SyncIncident
 from zentral.contrib.santa.models import Configuration, EnrolledMachine, Enrollment, MachineRule
@@ -201,8 +203,7 @@ class PreflightView(BaseSyncView):
         )
 
         # apply enrollment secret tags
-        for tag in enrollment.secret.tags.all():
-            MachineTag.objects.get_or_create(serial_number=enrolled_machine.serial_number, tag=tag)
+        add_machine_tags(enrolled_machine.serial_number, enrollment.secret.tags.all(), self.request)
 
         # delete other enrolled machines
         other_enrolled_machines = (EnrolledMachine.objects.select_related("enrollment__configuration")

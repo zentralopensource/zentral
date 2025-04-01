@@ -4,7 +4,8 @@ from django import forms
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from zentral.core.actions.backends.base import BaseAction, BaseActionForm
-from zentral.contrib.inventory.models import Tag, MachineTag
+from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.utils import add_machine_tags, remove_machine_tags
 
 logger = logging.getLogger('zentral.contrib.inventory.actions.machine_tag')
 
@@ -89,12 +90,11 @@ class Action(BaseAction):
         tags = self.get_tags(event, probe, action_config_d)
         if not tags:
             return
-        for tag in tags:
-            action = action_config_d['action']
-            if action == ACTION_ADD_TAG:
-                MachineTag.objects.get_or_create(serial_number=msn, tag=tag)
-            elif action == ACTION_REMOVE_TAG:
-                MachineTag.objects.filter(serial_number=msn, tag=tag).delete()
-            else:
-                raise ValueError("Unknown action '%s' in machine tag action %s of probe %s",
-                                 action, self.name, probe.name)
+        action = action_config_d['action']
+        if action == ACTION_ADD_TAG:
+            add_machine_tags(msn, tags)
+        elif action == ACTION_REMOVE_TAG:
+            remove_machine_tags(msn, tags)
+        else:
+            raise ValueError("Unknown action '%s' in machine tag action %s of probe %s",
+                             action, self.name, probe.name)

@@ -433,7 +433,8 @@ class InventoryAPITests(APITestCase):
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
                                               'token_authenticated': True},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory_api:meta_business_units'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -546,7 +547,8 @@ class InventoryAPITests(APITestCase):
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
                                               'token_authenticated': True},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory_api:meta_business_unit'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -633,7 +635,8 @@ class InventoryAPITests(APITestCase):
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
                                               'token_authenticated': True},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory_api:meta_business_unit'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -725,7 +728,8 @@ class InventoryAPITests(APITestCase):
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
                                               'token_authenticated': True},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory_api:tags'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -818,7 +822,8 @@ class InventoryAPITests(APITestCase):
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
                                               'token_authenticated': True},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory_api:tag'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -887,7 +892,8 @@ class InventoryAPITests(APITestCase):
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
                                               'token_authenticated': True},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory_api:tag'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -985,7 +991,8 @@ class InventoryAPITests(APITestCase):
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
                                               'token_authenticated': True},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory_api:taxonomies'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -1076,7 +1083,8 @@ class InventoryAPITests(APITestCase):
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
                                               'token_authenticated': True},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory_api:taxonomy'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -1145,7 +1153,8 @@ class InventoryAPITests(APITestCase):
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
                                               'token_authenticated': True},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory_api:taxonomy'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )

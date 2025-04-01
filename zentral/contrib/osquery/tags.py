@@ -1,5 +1,5 @@
 import logging
-from zentral.contrib.inventory.models import MachineTag
+from zentral.contrib.inventory.utils import add_machine_tags, remove_machine_tags
 from .models import Query
 
 
@@ -10,8 +10,9 @@ class TagUpdateAggregator:
     OP_ADD = "add"
     OP_REMOVE = "remove"
 
-    def __init__(self, serial_number):
+    def __init__(self, serial_number, request):
         self.serial_number = serial_number
+        self.request = request
         self.tag_updates = {}
 
     def add_result(self, query_pk, query_version, result_time, results, distributed_query_pk=None):
@@ -43,10 +44,5 @@ class TagUpdateAggregator:
                 tags_to_add.append(query.tag)
             else:
                 tags_to_remove.append(query.tag)
-        if tags_to_remove:
-            MachineTag.objects.filter(serial_number=self.serial_number, tag__in=tags_to_remove).delete()
-        if tags_to_add:
-            MachineTag.objects.bulk_create(
-                [MachineTag(serial_number=self.serial_number, tag=tag) for tag in tags_to_add],
-                ignore_conflicts=True
-            )
+        add_machine_tags(self.serial_number, tags_to_add, self.request)
+        remove_machine_tags(self.serial_number, tags_to_remove, self.request)

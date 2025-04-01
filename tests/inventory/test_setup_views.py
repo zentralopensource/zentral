@@ -130,7 +130,8 @@ class InventorySetupViewsTestCase(TestCase):
                                               'token_authenticated': False,
                                               'expire_at_browser_close': False,
                                               'expiry_age': 1209600},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory:create_mbu'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -216,7 +217,8 @@ class InventorySetupViewsTestCase(TestCase):
                                               'token_authenticated': False,
                                               'expire_at_browser_close': False,
                                               'expiry_age': 1209600},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory:update_mbu'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -310,7 +312,8 @@ class InventorySetupViewsTestCase(TestCase):
                                               'token_authenticated': False,
                                               'expire_at_browser_close': False,
                                               'expiry_age': 1209600},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory:delete_mbu'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -400,7 +403,8 @@ class InventorySetupViewsTestCase(TestCase):
                                               'token_authenticated': False,
                                               'expire_at_browser_close': False,
                                               'expiry_age': 1209600},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory:create_tag'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -483,7 +487,8 @@ class InventorySetupViewsTestCase(TestCase):
                                               'token_authenticated': False,
                                               'expire_at_browser_close': False,
                                               'expiry_age': 1209600},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory:update_tag'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -555,7 +560,8 @@ class InventorySetupViewsTestCase(TestCase):
                                               'token_authenticated': False,
                                               'expire_at_browser_close': False,
                                               'expiry_age': 1209600},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory:delete_tag'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -628,7 +634,8 @@ class InventorySetupViewsTestCase(TestCase):
                                               'token_authenticated': False,
                                               'expire_at_browser_close': False,
                                               'expiry_age': 1209600},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory:create_taxonomy'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -712,7 +719,8 @@ class InventorySetupViewsTestCase(TestCase):
                                               'token_authenticated': False,
                                               'expire_at_browser_close': False,
                                               'expiry_age': 1209600},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory:update_taxonomy'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )
@@ -784,7 +792,8 @@ class InventorySetupViewsTestCase(TestCase):
                                               'token_authenticated': False,
                                               'expire_at_browser_close': False,
                                               'expiry_age': 1209600},
-                                  'username': self.user.username}},
+                                  'username': self.user.username},
+                         'view': 'inventory:delete_taxonomy'},
              'tags': ['inventory', 'zentral'],
              'type': 'zentral_audit'}
         )

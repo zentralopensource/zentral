@@ -39,6 +39,7 @@ class SCIMGroup(serializers.Serializer):
     def __init__(self, *args, **kwargs):
         self.resource = kwargs.pop("resource", None)
         self.realm = kwargs.pop("realm")
+        self.request = kwargs.pop("request")
         super().__init__(*args, **kwargs)
 
     def validate_schemas(self, value):
@@ -107,7 +108,7 @@ class SCIMGroup(serializers.Serializer):
             )
             members_updated |= users_removed > 0
         if members_updated:
-            realm_group_members_updated.send_robust(self.__class__, realm=self.realm)
+            realm_group_members_updated.send_robust(self.__class__, realm=self.realm, request=self.request)
 
     def save(self):
         self.resource = RealmGroup.objects.create(
@@ -182,6 +183,7 @@ class SCIMUser(serializers.Serializer):
     def __init__(self, *args, **kwargs):
         self.resource = kwargs.pop("resource", None)
         self.realm = kwargs.pop("realm")
+        self.request = kwargs.pop("request")
         super().__init__(*args, **kwargs)
 
     def to_internal_value(self, data):

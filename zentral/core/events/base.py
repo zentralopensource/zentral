@@ -207,30 +207,34 @@ class EventRequestGeo(object):
 class EventRequest(object):
     user_agent_str_length = 50
 
-    def __init__(self, user_agent, ip, user=None, geo=None, method=None, path=None):
+    def __init__(self, user_agent, ip, user=None, geo=None, method=None, path=None, view=None):
         self.user_agent = user_agent
         self.ip = ip
         self.geo = geo
         self.user = user
         self.method = method
         self.path = path
+        self.view = view
 
     @classmethod
     def build_from_request(cls, request):
         user_agent, ip = user_agent_and_ip_address_from_request(request)
         method = request.method
-        path = request.get_full_path()
+        path = request.get_full_path_info()
+        view = None
+        if request.resolver_match:
+            view = request.resolver_match.view_name
         user = EventRequestUser.build_from_request(request)
         geo = EventRequestGeo.build_from_request(request)
         return EventRequest(
             user_agent, ip,
-            method=method, path=path,
+            method=method, path=path, view=view,
             user=user, geo=geo,
         )
 
     @classmethod
     def deserialize(cls, request_d):
-        kwargs = {k: request_d.get(k) for k in ("user_agent", "ip", "method", "path")}
+        kwargs = {k: request_d.get(k) for k in ("user_agent", "ip", "method", "path", "view")}
         geo_d = request_d.get("geo")
         if geo_d:
             kwargs["geo"] = EventRequestGeo(**geo_d)
@@ -243,7 +247,8 @@ class EventRequest(object):
         d = {k: v for k, v in (("user_agent", self.user_agent),
                                ("ip", self.ip),
                                ("method", self.method),
-                               ("path", self.path)) if v}
+                               ("path", self.path),
+                               ("view", self.view),) if v}
         if self.geo:
             d["geo"] = self.geo.serialize()
         if self.user:

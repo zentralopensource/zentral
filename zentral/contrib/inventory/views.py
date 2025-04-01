@@ -37,7 +37,7 @@ from .forms import (MetaBusinessUnitForm,
 from .models import (BusinessUnit,
                      MetaBusinessUnit, MachineGroup,
                      MetaMachine,
-                     MetaBusinessUnitTag, MachineTag, Tag, Taxonomy,
+                     MetaBusinessUnitTag, Tag, Taxonomy,
                      JMESPathCheck)
 from .terraform import iter_compliance_check_resources
 from .utils import (AndroidAppFilter, AndroidAppFilterForm,
@@ -48,7 +48,8 @@ from .utils import (AndroidAppFilter, AndroidAppFilterForm,
                     IOSAppFilter, IOSAppFilterForm,
                     ProgramFilter, ProgramFilterForm,
                     SourceFilter,
-                    MSQuery)
+                    MSQuery,
+                    remove_machine_tags)
 
 
 logger = logging.getLogger("zentral.contrib.inventory.views")
@@ -884,6 +885,7 @@ class MachineTagsView(PermissionRequiredMixin, FormView):
     def get_form_kwargs(self, *args, **kwargs):
         kwargs = super(MachineTagsView, self).get_form_kwargs(*args, **kwargs)
         kwargs['machine_serial_number'] = self.msn
+        kwargs['request'] = self.request
         return kwargs
 
     def form_valid(self, form):
@@ -898,9 +900,9 @@ class RemoveMachineTagView(PermissionRequiredMixin, View):
     permission_required = "inventory.delete_machinetag"
 
     def post(self, request, *args, **kwargs):
+        tag = get_object_or_404(Tag, pk=kwargs['tag_id'])
         machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
-        MachineTag.objects.filter(tag__id=kwargs['tag_id'],
-                                  serial_number=machine.serial_number).delete()
+        remove_machine_tags(machine.serial_number, [tag], request)
         return HttpResponseRedirect(reverse('inventory:machine_tags', args=(machine.get_urlsafe_serial_number(),)))
 
 

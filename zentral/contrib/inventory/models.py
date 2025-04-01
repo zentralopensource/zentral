@@ -1114,28 +1114,6 @@ class MetaMachine:
         cursor.execute(query, [self.serial_number, self.serial_number])
         return sorted(cursor.fetchall(), key=lambda t: t[1].lower())
 
-    def update_taxonomy_tags(self, taxonomy, tag_names):
-        tag_names = set(tag_names)
-        with transaction.atomic():
-            existing_machine_tags = (MachineTag.objects.select_for_update()
-                                                       .select_related("tag")
-                                                       .filter(serial_number=self.serial_number,
-                                                               tag__taxonomy=taxonomy))
-            existing_tag_names = set(mt.tag.name for mt in existing_machine_tags)
-            # delete old tags
-            tag_names_to_delete = existing_tag_names - tag_names
-            if tag_names_to_delete:
-                existing_machine_tags.filter(tag__name__in=tag_names_to_delete).delete()
-            # add missing tags
-            for tag_name in tag_names - existing_tag_names:
-                try:
-                    with transaction.atomic():
-                        tag, _ = Tag.objects.get_or_create(taxonomy=taxonomy, name=tag_name)
-                except IntegrityError:
-                    logger.error("Tag collision, taxonomy '%s', name '%s'", taxonomy.pk, tag_name)
-                else:
-                    MachineTag.objects.get_or_create(serial_number=self.serial_number, tag=tag)
-
     def max_incident_severity(self):
         return (MachineIncident.objects.select_related("incident")
                                        .filter(serial_number=self.serial_number, status__in=Status.open_values())

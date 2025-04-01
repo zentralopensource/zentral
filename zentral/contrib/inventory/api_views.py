@@ -39,7 +39,7 @@ from .tasks import (cleanup_inventory,
                     export_machine_ios_apps,
                     export_machine_program_instances,
                     export_machine_snapshots)
-from .utils import MSQuery
+from .utils import MSQuery, add_machine_tags, remove_machine_tags
 
 
 # Machine mass tagging
@@ -76,7 +76,9 @@ class UpdateMachineTags(APIView):
                     for name in names
                 )
             elif kind == "REMOVE":
-                self.tags_to_remove.extend(names)
+                self.tags_to_remove.extend(
+                    Tag.objects.filter(name__in=names)
+                )
 
     def _iter_serial_numbers(self):
         # serial numbers
@@ -111,26 +113,27 @@ class UpdateMachineTags(APIView):
         total_removed = 0
         total_added = 0
         if self.taxonomies_to_clear:
-            removed, _ = MachineTag.objects.filter(serial_number=serial_number,
-                                                   tag__taxonomy__name__in=self.taxonomies_to_clear).delete()
-            total_removed += removed
+            total_removed += remove_machine_tags(
+                serial_number,
+                [mt.tag
+                 for mt in MachineTag.objects.select_related("tag")
+                                             .filter(serial_number=serial_number,
+                                                     tag__taxonomy__name__in=self.taxonomies_to_clear)],
+                self.request,
+            )
         for taxonomy, tags in self.tags_to_set.items():
-            removed, _ = (MachineTag.objects.filter(serial_number=serial_number,
-                                                    tag__taxonomy=taxonomy)
-                                            .exclude(tag__in=tags)).delete()
-            total_removed += removed
-            for tag in tags:
-                _, created = MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
-                if created:
-                    total_added += 1
-        for tag in self.tags_to_add:
-            _, created = MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
-            if created:
-                total_added += 1
-        if self.tags_to_remove:
-            removed, _ = MachineTag.objects.filter(serial_number=serial_number,
-                                                   tag__name__in=self.tags_to_remove).delete()
-            total_removed += removed
+            total_added += add_machine_tags(serial_number, tags, self.request)
+            total_removed += remove_machine_tags(
+                serial_number,
+                [mt.tag
+                 for mt in MachineTag.objects.select_related("tag")
+                                             .filter(serial_number=serial_number,
+                                                     tag__taxonomy=taxonomy)
+                                             .exclude(tag__in=tags)],
+                self.request,
+            )
+        total_added += add_machine_tags(serial_number, self.tags_to_add, self.request)
+        total_removed += remove_machine_tags(serial_number, self.tags_to_remove, self.request)
         return total_removed, total_added
 
     def post(self, request, *args, **kwargs):

@@ -230,14 +230,11 @@ def post_status_logs(msn, user_agent, ip, logs):
     )
 
 
-def post_results(msn, user_agent, ip, results):
+def post_results(msn, results, request):
     event_uuid = uuid.uuid4()
-    if user_agent or ip:
-        request = EventRequest(user_agent, ip)
-    else:
-        request = None
+    event_request = EventRequest.build_from_request(request)
     cc_status_agg = ComplianceCheckStatusAggregator(msn)
-    tag_update_agg = TagUpdateAggregator(msn)
+    tag_update_agg = TagUpdateAggregator(msn, request)
     for index, result in enumerate(_iter_cleaned_up_records(results)):
         try:
             event_time = _get_record_created_at(result)
@@ -246,7 +243,7 @@ def post_results(msn, user_agent, ip, results):
             event_time = None
         metadata = EventMetadata(uuid=event_uuid, index=index,
                                  machine_serial_number=msn,
-                                 request=request,
+                                 request=event_request,
                                  created_at=event_time)
         event = OsqueryResultEvent(metadata, result)
         try:

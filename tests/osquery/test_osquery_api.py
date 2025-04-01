@@ -8,6 +8,7 @@ from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from server.urls import build_urlpatterns_for_zentral_apps
 from zentral.conf import settings
+from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
@@ -979,20 +980,29 @@ class OsqueryAPIViewsTestCase(TestCase):
                                                       serial_number=em.serial_number)
         dqm2 = DistributedQueryMachine.objects.create(distributed_query=distributed_query2,
                                                       serial_number=em.serial_number)
-        response = self.post_as_json("distributed_write",
-                                     {"node_key": em.node_key,
-                                      "queries": {str(dqm1.pk): [{"yolo": "fomo"}],
-                                                  str(dqm2.pk): [{"username": "godzilla"}]},
-                                      "statuses": {str(dqm1.pk): 0,
-                                                   str(dqm2.pk): 0}})
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post_as_json("distributed_write",
+                                         {"node_key": em.node_key,
+                                          "queries": {str(dqm1.pk): [{"yolo": "fomo"}],
+                                                      str(dqm2.pk): [{"username": "godzilla"}]},
+                                          "statuses": {str(dqm1.pk): 0,
+                                                       str(dqm2.pk): 0}})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {})
         self.assertEqual(MachineTag.objects.filter(tag=query1.tag, serial_number=em.serial_number).count(), 1)
+        # events
+        self.assertEqual(len(callbacks), 1)
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
-        self.assertEqual(len(events), 1)
+        self.assertEqual(len(events), 2)
         request_event = events[0]
         self.assertIsInstance(request_event, OsqueryRequestEvent)
         self.assertEqual(request_event.payload["request_type"], "distributed_write")
+        machine_tag_event = events[1]
+        self.assertIsInstance(machine_tag_event, MachineTagEvent)
+        self.assertEqual(
+            machine_tag_event.payload,
+            {"action": "added", "tag": {"pk": query1.tag.pk, "name": query1.tag.name}},
+        )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_distributed_write_two_distributed_queries_remove_one_tag(self, post_event):
@@ -1004,20 +1014,29 @@ class OsqueryAPIViewsTestCase(TestCase):
                                                       serial_number=em.serial_number)
         dqm2 = DistributedQueryMachine.objects.create(distributed_query=distributed_query2,
                                                       serial_number=em.serial_number)
-        response = self.post_as_json("distributed_write",
-                                     {"node_key": em.node_key,
-                                      "queries": {str(dqm1.pk): [],
-                                                  str(dqm2.pk): [{"username": "godzilla"}]},
-                                      "statuses": {str(dqm1.pk): 0,
-                                                   str(dqm2.pk): 0}})
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post_as_json("distributed_write",
+                                         {"node_key": em.node_key,
+                                          "queries": {str(dqm1.pk): [],
+                                                      str(dqm2.pk): [{"username": "godzilla"}]},
+                                          "statuses": {str(dqm1.pk): 0,
+                                                       str(dqm2.pk): 0}})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {})
         self.assertEqual(MachineTag.objects.filter(tag=query1.tag, serial_number=em.serial_number).count(), 0)
+        # events
+        self.assertEqual(len(callbacks), 1)
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
-        self.assertEqual(len(events), 1)
+        self.assertEqual(len(events), 2)
         request_event = events[0]
         self.assertIsInstance(request_event, OsqueryRequestEvent)
         self.assertEqual(request_event.payload["request_type"], "distributed_write")
+        machine_tag_event = events[1]
+        self.assertIsInstance(machine_tag_event, MachineTagEvent)
+        self.assertEqual(
+            machine_tag_event.payload,
+            {"action": "removed", "tag": {"pk": query1.tag.pk, "name": query1.tag.name}},
+        )
 
     # log
 
@@ -1497,7 +1516,7 @@ class OsqueryAPIViewsTestCase(TestCase):
                                   "osquery_query": [(query1.pk,)]})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_log_snapshot_result_with_added_tag_check(self, post_event):
+    def test_log_snapshot_result_with_added_tag(self, post_event):
         em = self.force_enrolled_machine()
         query1, pack1, _ = self.force_query(force_pack=True, force_tag=True)
         self.assertEqual(MachineTag.objects.filter(tag=query1.tag, serial_number=em.serial_number).count(), 0)
@@ -1519,20 +1538,29 @@ class OsqueryAPIViewsTestCase(TestCase):
                  "unixTime": status_time1.strftime('%s')},
             ]
         }
-        response = self.post_as_json("log", post_data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post_as_json("log", post_data)
         json_response = response.json()
         self.assertEqual(json_response, {})
         self.assertEqual(MachineTag.objects.filter(tag=query1.tag, serial_number=em.serial_number).count(), 1)
+        # events
+        self.assertEqual(len(callbacks), 1)
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
-        self.assertEqual(len(events), 3)
+        self.assertEqual(len(events), 4)
         request_event = events[0]
         self.assertIsInstance(request_event, OsqueryRequestEvent)
         self.assertEqual(request_event.payload["request_type"], "log")
-        for event_idx, result_event in enumerate(events[1:]):
+        for event_idx, result_event in enumerate(events[1:-1]):
             self.assertIsInstance(result_event, OsqueryResultEvent)
+        machine_tag_event = events[-1]
+        self.assertIsInstance(machine_tag_event, MachineTagEvent)
+        self.assertEqual(
+            machine_tag_event.payload,
+            {"action": "added", "tag": {"pk": query1.tag.pk, "name": query1.tag.name}},
+        )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_log_snapshot_result_with_query_outdated_no_added_tag_check(self, post_event):
+    def test_log_snapshot_result_with_query_outdated_no_added_tag(self, post_event):
         em = self.force_enrolled_machine()
         query1, pack1, _ = self.force_query(force_pack=True, force_tag=True)
         self.assertEqual(MachineTag.objects.filter(tag=query1.tag, serial_number=em.serial_number).count(), 0)
@@ -1556,10 +1584,13 @@ class OsqueryAPIViewsTestCase(TestCase):
         }
         query1.version = 147
         query1.save()
-        response = self.post_as_json("log", post_data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post_as_json("log", post_data)
         json_response = response.json()
         self.assertEqual(json_response, {})
         self.assertEqual(MachineTag.objects.filter(tag=query1.tag, serial_number=em.serial_number).count(), 0)
+        # events
+        self.assertEqual(len(callbacks), 0)
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 3)
         request_event = events[0]
@@ -1569,7 +1600,7 @@ class OsqueryAPIViewsTestCase(TestCase):
             self.assertIsInstance(result_event, OsqueryResultEvent)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_log_snapshot_result_with_removed_tag_check(self, post_event):
+    def test_log_snapshot_result_with_removed_tag(self, post_event):
         em = self.force_enrolled_machine()
         query1, pack1, _ = self.force_query(force_pack=True, force_tag=True)
         MachineTag.objects.create(tag=query1.tag, serial_number=em.serial_number)
@@ -1591,17 +1622,26 @@ class OsqueryAPIViewsTestCase(TestCase):
                  "unixTime": status_time0.strftime('%s')},
             ]
         }
-        response = self.post_as_json("log", post_data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post_as_json("log", post_data)
         json_response = response.json()
         self.assertEqual(json_response, {})
         self.assertEqual(MachineTag.objects.filter(tag=query1.tag, serial_number=em.serial_number).count(), 0)
+        # events
+        self.assertEqual(len(callbacks), 1)
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
-        self.assertEqual(len(events), 3)
+        self.assertEqual(len(events), 4)
         request_event = events[0]
         self.assertIsInstance(request_event, OsqueryRequestEvent)
         self.assertEqual(request_event.payload["request_type"], "log")
-        for event_idx, result_event in enumerate(events[1:]):
+        for event_idx, result_event in enumerate(events[1:-1]):
             self.assertIsInstance(result_event, OsqueryResultEvent)
+        machine_tag_event = events[-1]
+        self.assertIsInstance(machine_tag_event, MachineTagEvent)
+        self.assertEqual(
+            machine_tag_event.payload,
+            {"action": "removed", "tag": {"pk": query1.tag.pk, "name": query1.tag.name}},
+        )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_start_file_carving(self, post_event):

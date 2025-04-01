@@ -11,8 +11,9 @@ from django.http import Http404, JsonResponse
 from django.utils.crypto import get_random_string
 from django.views.generic import View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine, MachineTag
-from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_trigger_events,
+from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
+from zentral.contrib.inventory.utils import (add_machine_tags,
+                                             commit_machine_snapshot_and_trigger_events,
                                              verify_enrollment_secret)
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
 from zentral.contrib.osquery.conf import build_osquery_conf, INVENTORY_QUERY_NAME
@@ -118,8 +119,7 @@ class EnrollView(BaseJsonPostView):
         )
 
         # apply enrollment secret tags
-        for tag in enrollment.secret.tags.all():
-            MachineTag.objects.get_or_create(serial_number=self.serial_number, tag=tag)
+        add_machine_tags(self.serial_number, enrollment.secret.tags.all(), self.request)
 
         # delete other enrolled machines
         deleted_enrolled_machines, _ = (EnrolledMachine.objects.exclude(pk=enrolled_machine.pk)
@@ -376,7 +376,7 @@ class DistributedWriteView(BaseNodeView):
 
         # process compliance checks & tag updates
         cc_status_agg = ComplianceCheckStatusAggregator(self.machine.serial_number)
-        tag_update_agg = TagUpdateAggregator(self.machine.serial_number)
+        tag_update_agg = TagUpdateAggregator(self.machine.serial_number, self.request)
         result_time = datetime.utcnow()  # TODO: how to get a better time? add ztl_status_time = now() to the query?
         for dqm_pk, dqm in dqm_cache.items():
             distributed_query = dqm.distributed_query
@@ -485,7 +485,7 @@ class LogView(BaseNodeView):
                     tree["business_unit"] = business_unit.serialize()
                 update_tree_with_inventory_query_snapshot(tree, last_inventory_snapshot)
                 commit_machine_snapshot_and_trigger_events(tree)
-            post_results(self.machine.serial_number, self.user_agent, self.ip, results)
+            post_results(self.machine.serial_number, results, self.request)
         elif log_type == "status":
             # TODO: configuration option to filter some of those (severity) or maybe simply ignore them
             post_status_logs(self.machine.serial_number, self.user_agent, self.ip, records)

@@ -1,7 +1,10 @@
 import logging
-from django.db import connection
-from zentral.contrib.inventory.models import MachineTag, PrincipalUserSource
-from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
+from django.db import connection, transaction
+from zentral.contrib.inventory.models import PrincipalUserSource
+from zentral.contrib.inventory.utils import (add_machine_tags,
+                                             commit_machine_snapshot_and_trigger_events,
+                                             remove_machine_tags,
+                                             send_machine_tag_events)
 from zentral.contrib.mdm.models import Blueprint, Command, DeviceCommand, Platform, RealmGroupTagMapping
 
 
@@ -143,7 +146,7 @@ def update_inventory_tree(command, commit_enrolled_device=True):
     return ms_tree
 
 
-def update_realm_tags(realm):
+def update_realm_tags(realm, request):
     query = (
       # all groups / children tags combinations for the realm
       "WITH RECURSIVE groups_tag(group_pk, tag_pk) AS ("
@@ -194,7 +197,7 @@ def update_realm_tags(realm):
       "  SELECT tags.serial_number, tags.tag_pk FROM tags"
       "  WHERE NOT EXISTS ("
       "    SELECT 1 FROM inventory_machinetag WHERE serial_number=tags.serial_number AND tag_id=tags.tag_pk"
-      "  ) RETURNING serial_number, tag_id, 'c' op"
+      "  ) RETURNING serial_number, tag_id, 'added' action"
       # and delete the other managed tags for the machines linked to a realm user
       "), deleted_tags AS ("
       "  DELETE FROM inventory_machinetag mt"
@@ -211,28 +214,43 @@ def update_realm_tags(realm):
       "    WHERE u.realm_id = %(realm_pk)s"
       "  ) AND NOT EXISTS ("
       "    SELECT 1 FROM tags WHERE serial_number=mt.serial_number AND tag_pk=mt.tag_id"
-      "  ) RETURNING serial_number, tag_id, 'd' op"
-      ") SELECT * FROM inserted_tags UNION SELECT * FROM deleted_tags;"
+      "  ) RETURNING serial_number, tag_id, 'removed' action"
+      "), machine_tag_ops AS ("
+      "  SELECT * FROM inserted_tags"
+      "  UNION"
+      "  SELECT * FROM deleted_tags"
+      ") SELECT mto.serial_number, mto.action, mto.tag_id pk, t.name, tx.id taxonomy_pk, tx.name taxonomy_name "
+      "FROM machine_tag_ops mto "
+      "JOIN inventory_tag t ON (mto.tag_id = t.id) "
+      "LEFT JOIN inventory_taxonomy tx ON (t.taxonomy_id = tx.id)"
     )
     cursor = connection.cursor()
     cursor.execute(query, {"realm_pk": realm.pk})
-    columns = [col[0] for col in cursor.description]
-    for result in cursor.fetchall():
-        yield dict(zip(columns, result))
+    results = cursor.fetchall()
+
+    def send_realm_tag_update_events():
+        send_machine_tag_events(results, request)
+
+    transaction.on_commit(send_realm_tag_update_events)
 
 
 def realm_group_members_updated_receiver(sender, **kwargs):
+    logger.info("Realm group members updated signal received from %s", sender)
     try:
         realm = kwargs["realm"]
     except KeyError:
         logger.error("Realm group members updated signal received from %s without realm", sender)
         return
-    logger.info("Realm group members updated signal received from %s", sender)
-    for op in update_realm_tags(realm):
-        logger.info("Tag %s, Serial number %s, Operation %s", op["tag_id"], op["serial_number"], op["op"])
+    try:
+        request = kwargs["request"]
+    except KeyError:
+        logger.error("Realm group members updated signal received from %s without request", sender)
+        return
+
+    update_realm_tags(realm, request)
 
 
-def update_realm_user_machine_tags(realm_user, serial_number):
+def update_realm_user_machine_tags(realm_user, serial_number, request):
     realm_user_groups = set(g for (g, _) in realm_user.groups_with_types())
     tags_to_add = []
     tags_to_remove = []
@@ -244,10 +262,5 @@ def update_realm_user_machine_tags(realm_user, serial_number):
             tags_to_add.append(rgtm.tag)
         else:
             tags_to_remove.append(rgtm.tag)
-    if tags_to_add:
-        MachineTag.objects.bulk_create((
-            MachineTag(serial_number=serial_number, tag=tag_to_add)
-            for tag_to_add in tags_to_add
-        ), ignore_conflicts=True)
-    if tags_to_remove:
-        MachineTag.objects.filter(serial_number=serial_number, tag__in=tags_to_remove).delete()
+    add_machine_tags(serial_number, tags_to_add, request)
+    remove_machine_tags(serial_number, tags_to_remove, request)

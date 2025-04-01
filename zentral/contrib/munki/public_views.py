@@ -9,8 +9,10 @@ from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
 from django.views.generic import View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.models import MachineTag, MetaMachine
-from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events, verify_enrollment_secret
+from zentral.contrib.inventory.models import MetaMachine
+from zentral.contrib.inventory.utils import (add_machine_tags,
+                                             commit_machine_snapshot_and_trigger_events,
+                                             verify_enrollment_secret)
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -51,8 +53,7 @@ class EnrollView(View):
             )
 
             # apply enrollment secret tags
-            for tag in es_request.enrollment_secret.tags.all():
-                MachineTag.objects.get_or_create(serial_number=serial_number, tag=tag)
+            add_machine_tags(serial_number, es_request.enrollment_secret.tags.all(), request)
 
             # post event
             post_munki_enrollment_event(serial_number, user_agent, ip,

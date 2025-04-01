@@ -6,3 +6,4 @@ from .enrollments import *  # NOQA
 from .full_export import *  # NOQA
 from .machine_exports import *  # NOQA
 from .msquery import *  # NOQA
+from .tags import *  # NOQA

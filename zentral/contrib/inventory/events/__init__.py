@@ -1,3 +1,4 @@
+from enum import Enum
 import logging
 import uuid
 from zentral.core.events import event_cls_from_type, register_event_type
@@ -182,6 +183,21 @@ class JMESPathCheckStatusUpdated(BaseEvent):
 
 
 register_event_type(JMESPathCheckStatusUpdated)
+
+
+# machine tags
+
+
+class MachineTagEvent(BaseEvent):
+    class Action(Enum):
+        ADDED = "added"
+        REMOVED = "removed"
+
+    event_type = 'machine_tag'
+    tags = ['machine']
+
+
+register_event_type(MachineTagEvent)
 
 
 # cleanup

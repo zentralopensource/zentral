@@ -5,6 +5,7 @@ from unittest.mock import call, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from realms.models import RealmGroup, RealmUserGroupMembership
+from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, MetaMachine, Tag
 from zentral.contrib.mdm.commands.certificate_list import CertificateList
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
@@ -140,7 +141,8 @@ class MDMInventoryTestCase(TestCase):
 
     # realm tags
 
-    def test_update_realm_tags(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_realm_tags(self, post_event):
         serial_number = self.enrolled_device.serial_number
         mt_qs = MachineTag.objects.filter(serial_number=serial_number)
         self.assertFalse(mt_qs.exists())
@@ -170,13 +172,23 @@ class MDMInventoryTestCase(TestCase):
         RealmGroupTagMapping.objects.create(realm_group=non_matching_group, tag=tag_to_remove)
         MachineTag.objects.create(serial_number=serial_number, tag=tag_to_remove)
 
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            update_realm_tags(self.realm, None)
+
+        self.assertEqual(len(callbacks), 1)
+        event1, event2 = sorted(
+            [c.args[0] for c in post_event.call_args_list],
+            key=lambda e: e.payload["action"]
+        )
+        self.assertIsInstance(event1, MachineTagEvent)
         self.assertEqual(
-            sorted(update_realm_tags(self.realm), key=lambda d: d["tag_id"]),
-            sorted(
-                [{'serial_number': serial_number, 'tag_id': tag_to_add.pk, 'op': 'c'},
-                 {'serial_number': serial_number, 'tag_id': tag_to_remove.pk, 'op': 'd'}],
-                key=lambda d: d["tag_id"]
-            )
+            event1.payload,
+            {'action': 'added', 'tag': {'name': tag_to_add.name, 'pk': tag_to_add.pk}}
+        )
+        self.assertIsInstance(event2, MachineTagEvent)
+        self.assertEqual(
+            event2.payload,
+            {'action': 'removed', 'tag': {'name': tag_to_remove.name, 'pk': tag_to_remove.pk}}
         )
         self.assertEqual(mt_qs.count(), 3)
         self.assertTrue(mt_qs.filter(tag=tag_to_add).exists())
@@ -185,15 +197,24 @@ class MDMInventoryTestCase(TestCase):
         self.assertFalse(mt_qs.filter(tag=tag_to_remove).exists())
 
     @patch("zentral.contrib.mdm.inventory.logger.error")
-    def test_realm_group_members_updated_receiver_error(self, logger_error):
+    def test_realm_group_members_updated_missing_realm_receiver_error(self, logger_error):
         sentinel = object()
         realm_group_members_updated_receiver(sentinel)
         logger_error.assert_called_once_with(
             "Realm group members updated signal received from %s without realm", sentinel
         )
 
+    @patch("zentral.contrib.mdm.inventory.logger.error")
+    def test_realm_group_members_updated_missing_request_receiver_error(self, logger_error):
+        sentinel = object()
+        realm_group_members_updated_receiver(sentinel, realm=self.realm)
+        logger_error.assert_called_once_with(
+            "Realm group members updated signal received from %s without request", sentinel
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.mdm.inventory.logger.info")
-    def test_realm_group_members_updated_receiver_info(self, logger_info):
+    def test_realm_group_members_updated_receiver_info(self, logger_info, post_event):
         serial_number = self.enrolled_device.serial_number
         mt_qs = MachineTag.objects.filter(serial_number=serial_number)
         self.assertFalse(mt_qs.exists())
@@ -211,8 +232,17 @@ class MDMInventoryTestCase(TestCase):
         RealmGroupTagMapping.objects.create(realm_group=group, tag=tag_to_add)
 
         sentinel = object()
-        realm_group_members_updated_receiver(sentinel, realm=self.realm)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            realm_group_members_updated_receiver(sentinel, realm=self.realm, request=None)
+
         logger_info.assert_has_calls([
             call("Realm group members updated signal received from %s", sentinel),
-            call("Tag %s, Serial number %s, Operation %s", tag_to_add.pk, serial_number, "c")
         ])
+
+        self.assertEqual(len(callbacks), 1)
+        event, = [c.args[0] for c in post_event.call_args_list]
+        self.assertIsInstance(event, MachineTagEvent)
+        self.assertEqual(
+            event.payload,
+            {'action': 'added', 'tag': {'name': tag_to_add.name, 'pk': tag_to_add.pk}}
+        )

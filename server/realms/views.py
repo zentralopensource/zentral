@@ -15,7 +15,8 @@ from .backends.registry import backend_classes
 from .forms import RealmGroupSearchForm, RealmUserSearchForm
 from .models import (Realm, RealmAuthenticationSession,
                      RealmGroup, RealmGroupMapping, RoleMapping,
-                     RealmUser, RealmUserGroupMembership)
+                     RealmUser, RealmUserGroupMembership,
+                     realm_group_members_updated)
 from .utils import get_realm_user_mapped_groups, get_realm_user_mapped_realm_groups
 
 
@@ -217,6 +218,12 @@ class DeleteRealmGroupView(PermissionRequiredMixin, DeleteView):
 
     def get_queryset(self):
         return RealmGroup.objects.for_deletion()
+
+    def form_valid(self, form):
+        realm = self.object.realm
+        response = super().form_valid(form)
+        realm_group_members_updated.send_robust(self.__class__, realm=realm, request=self.request)
+        return response
 
 
 # realm users

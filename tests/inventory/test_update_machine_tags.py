@@ -1,12 +1,14 @@
 from functools import reduce
 import json
 import operator
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
+from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, Tag, Taxonomy
 
 
@@ -206,7 +208,8 @@ class InventoryAPITests(TestCase):
             0
         )
 
-    def test_post_set_add_one_tag(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_set_add_one_tag(self, post_event):
         self._set_required_permission()
         # non matching machine
         self._force_machine()
@@ -214,10 +217,11 @@ class InventoryAPITests(TestCase):
         serial_number, _, principal_name = self._force_machine()
         taxonomy_name = get_random_string(12)
         tag_name = get_random_string(12)
-        response = self._post_json_data({
-            "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
-            "principal_users": {"principal_names": [principal_name]}
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data({
+                "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
+                "principal_users": {"principal_names": [principal_name]}
+            })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -229,8 +233,19 @@ class InventoryAPITests(TestCase):
                                       serial_number=serial_number).count(),
             1
         )
+        # events
+        self.assertEqual(len(callbacks), 1)
+        event, = [c.args[0] for c in post_event.call_args_list]
+        self.assertIsInstance(event, MachineTagEvent)
+        self.assertEqual(
+            event.payload,
+            {'action': 'added',
+             'tag': {'name': tag_name, 'pk': Tag.objects.get(name=tag_name).pk},
+             'taxonomy': {'name': taxonomy_name, 'pk': Taxonomy.objects.get(name=taxonomy_name).pk}}
+        )
 
-    def test_post_set_add_one_remove_three(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_set_add_one_remove_three(self, post_event):
         self._set_required_permission()
         # non matching machine
         self._force_machine()
@@ -243,14 +258,15 @@ class InventoryAPITests(TestCase):
         new_taxonomy_tag_name1 = get_random_string(12)
         # 1 taxonomy with 1 tag
         taxonomy_name2, _ = self._force_machine_tags(serial_number, 1)
-        response = self._post_json_data({
-            "operations": [
-                {"kind": "SET", "taxonomy": taxonomy_name0, "names": [tag_names0[0]]},
-                {"kind": "SET", "taxonomy": taxonomy_name1, "names": [new_taxonomy_tag_name1]},
-                {"kind": "SET", "taxonomy": taxonomy_name2, "names": []}
-            ],
-            "principal_users": {"unique_ids": [unique_id]}
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data({
+                "operations": [
+                    {"kind": "SET", "taxonomy": taxonomy_name0, "names": [tag_names0[0]]},
+                    {"kind": "SET", "taxonomy": taxonomy_name1, "names": [new_taxonomy_tag_name1]},
+                    {"kind": "SET", "taxonomy": taxonomy_name2, "names": []}
+                ],
+                "principal_users": {"unique_ids": [unique_id]}
+            })
         self.assertEqual(
             response.json(),
             {'machines': {'found': 1}, 'tags': {'added': 1, 'removed': 3}}
@@ -270,8 +286,12 @@ class InventoryAPITests(TestCase):
                                       serial_number=serial_number).values_list("tag__name", flat=True).count(),
             0
         )
+        # events
+        self.assertEqual(len(callbacks), 4)
+        self.assertEqual(len(post_event.call_args_list), 4)
 
-    def test_post_set_multiple_add_one(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_set_multiple_add_one(self, post_event):
         self._set_required_permission()
         # 3 matching machines
         serial_number0, _, principal_name0 = self._force_machine()
@@ -279,11 +299,12 @@ class InventoryAPITests(TestCase):
         serial_number2, unique_id2, _ = self._force_machine()
         taxonomy_name = get_random_string(12)
         tag_name = get_random_string(12)
-        response = self._post_json_data({
-            "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
-            "principal_users": {"unique_ids": [unique_id1, unique_id2],
-                                "principal_names": [principal_name0, principal_name1]}
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data({
+                "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
+                "principal_users": {"unique_ids": [unique_id1, unique_id2],
+                                    "principal_names": [principal_name0, principal_name1]}
+            })
         self.assertEqual(
             response.json(),
             {'machines': {'found': 3}, 'tags': {'added': 3, 'removed': 0}}
@@ -293,8 +314,12 @@ class InventoryAPITests(TestCase):
                                   .values_list("serial_number", flat=True)),
             {serial_number0, serial_number1, serial_number2}
         )
+        # events
+        self.assertEqual(len(callbacks), 3)
+        self.assertEqual(len(post_event.call_args_list), 3)
 
-    def test_post_add_three_tags(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_add_three_tags(self, post_event):
         self._set_required_permission()
         serial_number, _, principal_name = self._force_machine()
         self.assertEqual(MachineTag.objects.filter(serial_number=serial_number).count(), 0)
@@ -302,11 +327,12 @@ class InventoryAPITests(TestCase):
         tag_name_2 = get_random_string(12)
         taxonomy_name_3 = get_random_string(12)
         tag_name_3 = get_random_string(12)
-        response = self._post_json_data({
-            "operations": [{"kind": "ADD", "names": [tag_name_1, tag_name_2]},
-                           {"kind": "ADD", "taxonomy": taxonomy_name_3, "names": [tag_name_3]}],
-            "principal_users": {"principal_names": [principal_name]}
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data({
+                "operations": [{"kind": "ADD", "names": [tag_name_1, tag_name_2]},
+                               {"kind": "ADD", "taxonomy": taxonomy_name_3, "names": [tag_name_3]}],
+                "principal_users": {"principal_names": [principal_name]}
+            })
         self.assertEqual(
             response.json(),
             {"machines": {"found": 1}, "tags": {"added": 3, "removed": 0}}
@@ -321,18 +347,33 @@ class InventoryAPITests(TestCase):
                                                                                  serial_number=serial_number)),
             set(Tag.objects.get(taxonomy__name=taxonomy_name_3, name=name) for name in (tag_name_3,))
         )
+        # events
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(len(post_event.call_args_list), 3)
 
-    def test_post_remove_one_tag(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_remove_one_tag(self, post_event):
         self._set_required_permission()
         serial_number, _, _ = self._force_machine()
         taxonomy_name, (tag_name_1, tag_name_2) = self._force_machine_tags(serial_number, 2)
-        response = self._post_json_data({
-            "operations": [{"kind": "REMOVE", "names": [tag_name_1]}],
-            "serial_numbers": [serial_number],
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data({
+                "operations": [{"kind": "REMOVE", "names": [tag_name_1]}],
+                "serial_numbers": [serial_number],
+            })
         self.assertEqual(
             response.json(),
             {"machines": {"found": 1}, "tags": {"added": 0, "removed": 1}}
         )
         self.assertEqual(MachineTag.objects.filter(serial_number=serial_number, tag__name=tag_name_1).count(), 0)
         self.assertEqual(MachineTag.objects.filter(serial_number=serial_number, tag__name=tag_name_2).count(), 1)
+        # events
+        self.assertEqual(len(callbacks), 1)
+        event, = [c.args[0] for c in post_event.call_args_list]
+        self.assertIsInstance(event, MachineTagEvent)
+        self.assertEqual(
+            event.payload,
+            {'action': 'removed',
+             'tag': {'name': tag_name_1, 'pk': Tag.objects.get(name=tag_name_1).pk},
+             'taxonomy': {'name': taxonomy_name, 'pk': Taxonomy.objects.get(name=taxonomy_name).pk}}
+        )

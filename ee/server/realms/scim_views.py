@@ -141,7 +141,7 @@ class SingleResourceSCIMView(SCIMView):
         return self.build_response(self.serialize_resource(self.resource), status=200)
 
     def put(self, request, *args, **kwargs):
-        serializer = self.serializer(realm=self.realm, resource=self.resource, data=request.data)
+        serializer = self.serializer(realm=self.realm, resource=self.resource, data=request.data, request=request)
         if serializer.is_valid():
             resource = serializer.update()
             return self.build_response(self.serialize_resource(resource), status=200)
@@ -196,7 +196,7 @@ class MultipleResourcesSCIMView(SCIMView):
         return self.build_response(data, status="200")
 
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer(realm=self.realm, data=request.data)
+        serializer = self.serializer(realm=self.realm, data=request.data, request=request)
         if serializer.is_valid():
             resource = serializer.save()
             return self.build_response(self.serialize_resource(resource), status=201)
@@ -410,5 +410,5 @@ class GroupsView(GroupMixin, MultipleResourcesSCIMView):
 class GroupView(GroupMixin, SingleResourceSCIMView):
     def delete(self, request, *args, **kwargs):
         self.resource.delete()
-        realm_group_members_updated.send_robust(self.__class__, realm=self.realm)
+        realm_group_members_updated.send_robust(self.__class__, realm=self.realm, request=request)
         return HttpResponse(status=204)

@@ -1,10 +1,12 @@
 from functools import reduce
 import operator
+from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
+from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, MetaBusinessUnit, Tag
 from accounts.models import User
 
@@ -72,7 +74,8 @@ class MachineTagsViewsTestCase(TestCase):
 
     # new tag
 
-    def test_post_new_tag(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_new_tag(self, post_event):
         qs = MachineTag.objects.filter(serial_number="1111")
         self.assertEqual(qs.count(), 0)
         self._login(
@@ -83,16 +86,25 @@ class MachineTagsViewsTestCase(TestCase):
             "inventory.add_tag",
         )
         name = get_random_string(12)
-        response = self.client.post(reverse("inventory:machine_tags", args=("1111",)),
-                                    {"new_tag_name": name,
-                                     "new_tag_color": "123456"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("inventory:machine_tags", args=("1111",)),
+                                        {"new_tag_name": name,
+                                         "new_tag_color": "123456"},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_tags.html")
         self.assertContains(response, name)
         self.assertEqual(qs.count(), 1)
         machine_tag = qs.first()
         self.assertEqual(machine_tag.tag.name, name)
+        # events
+        self.assertEqual(len(callbacks), 1)
+        event, = [c.args[0] for c in post_event.call_args_list]
+        self.assertIsInstance(event, MachineTagEvent)
+        self.assertEqual(
+            event.payload,
+            {'action': 'added', 'tag': {'name': machine_tag.tag.name, 'pk': machine_tag.tag.pk}}
+        )
 
     def test_post_new_tag_or_existing_error(self):
         qs = MachineTag.objects.filter(serial_number="1111")
@@ -136,7 +148,8 @@ class MachineTagsViewsTestCase(TestCase):
 
     # existing tag
 
-    def test_post_existing_tag(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_existing_tag(self, post_event):
         self.create_machine_snapshot(serial_number="1111")
         qs = MachineTag.objects.filter(serial_number="1111")
         self.assertEqual(qs.count(), 0)
@@ -148,14 +161,23 @@ class MachineTagsViewsTestCase(TestCase):
             "inventory.delete_machinetag",
             "inventory.add_tag",
         )
-        response = self.client.post(reverse("inventory:machine_tags", args=("1111",)),
-                                    {"existing_tag": tag.pk},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("inventory:machine_tags", args=("1111",)),
+                                        {"existing_tag": tag.pk},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_tags.html")
         self.assertEqual(qs.count(), 1)
         machine_tag = qs.first()
         self.assertEqual(machine_tag.tag, tag)
+        # events
+        self.assertEqual(len(callbacks), 1)
+        event, = [c.args[0] for c in post_event.call_args_list]
+        self.assertIsInstance(event, MachineTagEvent)
+        self.assertEqual(
+            event.payload,
+            {'action': 'added', 'tag': {'name': tag.name, 'pk': tag.pk}}
+        )
 
     def test_post_existing_tag_mbu_error(self):
         self.create_machine_snapshot(serial_number="1111")
@@ -207,7 +229,8 @@ class MachineTagsViewsTestCase(TestCase):
         response = self.client.post(reverse("inventory:remove_machine_tag", args=("1111", 2222)))
         self.assertEqual(response.status_code, 403)
 
-    def test_remove_tag(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_remove_tag(self, post_event):
         tag = Tag.objects.create(name=get_random_string(12))
         MachineTag.objects.create(serial_number="1111", tag=tag)
         qs = MachineTag.objects.filter(serial_number="1111")
@@ -219,6 +242,15 @@ class MachineTagsViewsTestCase(TestCase):
             "inventory.delete_machinetag",
             "inventory.add_tag",
         )
-        response = self.client.post(reverse("inventory:remove_machine_tag", args=("1111", tag.pk)), follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("inventory:remove_machine_tag", args=("1111", tag.pk)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_tags.html")
+        # events
+        self.assertEqual(len(callbacks), 1)
+        event, = [c.args[0] for c in post_event.call_args_list]
+        self.assertIsInstance(event, MachineTagEvent)
+        self.assertEqual(
+            event.payload,
+            {'action': 'removed', 'tag': {'name': tag.name, 'pk': tag.pk}}
+        )

@@ -11,11 +11,12 @@ from zentral.utils.text import get_version_sort_key
 from .conf import PLATFORM_CHOICES
 from .models import (CurrentMachineSnapshot,
                      EnrollmentSecret,
-                     MachineTag, MetaMachine,
+                     MetaMachine,
                      MetaBusinessUnit, MetaBusinessUnitTag,
                      Source, Tag,
                      JMESPathCheck)
-from .utils import (AndroidAppFilter,
+from .utils import (add_machine_tags,
+                    AndroidAppFilter,
                     BundleFilter,
                     DebPackageFilter,
                     IOSAppFilter,
@@ -218,6 +219,7 @@ class AddMachineTagForm(AddTagForm):
 
     def __init__(self, *args, **kwargs):
         self.machine = MetaMachine(kwargs.pop('machine_serial_number'))
+        self.request = kwargs.pop('request')
         super(AddMachineTagForm, self).__init__(*args, **kwargs)
         self.fields['existing_tag'].queryset = Tag.objects.filter(id__in=[t.id for t in self.machine.available_tags()])
         self.fields['new_tag_mbu'].queryset = MetaBusinessUnit.objects.filter(
@@ -228,8 +230,7 @@ class AddMachineTagForm(AddTagForm):
         return self.cleaned_data.get('new_tag_mbu')
 
     def save(self, *args, **kwargs):
-        return MachineTag.objects.get_or_create(serial_number=self.machine.serial_number,
-                                                tag=self._get_tag())
+        add_machine_tags(self.machine.serial_number, [self._get_tag()], self.request)
 
 
 class BaseAppSearchForm(forms.Form):

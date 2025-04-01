@@ -8,6 +8,7 @@ from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from rest_framework.request import Request
 from accounts.models import APIToken, User
 from realms.models import RealmGroup, RealmUser, RealmUserGroupMembership
 from realms.scim_views import SCIMPermissions
@@ -1361,7 +1362,11 @@ class RealmViewsTestCase(TestCase):
              'schemas': ['urn:ietf:params:scim:schemas:core:2.0:Group']}
         )
         self.assertTrue(created_group.scim_managed is True)
-        update_realm_tags.assert_called_once_with(self.realm)
+        self.assertEqual(len(update_realm_tags.call_args_list), 1)
+        args = update_realm_tags.call_args_list[0].args
+        self.assertEqual(len(args), 2)
+        self.assertEqual(args[0], self.realm)
+        self.assertIsInstance(args[1], Request)
 
     # update group put
 
@@ -1561,7 +1566,11 @@ class RealmViewsTestCase(TestCase):
         self.assertEqual(RealmUserGroupMembership.objects.filter(group=group, user=old_user_member).count(), 0)
         old_group_member.refresh_from_db()
         self.assertIsNone(old_group_member.parent)
-        update_realm_tags.assert_called_once_with(self.realm)
+        self.assertEqual(len(update_realm_tags.call_args_list), 1)
+        args = update_realm_tags.call_args_list[0].args
+        self.assertEqual(len(args), 2)
+        self.assertEqual(args[0], self.realm)
+        self.assertIsInstance(args[1], Request)
 
     # get group by pk
 
@@ -1687,4 +1696,8 @@ class RealmViewsTestCase(TestCase):
         self.set_permissions("realms.delete_realmgroup")
         response = self.delete(reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)))
         self.assertEqual(response.status_code, 204)
-        update_realm_tags.assert_called_once_with(self.realm)
+        self.assertEqual(len(update_realm_tags.call_args_list), 1)
+        args = update_realm_tags.call_args_list[0].args
+        self.assertEqual(len(args), 2)
+        self.assertEqual(args[0], self.realm)
+        self.assertIsInstance(args[1], Request)
