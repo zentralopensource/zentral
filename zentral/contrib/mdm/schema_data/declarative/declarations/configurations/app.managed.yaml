@@ -19,11 +19,16 @@ payload:
     tvOS:
       introduced: n/a
     visionOS:
-      introduced: n/a
+      introduced: '2.4'
+      allowed-enrollments:
+      - supervised
+      - device
+      - user
+      allowed-scopes:
+      - system
     watchOS:
       introduced: n/a
   apply: multiple
-  beta: true
 payloadkeys:
 - key: AppStoreID
   title: App Store ID
@@ -90,6 +95,8 @@ payloadkeys:
           removed: '18.0'
         macOS:
           removed: '15.0'
+        visionOS:
+          introduced: n/a
       type: <string>
       presence: optional
       rangelist:
@@ -136,6 +143,9 @@ payloadkeys:
     content: If 'true', the system enables direct downloads for the 'AssociatedDomains'.
   - key: CellularSliceUUID
     title: Cellular Slice UUID
+    supportedOS:
+      visionOS:
+        introduced: n/a
     type: <string>
     presence: optional
     content: The cellular slice identifier, which can be the data network name (DNN)
@@ -152,6 +162,31 @@ payloadkeys:
     type: <string>
     presence: optional
     content: The UUID of the DNS proxy to associate with the app.
+  - key: Hideable
+    title: Hideable
+    supportedOS:
+      iOS:
+        introduced: '18.1'
+      visionOS:
+        introduced: n/a
+    type: <boolean>
+    presence: optional
+    default: true
+    content: If `false`, the user cannot hide the app. It does not affect the user's
+      ability to leave it in the App Library, while removing it from the home screen.
+  - key: Lockable
+    title: Lockable
+    supportedOS:
+      iOS:
+        introduced: '18.1'
+      visionOS:
+        introduced: n/a
+    type: <boolean>
+    presence: optional
+    default: true
+    content: If `false`, the user cannot lock or hide the app. Because hiding an app
+      also requires locking it, disallowing the user from locking the app will also
+      prevent the user from hiding it.
   - key: RelayUUID
     title: Relay UUID
     type: <string>
@@ -159,6 +194,9 @@ payloadkeys:
     content: The UUID of the relay to associate with the app.
   - key: TapToPayScreenLock
     title: Tap to Pay Screen Lock
+    supportedOS:
+      visionOS:
+        introduced: n/a
     type: <boolean>
     presence: optional
     default: false
@@ -169,6 +207,160 @@ payloadkeys:
     type: <string>
     presence: optional
     content: The UUID of the VPN to associate with the app.
+- key: AppConfig
+  title: App Config
+  supportedOS:
+    iOS:
+      introduced: '18.4'
+    macOS:
+      introduced: n/a
+  type: <dictionary>
+  presence: optional
+  content: A dictionary of app config data and credentials.
+  subkeytype: AppConfigDictionary
+  subkeys: &id001
+  - key: DataAssetReference
+    title: App/Extension Config Data Asset Reference
+    type: <string>
+    assettypes:
+    - com.apple.asset.data
+    asset-content-types:
+    - application/plist
+    - application/x-plist
+    - application/xml
+    - text/xml
+    presence: optional
+    content: Specifies the identifier of an asset declaration containing a reference
+      to the app/extension config data. The corresponding asset must be of type "com.apple.asset.data".
+      The referenced data must be a property list file, and the asset's "ContentType"
+      value should be set to match the data type.
+  - key: Passwords
+    title: Password App/Extension Configs.
+    type: <array>
+    presence: optional
+    content: Provides passwords to the managed app/extension. Each element in the
+      array contains a password asset reference and an associated identifier, which
+      the app/extension may use to look up the password.
+    subkeytype: CredentialConfig
+    subkeys:
+    - key: PasswordAppConfigItem
+      type: <dictionary>
+      presence: required
+      subkeys:
+      - key: Identifier
+        title: Password Identifier
+        type: <string>
+        presence: required
+        content: The app/extension uses this identifier to fetch the corresponding
+          password using the ManagedApp framework. App developers will define what
+          values can be used for these identifiers.
+      - key: AssetReference
+        title: Asset Reference
+        type: <string>
+        assettypes:
+        - com.apple.asset.credential.userpassword
+        presence: required
+        content: Specifies the identifier of an asset declaration containing a user
+          name and password. The password is made available to the managed app/extension.
+          The user name is ignored.
+  - key: Identities
+    title: Identity App/Extension Configs.
+    type: <array>
+    presence: optional
+    content: Provides identities to the managed app/extension. Each element in the
+      array contains an identity asset reference and an associated identifier, which
+      the app/extension may use to look up the identity.
+    subkeytype: CredentialConfig
+    subkeys:
+    - key: IdentityAppConfigItem
+      type: <dictionary>
+      presence: required
+      subkeys:
+      - key: Identifier
+        title: Identity Identifier
+        type: <string>
+        presence: required
+        content: The app/extension uses this identifier to fetch the corresponding
+          identity using the ManagedApp framework. App developers will define what
+          values can be used for these identifiers.
+      - key: AssetReference
+        title: Asset Reference
+        type: <string>
+        assettypes:
+        - com.apple.asset.credential.identity
+        - com.apple.asset.credential.scep
+        - com.apple.asset.credential.acme
+        presence: required
+        content: Specifies the identifier of an asset declaration containing an identity
+          that is made available to the managed app/extension.
+  - key: Certificates
+    title: Certificate App/Extension Configs.
+    type: <array>
+    presence: optional
+    content: Provides certificates to the managed app/extension. Each element in the
+      array contains a certificate asset reference and an associated identifier, which
+      the app/extension may use to look up the certificate.
+    subkeytype: CredentialConfig
+    subkeys:
+    - key: CertificateAppConfigItem
+      type: <dictionary>
+      presence: required
+      subkeys:
+      - key: Identifier
+        title: Certificate Identifier
+        type: <string>
+        presence: required
+        content: The app/extension uses this identifier to fetch the corresponding
+          certificate using the ManagedApp framework. App developers will define what
+          values can be used for these identifiers.
+      - key: AssetReference
+        title: Asset Reference
+        type: <string>
+        assettypes:
+        - com.apple.asset.credential.certificate
+        presence: required
+        content: Specifies the identifier of an asset declaration containing a certificate
+          that is made available to the managed app/extension.
+- key: ExtensionConfigs
+  title: Extension Configs
+  supportedOS:
+    iOS:
+      introduced: '18.4'
+    macOS:
+      introduced: n/a
+  type: <dictionary>
+  presence: optional
+  content: A dictionary of extension config data and credentials.
+  subkeys:
+  - key: ANY
+    title: Extension Composed Identifier
+    type: <dictionary>
+    presence: optional
+    content: A dictionary mapping extension composed identifiers to the extension
+      config data and credentials. The expected format is "Identifier (TeamIdentifier)".
+    subkeytype: AppConfigDictionary
+    subkeys: *id001
+- key: LegacyAppConfigAssetReference
+  title: App Config MDMv1 Asset Reference
+  supportedOS:
+    iOS:
+      introduced: '18.4'
+    macOS:
+      introduced: n/a
+  type: <string>
+  assettypes:
+  - com.apple.asset.data
+  asset-content-types:
+  - application/plist
+  - application/x-plist
+  - application/xml
+  - text/xml
+  presence: optional
+  content: Specifies the identifier of an asset declaration containing a reference
+    to the app config data. This app config data is applied and made available to
+    the app using the traditional MDMv1 behavior. The corresponding asset must be
+    of type "com.apple.asset.data". The referenced data must be a property list file,
+    and the asset's "ContentType" value should be set to match the data type.
 related-status-items:
 - status-items:
   - app.managed.list

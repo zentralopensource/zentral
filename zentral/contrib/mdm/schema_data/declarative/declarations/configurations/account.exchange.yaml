@@ -75,9 +75,7 @@ payloadkeys:
   title: Server Host Name
   type: <string>
   presence: optional
-  content: The hostname of the EWS server (or IP address). This is a required field
-    on iOS and visionOS, unless the declaration contains an 'OAuth' property, with
-    'Enabled' set to 'true' and without a 'SignInURL'.
+  content: Specifies the Exchange server host name (or IP address).
 - key: Port
   title: Server Port
   supportedOS:

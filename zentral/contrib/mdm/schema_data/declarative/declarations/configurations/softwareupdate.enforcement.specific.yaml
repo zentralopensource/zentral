@@ -20,7 +20,12 @@ payload:
       allowed-scopes:
       - system
     tvOS:
-      introduced: n/a
+      introduced: '18.4'
+      allowed-enrollments:
+      - supervised
+      - device
+      allowed-scopes:
+      - system
     visionOS:
       introduced: n/a
     watchOS:

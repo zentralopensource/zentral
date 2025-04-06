@@ -20,7 +20,12 @@ payload:
       allowed-scopes:
       - system
     tvOS:
-      introduced: n/a
+      introduced: '18.4'
+      allowed-enrollments:
+      - supervised
+      - device
+      allowed-scopes:
+      - system
     visionOS:
       introduced: n/a
     watchOS:
@@ -40,6 +45,9 @@ payloadkeys:
   title: Software Update Deferrals
   supportedOS:
     iOS:
+      allowed-enrollments:
+      - supervised
+    tvOS:
       allowed-enrollments:
       - supervised
   type: <dictionary>
@@ -66,6 +74,8 @@ payloadkeys:
     supportedOS:
       iOS:
         introduced: n/a
+      tvOS:
+        introduced: n/a
     type: <integer>
     presence: optional
     range:
@@ -79,6 +89,8 @@ payloadkeys:
     title: Minor Update Deferral Period
     supportedOS:
       iOS:
+        introduced: n/a
+      tvOS:
         introduced: n/a
     type: <integer>
     presence: optional
@@ -95,6 +107,8 @@ payloadkeys:
     supportedOS:
       iOS:
         introduced: n/a
+      tvOS:
+        introduced: n/a
     type: <integer>
     presence: optional
     range:
@@ -108,6 +122,8 @@ payloadkeys:
   title: Software Update Recommended Cadence
   supportedOS:
     macOS:
+      introduced: n/a
+    tvOS:
       introduced: n/a
   type: <string>
   presence: optional
@@ -127,12 +143,18 @@ payloadkeys:
     iOS:
       allowed-enrollments:
       - supervised
+    tvOS:
+      allowed-enrollments:
+      - supervised
   type: <dictionary>
   presence: optional
   content: This object configures various automatic Software Update functionality.
   subkeys:
   - key: Download
     title: Automatic downloads of available updates.
+    supportedOS:
+      tvOS:
+        introduced: n/a
     type: <string>
     presence: optional
     rangelist:
@@ -166,6 +188,8 @@ payloadkeys:
     supportedOS:
       iOS:
         introduced: n/a
+      tvOS:
+        introduced: n/a
     type: <string>
     presence: optional
     rangelist:
@@ -185,6 +209,8 @@ payloadkeys:
     iOS:
       allowed-enrollments:
       - supervised
+    tvOS:
+      introduced: n/a
   type: <dictionary>
   presence: optional
   content: These configurations set user access to interacting with Rapid Security
@@ -213,6 +239,8 @@ payloadkeys:
   supportedOS:
     iOS:
       introduced: n/a
+    tvOS:
+      introduced: n/a
   type: <boolean>
   presence: optional
   default: true
@@ -223,6 +251,12 @@ payloadkeys:
 - key: Beta
   supportedOS:
     macOS:
+      introduced: '15.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+    tvOS:
       introduced: n/a
   type: <dictionary>
   presence: optional

@@ -375,6 +375,19 @@ payloadkeys:
   type: <string>
   presence: optional
   content: The key to skip the Safety pane. This key is available in iOS 16 and later.
+- key: SafetyAndHandling
+  title: Skips Safety and Handling pane
+  supportedOS:
+    iOS:
+      introduced: '18.4'
+    macOS:
+      introduced: n/a
+    tvOS:
+      introduced: n/a
+  type: <string>
+  presence: optional
+  content: If the key is included in the SkipSetup array the Safety and Handling pane
+    will be skipped.
 - key: ScreenTime
   title: Skip Screen Time pane
   supportedOS:
@@ -399,8 +412,9 @@ payloadkeys:
       introduced: n/a
   type: <string>
   presence: optional
-  content: The key to skip the add cellular plan pane. This key is available in iOS
-    12 and later.
+  content: The key to skip the add cellular plan pane. Skipping this pane prevents
+    automatic eSIM setup during Setup Assistant. This key is available in iOS 12 and
+    later.
 - key: Siri
   title: Disables Siri
   supportedOS:
@@ -416,7 +430,7 @@ payloadkeys:
     iOS:
       introduced: '12.0'
     macOS:
-      introduced: n/a
+      introduced: '15.4'
     tvOS:
       introduced: n/a
   type: <string>
