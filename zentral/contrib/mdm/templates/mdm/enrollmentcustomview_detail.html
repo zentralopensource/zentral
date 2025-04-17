@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrollment_custom_views' %}">Enrollment custom views</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
+</ol>
+
+<div class="object-details">
+  <div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">{{ object }}</h2>
+  </div>
+  <div class="d-flex align-items-center mb-3">
+    <h3 class="m-0 fs-5 text-secondary">Enrollment custom view</h3>
+    <div class="ms-auto">
+      {% if perms.mdm.change_enrollmentcustomview %}
+        {% url 'mdm:update_enrollment_custom_view' object.pk as url %}
+        {% button 'UPDATE' url "Edit enrollment custom view" %}
+      {% endif %}
+      {% if perms.mdm.delete_enrollmentcustomview and object.can_be_deleted %}
+        {% url 'mdm:delete_enrollment_custom_view' object.pk as url %}
+        {% button 'DELETE' url "Delete enrollment custom view" %}
+      {% endif %}
+    </div>
+  </div>
+
+  <table class="table-object-properties">
+    <tbody>
+      <tr>
+        <th width="240px">Name</th>
+        <td>{{ object.name }}</th>
+      </tr>
+      <tr>
+        <th>Description</th>
+        <td>{{ object.description|linebreaks }}</td>
+      </tr>
+      <tr>
+        <th>Requires authentication?</th>
+        <td>{{ object.requires_authentication|yesno }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% created_updated_at object %}
+
+</div>
+{% endblock %}

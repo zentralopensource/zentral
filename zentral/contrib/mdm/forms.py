@@ -25,7 +25,7 @@ from .payloads import get_configuration_profile_info
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag, Channel,
                      DataAsset, Declaration, DeclarationRef,
-                     DEPDevice, DEPOrganization, DEPEnrollment, DEPToken, DEPVirtualServer,
+                     DEPDevice, DEPOrganization, DEPEnrollment, DEPEnrollmentCustomView, DEPToken, DEPVirtualServer,
                      EnrolledDevice, EnterpriseApp, Platform,
                      FileVaultConfig, RecoveryPasswordConfig, SCEPConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
@@ -582,6 +582,37 @@ class UpdateDEPEnrollmentForm(CreateDEPEnrollmentForm):
             and not self.cleaned_data.get("admin_short_name")
             and not self.cleaned_data.get("admin_password_hash")
         )
+
+
+class DEPEnrollmentCustomViewForm(forms.ModelForm):
+    class Meta:
+        model = DEPEnrollmentCustomView
+        fields = ("custom_view", "weight")
+
+    def __init__(self, *args, **kwargs):
+        self.dep_enrollment = kwargs.pop("dep_enrollment")
+        super().__init__(*args, **kwargs)
+        # restrict the choice of custom views
+        dcvs_qs = self.dep_enrollment.depenrollmentcustomview_set.all()
+        if self.instance.pk:
+            dcvs_qs = dcvs_qs.exclude(pk=self.instance.pk)
+        self.fields["custom_view"].queryset = self.fields["custom_view"].queryset.exclude(
+            pk__in=[dcvs.custom_view.pk for dcvs in dcvs_qs]
+        )
+
+    def clean_weight(self):
+        weight = self.cleaned_data.get("weight")
+        if weight is not None:
+            clean_weight_qs = self.dep_enrollment.depenrollmentcustomview_set.filter(weight=weight)
+            if self.instance.pk:
+                clean_weight_qs = clean_weight_qs.exclude(pk=self.instance.pk)
+            if clean_weight_qs.exists():
+                raise forms.ValidationError("A custom view with this weight already exists.")
+        return weight
+
+    def clean(self):
+        super().clean()
+        self.instance.dep_enrollment = self.dep_enrollment
 
 
 class AssignDEPDeviceEnrollmentForm(forms.ModelForm):

@@ -32,7 +32,9 @@ def build_csp_header(request):
     csp_policies = DEFAULT_CSP_POLICIES.copy()
     csp_nonce = getattr(request, '_csp_nonce', None)
     if csp_nonce:
-        csp_policies["script-src"] += f" 'nonce-{csp_nonce}'"
+        nonce_src = f" 'nonce-{csp_nonce}'"
+        csp_policies["script-src"] += nonce_src
+        csp_policies["style-src"] += nonce_src
     return ";".join(f"{k} {v}" for k, v in csp_policies.items())
 
 
