@@ -1291,6 +1291,52 @@ class RealmGroupTagMapping(models.Model):
         return reverse("mdm:realm_group_tag_mappings") + f"#rgtm-{self.pk}"
 
 
+class EnrollmentCustomViewManager(models.Manager):
+    def can_be_deleted(self):
+        return self.annotate(
+            decv_count=Count("depenrollmentcustomview"),
+        ).filter(
+            decv_count=0,
+        )
+
+
+class EnrollmentCustomView(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(unique=True)
+    description = models.TextField(blank=True)
+    html = models.TextField(verbose_name="HTML template")
+    requires_authentication = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = EnrollmentCustomViewManager()
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("mdm:enrollment_custom_view", args=(self.pk,))
+
+    def can_be_deleted(self):
+        return EnrollmentCustomView.objects.can_be_deleted().filter(pk=self.pk).exists()
+
+    def serialize_for_event(self, keys_only=False):
+        d = {
+            "pk": str(self.pk),
+            "name": self.name,
+        }
+        if keys_only:
+            return d
+        d.update({
+            "description": self.description,
+            "html": self.html,
+            "requires_authentication": self.requires_authentication,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
+
+
 # Abstract MDM enrollment model
 
 
@@ -1747,11 +1793,19 @@ class DEPEnrollment(MDMEnrollment):
     def assigned_devices(self):
         return self.depdevice_set.exclude(last_op_type=DEPDevice.OP_TYPE_DELETED)
 
-    def serialize_for_event(self):
-        return {"uuid": self.pk,
-                "name": self.name,
-                "created_at": self.created_at,
-                "updated_at": self.updated_at}
+    def serialize_for_event(self, keys_only=False):
+        d = {
+            "pk": self.pk,
+            "uuid": str(self.uuid),
+            "name": self.name,
+        }
+        if keys_only:
+            return d
+        d.update({
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        return d
 
     def has_hardcoded_admin(self):
         return self.admin_full_name and self.admin_short_name and self.admin_password_hash
@@ -1932,6 +1986,37 @@ class DEPEnrollmentSession(EnrollmentSession):
                 and self.status == self.AUTHENTICATED
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)
+
+
+class DEPEnrollmentCustomView(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dep_enrollment = models.ForeignKey(DEPEnrollment, on_delete=models.CASCADE)
+    custom_view = models.ForeignKey(EnrollmentCustomView, on_delete=models.CASCADE)
+    weight = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (
+            ("dep_enrollment", "custom_view"),
+            ("dep_enrollment", "weight"),
+        )
+
+    def __str__(self):
+        return self.custom_view.name
+
+    def get_absolute_url(self):
+        return reverse("mdm:dep_enrollment", args=(self.dep_enrollment.pk,)) + f"#cv-{self.pk}"
+
+    def serialize_for_event(self):
+        return {
+            "pk": str(self.pk),
+            "dep_enrollment": self.dep_enrollment.serialize_for_event(keys_only=True),
+            "custom_view": self.custom_view.serialize_for_event(keys_only=True),
+            "weight": self.weight,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
 
 
 # User Enrollment

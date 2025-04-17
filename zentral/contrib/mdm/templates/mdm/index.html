@@ -14,6 +14,9 @@
 {% if perms.mdm.view_depenrollment or perms.mdm.view_otaenrollment or perms.mdm.view_userenrollment %}
 <p><a href="{% url 'mdm:enrollments' %}">Enrollments</a></p>
 {% endif %}
+{% if perms.mdm.view_enrollmentcustomview %}
+<p><a href="{% url 'mdm:enrollment_custom_views' %}">Enrollment custom views</a></p>
+{% endif %}
 {% if perms.mdm.view_enrolleddevice %}
 <p><a href="{% url 'mdm:enrolled_devices' %}">Enrolled devices</a></p>
 {% endif %}

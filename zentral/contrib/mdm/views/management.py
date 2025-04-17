@@ -15,12 +15,11 @@ from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands.base import load_command, registered_manual_commands
-from zentral.contrib.mdm.dep import add_dep_profile, assign_dep_device_profile, refresh_dep_device
-from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
+from zentral.contrib.mdm.dep import assign_dep_device_profile, refresh_dep_device
+from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        CreateDeclarationForm,
                                        AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
-                                       CreateDEPEnrollmentForm, UpdateDEPEnrollmentForm,
                                        CreateAssetArtifactForm,
                                        DEPDeviceSearchForm, EnrolledDeviceSearchForm,
                                        FileVaultConfigForm,
@@ -55,7 +54,6 @@ from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
 from zentral.contrib.mdm.scep import SCEPChallengeType
 from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm, OktaCAChallengeForm
 from zentral.contrib.mdm.scep.static import StaticChallengeForm
-from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
@@ -85,139 +83,6 @@ class EnrollmentListView(LoginRequiredMixin, TemplateView):
         else:
             ctx["user_enrollments"] = []
         return ctx
-
-
-# DEP enrollments
-
-
-class CreateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
-    permission_required = "mdm.add_depenrollment"
-    template_name = "mdm/depenrollment_form.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        dep_enrollment_form = kwargs.get("dep_enrollment_form")
-        if not dep_enrollment_form:
-            dep_enrollment_form = CreateDEPEnrollmentForm(prefix="de")
-        context["dep_enrollment_form"] = dep_enrollment_form
-        enrollment_secret_form = kwargs.get("enrollment_secret_form")
-        if not enrollment_secret_form:
-            enrollment_secret_form = EnrollmentSecretForm(
-                prefix="es",
-                no_restrictions=True,
-            )
-        context["enrollment_secret_form"] = enrollment_secret_form
-        return context
-
-    def post(self, request, *args, **kwargs):
-        dep_enrollment_form = CreateDEPEnrollmentForm(request.POST, prefix="de")
-        enrollment_secret_form = EnrollmentSecretForm(
-            request.POST,
-            prefix="es",
-            no_restrictions=True,
-        )
-        if dep_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
-            dep_enrollment = dep_enrollment_form.save(commit=False)
-            dep_enrollment.enrollment_secret = enrollment_secret_form.save()
-            enrollment_secret_form.save_m2m()
-            try:
-                add_dep_profile(dep_enrollment)
-            except DEPClientError as error:
-                dep_enrollment_form.add_error(None, str(error))
-            else:
-                return redirect(dep_enrollment)
-        return self.render_to_response(
-            self.get_context_data(dep_enrollment_form=dep_enrollment_form,
-                                  enrollment_secret_form=enrollment_secret_form)
-        )
-
-
-class DEPEnrollmentView(PermissionRequiredMixin, DetailView):
-    permission_required = "mdm.view_depenrollment"
-    model = DEPEnrollment
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        # TODO: pagination, separate view
-        ctx["dep_enrollment_sessions"] = (ctx["object"].depenrollmentsession_set.all()
-                                                       .select_related("enrollment_secret",
-                                                                       "realm_user")
-                                                       .order_by("-created_at"))
-        ctx["dep_enrollment_sessions_count"] = ctx["dep_enrollment_sessions"].count()
-        ctx["skip_keys"] = []
-        for skey, content in skippable_setup_panes:
-            for okey in self.object.skip_setup_items:
-                if okey == skey:
-                    ctx["skip_keys"].append(content)
-        return ctx
-
-
-class CheckDEPEnrollmentView(PermissionRequiredMixin, DetailView):
-    permission_required = "mdm.view_depenrollment"
-    model = DEPEnrollment
-    template_name = "mdm/depenrollment_check.html"
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        dep_client = DEPClient.from_dep_virtual_server(self.object.virtual_server)
-        ctx["fetched_profile"] = dep_client.get_profile(self.object.uuid)
-        return ctx
-
-
-class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
-    permission_required = "mdm.change_depenrollment"
-    template_name = "mdm/depenrollment_form.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.object = get_object_or_404(
-            DEPEnrollment,
-            pk=kwargs["pk"]
-        )
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["object"] = self.object
-        dep_enrollment_form = kwargs.get("dep_enrollment_form")
-        if not dep_enrollment_form:
-            dep_enrollment_form = UpdateDEPEnrollmentForm(prefix="de", instance=self.object)
-        context["dep_enrollment_form"] = dep_enrollment_form
-        enrollment_secret_form = kwargs.get("enrollment_secret_form")
-        if not enrollment_secret_form:
-            enrollment_secret_form = EnrollmentSecretForm(
-                prefix="es",
-                instance=self.object.enrollment_secret,
-                no_restrictions=True,
-            )
-        context["enrollment_secret_form"] = enrollment_secret_form
-        return context
-
-    def post(self, request, *args, **kwargs):
-        dep_enrollment_form = UpdateDEPEnrollmentForm(
-            request.POST,
-            prefix="de",
-            instance=self.object
-        )
-        enrollment_secret_form = EnrollmentSecretForm(
-            request.POST,
-            prefix="es",
-            instance=self.object.enrollment_secret,
-            no_restrictions=True,
-        )
-        if dep_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
-            dep_enrollment = dep_enrollment_form.save(commit=False)
-            dep_enrollment.enrollment_secret = enrollment_secret_form.save()
-            enrollment_secret_form.save_m2m()
-            try:
-                add_dep_profile(dep_enrollment)
-            except DEPClientError as error:
-                dep_enrollment_form.add_error(None, str(error))
-            else:
-                return redirect(dep_enrollment)
-        return self.render_to_response(
-            self.get_context_data(dep_enrollment_form=dep_enrollment_form,
-                                  enrollment_secret_form=enrollment_secret_form)
-        )
 
 
 # OTA Enrollments

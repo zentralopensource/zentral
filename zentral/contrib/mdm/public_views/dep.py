@@ -1,11 +1,11 @@
 import base64
 import logging
 import plistlib
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
+from django.template import Context, Engine
 from django.urls import reverse
 from django.views.generic import View
-from realms.models import RealmUser
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.contrib.mdm.crypto import verify_iphone_ca_signed_payload
@@ -28,7 +28,7 @@ class DEPEnrollMixin(PostEventMixin):
         try:
             payload_data = verify_iphone_ca_signed_payload(self.get_payload_data())
         except ValueError:
-            self.abort("Could not verify signer certificate")
+            self.abort("could not verify payload signer certificate")
 
         payload = plistlib.loads(payload_data)
 
@@ -138,8 +138,55 @@ class DEPEnrollView(DEPEnrollMixin, MDMProfileResponseMixin, View):
         return self.build_mdm_configuration_profile_response(dep_enrollment_session)
 
 
-def realm_user_session_key(dep_enrollment_session):
-    return "_dep_enrollment_session_{}_realm_user_pk".format(dep_enrollment_session.pk)
+# DEP web enroll views
+
+
+def get_dep_web_enroll_next_custom_view(dep_enrollment, authenticated, current_decv):
+    select_next = current_decv is None
+    for decv in (
+        dep_enrollment.depenrollmentcustomview_set
+                      .select_related("custom_view")
+                      .filter(custom_view__requires_authentication=authenticated)
+                      .order_by("weight")
+    ):
+        if select_next:
+            return decv
+        elif decv == current_decv:
+            select_next = True
+
+
+DEP_ENROLLMENT_PAYLOAD_KEY = "_dep_web_enroll_payload"
+DEP_ENROLLMENT_SESSION_KEY = "_dep_web_enroll_session_pk"
+
+
+def get_dep_web_enroll_authentication_url(request, dep_enrollment):
+    payload = request.session[DEP_ENROLLMENT_PAYLOAD_KEY]
+    callback = "zentral.contrib.mdm.public_views.dep.dep_web_enroll_callback"
+    callback_kwargs = {"dep_enrollment_pk": dep_enrollment.pk,
+                       "serial_number": payload["SERIAL"],
+                       "udid": payload["UDID"],
+                       "payload": payload}
+    if dep_enrollment.use_realm_user and \
+       dep_enrollment.realm_user_is_admin and \
+       dep_enrollment.realm.backend_instance.can_get_password:
+        callback_kwargs["save_password_hash"] = True
+
+    return dep_enrollment.realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
+
+
+def get_dep_web_enroll_next_url(request, dep_enrollment, authenticated=False, current_decv=None):
+    decv = get_dep_web_enroll_next_custom_view(dep_enrollment, authenticated, current_decv)
+    if decv:
+        # redirect to next custom view
+        return reverse(
+            "mdm_public:dep_web_enroll_custom_view",
+            args=(dep_enrollment.enrollment_secret.secret, decv.pk)
+        )
+    if not authenticated:
+        # redirect to authentication
+        return get_dep_web_enroll_authentication_url(request, dep_enrollment)
+    # By default, redirect to MDM profile
+    return reverse("mdm_public:dep_web_enroll_profile", args=(dep_enrollment.enrollment_secret.secret,))
 
 
 def dep_web_enroll_callback(request, realm_authentication_session, dep_enrollment_pk, serial_number, udid, payload):
@@ -156,9 +203,12 @@ def dep_web_enroll_callback(request, realm_authentication_session, dep_enrollmen
     dep_enrollment_session.realm_user = realm_user
     dep_enrollment_session.save()
 
-    # add user to session
-    request.session[realm_user_session_key(dep_enrollment_session)] = str(realm_user.pk)
-    return reverse("mdm_public:dep_enrollment_session", args=(dep_enrollment_session.enrollment_secret.secret,))
+    # update session
+    request.session[DEP_ENROLLMENT_PAYLOAD_KEY] = payload
+    request.session[DEP_ENROLLMENT_SESSION_KEY] = dep_enrollment_session.pk
+
+    # next page
+    return get_dep_web_enroll_next_url(request, dep_enrollment, authenticated=True, current_decv=None)
 
 
 class DEPWebEnrollView(DEPEnrollMixin, View):
@@ -179,47 +229,87 @@ class DEPWebEnrollView(DEPEnrollMixin, View):
             # should never happen
             self.abort("this DEP enrollment has no realm")
 
-        # start realm auth session, do redirect
-        callback = "zentral.contrib.mdm.public_views.dep.dep_web_enroll_callback"
-        callback_kwargs = {"dep_enrollment_pk": self.dep_enrollment.pk,
-                           "serial_number": self.serial_number,
-                           "udid": self.udid,
-                           "payload": payload}
-        if self.dep_enrollment.use_realm_user and \
-           self.dep_enrollment.realm_user_is_admin and \
-           self.dep_enrollment.realm.backend_instance.can_get_password:
-            callback_kwargs["save_password_hash"] = True
+        # save payload
+        request.session[DEP_ENROLLMENT_PAYLOAD_KEY] = payload
 
+        # redirect to next view
         return HttpResponseRedirect(
-            self.dep_enrollment.realm.backend_instance.initialize_session(request, callback, **callback_kwargs)
+            get_dep_web_enroll_next_url(request, self.dep_enrollment, authenticated=False, current_decv=None)
         )
 
 
-class DEPEnrollmentSessionView(PostEventMixin, MDMProfileResponseMixin, View):
+class DEPWebEnrollCustomView(PostEventMixin, View):
+    event_class = DEPEnrollmentRequestEvent
+
+    def get_next_url(self, request):
+        return get_dep_web_enroll_next_url(request, self.dep_enrollment, self.authenticated, self.current_decv)
+
+    def dispatch(self, request, *args, **kwargs):
+        # PostEventMixin
+        self.setup_with_request(request)
+
+        self.dep_enrollment = get_object_or_404(
+            DEPEnrollment,
+            enrollment_secret__secret=kwargs["dep_enrollment_secret"]
+        )
+        self.payload = request.session[DEP_ENROLLMENT_PAYLOAD_KEY]
+        self.serial_number = self.payload["SERIAL"]
+        self.udid = self.payload["UDID"]
+        self.current_decv = (
+            self.dep_enrollment.depenrollmentcustomview_set.select_related("custom_view")
+                                                           .filter(pk=kwargs["pk"])
+                                                           .first()
+        )
+        self.realm_user = None
+        try:
+            self.realm_user = DEPEnrollmentSession.objects.get(
+                dep_enrollment=self.dep_enrollment,
+                pk=request.session[DEP_ENROLLMENT_SESSION_KEY]
+            ).realm_user
+        except KeyError:
+            pass
+        except DEPEnrollmentSession.DoesNotExist:
+            logger.error("Unknown DEP enrollment session %s", request.session[DEP_ENROLLMENT_SESSION_KEY])
+            del request.session[DEP_ENROLLMENT_SESSION_KEY]
+        self.authenticated = self.realm_user is not None
+        if not self.current_decv or self.current_decv.custom_view.requires_authentication != self.authenticated:
+            # custom view not found probably because the configuration has changed, or auth not OK, we retry
+            return HttpResponseRedirect(self.get_next_url(request))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        ctx = {
+            "payload_language": self.payload.get("LANGUAGE", "").replace("_", "-"),
+            "request_language": request.META.get('HTTP_ACCEPT_LANGUAGE', "").split(",")[0],
+            "authenticated": self.authenticated,
+            "realm_user": self.realm_user,
+            "serial_number": self.serial_number,
+        }
+        template_engine = Engine.get_default()
+        template = template_engine.from_string(self.current_decv.custom_view.html)
+        return HttpResponse(template.render(Context(ctx)), content_type="text/html")
+
+    def post(self, request, *args, **kwargs):
+        payload = {"custom_view": self.current_decv.custom_view.serialize_for_event(keys_only=True)}
+        self.post_event("success", **payload)
+        return HttpResponseRedirect(self.get_next_url(request))
+
+
+class DEPWebEnrollProfileView(PostEventMixin, MDMProfileResponseMixin, View):
     event_class = DEPEnrollmentRequestEvent
 
     def get(self, request, *args, **kwargs):
         dep_enrollment_session = get_object_or_404(
             DEPEnrollmentSession,
-            enrollment_secret__secret=kwargs["dep_enrollment_session_secret"],
-            dep_enrollment__realm__isnull=False
+            pk=request.session[DEP_ENROLLMENT_SESSION_KEY],
+            realm_user__isnull=False,
+            dep_enrollment__enrollment_secret__secret=kwargs["dep_enrollment_secret"],
+            dep_enrollment__realm__isnull=False,
         )
 
         # for PostEventMixin
         enrollment_secret = dep_enrollment_session.enrollment_secret
         self.serial_number = enrollment_secret.serial_numbers[0]
-        self.udid = enrollment_secret.serial_numbers[0]
-
-        # check the auth
-        try:
-            realm_user_pk = self.request.session.pop(realm_user_session_key(dep_enrollment_session))
-            self.realm_user = RealmUser.objects.get(realm=dep_enrollment_session.dep_enrollment.realm,
-                                                    pk=realm_user_pk)
-        except (KeyError, RealmUser.DoesNotExist):
-            # should not happen
-            self.abort("DEP enrollment session - request not authenticated")
-        if self.realm_user != dep_enrollment_session.realm_user:
-            # should not happen
-            self.abort("DEP enrollment session - realm user missmatch")
+        self.udid = enrollment_secret.udids[0]
 
         return self.build_mdm_configuration_profile_response(dep_enrollment_session)

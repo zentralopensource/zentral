@@ -16,9 +16,12 @@ urlpatterns = [
     path('dep_web_enroll/<str:dep_enrollment_secret>/',
          public_views.DEPWebEnrollView.as_view(),
          name='dep_web_enroll'),
-    path('dep_enrollment_session/<str:dep_enrollment_session_secret>/',
-         public_views.DEPEnrollmentSessionView.as_view(),
-         name='dep_enrollment_session'),
+    path('dep_web_enroll/<str:dep_enrollment_secret>/custom_views/<uuid:pk>/',
+         csrf_exempt(public_views.DEPWebEnrollCustomView.as_view()),
+         name='dep_web_enroll_custom_view'),
+    path('dep_web_enroll/<str:dep_enrollment_secret>/profile/',
+         public_views.DEPWebEnrollProfileView.as_view(),
+         name='dep_web_enroll_profile'),
 
     # MDM protocol / mdm views
     path('checkin/',

@@ -22,6 +22,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         Blueprint, BlueprintArtifact,
                                         Channel, DataAsset, Declaration, DeclarationRef, Platform,
                                         DEPDevice, DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
+                                        EnrollmentCustomView, DEPEnrollmentCustomView,
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
                                         EnterpriseApp, FileVaultConfig, Location, LocationAsset,
                                         OTAEnrollment, OTAEnrollmentSession,
@@ -880,3 +881,25 @@ MACOS_13_CLIENT_CAPABILITIES = {
                              'test.string-value']},
             'supported-versions': ['1.0.0']
 }
+
+
+def force_enrollment_custom_view(requires_authentication=False, extra="CV"):
+    html = (
+        "{{ serial_number }} "
+        "{% if realm_user %}{{ realm_user.username }}{% else %}NO REALM USER{% endif %} "
+        + extra
+    )
+    return EnrollmentCustomView.objects.create(
+        name=get_random_string(12),
+        description=get_random_string(12),
+        html=html,
+        requires_authentication=requires_authentication,
+    )
+
+
+def force_dep_enrollment_custom_view(dep_enrollment, weight=1, requires_authentication=False, extra="CV"):
+    return DEPEnrollmentCustomView.objects.create(
+        dep_enrollment=dep_enrollment,
+        custom_view=force_enrollment_custom_view(requires_authentication, extra),
+        weight=weight,
+    )
