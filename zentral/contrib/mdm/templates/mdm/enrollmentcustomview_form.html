@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrollment_custom_views' %}">Enrollment custom views</a></li>
+  {% if object %}
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">update</li>
+  {% else %}
+  <li class="breadcrumb-item active">create</li>
+  {% endif %}
+</ol>
+
+<h3>{% if object %}Update enrollment custom view <i>{{ object }}</i>{% else %}Create enrollment custom view{% endif %}</h3>
+
+<form method="post" class="update-form">{% csrf_token %}
+  {{ form }}
+  <p>
+    {% if object %}
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    {% else %}
+    <a class="btn btn-outline-secondary" href="{% url 'mdm:enrollment_custom_views' %}">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Save</button>
+  </p>
+</form>
+{% endblock %}

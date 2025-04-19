@@ -79,6 +79,23 @@ urlpatterns = [
     # management views
     path('enrollments/', views.EnrollmentListView.as_view(), name="enrollments"),
 
+    # enrollment custom views
+    path('enrollments/custom_views/',
+         views.EnrollmentCustomViewListView.as_view(),
+         name="enrollment_custom_views"),
+    path('enrollments/custom_views/create/',
+         views.CreateEnrollmentCustomViewView.as_view(),
+         name="create_enrollment_custom_view"),
+    path('enrollments/custom_views/<uuid:pk>/',
+         views.EnrollmentCustomViewView.as_view(),
+         name="enrollment_custom_view"),
+    path('enrollments/custom_views/<uuid:pk>/update/',
+         views.UpdateEnrollmentCustomViewView.as_view(),
+         name="update_enrollment_custom_view"),
+    path('enrollments/custom_views/<uuid:pk>/delete/',
+         views.DeleteEnrollmentCustomViewView.as_view(),
+         name="delete_enrollment_custom_view"),
+
     # DEP enrollments
     path('enrollments/dep/create/',
          views.CreateDEPEnrollmentView.as_view(),
@@ -92,6 +109,15 @@ urlpatterns = [
     path('enrollments/dep/<int:pk>/update/',
          views.UpdateDEPEnrollmentView.as_view(),
          name='update_dep_enrollment'),
+    path('enrollments/dep/<int:enrollment_pk>/custom_views/create/',
+         views.CreateDEPEnrollmentCustomViewView.as_view(),
+         name='create_dep_enrollment_custom_view'),
+    path('enrollments/dep/<int:enrollment_pk>/custom_views/<uuid:pk>/update/',
+         views.UpdateDEPEnrollmentCustomViewView.as_view(),
+         name='update_dep_enrollment_custom_view'),
+    path('enrollments/dep/<int:enrollment_pk>/custom_views/<uuid:pk>/delete/',
+         views.DeleteDEPEnrollmentCustomViewView.as_view(),
+         name='delete_dep_enrollment_custom_view'),
 
     # OTA enrollments
     path('enrollments/ota/create/',

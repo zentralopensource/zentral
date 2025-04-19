@@ -9,8 +9,9 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.events import DEPEnrollmentRequestEvent
-from zentral.contrib.mdm.public_views.dep import dep_web_enroll_callback
-from .utils import force_dep_enrollment, force_dep_enrollment_session, force_realm_user, force_software_update
+from zentral.contrib.mdm.public_views.dep import dep_web_enroll_callback, DEP_ENROLLMENT_SESSION_KEY
+from .utils import (force_dep_enrollment, force_dep_enrollment_custom_view, force_dep_enrollment_session,
+                    force_realm_user, force_software_update)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -52,6 +53,17 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
                                     content_type="application/octet-stream")
         self.assertEqual(response.status_code, 400)
         self.assertAbort(post_event, "secret verification failed: 'unknown secret'")
+
+    def test_dep_enroll_invalid_payload_signature(self, vicsp, post_event):
+        vicsp.side_effect = ValueError
+        enrollment = force_dep_enrollment(self.mbu)
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": get_random_string(10),
+                                                         "UDID": str(uuid.uuid4()).upper()}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 400)
+        self.assertAbort(post_event, "could not verify payload signer certificate")
 
     def test_dep_enroll_realm(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
@@ -311,7 +323,33 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertAbort(post_event, "Device blocked")
 
-    def test_dep_web_enroll(self, vicsp, post_event):
+    def test_dep_web_enroll_ios_update_required(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True, completed=True)
+        enrollment = session.dep_enrollment
+        enrollment.ios_min_version = "17.1 (b)"
+        enrollment.save()
+        response = self.client.get(reverse("mdm_public:dep_web_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                   HTTP_X_APPLE_ASPEN_DEVICEINFO=base64.b64encode(
+                                       plistlib.dumps({
+                                           "PRODUCT": "iPhone14,5",
+                                           "SERIAL": session.enrolled_device.serial_number,
+                                           "UDID": session.enrolled_device.udid,
+                                           "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                           "OS_VERSION": "17.0 (a)"
+                                        })
+                                    ).decode("ascii"))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json(),
+            {'code': 'com.apple.softwareupdate.required', 'details': {'OSVersion': '17.1 (b)'}}
+        )
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, DEPEnrollmentRequestEvent)
+        self.assertEqual(last_event.payload["status"], "warning")
+        self.assertEqual(last_event.payload["reason"], "OS update to version 17.1 (b) required")
+
+    def test_dep_web_enroll_no_custom_views(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
         display_name = get_random_string(12)
         session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True, enrollment_display_name=display_name)
@@ -340,11 +378,115 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         url = dep_web_enroll_callback(request, ras, enrollment.pk, serial_number, udid, payload)
         request.session.save()
         # second request returns the MDM profile
-        dep_enrollment_session = enrollment.depenrollmentsession_set.filter(realm_user=ras.user).first()
-        self.assertEqual(url, reverse("mdm_public:dep_enrollment_session",
-                                      args=(dep_enrollment_session.enrollment_secret.secret,)))
+        self.assertEqual(url, reverse("mdm_public:dep_web_enroll_profile",
+                                      args=(enrollment.enrollment_secret.secret,)))
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
+        _, profile_data = verify_signed_payload(response.content)
+        profile = plistlib.loads(profile_data)
+        self.assertEqual(profile["PayloadIdentifier"], "zentral.mdm")
+        self.assertEqual(profile["PayloadOrganization"], display_name)
+
+    def test_dep_web_enroll_custom_view_unknown_dep_enrollment_session(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        display_name = get_random_string(12)
+        session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True, enrollment_display_name=display_name)
+        enrollment = session.dep_enrollment
+        cv = force_dep_enrollment_custom_view(enrollment, 10, requires_authentication=True, extra="CV")
+        serial_number = get_random_string(10)
+        udid = str(uuid.uuid4()).upper()
+        payload = {"PRODUCT": "Macmini9,1", "SERIAL": serial_number, "UDID": udid}
+        # first  request redirects to realm auth
+        response = self.client.get(reverse("mdm_public:dep_web_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                   HTTP_X_APPLE_ASPEN_DEVICEINFO=base64.b64encode(
+                                       plistlib.dumps(payload)
+                                    ).decode("ascii"))
+        self.assertEqual(response.status_code, 302)
+        realm = enrollment.realm
+        ras = realm.realmauthenticationsession_set.first()
+        self.assertEqual(response.url, f"/public/realms/{realm.pk}/ldap/{ras.pk}/login/")
+        self.assertEqual(ras.callback, "zentral.contrib.mdm.public_views.dep.dep_web_enroll_callback")
+        self.assertEqual(ras.callback_kwargs, {"dep_enrollment_pk": enrollment.pk,
+                                               "serial_number": serial_number,
+                                               "udid": udid,
+                                               "payload": payload})
+        # fake the realm auth, with bad session
+        _, ras.user = force_realm_user(realm)
+        request = Mock()
+        request.session = self.client.session
+        url = dep_web_enroll_callback(request, ras, enrollment.pk, serial_number, udid, payload)
+        request.session[DEP_ENROLLMENT_SESSION_KEY] = 2**16  # not a match!!!
+        request.session.save()
+        # second request triggers the 'Unknown DEP enrollment session' error
+        self.assertEqual(url, reverse("mdm_public:dep_web_enroll_custom_view",
+                                      args=(enrollment.enrollment_secret.secret, cv.pk)))
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        # it redirects to the realm auth
+        ras = realm.realmauthenticationsession_set.order_by("-created_at").first()
+        self.assertEqual(response.url, f"/public/realms/{realm.pk}/ldap/{ras.pk}/login/")
+
+    def test_dep_web_enroll_custom_views(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        display_name = get_random_string(12)
+        session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True, enrollment_display_name=display_name)
+        enrollment = session.dep_enrollment
+        cv1 = force_dep_enrollment_custom_view(enrollment, 100, requires_authentication=False, extra="CV1")
+        cv2 = force_dep_enrollment_custom_view(enrollment, 200, requires_authentication=False, extra="CV2")
+        cv3 = force_dep_enrollment_custom_view(enrollment, 10, requires_authentication=True, extra="CV3")
+        serial_number = get_random_string(10)
+        udid = str(uuid.uuid4()).upper()
+        payload = {"PRODUCT": "Macmini9,1", "SERIAL": serial_number, "UDID": udid}
+        # first request redirects to first custom view
+        response = self.client.get(reverse("mdm_public:dep_web_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                   HTTP_X_APPLE_ASPEN_DEVICEINFO=base64.b64encode(
+                                       plistlib.dumps(payload)
+                                    ).decode("ascii"),
+                                   follow=True)
+        resolver_match = response.resolver_match
+        self.assertEqual(resolver_match.view_name, "mdm_public:dep_web_enroll_custom_view")
+        self.assertEqual(resolver_match.kwargs["pk"], cv1.pk)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.decode("utf-8"), f"{serial_number} NO REALM USER CV1")
+        # second request redirects to second custom view
+        response = self.client.post(reverse(resolver_match.view_name, kwargs=resolver_match.kwargs), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.resolver_match.view_name, "mdm_public:dep_web_enroll_custom_view")
+        self.assertEqual(response.resolver_match.kwargs["pk"], cv2.pk)
+        self.assertEqual(response.content.decode("utf-8"), f"{serial_number} NO REALM USER CV2")
+        # third request redirects to auth view
+        resolver_match = response.resolver_match
+        response = self.client.post(reverse(resolver_match.view_name, kwargs=resolver_match.kwargs))
+        self.assertEqual(response.status_code, 302)
+        realm = enrollment.realm
+        ras = realm.realmauthenticationsession_set.first()
+        self.assertEqual(response.url, f"/public/realms/{realm.pk}/ldap/{ras.pk}/login/")
+        self.assertEqual(ras.callback, "zentral.contrib.mdm.public_views.dep.dep_web_enroll_callback")
+        self.assertEqual(ras.callback_kwargs, {"dep_enrollment_pk": enrollment.pk,
+                                               "serial_number": serial_number,
+                                               "udid": udid,
+                                               "payload": payload})
+        # fake the realm auth
+        _, ras.user = force_realm_user(realm)
+        request = Mock()
+        request.session = self.client.session
+        url = dep_web_enroll_callback(request, ras, enrollment.pk, serial_number, udid, payload)
+        request.session.save()
+        # fourth request redirects to third custom view
+        self.assertEqual(url, reverse("mdm_public:dep_web_enroll_custom_view",
+                                      args=(enrollment.enrollment_secret.secret, cv3.pk)))
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.resolver_match.view_name, "mdm_public:dep_web_enroll_custom_view")
+        self.assertEqual(response.resolver_match.kwargs["pk"], cv3.pk)
+        self.assertEqual(response.content.decode("utf-8"), f"{serial_number} {ras.user.username} CV3")
+        # fith request redirects to MDM profile
+        response = self.client.post(url, follow=True)
+        self.assertEqual(response.status_code, 200)
+        resolver_match = response.resolver_match
+        self.assertEqual(resolver_match.view_name, "mdm_public:dep_web_enroll_profile")
+        self.assertEqual(resolver_match.kwargs, {"dep_enrollment_secret": enrollment.enrollment_secret.secret})
         self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
         _, profile_data = verify_signed_payload(response.content)
         profile = plistlib.loads(profile_data)
