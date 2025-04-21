@@ -8,9 +8,10 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
-from zentral.contrib.mdm.commands import SetupFileVault
+from zentral.contrib.mdm.commands import SecurityInfo, SetupFileVault
+from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.scheduling import _get_next_queued_command, _setup_filevault
-from zentral.contrib.mdm.models import Channel, Command, Platform, RequestStatus
+from zentral.contrib.mdm.models import Channel, Command, DeviceCommand, Platform, RequestStatus
 from .utils import force_blueprint, force_dep_enrollment_session, force_filevault_config
 
 
@@ -260,6 +261,15 @@ class SetupFileVaultCommandTestCase(TestCase):
         self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
         self.enrolled_device.refresh_from_db()
         self.assertEqual(self.enrolled_device.filevault_config_uuid, filevault_config.uuid)
+        # check next queued command is a SecurityInfo command to fetch the PRK
+        qs = DeviceCommand.objects.filter(
+            enrolled_device=self.enrolled_device,
+            time__isnull=True
+        )
+        self.assertEqual(qs.count(), 1)
+        db_cmd = qs.first()
+        cmd = load_command(db_cmd)
+        self.assertIsInstance(cmd, SecurityInfo)
 
     # _setup_filevault
 
