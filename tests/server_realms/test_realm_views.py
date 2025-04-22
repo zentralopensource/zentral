@@ -1139,6 +1139,86 @@ class RealmViewsTestCase(TestCase):
         self.assertNotContains(response, user.get_absolute_url())
         self.assertContains(response, "Zentral user (1)")
 
+    # add realm user to group
+
+    def test_add_realm_user_to_group_login_redirect(self):
+        _, user = force_realm_user()
+        self.login_redirect("add_user_to_group", user.pk)
+
+    def test_add_realm_user_to_group_permission_denied(self):
+        _, user = force_realm_user()
+        self.login("realms.view_realmuser")
+        response = self.client.get(reverse("realms:add_user_to_group", args=(user.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_add_realm_user_to_group_get(self):
+        existing_group = force_realm_group()
+        realm, user = force_realm_user(realm=existing_group.realm, group=existing_group)
+        available_group = force_realm_group(realm=realm)
+        scim_group = force_realm_group(realm=realm)
+        scim_group.scim_managed = True
+        scim_group.save()
+        other_group = force_realm_group()
+        self.login("realms.change_realmgroup")
+        response = self.client.get(reverse("realms:add_user_to_group", args=(user.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_add_to_group.html")
+        self.assertNotContains(response, existing_group.display_name)
+        self.assertContains(response, available_group.display_name)
+        self.assertNotContains(response, scim_group.display_name)
+        self.assertNotContains(response, other_group.display_name)
+
+    @patch("realms.views.realm_group_members_updated.send_robust")
+    def test_add_realm_user_to_group_post(self, send_robust):
+        scim_group = force_realm_group()
+        scim_group.scim_managed = True
+        scim_group.save()
+        realm, user = force_realm_user(realm=scim_group.realm, group=scim_group)
+        group = force_realm_group(realm=realm)
+        self.login("realms.change_realmgroup", "realms.view_realmuser")
+        response = self.client.post(reverse("realms:add_user_to_group", args=(user.pk,)),
+                                    {"realm_group": str(group.pk)},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_detail.html")
+        self.assertNotContains(response, reverse("realms:remove_user_from_group", args=(user.pk, scim_group.pk)))
+        self.assertContains(response, reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
+        send_robust.assert_called_once()
+
+    # remove realm user from group
+
+    def test_remove_realm_user_from_group_redirect(self):
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm, group=group)
+        self.login_redirect("remove_user_from_group", user.pk, group.pk)
+
+    def test_remove_realm_user_from_group_permission_denied(self):
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm, group=group)
+        self.login("realms.view_realmuser")
+        response = self.client.get(reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_remove_realm_user_from_group_get(self):
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm, group=group)
+        self.login("realms.change_realmgroup")
+        response = self.client.get(reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_remove_from_group.html")
+
+    @patch("realms.views.realm_group_members_updated.send_robust")
+    def test_remove_realm_user_from_group_post(self, send_robust):
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm, group=group)
+        self.login("realms.change_realmgroup", "realms.view_realmuser")
+        response = self.client.post(reverse("realms:remove_user_from_group", args=(user.pk, group.pk)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_detail.html")
+        self.assertNotContains(response, group.display_name)
+        send_robust.assert_called_once()
+
     # test realm
 
     def test_realm_permission_denied(self):

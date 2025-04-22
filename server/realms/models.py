@@ -105,10 +105,10 @@ class Realm(models.Model):
 
 class RealmGroupManager(models.Manager):
     def for_deletion(self):
-        return self.filter(scim_external_id__isnull=True)
+        return self.filter(scim_managed=False)
 
     def for_update(self):
-        return self.filter(scim_external_id__isnull=True)
+        return self.filter(scim_managed=False)
 
 
 class RealmGroup(models.Model):

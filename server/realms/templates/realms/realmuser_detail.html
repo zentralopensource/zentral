@@ -63,7 +63,14 @@
       </tr>
       {% with object.groups_with_types as groups_with_types %}
       <tr>
-        <td>Group{{ groups_with_types|length|pluralize }} ({{ groups_with_types|length }})</td>
+        <td>
+          Group{{ groups_with_types|length|pluralize }} ({{ groups_with_types|length }})
+          {% if not request.realm_authentication_session.is_remote  and perms.realms.change_realmgroup %}
+          <a class="btn btn-link" href="{% url 'realms:add_user_to_group' object.pk %}">
+            <i class="bi bi-plus-circle"></i>
+          </a>
+          {% endif %}
+        </td>
         <td>
           {% if groups_with_types %}
           <ul class="list-unstyled">
@@ -73,6 +80,11 @@
             <a href="{{ group.get_absolute_url }}">{{ group }}</a> ({{ type }})
             {% else %}
             {{ group }} ({{ type }})
+            {% endif %}
+            {% if not request.realm_authentication_session.is_remote and perms.realms.change_realmgroup and not group.scim_managed %}
+            <a class="btn btn-link" href="{% url 'realms:remove_user_from_group' object.pk group.pk %}">
+              <i class="bi bi-trash"></i>
+            </a>
             {% endif %}
           </li>
           {% endfor %}

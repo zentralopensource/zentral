@@ -10,6 +10,10 @@ urlpatterns = [
     # users
     path('users/', views.RealmUserListView.as_view(), name='users'),
     path('users/<uuid:pk>/', views.RealmUserView.as_view(), name='user'),
+    path('users/<uuid:pk>/groups/add/', views.AddRealmUserToGroupView.as_view(),
+         name='add_user_to_group'),
+    path('users/<uuid:pk>/groups/<uuid:group_pk>/remove/', views.RemoveRealmUserFromGroupView.as_view(),
+         name='remove_user_from_group'),
 
     # groups
     path('groups/', views.RealmGroupListView.as_view(), name='groups'),

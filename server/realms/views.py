@@ -8,11 +8,11 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
+from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.conf import settings as zentral_settings
 from zentral.utils.views import UserPaginationListView
 from .backends.registry import backend_classes
-from .forms import RealmGroupSearchForm, RealmUserSearchForm
+from .forms import AddRealmUserToGroupForm, RealmGroupSearchForm, RealmUserSearchForm
 from .models import (Realm, RealmAuthenticationSession,
                      RealmGroup, RealmGroupMapping, RoleMapping,
                      RealmUser, RealmUserGroupMembership,
@@ -271,6 +271,59 @@ class RealmUserView(PermissionRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         ctx["zentral_users"] = list(self.object.get_users().order_by("username"))
         return ctx
+
+
+class AddRealmUserToGroupView(LocalUserRequiredMixin, PermissionRequiredMixin, FormView):
+    permission_required = "realms.change_realmgroup"
+    template_name = "realms/realmuser_add_to_group.html"
+    form_class = AddRealmUserToGroupForm
+
+    def get_object(self):
+        self.realm_user = get_object_or_404(RealmUser, pk=self.kwargs["pk"])
+
+    def get_context_data(self, **kwargs):
+        self.get_object()
+        ctx = super().get_context_data(**kwargs)
+        ctx["realm_user"] = self.realm_user
+        return ctx
+
+    def get_form_kwargs(self):
+        self.get_object()
+        kwargs = super().get_form_kwargs()
+        kwargs["realm_user"] = self.realm_user
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        realm_group_members_updated.send_robust(self.__class__, realm=self.realm_user.realm, request=self.request)
+        return redirect(self.realm_user)
+
+
+class RemoveRealmUserFromGroupView(LocalUserRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = "realms.change_realmgroup"
+    template_name = "realms/realmuser_remove_from_group.html"
+
+    def get_objects(self):
+        self.realm_user = get_object_or_404(RealmUser, pk=self.kwargs["pk"])
+        self.realm_group = get_object_or_404(
+            RealmGroup,
+            pk=self.kwargs["group_pk"],
+            realm=self.realm_user.realm,
+            scim_managed=False,
+        )
+
+    def get_context_data(self, **kwargs):
+        self.get_objects()
+        ctx = super().get_context_data(**kwargs)
+        ctx["realm_user"] = self.realm_user
+        ctx["realm_group"] = self.realm_group
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        self.get_objects()
+        self.realm_user.groups.remove(self.realm_group)
+        realm_group_members_updated.send_robust(self.__class__, realm=self.realm_user.realm, request=self.request)
+        return redirect(self.realm_user)
 
 
 # realm group mappings

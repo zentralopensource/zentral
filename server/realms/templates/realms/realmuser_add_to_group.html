@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:index' %}">SSO</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:users' %}">Users</a></li>
+  <li class="breadcrumb-item"><a href="{{ realm_user.get_absolute_url }}">{{ realm_user }}</a></li>
+  <li class="breadcrumb-item active">add to group</li>
+</ol>
+
+<h2>Add <i>{{ realm_user }}</i> to group</h2>
+
+<form method="POST">{% csrf_token %}
+  {{ form }}
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ realm_user.get_absolute_url }}">
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Add</button>
+  </p>
+</form>
+{% endblock %}

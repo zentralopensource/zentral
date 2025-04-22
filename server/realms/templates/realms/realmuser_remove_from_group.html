@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:index' %}">SSO</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'realms:users' %}">Users</a></li>
+  <li class="breadcrumb-item"><a href="{{ realm_user.get_absolute_url }}">{{ realm_user }}</a></li>
+  <li class="breadcrumb-item active">remove from group</li>
+</ol>
+
+<h2>Remove <i>{{ realm_user }}</i> from group</h2>
+
+<form method="POST">{% csrf_token %}
+  <p>Do you really want to remove this user from the <i>{{ realm_group }}</i> group?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ realm_user.get_absolute_url }}">
+      Cancel
+    </a>
+    <button class="btn btn-danger" type="submit">Remove</button>
+  </p>
+</form>
+
+{% endblock %}

@@ -62,3 +62,19 @@ class RealmUserSearchForm(forms.Form):
         if realm_group:
             qs = qs.filter(groups=realm_group)
         return qs
+
+
+class AddRealmUserToGroupForm(forms.Form):
+    realm_group = forms.ModelChoiceField(label="Realm Group", queryset=RealmGroup.objects.for_update(), required=True)
+
+    def __init__(self, *args, **kwargs):
+        self.realm_user = kwargs.pop("realm_user")
+        super().__init__(*args, **kwargs)
+        self.fields["realm_group"].queryset = self.fields["realm_group"].queryset.filter(
+          realm=self.realm_user.realm
+        ).exclude(
+          pk__in=[g.pk for g in self.realm_user.groups.all()]
+        ).order_by("display_name")
+
+    def save(self):
+        self.realm_user.groups.add(self.cleaned_data["realm_group"])
