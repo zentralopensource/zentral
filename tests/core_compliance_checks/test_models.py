@@ -21,9 +21,10 @@ class ComplianceChecksTestCase(TestCase):
         serial_number = get_random_string(12)
         result = update_machine_statuses(serial_number, [(cc1, Status.OK, datetime.utcnow()),
                                                          (cc2, Status.FAILED, datetime.utcnow())])
-        self.assertEqual(len(result), 2)
-        self.assertEqual(result[0], (cc1.pk, Status.OK.value, None))
-        self.assertEqual(result[1], (cc2.pk, Status.FAILED.value, None))
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], (cc1.pk, Status.OK, None))
+        self.assertEqual(result[1], (cc2.pk, Status.FAILED, None))
+        self.assertEqual(result[2], (None, Status.FAILED, None))
         self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 2)
 
     def test_update_machine_statuses_to_old_noop(self):
@@ -54,8 +55,8 @@ class ComplianceChecksTestCase(TestCase):
         update_machine_statuses(serial_number, [(cc1, Status.OK, None), (cc2, Status.FAILED, datetime.utcnow())])
         result = update_machine_statuses(serial_number, [(cc1, Status.OK, None), (cc2, Status.FAILED, None)])
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[0], (cc1.pk, Status.OK.value, Status.OK.value))
-        self.assertEqual(result[1], (cc2.pk, Status.FAILED.value, Status.FAILED.value))
+        self.assertEqual(result[0], (cc1.pk, Status.OK, Status.OK))
+        self.assertEqual(result[1], (cc2.pk, Status.FAILED, Status.FAILED))
         self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 2)
 
     def test_update_machine_statuses_update_two_one_change(self):
@@ -65,21 +66,34 @@ class ComplianceChecksTestCase(TestCase):
         update_machine_statuses(serial_number, [(cc1, Status.OK, datetime.utcnow()), (cc2, Status.FAILED, None)])
         result = update_machine_statuses(serial_number, [(cc1, Status.FAILED, None), (cc2, Status.FAILED, None)])
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[0], (cc1.pk, Status.FAILED.value, Status.OK.value))
-        self.assertEqual(result[1], (cc2.pk, Status.FAILED.value, Status.FAILED.value))
+        self.assertEqual(result[0], (cc1.pk, Status.FAILED, Status.OK))
+        self.assertEqual(result[1], (cc2.pk, Status.FAILED, Status.FAILED))
+        self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 2)
+
+    def test_update_machine_statuses_update_two_one_change_machine_status_change(self):
+        cc1 = self._force_compliance_check()
+        cc2 = self._force_compliance_check()
+        serial_number = get_random_string(12)
+        update_machine_statuses(serial_number, [(cc1, Status.OK, None), (cc2, Status.FAILED, None)])
+        result = update_machine_statuses(serial_number, [(cc1, Status.OK, None), (cc2, Status.OK, None)])
+        self.assertEqual(result[0], (cc1.pk, Status.OK, Status.OK))
+        self.assertEqual(result[1], (cc2.pk, Status.OK, Status.FAILED))
+        self.assertEqual(result[2], (None, Status.OK, Status.FAILED))
         self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 2)
 
     def test_update_machine_statuses_create_one_then_another_one(self):
         cc1 = self._force_compliance_check()
         serial_number = get_random_string(12)
         result = update_machine_statuses(serial_number, [(cc1, Status.OK, datetime.utcnow())])
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0], (cc1.pk, Status.OK.value, None))
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], (cc1.pk, Status.OK, None))
+        self.assertEqual(result[1], (None, Status.OK, None))
         self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 1)
         serial_number = get_random_string(12)
         result = update_machine_statuses(serial_number, [(cc1, Status.OK, datetime.utcnow())])
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0], (cc1.pk, Status.OK.value, None))
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], (cc1.pk, Status.OK, None))
+        self.assertEqual(result[1], (None, Status.OK, None))
         self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 1)
 
     def test_update_machine_statuses_version_update(self):
@@ -87,8 +101,9 @@ class ComplianceChecksTestCase(TestCase):
         self.assertEqual(cc1.version, 1)
         serial_number = get_random_string(12)
         result = update_machine_statuses(serial_number, [(cc1, Status.OK, datetime.utcnow())])
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0], (cc1.pk, Status.OK.value, None))
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], (cc1.pk, Status.OK, None))
+        self.assertEqual(result[1], (None, Status.OK, None))
         ms_qs = MachineStatus.objects.filter(serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -97,7 +112,7 @@ class ComplianceChecksTestCase(TestCase):
         cc1.save()
         result = update_machine_statuses(serial_number, [(cc1, Status.OK, datetime.utcnow())])
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0], (cc1.pk, Status.OK.value, Status.OK.value))
+        self.assertEqual(result[0], (cc1.pk, Status.OK, Status.OK))
         ms.refresh_from_db()
         self.assertEqual(ms.compliance_check_version, cc1.version)
 

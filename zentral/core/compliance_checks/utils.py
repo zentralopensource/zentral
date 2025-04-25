@@ -8,19 +8,30 @@ from .models import Status
 
 def update_machine_statuses(serial_number, compliance_check_statuses):
     query = (
-        'insert into compliance_checks_machinestatus '
-        '("compliance_check_id", "compliance_check_version", "serial_number", "status", "status_time") '
-        'values %s '
-        'on conflict ("compliance_check_id", "serial_number") do update '
-        'set compliance_check_version = excluded.compliance_check_version,'
-        'status = excluded.status, status_time = excluded.status_time,'
-        'previous_status = compliance_checks_machinestatus.status '
-        'where excluded.status_time > compliance_checks_machinestatus.status_time '
-        'returning compliance_check_id, status, previous_status'
+        'with existing_ms as ('
+        '  select compliance_check_id, status'
+        '  from compliance_checks_machinestatus'
+        '  where serial_number = %(serial_number)s'
+        '), updated_ms as ('
+        '  insert into compliance_checks_machinestatus'
+        '  ("compliance_check_id", "compliance_check_version", "serial_number", "status", "status_time")'
+        '  values %%s'
+        '  on conflict ("compliance_check_id", "serial_number") do update'
+        '  set compliance_check_version = excluded.compliance_check_version,'
+        '  status = excluded.status, status_time = excluded.status_time,'
+        '  previous_status = compliance_checks_machinestatus.status'
+        '  where excluded.status_time > compliance_checks_machinestatus.status_time'
+        '  returning compliance_check_id, status, previous_status'
+        ") select 'noop' op, compliance_check_id, status, status previous_status from existing_ms "
+        'where not exists (select 1 from updated_ms where compliance_check_id = existing_ms.compliance_check_id) '
+        'union '
+        "select 'update' op, compliance_check_id, status, previous_status from updated_ms"
     )
+
     with connection.cursor() as cursor:
         now = datetime.utcnow()  # default status time
-        result = psycopg2.extras.execute_values(
+        query = cursor.mogrify(query, {"serial_number": serial_number})
+        results = psycopg2.extras.execute_values(
             cursor, query,
             ((compliance_check.pk,
               compliance_check.version,
@@ -30,7 +41,24 @@ def update_machine_statuses(serial_number, compliance_check_statuses):
              for compliance_check, status, status_time in compliance_check_statuses),
             fetch=True
         )
-        return result
+    current_machine_status = None
+    previous_machine_status = None
+    updates = []
+    for op, compliance_check_id, status, previous_status in sorted(results, key=lambda t: t[1]):
+        status = Status(status)
+        if current_machine_status is None:
+            current_machine_status = Status.OK
+        current_machine_status = max(current_machine_status, status)
+        if previous_status is not None:
+            previous_status = Status(previous_status)
+            if previous_machine_status is None:
+                previous_machine_status = Status.OK
+            previous_machine_status = max(previous_machine_status, previous_status)
+        if op == 'update':
+            updates.append((compliance_check_id, status, previous_status))
+    if current_machine_status != previous_machine_status:
+        updates.append((None, current_machine_status, previous_machine_status))
+    return updates
 
 
 def get_machine_compliance_check_statuses(serial_number, tags):

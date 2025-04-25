@@ -2,10 +2,11 @@ from datetime import datetime
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
-from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator, sync_query_compliance_check
 from zentral.contrib.osquery.events import OsqueryCheckStatusUpdated
 from zentral.contrib.osquery.models import DistributedQuery, Pack, PackQuery, Query
+from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
+from zentral.core.compliance_checks.models import MachineStatus, Status
 
 
 class OsqueryComplianceChecksTestCase(TestCase):
@@ -54,22 +55,27 @@ class OsqueryComplianceChecksTestCase(TestCase):
         status_time = datetime(2021, 12, 25)
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}])
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 1)
-        event = events[0]
-        self.assertIsInstance(event, OsqueryCheckStatusUpdated)
-        self.assertEqual(event.metadata.created_at, status_time)
-        self.assertEqual(event.payload["pk"], compliance_check.pk)
-        self.assertEqual(event.payload["version"], query.version)
-        self.assertEqual(event.payload["version"], compliance_check.version)
-        self.assertEqual(event.payload["osquery_query"], {"pk": query.pk})
-        self.assertEqual(event.payload["osquery_pack"], {"pk": pack.pk, "name": pack.name})
-        self.assertIsNone(event.payload.get("osquery_run"))
-        self.assertEqual(event.payload["status"], Status.OK.name)
-        self.assertIsNone(event.payload.get("previous_status"))
-        self.assertEqual(event.get_linked_objects_keys(),
+        self.assertEqual(len(events), 2)
+        event1, event2 = events
+        self.assertIsInstance(event1, OsqueryCheckStatusUpdated)
+        self.assertEqual(event1.metadata.machine_serial_number, serial_number)
+        self.assertEqual(event1.metadata.created_at, status_time)
+        self.assertEqual(event1.payload["pk"], compliance_check.pk)
+        self.assertEqual(event1.payload["version"], query.version)
+        self.assertEqual(event1.payload["version"], compliance_check.version)
+        self.assertEqual(event1.payload["osquery_query"], {"pk": query.pk})
+        self.assertEqual(event1.payload["osquery_pack"], {"pk": pack.pk, "name": pack.name})
+        self.assertIsNone(event1.payload.get("osquery_run"))
+        self.assertEqual(event1.payload["status"], Status.OK.name)
+        self.assertIsNone(event1.payload.get("previous_status"))
+        self.assertEqual(event1.get_linked_objects_keys(),
                          {"compliance_check": [(compliance_check.pk,)],
                           "osquery_query": [(query.pk,)],
                           "osquery_pack": [(pack.pk,)]})
+        self.assertIsInstance(event2, MachineComplianceChangeEvent)
+        self.assertEqual(event2.metadata.machine_serial_number, serial_number)
+        self.assertEqual(event2.metadata.created_at, status_time)
+        self.assertEqual(event2.payload, {"status": Status.OK.name})
         ms_qs = MachineStatus.objects.filter(compliance_check=compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -91,21 +97,25 @@ class OsqueryComplianceChecksTestCase(TestCase):
             query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}], distributed_query.pk
         )
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 1)
-        event = events[0]
-        self.assertIsInstance(event, OsqueryCheckStatusUpdated)
-        self.assertEqual(event.payload["pk"], compliance_check.pk)
-        self.assertEqual(event.payload["version"], query.version)
-        self.assertEqual(event.payload["version"], compliance_check.version)
-        self.assertEqual(event.payload["osquery_query"], {"pk": query.pk})
-        self.assertIsNone(event.payload.get("osquery_pack"))
-        self.assertEqual(event.payload["osquery_run"], {"pk": distributed_query.pk})
-        self.assertEqual(event.payload["status"], Status.OK.name)
-        self.assertIsNone(event.payload.get("previous_status"))
-        self.assertEqual(event.get_linked_objects_keys(),
+        self.assertEqual(len(events), 2)
+        event1, event2 = events
+        self.assertIsInstance(event1, OsqueryCheckStatusUpdated)
+        self.assertEqual(event1.metadata.machine_serial_number, serial_number)
+        self.assertEqual(event1.payload["pk"], compliance_check.pk)
+        self.assertEqual(event1.payload["version"], query.version)
+        self.assertEqual(event1.payload["version"], compliance_check.version)
+        self.assertEqual(event1.payload["osquery_query"], {"pk": query.pk})
+        self.assertIsNone(event1.payload.get("osquery_pack"))
+        self.assertEqual(event1.payload["osquery_run"], {"pk": distributed_query.pk})
+        self.assertEqual(event1.payload["status"], Status.OK.name)
+        self.assertIsNone(event1.payload.get("previous_status"))
+        self.assertEqual(event1.get_linked_objects_keys(),
                          {"compliance_check": [(compliance_check.pk,)],
                           "osquery_query": [(query.pk,)],
                           "osquery_run": [(distributed_query.pk,)]})
+        self.assertIsInstance(event2, MachineComplianceChangeEvent)
+        self.assertEqual(event2.metadata.machine_serial_number, serial_number)
+        self.assertEqual(event2.payload, {"status": Status.OK.name})
         ms_qs = MachineStatus.objects.filter(compliance_check=compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -114,13 +124,30 @@ class OsqueryComplianceChecksTestCase(TestCase):
         self.assertEqual(ms.status_time, status_time)
 
     def test_scheduled_compliance_check_no_tuple(self):
-        query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
+        query, pack, _ = self._force_query(force_pack=True, force_compliance_check=True)
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         status_time = datetime.utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [])
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 1)
+        self.assertEqual(len(events), 2)
+        event1, event2 = events
+        self.assertIsInstance(event1, OsqueryCheckStatusUpdated)
+        self.assertEqual(event1.metadata.machine_serial_number, serial_number)
+        self.assertEqual(
+            event1.payload,
+            {'description': '',
+             'model': 'OsqueryCheck',
+             'name': query.compliance_check.name,
+             'osquery_pack': {'name': pack.name, 'pk': pack.pk},
+             'osquery_query': {'pk': query.pk},
+             'pk': query.compliance_check.pk,
+             'status': 'UNKNOWN',
+             'version': 1}
+        )
+        self.assertIsInstance(event2, MachineComplianceChangeEvent)
+        self.assertEqual(event2.metadata.machine_serial_number, serial_number)
+        self.assertEqual(event2.payload, {"status": "UNKNOWN"})
         ms_qs = MachineStatus.objects.filter(compliance_check=query.compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -137,7 +164,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
                                  [{"ztl_status": Status.OK.name},
                                   {}])
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 1)
+        self.assertEqual(len(events), 2)
         ms_qs = MachineStatus.objects.filter(compliance_check=query.compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -154,7 +181,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
                                  [{"ztl_status": Status.OK.name},
                                   {"ztl_status": "_NOT_A_VALID_STATUS"}])
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 1)
+        self.assertEqual(len(events), 2)
         ms_qs = MachineStatus.objects.filter(compliance_check=query.compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -171,7 +198,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
                                  [{"ztl_status": Status.OK.name},
                                   {"ztl_status": Status.FAILED.name}])
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 1)
+        self.assertEqual(len(events), 2)
         ms_qs = MachineStatus.objects.filter(compliance_check=query.compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -187,7 +214,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         status_time = datetime.utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}])
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 1)
+        self.assertEqual(len(events), 2)
         ms_qs = MachineStatus.objects.filter(compliance_check=query.compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -203,7 +230,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}])
         cc_status_agg.add_result(query.pk, query.version, datetime(2001, 1, 1), [{"ztl_status": Status.FAILED.name}])
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 1)
+        self.assertEqual(len(events), 2)
         ms_qs = MachineStatus.objects.filter(compliance_check=query.compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -283,10 +310,15 @@ class OsqueryComplianceChecksTestCase(TestCase):
         status_time = datetime.utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.FAILED.name}])
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 1)
-        event = events[0]
-        self.assertEqual(event.payload["status"], Status.FAILED.name)
-        self.assertEqual(event.payload["previous_status"], Status.OK.name)
+        self.assertEqual(len(events), 2)
+        event1, event2 = events
+        self.assertEqual(event1.payload["status"], Status.FAILED.name)
+        self.assertEqual(event1.payload["previous_status"], Status.OK.name)
+        self.assertEqual(
+            event2.payload,
+            {"status": Status.FAILED.name,
+             "previous_status": Status.OK.name}
+        )
         ms_qs = MachineStatus.objects.filter(compliance_check=query.compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -305,7 +337,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         cc_status_agg.add_result(query1.pk, query1.version, status_time1, [{"ztl_status": Status.OK.name}])
         cc_status_agg.add_result(query2.pk, query2.version, status_time2, [{"ztl_status": Status.FAILED.name}])
         events = list(cc_status_agg.commit())
-        self.assertEqual(len(events), 2)
+        self.assertEqual(len(events), 3)
         ms_qs1 = MachineStatus.objects.filter(compliance_check=query1.compliance_check, serial_number=serial_number)
         self.assertEqual(ms_qs1.count(), 1)
         ms_qs2 = MachineStatus.objects.filter(compliance_check=query2.compliance_check, serial_number=serial_number)

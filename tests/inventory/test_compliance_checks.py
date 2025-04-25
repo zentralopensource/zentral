@@ -2,10 +2,11 @@ from datetime import datetime
 import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.contrib.inventory.events import JMESPathCheckStatusUpdated
 from zentral.contrib.inventory.models import MachineTag, Tag
 from zentral.contrib.inventory.compliance_checks import jmespath_checks_cache
+from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
+from zentral.core.compliance_checks.models import MachineStatus, Status
 from .utils import force_jmespath_check
 
 
@@ -38,9 +39,10 @@ class InventoryComplianceChecksTestCase(TestCase):
         jmespath_check = force_jmespath_check(source_name, profile_uuid, platforms=["IPADOS", "MACOS"])
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
-        self.assertEqual(len(events), 1)
-        event = events[0]
-        self.assertIsInstance(event, JMESPathCheckStatusUpdated)
+        self.assertEqual(len(events), 2)
+        event1, event2 = events
+        self.assertIsInstance(event1, JMESPathCheckStatusUpdated)
+        self.assertIsInstance(event2, MachineComplianceChangeEvent)
         ms_qs = MachineStatus.objects.filter(compliance_check=jmespath_check.compliance_check)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -66,9 +68,10 @@ class InventoryComplianceChecksTestCase(TestCase):
         jmespath_check = force_jmespath_check(source_name, str(uuid.uuid4()))
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
-        self.assertEqual(len(events), 1)
-        event = events[0]
-        self.assertIsInstance(event, JMESPathCheckStatusUpdated)
+        self.assertEqual(len(events), 2)
+        event1, event2 = events
+        self.assertIsInstance(event1, JMESPathCheckStatusUpdated)
+        self.assertIsInstance(event2, MachineComplianceChangeEvent)
         ms_qs = MachineStatus.objects.filter(compliance_check=jmespath_check.compliance_check)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -85,9 +88,10 @@ class InventoryComplianceChecksTestCase(TestCase):
         jmespath_check = force_jmespath_check(source_name, profile_uuid, jmespath_expression="profiles")
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
-        self.assertEqual(len(events), 1)
-        event = events[0]
-        self.assertIsInstance(event, JMESPathCheckStatusUpdated)
+        self.assertEqual(len(events), 2)
+        event1, event2 = events
+        self.assertIsInstance(event1, JMESPathCheckStatusUpdated)
+        self.assertIsInstance(event2, MachineComplianceChangeEvent)
         ms_qs = MachineStatus.objects.filter(compliance_check=jmespath_check.compliance_check)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -106,9 +110,10 @@ class InventoryComplianceChecksTestCase(TestCase):
         jmespath_check = force_jmespath_check(source_name, profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
-        self.assertEqual(len(events), 1)
-        event = events[0]
-        self.assertIsInstance(event, JMESPathCheckStatusUpdated)
+        self.assertEqual(len(events), 2)
+        event1, event2 = events
+        self.assertIsInstance(event1, JMESPathCheckStatusUpdated)
+        self.assertIsInstance(event2, MachineComplianceChangeEvent)
         ms_qs = MachineStatus.objects.filter(compliance_check=jmespath_check.compliance_check)
         self.assertEqual(ms_qs.count(), 1)
         ms = ms_qs.first()
@@ -124,9 +129,10 @@ class InventoryComplianceChecksTestCase(TestCase):
         jmespath_check = force_jmespath_check(source_name, profile_uuid)
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events0 = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
-        self.assertEqual(len(events0), 1)
-        event = events0[0]
-        self.assertIsInstance(event, JMESPathCheckStatusUpdated)
+        self.assertEqual(len(events0), 2)
+        event1, event2 = events0
+        self.assertIsInstance(event1, JMESPathCheckStatusUpdated)
+        self.assertIsInstance(event2, MachineComplianceChangeEvent)
         events1 = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))  # use the cache
         self.assertEqual(len(events1), 0)  # second time, no event
         ms_qs = MachineStatus.objects.filter(compliance_check=jmespath_check.compliance_check)
@@ -152,8 +158,8 @@ class InventoryComplianceChecksTestCase(TestCase):
         jmespath_checks_cache._last_fetched_time = None  # force refresh
         events = list(jmespath_checks_cache.process_tree(tree, datetime.utcnow()))
         # two status update events for the 2 matching checks
-        self.assertEqual(len(events), 2)
-        for event in events:
+        self.assertEqual(len(events), 3)
+        for event in events[:-1]:
             if event.payload["status"] == Status.FAILED.name:
                 self.assertEqual(event.payload["pk"], jmespath_check_failed_no_tags.compliance_check.pk)
                 self.assertEqual(event.payload["inventory_jmespath_check"]["pk"], jmespath_check_failed_no_tags.pk)
@@ -164,6 +170,10 @@ class InventoryComplianceChecksTestCase(TestCase):
                                  sorted(tag.name for tag in jmespath_check_ok_tags.tags.all()))
             else:
                 raise AssertionError("Unexpected status")
+        machine_compliance_event = events[-1]
+        self.assertIsInstance(machine_compliance_event, MachineComplianceChangeEvent)
+        self.assertEqual(machine_compliance_event.metadata.machine_serial_number, serial_number)
+        self.assertEqual(machine_compliance_event.payload, {"status": Status.FAILED.name})
         # no tags, one FAILED status
         ms_qs = MachineStatus.objects.filter(compliance_check=jmespath_check_failed_no_tags.compliance_check)
         self.assertEqual(ms_qs.count(), 1)

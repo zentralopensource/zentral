@@ -2,7 +2,6 @@ from datetime import datetime
 from unittest.mock import patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.munki.compliance_checks import (convert_bool_expected_result,
                                                      prune_out_of_scope_machine_statuses,
@@ -12,6 +11,8 @@ from zentral.contrib.munki.compliance_checks import (convert_bool_expected_resul
                                                      MunkiScriptCheck)
 from zentral.contrib.munki.events import MunkiScriptCheckStatusUpdated
 from zentral.contrib.munki.models import ScriptCheck
+from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
+from zentral.core.compliance_checks.models import MachineStatus, Status
 from inventory.utils import force_jmespath_check
 from .utils import force_script_check
 
@@ -221,11 +222,12 @@ class MunkiComplianceChecksTestCase(TestCase):
         ms.refresh_from_db()
         self.assertEqual(ms.status, Status.FAILED.value)
         self.assertEqual(ms.status_time, status_time)
-        self.assertEqual(len(post_event.call_args_list), 1)
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, MunkiScriptCheckStatusUpdated)
+        self.assertEqual(len(post_event.call_args_list), 2)
+        event1, event2 = post_event.call_args_list[0].args[0], post_event.call_args_list[1].args[0]
+        self.assertIsInstance(event1, MunkiScriptCheckStatusUpdated)
+        self.assertEqual(event1.metadata.machine_serial_number, serial_number)
         self.assertEqual(
-            event.payload,
+            event1.payload,
             {"pk": sc.compliance_check.pk,
              "model": "MunkiScriptCheck",
              "name": sc.compliance_check.name,
@@ -233,6 +235,13 @@ class MunkiComplianceChecksTestCase(TestCase):
              "version": 1,
              "munki_script_check": {"pk": sc.pk},
              "status": "FAILED",
+             "previous_status": "OK"}
+        )
+        self.assertIsInstance(event2, MachineComplianceChangeEvent)
+        self.assertEqual(event2.metadata.machine_serial_number, serial_number)
+        self.assertEqual(
+            event2.payload,
+            {"status": "FAILED",
              "previous_status": "OK"}
         )
 

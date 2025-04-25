@@ -163,13 +163,19 @@ class JMESPathCheckStatusUpdated(BaseEvent):
     tags = ['compliance_check', 'inventory_jmespath_check', 'compliance_check_status']
 
     @classmethod
-    def build_from_object_serial_number_and_statuses(cls, jmespath_check, serial_number, status, previous_status):
+    def build_from_object_serial_number_and_statuses(
+        cls,
+        jmespath_check,
+        serial_number,
+        status, status_time,
+        previous_status
+    ):
         payload = jmespath_check.compliance_check.serialize_for_event()
         payload["inventory_jmespath_check"] = jmespath_check.serialize_for_event()
         payload["status"] = status.name
         if previous_status is not None:
             payload["previous_status"] = previous_status.name
-        return cls(EventMetadata(machine_serial_number=serial_number), payload)
+        return cls(EventMetadata(machine_serial_number=serial_number, created_at=status_time), payload)
 
     def get_linked_objects_keys(self):
         keys = {}

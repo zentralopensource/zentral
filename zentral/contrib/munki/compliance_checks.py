@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils.functional import cached_property
 from zentral.core.compliance_checks import register_compliance_check_class
 from zentral.core.compliance_checks.compliance_checks import BaseComplianceCheck
+from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.core.compliance_checks.utils import update_machine_statuses
 from .events import MunkiScriptCheckStatusUpdated
@@ -109,17 +110,21 @@ def update_machine_munki_script_check_statuses(serial_number, results, status_ti
         compliance_check_statuses.append((script_check.compliance_check, status, status_time))
     status_updates = update_machine_statuses(serial_number, compliance_check_statuses)
     events = []
-    for compliance_check_pk, status_value, previous_status_value in status_updates:
-        if status_value == previous_status_value:
+    for compliance_check_pk, status, previous_status in status_updates:
+        if status == previous_status:
             # status not updated, no event
             continue
-        script_check = cc_d[compliance_check_pk]
-        events.append(MunkiScriptCheckStatusUpdated.build_update(
-            script_check,
-            serial_number,
-            Status(status_value), status_time,
-            Status(previous_status_value) if previous_status_value is not None else None
-        ))
+        if compliance_check_pk:
+            script_check = cc_d[compliance_check_pk]
+            events.append(MunkiScriptCheckStatusUpdated.build_update(
+                script_check,
+                serial_number, status, status_time, previous_status
+            ))
+        else:
+            events.append(MachineComplianceChangeEvent.build_from_serial_number_and_statuses(
+                serial_number, status, status_time, previous_status
+            ))
+
     if events:
 
         def post_events():

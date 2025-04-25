@@ -5,6 +5,7 @@ from django.utils.functional import cached_property, SimpleLazyObject
 import jmespath
 from zentral.core.compliance_checks import register_compliance_check_class
 from zentral.core.compliance_checks.compliance_checks import BaseComplianceCheck
+from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import Status
 from zentral.core.compliance_checks.utils import update_machine_statuses
 from .events import JMESPathCheckStatusUpdated
@@ -123,16 +124,19 @@ class JMESPathChecksCache:
             # nothing to update, no events
             return
         status_updates = update_machine_statuses(serial_number, compliance_check_statuses)
-        for compliance_check_pk, status_value, previous_status_value in status_updates:
-            if status_value == previous_status_value:
+        for compliance_check_pk, status, previous_status in status_updates:
+            if status == previous_status:
                 # status not updated, no event
                 continue
-            yield JMESPathCheckStatusUpdated.build_from_object_serial_number_and_statuses(
-                self._checks[compliance_check_pk],
-                serial_number,
-                Status(status_value),
-                Status(previous_status_value) if previous_status_value is not None else None
-            )
+            if compliance_check_pk:
+                yield JMESPathCheckStatusUpdated.build_from_object_serial_number_and_statuses(
+                    self._checks[compliance_check_pk],
+                    serial_number, status, last_seen, previous_status,
+                )
+            else:
+                yield MachineComplianceChangeEvent.build_from_serial_number_and_statuses(
+                    serial_number, status, last_seen, previous_status,
+                )
 
 
 jmespath_checks_cache = SimpleLazyObject(lambda: JMESPathChecksCache())

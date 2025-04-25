@@ -19,6 +19,7 @@ from zentral.contrib.osquery.models import (Configuration, ConfigurationPack,
                                             EnrolledMachine, Enrollment, FileCarvingSession,
                                             Query, Pack, PackQuery)
 from zentral.contrib.osquery.views.utils import update_tree_with_inventory_query_snapshot
+from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
 
 
@@ -933,17 +934,19 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(ms.compliance_check_version, distributed_query1.query_version)
         self.assertEqual(ms.status, Status.OK.value)
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
-        self.assertEqual(len(events), 2)
-        request_event = events[0]
+        self.assertEqual(len(events), 3)
+        request_event, cc_status_event, machine_compliance_event = events
         self.assertIsInstance(request_event, OsqueryRequestEvent)
         self.assertEqual(request_event.payload["request_type"], "distributed_write")
-        cc_status_event = events[1]
         self.assertIsInstance(cc_status_event, OsqueryCheckStatusUpdated)
         self.assertEqual(cc_status_event.payload["osquery_run"], {"pk": distributed_query1.pk})
         self.assertEqual(cc_status_event.get_linked_objects_keys(),
                          {"compliance_check": [(query1.compliance_check.pk,)],
                           "osquery_run": [(distributed_query1.pk,)],
                           "osquery_query": [(query1.pk,)]})
+        self.assertIsInstance(machine_compliance_event, MachineComplianceChangeEvent)
+        self.assertEqual(machine_compliance_event.metadata.machine_serial_number, em.serial_number)
+        self.assertEqual(machine_compliance_event.payload, {"status": Status.OK.name})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_distributed_write_two_distributed_queries_one_outdated_version_compliance_check(self, post_event):
@@ -1487,7 +1490,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(ms2.status_time, status_time2)
         self.assertEqual(ms2.status, Status.UNKNOWN.value)
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
-        self.assertEqual(len(events), 6)
+        self.assertEqual(len(events), 7)
         request_event = events[0]
         self.assertIsInstance(request_event, OsqueryRequestEvent)
         self.assertEqual(request_event.payload["request_type"], "log")
@@ -1497,7 +1500,7 @@ class OsqueryAPIViewsTestCase(TestCase):
                 self.assertEqual(result_event.metadata.routing_key, event_routing_key)
             else:
                 self.assertIsNone(result_event.metadata.routing_key)
-        for cc_status_event in events[4:]:
+        for cc_status_event in events[4:-1]:
             self.assertIsInstance(cc_status_event, OsqueryCheckStatusUpdated)
             if cc_status_event.payload["status"] == Status.UNKNOWN.name:
                 self.assertEqual(cc_status_event.payload["osquery_query"], {"pk": query2.pk})
@@ -1514,6 +1517,10 @@ class OsqueryAPIViewsTestCase(TestCase):
                                  {"compliance_check": [(query1.compliance_check.pk,)],
                                   "osquery_pack": [(pack1.pk,)],
                                   "osquery_query": [(query1.pk,)]})
+        machine_compliance_event = events[-1]
+        self.assertIsInstance(machine_compliance_event, MachineComplianceChangeEvent)
+        self.assertEqual(machine_compliance_event.metadata.machine_serial_number, em.serial_number)
+        self.assertEqual(machine_compliance_event.payload, {"status": Status.FAILED.name})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_log_snapshot_result_with_added_tag(self, post_event):

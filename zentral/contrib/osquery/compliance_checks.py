@@ -2,6 +2,7 @@ import logging
 from django.utils.functional import cached_property
 from zentral.core.compliance_checks import register_compliance_check_class
 from zentral.core.compliance_checks.compliance_checks import BaseComplianceCheck
+from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import ComplianceCheck, Status
 from zentral.core.compliance_checks.utils import update_machine_statuses
 from zentral.core.events import event_cls_from_type
@@ -91,6 +92,7 @@ class ComplianceCheckStatusAggregator:
             return
         compliance_check_statuses = []
         checks = {}
+        max_status_time = None
         for query in (Query.objects.select_related("compliance_check")
                                    .prefetch_related("packquery__pack")
                                    .filter(pk__in=self.cc_statuses.keys(),
@@ -101,19 +103,24 @@ class ComplianceCheckStatusAggregator:
                 continue
             compliance_check_statuses.append((query.compliance_check, status, status_time))
             checks[query.compliance_check.pk] = (query, status_time, distributed_query_pk)
+            if max_status_time is None or status_time > max_status_time:
+                max_status_time = status_time
         status_updates = update_machine_statuses(self.serial_number, compliance_check_statuses)
         event_cls = event_cls_from_type("osquery_check_status_updated")  # import cycle with osquery.events
-        for compliance_check_pk, status_value, previous_status_value in status_updates:
-            if status_value == previous_status_value:
+        for compliance_check_pk, status, previous_status in status_updates:
+            if status == previous_status:
                 # status not updated, no event
                 continue
-            query, status_time, distributed_query_pk = checks[compliance_check_pk]
-            yield event_cls.build_from_query_serial_number_and_statuses(
-                query, distributed_query_pk,
-                self.serial_number,
-                Status(status_value), status_time,
-                Status(previous_status_value) if previous_status_value is not None else None,
-            )
+            if compliance_check_pk:
+                query, status_time, distributed_query_pk = checks[compliance_check_pk]
+                yield event_cls.build_from_query_serial_number_and_statuses(
+                    query, distributed_query_pk,
+                    self.serial_number, status, status_time, previous_status,
+                )
+            else:
+                yield MachineComplianceChangeEvent.build_from_serial_number_and_statuses(
+                    self.serial_number, status, max_status_time, previous_status
+                )
 
     def commit_and_post_events(self):
         for event in self.commit():
