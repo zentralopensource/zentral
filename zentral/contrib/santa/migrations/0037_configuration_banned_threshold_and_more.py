@@ -21,9 +21,17 @@ def flatten_bundle_rules(apps, schema_editor):
     for rule in Rule.objects.filter(target__type="BUNDLE"):
         rules_to_delete.append(rule.pk)
         for binary_target in list(rule.target.bundle.binary_targets.all()):
-            rule.pk = None
-            rule.target = binary_target
-            rule.save()
+            if not Rule.objects.filter(configuration=rule.configuration, target=binary_target).exists():
+                rule.pk = None
+                rule.target = binary_target
+                rule.save()
+            else:
+                print(">>>>", "DUPLICATED BINARY RULE",
+                      rule.configuration.pk,
+                      rule.configuration,
+                      binary_target.pk,
+                      binary_target,
+                      "<<<<")
     Rule.objects.filter(pk__in=rules_to_delete).delete()
 
 
