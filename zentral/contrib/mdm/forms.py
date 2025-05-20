@@ -18,7 +18,7 @@ from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
 from .commands.set_recovery_lock import validate_recovery_password
 from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
-from .declarations import get_declaration_info
+from .declarations import verify_declaration_source
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
 from .payloads import get_configuration_profile_info
@@ -770,56 +770,24 @@ class BaseDeclarationForm(forms.ModelForm):
         model = Declaration
         fields = []
 
-    def get_channel(self):
+    def get_artifact(self):
         raise NotImplementedError
 
-    def get_platforms(self):
+    def get_declaration(self):
         raise NotImplementedError
-
-    def verify_type(self, declaration_type):
-        if self.artifact_type.is_activation:
-            type_prefix = "com.apple.activation."
-        elif self.artifact_type.is_asset:
-            type_prefix = "com.apple.asset."
-        elif self.artifact_type.is_configuration:
-            type_prefix = "com.apple.configuration."
-        else:
-            # should never happen
-            raise RuntimeError("Unsupported artifact type")
-        if not declaration_type.startswith(type_prefix):
-            raise forms.ValidationError(f"Invalid declaration Type for {self.artifact_type}")
-
-    def verify_identifier(self, identifier):
-        pass
-
-    def verify_server_token(self, server_token):
-        if Declaration.objects.filter(server_token=server_token).exists():
-            raise forms.ValidationError("A declaration with this ServerToken already exists")
-
-    def verify_payload(self, payload):
-        pass
 
     def clean(self):
         source = self.cleaned_data.get("source")
-        channel = self.get_channel()
-        platforms = self.get_platforms()
-        if source and channel and platforms:
+        artifact = self.get_artifact()
+        if source and artifact:
             try:
-                info = get_declaration_info(source, channel, platforms, ensure_server_token=True)
+                info = verify_declaration_source(artifact, source, self.get_declaration())
             except ValueError as e:
                 self.add_error("source", str(e))
             else:
-                try:
-                    self.verify_type(info["type"])
-                    self.verify_identifier(info["identifier"])
-                    self.verify_server_token(info["server_token"])
-                    self.verify_payload(info["payload"])
-                except forms.ValidationError as e:
-                    self.add_error("source", e)
-                else:
-                    self.cleaned_data["refs"] = info.pop("refs")
-                    for attr, val in info.items():
-                        setattr(self.instance, attr, val)
+                self.cleaned_data["refs"] = info.pop("refs")
+                for attr, val in info.items():
+                    setattr(self.instance, attr, val)
 
     def save_refs(self):
         for path, ref_artifact in self.cleaned_data["refs"].items():
@@ -835,27 +803,24 @@ class CreateDeclarationForm(BaseDeclarationForm):
         self.artifact_type = kwargs.pop("artifact_type")
         super().__init__(*args, **kwargs)
 
-    def get_channel(self):
+    def get_artifact(self):
         channel = self.cleaned_data.get("channel")
-        if channel:
-            return Channel(channel)
-
-    def get_platforms(self):
         platforms = self.cleaned_data.get("platforms")
-        if platforms:
-            return [Platform(p) for p in platforms]
-        return []
+        if channel and platforms:
+            return Artifact(
+                type=self.artifact_type,
+                channel=channel,
+                platforms=platforms,
+            )
+
+    def get_declaration(self):
+        return
 
     def clean_name(self):
         name = self.cleaned_data.get("name")
         if name and Artifact.objects.filter(name=name).exists():
             raise forms.ValidationError("An artifact with this name already exists")
         return name
-
-    def verify_identifier(self, identifier):
-        super().verify_identifier(identifier)
-        if Declaration.objects.filter(identifier=identifier).exists():
-            raise forms.ValidationError("A declaration with this Identifier already exists")
 
     def save(self):
         artifact = Artifact.objects.create(name=self.cleaned_data["name"],
@@ -878,26 +843,11 @@ class UpgradeDeclarationForm(BaseDeclarationForm):
         self.artifact_type = self.artifact.get_type()
         super().__init__(*args, **kwargs)
 
-    def get_channel(self):
-        return self.artifact.get_channel()
+    def get_artifact(self):
+        return self.artifact
 
-    def get_platforms(self):
-        return self.artifact.get_platforms()
-
-    def verify_type(self, declaration_type):
-        super().verify_type(declaration_type)
-        if not declaration_type == self.instance.type:
-            raise forms.ValidationError("The new declaration Type is different from the existing one")
-
-    def verify_identifier(self, identifier):
-        super().verify_identifier(identifier)
-        if not identifier == self.instance.identifier:
-            raise forms.ValidationError("The new declaration Identifier is different from the existing one")
-
-    def verify_payload(self, payload):
-        super().verify_payload(payload)
-        if payload == self.instance.payload:
-            raise forms.ValidationError("The new declaration Payload is the same as the latest one")
+    def get_declaration(self):
+        return self.instance
 
     def save(self, artifact_version):
         self.instance.id = None  # force insert

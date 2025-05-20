@@ -11,10 +11,12 @@ from zentral.utils.ssl import ensure_bytes
 from .app_manifest import download_package, read_package_info, validate_configuration
 from .artifacts import update_blueprint_serialized_artifacts
 from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
+from .declarations import verify_declaration_source
 from .dep import assign_dep_device_profile, DEPClientError
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
                      DEPDevice,
+                     Declaration, DeclarationRef,
                      DeviceCommand,
                      EnrolledDevice, EnterpriseApp, FileVaultConfig,
                      Location, LocationAsset,
@@ -600,6 +602,61 @@ class B64EncodedBinaryField(serializers.Field):
 
     def to_internal_value(self, data):
         return base64.b64decode(data)
+
+
+class DeclarationSerializer(ArtifactVersionSerializer):
+    source = serializers.JSONField(required=True, source="get_full_dict")
+
+    def validate(self, data):
+        data = super().validate(data)
+        artifact = data["artifact_version"]["artifact"]
+        declaration = self.instance if (self.instance and self.instance.pk) else None
+        try:
+            info = verify_declaration_source(artifact, data["get_full_dict"], declaration)
+        except ValueError as e:
+            raise serializers.ValidationError({"source": str(e)})
+        data["declaration"] = info
+        return data
+
+    def create(self, validated_data):
+        refs = validated_data["declaration"].pop("refs")
+        with transaction.atomic(durable=True):
+            artifact_version = super().create(validated_data)
+            instance = Declaration.objects.create(
+                artifact_version=artifact_version,
+                **validated_data["declaration"]
+            )
+            # update refs
+            for key, ref_artifact in refs.items():
+                DeclarationRef.objects.create(declaration=instance, key=key, artifact=ref_artifact)
+        with transaction.atomic(durable=True):
+            for blueprint in artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
+        return instance
+
+    def update(self, instance, validated_data):
+        refs = validated_data["declaration"].pop("refs")
+        with transaction.atomic(durable=True):
+            super().update(instance, validated_data)
+            for attr, value in validated_data["declaration"].items():
+                setattr(instance, attr, value)
+            instance.save()
+            # update refs
+            seen_keys = []
+            for key, ref_artifact in refs.items():
+                DeclarationRef.objects.update_or_create(
+                    declaration=instance,
+                    key=key,
+                    defaults={"artifact": ref_artifact}
+                )
+                seen_keys.append(tuple(key))
+            for decl_ref in DeclarationRef.objects.filter(declaration=instance):
+                if tuple(decl_ref.key) not in seen_keys:
+                    decl_ref.delete()
+        with transaction.atomic(durable=True):
+            for blueprint in instance.artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
+        return instance
 
 
 class ProfileSerializer(ArtifactVersionSerializer):

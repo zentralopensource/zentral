@@ -2646,16 +2646,6 @@ class Declaration(models.Model):
     def __str__(self):
         return self.identifier
 
-    def serialize_for_event(self):
-        d = self.artifact_version.serialize_for_event()
-        d.update({
-            "type": self.type,
-            "identifier": self.identifier,
-            "server_token": self.server_token,
-            "payload": self.payload,
-        })
-        return d
-
     def delete(self, *args, **kwargs):
         self.artifact_version.delete(*args, **kwargs)
         super().delete(*args, **kwargs)
@@ -2671,6 +2661,11 @@ class Declaration(models.Model):
             "ServerToken": self.server_token,
             "Payload": self.payload
         }
+
+    def serialize_for_event(self):
+        d = self.artifact_version.serialize_for_event()
+        d["source"] = self.get_full_dict()
+        return d
 
 
 class DeclarationRef(models.Model):

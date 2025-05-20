@@ -55,7 +55,6 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
              'created_at': artifact_version.created_at,
              'default_shard': 100,
              'excluded_tags': [],
-             'identifier': declaration.identifier,
              'ios': False,
              'ios_max_version': '',
              'ios_min_version': '',
@@ -65,15 +64,18 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
              'macos': True,
              'macos_max_version': '',
              'macos_min_version': '',
-             'payload': declaration.payload,
              'pk': str(artifact_version.pk),
-             'server_token': declaration.server_token,
              'shard_modulo': 100,
+             'source': {
+                 'Identifier': declaration.identifier,
+                 'Payload': declaration.payload,
+                 'ServerToken': declaration.server_token,
+                 'Type': declaration.type,
+             },
              'tag_shards': [],
              'tvos': False,
              'tvos_max_version': '',
              'tvos_min_version': '',
-             'type': declaration.type,
              'updated_at': artifact_version.updated_at,
              'version': 1}
         )
@@ -317,7 +319,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
         self.assertFormError(response.context["form"], "source",
-                             "The new declaration Type is different from the existing one")
+                             "A declaration with a different Type exists for this artifact")
 
     def test_upgrade_declaration_post_different_identifier_error(self):
         artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
@@ -334,7 +336,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
         self.assertFormError(response.context["form"], "source",
-                             "The new declaration Identifier is different from the existing one")
+                             "A declaration with a different Identifier exists for this artifact")
 
     def test_upgrade_declaration_post_same_payload_error(self):
         artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
@@ -351,7 +353,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
         self.assertFormError(response.context["form"], "source",
-                             "The new declaration Payload is the same as the latest one")
+                             "The latest declaration of this artifact has the same Payload")
 
     def test_upgrade_declaration_post(self):
         bpa, artifact, (artifact_version,) = force_blueprint_artifact(artifact_type=Artifact.Type.CONFIGURATION)
