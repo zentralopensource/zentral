@@ -612,11 +612,14 @@ def force_location_asset(asset=None, location=None):
     )
 
 
-def build_plistfile(filename=None):
+def build_plistfile(filename=None, random=False):
     if filename is None:
         filename = "{}.plist".format(get_random_string(17))
     plist_buffer = io.BytesIO()
-    plistlib.dump({"un": 2}, plist_buffer)
+    data = {"un": 2}
+    if random:
+        data["deux"] = get_random_string(12)
+    plistlib.dump(data, plist_buffer)
     plist_buffer.name = filename
     plist_buffer.seek(0)
     return plist_buffer

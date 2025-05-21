@@ -1,14 +1,17 @@
 import base64
 import logging
 import os
+import plistlib
+import zipfile
 from django.core.files import File
 from django.db import transaction
 from rest_framework import serializers
 from zentral.contrib.inventory.models import EnrollmentSecret, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.utils.external_resources import download_external_resource
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.ssl import ensure_bytes
-from .app_manifest import download_package, read_package_info, validate_configuration
+from .app_manifest import read_package_info, validate_configuration
 from .artifacts import update_blueprint_serialized_artifacts
 from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
 from .declarations import verify_declaration_source
@@ -16,6 +19,7 @@ from .dep import assign_dep_device_profile, DEPClientError
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
                      DEPDevice,
+                     DataAsset,
                      Declaration, DeclarationRef,
                      DeviceCommand,
                      EnrolledDevice, EnterpriseApp, FileVaultConfig,
@@ -604,6 +608,94 @@ class B64EncodedBinaryField(serializers.Field):
         return base64.b64decode(data)
 
 
+class DataAssetSerializer(ArtifactVersionSerializer):
+    type = serializers.ChoiceField(required=True, choices=DataAsset.Type.choices)
+    file_uri = serializers.CharField(required=True, write_only=True)
+    file_sha256 = serializers.RegexField(r"[0-9a-f]{64}", required=True)
+    file_size = serializers.IntegerField(read_only=True)
+    filename = serializers.CharField(read_only=True)
+
+    def validate(self, data):
+        data = super().validate(data)
+        # type
+        data_asset_type = DataAsset.Type(data["type"])
+        if data_asset_type == DataAsset.Type.PLIST:
+            supported_file_extensions = (".plist",)
+        elif data_asset_type == DataAsset.Type.ZIP:
+            supported_file_extensions = (".zip",)
+        else:
+            raise RuntimeError("Unknown data asset type")
+        # download external resource
+        try:
+            filename, tmp_file = download_external_resource(
+                data["file_uri"], data["file_sha256"],
+                supported_file_extensions
+            )
+        except Exception as e:
+            raise serializers.ValidationError({"file_uri": str(e)})
+        # verify file type
+        if data_asset_type == DataAsset.Type.PLIST:
+            try:
+                plistlib.load(tmp_file)
+            except Exception:
+                tmp_file.close()
+                os.unlink(tmp_file.name)
+                raise serializers.ValidationError({"file_uri": "Invalid PLIST file"})
+        elif data_asset_type == DataAsset.Type.ZIP:
+            if not zipfile.is_zipfile(tmp_file):
+                tmp_file.close()
+                os.unlink(tmp_file.name)
+                raise serializers.ValidationError({"file_uri": "Invalid ZIP file"})
+        # verify last version
+        latest_data_asset = (
+            DataAsset.objects.filter(artifact_version__artifact=data["artifact_version"]["artifact"])
+                             .order_by("-artifact_version__version")
+                             .first()
+        )
+        if latest_data_asset and latest_data_asset.file_sha256 == data["file_sha256"]:
+            raise serializers.ValidationError({"file_uri": "This file is not different from the latest one"})
+        # add data asset info
+        tmp_file.seek(0)
+        file = File(tmp_file)
+        data["data_asset"] = {
+            "type": data_asset_type,
+            "file": file,
+            "filename": filename,
+            "file_sha256": data["file_sha256"],
+            "file_size": file.size
+        }
+        return data
+
+    def create(self, validated_data):
+        try:
+            with transaction.atomic(durable=True):
+                artifact_version = super().create(validated_data)
+                instance = DataAsset.objects.create(
+                    artifact_version=artifact_version,
+                    **validated_data["data_asset"]
+                )
+            with transaction.atomic(durable=True):
+                for blueprint in artifact_version.artifact.blueprints():
+                    update_blueprint_serialized_artifacts(blueprint)
+        finally:
+            os.unlink(validated_data["data_asset"]["file"].name)
+        return instance
+
+    def update(self, instance, validated_data):
+        try:
+            with transaction.atomic(durable=True):
+                super().update(instance, validated_data)
+                for attr, value in validated_data["data_asset"].items():
+                    setattr(instance, attr, value)
+                instance.save()
+            with transaction.atomic(durable=True):
+                for blueprint in instance.artifact_version.artifact.blueprints():
+                    update_blueprint_serialized_artifacts(blueprint)
+        finally:
+            os.unlink(validated_data["data_asset"]["file"].name)
+        return instance
+
+
 class DeclarationSerializer(ArtifactVersionSerializer):
     source = serializers.JSONField(required=True, source="get_full_dict")
 
@@ -739,7 +831,7 @@ class EnterpriseAppSerializer(ArtifactVersionSerializer):
         if package_sha256 is None:
             return data
         try:
-            filename, tmp_file = download_package(package_uri, package_sha256)
+            filename, tmp_file = download_external_resource(package_uri, package_sha256, (".pkg", ".ipa"))
             _, _, ea_data = read_package_info(tmp_file)
         except Exception as e:
             raise serializers.ValidationError({"package_uri": str(e)})

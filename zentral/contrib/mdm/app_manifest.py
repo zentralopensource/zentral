@@ -4,12 +4,9 @@ import os
 import plistlib
 import subprocess
 import tempfile
-from urllib.parse import urlparse
 import zipfile
-import boto3
 from defusedxml.ElementTree import fromstring, ParseError
 from django.core.files.uploadedfile import TemporaryUploadedFile, UploadedFile
-from zentral.utils.aws import get_region as get_aws_region
 from .models import Platform
 
 
@@ -33,43 +30,6 @@ def validate_configuration(configuration):
         return plistlib.dumps(loaded_configuration)
     else:
         return None
-
-
-def download_s3_package(parsed_package_uri, package_sha256):
-    bucket = parsed_package_uri.netloc
-    key = parsed_package_uri.path.lstrip("/")
-    _, ext = os.path.splitext(key)
-    if ext not in (".pkg", ".ipa"):
-        raise ValueError(f"Unsupported file extension: '{ext}'")
-    file = tempfile.NamedTemporaryFile(suffix=f".downloaded_s3_package{ext}", delete=False)
-    try:
-        s3_client = boto3.client('s3', region_name=get_aws_region())
-        s3_client.download_fileobj(bucket, key, file)
-    except Exception:
-        file.close()
-        os.unlink(file.name)
-        raise
-    return file
-
-
-def download_package(package_uri, package_sha256):
-    parsed_package_uri = urlparse(package_uri)
-    if parsed_package_uri.scheme == "s3":
-        file = download_s3_package(parsed_package_uri, package_sha256)
-    else:
-        raise ValueError(f"Unknown package URI scheme: '{parsed_package_uri.scheme}'")
-    # verify hash
-    file.seek(0)
-    h = sha256()
-    while True:
-        chunk = file.read(2**10 * 64)
-        if not chunk:
-            break
-        h.update(chunk)
-    if h.hexdigest() != package_sha256:
-        raise ValueError("Hash mismatch")
-    file.seek(0)
-    return os.path.basename(parsed_package_uri.path), file
 
 
 def ensure_tmp_file(file):
