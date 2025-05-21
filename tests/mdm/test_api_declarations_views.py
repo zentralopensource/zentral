@@ -132,6 +132,7 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
                                    "source": {
                                        "Type": "com.apple.configuration.passcode.settings",
                                        "Identifier": "com.example.ddm.1",
+                                       "ServerToken": "8cbb059c-326a-4ad8-8ffc-ea6c72e368a1",
                                        "Payload": {"MinimumLength": 10},
                                    },
                                    "macos": True},
@@ -145,6 +146,7 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
                                    "source": {
                                        "Type": "com.apple.configuration.passcode.settings",
                                        "Identifier": "com.example.ddm.1",
+                                       "ServerToken": "8cbb059c-326a-4ad8-8ffc-ea6c72e368a1",
                                        "Payload": {"MinimumLength": 10},
                                    },
                                    "macos": True})
@@ -156,6 +158,7 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
         response = self.post(reverse("mdm_api:declarations"),
                              data={"artifact": str(artifact.pk),
                                    'source': {'Identifier': av.declaration.identifier,
+                                              'ServerToken': "8cbb059c-326a-4ad8-8ffc-ea6c72e368a1",
                                               'Payload': {},
                                               'Type': 'com.apple.configuration.services.configuration-files'},
                                    "macos": True,
@@ -164,6 +167,25 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
         self.assertEqual(
             response.json(),
             {'source': ['A declaration with a different Type exists for this artifact']}
+        )
+
+    def test_create_declaration_missing_server_token_error(self):
+        artifact, (av,) = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
+        self.set_permissions("mdm.add_declaration")
+        response = self.post(reverse("mdm_api:declarations"),
+                             data={"artifact": str(artifact.pk),
+                                   'source': {'Identifier': av.declaration.identifier,
+                                              'Payload': {
+                                                  'ExternalStorage': 'Allowed',
+                                                  'NetworkStorage': 'Disallowed',
+                                              },
+                                              'Type': 'com.apple.configuration.diskmanagement.settings'},
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'source': ['Missing ServerToken']}
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -183,6 +205,7 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
             response = self.post(reverse("mdm_api:declarations"),
                                  data={"artifact": str(artifact.pk),
                                        'source': {'Identifier': identifier,
+                                                  'ServerToken': "8cbb059c-326a-4ad8-8ffc-ea6c72e368a1",
                                                   'Payload': {'ServiceType': 'sudo',
                                                               'DataAssetReference': f'ztl:{asset_artifact.pk}'},
                                                   'Type': 'com.apple.configuration.services.configuration-files'},
@@ -219,7 +242,7 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
                  'Payload': {'ServiceType': 'sudo',
                              'DataAssetReference': f'ztl:{asset_artifact.pk}'},
                  'Type': 'com.apple.configuration.services.configuration-files',
-                 'ServerToken': av.declaration.server_token,
+                 'ServerToken': '8cbb059c-326a-4ad8-8ffc-ea6c72e368a1',
              },
              'tag_shards': [{"tag": shard_tag.pk, "shard": 5}],
              'tvos': False,
@@ -339,6 +362,7 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
                                   "source": {
                                       "Type": "com.apple.configuration.passcode.settings",
                                       "Identifier": "com.example.ddm.1",
+                                      "ServerToken": "8cbb059c-326a-4ad8-8ffc-ea6c72e368a1",
                                       "Payload": {"MinimumLength": 10},
                                   },
                                   "macos": True,
@@ -353,6 +377,7 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
                                   "source": {
                                       "Type": "com.apple.configuration.passcode.settings",
                                       "Identifier": "com.example.ddm.1",
+                                      "ServerToken": "8cbb059c-326a-4ad8-8ffc-ea6c72e368a1",
                                       "Payload": {"MinimumLength": 10},
                                   },
                                   "macos": True,
@@ -367,6 +392,7 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
                                   "source": {
                                       "Type": av.declaration.type,
                                       "Identifier": "com.example.ddm.1",
+                                      "ServerToken": "8cbb059c-326a-4ad8-8ffc-ea6c72e368a1",
                                       "Payload": {"yolo": "fomo"},
                                   },
                                   "macos": True,
@@ -415,6 +441,7 @@ class MDMDeclarationsAPIViewsTestCase(TestCase):
             response = self.put(reverse("mdm_api:declaration", args=(av.pk,)),
                                 data={"artifact": str(artifact.pk),
                                       'source': {'Identifier': av.declaration.identifier,
+                                                 'ServerToken': '8cbb059c-326a-4ad8-8ffc-ea6c72e368a1',
                                                  'Type': 'com.apple.configuration.services.configuration-files',
                                                  'Payload': {'ServiceType': 'com.apple.sudo',
                                                              'DataAssetReference': f'ztl:{asset_artifact2.pk}'}},

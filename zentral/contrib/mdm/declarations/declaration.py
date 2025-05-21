@@ -120,8 +120,13 @@ def verify_declaration_source_payload(payload, artifact):
             raise ValueError("The latest declaration of this artifact has the same Payload")
 
 
-def verify_declaration_source(artifact, source, declaration=None):
-    info = get_declaration_info(source, artifact.get_channel(), artifact.get_platforms(), ensure_server_token=True)
+def verify_declaration_source(artifact, source, declaration, ensure_server_token=True):
+    info = get_declaration_info(
+        source,
+        artifact.get_channel(),
+        artifact.get_platforms(),
+        ensure_server_token=ensure_server_token,
+    )
     verify_declaration_source_type(info["type"], artifact)
     verify_declaration_source_identifier(info["identifier"], artifact)
     verify_declaration_source_server_token(info["server_token"], declaration)

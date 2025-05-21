@@ -612,7 +612,12 @@ class DeclarationSerializer(ArtifactVersionSerializer):
         artifact = data["artifact_version"]["artifact"]
         declaration = self.instance if (self.instance and self.instance.pk) else None
         try:
-            info = verify_declaration_source(artifact, data["get_full_dict"], declaration)
+            info = verify_declaration_source(
+                artifact,
+                data["get_full_dict"],
+                declaration,
+                ensure_server_token=False,
+            )
         except ValueError as e:
             raise serializers.ValidationError({"source": str(e)})
         data["declaration"] = info
