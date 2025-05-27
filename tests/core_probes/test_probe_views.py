@@ -7,6 +7,7 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from zentral.core.probes.models import ProbeSource
 from accounts.models import User
+from .utils import force_action
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -120,16 +121,22 @@ class ProbeViewsTestCase(TestCase):
 
     def test_update_probe_post(self):
         probe_source = self._force_probe(active=True)
+        self.assertEqual(probe_source.actions.count(), 0)
         self._login("probes.change_probesource", "probes.view_probesource")
+        action = force_action()
         response = self.client.post(reverse("probes:update", args=(probe_source.pk,)),
                                     {"name": probe_source.name,
-                                     "status": ProbeSource.INACTIVE},
+                                     "status": ProbeSource.INACTIVE,
+                                     "actions": [action.pk]},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "probes/probe.html")
         ctx_probe_source = response.context["object"]
         self.assertEqual(ctx_probe_source, probe_source)
         self.assertEqual(ctx_probe_source.status, ProbeSource.INACTIVE)
+        self.assertEqual(ctx_probe_source.actions.count(), 1)
+        self.assertEqual(ctx_probe_source.actions.first(), action)
+        self.assertContains(response, action.name)
 
     # delete probe
 

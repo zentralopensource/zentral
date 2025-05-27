@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import logging
 import os.path
@@ -283,9 +283,12 @@ class EventMetadata(object):
         self.index = int(kwargs.pop('index', 0))
         self.created_at = kwargs.pop('created_at', None)
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(timezone.utc)
         elif isinstance(self.created_at, str):
-            self.created_at = parser.parse(self.created_at)
+            try:
+                self.created_at = datetime.fromisoformat(self.created_at)
+            except ValueError:
+                self.created_at = parser.parse(self.created_at)
         self.machine_serial_number = kwargs.pop('machine_serial_number', None)
         if self.machine_serial_number:
             self.machine = MetaMachine(self.machine_serial_number)

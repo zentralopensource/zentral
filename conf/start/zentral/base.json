@@ -49,12 +49,6 @@
       "index": "zentral-events"
     }
   },
-  "actions": {
-    "debug": {
-      "backend": "zentral.core.actions.backends.json_file",
-      "local_dir": "/tmp/zentral_notifications/"
-    }
-  },
   "apps": {
     "realms": {
       "metrics": true

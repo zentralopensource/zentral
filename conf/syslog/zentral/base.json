@@ -56,12 +56,6 @@
       "protocol": "tcp"
     }
   },
-  "actions": {
-    "debug": {
-      "backend": "zentral.core.actions.backends.json_file",
-      "local_dir": "/tmp/zentral_notifications/"
-    }
-  },
   "apps": {
     "zentral.contrib.inventory": {
       "metrics": true,

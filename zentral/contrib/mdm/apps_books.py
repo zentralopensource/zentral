@@ -7,12 +7,11 @@ from django.db.models import F
 from django.urls import reverse
 from django.utils.functional import SimpleLazyObject
 import requests
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util import Retry
 from urllib.parse import urljoin
 from base.utils import deployment_info
 from zentral.conf import settings
 from zentral.core.events.base import EventMetadata
+from zentral.utils.requests import CustomHTTPAdapter
 from .artifacts import Target
 from .commands.install_application import InstallApplication
 from .events import (AssetCreatedEvent, AssetUpdatedEvent,
@@ -28,24 +27,6 @@ logger = logging.getLogger("zentral.contrib.mdm.apps_books")
 
 
 # API client
-
-
-class CustomHTTPAdapter(HTTPAdapter):
-    def __init__(self, default_timeout, retries):
-        self.default_timeout = default_timeout
-        super().__init__(
-            max_retries=Retry(
-                total=retries + 1,
-                backoff_factor=1,
-                status_forcelist=[500, 502, 503, 504]
-            )
-        )
-
-    def send(self, *args, **kwargs):
-        timeout = kwargs.get("timeout")
-        if timeout is None:
-            kwargs["timeout"] = self.default_timeout
-        return super().send(*args, **kwargs)
 
 
 class AppsBooksAPIError(Exception):

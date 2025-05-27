@@ -62,6 +62,20 @@
       <td>Incident severity</td>
       <td>{% incident_severity probe.incident_severity '-' %}</td>
     </tr>
+    <tr>
+      <td>Action{{ probe.loaded_actions|length|pluralize }} ({{ probe.loaded_actions|length }})</td>
+      <td>
+        {% if probe.loaded_actions %}
+        <ul class="list-unstyled">
+          {% for action in probe.loaded_actions %}
+          <li>{{ action }}</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        -
+        {% endif %}
+      </td>
+    <tr>
   </table>
   <div class="card-footer">
     <div class="btn-group" role="group">
@@ -291,48 +305,4 @@
 {% block probe_extra %}
 {% endblock %}
 
-<a name="actions"></a>
-<h3 class="mt-4">Actions</h3>
-
-{% if perms.probes.change_probesource and add_action_urls %}
-<div class="dropdown">
-  <button id="addAction" class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-    Add action
-    <span class="caret"></span>
-  </button>
-  <ul class="dropdown-menu" aria-labelledby="addAction">
-    {% for action_name, edit_action_url in add_action_urls %}
-        <li><a class="dropdown-item" href="{{ edit_action_url }}">{{ action_name }}</a></li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
-
-{% if probe.actions %}
-<table class="table-probe table-object-properties">
-  <thead>
-    <th>Name</th>
-    <th>Configuration</th>
-    {% if perms.probes.change_probesource %}
-    <th></th>
-    {% endif %}
-  </thead>
-  <tbody>
-    {% for action, action_probe_config in probe.actions %}
-    <tr>
-      <td>{{ action.name }}</td>
-      <td>{% if action_probe_config %}{% action_probe_config action action_probe_config %}{% endif %}</td>
-      {% if perms.probes.change_probesource %}
-      <td>
-            {% url 'probes:edit_action' object.id action.name as url %}
-            {% button 'UPDATE' url "Edit Action" %}
-            {% url 'probes:delete_action' object.id action.name as url %}
-            {% button 'DELETE' url "Delete Action" %}
-      </td>
-      {% endif %}
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
 {% endblock %}

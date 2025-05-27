@@ -18,8 +18,6 @@ urlpatterns = [
     path('<int:pk>/delete/', views.DeleteProbeView.as_view(), name='delete'),
     path('<int:pk>/clone/', views.CloneProbeView.as_view(), name='clone'),
     path('<int:pk>/review_update/', views.ReviewProbeUpdateView.as_view(), name='review_update'),
-    path('<int:pk>/actions/<str:action>/edit/', views.EditActionView.as_view(), name='edit_action'),
-    path('<int:pk>/actions/<str:action>/delete/', views.DeleteActionView.as_view(), name='delete_action'),
     re_path(r'^(?P<pk>\d+)/filters/(?P<section>(inventory|metadata|payload))/add/$',
             views.AddFilterView.as_view(), name='add_filter'),
     re_path(r'^(?P<pk>\d+)/filters/(?P<section>(inventory|metadata|payload))/(?P<filter_id>\d+)/update/$',

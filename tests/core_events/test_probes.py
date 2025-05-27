@@ -1,10 +1,12 @@
+from unittest.mock import patch, Mock
+import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.core.events import event_from_event_d
-from zentral.core.events.pipeline import enrich_event
+from zentral.core.events.pipeline import enrich_event, process_event
 from zentral.core.incidents.models import Incident, IncidentUpdate, MachineIncident, Severity
 from zentral.core.probes.conf import all_probes
-from zentral.core.probes.models import ProbeSource
+from zentral.core.probes.models import Action, ActionBackend, ProbeSource
 
 
 serialized_event = {
@@ -36,7 +38,7 @@ serialized_event = {
 }
 
 
-class EventDeserializationTestCase(TestCase):
+class EventProbesTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.probe_source = ProbeSource.objects.create(
@@ -45,6 +47,14 @@ class EventDeserializationTestCase(TestCase):
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_types": ["inventory_heartbeat"]}]}}
         )
+        cls.action = Action(
+            pk=uuid.uuid4(),
+            backend=ActionBackend.HTTP_POST,
+            name=get_random_string(12),
+        )
+        cls.action.set_backend_kwargs({"url": "https://www.example.com/post"})
+        cls.action.save()
+        cls.probe_source.actions.add(cls.action)
         cls.probe_source_with_incident = ProbeSource.objects.create(
             model="BaseProbe",
             name=get_random_string(12),
@@ -276,8 +286,29 @@ class EventDeserializationTestCase(TestCase):
 
         event4 = events[4]
         self.assertEqual(event4.metadata.event_type, "inventory_heartbeat")
+        self.assertEqual(
+            sorted(event4.metadata.probes, key=lambda d: d["pk"]),
+            sorted(
+                [self.probe.serialize_for_event_metadata(),
+                 self.probe_with_incident.serialize_for_event_metadata()],
+                key=lambda d: d["pk"]
+            )
+        )
 
         # one more time, only the original event, no incident events
         events = list(enrich_event(serialized_event))
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].metadata.event_type, "inventory_heartbeat")
+
+    @patch("zentral.core.probes.action_backends.http.requests.Session.post")
+    def test_process_event(self, session_post):
+        response = Mock()
+        session_post.return_value = response
+        event = list(enrich_event(serialized_event))[4]
+        self.assertEqual(event.metadata.event_type, "inventory_heartbeat")
+        process_event(event.serialize())  # to force deserialization
+        session_post.assert_called_once_with(
+            "https://www.example.com/post",
+            json=event.serialize(),
+        )
+        response.raise_for_status.assert_called_once()

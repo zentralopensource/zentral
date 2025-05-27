@@ -51,7 +51,6 @@ class EmptyBaseProbeTestCase(TestCase):
         self.assertEqual(self.probe.inventory_filters, [])
         self.assertEqual(self.probe.metadata_filters, [])
         self.assertEqual(self.probe.payload_filters, [])
-        self.assertEqual(self.probe.actions, [])
         self.assertEqual(self.probe.incident_severity, None)
 
 

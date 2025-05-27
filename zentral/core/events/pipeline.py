@@ -55,8 +55,8 @@ def process_event(event):
     if isinstance(event, dict):
         event = event_from_event_d(event)
     for probe in event.metadata.iter_loaded_probes():
-        for action, action_config_d in probe.actions:
+        for action in probe.loaded_actions:
             try:
-                action.trigger(event, probe, action_config_d)
+                action.trigger(event, probe)
             except Exception:
-                logger.exception("Could not trigger action %s", action.name)
+                logger.exception("Could not trigger action %s", action)

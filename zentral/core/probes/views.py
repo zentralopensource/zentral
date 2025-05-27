@@ -8,7 +8,6 @@ from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, TemplateView, UpdateView, View
-from zentral.core.actions.conf import actions as available_actions
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.charts import make_dataset
@@ -80,11 +79,6 @@ class ProbeView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super(ProbeView, self).get_context_data(**kwargs)
         ctx['probe'] = self.probe = self.object.load()
-        if self.probe.loaded:
-            ctx['add_action_urls'] = [
-                (action.name, reverse("probes:edit_action", args=(self.object.id, action.name)))
-                for action in self.probe.not_configured_actions()
-            ]
         store_links = []
         ctx['show_events_link'] = frontend_store.probe_events
         store_links = []
@@ -297,80 +291,6 @@ class ReviewProbeUpdateView(PermissionRequiredMixin, TemplateView):
             self.probe_source.apply_update()
             messages.success(request, "Probe updated")
         return HttpResponseRedirect(self.probe_source.get_absolute_url())
-
-
-# Actions
-
-
-class EditActionView(PermissionRequiredMixin, FormView):
-    permission_required = "probes.change_probesource"
-    template_name = "probes/action_form.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
-        self.probe = self.probe_source.load()
-        try:
-            self.action = available_actions[kwargs["action"]]
-        except KeyError:
-            raise Http404
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_class(self):
-        return self.action.action_form_class
-
-    def get_initial(self):
-        for action, action_config_d in self.probe.actions:
-            if action.name == self.action.name:
-                self.add_action = False
-                return action_config_d or {}
-        self.add_action = True
-        return {}
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["config_d"] = self.action.config_d
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['action'] = self.action
-        ctx['add_action'] = self.add_action
-        ctx['probe_source'] = self.probe_source
-        ctx['probe'] = self.probe
-        return ctx
-
-    def form_valid(self, form):
-        self.probe_source.update_action(self.action.name,
-                                        form.get_action_config_d())
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        return self.probe_source.get_actions_absolute_url()
-
-
-class DeleteActionView(PermissionRequiredMixin, TemplateView):
-    permission_required = "probes.change_probesource"
-    template_name = "probes/delete_action.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
-        self.probe = self.probe_source.load()
-        try:
-            self.action = available_actions[kwargs["action"]]
-        except KeyError:
-            raise Http404
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['action'] = self.action
-        ctx['probe_source'] = self.probe_source
-        ctx['probe'] = self.probe
-        return ctx
-
-    def post(self, request, *args, **kwargs):
-        self.probe_source.delete_action(self.action.name)
-        return HttpResponseRedirect(self.probe_source.get_actions_absolute_url())
 
 
 # Filters
@@ -653,7 +573,6 @@ class DeleteFeedView(PermissionRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        
         ctx['title'] = 'Delete feed'
         return ctx
 
@@ -683,7 +602,6 @@ class ImportFeedProbeView(PermissionRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        
         ctx['feed_probe'] = self.feed_probe
         ctx['feed'] = self.feed_probe.feed
         ctx['title'] = "Import feed probe"

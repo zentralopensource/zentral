@@ -78,6 +78,10 @@ New `zentral.core.stores.backends.panther` store backend for [Panther](https://p
 
 ### Backward incompatibilities
 
+#### 🧨 Probe actions refactoring
+
+Probe actions are not managed in `base.json` anymore, and a lot of action backends have been removed because they were not used. We have kept `http_post` and `slack_incoming_webhook`. Actions will have to be re-created via the API and added to the probes.
+
 #### 🧨 MDM Profiles *NOT* managed via DDM anymore
 
 The DDM implementation of the legacy profile declarations is not robust enough at the moment. Network disruptions might leave the device in an indesirable state that can only be fixed with a reboot. This is not good enough, especially during the MDM enrollment. We have decided to switch back to the InstallProfile command until this is fixed by Apple.

@@ -232,7 +232,7 @@ class UpdateProbeForm(forms.ModelForm):
 
     class Meta:
         model = ProbeSource
-        fields = ["name", "description", "status"]
+        fields = ["name", "description", "status", "actions"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": "2"})
         }
@@ -248,6 +248,7 @@ class UpdateProbeForm(forms.ModelForm):
         probe_source = super().save(commit=False)
         probe_source.body["incident_severity"] = self.cleaned_data.get("incident_severity")
         probe_source.save()
+        self.save_m2m()
         return probe_source
 
 

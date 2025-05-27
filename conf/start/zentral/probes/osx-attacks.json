@@ -1,8 +1,5 @@
 {
   "name": "osx-attacks",
-  "actions": {
-  "debug": {"sub_dir": "osx-attacks"}
-  },
   "osquery": {
     "schedule": [
       {

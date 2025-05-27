@@ -8,11 +8,10 @@ from dateutil import parser
 from django.urls import reverse
 from django.utils.functional import cached_property
 import requests
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util import Retry
 from zentral.conf import settings
 from zentral.contrib.inventory.conf import macos_version_from_build
 from zentral.contrib.inventory.utils import clean_ip_address
+from zentral.utils.requests import CustomHTTPAdapter
 from zentral.utils.text import shard
 from .events import JAMF_EVENTS
 
@@ -28,20 +27,6 @@ INVENTORY_DISPLAY_CHOICES = (
     (INVENTORY_DISPLAY_HARDWARE, INVENTORY_DISPLAY_HARDWARE),
     (INVENTORY_DISPLAY_USER_AND_LOCATION, INVENTORY_DISPLAY_USER_AND_LOCATION),
 )
-
-
-class CustomHTTPAdapter(HTTPAdapter):
-    def __init__(self, default_timeout, max_retries):
-        self.default_timeout = default_timeout
-        super().__init__(
-            max_retries=Retry(total=max_retries, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-        )
-
-    def send(self, *args, **kwargs):
-        timeout = kwargs.get("timeout")
-        if timeout is None:
-            kwargs["timeout"] = self.default_timeout
-        return super().send(*args, **kwargs)
 
 
 class APIClientError(Exception):

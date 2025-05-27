@@ -1,13 +1,16 @@
 import logging
+import uuid
 from django.contrib.postgres.fields import ArrayField
 from django.urls import reverse
 from django.db import models, transaction
-from django.db.models import F, Func
+from django.db.models import Count, F, Func
 from django.utils.text import slugify
 from zentral.core.events import event_types
 from zentral.core.probes.sync import signal_probe_change
+from zentral.utils.backend_model import BackendInstance
 from zentral.utils.dict import dict_diff
 from . import probe_classes
+from .action_backends import ActionBackend, get_action_backend
 
 logger = logging.getLogger('zentral.core.probes.models')
 
@@ -56,6 +59,30 @@ class FeedProbe(models.Model):
             return probe_class.model_display
         else:
             return "Unknown probe class"
+
+
+class ActionManager(models.Manager):
+    def for_deletion(self):
+        return self.annotate(
+            # no probes
+            probe_count=Count("probesource")
+        ).filter(
+            probe_count=0
+        )
+
+
+class Action(BackendInstance):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    backend = models.CharField(choices=ActionBackend.choices)
+    backend_enum = ActionBackend
+
+    objects = ActionManager()
+
+    def get_backend(self, load=False):
+        return get_action_backend(self, load)
+
+    def can_be_deleted(self):
+        return Action.objects.for_deletion().filter(pk=self.pk).exists()
 
 
 class ProbeSourceManager(models.Manager):
@@ -108,6 +135,8 @@ class ProbeSource(models.Model):
     feed_probe = models.ForeignKey(FeedProbe, blank=True, null=True, editable=False, on_delete=models.SET_NULL)
     feed_probe_last_synced_at = models.DateTimeField(blank=True, null=True)
     feed_probe_update_available = models.BooleanField(default=False)
+
+    actions = models.ManyToManyField(Action, blank=True)
 
     body = models.JSONField(editable=False)
 
@@ -176,18 +205,6 @@ class ProbeSource(models.Model):
     def update_body(self, func):
         func(self.body)
         self.save()
-
-    def update_action(self, action_name, action_config_d):
-        def func(probe_d):
-            actions = probe_d.setdefault("actions", {})
-            actions[action_name] = action_config_d
-        self.update_body(func)
-
-    def delete_action(self, action_name):
-        def func(probe_d):
-            if "actions" in probe_d:
-                probe_d["actions"].pop(action_name, None)
-        self.update_body(func)
 
     def append_filter(self, filter_section, filter_d):
         def func(probe_d):

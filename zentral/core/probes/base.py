@@ -7,9 +7,9 @@ from django.utils.functional import cached_property
 from rest_framework import serializers
 from zentral.contrib.inventory.conf import (PLATFORM_CHOICES, PLATFORM_CHOICES_DICT,
                                             TYPE_CHOICES, TYPE_CHOICES_DICT)
-from zentral.core.actions.conf import actions as available_actions
 from zentral.core.events import event_types
 from zentral.core.incidents.models import Severity
+from .action_backends import get_action_backend
 from .incidents import ProbeIncident
 from . import register_probe_class
 
@@ -235,13 +235,8 @@ class FiltersSerializer(serializers.Serializer):
     )
 
 
-class ActionsSerializer(serializers.DictField):
-    child = serializers.JSONField()
-
-
 class BaseProbeSerializer(serializers.Serializer):
     filters = FiltersSerializer(required=False)
-    actions = ActionsSerializer(required=False)
     incident_severity = serializers.ChoiceField(Severity.choices(), allow_null=True, required=False)
 
 
@@ -276,23 +271,22 @@ class BaseProbe(object):
         self.syntax_errors = None
         serializer = self.serializer_class(data=data)
         if serializer.is_valid():
+            self.load_actions()
             self.load_validated_data(serializer.validated_data)
             self.loaded = True
         else:
             logger.warning("Invalid source body for probe %s", self.pk)
             self.syntax_errors = serializer.errors
 
-    def load_actions(self, validated_data):
-        self.actions = []
-        actions = validated_data.get("actions")
-        if not actions:
+    def load_actions(self):
+        self.loaded_actions = []
+        if not self.source.pk:
             return
-        for action_name, action_config_d in actions.items():
+        for action in self.source.actions.all():
             try:
-                self.actions.append((available_actions[action_name],
-                                     action_config_d))
-            except KeyError:
-                logger.warning("Unknown action '%s'. Ignored", action_name)
+                self.loaded_actions.append(get_action_backend(action, load=True))
+            except Exception:
+                logger.exception("Could not load action '%s'. Ignored", action)
 
     def load_filter_section(self, section, filter_class, filter_data_list):
         setattr(self, "{}_filters".format(section),
@@ -324,7 +318,6 @@ class BaseProbe(object):
     # to load the rest of the probe source
     def load_validated_data(self, validated_data):
         self.load_filters(validated_data)
-        self.load_actions(validated_data)
         self.incident_severity = validated_data.get("incident_severity")
 
     # methods used in the ProbeSource
@@ -401,15 +394,6 @@ class BaseProbe(object):
 
     def get_matching_event_incident_update(self, matching_event):
         return ProbeIncident.build_incident_update(self)
-
-    def not_configured_actions(self):
-        """return a list of available actions not configured in the probe."""
-        configured_actions = {action.name for action, _ in self.actions}
-        al = [action
-              for action_name, action in available_actions.items()
-              if action_name not in configured_actions]
-        al.sort(key=lambda action: action.name)
-        return al
 
     def get_incident_severity_display(self):
         if self.incident_severity is None:
