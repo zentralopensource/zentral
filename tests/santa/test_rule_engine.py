@@ -59,6 +59,7 @@ class SantaRuleEngineTestCase(TestCase):
         result = {
             "target_id": target.pk,
             "policy": rule.policy,
+            "cel_expr": "",
             "rule_type": target.type,
             "identifier": target.identifier,
             "custom_msg": "",
@@ -78,6 +79,8 @@ class SantaRuleEngineTestCase(TestCase):
             "identifier": target.identifier,
             "policy": rule.policy.name,
         }
+        if rule.cel_expr:
+            serialized_rule["cel_expr"] = rule.cel_expr
         if rule.custom_msg:
             serialized_rule["custom_msg"] = rule.custom_msg
         return target, rule, serialized_rule
@@ -242,6 +245,7 @@ class SantaRuleEngineTestCase(TestCase):
         rule.delete()
         result3 = result.copy()
         result3["policy"] = 4  # REMOVE
+        result3.pop("cel_expr", None)
         result3.pop("custom_msg", None)
         result3["version"] = 1
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result3])

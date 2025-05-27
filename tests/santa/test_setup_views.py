@@ -1,5 +1,6 @@
 import datetime
 from functools import reduce
+import html
 import operator
 import plistlib
 import urllib.parse
@@ -1093,6 +1094,7 @@ class SantaSetupViewsTestCase(TestCase):
             self.assertEqual(rule.target.identifier, target_identifier)
             self.assertEqual(rule.target.type, target_type)
             self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST)
+            self.assertEqual(rule.cel_expr, "")
             self.assertEqual(rule.custom_msg, "")
             self.assertEqual(rule.description, description)
             self.assertEqual(rule.serial_numbers, [])
@@ -1112,6 +1114,80 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/rule_form.html")
         self.assertFormError(response.context["form"], "target_identifier", "Invalid BINARY identifier")
+
+    def test_create_configuration_custom_msg_not_on_blocklist_rule_error(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
+        configuration = force_configuration()
+        # create
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.Type.BINARY,
+                                     "target_identifier": get_random_string(12),
+                                     "policy": Rule.Policy.ALLOWLIST,
+                                     "custom_msg": "yolo"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "custom_msg", "Can only be set on BLOCKLIST rules")
+
+    def test_create_configuration_cel_expr_not_on_cel_rule_error(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
+        configuration = force_configuration()
+        # create
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.Type.BINARY,
+                                     "target_identifier": get_random_string(12),
+                                     "policy": Rule.Policy.ALLOWLIST,
+                                     "cel_expr": "target.signing_time >= timestamp('2025-05-31T00:00:00Z')"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "cel_expr", "Can only be set on CEL rules")
+
+    def test_create_configuration_cel_expr_missing_on_cel_rule_error(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
+        configuration = force_configuration()
+        # create
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.Type.BINARY,
+                                     "target_identifier": get_random_string(12),
+                                     "policy": Rule.Policy.CEL},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "cel_expr", "This field is required for CEL rules")
+
+    def test_create_configuration_cel_rule(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
+        configuration = force_configuration()
+        # create
+        self._login("santa.add_rule", "santa.view_rule")
+        team_id = new_team_id()
+        cel_expr = "target.signing_time >= timestamp('2025-05-31T00:00:00Z')"
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.Type.TEAM_ID,
+                                     "target_identifier": team_id,
+                                     "policy": Rule.Policy.CEL,
+                                     "cel_expr": cel_expr,
+                                     "description": "description",
+                                     },
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, team_id)
+        self.assertContains(response, html.escape(cel_expr))
+        rule = response.context["object_list"][0]
+        self.assertEqual(rule.configuration, configuration)
+        self.assertEqual(rule.target.identifier, team_id)
+        self.assertEqual(rule.target.type, Target.Type.TEAM_ID)
+        self.assertEqual(rule.policy, Rule.Policy.CEL)
+        self.assertEqual(rule.cel_expr, cel_expr)
+        self.assertEqual(rule.custom_msg, "")
+        self.assertEqual(rule.description, "description")
+        self.assertEqual(rule.serial_numbers, [])
+        self.assertEqual(rule.primary_users, [])
 
     def test_create_configuration_binary_rule_preselected_get_ok(self):
         configuration = force_configuration()
@@ -1449,6 +1525,111 @@ class SantaSetupViewsTestCase(TestCase):
         rule = force_rule(is_voting_rule=True)
         response = self.client.get(reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)))
         self.assertEqual(response.status_code, 404)
+
+    def test_update_configuration_rule_custom_msg_on_allowlist_rule_error(self):
+        self._login("santa.change_rule")
+        rule = force_rule()
+        response = self.client.post(
+            reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)),
+            {"target_type": rule.target.type,
+             "target_identifier": rule.target.identifier,
+             "policy": Rule.Policy.ALLOWLIST,
+             "custom_msg": "yolo",
+             },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "custom_msg", "Cannot be set for this rule policy")
+
+    def test_update_configuration_rule_cel_expr_missing_error(self):
+        self._login("santa.change_rule")
+        rule = force_rule()
+        response = self.client.post(
+            reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)),
+            {"target_type": rule.target.type,
+             "target_identifier": rule.target.identifier,
+             "policy": Rule.Policy.CEL,
+             },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "cel_expr", "This field is required for CEL rules")
+
+    def test_update_configuration_rule_cel_expr_on_allowlist_rule_error(self):
+        self._login("santa.change_rule")
+        rule = force_rule()
+        response = self.client.post(
+            reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)),
+            {"target_type": rule.target.type,
+             "target_identifier": rule.target.identifier,
+             "policy": Rule.Policy.ALLOWLIST,
+             "cel_expr": "target.signing_time >= timestamp('2025-05-31T00:00:00Z')",
+             },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "cel_expr", "Can only be set on CEL rules")
+
+    def test_update_configuration_rule_to_cel_rule(self):
+        self._login("santa.view_configuration",
+                    "santa.change_rule",
+                    "santa.view_rule")
+        rule = force_rule()
+        self.assertEqual(rule.version, 1)
+        self.assertEqual(rule.cel_expr, "")
+        self.assertEqual(rule.description, "")
+        response = self.client.post(
+            reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)),
+            {"target_type": rule.target.type,
+             "target_identifier": rule.target.identifier,
+             "policy": Rule.Policy.CEL,
+             "cel_expr": "target.signing_time >= timestamp('2025-05-31T00:00:00Z')",
+             "description": "description",
+             },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        rule2 = response.context["object_list"][0]
+        self.assertEqual(rule, rule2)
+        rule.refresh_from_db()
+        self.assertEqual(rule.policy, Rule.Policy.CEL)
+        self.assertEqual(rule.cel_expr, "target.signing_time >= timestamp('2025-05-31T00:00:00Z')")
+        self.assertEqual(rule.description, "description")
+        self.assertEqual(rule.version, 2)
+
+    def test_update_configuration_cel_rule_to_allowlist_rule(self):
+        self._login("santa.view_configuration",
+                    "santa.change_rule",
+                    "santa.view_rule")
+        rule = force_rule(
+            policy=Rule.Policy.CEL,
+            cel_expr="target.signing_time >= timestamp('2025-05-31T00:00:00Z')",
+            description="description",
+        )
+        self.assertEqual(rule.version, 1)
+        self.assertEqual(rule.cel_expr, "target.signing_time >= timestamp('2025-05-31T00:00:00Z')")
+        self.assertEqual(rule.description, "description")
+        response = self.client.post(
+            reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)),
+            {"target_type": rule.target.type,
+             "target_identifier": rule.target.identifier,
+             "policy": Rule.Policy.ALLOWLIST,
+             },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        rule2 = response.context["object_list"][0]
+        self.assertEqual(rule, rule2)
+        rule.refresh_from_db()
+        self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST)
+        self.assertEqual(rule.cel_expr, "")
+        self.assertEqual(rule.description, "")
+        self.assertEqual(rule.version, 2)
 
     # delete configuration rule
 

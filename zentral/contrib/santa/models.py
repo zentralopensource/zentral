@@ -965,6 +965,11 @@ class Rule(models.Model):
         SILENT_BLOCKLIST = 3, _("Silent blocklist")
         REMOVE = 4,  _("Remove")
         ALLOWLIST_COMPILER = 5, _("Allowlist compiler")
+        CEL = 9, _("CEL")
+
+        @property
+        def compatible_with_custom_msg(self):
+            return self.value in (self.BLOCKLIST, self.CEL)
 
         @property
         def sync_only(self):
@@ -980,6 +985,7 @@ class Rule(models.Model):
 
     target = models.ForeignKey(Target, on_delete=models.PROTECT)
     policy = models.PositiveSmallIntegerField(choices=Policy.rule_choices())
+    cel_expr = models.TextField(blank=True)
     custom_msg = models.TextField(blank=True)
     description = models.TextField(blank=True)
     version = models.PositiveIntegerField(default=1)
@@ -1014,6 +1020,8 @@ class Rule(models.Model):
             "target": self.target.serialize_for_event(),
             "policy": self.get_translated_policy(),
         }
+        if self.cel_expr:
+            d["cel_expr"] = self.cel_expr
         if self.ruleset:
             d["ruleset"] = self.ruleset.serialize_for_event()
         if self.custom_msg:
@@ -1039,7 +1047,7 @@ class MachineRuleManager(models.Manager):
     def _iter_new_rules(self, enrolled_machine, tags):
         query = (
             "WITH prepared_rules as ("  # aggregate the tag ids
-            "  select r.target_id, r.policy, r.custom_msg, r.version,"
+            "  select r.target_id, r.policy, r.cel_expr, r.custom_msg, r.version,"
             "  r.serial_numbers, r.primary_users,"
             "  array_remove(array_agg(srt.tag_id), null) as tag_ids,"
             "  r.excluded_serial_numbers, r.excluded_primary_users,"
@@ -1048,11 +1056,11 @@ class MachineRuleManager(models.Manager):
             "  left join santa_rule_tags as srt on (srt.rule_id = r.id)"
             "  left join santa_rule_excluded_tags as sret on (sret.rule_id = r.id)"
             "  where r.configuration_id = %(configuration_pk)s"
-            "  group by r.target_id, r.policy, r.custom_msg, r.version,"
+            "  group by r.target_id, r.policy, r.cel_expr, r.custom_msg, r.version,"
             "  r.serial_numbers, r.excluded_serial_numbers,"
             "  r.primary_users, r.excluded_primary_users"
             "), filtered_rules as ("  # filter the configured rules for the enrolled machine
-            "  select pr.target_id, pr.policy, pr.custom_msg, pr.version"
+            "  select pr.target_id, pr.policy, pr.cel_expr, pr.custom_msg, pr.version"
             "  from prepared_rules as pr"
             "  where ("
             "    {wheres}"
@@ -1062,24 +1070,28 @@ class MachineRuleManager(models.Manager):
             "   from santa_machinerule"
             "   where enrolled_machine_id = %(enrolled_machine_pk)s"
             "), rule_product as ("  # full product of the configured rules and the machine rules
-            "  select fr.target_id as rule_target_id, fr.policy as rule_policy,"
-            "  fr.custom_msg as rule_custom_msg, fr.version as rule_version,"
+            "  select fr.target_id as rule_target_id, fr.policy as rule_policy, fr.cel_expr as rule_cel_expr,"
+            "  fr.custom_msg as rule_custom_msg,"
+            "  fr.version as rule_version,"
             "  mr.target_id as machine_rule_target_id, mr.policy as machine_rule_policy,"
             "  mr.version as machine_rule_version"
             "  from filtered_rules as fr"
             "  full outer join machine_rules as mr on (mr.target_id = fr.target_id)"
             "), changed_rules as ("  # filter the product to get the changes
-            "  select rule_target_id as target_id, rule_policy as policy,"
-            "  rule_custom_msg as custom_msg, rule_version as version"
+            "  select rule_target_id as target_id, rule_policy as policy, rule_cel_expr as cel_expr,"
+            "  rule_custom_msg as custom_msg,"
+            "  rule_version as version"
             "  from rule_product where ("
             "    (machine_rule_target_id is null)"
             "    or (rule_target_id is not null"
             "        and (rule_policy <> machine_rule_policy or rule_version <> machine_rule_version)))"
             "  union"
-            "  select machine_rule_target_id as target_id, 4 as policy, null as custom_msg, 1 as version"
+            "  select machine_rule_target_id as target_id, 4 as policy, null as cel_expr,"
+            "  null as custom_msg, 1 as version"
             "  from rule_product where rule_target_id is null"
             ") "  # limit, order and join with target to get all the necessary info
-            "select t.id as target_id, t.type as rule_type, t.identifier, cr.policy, cr.custom_msg, cr.version "
+            "select t.id as target_id, t.type as rule_type, t.identifier, cr.policy, cr.cel_expr,"
+            "cr.custom_msg, cr.version "
             "from changed_rules as cr "
             "join santa_target as t on (t.id = cr.target_id) "
             "order by t.identifier limit %(batch_size)s"
@@ -1088,6 +1100,9 @@ class MachineRuleManager(models.Manager):
         # machine specific rules
         wheres = ["(cardinality(pr.serial_numbers) = 0 or %(serial_number)s = ANY(pr.serial_numbers))",
                   "%(serial_number)s <> ALL(pr.excluded_serial_numbers)"]
+        # skip rules with CEL policy if santa version is too old
+        if enrolled_machine.get_comparable_santa_version() < (2025, 6):
+            wheres.append(f"pr.policy != {Rule.Policy.CEL}")
         kwargs = {"configuration_pk": configuration.pk,
                   "serial_number": enrolled_machine.serial_number,
                   "enrolled_machine_pk": enrolled_machine.pk,
@@ -1144,7 +1159,8 @@ class MachineRuleManager(models.Manager):
         # return next batch
         rules = []
         new_cursor = None
-        use_sha256_attr = enrolled_machine.get_comparable_santa_version() < (2022, 1)
+        cmp_santa_version = enrolled_machine.get_comparable_santa_version()
+        use_sha256_attr = cmp_santa_version < (2022, 1)
         for rule in self._iter_new_rules(enrolled_machine, tags):
             if new_cursor is None:
                 new_cursor = get_random_string(8)
@@ -1152,6 +1168,8 @@ class MachineRuleManager(models.Manager):
             policy = Rule.Policy(rule.pop("policy"))
             rule["policy"] = policy.name
             version = rule.pop("version")
+            if policy == Rule.Policy.REMOVE or not rule["cel_expr"]:
+                rule.pop("cel_expr", None)
             if policy == Rule.Policy.REMOVE or not rule["custom_msg"]:
                 rule.pop("custom_msg", None)
             if use_sha256_attr and Target.Type(rule["rule_type"]).has_sha256_identifier:

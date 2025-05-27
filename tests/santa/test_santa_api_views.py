@@ -529,7 +529,11 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(json_response, {"rules": []})
         # add a rule
         target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
+        rule = Rule.objects.create(
+            configuration=self.configuration,
+            target=target,
+            policy=Rule.Policy.BLOCKLIST,
+        )
         response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
@@ -646,6 +650,39 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {"rules": []})
+
+    def test_cel_rule_download(self):
+        # add a CEL rule
+        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        Rule.objects.create(
+            configuration=self.configuration,
+            target=target,
+            policy=Rule.Policy.CEL,
+            cel_expr="target.signing_time >= timestamp('2025-05-31T00:00:00Z')",
+        )
+        # No rules with CEL policies for older Santa agents
+        self.assertTrue(self.enrolled_machine.get_comparable_santa_version() < (2025, 6))
+        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["rules"], [])
+        # Rules with CEL policies for Santa agent >= 2025.6
+        enrolled_machine = EnrolledMachine.objects.create(enrollment=self.enrollment,
+                                                          hardware_uuid=uuid.uuid4(),
+                                                          serial_number=get_random_string(12),
+                                                          client_mode=Configuration.MONITOR_MODE,
+                                                          santa_version="2025.6")
+        self.assertTrue(enrolled_machine.get_comparable_santa_version() >= (2025, 6))
+        response = self.post_as_json("ruledownload", enrolled_machine.hardware_uuid, {})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(
+            json_response["rules"],
+            [{"rule_type": Target.Type.BINARY,
+              "identifier": target.identifier,
+              "policy": "CEL",
+              "cel_expr": "target.signing_time >= timestamp('2025-05-31T00:00:00Z')"}]
+        )
 
     def test_deprecated_rule_download(self):
         # no rules

@@ -284,6 +284,8 @@ class RuleForm(RuleFormMixin, forms.Form):
     target_type = forms.ChoiceField(choices=Target.Type.rule_choices())
     target_identifier = forms.CharField()
     policy = forms.ChoiceField(choices=Rule.Policy.rule_choices())
+    cel_expr = forms.CharField(label="CEL expression", required=False,
+                               widget=forms.Textarea(attrs={"cols": "40", "rows": "5"}))
     custom_msg = forms.CharField(label="Custom message", required=False,
                                  widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
     description = forms.CharField(required=False, widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
@@ -357,11 +359,19 @@ class RuleForm(RuleFormMixin, forms.Form):
         except (TypeError, ValueError):
             pass
 
-        # custom message only on blocklist rules
-        if policy and policy != Rule.Policy.BLOCKLIST:
-            custom_msg = cleaned_data.get("custom_msg")
-            if custom_msg:
-                self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
+        if policy:
+            # custom message only on blocklist rules
+            if policy != Rule.Policy.BLOCKLIST:
+                custom_msg = cleaned_data.get("custom_msg")
+                if custom_msg:
+                    self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
+            # CEL expression only on CEL rules
+            cel_expr = cleaned_data.get("cel_expr")
+            if policy == Rule.Policy.CEL:
+                if not cel_expr:
+                    self.add_error("cel_expr", "This field is required for CEL rules")
+            elif cel_expr:
+                self.add_error("cel_expr", "Can only be set on CEL rules")
 
         cleaned_data["target_type"] = target_type
         cleaned_data["target_identifier"] = target_identifier
@@ -375,6 +385,7 @@ class RuleForm(RuleFormMixin, forms.Form):
         rule = Rule.objects.create(configuration=self.configuration,
                                    target=target,
                                    policy=self.cleaned_data["policy"],
+                                   cel_expr=self.cleaned_data["cel_expr"],
                                    custom_msg=self.cleaned_data.get("custom_msg", ""),
                                    description=self.cleaned_data.get("description", ""),
                                    serial_numbers=self.cleaned_data.get("serial_numbers") or [],
@@ -393,7 +404,7 @@ class RuleForm(RuleFormMixin, forms.Form):
 class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
     class Meta:
         model = Rule
-        fields = ("policy", "custom_msg", "description",
+        fields = ("policy", "cel_expr", "custom_msg", "description",
                   "serial_numbers", "excluded_serial_numbers",
                   "primary_users", "excluded_primary_users",
                   "tags", "excluded_tags")
@@ -406,14 +417,22 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
         cleaned_data = super().clean()
 
         try:
-            policy = int(cleaned_data.get("policy"))
+            policy = Rule.Policy(int(cleaned_data.get("policy")))
         except (TypeError, ValueError):
             pass
         else:
-            if policy != Rule.Policy.BLOCKLIST:
+            # custom message only on some rules
+            if not policy.compatible_with_custom_msg:
                 custom_msg = cleaned_data.get("custom_msg")
                 if custom_msg:
-                    self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
+                    self.add_error("custom_msg", "Cannot be set for this rule policy")
+            # CEL expression only on CEL rules
+            cel_expr = cleaned_data.get("cel_expr")
+            if policy == Rule.Policy.CEL:
+                if not cel_expr:
+                    self.add_error("cel_expr", "This field is required for CEL rules")
+            elif cel_expr:
+                self.add_error("cel_expr", "Can only be set on CEL rules")
 
         self.validate_scope()
 
@@ -430,6 +449,16 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
             self.instance.policy = policy
             updated = True
             updates.setdefault("added", {})["policy"] = self.instance.policy.name
+        # cel_expr
+        cel_expr = self.cleaned_data["cel_expr"]
+        if self.instance.cel_expr != cel_expr:
+            if self.instance.cel_expr:
+                updates.setdefault("removed", {})["cel_expr"] = self.instance.cel_expr
+            self.instance.cel_expr = cel_expr
+            self.instance.version = F("version") + 1  # bump version to trigger rule distribution
+            updated = True
+            if self.instance.cel_expr:
+                updates.setdefault("added", {})["cel_expr"] = self.instance.cel_expr
         # custom_msg
         custom_msg = self.cleaned_data["custom_msg"]
         if self.instance.custom_msg != custom_msg:

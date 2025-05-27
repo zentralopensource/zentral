@@ -110,7 +110,7 @@ class SantaSerializersTestCase(TestCase):
         serializer = RuleUpdateSerializer(data=data)
         self.assertFalse(serializer.is_valid())
         ed = serializer.errors["non_field_errors"][0]
-        self.assertEqual(str(ed), "Custom message can only be set on BLOCKLIST rules")
+        self.assertEqual(str(ed), "Custom message cannot be set for this rule policy")
 
     def test_rule_tags_conflict(self):
         data = {"rule_type": "BINARY",

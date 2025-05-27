@@ -977,7 +977,35 @@ class APIViewsTestCase(TestCase):
         }
         response = self.post_json_data(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {'custom_msg': ['Can only be set on BLOCKLIST rules']})
+        self.assertEqual(response.json(), {'custom_msg': ['Cannot be set for this rule policy']})
+        self.assertEqual(Rule.objects.count(), 0)
+
+    def test_create_rule_policy_cel_expr_no_cel_policy_error(self):
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": self.configuration.pk,
+            "policy": Rule.Policy.ALLOWLIST,
+            "target_type": Target.Type.BINARY,
+            "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789'),
+            "cel_expr": "This should not be here"
+        }
+        response = self.post_json_data(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {'cel_expr': ['Can only be set on CEL rules']})
+        self.assertEqual(Rule.objects.count(), 0)
+
+    def test_create_rule_policy_cel_expr_missing_error(self):
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": self.configuration.pk,
+            "policy": Rule.Policy.CEL,
+            "target_type": Target.Type.BINARY,
+            "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789'),
+            # missing cel_expr
+        }
+        response = self.post_json_data(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {'cel_expr': ['This field is required for CEL rules']})
         self.assertEqual(Rule.objects.count(), 0)
 
     def test_create_rule_primary_user_conflicts_error(self):
@@ -1058,6 +1086,7 @@ class APIViewsTestCase(TestCase):
             "id": rule.id,
             "configuration": configuration.pk,
             "policy": 1,
+            "cel_expr": '',
             "target_type": Target.Type.BINARY,
             "target_identifier": data["target_identifier"],
             "description": "Description",
@@ -1078,6 +1107,7 @@ class APIViewsTestCase(TestCase):
             "id": rule.pk,
             "configuration": configuration.pk,
             "policy": rule.policy,
+            "cel_expr": rule.cel_expr,
             "target_type": rule.target.type,
             "target_identifier": rule.target.identifier,
             "description": rule.description,
@@ -1174,6 +1204,24 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json()["custom_msg"], "Custom message")
         rule = Rule.objects.first()
         self.assertEqual(rule.custom_msg, "Custom message")
+
+    def test_rule_create_with_cel_expr(self):
+        configuration = self.force_configuration()
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": configuration.pk,
+            "policy": Rule.Policy.CEL,
+            "cel_expr": "target.signing_time >= timestamp('2025-05-31T00:00:00Z')",
+            "target_type": Target.Type.TEAM_ID,
+            "target_identifier": "1234567890",
+        }
+        response = self.post_json_data(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Rule.objects.count(), 1)
+        self.assertEqual(response.json()["cel_expr"],
+                         "target.signing_time >= timestamp('2025-05-31T00:00:00Z')")
+        rule = Rule.objects.first()
+        self.assertEqual(rule.cel_expr, "target.signing_time >= timestamp('2025-05-31T00:00:00Z')")
 
     def test_rule_create_unauthorized(self):
         response = self.client.post(reverse("santa_api:rules"))
@@ -1467,7 +1515,7 @@ class APIViewsTestCase(TestCase):
         }
         response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {'custom_msg': ['Can only be set on BLOCKLIST rules']})
+        self.assertEqual(response.json(), {'custom_msg': ['Cannot be set for this rule policy']})
         rule.refresh_from_db()
         self.assertNotEqual(rule.custom_msg, "This should not be here")
         self.assertEqual(rule.policy, Rule.Policy.BLOCKLIST)
@@ -1673,6 +1721,7 @@ class APIViewsTestCase(TestCase):
             "id": rule.id,
             "configuration": configuration2.pk,
             "policy": Rule.Policy.BLOCKLIST,
+            "cel_expr": "",
             "target_type": Target.Type.TEAM_ID,
             "target_identifier": data["target_identifier"],
             "description": "new description",

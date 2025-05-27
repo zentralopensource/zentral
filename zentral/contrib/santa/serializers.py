@@ -120,9 +120,14 @@ class RuleSerializer(serializers.ModelSerializer):
 
         # policy
         policy = Rule.Policy(data.get("policy"))
-        if policy is not Rule.Policy.BLOCKLIST:
+        if not policy.compatible_with_custom_msg:
             if data.get("custom_msg"):
-                raise serializers.ValidationError({"custom_msg": "Can only be set on BLOCKLIST rules"})
+                raise serializers.ValidationError({"custom_msg": "Cannot be set for this rule policy"})
+        if policy is Rule.Policy.CEL:
+            if not data.get("cel_expr"):
+                raise serializers.ValidationError({"cel_expr": "This field is required for CEL rules"})
+        elif data.get("cel_expr"):
+            raise serializers.ValidationError({"cel_expr": "Can only be set on CEL rules"})
 
         return data
 
@@ -180,7 +185,7 @@ class RuleSerializer(serializers.ModelSerializer):
                 else:
                     added_items = added
                     removed_items = removed
-                    if attr == "custom_msg":
+                    if attr in ("cel_expr", "custom_msg"):
                         bump_version = True
 
             if removed_items:
@@ -261,9 +266,9 @@ class RuleUpdateSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"identifier": f"Invalid {rule_type} identifier"})
             data["identifier"] = identifier
         # custom message only with blocklist rule
-        if data["policy"] != Rule.Policy.BLOCKLIST and "custom_msg" in data:
+        if not data["policy"].compatible_with_custom_msg and "custom_msg" in data:
             if data["custom_msg"]:
-                raise serializers.ValidationError("Custom message can only be set on BLOCKLIST rules")
+                raise serializers.ValidationError("Custom message cannot be set for this rule policy")
         # scope conflicts
         for attr in ("serial_numbers", "primary_users", "tags"):
             if set(data.get(attr, [])).intersection(set(data.get(f"excluded_{attr}", []))):
