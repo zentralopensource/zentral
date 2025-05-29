@@ -79,8 +79,17 @@ class BaseViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "base/index.html")
         self.assertNotContains(response, 'canvas class="chart"')
+        self.assertEqual(len(response.context["apps"]), 0)
         for app_name in apps.app_configs:
             self.assertNotContains(response, 'data-app="{{ app_name }}"')
+
+    def test_index_some_perms(self):
+        self._login("compliance_checks.add_compliancecheck", "osquery.view_configuration")
+        response = self.client.get(reverse("base:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "base/index.html")
+        # No compliance checks because no all events search dict
+        self.assertEqual(response.context["apps"], ["osquery"])
 
     def test_hist_data_unknown_app(self):
         self._login()
