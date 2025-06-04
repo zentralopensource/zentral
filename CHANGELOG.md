@@ -48,6 +48,8 @@ Support for multiple Munki repositories, and virtual repositories with direct pa
 
 Support for the Munki `default_installs` key.
 
+Remove Munki install probes.
+
 #### Santa
 
 Support for the [Santa Signing ID rules](https://santa.dev/concepts/rules.html#signing-id-rules).
@@ -77,6 +79,10 @@ New `zentral.core.stores.backends.panther` store backend for [Panther](https://p
 🚧 Alpha release of the new UI.
 
 ### Backward incompatibilities
+
+#### 🧨 Probes refactoring
+
+The different probe models have been removed. Only event probes are supported now. The Munki install probes were the last ones still available, and they can be easily replaced by event probes.
 
 #### 🧨 Probe actions refactoring
 

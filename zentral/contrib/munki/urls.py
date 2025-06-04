@@ -44,12 +44,6 @@ urlpatterns = [
          views.ScriptCheckEventsStoreRedirectView.as_view(),
          name='script_check_events_store_redirect'),
 
-    # install probe
-    path('install_probes/create/',
-         views.CreateInstallProbeView.as_view(), name='create_install_probe'),
-    path('install_probes/<int:probe_id>/update/',
-         views.UpdateInstallProbeView.as_view(), name='update_install_probe'),
-
     # machine actions
     path('machine/<str:urlsafe_serial_number>/force_full_sync/',
          views.ForceMachineFullSync.as_view(), name='force_machine_full_sync'),

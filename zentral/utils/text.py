@@ -1,9 +1,4 @@
 from hashlib import md5
-import unicodedata
-
-
-def str_to_ascii(value):
-    return unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
 
 
 def split_comma_separated_quoted_string(s):

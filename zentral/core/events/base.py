@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from enum import Enum
 import logging
 import os.path
-import re
 import uuid
 import weakref
 from dateutil import parser
@@ -454,17 +453,6 @@ class BaseEvent(object):
         return self.get_event_type_display()
 
     @classmethod
-    def get_app_display(cls):
-        module = cls.__module__
-        if module.startswith("zentral.core"):
-            return "Zentral"
-        else:
-            try:
-                return module.split(".")[-2].capitalize()
-            except IndexError:
-                return module
-
-    @classmethod
     def deserialize(cls, event_d):
         payload = event_d.copy()
         metadata = EventMetadata.deserialize(payload.pop('_zentral'))
@@ -582,40 +570,6 @@ class AuditEvent(BaseEvent):
 
 
 register_event_type(AuditEvent)
-
-
-# Zentral Commands
-
-
-class CommandEvent(BaseEvent):
-    COMMAND_RE = re.compile(r"^zentral\$(?P<command>[a-zA-Z\-_ ]+)"
-                            r"(?P<serial_numbers>(?:\$[a-zA-Z0-9\-_]+)+)"
-                            r"(?P<args>(?:#[a-zA-Z0-9\-_ ]+)+)?$")
-    event_type = "zentral_command"
-    tags = ["zentral"]
-
-
-register_event_type(CommandEvent)
-
-
-def post_command_events(message, source, tags):
-    if not message:
-        return
-    for line in message.splitlines():
-        line = line.strip()
-        m = CommandEvent.COMMAND_RE.match(line)
-        if m:
-            payload = {'command': m.group('command'),
-                       'source': source}
-            args = m.group('args')
-            if args:
-                payload['args'] = [arg for arg in args.split('#') if arg]
-            for serial_number in m.group('serial_numbers').split('$'):
-                if serial_number:
-                    metadata = EventMetadata(machine_serial_number=serial_number,
-                                             tags=tags)
-                    event = CommandEvent(metadata, payload.copy())
-                    event.post()
 
 
 # Zentral machine conflict

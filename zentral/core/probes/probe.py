@@ -1,6 +1,3 @@
-import collections
-import collections.abc
-import copy
 import logging
 from django.urls import reverse_lazy
 from django.utils.functional import cached_property
@@ -11,12 +8,12 @@ from zentral.core.events import event_types
 from zentral.core.incidents.models import Severity
 from .action_backends import get_action_backend
 from .incidents import ProbeIncident
-from . import register_probe_class
-
-logger = logging.getLogger('zentral.core.probes.base')
 
 
-class InventoryFilter(object):
+logger = logging.getLogger('zentral.core.probes.probe')
+
+
+class InventoryFilter:
     def __init__(self, data):
         for attr in ("meta_business_unit_ids", "tag_ids", "platforms", "types"):
             setattr(self, attr, set(data.get(attr, [])))
@@ -75,13 +72,17 @@ class InventoryFilterSerializer(serializers.Serializer):
     )
 
     def validate(self, data):
+        # MultipleChoiceField return sets that are not JSON serializable
+        for key in ("platforms", "types"):
+            if isinstance(data.get(key), set):
+                data[key] = list(data.pop(key))
         for key, val in data.items():
             if val:
                 return data
         raise serializers.ValidationError("No business units, tags, platforms or types")
 
 
-class MetadataFilter(object):
+class MetadataFilter:
     def __init__(self, data):
         event_types = data.get("event_types")
         if event_types is None:
@@ -129,7 +130,7 @@ class MetadataFilter(object):
         return ", ".join(sorted(self.event_routing_keys))
 
 
-class MetadataFiltersSerializer(serializers.Serializer):
+class MetadataFilterSerializer(serializers.Serializer):
     event_types = serializers.ListField(
         child=serializers.CharField(),
         required=False
@@ -170,7 +171,7 @@ def get_flattened_payload_values(payload, attrs):
         logger.warning("Wrong payload filter attribute %s", attrs)
 
 
-class PayloadFilter(object):
+class PayloadFilter:
     IN = "IN"
     NOT_IN = "NOT_IN"
     operator_choices = (
@@ -226,27 +227,25 @@ class FiltersSerializer(serializers.Serializer):
         required=False
     )
     metadata = serializers.ListField(
-        child=MetadataFiltersSerializer(),
+        child=MetadataFilterSerializer(),
         required=False
     )
     payload = serializers.ListField(
         child=PayloadFilterSerializer(),
-        required=False
+        required=False,
     )
 
 
-class BaseProbeSerializer(serializers.Serializer):
+class ProbeSerializer(serializers.Serializer):
     filters = FiltersSerializer(required=False)
     incident_severity = serializers.ChoiceField(Severity.choices(), allow_null=True, required=False)
 
 
-class BaseProbe(object):
-    serializer_class = BaseProbeSerializer
+class Probe:
+    serializer_class = ProbeSerializer
     model_display = "events"
-    forced_event_type = None
     create_url = reverse_lazy("probes:create")
     template_name = "probes/probe.html"
-    can_edit_payload_filters = True
 
     def __init__(self, source):
         self.source = source
@@ -256,11 +255,10 @@ class BaseProbe(object):
         self.slug = source.slug
         self.description = source.description
         self.created_at = source.created_at
-        self.can_edit_metadata_filters = self.forced_event_type is None
         self.load(source.body)
 
     def __eq__(self, other):
-        if isinstance(other, BaseProbe):
+        if isinstance(other, Probe):
             return self.source == other.source
         return False
 
@@ -299,32 +297,16 @@ class BaseProbe(object):
         self.load_filter_section("inventory", InventoryFilter, filters.get("inventory", []))
         # payload
         payload_filter_data_list = filters.get("payload", [])
-        if self.can_edit_payload_filters:
-            self.load_filter_section("payload", PayloadFilter, payload_filter_data_list)
-        else:
-            if payload_filter_data_list:
-                logger.warning("Payload filters in probe %s with can_edit_payload_filters == False", self.pk)
-            # the sub classes with can_edit_payload_filters == False must override this
-            self.payload_filters = []
+        self.load_filter_section("payload", PayloadFilter, payload_filter_data_list)
         # metadata
         metadata_filter_data_list = filters.get("metadata", [])
-        if self.forced_event_type:
-            if metadata_filter_data_list:
-                logger.warning("Metadata filters in probe %s with forced_event_type", self.pk)
-            metadata_filter_data_list = [{"event_types": [self.forced_event_type]}]
         self.load_filter_section("metadata", MetadataFilter, metadata_filter_data_list)
 
-    # load_validated_data must be extended in the sub-classes
-    # to load the rest of the probe source
     def load_validated_data(self, validated_data):
         self.load_filters(validated_data)
         self.incident_severity = validated_data.get("incident_severity")
 
     # methods used in the ProbeSource
-
-    @classmethod
-    def get_model(cls):
-        return cls.__name__
 
     def get_event_type_classes(self):
         event_type_classes = []
@@ -383,10 +365,7 @@ class BaseProbe(object):
         metadata = event.metadata
         if metadata.machine_serial_number and not self.test_machine(metadata.machine):
             return False
-        if self.forced_event_type:
-            if event.event_type != self.forced_event_type:
-                return False
-        elif not self._test_event_metadata(metadata):
+        if not self._test_event_metadata(metadata):
             return False
         if not self._test_event_payload(event.payload):
             return False
@@ -395,60 +374,7 @@ class BaseProbe(object):
     def get_matching_event_incident_update(self, matching_event):
         return ProbeIncident.build_incident_update(self)
 
-    def get_incident_severity_display(self):
-        if self.incident_severity is None:
-            return "Do not create incidents"
-        else:
-            try:
-                return str(Severity(self.incident_severity))
-            except ValueError:
-                return f"Unknown severity: {self.incident_severity}"
-
     # serialize
 
     def serialize_for_event_metadata(self):
         return {"pk": self.pk, "name": self.name}
-
-    # export method for probe sharing
-
-    def export(self):
-        body = copy.deepcopy(self.source.body)
-        if "actions" in body:
-            del body["actions"]
-        body_filters = body.get("filters", {})
-        if "inventory" in body_filters:
-            del body_filters["inventory"]
-        if not self.can_edit_metadata_filters and "metadata" in body_filters:
-            del body_filters["metadata"]
-        if not self.can_edit_payload_filters and "payload" in body_filters:
-            del body_filters["payload"]
-        d = {"name": self.name,
-             "model": self.get_model(),
-             "body": body}
-        if self.description:
-            d["description"] = self.description
-        return d
-
-    # aggregations
-
-    def get_aggregations(self):
-        aggs = collections.OrderedDict([("created_at",
-                                        {"type": "date_histogram",
-                                         "interval": "day",
-                                         "bucket_number": 31,
-                                         "label": "Events"})])
-        event_type_classes = self.get_event_type_classes()
-        if len(event_type_classes) == 1:
-            event_type_class = event_type_classes[0]
-            for field, aggregation in event_type_class.get_payload_aggregations():
-                aggs[field] = aggregation
-        else:
-            aggs["event_type"] = {
-                "type": "terms",
-                "bucket_number": len(event_types),
-                "label": "Event types",
-            }
-        return aggs
-
-
-register_probe_class(BaseProbe)

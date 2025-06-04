@@ -5,4 +5,4 @@ class ZentralProbesAppConfig(ZentralAppConfig):
     name = "zentral.core.probes"
     default = True
     verbose_name = "Zentral probes app"
-    permission_models = ("action", "feed", "feedprobe", "probesource")
+    permission_models = ("action", "probesource")

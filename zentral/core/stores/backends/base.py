@@ -13,7 +13,6 @@ class BaseEventStore(object):
     object_events_url = False
     probe_events = False
     probe_events_url = False
-    probe_events_aggregations = False
 
     def __init__(self, config_d):
         self.name = config_d['store_name']
@@ -89,9 +88,6 @@ class BaseEventStore(object):
         return [], None
 
     def get_aggregated_probe_event_counts(self, probe, from_dt, to_dt=None):
-        return {}
-
-    def get_probe_events_aggregations(self, probe, from_dt, to_dt=None):
         return {}
 
     def get_probe_events_url(self, probe, from_dt, to_dt=None, event_type=None):

@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.core.events.base import BaseEvent, EventMetadata
 from zentral.core.probes.models import ActionBackend, ProbeSource
+from zentral.core.probes.probe import Probe
 from .utils import force_action
 
 
@@ -30,8 +31,8 @@ class SlackIncomingWebhookActionTests(TestCase):
     @patch("zentral.core.probes.action_backends.http.requests.Session.post")
     def test_trigger(self, session_post):
         probe_name = get_random_string(12)
-        probe_source = ProbeSource.objects.create(model="BaseProbe", name=probe_name, body={})
-        probe = probe_source.load()
+        probe_source = ProbeSource.objects.create(name=probe_name, body={})
+        probe = Probe(probe_source)
         response = Mock()
         session_post.return_value = response
         action_backend = self._create_action({"url": "https://www.example.com/post"})

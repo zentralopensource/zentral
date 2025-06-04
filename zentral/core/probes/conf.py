@@ -4,6 +4,7 @@ import threading
 import weakref
 from base.notifier import notifier
 from .models import ProbeSource
+from .probe import Probe
 
 
 logger = logging.getLogger("zentral.core.probes.conf")
@@ -23,8 +24,8 @@ class ProbeView(object):
 
     def iter_parent_probes(self):
         if self.parent is None:
-            for p in ProbeSource.objects.active():
-                yield p.load()
+            for ps in ProbeSource.objects.active():
+                yield Probe(ps)
         else:
             yield from self.parent
 

@@ -535,7 +535,7 @@ class ProbeActionAPIViewsTestCase(TestCase):
 
     def test_delete_action_cannot_be_deleted(self):
         action = force_action()
-        probe_source = ProbeSource.objects.create(model="BaseProbe", name=get_random_string(12), body={})
+        probe_source = ProbeSource.objects.create(name=get_random_string(12), body={})
         probe_source.actions.add(action)
         self.set_permissions("probes.delete_action")
         response = self.delete(reverse("probes_api:action", args=(action.pk,)))

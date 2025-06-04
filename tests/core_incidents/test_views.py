@@ -23,7 +23,6 @@ class InventoryViewsTestCase(TestCase):
         cls.user.groups.set([cls.group])
         # probe
         cls.probe_source = ProbeSource.objects.create(
-            model="BaseProbe",
             name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_types": ["inventory_heartbeat"]}]}}

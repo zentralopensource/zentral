@@ -1,7 +1,10 @@
+from django.utils.text import slugify
 from rest_framework import serializers
+from zentral.core.incidents.models import Severity
 from .action_backends.http import HTTPPostActionSerializer
 from .action_backends.slack import SlackIncomingWebhookActionSerializer
-from .models import Action
+from .probe import InventoryFilterSerializer, MetadataFilterSerializer, PayloadFilterSerializer
+from .models import Action, ProbeSource
 
 
 class ActionSerializer(serializers.ModelSerializer):
@@ -48,3 +51,57 @@ class ActionSerializer(serializers.ModelSerializer):
         action.set_backend_kwargs(backend_kwargs)
         action.save()
         return action
+
+
+class ProbeSourceSerializer(serializers.ModelSerializer):
+    active = serializers.BooleanField(default=False)
+    inventory_filters = serializers.ListField(child=InventoryFilterSerializer(), required=False)
+    metadata_filters = serializers.ListField(child=MetadataFilterSerializer(), required=False)
+    payload_filters = serializers.ListField(child=PayloadFilterSerializer(), required=False)
+    incident_severity = serializers.ChoiceField(choices=Severity.choices(), required=False, allow_null=True)
+
+    class Meta:
+        model = ProbeSource
+        fields = (
+            "id",
+            "name",
+            "slug",
+            "description",
+            "inventory_filters",
+            "metadata_filters",
+            "payload_filters",
+            "incident_severity",
+            "actions",
+            "active",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate(self, data):
+        data = super().validate(data)
+        # active
+        if data.pop("active", None):
+            data["status"] = ProbeSource.ACTIVE
+        else:
+            data["status"] = ProbeSource.INACTIVE
+        # slug
+        slug_qs = ProbeSource.objects.filter(slug=slugify(data["name"]))
+        if self.instance and self.instance.pk:
+            slug_qs = slug_qs.exclude(pk=self.instance.pk)
+        if slug_qs.exists():
+            raise serializers.ValidationError(
+                {"name": "this name produces a slug that is already taken by another probe source"}
+            )
+        # body
+        data["body"] = body = {}
+        # filters
+        for filter_type in ("inventory", "metadata", "payload"):
+            filters = data.pop(f"{filter_type}_filters", None)
+            if not filters:
+                continue
+            body.setdefault("filters", {})[filter_type] = filters
+        # incident severity
+        incident_severity = data.pop("incident_severity", None)
+        if incident_severity is not None:
+            body["incident_severity"] = incident_severity
+        return data

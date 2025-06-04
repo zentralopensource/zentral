@@ -6,59 +6,13 @@ from django.db import models, transaction
 from django.db.models import Count, F, Func
 from django.utils.text import slugify
 from zentral.core.events import event_types
+from zentral.core.incidents.models import Severity
 from zentral.core.probes.sync import signal_probe_change
 from zentral.utils.backend_model import BackendInstance
-from zentral.utils.dict import dict_diff
-from . import probe_classes
 from .action_backends import ActionBackend, get_action_backend
 
+
 logger = logging.getLogger('zentral.core.probes.models')
-
-
-class Feed(models.Model):
-    name = models.TextField()
-    description = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now_add=True)
-    last_synced_at = models.DateTimeField(blank=True, null=True)
-
-    class Meta:
-        ordering = ('name',)
-
-    def __str__(self):
-        return self.name
-
-    def get_absolute_url(self, anchor=None):
-        return reverse("probes:feed", args=(self.pk,))
-
-
-class FeedProbe(models.Model):
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
-    model = models.CharField(max_length=255)
-    name = models.TextField()
-    description = models.TextField(blank=True)
-    key = models.CharField(max_length=255)
-    body = models.JSONField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    archived_at = models.DateTimeField(blank=True, null=True)
-
-    class Meta:
-        unique_together = (('feed', 'key'),)
-        ordering = ('model', 'name')
-
-    def __str__(self):
-        return self.name
-
-    def get_probe_class(self):
-        return probe_classes.get(self.model, None)
-
-    def get_model_display(self):
-        probe_class = self.get_probe_class()
-        if probe_class:
-            return probe_class.model_display
-        else:
-            return "Unknown probe class"
 
 
 class ActionManager(models.Manager):
@@ -89,12 +43,6 @@ class ProbeSourceManager(models.Manager):
     def active(self):
         return self.filter(status=ProbeSource.ACTIVE)
 
-    def current_models(self):
-        qs = ProbeSource.objects.values("model").distinct().order_by()
-        return sorted(((rd["model"], probe_classes[rd["model"]].model_display)
-                       for rd in qs),
-                      key=lambda t: t[1])
-
     def current_event_types(self):
         qs = (ProbeSource.objects.annotate(event_type=Func(F("event_types"), function="unnest"))
                                  .values("event_type").distinct().order_by())
@@ -124,17 +72,12 @@ class ProbeSource(models.Model):
         (ACTIVE, "Active"),
         (INACTIVE, "Inactive"),
     )
-    model = models.CharField(max_length=255, blank=True, null=True, editable=False)
     name = models.CharField(max_length=255, unique=True)
     slug = models.SlugField(max_length=255, unique=True, editable=False)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=INACTIVE)
     description = models.TextField(blank=True)
     # auto fields for search / filtering
     event_types = ArrayField(models.CharField(max_length=255), blank=True, editable=False)
-
-    feed_probe = models.ForeignKey(FeedProbe, blank=True, null=True, editable=False, on_delete=models.SET_NULL)
-    feed_probe_last_synced_at = models.DateTimeField(blank=True, null=True)
-    feed_probe_update_available = models.BooleanField(default=False)
 
     actions = models.ManyToManyField(Action, blank=True)
 
@@ -151,28 +94,41 @@ class ProbeSource(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def active(self):
+        return self.status == self.ACTIVE
+
+    @property
+    def inventory_filters(self):
+        return self.body.get("filters", {}).get("inventory", [])
+
+    @property
+    def metadata_filters(self):
+        return self.body.get("filters", {}).get("metadata", [])
+
+    @property
+    def payload_filters(self):
+        return self.body.get("filters", {}).get("payload", [])
+
+    @property
+    def incident_severity(self):
+        try:
+            return Severity(self.body.get("incident_severity"))
+        except ValueError:
+            pass
+
     def save(self, *args, **kwargs):
         self.slug = slugify(self.name)
-        probe = self.load()
-        self.model = probe.get_model()
+        from .probe import Probe
+        probe = Probe(self)
         if not probe.loaded:
-            logger.warning("Probe %s not loaded => probe source INACTIVE", self.pk)
+            logger.warning("Probe %s not loaded → probe source INACTIVE", self.pk)
             self.status = ProbeSource.INACTIVE
         # denormalize event_types for UI filtering
         # TODO: Json filtering in the query ?
         self.event_types = [etc.event_type for etc in probe.get_event_type_classes()]
         super(ProbeSource, self).save(*args, **kwargs)
         transaction.on_commit(signal_probe_change)
-
-    def get_probe_class(self):
-        return probe_classes.get(self.model, None)
-
-    def get_model_display(self):
-        probe_class = self.get_probe_class()
-        if probe_class:
-            return probe_class.model_display
-        else:
-            return "Unknown probe class"
 
     def get_event_type_classes(self):
         return [etc for etc in (event_types.get(et, None) for et in self.event_types) if etc]
@@ -190,17 +146,8 @@ class ProbeSource(models.Model):
             url = "{}#{}".format(url, anchor)
         return url
 
-    def get_actions_absolute_url(self):
-        return self.get_absolute_url("actions")
-
     def get_filters_absolute_url(self):
         return self.get_absolute_url("filters")
-
-    def load(self):
-        probe_cls = probe_classes.get(self.model)
-        if not probe_cls:
-            probe_cls = probe_classes.get("BaseProbe")  # always present
-        return probe_cls(self)
 
     def update_body(self, func):
         func(self.body)
@@ -225,45 +172,24 @@ class ProbeSource(models.Model):
             filter_section_l.pop(filter_id)
         self.update_body(func)
 
-    # update
-
-    def update_diff(self):
-        if not self.feed_probe:
-            return {}
-        probe = self.load()
-        current_body = probe.export()["body"]
-        return dict_diff(current_body, self.feed_probe.body)
-
-    def skip_update(self):
-        if self.feed_probe_update_available:
-            self.feed_probe_update_available = False
-            self.save()
-
-    def apply_update(self):
-        update_diff = self.update_diff()
-        if not update_diff:
-            if self.feed_probe_update_available:
-                self.feed_probe_update_available = False
-                self.save()
-            return
-        body = self.body
-        for key, kdiff in update_diff.items():
-            removed = kdiff.get("removed")
-            added = kdiff.get("added")
-            if isinstance(added, list) or isinstance(removed, list):
-                val = body.get(key, [])
-                for removed_item in (removed or []):
-                    val.remove(removed_item)
-                for added_item in (added or []):
-                    val.append(added_item)
-                if val:
-                    body[key] = val
-                elif key in body:
-                    del body[key]
-            else:
-                if added:
-                    body[key] = added
-                elif key in body:
-                    del body[key]
-        self.feed_probe_update_available = False
-        self.save()
+    def serialize_for_event(self):
+        d = {
+            "pk": self.pk,
+            "name": self.name,
+            "slug": self.slug,
+            "description": self.description,
+            "active": self.active,
+            "actions": [a.serialize_for_event(keys_only=True) for a in self.actions.all().order_by("pk")],
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+        if self.description:
+            d["description"] = self.description
+        if self.incident_severity:
+            d["incident_severity"] = self.incident_severity.value
+        for filter_type in ("inventory", "metadata", "payload"):
+            filter_attr = f"{filter_type}_filters"
+            filters = getattr(self, filter_attr)
+            if filters:
+                d[filter_attr] = filters
+        return d
