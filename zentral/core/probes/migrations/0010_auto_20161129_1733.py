@@ -3,10 +3,13 @@
 from __future__ import unicode_literals
 
 from django.db import migrations
-from zentral.core.probes import probe_classes
 
 
 def load_probe(probe_source):
+    try:
+        from zentral.core.probes import probe_classes
+    except ImportError:
+        return
     probe_cls = probe_classes.get(probe_source.model)
     if not probe_cls:
         probe_cls = probe_classes.get("BaseProbe")
@@ -17,7 +20,7 @@ def deactivate_bad_probe_sources(apps, schema_editor):
     ProbeSource = apps.get_model("probes", "ProbeSource")
     for ps in ProbeSource.objects.all():
         p = load_probe(ps)
-        if not p.loaded:
+        if p is None or not p.loaded:
             ps.status = "INACTIVE"
             ps.save()
             print("PROBE", ps.name, "set to INACTIVE:", "SYNTAX ERROR")

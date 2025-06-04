@@ -41,7 +41,6 @@
     <div class="table-reponsive mb-3">
     <table class="table table-striped align-middle">
         <thead>
-        <th>Model</th>
         <th>Events</th>
         <th>Name</th>
         <th>Status</th>
@@ -49,7 +48,6 @@
         <tbody>
         {% for probe in object_list %}
         <tr>
-        <td>{{ probe.get_model_display }}</td>
         <td>
             {% with probe.get_event_type_class_names as event_type_class_names %}
             {% if event_type_class_names %}

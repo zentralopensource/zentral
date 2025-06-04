@@ -7,20 +7,18 @@ from django.db import transaction
 from django.db.models import F, Count
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
+from django.views.generic import DeleteView, DetailView, ListView, TemplateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
 from zentral.core.events.base import AuditEvent
-from zentral.core.probes.models import ProbeSource
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 from .compliance_checks import MunkiScriptCheck
-from .forms import (CreateInstallProbeForm, ConfigurationForm, EnrollmentForm, ScriptCheckForm,
-                    ScriptCheckSearchForm, UpdateInstallProbeForm)
+from .forms import ConfigurationForm, EnrollmentForm, ScriptCheckForm, ScriptCheckSearchForm
 from .models import Configuration, Enrollment, MunkiState, PrincipalUserDetectionSource, ScriptCheck
 from .terraform import iter_resources
 
@@ -492,59 +490,6 @@ class FetchScriptCheckEventsView(ScriptCheckEventsMixin, FetchEventsView):
 
 class ScriptCheckEventsStoreRedirectView(ScriptCheckEventsMixin, EventsStoreRedirectView):
     pass
-
-
-# install probe
-
-
-class CreateInstallProbeView(PermissionRequiredMixin, FormView):
-    permission_required = "probes.add_probesource"
-    form_class = CreateInstallProbeForm
-    template_name = "probes/form.html"
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['title'] = 'Create munki install probe'
-        return ctx
-
-    def form_valid(self, form):
-        probe_source = form.save()
-        return redirect(probe_source)
-
-
-class UpdateInstallProbeView(PermissionRequiredMixin, FormView):
-    permission_required = "probes.change_probesource"
-    form_class = UpdateInstallProbeForm
-    template_name = "probes/form.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs['probe_id'])
-        self.probe = self.probe_source.load()
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_initial(self):
-        return self.form_class.get_probe_initial(self.probe)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['title'] = 'Update munki install probe'
-        ctx['probe_source'] = self.probe_source
-        ctx['probe'] = self.probe
-        ctx['cancel_url'] = self.probe_source.get_absolute_url("munki")
-        return ctx
-
-    def form_valid(self, form):
-        body = form.get_body()
-
-        def func(probe_d):
-            probe_d.update(body)
-            if "unattended_installs" not in body:
-                probe_d.pop("unattended_installs", None)
-        self.probe_source.update_body(func)
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        return self.probe_source.get_absolute_url("munki")
 
 
 # Machine actions

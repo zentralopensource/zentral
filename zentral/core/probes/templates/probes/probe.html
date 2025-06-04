@@ -31,33 +31,6 @@
       </td>
     </tr>
     {% endif %}
-    {% if object.feed_probe %}
-    <tr>
-      <td>feed</td>
-      <td>
-        {% if perms.probes.view_feed %}
-        <a href="{% url 'probes:feed' object.feed_probe.feed.id %}">{{ object.feed_probe.feed }}</a>
-        {% else %}
-        {{ object.feed_probe.feed }}
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <td>feed probe</td>
-      <td>
-        {% if perms.probes.view_feedprobe %}
-        <a href="{% url 'probes:feed_probe' object.feed_probe.feed.id object.feed_probe.id %}">
-          {{ object.feed_probe }}
-        </a>
-        {% else %}
-        {{ object.feed_probe }}
-        {% endif %}
-        {% if perms.probes.change_probesource and object.feed_probe_update_available %}
-        <a href="{% url 'probes:review_update' object.id %}" class="btn btn-warning">Update available</a>
-        {% endif %}
-      </td>
-    </tr>
-    {% endif %}
     <tr>
       <td>Incident severity</td>
       <td>{% incident_severity probe.incident_severity '-' %}</td>
@@ -103,12 +76,6 @@
         <span class="bi bi-activity" aria-hidden="true"></span> Events
       </a>
       {% endif %}
-      {% if show_dashboard_link %}
-      <a class="btn btn-outline-secondary" href="{% url 'probes:probe_dashboard' probe.pk %}"
-        data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Dashboard">
-        <span class="bi bi-bar-chart-fill" aria-hidden="true"></span> Dashboard
-      </a>
-      {% endif %}
       {% for link, store_name in store_links %}
       <a class="btn btn-outline-secondary" href="{{ link }}"
         data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="{{store_name}}">
@@ -135,20 +102,16 @@
         Inventory filter
       </a>
     </li>
-    {% if probe.can_edit_metadata_filters %}
     <li>
       <a class="dropdown-item" href="{% url 'probes:add_filter' object.id "metadata" %}">
         Metadata filter
       </a>
     </li>
-    {% endif %}
-    {% if probe.can_edit_payload_filters %}
     <li>
       <a class="dropdown-item" href="{% url 'probes:add_filter' object.id "payload" %}">
         Payload filter
       </a>
     </li>
-    {% endif %}
   </ul>
 </div>
 {% endif %}
@@ -222,7 +185,7 @@
 </div> <!-- inventory filters col -->
 {% endif %}
 
-{% if probe.can_edit_metadata_filters and probe.metadata_filters %}
+{% if probe.metadata_filters %}
 <div class="col-md-4">
 <h4 class="mt-4">Metadata</h4>
 
@@ -269,7 +232,7 @@
 </div> <!-- metadata filters col -->
 {% endif %}
 
-{% if probe.can_edit_payload_filters and probe.payload_filters %}
+{% if probe.payload_filters %}
 <div class="col-md-4">
 <h4 class="mt-4">Payload</h4>
 

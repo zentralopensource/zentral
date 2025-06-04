@@ -1,16 +1,14 @@
 from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
 from django.db.models import Q
-from django.utils import timezone
 from django.utils.text import slugify
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.conf import PLATFORM_CHOICES, TYPE_CHOICES
 from zentral.core.incidents.models import Severity
-from zentral.core.probes.base import PayloadFilter
+from zentral.core.probes.probe import PayloadFilter
 from zentral.utils.forms import CommaSeparatedQuotedStringField
-from .base import BaseProbe
-from .models import Feed, ProbeSource
-from . import probe_classes
+from .models import ProbeSource
+from .probe import Probe
 
 
 class ProbeSearchForm(forms.Form):
@@ -18,7 +16,6 @@ class ProbeSearchForm(forms.Form):
 
     q = forms.CharField(label="Query", required=False,
                         widget=forms.TextInput(attrs={"autofocus": True, "placeholder": "Keywords…"}))
-    model = forms.ChoiceField(label="Model", choices=[], required=False)
     event_type = forms.ChoiceField(label="Event type", choices=[], required=False)
     status = forms.ChoiceField(label="Status",
                                choices=[("", "..."),
@@ -29,7 +26,6 @@ class ProbeSearchForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["model"].choices = [("", "...")] + ProbeSource.objects.current_models()
         self.fields["event_type"].choices = [("", "...")] + ProbeSource.objects.current_event_types()
 
     def get_queryset(self):
@@ -40,9 +36,6 @@ class ProbeSearchForm(forms.Form):
             qs = qs.filter(Q(name__icontains=q)
                            | Q(description__icontains=q)
                            | Q(body__icontains=q))
-        model = cleaned_data.get("model")
-        if model:
-            qs = qs.filter(model=model)
         event_type = cleaned_data.get("event_type")
         if event_type:
             qs = qs.filter(event_types__contains=[event_type])
@@ -159,7 +152,7 @@ class BasePayloadFilterFormSet(forms.BaseFormSet):
     def get_serialized_filter(self):
         filter_l = []
         for item_cleaned_data in self.cleaned_data:
-            if not item_cleaned_data.get("DELETE"):
+            if not item_cleaned_data.pop("DELETE", False):
                 filter_l.append(item_cleaned_data)
         return filter_l
 
@@ -185,20 +178,13 @@ def clean_probe_name(name):
 
 
 class BaseCreateProbeForm(forms.Form):
-    model = BaseProbe
     name = forms.CharField(max_length=255)
 
     def clean_name(self):
         return clean_probe_name(self.cleaned_data.get("name"))
 
-    def get_probe_source_model(self):
-        for k, v in probe_classes.items():
-            if v == self.model:
-                return k
-
     def save(self):
-        ps = ProbeSource(model=self.get_probe_source_model(),
-                         name=self.cleaned_data["name"],
+        ps = ProbeSource(name=self.cleaned_data["name"],
                          body=self.get_body())
         ps.save()
         return ps
@@ -225,7 +211,7 @@ class UpdateProbeForm(forms.ModelForm):
         instance = kwargs.get("instance")
         if instance:
             try:
-                kwargs.setdefault("initial", {})["incident_severity"] = instance.load().incident_severity
+                kwargs.setdefault("initial", {})["incident_severity"] = Probe(instance).incident_severity
             except Exception:
                 pass
         super().__init__(*args, **kwargs)
@@ -252,36 +238,15 @@ class UpdateProbeForm(forms.ModelForm):
         return probe_source
 
 
-class FeedForm(forms.ModelForm):
-    class Meta:
-        model = Feed
-        fields = ("name", "description")
-        widgets = {
-            "name": forms.TextInput,
-            "description": forms.Textarea(attrs={"rows": "2"})
-        }
-
-
-class ImportFeedProbeForm(forms.Form):
-    probe_name = forms.CharField(label="Probe name")
-
-    def clean_probe_name(self):
-        return clean_probe_name(self.cleaned_data.get("probe_name"))
-
-    def save(self, feed_probe):
-        return ProbeSource.objects.create(
-            model=feed_probe.model,
-            name=self.cleaned_data["probe_name"],
-            description=feed_probe.description,
-            feed_probe=feed_probe,
-            feed_probe_last_synced_at=timezone.now(),
-            body=feed_probe.body
-        )
-
-
 class CloneProbeForm(forms.Form):
     name = forms.CharField(max_length=255,
                            help_text="Name of the new probe")
+
+    def clean_name(self):
+        name = self.cleaned_data.get("name")
+        if name and ProbeSource.objects.filter(name=name).exists():
+            raise forms.ValidationError("A probe with this name already exists.")
+        return name
 
     def save(self, probe_source):
         new_probe_name = self.cleaned_data["name"]

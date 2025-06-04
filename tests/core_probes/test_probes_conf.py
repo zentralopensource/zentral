@@ -2,21 +2,20 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.core.probes.conf import all_probes, all_probes_dict
 from zentral.core.probes.models import ProbeSource
+from zentral.core.probes.probe import Probe
 
 
 class ProbesConfTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.inactive_probe_source = ProbeSource.objects.create(model="BaseProbe",
-                                                               name=get_random_string(12),
+        cls.inactive_probe_source = ProbeSource.objects.create(name=get_random_string(12),
                                                                status=ProbeSource.INACTIVE,
                                                                body={})
-        cls.inactive_probe = cls.inactive_probe_source.load()
-        cls.probe_source = ProbeSource.objects.create(model="BaseProbe",
-                                                      name=get_random_string(12),
+        cls.inactive_probe = Probe(cls.inactive_probe_source)
+        cls.probe_source = ProbeSource.objects.create(name=get_random_string(12),
                                                       status=ProbeSource.ACTIVE,
                                                       body={})
-        cls.probe = cls.probe_source.load()
+        cls.probe = Probe(cls.probe_source)
 
     def test_all_probes(self):
         all_probes.clear()
