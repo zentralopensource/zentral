@@ -44,7 +44,7 @@ exceptiongroup==1.2.2
 executing==2.1.0
 filelock==3.16.1
 frozenlist==1.5.0
-geoip2==4.8.0
+geoip2==5.1.0
 google-api-core==2.22.0
 google-auth==2.35.0
 google-cloud-core==2.4.1
@@ -76,7 +76,7 @@ josepy==1.14.0
 kombu==5.4.2
 MarkupSafe==3.0.2
 matplotlib-inline==0.1.7
-maxminddb==2.6.2
+maxminddb==2.7.0
 microsoft-kiota-abstractions==1.6.0
 microsoft-kiota-authentication-azure==1.6.0
 microsoft-kiota-http==1.6.0
