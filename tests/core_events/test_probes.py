@@ -7,6 +7,7 @@ from zentral.core.events.pipeline import enrich_event, process_event
 from zentral.core.incidents.models import Incident, IncidentUpdate, MachineIncident, Severity
 from zentral.core.probes.conf import all_probes
 from zentral.core.probes.models import Action, ActionBackend, ProbeSource
+from zentral.core.probes.probe import Probe
 
 
 serialized_event = {
@@ -42,7 +43,6 @@ class EventProbesTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.probe_source = ProbeSource.objects.create(
-            model="BaseProbe",
             name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_types": ["inventory_heartbeat"]}]}}
@@ -56,22 +56,20 @@ class EventProbesTestCase(TestCase):
         cls.action.save()
         cls.probe_source.actions.add(cls.action)
         cls.probe_source_with_incident = ProbeSource.objects.create(
-            model="BaseProbe",
             name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_types": ["inventory_heartbeat"]}]},
                   "incident_severity": Severity.CRITICAL.value},
         )
         cls.probe_source_for_incident_with_incident = ProbeSource.objects.create(
-            model="BaseProbe",
             name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_types": ["incident_created"]}]},
                   "incident_severity": Severity.CRITICAL.value},  # only for the tests! Not useful at all!
         )
-        cls.probe = cls.probe_source.load()
-        cls.probe_with_incident = cls.probe_source_with_incident.load()
-        cls.probe_for_incident_with_incident = cls.probe_source_for_incident_with_incident.load()
+        cls.probe = Probe(cls.probe_source)
+        cls.probe_with_incident = Probe(cls.probe_source_with_incident)
+        cls.probe_for_incident_with_incident = Probe(cls.probe_source_for_incident_with_incident)
         all_probes.clear()
 
     def test_event_from_event_d(self):
@@ -142,12 +140,11 @@ class EventProbesTestCase(TestCase):
         }
         event = event_from_event_d(serialized_event)
         probe_source = ProbeSource.objects.create(
-            model="BaseProbe",
             name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_tags": ["daslkjdaklasdj", "not-a-match"]}]}}
         )
-        probe = probe_source.load()
+        probe = Probe(probe_source)
         self.assertTrue(probe.test_event(event))
 
     def test_routing_key_filter(self):
@@ -163,12 +160,11 @@ class EventProbesTestCase(TestCase):
         }
         event = event_from_event_d(serialized_event)
         probe_source = ProbeSource.objects.create(
-            model="BaseProbe",
             name=get_random_string(12),
             status=ProbeSource.ACTIVE,
             body={"filters": {"metadata": [{"event_routing_keys": ["not-a-match", "edlkjdlqkjdqe"]}]}}
         )
-        probe = probe_source.load()
+        probe = Probe(probe_source)
         self.assertTrue(probe.test_event(event))
 
     def test_event_probes_with_probe_incident(self):

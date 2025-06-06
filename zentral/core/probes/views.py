@@ -1,22 +1,18 @@
-from datetime import datetime, timedelta
 import logging
 from urllib.parse import urlencode
-from django import forms
-from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.http import Http404, HttpResponseRedirect, JsonResponse
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, FormView, TemplateView, UpdateView, View
+from django.views.generic import DeleteView, DetailView, FormView, TemplateView, UpdateView
 from zentral.core.stores.conf import frontend_store, stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
-from zentral.utils.charts import make_dataset
 from zentral.utils.views import UserPaginationListView
 from .forms import (CreateProbeForm, ProbeSearchForm,
                     InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
-                    FeedForm, ImportFeedProbeForm,
                     CloneProbeForm, UpdateProbeForm)
-from .models import Feed, FeedProbe, ProbeSource
+from .models import ProbeSource
+from .probe import Probe
 
 
 logger = logging.getLogger("zentral.core.probes.views")
@@ -78,7 +74,7 @@ class ProbeView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super(ProbeView, self).get_context_data(**kwargs)
-        ctx['probe'] = self.probe = self.object.load()
+        ctx['probe'] = self.probe = Probe(self.object)
         store_links = []
         ctx['show_events_link'] = frontend_store.probe_events
         store_links = []
@@ -90,7 +86,6 @@ class ProbeView(PermissionRequiredMixin, DetailView):
             )
             store_links.append((url, store.name))
         ctx["store_links"] = store_links
-        ctx["show_dashboard_link"] = frontend_store.probe_events_aggregations
         return ctx
 
     def get_template_names(self):
@@ -98,84 +93,6 @@ class ProbeView(PermissionRequiredMixin, DetailView):
             return [self.probe.template_name]
         else:
             return ["probes/syntax_error.html"]
-
-
-class ProbeDashboardView(PermissionRequiredMixin, DetailView):
-    permission_required = "probes.view_probesource"
-    model = ProbeSource
-    template_name = "probes/probe_dashboard.html"
-
-    def get_context_data(self, **kwargs):
-        ctx = super(ProbeDashboardView, self).get_context_data(**kwargs)
-        ctx['probe'] = self.probe = self.object.load()
-        if self.probe.loaded:
-            ctx['aggregations'] = self.probe.get_aggregations()
-        return ctx
-
-
-class ProbeDashboardDataView(PermissionRequiredMixin, View):
-    permission_required = "probes.view_probesource"
-    INTERVAL_DATE_FORMAT = {
-        "hour": "%H:%M",
-        "day": "%d/%m",
-        "week": "%d/%m",
-        "month": "%m/%y",
-    }
-
-    def get(self, response, *args, **kwargs):
-        probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
-        probe = probe_source.load()
-        charts = {}
-        from_dt = datetime.utcnow() - timedelta(days=30)
-        for field, results in frontend_store.get_probe_events_aggregations(probe, from_dt).items():
-            a_type = results["type"]
-            if a_type == "table":
-                aggregation = probe.get_aggregations()[field]
-                columns = aggregation["columns"]
-                data = []
-                for row in results["values"]:
-                    for k, v in row.items():
-                        if v is None:
-                            row[k] = "-"
-                    data.append(row)
-                top_results = aggregation.get("top", False)
-                if not top_results:
-                    data.sort(key=lambda d: [d[fn].lower() for fn, _ in columns])
-                labels = [l for _, l in columns]
-                labels.append("Event count")
-                chart_config = {
-                    "type": "table",
-                    "data": {
-                        "labels": labels,
-                        "datasets": [
-                            {"data": data}
-                        ]
-                    }
-                }
-            elif a_type == "terms":
-                chart_config = {
-                    "type": "doughnut",
-                    "data": {
-                        "labels": ["Other" if label is None else label for label, _ in results["values"]],
-                        "datasets": [make_dataset([value for _, value in results["values"]])],
-                    }
-                }
-            elif a_type == "date_histogram":
-                date_format = self.INTERVAL_DATE_FORMAT.get(results["interval"], "day")
-                chart_config = {
-                    "type": "bar",
-                    "data": {
-                        "labels": [label.strftime(date_format) for label, _ in results["values"]],
-                        "datasets": [make_dataset([value for _, value in results["values"]],
-                                                  cycle_colors=False,
-                                                  label="event number")]
-                    }
-                }
-            else:
-                logger.error("Unknown aggregation type %s", a_type)
-                continue
-            charts[field] = chart_config
-        return JsonResponse(charts)
 
 
 class EventsMixin:
@@ -200,7 +117,7 @@ class EventsMixin:
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["probe_source"] = self.object
-        ctx["probe"] = self.object.load()
+        ctx["probe"] = Probe(self.object)
         return ctx
 
 
@@ -234,7 +151,7 @@ class UpdateProbeView(PermissionRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         ctx = super(UpdateProbeView, self).get_context_data(**kwargs)
         probe_source = ctx['object']
-        probe = probe_source.load()
+        probe = Probe(probe_source)
         ctx["probe"] = probe
         return ctx
 
@@ -268,31 +185,6 @@ class CloneProbeView(PermissionRequiredMixin, FormView):
         return HttpResponseRedirect(new_probe.get_absolute_url())
 
 
-class ReviewProbeUpdateView(PermissionRequiredMixin, TemplateView):
-    permission_required = "probes.change_probesource"
-    template_name = "probes/review_update.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data()
-        ctx["probe_source"] = self.probe_source
-        ctx["update_diff"] = self.probe_source.update_diff()
-        return ctx
-
-    def post(self, request, *args, **kwargs):
-        action = request.POST["action"]
-        if action == "skip":
-            self.probe_source.skip_update()
-            messages.warning(request, "Probe update skipped")
-        elif action == "apply":
-            self.probe_source.apply_update()
-            messages.success(request, "Probe updated")
-        return HttpResponseRedirect(self.probe_source.get_absolute_url())
-
-
 # Filters
 
 
@@ -301,7 +193,7 @@ class AddFilterView(PermissionRequiredMixin, FormView):
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
-        self.probe = self.probe_source.load()
+        self.probe = Probe(self.probe_source)
         self.section = kwargs["section"]
         return super().dispatch(request, *args, **kwargs)
 
@@ -339,7 +231,7 @@ class UpdateFilterView(PermissionRequiredMixin, FormView):
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
-        self.probe = self.probe_source.load()
+        self.probe = Probe(self.probe_source)
         self.section = kwargs["section"]
         self.filter_id = int(kwargs["filter_id"])
         try:
@@ -386,7 +278,7 @@ class DeleteFilterView(PermissionRequiredMixin, TemplateView):
 
     def dispatch(self, request, *args, **kwargs):
         self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["pk"])
-        self.probe = self.probe_source.load()
+        self.probe = Probe(self.probe_source)
         self.filter_id = int(kwargs["filter_id"])
         self.section = kwargs["section"]
         try:
@@ -405,208 +297,3 @@ class DeleteFilterView(PermissionRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         self.probe_source.delete_filter(self.section, self.filter_id)
         return HttpResponseRedirect(self.probe_source.get_filters_absolute_url())
-
-
-# Item views, used by other probes
-
-
-class BaseProbeItemView(PermissionRequiredMixin, FormView):
-    permission_required = "probes.change_probesource"
-    probe_item_attribute = None
-    success_anchor = None
-    permission = None
-
-    def do_setup(self, **kwargs):
-        self.probe_source = get_object_or_404(ProbeSource, pk=kwargs["probe_id"])
-        self.redirect_url = self.probe_source.get_absolute_url(self.success_anchor)
-        self.probe = self.probe_source.load()
-        if self.permission and not getattr(self.probe, self.permission):
-            return HttpResponseRedirect(self.redirect_url)
-
-    def dispatch(self, request, *args, **kwargs):
-        response = self.do_setup(**kwargs)
-        if response:
-            return response
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['probe_source'] = self.probe_source
-        ctx['probe'] = self.probe
-        ctx['add_item'] = False
-        ctx['cancel_url'] = self.redirect_url
-        return ctx
-
-    def get_success_url(self):
-        return self.redirect_url
-
-    def form_valid(self, form):
-        item_d = form.get_item_d()
-        func = self.get_update_func(item_d)
-        self.probe_source.update_body(func)
-        return super().form_valid(form)
-
-
-class AddProbeItemView(BaseProbeItemView):
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["add_item"] = True
-        return ctx
-
-    def get_update_func(self, item_d):
-        def func(probe_d):
-            items = probe_d.setdefault(self.probe_item_attribute, [])
-            items.append(item_d)
-        return func
-
-
-class EditProbeItemView(BaseProbeItemView):
-    item_pk_kwarg = None
-
-    def do_setup(self, **kwargs):
-        response = super().do_setup(**kwargs)
-        if response:
-            return response
-        self.item_id = int(kwargs[self.item_pk_kwarg])
-        self.items = getattr(self.probe, self.probe_item_attribute, [])
-        try:
-            self.item = self.items[self.item_id]
-        except IndexError:
-            return HttpResponseRedirect(self.redirect_url)
-
-
-class UpdateProbeItemView(EditProbeItemView):
-    def get_initial(self):
-        return self.form_class.get_initial(self.item)
-
-    def get_update_func(self, item_d):
-        def func(probe_d):
-            probe_d[self.probe_item_attribute][self.item_id] = item_d
-        return func
-
-
-class DeleteForm(forms.Form):
-    def get_item_d(self):
-        return {}
-
-
-class DeleteProbeItemView(EditProbeItemView):
-    form_class = DeleteForm
-
-    def get_update_func(self, item_d):
-        def func(probe_d):
-            probe_d[self.probe_item_attribute].pop(self.item_id)
-            if not probe_d[self.probe_item_attribute]:
-                probe_d.pop(self.probe_item_attribute)
-        return func
-
-
-# feeds
-
-
-class FeedsView(PermissionRequiredMixin, UserPaginationListView):
-    permission_required = "probes.view_feed"
-    template_name = "probes/feeds.html"
-    model = Feed
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        page = ctx['page_obj']
-
-        bc = [(reverse('probes:index'), 'Probes')]
-        if page.number > 1:
-            qd = self.request.GET.copy()
-            qd.pop("page", None)
-            reset_link = "?{}".format(qd.urlencode())
-        else:
-            reset_link = None
-        paginator = page.paginator
-        if paginator.count:
-            count = paginator.count
-            pluralize = min(1, count - 1) * 's'
-            bc.extend([(reset_link, '{} feed{}'.format(count, pluralize)),
-                       (None, "page {} of {}".format(page.number, paginator.num_pages))])
-        else:
-            bc.append((None, "no feeds"))
-        ctx['breadcrumbs'] = bc
-        return ctx
-
-
-class CreateFeedView(PermissionRequiredMixin, CreateView):
-    permission_required = "probes.add_feed"
-    model = Feed
-    form_class = FeedForm
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['title'] = "Create feed"
-        return ctx
-
-
-class FeedView(PermissionRequiredMixin, DetailView):
-    permission_required = "probes.view_feed"
-    template_name = "probes/feed.html"
-    model = Feed
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['active_probes'] = list(self.object.feedprobe_set.filter(archived_at__isnull=True))
-        return ctx
-
-
-class UpdateFeedView(PermissionRequiredMixin, UpdateView):
-    permission_required = "probes.change_feed"
-    model = Feed
-    form_class = FeedForm
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['title'] = "Update feed"
-        return ctx
-
-
-class DeleteFeedView(PermissionRequiredMixin, DeleteView):
-    permission_required = "probes.delete_feed"
-    model = Feed
-    template_name = "probes/delete_feed.html"
-    success_url = reverse_lazy('probes:feeds')
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['title'] = 'Delete feed'
-        return ctx
-
-
-class FeedProbeView(PermissionRequiredMixin, DetailView):
-    permission_required = "probes.view_feedprobe"
-    template_name = "probes/feed_probe.html"
-    model = FeedProbe
-
-    def get_object(self):
-        return get_object_or_404(self.model, pk=self.kwargs["probe_id"], feed__pk=self.kwargs["pk"])
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["probe_sources"] = list(self.object.probesource_set.all())
-        return ctx
-
-
-class ImportFeedProbeView(PermissionRequiredMixin, FormView):
-    permission_required = ("probes.view_feedprobe", "probes.add_probesource")
-    form_class = ImportFeedProbeForm
-    template_name = "probes/import_feed_probe.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.feed_probe = get_object_or_404(FeedProbe, pk=self.kwargs["probe_id"], feed__pk=self.kwargs["pk"])
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['feed_probe'] = self.feed_probe
-        ctx['feed'] = self.feed_probe.feed
-        ctx['title'] = "Import feed probe"
-        return ctx
-
-    def form_valid(self, form):
-        probe_source = form.save(self.feed_probe)
-        return HttpResponseRedirect(probe_source.get_absolute_url())

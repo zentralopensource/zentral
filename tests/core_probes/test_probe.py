@@ -3,7 +3,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.core.events import event_types
 from zentral.core.events.base import BaseEvent, EventMetadata
 from zentral.core.incidents.models import Severity
-from zentral.core.probes.base import BaseProbe, get_flattened_payload_values
+from zentral.core.probes.probe import Probe, get_flattened_payload_values
 from zentral.core.probes.models import ProbeSource
 from tests.inventory.utils import MockMetaMachine
 
@@ -19,15 +19,13 @@ def _build_event(event_type, machine_serial_number=None, payload=None, tags=None
     return cls(event_metadata, payload)
 
 
-class EmptyBaseProbeTestCase(TestCase):
+class EmptyProbeTestCase(TestCase):
     def setUp(self):
-        self.probe_source = ProbeSource.objects.create(model="BaseProbe",
-                                                       name="base probe",
-                                                       body={})
-        self.probe = self.probe_source.load()
+        self.probe_source = ProbeSource.objects.create(name="empty probe", body={})
+        self.probe = Probe(self.probe_source)
 
     def test_slug(self):
-        self.assertEqual(self.probe_source.slug, "base-probe")
+        self.assertEqual(self.probe_source.slug, "empty-probe")
 
     def test_inactive(self):
         self.assertEqual(self.probe_source.status, ProbeSource.INACTIVE)
@@ -45,7 +43,7 @@ class EmptyBaseProbeTestCase(TestCase):
 
     def test_load(self):
         self.assertEqual(self.probe.loaded, True)
-        self.assertTrue(isinstance(self.probe, BaseProbe))
+        self.assertTrue(isinstance(self.probe, Probe))
 
     def test_empty(self):
         self.assertEqual(self.probe.inventory_filters, [])
@@ -54,24 +52,22 @@ class EmptyBaseProbeTestCase(TestCase):
         self.assertEqual(self.probe.incident_severity, None)
 
 
-class InventoryFilterBaseProbeTestCase(TestCase):
+class InventoryFilterProbeTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # test probe with an empty inventory filter
         # should not load and match
         cls.error_probe_source = ProbeSource.objects.create(
             status=ProbeSource.ACTIVE,
-            model="BaseProbe",
             name="error probe",
             body={"filters": {"inventory": [{}]}}
         )
-        cls.error_probe = cls.error_probe_source.load()
+        cls.error_probe = Probe(cls.error_probe_source)
         # test probe
         cls.mbu1 = MetaBusinessUnit.objects.create(name="MBU1")
         cls.mbu2 = MetaBusinessUnit.objects.create(name="MBU2")
         cls.tag1 = Tag.objects.create(name="TAG1")
         cls.probe_source = ProbeSource.objects.create(
-            model="BaseProbe",
             name="base probe",
             body={"incident_severity": Severity.CRITICAL.value,
                   "filters": {
@@ -85,7 +81,7 @@ class InventoryFilterBaseProbeTestCase(TestCase):
                       ]
                   }}
         )
-        cls.probe = cls.probe_source.load()
+        cls.probe = Probe(cls.probe_source)
 
     def test_error_probe_not_loaded(self):
         self.assertEqual(self.error_probe.loaded, False)
@@ -148,7 +144,7 @@ class InventoryFilterBaseProbeTestCase(TestCase):
             self.assertEqual(self.error_probe.test_event(event), False)
 
 
-class MetadataFilterBaseProbeTestCase(TestCase):
+class MetadataFilterProbeTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.event_tags = ["osquery",
@@ -156,7 +152,6 @@ class MetadataFilterBaseProbeTestCase(TestCase):
         cls.event_types = ["remove_machine_link",
                            "add_machine_group"]
         cls.probe_source = ProbeSource.objects.create(
-            model="BaseProbe",
             name="base probe",
             body={"filters": {
                       "metadata": [
@@ -166,7 +161,7 @@ class MetadataFilterBaseProbeTestCase(TestCase):
                        ]
                   }}
         )
-        cls.probe = cls.probe_source.load()
+        cls.probe = Probe(cls.probe_source)
 
     def test_probe_source_denormalization(self):
         self.assertEqual(self.probe_source.event_types,
@@ -212,7 +207,7 @@ class MetadataFilterBaseProbeTestCase(TestCase):
             self.assertEqual(self.probe.test_event(event), result)
 
 
-class PayloadFilterBaseProbeTestCase(TestCase):
+class PayloadFilterProbeTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.payload_filter_data = [
@@ -237,7 +232,6 @@ class PayloadFilterBaseProbeTestCase(TestCase):
             {"attribute": "yo_int", "operator": "IN", "values": ["42"]},
         ]
         cls.probe_source = ProbeSource.objects.create(
-            model="BaseProbe",
             name="base probe",
             body={"filters": {"payload": [cls.payload_filter_data,
                                           cls.payload_filter_data2,
@@ -246,7 +240,7 @@ class PayloadFilterBaseProbeTestCase(TestCase):
                                           cls.payload_filter_data5,
                                           cls.payload_filter_data6]}}
         )
-        cls.probe = cls.probe_source.load()
+        cls.probe = Probe(cls.probe_source)
 
     def test_payload_filters(self):
         self.assertEqual(len(self.probe.payload_filters), 6)

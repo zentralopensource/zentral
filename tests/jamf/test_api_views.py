@@ -2,6 +2,7 @@ import json
 from django.urls import reverse
 from django.test import TestCase, override_settings
 from zentral.contrib.jamf.models import JamfInstance
+from zentral.core.events.base import EventObserver
 
 
 COMPUTER_CHECKIN = {
@@ -46,3 +47,43 @@ class JssAPIViewsTestCase(TestCase):
         jamf_instance.save()
         response = self.post_as_json(jamf_instance.secret, PAYLOAD)
         self.assertEqual(response.status_code, 200)
+
+    def test_event_observer_serialization(self):
+        jamf_instance = JamfInstance.objects.create(host="yo.example.com",
+                                                    user="god", password="zilla")
+        self.assertEqual(
+            jamf_instance.observer_dict(),
+            {'content_type': 'jamf.jamfinstance',
+             'hostname': 'yo.example.com',
+             'pk': jamf_instance.pk,
+             'product': 'Jamf Pro',
+             'type': 'MDM',
+             'vendor': 'Jamf'},
+        )
+        self.assertEqual(
+            jamf_instance.observer_dict(),
+            EventObserver.deserialize(jamf_instance.observer_dict()).serialize(),
+        )
+
+    def test_event_observer_str(self):
+        jamf_instance = JamfInstance.objects.create(host="yo.example.com",
+                                                    user="god", password="zilla")
+        self.assertEqual(
+            str(EventObserver.deserialize(jamf_instance.observer_dict())),
+            'yo.example.com',
+        )
+
+    def test_event_observer_get_object(self):
+        jamf_instance = JamfInstance.objects.create(host="yo.example.com",
+                                                    user="god", password="zilla")
+        self.assertEqual(
+            EventObserver.deserialize(jamf_instance.observer_dict()).get_object(),
+            jamf_instance,
+        )
+
+    def test_event_observer_get_object_gone(self):
+        jamf_instance = JamfInstance.objects.create(host="yo.example.com",
+                                                    user="god", password="zilla")
+        observer_dict = jamf_instance.observer_dict()
+        jamf_instance.delete()
+        self.assertIsNone(EventObserver.deserialize(observer_dict).get_object())

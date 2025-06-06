@@ -1,6 +1,7 @@
 import uuid
 from django.utils.crypto import get_random_string
-from zentral.core.probes.models import Action, ActionBackend
+from django.utils.text import slugify
+from zentral.core.probes.models import Action, ActionBackend, ProbeSource
 
 
 def force_action(backend=ActionBackend.HTTP_POST, backend_kwargs=None):
@@ -18,3 +19,16 @@ def force_action(backend=ActionBackend.HTTP_POST, backend_kwargs=None):
     action.set_backend_kwargs(backend_kwargs)
     action.save()
     return action
+
+
+def force_probe_source(name=None, active=True):
+    if name is None:
+        name = get_random_string(12)
+    slug = slugify(name)
+    ps = ProbeSource.objects.create(
+        name=name, slug=slug,
+        status=ProbeSource.ACTIVE if active else ProbeSource.INACTIVE,
+        body={"filters": {"metadata": [{"event_types": ["zentral_login"]}]}},
+    )
+    ps.actions.add(force_action())
+    return ps
