@@ -261,17 +261,20 @@ def macos_version_from_build(build):
         patch_letter = match.group("patch_letter")
         patch_number = int(match.group("patch_number"))
         patch = ord(patch_letter) - 65
-        minor = int(match.group("minor")) - 4
-        if minor < 8:
+        minor = int(match.group("minor"))
+        if minor < 12:
             # the patch letters are not always consecutive for older versions
             # probably because of the different architectures.
             raise ValueError("Cannot parse build str for macos < 10.8")
-        if minor < 12:
+        if minor < 16:
             name = "OS X"
         else:
             name = "macOS"
-        if minor >= 17:
-            major = minor - 5
+        if minor >= 21:
+            if minor <= 24:
+                major = minor - 9
+            else:
+                major = minor + 1
             minor = patch
             if build in ("21A558", "21A559", "21D62", "21E258", "21G83", "21G217", "21G920",
                          "22A400", "22D68", "22E261", "22E772610a", "22F82", "22F770820b", "22F770820d",
@@ -308,7 +311,7 @@ def macos_version_from_build(build):
                 minor = 6
             elif patch_letter < "H" and minor > 0 and major < 14:
                 minor -= 1
-        elif minor == 16:
+        elif minor == 20:
             major = 11
             if patch_letter >= "G" and patch_number >= 817:
                 minor = 7
@@ -340,6 +343,7 @@ def macos_version_from_build(build):
                 patch = 0
         else:
             major = 10
+            minor -= 4
         os_version = {
             "name": name,
             "major": major,
