@@ -341,7 +341,7 @@ class EventMetadata(object):
              'namespace': self.namespace,
              }
         if self.all_tags:
-            d['tags'] = list(self.all_tags)
+            d['tags'] = sorted(self.all_tags)
         if self.routing_key:
             d['routing_key'] = self.routing_key
         if self.observer:
