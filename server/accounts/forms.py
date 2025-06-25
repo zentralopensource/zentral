@@ -1,10 +1,7 @@
-import functools
 import json
 import logging
-import operator
 from urllib.parse import urlparse
 from django import forms
-from django.apps import apps
 from django.conf import settings as django_settings
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm as DjangoPasswordResetForm,  UsernameField
 from django.contrib.auth.models import Group
@@ -21,6 +18,7 @@ from zentral.conf.config import ConfigList
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
 from .models import User, UserTOTP, UserWebAuthn
 from .password_reset import handler as password_reset_handler
+from .utils import all_permissions_queryset
 
 
 logger = logging.getLogger("zentral.accounts.forms")
@@ -36,34 +34,13 @@ class ZentralAuthenticationForm(AuthenticationForm):
 
 
 class GroupForm(forms.ModelForm):
-    default_permission_content_types = (
-        ("auth", "group"),
-        ("probes", "feed"),
-        ("probes", "feedprobe"),
-        ("probes", "probesource"),
-    )
-
     class Meta:
         model = Group
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        content_type_filters = [
-            Q(content_type__app_label=a, content_type__model=m) for a, m in self.default_permission_content_types
-        ]
-        for app_name, app_config in apps.app_configs.items():
-            permission_models = getattr(app_config, "permission_models", None)
-            if permission_models:
-                for model in permission_models:
-                    content_type_filters.append(Q(content_type__app_label=app_name, content_type__model=model))
-        content_types_filter = functools.reduce(
-            operator.or_,
-            content_type_filters
-        )
-        self.fields["permissions"].queryset = (
-            self.fields["permissions"].queryset.filter(content_types_filter)
-        )
+        self.fields["permissions"].queryset = all_permissions_queryset()
 
 
 class InviteUserForm(forms.ModelForm):

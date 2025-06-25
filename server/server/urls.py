@@ -13,9 +13,6 @@ urlpatterns = [
     path('', include('base.urls')),
     path('api/', include('base.api_urls')),
 
-    # user admin views
-    path('accounts/', include('accounts.urls')),
-
     # special login view with verification device redirect
     path('accounts/login/', login, name='login'),
 
