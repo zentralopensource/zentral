@@ -5,7 +5,7 @@ from django.db.models import Q
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import User
+from accounts.models import ProvisionedRole, User
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -22,7 +22,8 @@ class AccountUsersViewsTestCase(TestCase):
         cls.ui_user.groups.set([cls.ui_group])
         # groups
         cls.group = Group.objects.create(name=get_random_string(12))
-        cls.group2 = Group.objects.create(name=get_random_string(12))
+        cls.provisioned_group = Group.objects.create(name=get_random_string(12))
+        ProvisionedRole.objects.create(group=cls.provisioned_group, provisioning_uid=get_random_string(12))
 
     # auth utils
 
@@ -87,10 +88,13 @@ class AccountUsersViewsTestCase(TestCase):
         response = self.client.get(reverse("accounts:groups"))
         self.assertTemplateUsed(response, "accounts/group_list.html")
         self.assertContains(response, self.group.name)
-        self.assertContains(response, self.group2.name)
+        self.assertContains(response, self.provisioned_group.name)
         for text in (reverse("accounts:delete_group", args=(self.group.pk,)),
                      reverse("accounts:update_group", args=(self.group.pk,)),
                      reverse("accounts:create_group")):
+            self.assertNotContains(response, text)
+        for text in (reverse("accounts:delete_group", args=(self.provisioned_group.pk,)),
+                     reverse("accounts:update_group", args=(self.provisioned_group.pk,))):
             self.assertNotContains(response, text)
         self.login("auth.view_group", "auth.add_group", "auth.change_group", "auth.delete_group")
         response = self.client.get(reverse("accounts:groups"))
@@ -98,6 +102,9 @@ class AccountUsersViewsTestCase(TestCase):
                      reverse("accounts:update_group", args=(self.group.pk,)),
                      reverse("accounts:create_group")):
             self.assertContains(response, text)
+        for text in (reverse("accounts:delete_group", args=(self.provisioned_group.pk,)),
+                     reverse("accounts:update_group", args=(self.provisioned_group.pk,))):
+            self.assertNotContains(response, text)
 
     # create group
 
@@ -124,11 +131,58 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertTemplateUsed("accounts/group_detail.html")
         self.assertContains(response, name)
 
+    # view group
+
+    def test_view_group_no_perms_get(self):
+        self.login("auth.view_group")
+        response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "accounts/group_detail.html")
+        self.assertContains(response, self.group.name)
+        for text in (reverse("accounts:delete_group", args=(self.group.pk,)),
+                     reverse("accounts:update_group", args=(self.group.pk,))):
+            self.assertNotContains(response, text)
+
+    def test_view_group_all_perms_get(self):
+        self.login("auth.view_group", "auth.change_group", "auth.delete_group")
+        response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "accounts/group_detail.html")
+        self.assertContains(response, self.group.name)
+        for text in (reverse("accounts:delete_group", args=(self.group.pk,)),
+                     reverse("accounts:update_group", args=(self.group.pk,))):
+            self.assertContains(response, text)
+
+    def test_view_provisioned_group_no_perms_get(self):
+        self.login("auth.view_group")
+        response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "accounts/group_detail.html")
+        self.assertContains(response, self.group.name)
+        for text in (reverse("accounts:delete_group", args=(self.group.pk,)),
+                     reverse("accounts:update_group", args=(self.group.pk,))):
+            self.assertNotContains(response, text)
+
+    def test_view_provisioned_group_all_perms_get(self):
+        self.login("auth.view_group", "auth.change_group", "auth.delete_group")
+        response = self.client.get(reverse("accounts:group", args=(self.provisioned_group.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "accounts/group_detail.html")
+        self.assertContains(response, self.provisioned_group.name)
+        for text in (reverse("accounts:delete_group", args=(self.provisioned_group.pk,)),
+                     reverse("accounts:update_group", args=(self.provisioned_group.pk,))):
+            self.assertNotContains(response, text)
+
     # update
 
     def test_update_group_404(self):
         self.login("auth.change_group")
         response = self.client.get(reverse("accounts:update_group", args=(0,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_provisioned_group_404(self):
+        self.login("auth.change_group")
+        response = self.client.get(reverse("accounts:update_group", args=(self.provisioned_group.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_update_group_get(self):
@@ -142,7 +196,7 @@ class AccountUsersViewsTestCase(TestCase):
     def test_user_update_username_error(self):
         self.login("auth.change_group")
         response = self.client.post(reverse("accounts:update_group", args=(self.group.pk,)),
-                                    {"name": self.group2.name})
+                                    {"name": self.provisioned_group.name})
         self.assertTemplateUsed(response, "accounts/group_form.html")
         self.assertFormError(response.context["form"], "name", "Group with this Name already exists.")
 
@@ -160,6 +214,11 @@ class AccountUsersViewsTestCase(TestCase):
     def test_delete_group_404(self):
         self.login("auth.delete_group")
         response = self.client.post(reverse("accounts:delete_group", args=(0,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_provisioned_group_404(self):
+        self.login("auth.delete_group")
+        response = self.client.post(reverse("accounts:delete_group", args=(self.provisioned_group.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_delete_group_ok(self):

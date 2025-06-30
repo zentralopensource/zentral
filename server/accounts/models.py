@@ -1,7 +1,7 @@
 import enum
 from hashlib import blake2b
 from itertools import chain
-from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
+from django.contrib.auth.models import AbstractUser, Group, UserManager as DjangoUserManager
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.urls import reverse
@@ -200,6 +200,12 @@ class UserWebAuthn(UserVerificationDevice):
         if self.rp_id.startswith("https://"):
             # legacy U2F registration
             return self.rp_id
+
+
+class ProvisionedRole(models.Model):
+    group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name="provisioned_role")
+    provisioning_uid = models.CharField(max_length=256, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class APITokenManager(models.Manager):

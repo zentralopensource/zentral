@@ -15,13 +15,15 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Role</h3>
         <div class="ms-auto">
-            {% if perms.auth.change_group and perms.accounts.change_user %}
+            {% if can_be_edited %}
+            {% if perms.auth.change_group %}
                 {% url 'accounts:update_group' object.pk as url %}
                 {% button 'UPDATE' url "Edit role" %}
             {% endif %}
-            {% if perms.auth.delete_group and perms.accounts.change_user %}
+            {% if perms.auth.delete_group %}
                 {% url 'accounts:delete_group' object.pk as url %}
                 {% button 'DELETE' url "Delete role" %}
+            {% endif %}
             {% endif %}        
         </div>
     </div>

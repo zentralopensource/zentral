@@ -2,10 +2,13 @@ from collections import OrderedDict
 import logging
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.contrib.auth.models import Group
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Exists, OuterRef
 from django.db.models.functions import Lower
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 from accounts.forms import GroupForm
+from accounts.models import ProvisionedRole
 
 
 logger = logging.getLogger("zentral.accounts.views.groups")
@@ -25,7 +28,8 @@ class GroupsView(PermissionRequiredMixin, ListView):
             " join accounts_user_groups ug on (ug.user_id = u.id) "
             " where ug.group_id=g.id and is_service_account = FALSE) user_count,"
             "(select count(*) from realms_rolemapping rrm"
-            " where rrm.group_id=g.id) role_mapping_count "
+            " where rrm.group_id=g.id) role_mapping_count,"
+            "not exists(select * from accounts_provisionedrole where group_id = g.id) can_be_edited "
             "from auth_group g order by g.name"
         )
 
@@ -71,12 +75,18 @@ class GroupView(PermissionRequiredMixin, DetailView):
         )
         ctx["role_mappings"] = role_mappings
         ctx["role_mapping_count"] = role_mappings.count()
+        try:
+            self.object.provisioned_role
+        except ObjectDoesNotExist:
+            ctx["can_be_edited"] = True
+        else:
+            ctx["can_be_edited"] = False
         return ctx
 
 
 class UpdateGroupView(PermissionRequiredMixin, UpdateView):
     permission_required = 'auth.change_group'
-    model = Group
+    queryset = Group.objects.filter(~Exists(ProvisionedRole.objects.filter(group=OuterRef('pk'))))
     form_class = GroupForm
     template_name = "accounts/group_form.html"
 
@@ -86,6 +96,6 @@ class UpdateGroupView(PermissionRequiredMixin, UpdateView):
 
 class DeleteGroupView(PermissionRequiredMixin, DeleteView):
     permission_required = 'auth.delete_group'
-    model = Group
+    queryset = Group.objects.filter(~Exists(ProvisionedRole.objects.filter(group=OuterRef('pk'))))
     template_name = "accounts/group_confirm_delete.html"
     success_url = reverse_lazy("accounts:groups")

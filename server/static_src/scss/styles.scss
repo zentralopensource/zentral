@@ -342,3 +342,9 @@ td > p:last-child, td > table:last-child {
 .ed-secret {
     font-family: var(--bs-font-monospace);
 }
+
+// Role permissions select
+
+select#id_permissions {
+  height: 60vh;
+}

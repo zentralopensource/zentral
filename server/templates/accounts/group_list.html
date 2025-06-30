@@ -53,6 +53,7 @@
         </td>
         {% endif %}
         <td class="text-end py-0">
+            {% if group.can_be_edited %}
             {% if perms.auth.change_group %}
                 {% url 'accounts:update_group' group.pk as url %}
                 {% button 'UPDATE' url "Edit role" %}
@@ -60,6 +61,7 @@
             {% if perms.auth.delete_group %}
                 {% url 'accounts:delete_group' group.pk as url %}
                 {% button 'DELETE' url "Delete role" %}
+            {% endif %}
             {% endif %}
         </td>
         </tr>
