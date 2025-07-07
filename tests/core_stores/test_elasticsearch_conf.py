@@ -90,6 +90,54 @@ class TestElasticsearchStoreConf(SimpleTestCase):
             }))
         self.assertEqual(cm.exception.args[0], "missing read index")
 
+    def test_kwargs_basic_auth(self):
+        kwargs = EventStore._get_client_kwargs(ConfigDict({
+            'servers': ["http://elastic:9200"],
+            'index': 'zentral-events',
+            'store_name': 'yolo',
+            'basic_auth': ("user", "password"),
+        }))
+        self.assertEqual(
+            kwargs,
+            {'hosts': [{'host': 'elastic',
+                        'port': 9200,
+                        'scheme': 'http'}],
+             'basic_auth': ("user", "password")}
+        )
+
+    def test_kwargs_default_verify_certs(self):
+        kwargs = EventStore._get_client_kwargs(ConfigDict({
+            'servers': ["https://elastic:9200"],
+            'index': 'zentral-events',
+            'store_name': 'yolo'
+        }))
+        self.assertEqual(
+            kwargs,
+            {'hosts': [{'host': 'elastic',
+                        'port': 9200,
+                        'scheme': 'https',
+                        'use_ssl': True}],
+             'verify_certs': True}
+        )
+
+    def test_kwargs_override_verify_certs(self):
+        kwargs = EventStore._get_client_kwargs(ConfigDict({
+            'servers': ["https://elastic:9200"],
+            'index': 'zentral-events',
+            'store_name': 'yolo',
+            'verify_certs': False,
+            'ssl_show_warn': False,
+        }))
+        self.assertEqual(
+            kwargs,
+            {'hosts': [{'host': 'elastic',
+                        'port': 9200,
+                        'scheme': 'https',
+                        'use_ssl': True}],
+             'verify_certs': False,
+             'ssl_show_warn': False}
+        )
+
     def test_one_index_get_event_index(self):
         store_index = get_random_string(12)
         store = EventStore(ConfigDict({

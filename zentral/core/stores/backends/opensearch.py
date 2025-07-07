@@ -15,7 +15,8 @@ class EventStore(ESOSEventStore):
     connection_error_class = ConnectionError
     request_error_class = RequestError
 
-    def _get_client_kwargs(self, config_d):
+    @classmethod
+    def _get_client_kwargs(cls, config_d):
         kwargs = super()._get_client_kwargs(config_d)
         aws_auth = config_d.get("aws_auth")
         if aws_auth is None:

@@ -13,5 +13,13 @@ class EventStore(ESOSEventStore):
     connection_error_class = ConnectionError
     request_error_class = RequestError
 
+    @classmethod
+    def _get_client_kwargs(cls, config_d):
+        kwargs = super()._get_client_kwargs(config_d)
+        basic_auth = config_d.get("basic_auth")
+        if basic_auth:
+            kwargs["basic_auth"] = basic_auth
+        return kwargs
+
     def _streaming_bulk(self, *args, **kwargs):
         return streaming_bulk(*args, **kwargs)

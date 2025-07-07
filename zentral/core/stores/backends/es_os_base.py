@@ -105,11 +105,12 @@ class ESOSEventStore(BaseEventStore):
         "month": "M",
     }
 
-    def _get_client_kwargs(self, config_d):
+    @classmethod
+    def _get_client_kwargs(cls, config_d):
         # client kwargs
         kwargs = {}
 
-        # client kwargs > hosts
+        # client kwargs → hosts
         hosts = []
         configured_hosts = config_d.get("hosts", config_d.get("servers"))
         for host in configured_hosts:
@@ -128,8 +129,13 @@ class ESOSEventStore(BaseEventStore):
             hosts.append(host)
         kwargs['hosts'] = hosts
 
-        # client kwargs > verify_certs
-        if any(host.get("use_ssl") for host in hosts):
+        if 'verify_certs' in config_d:
+            # verify certs override
+            kwargs['verify_certs'] = config_d['verify_certs']
+            if 'ssl_show_warn' in config_d:
+                kwargs['ssl_show_warn'] = config_d['ssl_show_warn']
+        elif any(host.get("use_ssl") for host in hosts):
+            # make sure that the certs are verified by default
             kwargs['verify_certs'] = True
 
         return kwargs
