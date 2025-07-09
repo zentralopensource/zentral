@@ -581,6 +581,10 @@ class TargetSearchForm(forms.Form):
         required=False,
         choices=[('', '…')] + TargetState.State.choices,
     )
+    configuration = forms.ModelChoiceField(queryset=Configuration.objects.all(), empty_label="…")
+    has_yes_votes = forms.BooleanField(label="Has upvotes")
+    has_no_votes = forms.BooleanField(label="Has downvotes")
+    todo = forms.BooleanField(label="Waiting for my ballot only", required=False, initial=False)
     last_seen_days = forms.ChoiceField(
         label="Last seen",
         required=False,
@@ -592,10 +596,6 @@ class TargetSearchForm(forms.Form):
                  ('30', '30 days'),
                  ('90', '90 days')],
     )
-    configuration = forms.ModelChoiceField(queryset=Configuration.objects.all(), empty_label="…")
-    has_yes_votes = forms.BooleanField(label="Has upvotes")
-    has_no_votes = forms.BooleanField(label="Has downvotes")
-    todo = forms.BooleanField(label="Waiting for my ballot only", required=False, initial=False)
     order_by = forms.ChoiceField(
         label="Order by",
         required=False,
@@ -901,6 +901,8 @@ class TargetSearchForm(forms.Form):
                 kwargs["username"] = current_username
             if current_email:
                 kwargs["email"] = current_email
+        if not kwargs:
+            return kwargs
         try:
             kwargs["last_seen_days"] = min(366, max(1, int(self.cleaned_data.get("last_seen_days"))))
         except (ValueError, TypeError):
@@ -911,6 +913,12 @@ class TargetSearchForm(forms.Form):
         return kwargs
 
     def results(self, current_username, current_email, offset, limit):
+        search_kwargs = self.search_query_kwargs(current_username, current_email)
+        if not search_kwargs:
+            self.filters_ok = False
+            return []
+        else:
+            self.filters_ok = True
         query, kwargs = self.search_query(**self.search_query_kwargs(current_username, current_email))
         kwargs.update({"offset": offset, "limit": limit})
         with connection.cursor() as cursor:

@@ -21,7 +21,7 @@ def pagination(next_url, previous_url):
 
 
 @register.inclusion_tag('_empty_results.html')
-def empty_results(link):
+def empty_results(link=None):
     return {
         'reset_search_link': link,
     }

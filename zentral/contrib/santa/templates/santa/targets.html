@@ -18,7 +18,7 @@
   <li class="breadcrumb-item active">page {{ page_num }} of {{ num_pages }}</li>
 </ol>
 
-<h2 class="mb-3">Target{{ target_count|pluralize }} ({{ target_count }})</h2>
+<h2 class="mb-3">{% if form.filters_ok %}Target{{ target_count|pluralize }} ({{ target_count }}){% else %}Search targets{% endif %}</h2>
 
 <div class="d-flex flex-wrap align-items-center mb-1">
     <form method="GET" class="search-form">
@@ -121,9 +121,13 @@
     </table>
 
     {% pagination next_url previous_url %}
-{% elif form.has_changed %}
-    {% url 'santa:targets' as empty_results_url %}
-    {% empty_results empty_results_url %}
+{% elif form.filters_ok %}
+    {% empty_results %}
+{% else %}
+    <div class="text-center py-5">
+      <p><i class="bi bi-emoji-smile"></i></p>
+      <h5>Use the filters to run a target search</h5>
+    </div>
 {% endif %}
 
 {% endblock %}

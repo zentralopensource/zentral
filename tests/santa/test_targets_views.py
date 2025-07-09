@@ -98,14 +98,8 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:targets"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
-        self.assertContains(response, "Targets (7)")
-        self.assertContains(response, self.cdhash)
-        self.assertContains(response, self.file_sha256)
-        self.assertContains(response, self.file_cert_sha256)
-        self.assertContains(response, self.file_team_id)
-        self.assertContains(response, self.file_signing_id)
-        self.assertContains(response, self.bundle_sha256)
-        self.assertContains(response, self.metabundle_sha256)
+        self.assertContains(response, "Search targets")
+        self.assertContains(response, "Use the filters to run a target search")
 
     def test_bad_target_identifier_no_url(self):
         # create bad CDHASH File & Target
@@ -228,7 +222,6 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
         self.assertContains(response, "We didn't find any item related to your search")
-        self.assertContains(response, reverse("santa:targets") + '">all the items')
 
     def test_search_target_file_identifier(self):
         self._login("santa.view_target")
@@ -263,7 +256,8 @@ class SantaSetupViewsTestCase(TestCase):
         ).update(updated_at=datetime.utcnow() - timedelta(days=100))
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:targets"),
-                                   {"last_seen_days": 3})
+                                   {"target_type": "BINARY",
+                                    "last_seen_days": 3})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
         self.assertContains(response, "Target (1)")

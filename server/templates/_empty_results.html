@@ -1,5 +1,7 @@
 <div class="text-center py-5">
     <p><i class="bi bi-emoji-frown"></i></p>
     <h5>We didn't find any item related to your search</h5>
+    {% if reset_search_link %}
     <h6>Why don't you see <a href="{{ reset_search_link }}">all the items</a>?</h6>
+    {% endif %}
 </div>
