@@ -1,4 +1,5 @@
 import logging
+from zentral.conf import ConfigDict
 
 
 logger = logging.getLogger("zentral.utils.provisioning")
@@ -33,6 +34,8 @@ class Provisioner:
         if not provisioning_d:
             return
         for uid, spec in provisioning_d.get(self.config_key, {}).items():
+            if isinstance(spec, ConfigDict):
+                spec = spec.serialize()
             yield uid, spec
 
     def create_instance(self, uid, spec):
