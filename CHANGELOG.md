@@ -52,9 +52,11 @@ Remove Munki install probes.
 
 #### Santa
 
-Support for the [Santa Signing ID rules](https://santa.dev/concepts/rules.html#signing-id-rules).
+Support for the [Santa CEL policies](https://northpole.dev/features/binary-authorization#cel).
 
-Support for the [Santa CDHASH rules](https://santa.dev/concepts/rules.html#cdhash-rules).
+Support for the [Santa Signing ID rules](https://northpole.dev/features/binary-authorization#signingid).
+
+Support for the [Santa CDHASH rules](https://northpole.dev/features/binary-authorization#cdhash).
 
 Support for the `SyncExtraHeaders` configuration key and implementation of the authentication via `Zentral-Authorization` header.
 
