@@ -1,4 +1,4 @@
-## 2024.1 (TBD)
+## 2025.1 (TBD)
 
 ### Features (some, not all…)
 
@@ -81,6 +81,10 @@ New `zentral.core.stores.backends.panther` store backend for [Panther](https://p
 🚧 Alpha release of the new UI.
 
 ### Backward incompatibilities
+
+#### 🧨 Event stores
+
+Removed the Syslog, Humio, and Azure Log Analytics event store backends.
 
 #### 🧨 Probes refactoring
 
