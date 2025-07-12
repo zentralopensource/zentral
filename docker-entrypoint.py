@@ -103,10 +103,14 @@ KNOWN_COMMANDS = {
 }
 
 KNOWN_COMMANDS_EXTRA_ENV = {
-    "tests": {"ZENTRAL_PROBES_SYNC": "0",
-              "ZENTRAL_CONF_DIR": "/zentral/tests/conf"},
-    "tests_with_coverage": {"ZENTRAL_PROBES_SYNC": "0",
-                            "ZENTRAL_CONF_DIR": "/zentral/tests/conf"}
+    "tests": {"ZENTRAL_CONF_DIR": "/zentral/tests/conf",
+              "ZENTRAL_FORCE_ES_OS_INDEX_REFRESH": "1",
+              "ZENTRAL_PROBES_SYNC": "0",
+              "ZENTRAL_STORES_SYNC": "0"},
+    "tests_with_coverage": {"ZENTRAL_CONF_DIR": "/zentral/tests/conf",
+                            "ZENTRAL_FORCE_ES_OS_INDEX_REFRESH": "1",
+                            "ZENTRAL_PROBES_SYNC": "0",
+                            "ZENTRAL_STORES_SYNC": "0"},
 }
 
 KNOWN_COMMANDS_CHDIR = {

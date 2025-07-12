@@ -1,29 +1,38 @@
 import logging
 import queue
-import random
 import threading
 import time
+from urllib.parse import urlparse
 from django.utils.functional import cached_property
 import requests
-from zentral.core.stores.backends.base import BaseEventStore
+from rest_framework import serializers
+from .base import BaseStore
+from base.utils import deployment_info
+from zentral.utils.requests import CustomHTTPAdapter
 
 
 logger = logging.getLogger('zentral.core.stores.backends.http')
 
 
 class HTTPStoreClient:
-    max_retries = 3
+    default_request_timeout = 120
+    max_request_timeout = 600
+    default_max_retries = 3
+    max_max_retries = 5
 
-    def __init__(self, event_store, name="client"):
-        self.endpoint_url = event_store.endpoint_url
-        self.session = requests.Session()
-        self.session.verify = event_store.verify_tls
-        self.session.headers.update({'Content-Type': 'application/json'})
-        if event_store.headers:
-            self.session.headers.update(event_store.headers)
-        if event_store.username and event_store.password:
-            self.session.auth = (event_store.username, event_store.password)
+    def __init__(self, store, name="client"):
+        self.endpoint_url = store.endpoint_url
         self.name = name
+        # Session
+        self.session = requests.Session()
+        self.session.verify = store.verify_tls
+        self.session.headers.update({'Content-Type': 'application/json',
+                                     'User-Agent': deployment_info.user_agent})
+        if store.headers:
+            self.session.headers.update({h["name"]: h["value"] for h in store.headers})
+        if store.username and store.password:
+            self.session.auth = (store.username, store.password)
+        self.session.mount(self.endpoint_url, CustomHTTPAdapter(store.request_timeout, store.max_retries))
 
     def _serialize_event(self, event):
         if not isinstance(event, dict):
@@ -36,25 +45,15 @@ class HTTPStoreClient:
 
     def store_event(self, event):
         payload = self._serialize_event(event)
-        for i in range(self.max_retries):
-            r = self.session.post(self.endpoint_url, json=payload)
-            if r.ok:
-                return
-            if r.status_code > 500:
-                logger.error("[%s] temporary server error", self.name)
-                if i + 1 < self.max_retries:
-                    seconds = random.uniform(3, 4) * (i + 1)
-                    logger.error("[%s] retry in %.1fs", self.name, seconds)
-                    time.sleep(seconds)
-                    continue
-            r.raise_for_status()
+        r = self.session.post(self.endpoint_url, json=payload)
+        r.raise_for_status()
 
 
-class EventStoreThread(threading.Thread):
-    def __init__(self, event_store, thread_id, in_queue, out_queue, stop_event):
+class HTTPStoreThread(threading.Thread):
+    def __init__(self, store, thread_id, in_queue, out_queue, stop_event):
         name = f"HTTP store thread {thread_id}"
         logger.debug("[%s] initialize", name)
-        self.client = HTTPStoreClient(event_store, name)
+        self.client = HTTPStoreClient(store, name)
         self.in_queue = in_queue
         self.out_queue = out_queue
         self.stop_event = stop_event
@@ -83,27 +82,26 @@ class EventStoreThread(threading.Thread):
                     self.out_queue.put((receipt_handle, True, event_type, time.monotonic() - request_time))
 
 
-class EventStore(BaseEventStore):
-    max_retries = 3
+class HTTPStore(BaseStore):
+    kwargs_keys = (
+        "endpoint_url",
+        "verify_tls",
+        "username",
+        "password",
+        "headers",
+        "concurrency",
+        "max_retries",
+        "request_timeout"
+    )
+    encrypted_kwargs_paths = (
+        ["headers", "*", "value"],
+        ["password"],
+    )
     max_concurrency = 20
-
-    def __init__(self, config_d):
-        super().__init__(config_d)
-        self.endpoint_url = config_d["endpoint_url"]
-        self.verify_tls = config_d.get('verify_tls', True)
-        self.headers = config_d.get("headers")
-        self.username = config_d.get("username")
-        self.password = config_d.get("password")
-        if self.username and not self.password:
-            logger.error("Username set without password")
-        elif self.password and not self.username:
-            logger.error("Password set without username")
-        elif self.headers and self.password and self.username and "AUTHORIZATION" in (k.upper() for k in self.headers):
-            logger.error("Basic auth AND Authorization header cannot be both configured")
 
     def get_process_thread_constructor(self):
         def constructor(thread_id, in_queue, out_queue, stop_event):
-            return EventStoreThread(self, thread_id, in_queue, out_queue, stop_event)
+            return HTTPStoreThread(self, thread_id, in_queue, out_queue, stop_event)
         return constructor
 
     @cached_property
@@ -112,3 +110,56 @@ class EventStore(BaseEventStore):
 
     def store(self, event):
         self.client.store_event(event)
+
+
+# Serializers
+
+
+class HTTPURLField(serializers.Field):
+    def to_representation(self, value):
+        return str(value)
+
+    def to_internal_value(self, data):
+        if not isinstance(data, str):
+            raise serializers.ValidationError("Incorrect type")
+        pr = urlparse(data)
+        if pr.scheme not in ("http", "https"):
+            raise serializers.ValidationError("Invalid URL scheme")
+        if not pr.netloc:
+            raise serializers.ValidationError("Invalid URL netloc")
+        return data
+
+
+class HTTPHeaderSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    value = serializers.CharField()
+
+
+class HTTPStoreSerializer(serializers.Serializer):
+    endpoint_url = HTTPURLField()
+    verify_tls = serializers.BooleanField(required=False, default=True)
+    username = serializers.CharField(required=False, allow_null=True)
+    password = serializers.CharField(required=False, allow_null=True)
+    headers = HTTPHeaderSerializer(many=True, required=False)
+    concurrency = serializers.IntegerField(max_value=HTTPStore.max_concurrency, min_value=1, default=1)
+    request_timeout = serializers.IntegerField(
+        min_value=1,
+        max_value=HTTPStoreClient.max_request_timeout,
+        default=HTTPStoreClient.default_request_timeout,
+    )
+    max_retries = serializers.IntegerField(
+        min_value=1,
+        max_value=HTTPStoreClient.max_max_retries,
+        default=HTTPStoreClient.default_max_retries,
+    )
+
+    def validate(self, data):
+        username = data.get("username")
+        password = data.get("password")
+        if username and not password:
+            raise serializers.ValidationError({"password": "Required when username is set"})
+        elif password and not username:
+            raise serializers.ValidationError({"username": "Required when password is set"})
+        if username and any(h["name"].upper() == "AUTHORIZATION" for h in data.get("headers", [])):
+            raise serializers.ValidationError("Basic Auth and Authorization header cannot be both set")
+        return data

@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
-from zentral.core.stores.conf import frontend_store, stores
+from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.text import encode_args
@@ -66,7 +66,7 @@ class InstanceView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         if self.request.user.has_perm(EventsMixin.permission_required):
-            ctx["show_events_link"] = frontend_store.object_events
+            ctx["show_events_link"] = stores.admin_console_store.object_events
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
                 url = "{}?{}".format(

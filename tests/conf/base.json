@@ -28,19 +28,22 @@
     "backend": "zentral.core.queues.backends.kombu",
     "backend_url": "amqp://guest:guest@rabbitmq:5672//"
   },
-  "stores": {
-    "elasticsearch": {
-      "frontend": true,
-      "backend": "zentral.core.stores.backends.elasticsearch",
-      "hosts": [
-        "http://elastic:9200"
-      ],
-      "index": "zentral-events",
-      "kibana_base_url": "/kibana/",
-      "kibana_index_pattern_uuid": "yolo-fomo"
-    }
-  },
   "apps": {
+    "accounts": {
+      "provisioning": {
+        "roles": {
+          "first-role": {
+            "name": "First role"
+          },
+          "second-role": {
+            "name": "Second role",
+            "permissions": [
+              "inventory.view_machinesnapshot"
+            ]
+          }
+        }
+      }
+    },
     "realms": {
       "metrics": true
     },
@@ -49,6 +52,27 @@
     },
     "zentral.core.incidents": {
       "metrics": true
+    },
+    "zentral.core.stores": {
+      "provisioning": {
+        "stores": {
+          "elasticsearch": {
+            "admin_console": true,
+            "name": "Elasticsearch",
+            "description": "Built-in Elasticsearch event store",
+            "events_url_authorized_roles": [
+              "first-role"
+            ],
+            "backend": "ELASTICSEARCH",
+            "elasticsearch_kwargs": {
+              "hosts": ["http://elastic:9200"],
+              "index": "zentral-events",
+              "kibana_discover_url": "/kibana/",
+              "kibana_index_pattern_uuid": "yolo-fomo"
+            }
+          }
+        }
+      }
     },
     "zentral.core.terraform": {},
     "zentral.contrib.inventory": {

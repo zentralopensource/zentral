@@ -9,16 +9,21 @@ from django.test import TestCase, override_settings
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.wsone.models import Instance
+from zentral.core.stores.conf import stores
+from zentral.utils.provisioning import provision
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class WSOneSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
+        stores._load(force=True)
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
-        cls.user.groups.set([cls.group])
+        cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.bu = cls.mbu.create_enrollment_business_unit()
@@ -90,7 +95,7 @@ class WSOneSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("wsone:instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_instance_events_ok(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         instance = self._force_instance()
@@ -109,7 +114,7 @@ class WSOneSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("wsone:fetch_instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_instance_events_ok(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         instance = self._force_instance()

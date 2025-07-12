@@ -18,7 +18,7 @@ from zentral.contrib.santa.forms import (BinarySearchForm,
                                          RuleForm, RuleSearchForm, UpdateRuleForm)
 from zentral.contrib.santa.models import Configuration, Enrollment, Rule, Target, VotingGroup
 from zentral.contrib.santa.terraform import iter_resources
-from zentral.core.stores.conf import frontend_store, stores
+from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
@@ -73,7 +73,7 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
              "santa.view_rule",
              "santa.view_ruleset")
         ):
-            ctx["show_events_link"] = frontend_store.object_events
+            ctx["show_events_link"] = stores.admin_console_store.object_events
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
                 url = "{}?{}".format(

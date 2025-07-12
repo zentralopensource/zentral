@@ -12,7 +12,7 @@ from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
 from zentral.core.events.base import AuditEvent
-from zentral.core.stores.conf import frontend_store, stores
+from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
@@ -103,7 +103,7 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
 
         # events
         if self.request.user.has_perms(ConfigurationEventsView.permission_required):
-            ctx["show_events_link"] = frontend_store.object_events
+            ctx["show_events_link"] = stores.admin_console_store.object_events
         return ctx
 
 
@@ -350,7 +350,7 @@ class ScriptCheckView(PermissionRequiredMixin, DetailView):
         ctx = super().get_context_data()
         ctx["compliance_check"] = self.object.compliance_check
         if self.request.user.has_perm(ScriptCheckEventsMixin.permission_required):
-            ctx["show_events_link"] = frontend_store.object_events
+            ctx["show_events_link"] = stores.admin_console_store.object_events
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
                 url = "{}?{}".format(

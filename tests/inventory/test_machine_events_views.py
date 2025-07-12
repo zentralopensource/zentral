@@ -7,17 +7,21 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import User
-from zentral.core.stores.conf import frontend_store
+from zentral.core.stores.conf import stores
+from zentral.utils.provisioning import provision
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class MachineEventsViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
+        stores._load(force=True)
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
-        cls.user.groups.set([cls.group])
+        cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
 
     # utility methods
 
@@ -65,7 +69,7 @@ class MachineEventsViewsTestCase(TestCase):
         response = self.client.get(reverse("inventory:fetch_machine_events", args=("1111",)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_machine_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_machine_events")
     def test_fetch(self, fetch_machine_events):
         fetch_machine_events.return_value = ([], None)
         self._login("inventory.view_machinesnapshot")
@@ -86,5 +90,5 @@ class MachineEventsViewsTestCase(TestCase):
     def test_store_redirect(self):
         self._login("inventory.view_machinesnapshot")
         response = self.client.get(reverse("inventory:machine_events_store_redirect", args=("1111",)),
-                                   {"es": frontend_store.name})
+                                   {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))

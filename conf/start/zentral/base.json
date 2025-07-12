@@ -39,16 +39,6 @@
     "backend": "zentral.core.queues.backends.kombu",
     "backend_url": "amqp://guest:guest@rabbitmq:5672//"
   },
-  "stores": {
-    "elasticsearch": {
-      "frontend": true,
-      "backend": "zentral.core.stores.backends.elasticsearch",
-      "hosts": [
-        "http://elastic:9200"
-      ],
-      "index": "zentral-events"
-    }
-  },
   "apps": {
     "realms": {
       "metrics": true
@@ -58,6 +48,22 @@
     },
     "zentral.core.incidents": {
       "metrics": true
+    },
+    "zentral.core.stores": {
+      "provisioning": {
+        "stores": {
+          "elasticsearch": {
+            "admin_console": true,
+            "name": "Elasticsearch",
+            "description": "Built-in Elasticsearch event store",
+            "backend": "ELASTICSEARCH",
+            "elasticsearch_kwargs": {
+              "hosts": ["http://elastic:9200"],
+              "index": "zentral-events"
+            }
+          }
+        }
+      }
     },
     "zentral.core.terraform": {},
     "zentral.contrib.inventory": {
@@ -70,11 +76,7 @@
     },
     "zentral.contrib.jamf": {},
     "zentral.contrib.munki": {
-      "metrics": true,
-      "principal_user_detection": {
-        "sources": ["company_portal", "google_chrome", "logged_in_user"],
-        "domains": ["zentral.pro"]
-      }
+      "metrics": true
     },
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {

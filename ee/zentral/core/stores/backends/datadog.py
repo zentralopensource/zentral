@@ -5,43 +5,81 @@ import re
 import requests
 import time
 import zlib
+from rest_framework import serializers
 from urllib.parse import urlencode
+from base.utils import deployment_info
 from zentral.core.events import event_from_event_d
-from zentral.core.stores.backends.base import BaseEventStore
+from zentral.core.stores.backends.base import BaseStore
+from zentral.utils.requests import CustomHTTPAdapter
 
 
 logger = logging.getLogger('zentral.core.stores.backends.datadog')
 
 
-class EventStore(BaseEventStore):
+class DatadogStore(BaseStore):
+    kwargs_keys = (
+        "site",
+        "service",
+        "source",
+        "api_key",
+        "application_key",
+    )
+    encrypted_kwargs_paths = (
+        ["api_key"],
+        ["application_key"],
+    )
+
+    # https://docs.datadoghq.com/getting_started/site/
+    site_choices = [
+        "datadoghq.com",
+        "us3.datadoghq.com",
+        "us5.datadoghq.com",
+        "datadoghq.eu",
+        "ddog-gov.com",
+        "ap1.datadoghq.com",
+        "ap2.datadoghq.com",
+    ]
+
     machine_events = True
     machine_events_url = True
     probe_events = True
     probe_events_url = True
     tag_component_cleanup_re = re.compile(r'[^\w\-/\.]+')
 
-    def __init__(self, config_d):
-        super(EventStore, self).__init__(config_d)
-        # URLs
-        site = config_d.get("site", "datadoghq.com")
-        self.aggregate_url = f"https://api.{site}/api/v2/logs/analytics/aggregate"
-        self.input_url = f"https://http-intake.logs.{site}/v1/input"
-        self.log_url = f"https://app.{site}/logs"
-        self.search_url = f"https://api.{site}/api/v2/logs/events/search"
+    store_request_max_retries = 3
+    store_request_timeout = 120
+    fetch_request_max_retries = 1
+    fetch_request_timeout = 30
 
-        # Service / Source
-        self.service = config_d.get("service", "Zentral")
-        self.source = config_d.get("source", "zentral")
+    def load(self):
+        super().load()
+        # URLs
+        # store
+        self.input_url = f"https://http-intake.logs.{self.site}/v1/input"
+        # fetch
+        self.aggregate_url = f"https://api.{self.site}/api/v2/logs/analytics/aggregate"
+        self.search_url = f"https://api.{self.site}/api/v2/logs/events/search"
+        # events URLs
+        self.log_url = f"https://app.{self.site}/logs"
 
         # requests session
         self._session = requests.Session()
         self._session.headers.update({
-            'DD-API-KEY': config_d["api_key"],
+            'DD-API-KEY': self.api_key,
             'Content-Type': 'application/json',
+            'User-Agent': deployment_info.user_agent,
         })
-        app_key = config_d.get("application_key")
-        if app_key:
-            self._session.headers.update({"DD-APPLICATION-KEY": app_key})
+        if self.application_key:
+            self._session.headers.update({"DD-APPLICATION-KEY": self.application_key})
+        # store timeout & retries
+        self._session.mount(
+            self.input_url,
+            CustomHTTPAdapter(self.store_request_timeout, self.store_request_max_retries)
+        )
+        # fetch timeout & retries
+        fetch_http_adapter = CustomHTTPAdapter(self.fetch_request_timeout, self.fetch_request_max_retries)
+        for prefix in (self.aggregate_url, self.search_url):
+            self._session.mount(prefix, fetch_http_adapter)
 
     def _prepare_tag(self, key, value):
         value = self.tag_component_cleanup_re.sub("_", value)
@@ -265,3 +303,14 @@ class EventStore(BaseEventStore):
                   "from_ts": self._prepare_datetime(from_dt, tick=1000),
                   "to_ts": self._prepare_datetime(to_dt or datetime.utcnow(), tick=1000)}
         return "{}?{}".format(self.log_url, urlencode(kwargs))
+
+
+# Serializers
+
+
+class DatadogStoreSerializer(serializers.Serializer):
+    site = serializers.ChoiceField(choices=DatadogStore.site_choices)
+    service = serializers.CharField(min_length=1, default="Zentral")
+    source = serializers.CharField(min_length=1, default="zentral")
+    api_key = serializers.CharField()
+    application_key = serializers.CharField(required=False)

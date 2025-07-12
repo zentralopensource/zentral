@@ -19,7 +19,7 @@ from zentral.core.compliance_checks import compliance_check_class_from_model
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
 from zentral.core.compliance_checks.models import Status
 from zentral.core.incidents.models import MachineIncident
-from zentral.core.stores.conf import frontend_store, stores
+from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
 from zentral.utils.terraform import build_config_response
@@ -518,7 +518,7 @@ class MachineHeartbeatsView(PermissionRequiredMixin, TemplateView):
         ctx["machine"] = machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
         prepared_heartbeats = []
         try:
-            last_machine_heartbeats = frontend_store.get_last_machine_heartbeats(
+            last_machine_heartbeats = stores.admin_console_store.get_last_machine_heartbeats(
                 machine.serial_number,
                 from_dt=datetime.utcnow() - timedelta(days=self.time_range_days)
             )
@@ -583,7 +583,7 @@ class MachineView(PermissionRequiredMixin, TemplateView):
             context['machine_snapshots'].append((source_display, ms, source_subview))
 
         # heartbeats?
-        context['fetch_heartbeats'] = frontend_store.last_machine_heartbeats
+        context['fetch_heartbeats'] = stores.admin_console_store.last_machine_heartbeats
 
         # compliance checks
         compliance_check_statuses = []
@@ -612,7 +612,7 @@ class MachineView(PermissionRequiredMixin, TemplateView):
         context["compliance_check_unknown"] = cc_unknown
 
         # event links
-        context['show_events_link'] = frontend_store.machine_events
+        context['show_events_link'] = stores.admin_console_store.machine_events
         store_links = []
         for store in stores.iter_events_url_store_for_user("machine", self.request.user):
             url = "{}?{}".format(
@@ -987,7 +987,7 @@ class ComplianceCheckView(PermissionRequiredMixin, DetailView):
                            "jmespath_expression": self.object.jmespath_expression})
             )
         if self.request.user.has_perm(ComplianceCheckEventsMixin.permission_required):
-            ctx["show_events_link"] = frontend_store.object_events
+            ctx["show_events_link"] = stores.admin_console_store.object_events
             store_links = []
             for store in stores.iter_events_url_store_for_user("object", self.request.user):
                 url = "{}?{}".format(

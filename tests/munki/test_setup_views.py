@@ -14,6 +14,8 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.munki.models import Enrollment
 from accounts.models import User
 from zentral.core.events.base import AuditEvent
+from zentral.core.stores.conf import stores
+from zentral.utils.provisioning import provision
 from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
 
@@ -23,10 +25,13 @@ class MunkiSetupViewsTestCase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
+        stores._load(force=True)
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
-        cls.user.groups.set([cls.group])
+        cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
@@ -140,7 +145,7 @@ class MunkiSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("munki:configuration_events", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_configuration_events_ok(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         configuration = force_configuration()
@@ -150,7 +155,7 @@ class MunkiSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_events.html")
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_configuration_events_ok(self, fetch_object_events):
         fetch_object_events.return_value = {}
         configuration = force_configuration()

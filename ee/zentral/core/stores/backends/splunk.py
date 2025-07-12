@@ -1,76 +1,88 @@
 from datetime import datetime, timedelta
 from kombu.utils import json
 import logging
-import random
 import time
 import uuid
 from urllib.parse import urlencode, urljoin
 from defusedxml.ElementTree import fromstring, ParseError
 from django.utils.functional import cached_property
-from django.utils.text import slugify
 from django.utils.timezone import is_aware, make_naive
 import requests
+from rest_framework import serializers
+from base.utils import deployment_info
 from zentral.core.events import event_from_event_d, event_types
-from zentral.core.stores.backends.base import BaseEventStore
+from zentral.core.stores.backends.base import BaseStore
+from zentral.core.stores.backends.http import HTTPHeaderSerializer, HTTPURLField
+from zentral.utils.requests import CustomHTTPAdapter
 
 
 logger = logging.getLogger('zentral.core.stores.backends.splunk')
 
 
-class EventStore(BaseEventStore):
+class SplunkStore(BaseStore):
+    kwargs_keys = (
+        "hec_url",
+        "hec_token",
+        "hec_extra_headers",
+        "hec_request_timeout",
+        "hec_index",
+        "hec_source",
+        "computer_name_as_host_sources",
+        "custom_host_field",
+        "serial_number_field",
+        "batch_size",
+        # events URLs
+        "search_app_url",
+        # events search
+        "search_url",
+        "search_token",
+        "search_extra_headers",
+        "search_request_timeout",
+        "search_index",
+        "search_source",
+        # common
+        "verify_tls",
+    )
+    encrypted_kwargs_paths = (
+        ["hec_token"],
+        ["hec_extra_headers", "*", "value"],
+        ["search_token"],
+        ["search_extra_headers", "*", "value"],
+    )
+    default_request_timeout = 300
+    default_serial_number_field = "machine_serial_number"
     max_batch_size = 100
     max_retries = 3
 
-    def __init__(self, config_d):
-        super().__init__(config_d)
-        self.hec_url = urljoin(config_d["hec_url"], "/services/collector/event")
-        logger.info("HEC URL: %s", self.hec_url)
-        self.hec_extra_headers = config_d.get("hec_extra_headers")
-        self.hec_token = config_d["hec_token"]
-        self.hec_request_timeout = int(config_d.get("hec_request_timeout", 300))
-        logger.info("HEC request timeout: %ds", self.hec_request_timeout)
-        self.search_app_url = config_d.get("search_app_url")
-        # If set, the computer name of the machine snapshots of these sources will be used
-        # as host field value. First source with a non-empty value will be picked.
-        self.computer_name_as_host_sources = [
-            slugify(src)
-            for src in config_d.get("computer_name_as_host_sources", [])
-        ]
-        # Extra custom field to copy the host metadata field to.
-        self.custom_host_field = config_d.get("custom_host_field")
-        self.serial_number_field = config_d.get("serial_number_field", "machine_serial_number")
+    def load(self):
+        super().load()
+        # events URLs
         if self.search_app_url:
             self.machine_events_url = True
             self.object_events_url = True
             self.probe_events_url = True
-        self.verify_tls = config_d.get('verify_tls', True)
-        self.index = config_d.get("index")
-        self.source = config_d.get("source")
-        # search
-        self.authentication_token = config_d.get("authentication_token")
-        self.search_url = config_d.get("search_url")
-        self.search_extra_headers = config_d.get("search_extra_headers")
-        self.search_source = config_d.get("search_source")
-        self.search_timeout = int(config_d.get("search_timeout", 300))
-        if self.search_url and self.authentication_token:
+        # events search
+        if self.search_url and self.search_token:
             self.last_machine_heartbeats = True
             self.machine_events = True
             self.object_events = True
             self.probe_events = True
 
-    @cached_property
-    def hec_session(self):
+    def _build_requests_session(self, auth_scheme, credentials, extra_headers, base_url, request_timeout):
         session = requests.Session()
         session.verify = self.verify_tls
-        session.headers.update({'Authorization': f'Splunk {self.hec_token}',
-                                'Content-Type': 'application/json'})
-        if self.hec_extra_headers:
-            for k, v in self.hec_extra_headers.items():
-                if k.lower() in ('authorization', 'content-type'):
-                    logger.error("Skip '%s' HEC extra header", k)
+        session.headers.update({'Authorization': f'{auth_scheme} {credentials}',
+                                'Content-Type': 'application/json',
+                                'User-Agent': deployment_info.user_agent})
+        if extra_headers:
+            for extra_header in extra_headers:
+                name = extra_header["name"]
+                if name.lower() in ('authorization', 'content-type'):
+                    logger.error("Skip '%s' %s extra header", name, base_url)
                 else:
-                    logger.info("HEC extra header: %s", k)
-                    session.headers[k] = v
+                    logger.debug("Set '%s' %s extra header", name, base_url)
+                    session.headers[name] = extra_header["value"]
+        session.mount(base_url, CustomHTTPAdapter(request_timeout, self.max_retries))
         return session
 
     @staticmethod
@@ -118,10 +130,10 @@ class EventStore(BaseEventStore):
             "time": self._convert_datetime(created_at),
             "event": payload_event,
         }
-        if self.index:
-            payload["index"] = self.index
-        if self.source:
-            payload["source"] = self.source
+        if self.hec_index:
+            payload["index"] = self.hec_index
+        if self.hec_source:
+            payload["source"] = self.hec_source
         return payload
 
     def _deserialize_event(self, result):
@@ -150,20 +162,18 @@ class EventStore(BaseEventStore):
         event_d["_zentral"] = metadata
         return event_from_event_d(event_d)
 
+    @cached_property
+    def hec_session(self):
+        return self._build_requests_session(
+            "Splunk", self.hec_token,
+            self.hec_extra_headers,
+            self.hec_url, self.hec_request_timeout
+        )
+
     def store(self, event):
         payload = self._serialize_event(event)
-        for i in range(self.max_retries):
-            r = self.hec_session.post(self.hec_url, json=payload, timeout=self.hec_request_timeout)
-            if r.ok:
-                return
-            if r.status_code > 500:
-                logger.error("HEC status code %s for store request", r.status_code)
-                if i + 1 < self.max_retries:
-                    seconds = random.uniform(3, 4) * (i + 1)
-                    logger.error("Retry HEC store request in %.1fs", seconds)
-                    time.sleep(seconds)
-                    continue
-            r.raise_for_status()
+        r = self.hec_session.post(self.hec_url, json=payload, timeout=self.hec_request_timeout)
+        r.raise_for_status()
 
     def bulk_store(self, events):
         if self.batch_size < 2:
@@ -177,40 +187,15 @@ class EventStore(BaseEventStore):
             if data:
                 data += b"\n"
             data += json.dumps(payload).encode("utf-8")
-        for i in range(self.max_retries):
-            r = self.hec_session.post(self.hec_url, data=data, timeout=self.hec_request_timeout)
-            if r.ok:
-                return event_keys
-            if r.status_code > 500:
-                logger.error("HEC status code %s for bulk store request", r.status_code)
-                if i + 1 < self.max_retries:
-                    seconds = random.uniform(3, 4) * (i + 1)
-                    logger.error("Retry HEC bulk store request in %.1fs", seconds)
-                    time.sleep(seconds)
-                    continue
-            r.raise_for_status()
+        r = self.hec_session.post(self.hec_url, data=data, timeout=self.hec_request_timeout)
+        r.raise_for_status()
 
     # event methods
 
-    @cached_property
-    def search_session(self):
-        session = requests.Session()
-        session.verify = self.verify_tls
-        session.headers.update({'Authorization': f'Bearer {self.authentication_token}',
-                                'Content-Type': 'application/json'})
-        if self.search_extra_headers:
-            for k, v in self.search_extra_headers.items():
-                if k.lower() in ('authorization', 'content-type'):
-                    logger.error("Skip '%s' search extra header", k)
-                else:
-                    logger.debug("Set '%s' search extra header", k)
-                    session.headers[k] = v
-        return session
-
     def _build_filters(self, event_type=None, serial_number=None, excluded_event_type=None, tag=None):
         filters = []
-        if self.index:
-            filters.append(("index", self.index))
+        if self.search_index:
+            filters.append(("index", self.search_index))
         if self.search_source:
             filters.append(("source", self.search_source))
         if event_type:
@@ -228,13 +213,21 @@ class EventStore(BaseEventStore):
             pipeline = f'{pipeline} | rename tags{{}} AS tagvalue | where (tagvalue = "{tag}")'
         return pipeline
 
-    def _get_search_url(self, query, from_dt, to_dt):
+    def _get_events_url(self, query, from_dt, to_dt):
         kwargs = {
             "q": f"search {query}",
             "earliest": self._convert_datetime(from_dt),
             "latest": self._convert_datetime(to_dt) if to_dt else "now"
         }
         return "{}?{}".format(self.search_app_url, urlencode(kwargs))
+
+    @cached_property
+    def search_session(self):
+        return self._build_requests_session(
+            "Bearer", self.search_token,
+            self.search_extra_headers,
+            self.search_url, self.search_request_timeout
+        )
 
     def _post_search_job(self, search, from_dt, to_dt):
         data = {"exec_mode": "blocking",
@@ -306,7 +299,7 @@ class EventStore(BaseEventStore):
         )
 
     def get_machine_events_url(self, serial_number, from_dt, to_dt=None, event_type=None):
-        return self._get_search_url(
+        return self._get_events_url(
             self._get_machine_events_query(serial_number, event_type),
             from_dt, to_dt
         )
@@ -364,7 +357,7 @@ class EventStore(BaseEventStore):
         )
 
     def get_object_events_url(self, key, val, from_dt, to_dt=None, event_type=None):
-        return self._get_search_url(
+        return self._get_events_url(
             self._get_object_events_query(key, val, event_type),
             from_dt, to_dt
         )
@@ -388,7 +381,7 @@ class EventStore(BaseEventStore):
         )
 
     def get_probe_events_url(self, probe, from_dt, to_dt=None, event_type=None):
-        return self._get_search_url(
+        return self._get_events_url(
             self._get_probe_events_query(probe, event_type),
             from_dt, to_dt
         )
@@ -427,3 +420,61 @@ class EventStore(BaseEventStore):
             data.append((current_dt, count, uniq_msn))
             current_dt += timedelta(seconds=bucket_seconds)
         return data[-1*bucket_number:]
+
+
+# Serializers
+
+
+class SplunkStoreSerializer(serializers.Serializer):
+    # HEC
+    hec_url = HTTPURLField()
+    hec_token = serializers.CharField(min_length=1)
+    hec_extra_headers = HTTPHeaderSerializer(many=True, required=False)
+    hec_request_timeout = serializers.IntegerField(
+        min_value=1,
+        default=SplunkStore.default_request_timeout,
+    )
+    hec_index = serializers.CharField(required=False)
+    hec_source = serializers.CharField(required=False)
+    # If set, the computer name of the machine snapshots of these sources will be used
+    # as host field value. First source with a non-empty value will be picked.
+    computer_name_as_host_sources = serializers.ListField(
+        child=serializers.SlugField(min_length=1),
+        allow_empty=True,
+        required=False,
+    )
+    custom_host_field = serializers.CharField(required=False)
+    serial_number_field = serializers.CharField(default=SplunkStore.default_serial_number_field)
+    batch_size = serializers.IntegerField(
+        default=1,
+        min_value=1,
+        max_value=SplunkStore.max_batch_size,
+    )
+    # events URLs
+    search_app_url = HTTPURLField(required=False)
+    # events search
+    search_url = HTTPURLField(required=False)
+    search_token = serializers.CharField(required=False)
+    search_extra_headers = HTTPHeaderSerializer(many=True, required=False)
+    search_index = serializers.CharField(required=False)
+    search_source = serializers.CharField(required=False)
+    search_request_timeout = serializers.IntegerField(
+        min_value=1,
+        default=SplunkStore.default_request_timeout,
+    )
+    # common
+    verify_tls = serializers.BooleanField(default=True)
+
+    def _validate_extra_headers(self, value):
+        if (
+            isinstance(value, list)
+            and any(h["name"].upper() in ("AUTHORIZATION", "CONTENT-TYPE") for h in value)
+        ):
+            raise serializers.ValidationError("Authorization and Content-Type headers cannot be changed")
+        return value
+
+    def validate_hec_extra_headers(self, value):
+        return self._validate_extra_headers(value)
+
+    def validate_search_extra_headers(self, value):
+        return self._validate_extra_headers(value)

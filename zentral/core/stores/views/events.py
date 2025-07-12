@@ -4,7 +4,7 @@ from django.core import signing
 from django.http import HttpResponseRedirect
 from django.views.generic import TemplateView, View
 from zentral.core.events import event_types
-from zentral.core.stores.conf import frontend_store, stores
+from zentral.core.stores.conf import stores
 from zentral.utils.views import UserPaginationMixin
 
 
@@ -115,7 +115,7 @@ class EventsView(EventsViewMixin, TemplateView):
         # event type options
         total_event_count = 0
         event_type_options = []
-        store_method = getattr(frontend_store, f"get_aggregated_{self.store_method_scope}_event_counts")
+        store_method = getattr(stores.admin_console_store, f"get_aggregated_{self.store_method_scope}_event_counts")
         for event_type, count in store_method(**self.fetch_kwargs).items():
             total_event_count += count
             event_type_options.append(
@@ -172,7 +172,7 @@ class FetchEventsView(EventsViewMixin, UserPaginationMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        store_method = getattr(frontend_store, f"fetch_{self.store_method_scope}_events")
+        store_method = getattr(stores.admin_console_store, f"fetch_{self.store_method_scope}_events")
         ctx["include_machine_info"] = self.include_machine_info
         ctx["events"], next_cursor = store_method(**self.fetch_kwargs)
         if next_cursor:

@@ -5,7 +5,7 @@ from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DeleteView, DetailView, FormView, TemplateView, UpdateView
-from zentral.core.stores.conf import frontend_store, stores
+from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.views import UserPaginationListView
 from .forms import (CreateProbeForm, ProbeSearchForm,
@@ -76,7 +76,7 @@ class ProbeView(PermissionRequiredMixin, DetailView):
         ctx = super(ProbeView, self).get_context_data(**kwargs)
         ctx['probe'] = self.probe = Probe(self.object)
         store_links = []
-        ctx['show_events_link'] = frontend_store.probe_events
+        ctx['show_events_link'] = stores.admin_console_store.probe_events
         store_links = []
         for store in stores.iter_events_url_store_for_user("probe", self.request.user):
             url = "{}?{}".format(

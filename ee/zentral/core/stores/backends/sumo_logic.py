@@ -1,21 +1,32 @@
 import gzip
 from kombu.utils import json
 import requests
-from zentral.core.exceptions import ImproperlyConfigured
-from zentral.core.stores.backends.base import BaseEventStore
+from rest_framework import serializers
+from base.utils import deployment_info
+from zentral.core.stores.backends.base import BaseStore
+from zentral.utils.requests import CustomHTTPAdapter
 
 
-class EventStore(BaseEventStore):
+class SumoLogicStore(BaseStore):
+    kwargs_keys = (
+        "collector_url",
+        "batch_size",
+    )
+    encrypted_kwargs_paths = (
+        ["collector_url"],
+    )
     max_batch_size = 100
+    request_timeout = 120
+    max_retries = 3
 
-    def __init__(self, config_d):
-        super().__init__(config_d)
-        try:
-            self.collector_url = config_d["collector_url"]
-        except KeyError:
-            raise ImproperlyConfigured("Missing collector_url")
+    def load(self):
+        super().load()
         self.session = requests.Session()
-        self.session.headers.update({'Content-Encoding': 'gzip'})
+        self.session.headers.update(
+            {'Content-Encoding': 'gzip',
+             'User-Agent': deployment_info.user_agent}
+        )
+        self.session.mount(self.collector_url, CustomHTTPAdapter(self.request_timeout, self.max_retries))
 
     def _serialize_event(self, event):
         if not isinstance(event, dict):
@@ -49,3 +60,15 @@ class EventStore(BaseEventStore):
         response = self.session.post(self.collector_url, data=data)
         response.raise_for_status()
         return event_keys
+
+
+# Serializers
+
+
+class SumoLogicStoreSerializer(serializers.Serializer):
+    collector_url = serializers.URLField()
+    batch_size = serializers.IntegerField(
+        default=1,
+        min_value=1,
+        max_value=SumoLogicStore.max_batch_size,
+    )

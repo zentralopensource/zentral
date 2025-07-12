@@ -8,7 +8,6 @@ import time
 import boto3
 from botocore.config import Config
 from django.utils.functional import cached_property
-from django.utils.text import slugify
 from zentral.conf import settings
 from zentral.core.queues.backends.base import BaseEventQueues
 from .consumer import BatchConsumer, ConcurrentConsumer, Consumer, ConsumerProducer
@@ -222,7 +221,7 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
     def __init__(self, event_queues, event_store):
         super().__init__(
             event_queues.setup_queue(
-                "store-enriched-events-{}".format(slugify(event_store.name)),
+                f"store-enriched-events-{event_store.slug}",
                 topic_basename="enriched-events",
                 filter_policy=build_sns_filter_policy_for_event_store(event_store)
             ),
@@ -261,7 +260,7 @@ class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
         self.event_store = event_store
         super().__init__(
             event_queues.setup_queue(
-                "store-enriched-events-{}".format(slugify(event_store.name)),
+                f"store-enriched-events-{event_store.slug}",
                 topic_basename="enriched-events",
                 filter_policy=build_sns_filter_policy_for_event_store(event_store)
             ),
@@ -300,7 +299,7 @@ class BulkStoreWorker(WorkerMixin, BatchConsumer):
     def __init__(self, event_queues, event_store):
         super().__init__(
             event_queues.setup_queue(
-                "store-enriched-events-{}".format(slugify(event_store.name)),
+                f"store-enriched-events-{event_store.slug}",
                 topic_basename="enriched-events",
                 filter_policy=build_sns_filter_policy_for_event_store(event_store)
             ),

@@ -23,6 +23,8 @@ from zentral.contrib.monolith.repository_backends.s3 import S3Repository
 from zentral.contrib.monolith.repository_backends.virtual import VirtualRepository
 from zentral.contrib.munki.models import ManagedInstall
 from zentral.core.events.base import AuditEvent
+from zentral.core.stores.conf import stores
+from zentral.utils.provisioning import provision
 from utils.packages import build_dummy_package
 from .utils import (CLOUDFRONT_PRIVKEY_PEM,
                     force_catalog, force_category, force_condition,
@@ -38,10 +40,13 @@ class MonolithSetupViewsTestCase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
+        stores._load(force=True)
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
-        cls.user.groups.set([cls.group])
+        cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
@@ -840,7 +845,7 @@ class MonolithSetupViewsTestCase(TestCase):
                                    args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_pkg_info_name_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         self._login("monolith.view_pkginfo", "monolith.view_pkginfoname")
@@ -849,7 +854,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/pkg_info_name_events.html")
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_pkg_info_name_fetch_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         self._login("monolith.view_pkginfo", "monolith.view_pkginfoname")

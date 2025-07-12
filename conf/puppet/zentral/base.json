@@ -43,18 +43,23 @@
     "backend": "zentral.core.queues.backends.kombu",
     "backend_url": "amqp://guest:guest@rabbitmq:5672//"
   },
-  "stores": {
-    "elasticsearch": {
-      "frontend": true,
-      "backend": "zentral.core.stores.backends.elasticsearch",
-      "hosts": [
-        "http://elastic:9200"
-      ],
-      "index": "zentral-events"
-    }
-  },
   "apps": {
-    "zentral.contrib.audit": {},
+    "zentral.core.stores": {
+      "provisioning": {
+        "stores": {
+          "elasticsearch": {
+            "admin_console": true,
+            "name": "Elasticsearch",
+            "description": "Built-in Elasticsearch event store",
+            "backend": "ELASTICSEARCH",
+            "elasticsearch_kwargs": {
+              "hosts": ["http://elastic:9200"],
+              "index": "zentral-events"
+            }
+          }
+        }
+      }
+    },
     "zentral.contrib.jamf": {},
     "zentral.contrib.munki": {
       "metrics": true

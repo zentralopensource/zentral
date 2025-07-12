@@ -111,6 +111,11 @@ class User(AbstractUser):
         """A set with all the group names. Used for authz."""
         return set(self.groups.values_list("name", flat=True))
 
+    @cached_property
+    def group_pk_set(self):
+        """A set with all the group PKs. Used for authz."""
+        return set(self.groups.values_list("pk", flat=True))
+
 
 class UserPasswordHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

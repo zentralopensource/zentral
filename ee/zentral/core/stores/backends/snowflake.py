@@ -3,57 +3,59 @@ import json
 import logging
 import time
 from django.utils import timezone
+from rest_framework import serializers
 import snowflake.connector
 from snowflake.connector import DictCursor
 from zentral.core.events import event_from_event_d, event_types
-from zentral.core.exceptions import ImproperlyConfigured
-from zentral.core.stores.backends.base import BaseEventStore
+from zentral.core.stores.backends.base import BaseStore
 
 
 logger = logging.getLogger("zentral.core.stores.backends.snowflake")
 
 
-class EventStore(BaseEventStore):
+class SnowflakeStore(BaseStore):
+    kwargs_keys = (
+        "account",
+        "user",
+        "password",
+        "database",
+        "schema",
+        "role",
+        "warehouse",
+        "session_timeout",
+    )
+    encrypted_kwargs_paths = (
+        ["password"],
+    )
+
+    default_schema = "PUBLIC"
+    default_session_timeout = 4 * 3600 - 10 * 60  # 4 hours (Snowflake default) - 10 min
+
     read_only = True
     last_machine_heartbeats = True
     machine_events = True
     object_events = True
     probe_events = True
 
-    def __init__(self, config_d):
-        super().__init__(config_d)
-        self._connect_kwargs = {}
+    def load(self):
+        super().load()
         # connection parameters
-        missing_params = []
+        self._connect_kwargs = {}
         for k in ("account", "user", "password", "database", "schema", "role", "warehouse"):
-            v = config_d.get(k)
-            if not v:
-                if k == "schema":
-                    v = "PUBLIC"
-                else:
-                    missing_params.append(k)
-                    continue
-            self._connect_kwargs[k] = v
-        if missing_params:
-            raise ImproperlyConfigured("Missing configuration parameters: {}".format(", ".join(missing_params)))
+            self._connect_kwargs[k] = getattr(self, k)
         # connection
         self._connection = None
         self._last_active_at = time.monotonic()
-        self._session_timeout = config_d.get(
-            "session_timeout",
-            4*3600-10*60  # 4 hours (Snowflake default) - 10 min
-        )
 
     def _get_connection(self):
-        if self._connection is None or (time.monotonic() - self._last_active_at) > self._session_timeout:
-            account = self._connect_kwargs["account"]
+        if self._connection is None or (time.monotonic() - self._last_active_at) > self.session_timeout:
             if self._connection is None:
                 action = "Connect"
             else:
-                logger.info("Close current connection to account %s", account)
+                logger.info("Close current connection to account %s", self.account)
                 self._connection.close()
                 action = "Re-connect"
-            logger.info("%s to account %s", action, account)
+            logger.info("%s to account %s", action, self.account)
             self._connection = snowflake.connector.connect(**self._connect_kwargs)
         self._last_active_at = time.monotonic()
         return self._connection
@@ -256,3 +258,17 @@ class EventStore(BaseEventStore):
                 event_count = machine_count = 0
             data.append((bucket, event_count, machine_count))
         return data
+
+
+# Serializers
+
+
+class SnowflakeStoreSerializer(serializers.Serializer):
+    account = serializers.CharField(min_length=1)
+    user = serializers.CharField(min_length=1)
+    password = serializers.CharField(min_length=1)
+    database = serializers.CharField(min_length=1)
+    schema = serializers.CharField(min_length=1, default=SnowflakeStore.default_schema)
+    role = serializers.CharField(min_length=1)
+    warehouse = serializers.CharField(min_length=1)
+    session_timeout = serializers.IntegerField(min_value=60, default=SnowflakeStore.default_session_timeout)
