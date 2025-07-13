@@ -1,5 +1,10 @@
+from graphlib import TopologicalSorter
+import inspect
 import logging
-from zentral.conf import ConfigDict
+from django.apps import apps
+from django.db import transaction
+from zentral.conf import ConfigDict, settings
+from .apps import ZentralAppConfig
 
 
 logger = logging.getLogger("zentral.utils.provisioning")
@@ -8,6 +13,7 @@ logger = logging.getLogger("zentral.utils.provisioning")
 class Provisioner:
     config_key = None
     serializer_class = None
+    depends_on = ()
 
     def __init__(self, app_config, settings):
         self.app_config = app_config
@@ -71,3 +77,40 @@ class Provisioner:
     def apply(self):
         for uid, spec in self.iter_uid_spec():
             self.create_or_update_instance(uid, spec)
+
+
+# provisioning tools
+
+
+def iter_provisioners():
+    provisioner_app_configs = {}
+    topological_sorter = TopologicalSorter()
+    for app_config in apps.app_configs.values():
+        if not isinstance(app_config, ZentralAppConfig):
+            continue
+        if not app_config.provisioning_module:
+            continue
+        for _, provisioner_cls in inspect.getmembers(
+            app_config.provisioning_module,
+            lambda m: (
+                # only classes
+                inspect.isclass(m)
+                # subclasses of Provisioner
+                and issubclass(m, Provisioner)
+                # directly from the module (not imported)
+                and m.__module__ == app_config.provisioning_module.__name__
+            )
+        ):
+            provisioner_app_configs[provisioner_cls] = app_config
+            topological_sorter.add(provisioner_cls, *provisioner_cls.depends_on)
+    topological_sorter.prepare()
+    while topological_sorter.is_active():
+        for provisioner_cls in topological_sorter.get_ready():
+            yield provisioner_cls(provisioner_app_configs[provisioner_cls], settings)
+            topological_sorter.done(provisioner_cls)
+
+
+def provision():
+    with transaction.atomic():
+        for provisioner in iter_provisioners():
+            provisioner.apply()
