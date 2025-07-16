@@ -1,33 +1,38 @@
 import logging
 import boto3
 from kombu.utils import json
-from zentral.core.exceptions import ImproperlyConfigured
-from zentral.core.stores.backends.base import BaseEventStore
+from rest_framework import serializers
+from zentral.core.stores.backends.base import BaseStore, AWSAuthSerializer
 from zentral.utils.boto3 import make_refreshable_assume_role_session
 
 
 logger = logging.getLogger('zentral.core.stores.backends.kinesis')
 
 
-class EventStore(BaseEventStore):
-    max_batch_size = 500
+class KinesisStore(BaseStore):
+    kwargs_keys = (
+        "stream",
+        "region_name",
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "assume_role_arn",
+        "batch_size",
+        "serialization_format",
+    )
+    encrypted_kwargs_paths = (
+        ["aws_secret_access_key"],
+    )
 
-    def __init__(self, config_d):
-        super(EventStore, self).__init__(config_d)
-        self.stream = config_d["stream"]
-        self.region_name = config_d["region_name"]
-        self.credentials = {}
-        for k in ("aws_access_key_id", "aws_secret_access_key"):
-            v = config_d.get(k)
-            if v:
-                self.credentials[k] = v
-        self.assume_role_arn = config_d.get("assume_role_arn")
-        self.serialization_format = config_d.get("serialization_format", "zentral")
-        if self.serialization_format not in ("zentral", "firehose_v1"):
-            raise ImproperlyConfigured("Unknown serialization format")
+    max_batch_size = 500
+    serialization_format_choices = ["zentral", "firehose_v1"]
 
     def wait_and_configure(self):
-        session = boto3.Session(**self.credentials)
+        session_kwargs = {}
+        for k in ("aws_access_key_id", "aws_secret_access_key"):
+            v = getattr(self, k, None)
+            if v:
+                session_kwargs[k] = v
+        session = boto3.Session(**session_kwargs)
         if self.assume_role_arn:
             logger.info("Assume role %s", self.assume_role_arn)
             session = make_refreshable_assume_role_session(
@@ -97,3 +102,19 @@ class EventStore(BaseEventStore):
         for key, record in zip(event_keys, response.get("Records", [])):
             if record.get("SequenceNumber") and record.get("ShardId"):
                 yield key
+
+
+# Serializers
+
+
+class KinesisStoreSerializer(AWSAuthSerializer):
+    stream = serializers.CharField(min_length=1)
+    assume_role_arn = serializers.CharField(required=False)
+    batch_size = serializers.IntegerField(
+        default=1,
+        min_value=1,
+        max_value=KinesisStore.max_batch_size,
+    )
+    serialization_format = serializers.ChoiceField(
+        choices=KinesisStore.serialization_format_choices,
+    )

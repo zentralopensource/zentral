@@ -10,6 +10,8 @@ from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.munki.models import ScriptCheck
 from zentral.core.events.base import AuditEvent
+from zentral.core.stores.conf import stores
+from zentral.utils.provisioning import provision
 from accounts.models import User
 from .utils import force_script_check
 
@@ -20,10 +22,13 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
+        stores._load(force=True)
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
-        cls.user.groups.set([cls.group])
+        cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
 
     # utility methods
 
@@ -560,7 +565,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         response = self.client.get(reverse("munki:script_check_events", args=(sc.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_script_check_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         sc = force_script_check()
@@ -581,7 +586,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         response = self.client.get(reverse("munki:fetch_script_check_events", args=(sc.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_script_check_fetch_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         sc = force_script_check()

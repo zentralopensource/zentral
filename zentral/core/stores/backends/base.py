@@ -1,8 +1,9 @@
-import warnings
+from rest_framework import serializers
 from zentral.core.events.filter import EventFilterSet
+from zentral.utils.backend_model import Backend
 
 
-class BaseEventStore(object):
+class BaseStore(Backend):
     read_only = False  # if read only, we do not need a store worker
     max_batch_size = 1
     max_concurrency = 1
@@ -14,38 +15,14 @@ class BaseEventStore(object):
     probe_events = False
     probe_events_url = False
 
-    def __init__(self, config_d):
-        self.name = config_d['store_name']
-        # list of group names
-        # members of those groups will have access to the events URLs
-        self.events_url_authorized_groups = set(config_d.get("events_url_authorized_groups", []))
-        self.frontend = config_d.get('frontend', False)
+    def load(self):
+        super().load()
+        self.slug = self.instance.slug
+        self.admin_console = self.instance.admin_console
+        self.events_url_authorized_roles = list(self.instance.events_url_authorized_roles.all())
+        self.events_url_authorized_role_pk_set = set(r.pk for r in self.events_url_authorized_roles)
+        self.event_filter_set = EventFilterSet.from_mapping(self.instance.event_filters)
         self.configured = False
-        self.batch_size = min(self.max_batch_size, max(config_d.get("batch_size") or 1, 1))
-        self.concurrency = min(self.max_concurrency, max(config_d.get("concurrency") or 1, 1))
-        self.event_filter_set = EventFilterSet.from_mapping(config_d)
-        # legacy included / excluded event types attrs ?
-        # TODO remove later
-        if not self.event_filter_set:
-            filter_set_m = {}
-            excluded_event_types = config_d.get("excluded_event_types")
-            if excluded_event_types:
-                warnings.warn(
-                    "excluded_event_types is deprecated and will be removed soon. "
-                    "Use excluded_event_filters instead.",
-                    DeprecationWarning, stacklevel=2,
-                )
-                filter_set_m["excluded_event_filters"] = [{"event_type": excluded_event_types}]
-            included_event_types = config_d.get("included_event_types")
-            if included_event_types:
-                warnings.warn(
-                    "included_event_types is deprecated and will be removed soon. "
-                    "Use included_event_filters instead.",
-                    DeprecationWarning, stacklevel=2,
-                )
-                filter_set_m["included_event_filters"] = [{"event_type": included_event_types}]
-            if filter_set_m:
-                self.event_filter_set = EventFilterSet.from_mapping(filter_set_m)
 
     def is_serialized_event_included(self, serialized_event):
         return self.event_filter_set.match_serialized_event(serialized_event)
@@ -97,3 +74,21 @@ class BaseEventStore(object):
 
     def get_app_hist_data(self, interval, bucket_number, tag):
         return []
+
+
+# Serializers
+
+
+class AWSAuthSerializer(serializers.Serializer):
+    region_name = serializers.CharField(min_length=1)
+    aws_access_key_id = serializers.CharField(required=False)
+    aws_secret_access_key = serializers.CharField(required=False)
+
+    def validate(self, data):
+        aws_access_key_id = data.get("aws_access_key_id")
+        aws_secret_access_key = data.get("aws_secret_access_key")
+        if aws_access_key_id and not aws_secret_access_key:
+            raise serializers.ValidationError({"aws_secret_access_key": "This field is required"})
+        elif aws_secret_access_key and not aws_access_key_id:
+            raise serializers.ValidationError({"aws_access_key_id": "This field is required"})
+        return data

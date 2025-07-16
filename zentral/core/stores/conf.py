@@ -1,67 +1,99 @@
-from importlib import import_module
 import logging
-from django.utils.functional import SimpleLazyObject
-from zentral.conf import settings
+import os
+import threading
+import weakref
+from base.notifier import notifier
+from .models import Store
+
 
 logger = logging.getLogger('zentral.core.stores.conf')
 
 
-__all__ = ['frontend_store', 'stores']
+__all__ = ['stores']
 
 
 class Stores:
-    @staticmethod
-    def _get_store_class(module_path):
-        class_name = "EventStore"
-        module = import_module(module_path)
-        return getattr(module, class_name)
+    def __init__(self, with_sync=False):
+        self._stores = None
+        self._admin_console_store = None
+        self._lock = threading.Lock()
+        self.with_sync = with_sync
+        self._sync_started = False
 
-    def __init__(self, settings):
-        self.frontend_store = None
-        self.stores = {}
-        first_store = None
-        for store_name, store_conf in settings['stores'].items():
-            store_conf = store_conf.copy()
-            store_conf['store_name'] = store_name
-            store_class = self._get_store_class(store_conf.pop('backend'))
-            store = store_class(store_conf)
-            self.stores[store_name] = store
-            if store.frontend:
-                if self.frontend_store:
-                    logger.error('Multiple frontend store')
+    def clear(self, *args, **kwargs):
+        with self._lock:
+            self._stores = None
+            self._admin_console_store = None
+
+    def _start_sync(self):
+        if self.with_sync:
+            if not self._sync_started:
+                notifier.add_callback("stores.store", weakref.WeakMethod(self.clear))
+                self._sync_started = True
+
+    def _load(self, force=False):
+        self._start_sync()
+        if self._stores is None or force:
+            self._stores = {}
+            self._admin_console_store = None
+            first_store = None
+            for db_store in Store.objects.prefetch_related("events_url_authorized_roles").all().order_by("created_at"):
+                store = db_store.get_backend(load=True)
+                self._stores[store.name] = store
+                # admin console store?
+                if db_store.admin_console:
+                    if self._admin_console_store:
+                        logger.error('Multiple admin console store')
+                    else:
+                        self._admin_console_store = store
+                elif not first_store:
+                    first_store = store
+            if not self._admin_console_store:
+                logger.error('No admin console store')
+                if first_store:
+                    self._admin_console_store = first_store
                 else:
-                    self.frontend_store = store
-            elif first_store is None:
-                first_store = store
-        if not self.frontend_store:
-            logger.error('No frontend store')
-            if first_store:
-                self.frontend_store = first_store
-            else:
-                logger.error('No stores')
+                    logger.error('No stores')
+
+    # public API
+
+    @property
+    def admin_console_store(self):
+        with self._lock:
+            self._load()
+            return self._admin_console_store
 
     def __iter__(self):
-        yield from self.stores.values()
+        with self._lock:
+            self._load()
+            yield from self._stores.values()
 
     def iter_events_url_store_for_user(self, key, user):
-        for store in self.stores.values():
-            if not getattr(store, f"{key}_events_url", False):
-                # store doesn't implement this functionality
-                continue
-            if not user.is_superuser and store.events_url_authorized_groups:
-                if not user.group_name_set:
-                    # user is not a member of any group, it cannot be a match
+        with self._lock:
+            self._load()
+            for store in self._stores.values():
+                if not getattr(store, f"{key}_events_url", False):
+                    # store doesn't implement this functionality
                     continue
-                if not store.events_url_authorized_groups.intersection(user.group_name_set):
-                    # no common groups
-                    continue
-            yield store
-
-    def iter_queue_worker_stores(self):
-        for store in self.stores.values():
-            if not store.read_only:
+                if not user.is_superuser and store.events_url_authorized_role_pk_set:
+                    if not user.group_pk_set:
+                        # user is not a member of any group, it cannot be a match
+                        continue
+                    if not store.events_url_authorized_role_pk_set.intersection(user.group_pk_set):
+                        # no common groups
+                        continue
                 yield store
 
+    def iter_queue_worker_stores(self):
+        with self._lock:
+            self._load()
+            for store in self._stores.values():
+                if not store.read_only:
+                    yield store
 
-stores = SimpleLazyObject(lambda: Stores(settings))
-frontend_store = SimpleLazyObject(lambda: stores.frontend_store)
+
+# used for the tests
+zentral_stores_sync = os.environ.get("ZENTRAL_STORES_SYNC", "1") == "1"
+
+
+stores = Stores(with_sync=zentral_stores_sync)

@@ -12,15 +12,21 @@ from zentral.contrib.inventory.models import Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
 from zentral.core.compliance_checks.models import ComplianceCheck
+from zentral.core.stores.conf import stores
+from zentral.utils.provisioning import provision
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class OsquerySetupQueriesViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
+        stores._load(force=True)
+        # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
-        cls.user.groups.set([cls.group])
+        cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
 
     # utiliy methods
 
@@ -330,7 +336,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         response = self.client.get(reverse("osquery:query_events", args=(query.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_query_events_ok(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         query = self._force_query()
@@ -349,7 +355,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         response = self.client.get(reverse("osquery:fetch_query_events", args=(query.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_query_events_ok(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         query = self._force_query()

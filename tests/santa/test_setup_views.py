@@ -15,6 +15,8 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, File, Tag
 from zentral.contrib.santa.models import Bundle, Enrollment, Rule, Target
 from zentral.core.events.base import AuditEvent
+from zentral.core.stores.conf import stores
+from zentral.utils.provisioning import provision
 from .utils import (force_configuration,
                     force_realm, force_realm_group, force_realm_user, force_rule, force_voting_group,
                     new_cdhash, new_sha256, new_signing_id_identifier, new_team_id)
@@ -26,10 +28,13 @@ class SantaSetupViewsTestCase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
+        stores._load(force=True)
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
-        cls.user.groups.set([cls.group])
+        cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         # file tree
@@ -254,7 +259,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:configuration_events", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_configuration_events_ok(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         configuration = force_configuration()
@@ -276,7 +281,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:fetch_configuration_events", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_configuration_events_ok(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         configuration = force_configuration()

@@ -37,12 +37,12 @@ def get_from_dt():
     return datetime.utcnow() - timedelta(days=1)
 
 
-class BaseTestEventStore(object):
-    event_store = None
+class BaseTestStore(object):
+    store = None
 
     def test_table_creation(self):
         self.assertEqual(
-            self.event_store.get_aggregated_machine_event_counts(
+            self.store.get_aggregated_machine_event_counts(
                 "not_so_random_machine_serial_number",
                 from_dt=get_from_dt()
             ), {}
@@ -50,8 +50,8 @@ class BaseTestEventStore(object):
 
     def test_store_event_with_request(self):
         event = make_event()
-        self.event_store.store(event)
-        l, _ = self.event_store.fetch_machine_events(
+        self.store.store(event)
+        l, _ = self.store.fetch_machine_events(
             event.metadata.machine_serial_number,
             from_dt=get_from_dt()
         )
@@ -60,8 +60,8 @@ class BaseTestEventStore(object):
 
     def test_store_event_without_request(self):
         event = make_event(with_request=False)
-        self.event_store.store(event)
-        l, _ = self.event_store.fetch_machine_events(
+        self.store.store(event)
+        l, _ = self.store.fetch_machine_events(
             event.metadata.machine_serial_number,
             from_dt=get_from_dt()
         )
@@ -69,14 +69,14 @@ class BaseTestEventStore(object):
         self.assertEqual(e.serialize(), event.serialize())
 
     def test_bulk_store_event_with_request(self):
-        if self.event_store.batch_size > 1:
+        if self.store.batch_size > 1:
             event_keys = set()
             events = []
-            for _ in range(self.event_store.batch_size):
+            for _ in range(self.store.batch_size):
                 event = make_event()
                 event_keys.add((str(event.metadata.uuid), event.metadata.index))
                 events.append(event)
-            results = self.event_store.bulk_store(events)
+            results = self.store.bulk_store(events)
             for key in results:
                 event_keys.remove(key)
             self.assertEqual(len(event_keys), 0)
@@ -84,15 +84,15 @@ class BaseTestEventStore(object):
     def test_fetch_machine_events_cursor(self):
         for i in range(100):
             event = make_event(idx=i)
-            self.event_store.store(event)
-        l, cursor = self.event_store.fetch_machine_events(
+            self.store.store(event)
+        l, cursor = self.store.fetch_machine_events(
             event.metadata.machine_serial_number,
             from_dt=get_from_dt(), limit=2
         )
         self.assertEqual(len(l), 2)
         self.assertEqual(l[0].payload['idx'], 99)
         self.assertEqual(l[1].payload['idx'], 98)
-        l2, _ = self.event_store.fetch_machine_events(
+        l2, _ = self.store.fetch_machine_events(
             event.metadata.machine_serial_number,
             from_dt=get_from_dt(), limit=2, cursor=cursor
         )
@@ -103,8 +103,8 @@ class BaseTestEventStore(object):
     def test_aggregated_machine_event_counts(self):
         for i in range(100):
             event = make_event(idx=i, first_type=i < 50)
-            self.event_store.store(event)
-        types_d = self.event_store.get_aggregated_machine_event_counts(
+            self.store.store(event)
+        types_d = self.store.get_aggregated_machine_event_counts(
             event.metadata.machine_serial_number,
             from_dt=get_from_dt()
         )

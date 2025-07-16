@@ -1,16 +1,18 @@
-from collections.abc import Mapping
 import logging
+import os
 import random
 import time
-from urllib.parse import urlencode, urljoin, urlparse
+from urllib.parse import urlencode
 from dateutil import parser
+from rest_framework import serializers
 from zentral.core.events import event_from_event_d, event_types
 from zentral.core.events.filter import EventFilterSet
-from zentral.core.exceptions import ImproperlyConfigured
-from zentral.core.stores.backends.base import BaseEventStore
+from zentral.core.events.serializers import EventFilterSetSerializer
+from zentral.core.stores.backends.base import BaseStore
+from zentral.core.stores.backends.http import HTTPURLField
 from zentral.utils.rison import dumps as rison_dumps
 
-logger = logging.getLogger('zentral.core.stores.backends.elasticsearch')
+logger = logging.getLogger('zentral.core.stores.backends.es_os_base')
 
 try:
     random = random.SystemRandom()
@@ -18,12 +20,32 @@ except NotImplementedError:
     logger.warning('No secure pseudo random number generator available.')
 
 
-class ESOSEventStore(BaseEventStore):
+class ESOSStore(BaseStore):
+    kwargs_keys = (
+        "hosts",
+        "verify_certs",
+        "ssl_show_warn",
+        "username",
+        "password",
+        "batch_size",
+        "index",
+        "indices",
+        "read_index",
+        "number_of_shards",
+        "number_of_replicas",
+        "kibana_discover_url",
+        "kibana_index_pattern_uuid",
+    )
+    encrypted_kwargs_paths = (
+        ["password"],
+    )
+
     client_class = None
     streaming_bulk = None
     connection_error_class = Exception
     request_error_class = Exception
 
+    total_fields_limit = 2000
     max_batch_size = 500
     machine_events = True
     last_machine_heartbeats = True
@@ -105,124 +127,65 @@ class ESOSEventStore(BaseEventStore):
         "month": "M",
     }
 
-    @classmethod
-    def _get_client_kwargs(cls, config_d):
-        # client kwargs
-        kwargs = {}
-
-        # client kwargs → hosts
-        hosts = []
-        configured_hosts = config_d.get("hosts", config_d.get("servers"))
-        for host in configured_hosts:
-            if not isinstance(host, dict):
-                o = urlparse(host)
-                host = {k: v for k, v in (('host', o.hostname),
-                                          ('port', o.port),
-                                          ('url_prefix', o.path)) if v}
-                if o.scheme == "https" or o.port == 443:
-                    if o.port is None:
-                        host['port'] = 443
-                    host['use_ssl'] = True
-                    host['scheme'] = "https"
-                else:
-                    host['scheme'] = "http"
-            hosts.append(host)
-        kwargs['hosts'] = hosts
-
-        if 'verify_certs' in config_d:
-            # verify certs override
-            kwargs['verify_certs'] = config_d['verify_certs']
-            if 'ssl_show_warn' in config_d:
-                kwargs['ssl_show_warn'] = config_d['ssl_show_warn']
-        elif any(host.get("use_ssl") for host in hosts):
-            # make sure that the certs are verified by default
-            kwargs['verify_certs'] = True
-
-        return kwargs
-
-    def _get_index_settings(self, config_d):
-        return {
-            "index.mapping.total_fields.limit": config_d.get("index.mapping.total_fields.limit", 2000),
-            "number_of_shards": config_d.get("number_of_shards", 1),
-            "number_of_replicas": config_d.get("number_of_replicas", 0)
+    def _get_client_kwargs(self):
+        client_kwargs = {
+            "hosts": self.hosts,
+            "verify_certs": self.verify_certs,
+            "ssl_show_warn": self.ssl_show_warn,
         }
+        if self.username and self.password:
+            client_kwargs["http_auth"] = (self.username, self.password)
+        return client_kwargs
 
-    def __init__(self, config_d, test=False):
-        super().__init__(config_d)
-        self._client = self.client_class(**self._get_client_kwargs(config_d))
-        self.test = test
-
-        self.version = None
-        self.use_mapping_types = None
-
+    def load(self):
+        super().load()
         # indices
-        self.index_settings = self._get_index_settings(config_d)
-        self.index = config_d.get('index')
-        self.default_index = self.index
+        self.read_index = self.read_index or self.index
         self.index_mappings = None
-        indices = config_d.get('indices')
-        if indices:
-            if self.index:
-                raise ImproperlyConfigured("index and indices cannot be both set")
-            if not isinstance(indices, Mapping):
-                raise ImproperlyConfigured("indices must be a Mapping")
-            index_priorities = set(index.get("priority") for index in indices.values())
-            if any(not isinstance(p, int) for p in index_priorities):
-                raise ImproperlyConfigured("missing or invalid index priority")
-            if len(index_priorities) < len(indices):
-                raise ImproperlyConfigured("all indices must have a different priority")
+        if self.indices:
             index_mappings = []
-            for index_name, index_config in sorted(indices.items(), key=lambda t: t[1]["priority"], reverse=True):
-                try:
-                    event_filter_set = EventFilterSet.from_mapping(index_config)
-                except (TypeError, ValueError):
-                    raise ImproperlyConfigured(f"invalid event filters for index '{index_name}'")
-                index_mappings.append((event_filter_set, index_name))
-            if not index_mappings:
-                raise ImproperlyConfigured("empty indices value")
-            default_event_filter_set, default_index = index_mappings[-1]
-            if default_event_filter_set:
-                raise ImproperlyConfigured(f"default index '{default_index}' (lowest priority) cannot be filtered")
+            for index in sorted(self.indices, key=lambda idx: idx["priority"], reverse=True):
+                index_mappings.append((EventFilterSet.from_mapping(index), index["name"]))
             self.index_mappings = index_mappings
-        if not self.index and not self.index_mappings:
-            raise ImproperlyConfigured("no index configured")
-
-        self.read_index = config_d.get('read_index', self.index)
-        if not self.read_index:
-            raise ImproperlyConfigured("missing read index")
 
         # kibana
-        self.kibana_discover_url = config_d.get('kibana_discover_url')
-        if not self.kibana_discover_url:
-            # TODO deprecated. Remove.
-            kibana_base_url = config_d.get('kibana_base_url')
-            if kibana_base_url:
-                self.kibana_discover_url = urljoin(kibana_base_url, "app/discover#/")
         if self.kibana_discover_url:
             self.machine_events_url = True
             self.object_events_url = True
             self.probe_events_url = True
-        self.kibana_index_pattern_uuid = config_d.get('kibana_index_pattern_uuid')
+
+        # backward compatibility
+        self.version = None
+        self.use_mapping_types = None
+
+        # for the tests
+        self.force_index_refresh = os.environ.get("ZENTRAL_FORCE_ES_OS_INDEX_REFRESH") == "1"
 
     def get_index_conf(self):
+        index_settings = {
+            "index.mapping.total_fields.limit": self.total_fields_limit,
+            "number_of_shards": self.number_of_shards,
+            "number_of_replicas": self.number_of_replicas,
+        }
         if self.version:
             if self.version >= [7]:
-                return {"settings": self.index_settings,
+                return {"settings": index_settings,
                         "mappings": self.MAPPINGS}
             else:
-                return {"settings": self.index_settings,
+                return {"settings": index_settings,
                         "mappings": {self.LEGACY_DOC_TYPE: self.MAPPINGS}}
 
     def wait_and_configure(self):
+        self._client = self.client_class(**self._get_client_kwargs())
         for i in range(self.MAX_CONNECTION_ATTEMPTS):
             # get or create index
             try:
                 info = self._client.info()
                 self.version = [int(i) for i in info["version"]["number"].split(".")]
-                if self.default_index and not self._client.indices.exists(index=self.default_index):
-                    self._client.indices.create(index=self.default_index, body=self.get_index_conf())
+                if self.index and not self._client.indices.exists(index=self.index):
+                    self._client.indices.create(index=self.index, body=self.get_index_conf())
                     self.use_mapping_types = False
-                    logger.info("Index %s created", self.default_index)
+                    logger.info("Index %s created", self.index)
             except self.connection_error_class:
                 s = (i + 1) * random.uniform(0.9, 1.1)
                 logger.warning('Could not connect to server %d/%d. Sleep %ss',
@@ -233,15 +196,15 @@ class ESOSEventStore(BaseEventStore):
                 error = exception.error.lower()
                 if "already" in error and "exist" in error:
                     # race
-                    logger.info('Index %s exists', self.default_index)
+                    logger.info('Index %s exists', self.index)
                 else:
                     raise
-            if self.default_index:
+            if self.index:
                 # wait for index recovery
                 waiting_for_recovery = False
                 while True:
-                    recovery = self._client.indices.recovery(index=self.default_index, params={"active_only": "true"})
-                    shards = recovery.get(self.default_index, {}).get("shards", [])
+                    recovery = self._client.indices.recovery(index=self.index, params={"active_only": "true"})
+                    shards = recovery.get(self.index, {}).get("shards", [])
                     if any(c["stage"] != "DONE" for c in shards):
                         waiting_for_recovery = True
                         s = 1000 / random.randint(1000, 3000)
@@ -262,7 +225,7 @@ class ESOSEventStore(BaseEventStore):
                 self.use_mapping_types = False
             else:
                 mappings = set(
-                    list(self._client.indices.get_mapping(index=self.default_index).values())[0]['mappings']
+                    list(self._client.indices.get_mapping(index=self.index).values())[0]['mappings']
                 )
                 self.use_mapping_types = self.LEGACY_DOC_TYPE not in mappings
 
@@ -326,7 +289,7 @@ class ESOSEventStore(BaseEventStore):
         if self.version < [7]:
             kwargs["doc_type"] = doc_type
         self._client.index(index=index, **kwargs)
-        if self.test:
+        if self.force_index_refresh:
             self._client.indices.refresh(index=index)
 
     def bulk_store(self, events):
@@ -659,3 +622,67 @@ class ESOSEventStore(BaseEventStore):
 
     def close(self):
         self._client.close()
+
+
+# Serializers
+
+
+class IndexSerializer(EventFilterSetSerializer):
+    name = serializers.CharField(allow_blank=False)
+    priority = serializers.IntegerField(min_value=1)
+
+
+class ESOSStoreSerializer(serializers.Serializer):
+    hosts = serializers.ListField(
+        child=HTTPURLField(),
+        min_length=1,
+    )
+    verify_certs = serializers.BooleanField(required=False, default=True)
+    ssl_show_warn = serializers.BooleanField(required=False, default=True)
+    username = serializers.CharField(required=False, allow_null=True)
+    password = serializers.CharField(required=False, allow_null=True)
+    batch_size = serializers.IntegerField(
+        default=1,
+        min_value=1,
+        max_value=ESOSStore.max_batch_size
+    )
+    # indices
+    index = serializers.CharField(required=False)
+    indices = IndexSerializer(many=True, required=False)
+    read_index = serializers.CharField(required=False)
+    number_of_shards = serializers.IntegerField(min_value=1, default=1, required=False)
+    number_of_replicas = serializers.IntegerField(min_value=0, default=0, required=False)
+    # kibana
+    kibana_discover_url = serializers.CharField(required=False)
+    kibana_index_pattern_uuid = serializers.CharField(required=False)
+
+    def validate(self, data):
+        # username and password for basic auth
+        username = data.get("username")
+        password = data.get("password")
+        if username and not password:
+            raise serializers.ValidationError({"password": "Required when username is set"})
+        elif password and not username:
+            raise serializers.ValidationError({"username": "Required when password is set"})
+
+        # indices
+        indices = data.get("indices")
+        if data.get("index"):
+            if indices:
+                raise serializers.ValidationError({"index": "Cannot be set when multiple indices are configured"})
+        else:
+            if not indices:
+                raise serializers.ValidationError({"indices": "Required when index is empty"})
+            if len(set(idx["priority"] for idx in indices)) < len(indices):
+                raise serializers.ValidationError({"indices": "All indices must have a different priority"})
+            if len(set(idx["name"] for idx in indices)) < len(indices):
+                raise serializers.ValidationError({"indices": "All indices must have a different name"})
+            default_index = sorted(indices, key=lambda idx: idx["priority"])[0]
+            if EventFilterSet.from_mapping(default_index):
+                raise serializers.ValidationError(
+                    {"indices": f"Default index {default_index['name']} (lowest priority) cannot be filtered"}
+                )
+            if not data.get("read_index"):
+                raise serializers.ValidationError({"read_index": "Required when multiple indices are configured"})
+
+        return data

@@ -15,7 +15,8 @@ from realms.backends.views import finalize_session
 from realms.models import RealmAuthenticationSession
 from zentral.contrib.inventory.models import Source, File
 from zentral.contrib.santa.models import Target, TargetCounter, TargetState
-from zentral.core.stores.conf import frontend_store
+from zentral.core.stores.conf import stores
+from zentral.utils.provisioning import provision
 from .utils import (add_file_to_test_class, force_ballot, force_configuration,
                     force_realm, force_realm_user, force_voting_group,
                     new_sha256)
@@ -25,10 +26,13 @@ from .utils import (add_file_to_test_class, force_ballot, force_configuration,
 class SantaSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
+        stores._load(force=True)
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
-        cls.user.groups.set([cls.group])
+        cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
         cls.realm = force_realm(enabled_for_login=True)
         _, cls.realm_user = force_realm_user(realm=cls.realm, username=cls.user.username, email=cls.user.email)
         # file tree
@@ -502,7 +506,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:binary_events", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_binary_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         self._login("santa.view_target")
@@ -519,7 +523,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:fetch_binary_events", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_binary_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         self._login("santa.view_target")
@@ -538,7 +542,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_binary_target_store_redirect(self):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:binary_events_store_redirect", args=(self.file_sha256,)),
-                                   {"es": frontend_store.name})
+                                   {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # bundle target
@@ -623,7 +627,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:cdhash_events", args=(self.cdhash,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_cdhash_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         self._login("santa.view_target")
@@ -640,7 +644,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:fetch_cdhash_events", args=(self.cdhash,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_cdhash_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         self._login("santa.view_target")
@@ -659,7 +663,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_cdhash_target_store_redirect(self):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:cdhash_events_store_redirect", args=(self.cdhash,)),
-                                   {"es": frontend_store.name})
+                                   {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # certificate target
@@ -694,7 +698,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:certificate_events", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_certificate_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         self._login("santa.view_target")
@@ -711,7 +715,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:fetch_certificate_events", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_certificate_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         self._login("santa.view_target")
@@ -730,7 +734,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_certificate_target_store_redirect(self):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:certificate_events_store_redirect", args=(self.file_cert_sha256,)),
-                                   {"es": frontend_store.name})
+                                   {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # team ID target
@@ -765,7 +769,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:teamid_events", args=(self.file_team_id,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_team_id_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         self._login("santa.view_target")
@@ -782,7 +786,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:fetch_teamid_events", args=(self.file_team_id,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_team_id_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         self._login("santa.view_target")
@@ -801,7 +805,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_team_id_target_store_redirect(self):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:teamid_events_store_redirect", args=(self.file_team_id,)),
-                                   {"es": frontend_store.name})
+                                   {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # signing ID target
@@ -836,7 +840,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:signingid_events", args=(self.file_signing_id,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.get_aggregated_object_event_counts")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_signing_id_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         self._login("santa.view_target")
@@ -853,7 +857,7 @@ class SantaSetupViewsTestCase(TestCase):
         response = self.client.get(reverse("santa:fetch_signingid_events", args=(self.file_signing_id,)))
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.core.stores.backends.elasticsearch.EventStore.fetch_object_events")
+    @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_signing_id_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         self._login("santa.view_target")
@@ -872,7 +876,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_signing_id_target_store_redirect(self):
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:signingid_events_store_redirect", args=(self.file_signing_id,)),
-                                   {"es": frontend_store.name})
+                                   {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # reset target state

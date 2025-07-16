@@ -24,18 +24,15 @@ To define a store, a backend configuration needs to be added to the base.json `s
 
 The python module implementing the store, as a string. Currently available:
 
-* `zentral.core.stores.backends.azure_log_analytics`
 * `zentral.core.stores.backends.datadog`
 * `zentral.core.stores.backends.elasticsearch`
 * `zentral.core.stores.backends.http`
-* `zentral.core.stores.backends.humio`
 * `zentral.core.stores.backends.kinesis`
 * `zentral.core.stores.backends.opensearch`
 * `zentral.core.stores.backends.panther`
 * `zentral.core.stores.backends.snowflake`
 * `zentral.core.stores.backends.splunk`
 * `zentral.core.stores.backends.sumo_logic`
-* `zentral.core.stores.backends.syslog`
 
 ### `frontend`
 

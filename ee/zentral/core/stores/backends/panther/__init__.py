@@ -1,28 +1,34 @@
 import gzip
 from kombu.utils import json
 import requests
-from zentral.core.exceptions import ImproperlyConfigured
-from zentral.core.stores.backends.base import BaseEventStore
+from rest_framework import serializers
+from base.utils import deployment_info
+from zentral.core.stores.backends.base import BaseStore
+from zentral.utils.requests import CustomHTTPAdapter
 
 
-class EventStore(BaseEventStore):
+class PantherStore(BaseStore):
+    kwargs_keys = (
+        "endpoint_url",
+        "bearer_token",
+        "batch_size",
+    )
+    encrypted_kwargs_paths = (
+        ["bearer_token"],
+    )
     max_batch_size = 100
+    request_timeout = 300
+    max_retries = 3
 
-    def __init__(self, config_d):
-        super().__init__(config_d)
-        endpoint_url = config_d.get("endpoint_url")
-        if endpoint_url:
-            self.endpoint_url = endpoint_url
-        else:
-            raise ImproperlyConfigured("Missing or empty endpoint_url")
-        bearer_token = config_d.get("bearer_token")
-        if not bearer_token:
-            raise ImproperlyConfigured("Missing or empty bearer_token")
+    def load(self):
+        super().load()
         self.session = requests.Session()
         self.session.headers.update({
-            'Authorization': f'Bearer {bearer_token}',
-            'Content-Encoding': 'gzip'
+            'Authorization': f'Bearer {self.bearer_token}',
+            'Content-Encoding': 'gzip',
+            'User-Agent': deployment_info.user_agent,
         })
+        self.session.mount(self.endpoint_url, CustomHTTPAdapter(self.request_timeout, self.max_retries))
 
     def _serialize_event(self, event):
         if not isinstance(event, dict):
@@ -54,3 +60,16 @@ class EventStore(BaseEventStore):
         response = self.session.post(self.endpoint_url, data=data)
         response.raise_for_status()
         return event_keys
+
+
+# Serializers
+
+
+class PantherStoreSerializer(serializers.Serializer):
+    endpoint_url = serializers.URLField()
+    bearer_token = serializers.CharField(min_length=1)
+    batch_size = serializers.IntegerField(
+        default=1,
+        min_value=1,
+        max_value=PantherStore.max_batch_size,
+    )

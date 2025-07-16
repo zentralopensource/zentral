@@ -1,4 +1,4 @@
-## 2024.1 (TBD)
+## 2025.1 (TBD)
 
 ### Features (some, not all…)
 
@@ -52,9 +52,11 @@ Remove Munki install probes.
 
 #### Santa
 
-Support for the [Santa Signing ID rules](https://santa.dev/concepts/rules.html#signing-id-rules).
+Support for the [Santa CEL policies](https://northpole.dev/features/binary-authorization#cel).
 
-Support for the [Santa CDHASH rules](https://santa.dev/concepts/rules.html#cdhash-rules).
+Support for the [Santa Signing ID rules](https://northpole.dev/features/binary-authorization#signingid).
+
+Support for the [Santa CDHASH rules](https://northpole.dev/features/binary-authorization#cdhash).
 
 Support for the `SyncExtraHeaders` configuration key and implementation of the authentication via `Zentral-Authorization` header.
 
@@ -79,6 +81,14 @@ New `zentral.core.stores.backends.panther` store backend for [Panther](https://p
 🚧 Alpha release of the new UI.
 
 ### Backward incompatibilities
+
+#### 🧨 Event stores
+
+Event stores are managed in the database now. You can still pre-configure them in `base.json` with the new provisioning functionality.
+
+Removed the `excluded_event_types` and `included_event_types` options. Use the `excluded_event_filters` and `included_event_filters` options instead.
+
+Removed the Syslog, Humio, and Azure Log Analytics event store backends.
 
 #### 🧨 Probes refactoring
 
@@ -239,7 +249,7 @@ Add Santa metrics and targets views.
 
 Add event linked objects search.
 
-Splunk can be used as frontend store.
+Splunk can be used as admin console store.
 
 Shards for Santa Allow unknown and Upload all events options
 

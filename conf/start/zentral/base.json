@@ -39,16 +39,6 @@
     "backend": "zentral.core.queues.backends.kombu",
     "backend_url": "amqp://guest:guest@rabbitmq:5672//"
   },
-  "stores": {
-    "elasticsearch": {
-      "frontend": true,
-      "backend": "zentral.core.stores.backends.elasticsearch",
-      "hosts": [
-        "http://elastic:9200"
-      ],
-      "index": "zentral-events"
-    }
-  },
   "apps": {
     "realms": {
       "metrics": true
@@ -59,6 +49,22 @@
     "zentral.core.incidents": {
       "metrics": true
     },
+    "zentral.core.stores": {
+      "provisioning": {
+        "stores": {
+          "elasticsearch": {
+            "admin_console": true,
+            "name": "Elasticsearch",
+            "description": "Built-in Elasticsearch event store",
+            "backend": "ELASTICSEARCH",
+            "elasticsearch_kwargs": {
+              "hosts": ["http://elastic:9200"],
+              "index": "zentral-events"
+            }
+          }
+        }
+      }
+    },
     "zentral.core.terraform": {},
     "zentral.contrib.inventory": {
       "metrics": true,
@@ -66,35 +72,11 @@
         {
           "backend": "zentral.contrib.inventory.clients.dummy"
         }
-      ],
-      "exporters": [
-        {
-          "backend": "zentral.contrib.inventory.exporters.es_machine_snapshots",
-          "es_hosts": [
-            "http://elastic:9200"
-          ],
-          "bundle_ids": [
-            "org.mozilla.firefox"
-          ]
-        },
-        {
-          "backend": "zentral.contrib.inventory.exporters.es_aggregations",
-          "es_hosts": [
-            "http://elastic:9200"
-          ],
-          "bundle_ids": [
-            "org.mozilla.firefox"
-          ]
-        }
       ]
     },
     "zentral.contrib.jamf": {},
     "zentral.contrib.munki": {
-      "metrics": true,
-      "principal_user_detection": {
-        "sources": ["company_portal", "google_chrome", "logged_in_user"],
-        "domains": ["zentral.pro"]
-      }
+      "metrics": true
     },
     "zentral.contrib.osquery": {},
     "zentral.contrib.santa": {

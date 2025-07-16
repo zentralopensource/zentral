@@ -118,7 +118,7 @@ class ProbeList(ProbeView):
         return self.filter(_filter)
 
 
-# used for the tests, to avoid having an extra DB connection
+# used for the tests
 zentral_probes_sync = os.environ.get("ZENTRAL_PROBES_SYNC", "1") == "1"
 
 

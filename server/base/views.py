@@ -4,7 +4,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.generic import TemplateView, View
-from zentral.core.stores.conf import frontend_store
+from zentral.core.stores.conf import stores
 
 
 logger = logging.getLogger("server.base.views")
@@ -64,7 +64,9 @@ class AppHistogramDataView(LoginRequiredMixin, View):
         labels = []
         event_count_data = []
         unique_msn_data = []
-        for dt, event_count, unique_msn in frontend_store.get_app_hist_data(interval, bucket_number, app_tag):
+        for dt, event_count, unique_msn in stores.admin_console_store.get_app_hist_data(
+            interval, bucket_number, app_tag
+        ):
             labels.append(dt.strftime(date_format))
             event_count_data.append(event_count)
             unique_msn_data.append(unique_msn)

@@ -6,7 +6,6 @@ import random
 import threading
 import time
 from django.utils.functional import cached_property
-from django.utils.text import slugify
 from kombu.utils import json
 from google.cloud import pubsub_v1
 from google.oauth2 import service_account
@@ -116,7 +115,7 @@ class StoreWorker(Consumer):
 
     def __init__(self, enriched_events_topic, credentials, event_store):
         self.name = f"store worker {event_store.name}"
-        self.subscription_id = "{}-store-enriched-events-subscription".format(slugify(event_store.name))
+        self.subscription_id = f"{event_store.slug}-store-enriched-events-subscription"
         super().__init__(enriched_events_topic, credentials)
         self.event_store = event_store
 
@@ -251,7 +250,7 @@ class BulkStoreWorker(BaseWorker):
 
     def __init__(self, enriched_events_topic, credentials, event_store):
         self.name = f"store worker {event_store.name}"
-        self.subscription_id = "{}-store-enriched-events-subscription".format(slugify(event_store.name))
+        self.subscription_id = f"{event_store.slug}-store-enriched-events-subscription"
         super().__init__(enriched_events_topic, credentials)
         self.event_store = event_store
         # threading
