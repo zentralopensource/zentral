@@ -155,6 +155,16 @@ class TestOpenSearchStore(TestCase):
             {"aws_auth": {"aws_access_key_id": ["This field is required"]}}
         )
 
+    def test_serializer_aws_auth_no_username_ok(self):
+        s = OpenSearchStoreSerializer(data={
+            "hosts": ["http://opensearch:9200"],
+            "index": "zentral-events",
+            "aws_auth": {
+                "region_name": "eu-central-1",
+            }
+        })
+        self.assertTrue(s.is_valid())
+
     def test_serializer_basic_auth_aws_auth_conflict(self):
         s = OpenSearchStoreSerializer(data={
             "hosts": ["http://opensearch:9200"],

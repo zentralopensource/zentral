@@ -55,6 +55,6 @@ class OpenSearchStoreSerializer(ESOSStoreSerializer):
 
     def validate(self, data):
         data = super().validate(data)
-        if data["username"] and data.get("aws_auth"):
+        if data.get("username") and data.get("aws_auth"):
             raise serializers.ValidationError({"aws_auth": "Cannot be used with basic auth"})
         return data
