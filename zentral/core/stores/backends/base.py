@@ -15,9 +15,12 @@ class BaseStore(Backend):
     probe_events = False
     probe_events_url = False
 
+    def __init__(self, instance, load=True):
+        self.slug = instance.slug
+        super().__init__(instance, load)
+
     def load(self):
         super().load()
-        self.slug = self.instance.slug
         self.admin_console = self.instance.admin_console
         self.events_url_authorized_roles = list(self.instance.events_url_authorized_roles.all())
         self.events_url_authorized_role_pk_set = set(r.pk for r in self.events_url_authorized_roles)
