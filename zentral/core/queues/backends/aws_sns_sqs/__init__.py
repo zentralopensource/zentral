@@ -1,3 +1,4 @@
+from datetime import datetime
 from importlib import import_module
 import json
 import logging
@@ -247,11 +248,7 @@ class SimpleStoreWorker(StoreWorkerMixin, Consumer):
 
     def __init__(self, event_queues, event_store):
         super().__init__(
-            event_queues.setup_queue(
-                f"store-enriched-events-{event_store.slug}",
-                topic_basename="enriched-events",
-                filter_policy=build_sns_filter_policy_for_event_store(event_store)
-            ),
+            event_queues.setup_store_worker_queue(event_store),
             event_queues.client_kwargs
         )
         self.event_store = event_store
@@ -273,11 +270,7 @@ class ConcurrentStoreWorker(StoreWorkerMixin, ConcurrentConsumer):
     def __init__(self, event_queues, event_store):
         self.event_store = event_store
         super().__init__(
-            event_queues.setup_queue(
-                f"store-enriched-events-{event_store.slug}",
-                topic_basename="enriched-events",
-                filter_policy=build_sns_filter_policy_for_event_store(event_store)
-            ),
+            event_queues.setup_store_worker_queue(event_store),
             event_store.concurrency,
             event_queues.client_kwargs
         )
@@ -299,11 +292,7 @@ class BulkStoreWorker(StoreWorkerMixin, BatchConsumer):
 
     def __init__(self, event_queues, event_store):
         super().__init__(
-            event_queues.setup_queue(
-                f"store-enriched-events-{event_store.slug}",
-                topic_basename="enriched-events",
-                filter_policy=build_sns_filter_policy_for_event_store(event_store)
-            ),
+            event_queues.setup_store_worker_queue(event_store),
             event_store.batch_size,
             event_queues.client_kwargs
         )
@@ -365,8 +354,10 @@ class EventQueues(BaseEventQueues):
             if val:
                 self.client_kwargs[kwarg] = val
         self._known_queues = {}
+        self._predefined_queue_basenames = []
         for queue_basename, queue_url in config_d.get("predefined_queues", {}).items():
             self._known_queues[queue_basename] = queue_url
+            self._predefined_queue_basenames.append(queue_basename)
         self._known_topics = {}
         for topic_basename, topic_arn in config_d.get("predefined_topics", {}).items():
             self._known_topics[topic_basename] = topic_arn
@@ -404,7 +395,8 @@ class EventQueues(BaseEventQueues):
         try:
             queue_url = self._known_queues[queue_basename]
         except KeyError:
-            queue_name = "{}{}-queue".format(self._prefix, queue_basename)
+            queue_name = f"{self._prefix}{queue_basename}-queue"
+            queue_created = False
             try:
                 response = self.sqs_client.get_queue_url(QueueName=queue_name)
             except self.sqs_client.exceptions.QueueDoesNotExist:
@@ -412,7 +404,14 @@ class EventQueues(BaseEventQueues):
                     QueueName=queue_name,
                     tags=self._tags,
                 )
+                queue_created = True
             queue_url = response["QueueUrl"]
+            if not queue_created:
+                # make sure we remove the deletion tag
+                self.sqs_client.untag_queue(
+                    QueueUrl=queue_url,
+                    TagKeys=["Zentral:ToDelete"],
+                )
             self._known_queues[queue_basename] = queue_url
             if topic_basename:
                 topic_arn = self.setup_topic(topic_basename)
@@ -476,6 +475,32 @@ class EventQueues(BaseEventQueues):
                         AttributeValue=json.dumps(filter_policy)
                     )
         return queue_url
+
+    def get_store_worker_queue_basename(self, event_store):
+        return f"store-enriched-events-{event_store.slug}"
+
+    def setup_store_worker_queue(self, event_store):
+        return self.setup_queue(
+            self.get_store_worker_queue_basename(event_store),
+            topic_basename="enriched-events",
+            filter_policy=build_sns_filter_policy_for_event_store(event_store),
+        )
+
+    def mark_store_worker_queue_for_deletion(self, event_store):
+        queue_basename = self.get_store_worker_queue_basename(event_store)
+        if queue_basename in self._predefined_queue_basenames:
+            logger.warning("Known queue %s cannot be marked for deletion", queue_basename)
+            return
+        queue_name = f"{self._prefix}{queue_basename}-queue"
+        try:
+            response = self.sqs_client.get_queue_url(QueueName=queue_name)
+        except self.sqs_client.exceptions.QueueDoesNotExist:
+            logger.warning("Missing queue %s cannot be marked for deletion", queue_name)
+        else:
+            self.sqs_client.tag_queue(
+                QueueUrl=response["QueueUrl"],
+                Tags={"Zentral:ToDelete": datetime.utcnow().isoformat()}
+            )
 
     def get_preprocess_worker(self):
         return PreprocessWorker(self)
