@@ -4,6 +4,7 @@ import threading
 import time
 from urllib.parse import urlparse
 from django.utils.functional import cached_property
+from kombu.utils import json
 import requests
 from rest_framework import serializers
 from .base import BaseStore
@@ -45,7 +46,7 @@ class HTTPStoreClient:
 
     def store_event(self, event):
         payload = self._serialize_event(event)
-        r = self.session.post(self.endpoint_url, json=payload)
+        r = self.session.post(self.endpoint_url, data=json.dumps(payload))
         r.raise_for_status()
 
 
