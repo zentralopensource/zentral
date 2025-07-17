@@ -34,12 +34,12 @@ class Stores:
     def _load(self, force=False):
         self._start_sync()
         if self._stores is None or force:
-            self._stores = {}
+            self._stores = []
             self._admin_console_store = None
             first_store = None
             for db_store in Store.objects.prefetch_related("events_url_authorized_roles").all().order_by("created_at"):
                 store = db_store.get_backend(load=True)
-                self._stores[store.name] = store
+                self._stores.append(store)
                 # admin console store?
                 if db_store.admin_console:
                     if self._admin_console_store:
@@ -66,30 +66,26 @@ class Stores:
     def __iter__(self):
         with self._lock:
             self._load()
-            yield from self._stores.values()
+            yield from self._stores
 
     def iter_events_url_store_for_user(self, key, user):
-        with self._lock:
-            self._load()
-            for store in self._stores.values():
-                if not getattr(store, f"{key}_events_url", False):
-                    # store doesn't implement this functionality
+        for store in self:
+            if not getattr(store, f"{key}_events_url", False):
+                # store doesn't implement this functionality
+                continue
+            if not user.is_superuser and store.events_url_authorized_role_pk_set:
+                if not user.group_pk_set:
+                    # user is not a member of any group, it cannot be a match
                     continue
-                if not user.is_superuser and store.events_url_authorized_role_pk_set:
-                    if not user.group_pk_set:
-                        # user is not a member of any group, it cannot be a match
-                        continue
-                    if not store.events_url_authorized_role_pk_set.intersection(user.group_pk_set):
-                        # no common groups
-                        continue
-                yield store
+                if not store.events_url_authorized_role_pk_set.intersection(user.group_pk_set):
+                    # no common groups
+                    continue
+            yield store
 
     def iter_queue_worker_stores(self):
-        with self._lock:
-            self._load()
-            for store in self._stores.values():
-                if not store.read_only:
-                    yield store
+        for store in self:
+            if not store.read_only:
+                yield store
 
 
 # used for the tests
