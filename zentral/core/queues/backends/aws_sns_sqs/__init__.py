@@ -5,9 +5,11 @@ import queue
 import signal
 import threading
 import time
+import weakref
 import boto3
 from botocore.config import Config
 from django.utils.functional import cached_property
+from base.notifier import notifier
 from zentral.conf import settings
 from zentral.core.queues.backends.base import BaseEventQueues
 from .consumer import BatchConsumer, ConcurrentConsumer, Consumer, ConsumerProducer
@@ -212,7 +214,32 @@ def build_sns_filter_policy_for_event_store(event_store):
     logger.warning("No SNS filter policy: incompatible %s event store filters", event_store.name)
 
 
-class SimpleStoreWorker(WorkerMixin, Consumer):
+class StoreWorkerMixin(WorkerMixin):
+    def store_notification_handler(self, *args, **kwargs):
+        try:
+            if str(args[0]) == str(self.event_store.instance.pk):
+                if not self.stop_receiving_event.is_set():
+                    logger.warning("Stop receiving events because the store has been updated.")
+                    self.stop_receiving_event.set()
+        except Exception:
+            logger.exception("Could not process store update notification.")
+
+    def run(self, *args, **kwargs):
+        self.log_info("run")
+        super().setup_metrics_exporter(*args, **kwargs)
+        notifier.add_callback("stores.store", weakref.WeakMethod(self.store_notification_handler))
+        super().run(*args, **kwargs)
+
+    def skip_event(self, receipt_handle, event_d):
+        event_type = event_d['_zentral']['type']
+        if not self.event_store.is_serialized_event_included(event_d):
+            self.inc_counter("skipped_events", event_type)
+            return True
+        else:
+            return False
+
+
+class SimpleStoreWorker(StoreWorkerMixin, Consumer):
     counters = (
         ("skipped_events", "event_type"),
         ("stored_events", "event_type"),
@@ -230,19 +257,6 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
         self.event_store = event_store
         self.name = "store worker {}".format(self.event_store.name)
 
-    def skip_event(self, receipt_handle, event_d):
-        event_type = event_d['_zentral']['type']
-        if not self.event_store.is_serialized_event_included(event_d):
-            self.inc_counter("skipped_events", event_type)
-            return True
-        else:
-            return False
-
-    def run(self, *args, **kwargs):
-        self.log_info("run")
-        super().setup_metrics_exporter(*args, **kwargs)
-        super().run(*args, **kwargs)
-
     def process_event(self, routing_key, event_d):
         self.log_debug("store event")
         event_type = event_d['_zentral']['type']
@@ -250,7 +264,7 @@ class SimpleStoreWorker(WorkerMixin, Consumer):
         self.inc_counter("stored_events", event_type)
 
 
-class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
+class ConcurrentStoreWorker(StoreWorkerMixin, ConcurrentConsumer):
     counters = (
         ("skipped_events", "event_type"),
         ("stored_events", "event_type"),
@@ -269,19 +283,6 @@ class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
         )
         self.name = f"store worker {event_store.name}"
 
-    def skip_event(self, receipt_handle, event_d):
-        event_type = event_d['_zentral']['type']
-        if not self.event_store.is_serialized_event_included(event_d):
-            self.inc_counter("skipped_events", event_type)
-            return True
-        else:
-            return False
-
-    def run(self, *args, **kwargs):
-        self.log_info("run")
-        super().setup_metrics_exporter(*args, **kwargs)
-        super().run(*args, **kwargs)
-
     def get_process_thread_constructor(self):
         return self.event_store.get_process_thread_constructor()
 
@@ -290,7 +291,7 @@ class ConcurrentStoreWorker(WorkerMixin, ConcurrentConsumer):
             self.inc_counter("stored_events", event_type)
 
 
-class BulkStoreWorker(WorkerMixin, BatchConsumer):
+class BulkStoreWorker(StoreWorkerMixin, BatchConsumer):
     counters = (
         ("skipped_events", "event_type"),
         ("stored_events", "event_type"),
@@ -308,19 +309,6 @@ class BulkStoreWorker(WorkerMixin, BatchConsumer):
         )
         self.event_store = event_store
         self.name = "store worker {}".format(self.event_store.name)
-
-    def skip_event(self, receipt_handle, event_d):
-        event_type = event_d['_zentral']['type']
-        if not self.event_store.is_serialized_event_included(event_d):
-            self.inc_counter("skipped_events", event_type)
-            return True
-        else:
-            return False
-
-    def run(self, *args, **kwargs):
-        self.log_info("run")
-        super().setup_metrics_exporter(*args, **kwargs)
-        super().run(*args, **kwargs)
 
     def process_events(self, batch):
         batch_size = len(batch)
