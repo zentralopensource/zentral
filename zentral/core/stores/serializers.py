@@ -105,6 +105,13 @@ class StoreSerializer(serializers.ModelSerializer):
             for field in list(ret.keys()):
                 if field == "backend" or "kwargs" in field:
                     ret.pop(field)
+        else:
+            # other backends kwargs
+            for other_backend in StoreBackend:
+                if other_backend == ret["backend"]:
+                    continue
+                other_backend_slug = other_backend.value.lower()
+                ret.pop(f"{other_backend_slug}_kwargs", None)
         return ret
 
 

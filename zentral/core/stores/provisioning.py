@@ -1,9 +1,9 @@
 import logging
 from django.db import transaction
 from accounts.provisioning import RoleProvisioner
-from base.notifier import notifier
 from zentral.utils.provisioning import Provisioner
 from .serializers import StoreProvisioningSerializer
+from .sync import signal_store_change
 
 
 logger = logging.getLogger("zentral.core.stores.provisioning")
@@ -21,7 +21,7 @@ class StoreProvisioner(Provisioner):
             return
 
         def notify():
-            notifier.send_notification("stores.store", str(db_store.pk))
+            signal_store_change(db_store)
 
         transaction.on_commit(notify)
 
@@ -29,6 +29,6 @@ class StoreProvisioner(Provisioner):
         super().update_instance(db_store, uid, spec)
 
         def notify():
-            notifier.send_notification("stores.store", str(db_store.pk))
+            signal_store_change(db_store)
 
         transaction.on_commit(notify)

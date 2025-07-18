@@ -11,7 +11,7 @@ def build_login_event(username=None, routing_key=None):
     return LoginEvent(EventMetadata(routing_key=routing_key), {"user": {"username": username}})
 
 
-def force_store(backend=None, backend_kwargs=None, name=None, event_filters=None):
+def force_store(backend=None, backend_kwargs=None, name=None, event_filters=None, provisioned=False):
     name = name or get_random_string(12)
     backend = backend or "HTTP"
     backend_kwargs = backend_kwargs or {"endpoint_url": "https://www.example.com"}
@@ -24,5 +24,7 @@ def force_store(backend=None, backend_kwargs=None, name=None, event_filters=None
         backend_kwargs={}
     )
     store.set_backend_kwargs(backend_kwargs)
+    if provisioned:
+        store.provisioning_uid = get_random_string(12)
     store.save()
     return get_store_backend(store, load=True)

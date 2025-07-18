@@ -10,13 +10,21 @@ class Backend:
 
     def __init__(self, instance, load=True):
         self.instance = instance
+        self.pk = instance.pk
         self.name = instance.name
+        self.created_at = instance.created_at
+        self.updated_at = instance.updated_at
         self.kwargs = {}
         if load:
             self.load()
 
     def __str__(self):
         return self.name
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.instance == other.instance
 
     def load(self):
         kwargs = self.get_kwargs()

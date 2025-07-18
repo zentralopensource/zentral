@@ -16,6 +16,12 @@ class BaseEventQueues:
     def get_store_worker(self, event_store):
         raise NotImplementedError
 
+    def setup_store_worker_queue(self, event_store):
+        return
+
+    def mark_store_worker_queue_for_deletion(self, event_store):
+        return
+
     # post events
 
     def post_raw_event(self, routing_key, raw_event):
