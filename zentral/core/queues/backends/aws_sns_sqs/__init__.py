@@ -174,51 +174,10 @@ class ProcessWorker(WorkerMixin, Consumer):
         self.inc_counter("processed_events", event_type)
 
 
-def build_sns_filter_policy_for_event_store(event_store):
-    """Try to build a SNS filter policy for the event store.
-
-    If the event store has a compatible event filter set, a policy will be built.
-    A compatible event filter set is not empty, and has either included event filters
-    or excluded event filters on a single attribute type.
-    """
-    event_filter_set = event_store.event_filter_set
-    if not event_filter_set:
-        logger.debug("No SNS filter policy: %s event store has no filters", event_store.name)
-        return
-    for anything_but, event_filters in ((False, event_filter_set.included_event_filters),
-                                        (True, event_filter_set.excluded_event_filters)):
-        if not event_filters:
-            continue
-        current_attr = None
-        accumulator = set([])
-        single_attr = True
-        for event_filter in event_filters:
-            for attr, values in event_filter.items():
-                if attr == "event_type":
-                    attr = "type"
-                if current_attr is None:
-                    current_attr = attr
-                elif current_attr != attr:
-                    single_attr = False
-                    break
-                accumulator.update(values)
-            if not single_attr:
-                break
-        if not single_attr:
-            continue
-        values = sorted(accumulator)  # sorted to make it testable
-        if not values:
-            break
-        if anything_but:
-            values = [{"anything-but": values}]
-        return {f"zentral.{current_attr}": values}
-    logger.warning("No SNS filter policy: incompatible %s event store filters", event_store.name)
-
-
 class StoreWorkerMixin(WorkerMixin):
     def store_notification_handler(self, *args, **kwargs):
         try:
-            if str(args[0]) == str(self.event_store.instance.pk):
+            if str(args[0]) == str(self.event_store.pk):
                 if not self.stop_receiving_event.is_set():
                     logger.warning("Stop receiving events because the store has been updated.")
                     self.stop_receiving_event.set()
@@ -333,6 +292,8 @@ class BulkStoreWorker(StoreWorkerMixin, BatchConsumer):
 
 
 class EventQueues(BaseEventQueues):
+    deletion_tag = "Zentral:ToDelete"
+
     def __init__(self, config_d):
         super().__init__(config_d)
         self._prefix = config_d.get("prefix", "ztl-")
@@ -365,7 +326,6 @@ class EventQueues(BaseEventQueues):
         self._events_queue = None
         self._stop_event = None
         self._threads = []
-        self._use_filter_policies = config_d.get("use_filter_policies", False)
         self._previous_signal_handlers = {}
 
     @cached_property
@@ -380,7 +340,7 @@ class EventQueues(BaseEventQueues):
         try:
             return self._known_topics[topic_basename]
         except KeyError:
-            topic_name = "{}{}-topic".format(self._prefix, topic_basename)
+            topic_name = f"{self._prefix}{topic_basename}-topic"
             response = self.sns_client.create_topic(
                 Name=topic_name,
                 Tags=[{"Key": k, "Value": v} for k, v in self._tags.items()]
@@ -389,118 +349,115 @@ class EventQueues(BaseEventQueues):
             self._known_topics[topic_basename] = topic_arn
             return topic_arn
 
-    def setup_queue(self, queue_basename, topic_basename=None, filter_policy=None):
-        if not self._use_filter_policies or not topic_basename:
-            filter_policy = None
+    def get_queue(self, queue_basename):
+        queue_name = f"{self._prefix}{queue_basename}-queue"
+        queue_url = None
         try:
             queue_url = self._known_queues[queue_basename]
         except KeyError:
-            queue_name = f"{self._prefix}{queue_basename}-queue"
-            queue_created = False
             try:
                 response = self.sqs_client.get_queue_url(QueueName=queue_name)
             except self.sqs_client.exceptions.QueueDoesNotExist:
-                response = self.sqs_client.create_queue(
-                    QueueName=queue_name,
-                    tags=self._tags,
-                )
-                queue_created = True
+                pass
+            else:
+                queue_url = response["QueueUrl"]
+                self._known_queues[queue_basename] = queue_url
+        return queue_basename in self._predefined_queue_basenames, queue_name, queue_url
+
+    def get_or_create_queue(self, queue_basename):
+        queue_is_predefined, queue_name, queue_url = self.get_queue(queue_basename)
+        created = False
+        if not queue_url:
+            response = self.sqs_client.create_queue(
+                QueueName=queue_name,
+                tags=self._tags,
+            )
+            created = True
             queue_url = response["QueueUrl"]
-            if not queue_created:
-                # make sure we remove the deletion tag
-                self.sqs_client.untag_queue(
-                    QueueUrl=queue_url,
-                    TagKeys=["Zentral:ToDelete"],
-                )
             self._known_queues[queue_basename] = queue_url
-            if topic_basename:
-                topic_arn = self.setup_topic(topic_basename)
-                response = self.sqs_client.get_queue_attributes(
-                    QueueUrl=queue_url,
-                    AttributeNames=["QueueArn"]
-                )
-                queue_arn = response["Attributes"]["QueueArn"]
-                self.sqs_client.set_queue_attributes(
-                    QueueUrl=queue_url,
-                    Attributes={
-                        "Policy": json.dumps({
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {"Sid": "AllowSendMessageFromSNSTopic",
-                                 "Principal": {"Service": "sns.amazonaws.com"},
-                                 "Action": ["sqs:SendMessage"],
-                                 "Effect": "Allow",
-                                 "Resource": queue_arn,
-                                 "Condition": {"ArnEquals": {"aws:SourceArn": topic_arn}}}
-                            ]
-                        })
-                    }
-                )
-                subscription_attributes = {"RawMessageDelivery": "true"}
-                if filter_policy:
-                    subscription_attributes["FilterPolicy"] = json.dumps(filter_policy)
-                self.sns_client.subscribe(
-                    TopicArn=topic_arn,
-                    Protocol="sqs",
-                    Endpoint=queue_arn,
-                    Attributes=subscription_attributes
-                )
-        else:
-            if filter_policy:
-                topic_arn = self._known_topics[topic_basename]
-                response = self.sqs_client.get_queue_attributes(
-                    QueueUrl=queue_url,
-                    AttributeNames=["QueueArn"]
-                )
-                queue_arn = response["Attributes"]["QueueArn"]
-                subscription_arn = None
-                next_token = None
-                while subscription_arn is None:
-                    request_kwargs = {"TopicArn": topic_arn}
-                    if next_token:
-                        request_kwargs["NextToken"] = next_token
-                    response = self.sns_client.list_subscriptions_by_topic(**request_kwargs)
-                    for subscription in response.get("Subscriptions"):
-                        if subscription["Endpoint"] == queue_arn:
-                            subscription_arn = subscription["SubscriptionArn"]
-                            break
-                    else:
-                        next_token = response.get("NextToken")
-                        if not next_token:
-                            break
-                if subscription_arn:
-                    self.sns_client.set_subscription_attributes(
-                        SubscriptionArn=subscription_arn,
-                        AttributeName="FilterPolicy",
-                        AttributeValue=json.dumps(filter_policy)
-                    )
+        return queue_is_predefined, queue_url, created
+
+    def get_queue_arn(self, queue_url):
+        response = self.sqs_client.get_queue_attributes(
+            QueueUrl=queue_url,
+            AttributeNames=["QueueArn"]
+        )
+        return response["Attributes"]["QueueArn"]
+
+    def setup_queue_subscription(self, queue_url, topic_basename):
+        # ARNs
+        topic_arn = self.setup_topic(topic_basename)
+        queue_arn = self.get_queue_arn(queue_url)
+
+        # set policy to allow sqs to send messages from the topic to the queue
+        self.sqs_client.set_queue_attributes(
+            QueueUrl=queue_url,
+            Attributes={
+                "Policy": json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {"Sid": "AllowSendMessageFromSNSTopic",
+                         "Principal": {"Service": "sns.amazonaws.com"},
+                         "Action": ["sqs:SendMessage"],
+                         "Effect": "Allow",
+                         "Resource": queue_arn,
+                         "Condition": {"ArnEquals": {"aws:SourceArn": topic_arn}}}
+                    ]
+                })
+            }
+        )
+
+        # create the subscription
+        self.sns_client.subscribe(
+            TopicArn=topic_arn,
+            Protocol="sqs",
+            Endpoint=queue_arn,
+            Attributes={"RawMessageDelivery": "true"}
+        )
+
+    def setup_queue(self, queue_basename, topic_basename=None):
+        queue_is_predefined, queue_url, created = self.get_or_create_queue(queue_basename)
+        if queue_is_predefined:
+            # predefined queue, nothing to setup
+            return queue_url
+        if not created:
+            # make sure we remove the deletion tag
+            self.sqs_client.untag_queue(
+                QueueUrl=queue_url,
+                TagKeys=[self.deletion_tag],
+            )
+            # no need to redo the subscription
+            return queue_url
+        if topic_basename:
+            self.setup_queue_subscription(queue_url, topic_basename)
         return queue_url
 
     def get_store_worker_queue_basename(self, event_store):
-        return f"store-enriched-events-{event_store.slug}"
+        if event_store.instance.provisioning_uid:
+            slug = event_store.slug  # stable identifier
+        else:
+            slug = str(event_store.pk)
+        return f"store-enriched-events-{slug}"
 
     def setup_store_worker_queue(self, event_store):
         return self.setup_queue(
             self.get_store_worker_queue_basename(event_store),
             topic_basename="enriched-events",
-            filter_policy=build_sns_filter_policy_for_event_store(event_store),
         )
 
     def mark_store_worker_queue_for_deletion(self, event_store):
         queue_basename = self.get_store_worker_queue_basename(event_store)
-        if queue_basename in self._predefined_queue_basenames:
-            logger.warning("Known queue %s cannot be marked for deletion", queue_basename)
+        queue_is_predefined, queue_name, queue_url = self.get_queue(queue_basename)
+        if queue_is_predefined:
+            logger.warning("Predefined queue %s cannot be marked for deletion", queue_basename)
             return
-        queue_name = f"{self._prefix}{queue_basename}-queue"
-        try:
-            response = self.sqs_client.get_queue_url(QueueName=queue_name)
-        except self.sqs_client.exceptions.QueueDoesNotExist:
+        if not queue_url:
             logger.warning("Missing queue %s cannot be marked for deletion", queue_name)
-        else:
-            self.sqs_client.tag_queue(
-                QueueUrl=response["QueueUrl"],
-                Tags={"Zentral:ToDelete": datetime.utcnow().isoformat()}
-            )
+            return
+        self.sqs_client.tag_queue(
+            QueueUrl=queue_url,
+            Tags={self.deletion_tag: datetime.utcnow().isoformat()}
+        )
 
     def get_preprocess_worker(self):
         return PreprocessWorker(self)

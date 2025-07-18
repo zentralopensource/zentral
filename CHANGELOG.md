@@ -82,6 +82,10 @@ New `zentral.core.stores.backends.panther` store backend for [Panther](https://p
 
 ### Backward incompatibilities
 
+#### 🧨 Event queues
+
+Remove `filter_policies` from the AWS SNS/SQS queues. All events will be delivered to the queues and filtered in the workers.
+
 #### 🧨 Event stores
 
 Event stores are managed in the database now. You can still pre-configure them in `base.json` with the new provisioning functionality.
