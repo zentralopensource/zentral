@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item active">Stores</li>
+    </ol>
+</nav>
+
+<div class="d-flex align-items-center mb-1">
+    <h3 class="mb-3">Store{{ store_count|pluralize }} ({{ store_count }})</h3>
+    <div class="ms-auto">
+        {% if perms.accounts.add_store %}
+        {% endif %}
+    </div>
+</div>
+
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>Name</th>
+        <th style="width:10%">Provisioned?</th>
+        <th>Backend</th>
+    </thead>
+    <tbody>
+        {% for store in object_list %}
+        <tr class="data-row">
+            <td>
+                <a href="{{ store.get_absolute_url }}">{{ store }}</a>
+            </td>
+            <td>
+                {{ store.provisioning_uid|yesno }}
+            </td>
+            <td>
+                {% if not store.provisioning_uid %}
+                <span class="store-backend">{{ store.get_backend_display }}</span>
+                {% else %}
+                -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,6 +1,7 @@
 import logging
 import uuid
 from django.db import models
+from django.urls import reverse
 from zentral.utils.backend_model import BackendInstance
 from django.contrib.auth.models import Group
 from .backends.all import StoreBackend, get_store_backend
@@ -30,6 +31,9 @@ class Store(BackendInstance):
     backend = models.CharField(choices=StoreBackend.choices)
     backend_enum = StoreBackend
     objects = StoreManager()
+
+    def get_absolute_url(self):
+        return reverse("stores:store", args=(self.pk,))
 
     def get_backend(self, load=False):
         return get_store_backend(self, load)

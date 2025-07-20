@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% load base_extras ui_extras %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'stores:index' %}">Stores</a></li>
+        <li class="breadcrumb-item active">{{ object }}</li>
+    </ol>
+</nav>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+        <div class="ms-3">
+        </div>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Store</h3>
+        <div class="ms-auto">
+            {% if perms.accounts.change_store and object.can_be_updated %}
+            {% endif %}
+            {% if perms.accounts.delete_store and object.can_be_deleted %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-responsive mb-3">
+        <table class="table-object-properties">
+        <tbody>
+            <tr>
+                <th style="width:20%">Name</th>
+                <td>{{ object.name }}</td>
+            </tr>
+            <tr>
+                <th>Provisioned?</th>
+                <td>{{ object.provisioning_uid|yesno }}</td>
+            </tr>
+            {% if not object.provisioning_uid %}
+            <tr>
+                <th>Backend</th>
+                <td><span class="store-backend">{{ object.get_backend_display }}</span></td>
+            </tr>
+            <tr>
+              <th>Backend config</th>
+              <td>
+                {{ object.get_backend_kwargs_for_event|pythonprettyprint }}
+              </td>
+            </tr>
+            {% endif %}
+            <tr>
+                <th>Admin console?</th>
+                <td>{{ object.admin_console|yesno }}</td>
+            </tr>
+            <tr>
+                <th>Authorized roles for store links</th>
+                <td>
+                  {% for role in object.events_url_authorized_roles.all %}
+                  {% if perms.accounts.view_group %}<a href="{% url 'accounts:group' role.pk %}">{{ role }}</a>{% else %}{{ role }}{% endif %}{% if not forloop.last %}, {% endif %}
+                  {% empty %}
+                  -
+                  {% endfor %}
+                </td>
+            </tr>
+            <tr>
+                <th>Description</th>
+                <td>{{ object.description|default:"-"|linebreaks }}</td>
+            </tr>
+            <tr>
+              <th>Event filters</th>
+              <td>
+                {{ object.event_filters|pythonprettyprint }}
+              </td>
+            </tr>
+        </tbody>
+        </table>
+    </div>
+    {% created_updated_at object %}
+</div>
+{% endblock %}
