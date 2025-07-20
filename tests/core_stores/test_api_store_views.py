@@ -179,6 +179,20 @@ class StoreAPIViewsTestCase(TestCase):
             {'http_kwargs': {'endpoint_url': ['This field is required.']}},
         )
 
+    def test_create_http_store_insufficient_quota(self):
+        # max_custom_store_count set to 1 in tests base.json
+        force_store()
+        self.set_permissions("stores.add_store")
+        response = self.post(
+            reverse("stores_api:stores"),
+            {"name": get_random_string(12),
+             "description": get_random_string(12),
+             "backend": "HTTP",
+             "http_kwargs": {"endpoint_url": "https://www.example.com/post"}},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), ['Insufficient quota'])
+
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_http_store_nones(self, post_event, send_notification):

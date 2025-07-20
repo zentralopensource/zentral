@@ -1,6 +1,7 @@
 from rest_framework.exceptions import ValidationError
 from zentral.core.queues import queues
 from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from .conf import stores
 from .models import Store
 from .serializers import StoreSerializer
 from .sync import signal_store_change
@@ -41,6 +42,8 @@ class StoreList(ListCreateAPIViewWithAudit):
         signal_store_change(instance)
 
     def perform_create(self, serializer):
+        if Store.objects.not_provisioned().count() >= stores.max_custom_store_count:
+            raise ValidationError("Insufficient quota")
         super().perform_create(serializer)
         # perform the queue updates within the transaction
         # TODO revisit

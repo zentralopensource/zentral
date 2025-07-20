@@ -54,6 +54,7 @@
       "metrics": true
     },
     "zentral.core.stores": {
+      "max_custom_store_count": 1,
       "provisioning": {
         "stores": {
           "elasticsearch": {

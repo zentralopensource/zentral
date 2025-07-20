@@ -3,6 +3,7 @@ import os
 import threading
 import weakref
 from base.notifier import notifier
+from zentral.conf import settings
 from .models import Store
 
 
@@ -13,6 +14,8 @@ __all__ = ['stores']
 
 
 class Stores:
+    default_max_custom_store_count = 3
+
     def __init__(self, with_sync=False):
         self._stores = None
         self._admin_console_store = None
@@ -56,6 +59,16 @@ class Stores:
                     logger.error('No stores')
 
     # public API
+
+    @property
+    def max_custom_store_count(self):
+        try:
+            return int(settings["apps"]["zentral.core.stores"]["max_custom_store_count"])
+        except KeyError:
+            pass
+        except (TypeError, ValueError):
+            logger.error("max_custom_store_count must be an integer")
+        return self.default_max_custom_store_count
 
     @property
     def admin_console_store(self):
