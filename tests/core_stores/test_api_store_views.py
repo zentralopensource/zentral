@@ -651,6 +651,7 @@ class StoreAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_store(self, post_event, mark_store_worker_queue_for_deletion, send_notification):
         store = force_store()
+        prev_pk = store.instance.pk
         prev_value = store.instance.serialize_for_event()
         self.set_permissions("stores.delete_store")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -673,5 +674,12 @@ class StoreAPIViewsTestCase(TestCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"stores_store": [str(store.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["stores", "zentral"])
+        mark_store_worker_queue_for_deletion.assert_called_once()
+        self.assertEqual(len(mark_store_worker_queue_for_deletion.call_args.args), 1)
+        call_store = mark_store_worker_queue_for_deletion.call_args.args[0]
+        # call_store.instance.pk re-hydrated in this test, because the post commit callbacks are executed
+        # and RetrieveUpdateDestroyAPIViewWithAudit re-hydrates the instance PK in perform_destroy > on_commit_callback
+        self.assertEqual(call_store, store)
+        self.assertEqual(call_store.pk, prev_pk)  # pk re-hydrated via instance pk before post commit callbacks
         mark_store_worker_queue_for_deletion.assert_called_once_with(store)
         send_notification.assert_called_once_with("stores.store", str(store.pk))

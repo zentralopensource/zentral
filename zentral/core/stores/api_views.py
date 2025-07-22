@@ -17,9 +17,11 @@ class StoreDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     def perform_destroy(self, instance):
         if not instance.can_be_deleted():
             raise ValidationError("This store cannot be deleted")
+        prev_pk = instance.pk
         super().perform_destroy(instance)
         # perform the queue updates within the transaction
         # TODO revisit
+        instance.pk = prev_pk  # re-hydrate the primary key that might be used in mark_store_worker_queue_for_deletion
         store = instance.get_backend(load=False)
         queues.mark_store_worker_queue_for_deletion(store)
 
