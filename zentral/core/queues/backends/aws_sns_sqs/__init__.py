@@ -12,6 +12,7 @@ from botocore.config import Config
 from django.utils.functional import cached_property
 from base.notifier import notifier
 from zentral.conf import settings
+from zentral.conf.config import ConfigDict
 from zentral.core.queues.backends.base import BaseEventQueues
 from .consumer import BatchConsumer, ConcurrentConsumer, Consumer, ConsumerProducer
 from .sns import SNSPublishThread
@@ -297,7 +298,10 @@ class EventQueues(BaseEventQueues):
     def __init__(self, config_d):
         super().__init__(config_d)
         self._prefix = config_d.get("prefix", "ztl-")
-        self._tags = config_d.get("tags", {"Product": "Zentral"})
+        tags = config_d.get("tags", {"Product": "Zentral"})
+        if isinstance(tags, ConfigDict):
+            tags = tags.serialize()
+        self._tags = tags
         self.client_kwargs = {
             "config": Config(
                 retries={

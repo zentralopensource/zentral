@@ -6,6 +6,7 @@ from botocore.stub import Stubber
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
+from zentral.conf.config import ConfigDict
 from zentral.core.queues.backends.aws_sns_sqs import EventQueues
 from zentral.core.stores.models import Store
 
@@ -34,7 +35,7 @@ class AWSSNSSQSQueuesTestCase(TestCase):
     @staticmethod
     def get_queues(config=None):
         if config is None:
-            config = {
+            config = ConfigDict({
                 "prefix": "prefix-",
                 "tags": {"un": "1"},
                 "region_name": "eu-central-1",
@@ -44,7 +45,7 @@ class AWSSNSSQSQueuesTestCase(TestCase):
                 "predefined_topics": {
                     "enriched-events": "arn:yolo"
                 }
-            }
+            })
         return EventQueues(config)
 
     def test_create_event_queues_defaults(self):
