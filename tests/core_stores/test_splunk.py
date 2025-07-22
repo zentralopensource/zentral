@@ -329,8 +329,16 @@ class TestSplunkStore(TestCase):
             {"hec_url": "https://www.example.com/hec",
              "hec_token": "yolo",
              "hec_request_timeout": 300,
+             "hec_index": None,
+             "hec_source": None,
+             "custom_host_field": None,
              "serial_number_field": "machine_serial_number",
              "batch_size": 1,
+             "search_app_url": None,
+             "search_url": None,
+             "search_token": None,
+             "search_index": None,
+             "search_source": None,
              "search_request_timeout": 300,
              "verify_tls": True}
         )

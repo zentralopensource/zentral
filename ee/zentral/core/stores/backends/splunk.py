@@ -434,8 +434,8 @@ class SplunkStoreSerializer(serializers.Serializer):
         min_value=1,
         default=SplunkStore.default_request_timeout,
     )
-    hec_index = serializers.CharField(required=False)
-    hec_source = serializers.CharField(required=False)
+    hec_index = serializers.CharField(required=False, allow_null=True)
+    hec_source = serializers.CharField(required=False, allow_null=True)
     # If set, the computer name of the machine snapshots of these sources will be used
     # as host field value. First source with a non-empty value will be picked.
     computer_name_as_host_sources = serializers.ListField(
@@ -443,7 +443,7 @@ class SplunkStoreSerializer(serializers.Serializer):
         allow_empty=True,
         required=False,
     )
-    custom_host_field = serializers.CharField(required=False)
+    custom_host_field = serializers.CharField(required=False, allow_null=True)
     serial_number_field = serializers.CharField(default=SplunkStore.default_serial_number_field)
     batch_size = serializers.IntegerField(
         default=1,
@@ -451,13 +451,13 @@ class SplunkStoreSerializer(serializers.Serializer):
         max_value=SplunkStore.max_batch_size,
     )
     # events URLs
-    search_app_url = HTTPURLField(required=False)
+    search_app_url = HTTPURLField(required=False, allow_null=True)
     # events search
-    search_url = HTTPURLField(required=False)
-    search_token = serializers.CharField(required=False)
+    search_url = HTTPURLField(required=False, allow_null=True)
+    search_token = serializers.CharField(required=False, allow_null=True)
     search_extra_headers = HTTPHeaderSerializer(many=True, required=False)
-    search_index = serializers.CharField(required=False)
-    search_source = serializers.CharField(required=False)
+    search_index = serializers.CharField(required=False, allow_null=True)
+    search_source = serializers.CharField(required=False, allow_null=True)
     search_request_timeout = serializers.IntegerField(
         min_value=1,
         default=SplunkStore.default_request_timeout,
