@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from .filter import EventFilterSet
 
 
 class EventFilterSerializer(serializers.Serializer):
@@ -22,3 +23,10 @@ class EventFilterSerializer(serializers.Serializer):
 class EventFilterSetSerializer(serializers.Serializer):
     excluded_event_filters = EventFilterSerializer(many=True, required=False)
     included_event_filters = EventFilterSerializer(many=True, required=False)
+
+    def validate(self, data):
+        try:
+            EventFilterSet.from_mapping(data)
+        except (TypeError, ValueError) as e:
+            raise serializers.ValidationError(f"Invalid event filters: {e}")
+        return data

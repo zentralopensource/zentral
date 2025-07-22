@@ -179,6 +179,26 @@ class StoreAPIViewsTestCase(TestCase):
             {'http_kwargs': {'endpoint_url': ['This field is required.']}},
         )
 
+    def test_create_http_store_invalid_event_filters(self):
+        self.set_permissions("stores.add_store")
+        response = self.post(
+            reverse("stores_api:stores"),
+            {"name": get_random_string(12),
+             "event_filters": {"included_event_filters": []},
+             "description": get_random_string(12),
+             "backend": "HTTP",
+             "http_kwargs": {"endpoint_url": "https://www.example.com/post"}},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'event_filters': {
+                'non_field_errors': [
+                    'Invalid event filters: included_event_filters value is empty'
+                ]
+            }}
+        )
+
     def test_create_http_store_insufficient_quota(self):
         # max_custom_store_count set to 1 in tests base.json
         force_store()
@@ -205,6 +225,7 @@ class StoreAPIViewsTestCase(TestCase):
                 {"name": name,
                  "description": description,
                  "backend": "HTTP",
+                 "event_filters": {},
                  "http_kwargs": {
                      "endpoint_url": "https://www.example.com/post",
                      "username": None,
@@ -347,6 +368,11 @@ class StoreAPIViewsTestCase(TestCase):
                 {"name": name,
                  "description": description,
                  "backend": "HTTP",
+                 "event_filters": {
+                     "included_event_filters": [{"tags": ["zentral"]}],
+                     "excluded_event_filters": [{"event_type": ["zentral_logout"]}],
+                 },
+                 "events_url_authorized_roles": [self.group.pk],
                  "http_kwargs": {
                      "endpoint_url": "https://www.example.com/post",
                      "username": "yolo",
@@ -366,8 +392,11 @@ class StoreAPIViewsTestCase(TestCase):
             'name': name,
             'description': description,
             'admin_console': False,
-            'event_filters': {},
-            'events_url_authorized_roles': [],
+            "event_filters": {
+                "included_event_filters": [{"tags": ["zentral"]}],
+                "excluded_event_filters": [{"event_type": ["zentral_logout"]}],
+            },
+            "events_url_authorized_roles": [self.group.pk],
             'backend': 'HTTP',
             'http_kwargs': {
                  "endpoint_url": "https://www.example.com/post",
@@ -399,8 +428,11 @@ class StoreAPIViewsTestCase(TestCase):
                     "name": name,
                     "description": description,
                     "admin_console": False,
-                    "event_filters": {},
-                    "events_url_authorized_roles": [],
+                    "event_filters": {
+                        "included_event_filters": [{"tags": ["zentral"]}],
+                        "excluded_event_filters": [{"event_type": ["zentral_logout"]}],
+                    },
+                    "events_url_authorized_roles": [{"pk": self.group.pk, "name": self.group.name}],
                     "backend": "HTTP",
                     "backend_kwargs": {
                         "endpoint_url": "https://www.example.com/post",
