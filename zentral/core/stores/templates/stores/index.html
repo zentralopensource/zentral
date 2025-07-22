@@ -31,7 +31,7 @@
                 <a href="{{ store.get_absolute_url }}">{{ store }}</a>
             </td>
             <td>
-                {{ store.provisioning_uid|yesno }}
+                {{ store.provisioning_uid|yesno:"yes,no" }}
             </td>
             <td>
                 {% if not store.provisioning_uid %}

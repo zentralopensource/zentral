@@ -35,7 +35,7 @@
             </tr>
             <tr>
                 <th>Provisioned?</th>
-                <td>{{ object.provisioning_uid|yesno }}</td>
+                <td>{{ object.provisioning_uid|yesno:"yes,no" }}</td>
             </tr>
             {% if not object.provisioning_uid %}
             <tr>
