@@ -17,15 +17,15 @@ from .models import Store
 
 class StoreSerializer(serializers.ModelSerializer):
     event_filters = EventFilterSetSerializer(required=False)
-    datadog_kwargs = DatadogStoreSerializer(source="get_datadog_kwargs", required=False)
-    elasticsearch_kwargs = ESOSStoreSerializer(source="get_elasticsearch_kwargs", required=False)
-    http_kwargs = HTTPStoreSerializer(source="get_http_kwargs", required=False)
-    kinesis_kwargs = KinesisStoreSerializer(source="get_kinesis_kwargs", required=False)
-    opensearch_kwargs = OpenSearchStoreSerializer(source="get_opensearch_kwargs", required=False)
-    panther_kwargs = PantherStoreSerializer(source="get_panther_kwargs", required=False)
-    snowflake_kwargs = SnowflakeStoreSerializer(source="get_snowflake_kwargs", required=False)
-    splunk_kwargs = SplunkStoreSerializer(source="get_splunk_kwargs", required=False)
-    sumo_logic_kwargs = SumoLogicStoreSerializer(source="get_sumo_logic_kwargs", required=False)
+    datadog_kwargs = DatadogStoreSerializer(source="get_datadog_kwargs", required=False, allow_null=True)
+    elasticsearch_kwargs = ESOSStoreSerializer(source="get_elasticsearch_kwargs", required=False, allow_null=True)
+    http_kwargs = HTTPStoreSerializer(source="get_http_kwargs", required=False, allow_null=True)
+    kinesis_kwargs = KinesisStoreSerializer(source="get_kinesis_kwargs", required=False, allow_null=True)
+    opensearch_kwargs = OpenSearchStoreSerializer(source="get_opensearch_kwargs", required=False, allow_null=True)
+    panther_kwargs = PantherStoreSerializer(source="get_panther_kwargs", required=False, allow_null=True)
+    snowflake_kwargs = SnowflakeStoreSerializer(source="get_snowflake_kwargs", required=False, allow_null=True)
+    splunk_kwargs = SplunkStoreSerializer(source="get_splunk_kwargs", required=False, allow_null=True)
+    sumo_logic_kwargs = SumoLogicStoreSerializer(source="get_sumo_logic_kwargs", required=False, allow_null=True)
 
     class Meta:
         model = Store

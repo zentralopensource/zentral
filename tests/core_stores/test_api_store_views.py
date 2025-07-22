@@ -210,7 +210,8 @@ class StoreAPIViewsTestCase(TestCase):
                      "username": None,
                      "password": None,
                      "headers": [],
-                 }}
+                 },
+                 "splunk_kwargs": None}
             )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(callbacks), 1)
