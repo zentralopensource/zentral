@@ -14,7 +14,7 @@ djangorestframework-yaml
 django-filter                   # API
 django-redis
 whitenoise                      # To serve the static files
-elasticsearch<9                 # For OpenSearch, see requirements_aws.txt
+elasticsearch<9
 geoip2
 gunicorn
 httpx[http2]                    # MDM (apns)
@@ -23,6 +23,7 @@ jmespath                        # inventory compliance checks
 jinja2                          # events templates
 kombu<6                         # events queues
 msgraph-sdk
+opensearch-py<3
 pip
 prometheus_client               # publish prometheus metrics
 psycopg2
