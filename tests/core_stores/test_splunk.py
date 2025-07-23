@@ -261,6 +261,21 @@ class TestSplunkStore(TestCase):
         self.assertEqual(hec_session.post.call_args_list[0].args[0], "https://www.example.com/hec/")
         self.assertEqual(hec_session.post.call_args_list[0].kwargs["timeout"], 123)
 
+    @patch("zentral.core.stores.backends.splunk.SplunkStore.hec_session")
+    def test_bulk_store_events(self, hec_session):
+        response = Mock()
+        response.ok = True
+        response.status_code = 200
+        hec_session.post.return_value = response
+        events = [build_login_event(), build_login_event()]
+        store = self.get_store(batch_size=17, hec_request_timeout=123)
+        response = store.bulk_store(events)
+        self.assertEqual(
+            response,
+            [(str(events[0].metadata.uuid), events[0].metadata.index),
+             (str(events[1].metadata.uuid), events[1].metadata.index)]
+        )
+
     # events URLs
 
     def test_get_machine_events_url(self):

@@ -189,6 +189,7 @@ class SplunkStore(BaseStore):
             data += json.dumps(payload).encode("utf-8")
         r = self.hec_session.post(self.hec_url, data=data, timeout=self.hec_request_timeout)
         r.raise_for_status()
+        return event_keys
 
     # event methods
 
