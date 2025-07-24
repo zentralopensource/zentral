@@ -117,7 +117,7 @@ class Command(BaseCommand):
 
         workers = options['worker']
         all_workers = []
-        for idx, worker in enumerate(sorted(get_workers(), key=lambda w: w.name)):
+        for idx, worker in enumerate(get_workers()):
             if list_workers:
                 all_workers.append(worker.name)
                 continue

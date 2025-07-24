@@ -40,6 +40,7 @@ class Stores:
             self._stores = []
             self._admin_console_store = None
             first_store = None
+            # IMPORTANT order_by created_at to get a stable ordering, even if the stores are renamed
             for db_store in Store.objects.prefetch_related("events_url_authorized_roles").all().order_by("created_at"):
                 store = db_store.get_backend(load=True)
                 self._stores.append(store)

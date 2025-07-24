@@ -34,7 +34,7 @@ class Command(BaseCommand):
     def _get_workers(list_workers, requested_worker_name):
         all_workers = []
         found_worker = None
-        for idx, worker in enumerate(sorted(get_workers(), key=lambda w: w.name)):
+        for idx, worker in enumerate(get_workers()):
             if list_workers:
                 all_workers.append(worker.name)
                 continue
