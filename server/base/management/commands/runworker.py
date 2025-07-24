@@ -51,7 +51,9 @@ class Command(BaseCommand):
         if options['prometheus']:
             from zentral.utils.prometheus import PrometheusMetricsExporter
             metrics_exporter = PrometheusMetricsExporter(
-                options['prometheus_port']
+                options['prometheus_port'],
+                # default label + value
+                worker=found_worker.name
             )
         elif options['statsd']:
             from zentral.utils.statsd import StatsdMetricsExporter
@@ -65,13 +67,12 @@ class Command(BaseCommand):
         if isinstance(exit_status, int):
             sys.exit(exit_status)
 
-    @staticmethod
-    def _output_worker_list(all_workers, options):
+    def _output_worker_list(self, all_workers, options):
         if options['json_output']:
-            print(json.dumps({"workers": all_workers}))
+            self.stdout.write(json.dumps({"workers": all_workers}))
         else:
             for worker_name in all_workers:
-                print("Worker '{}'".format(worker_name))
+                self.stdout.write("Worker '{}'".format(worker_name))
 
     def handle(self, *args, **options):
         list_workers = options['list_workers']

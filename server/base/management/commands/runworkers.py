@@ -47,7 +47,7 @@ class Command(BaseCommand):
         if self.prometheus:
             from zentral.utils.prometheus import PrometheusMetricsExporter
             prometheus_port = self.prometheus_base_port + idx
-            metrics_exporter = PrometheusMetricsExporter(prometheus_port)
+            metrics_exporter = PrometheusMetricsExporter(prometheus_port, worker=worker.name)
         elif self.statsd:
             from zentral.utils.statsd import StatsdMetricsExporter
             metrics_exporter = StatsdMetricsExporter(self.statsd_host, self.statsd_port, self.statsd_prefix)
@@ -95,7 +95,6 @@ class Command(BaseCommand):
                     logger.debug("Worker '%s' OK", worker.name)
             for idx, (deadline, worker) in list(self.processes_to_restart.items()):
                 if deadline < time.time():
-                    print("OUPS", flush=True)
                     self.start_worker(idx, worker)
                     self.processes_to_restart.pop(idx)
 
@@ -126,10 +125,10 @@ class Command(BaseCommand):
             self.start_worker(idx, worker)
         if list_workers:
             if json_output:
-                print(json.dumps({"workers": all_workers}))
+                self.stdout.write(json.dumps({"workers": all_workers}))
             else:
                 for worker_name in all_workers:
-                    print("Worker '{}'".format(worker_name))
+                    self.stdout.write("Worker '{}'".format(worker_name))
         if self.processes:
             if self.prometheus:
                 self.write_prometheus_sd_file()
