@@ -22,7 +22,7 @@ class SlackIncomingWebhookActionTests(TestCase):
         self.assertEqual(
             action_backend.session.headers,
             {'User-Agent': 'Zentral/unknown',
-             'Accept-Encoding': 'gzip, deflate',
+             'Accept-Encoding': 'gzip, deflate, zstd',
              'Accept': '*/*',
              'Connection': 'keep-alive',
              'Content-Type': 'application/json'},

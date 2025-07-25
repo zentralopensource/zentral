@@ -3,6 +3,7 @@ from rest_framework import serializers
 from accounts.models import Group
 from zentral.core.events.serializers import EventFilterSetSerializer
 from zentral.core.stores.backends.all import StoreBackend
+from zentral.core.stores.backends.clickhouse import ClickHouseStoreSerializer
 from zentral.core.stores.backends.datadog import DatadogStoreSerializer
 from zentral.core.stores.backends.es_os_base import ESOSStoreSerializer
 from zentral.core.stores.backends.http import HTTPStoreSerializer
@@ -17,6 +18,7 @@ from .models import Store
 
 class StoreSerializer(serializers.ModelSerializer):
     event_filters = EventFilterSetSerializer(required=False)
+    clickhouse_kwargs = ClickHouseStoreSerializer(source="get_clickhouse_kwargs", required=False, allow_null=True)
     datadog_kwargs = DatadogStoreSerializer(source="get_datadog_kwargs", required=False, allow_null=True)
     elasticsearch_kwargs = ESOSStoreSerializer(source="get_elasticsearch_kwargs", required=False, allow_null=True)
     http_kwargs = HTTPStoreSerializer(source="get_http_kwargs", required=False, allow_null=True)
@@ -41,6 +43,7 @@ class StoreSerializer(serializers.ModelSerializer):
             "updated_at",
             # backends
             "backend",
+            "clickhouse_kwargs",
             "datadog_kwargs",
             "elasticsearch_kwargs",
             "http_kwargs",

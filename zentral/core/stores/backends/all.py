@@ -7,6 +7,7 @@ logger = logging.getLogger("zentral.core.events.stores.all")
 
 
 class StoreBackend(models.TextChoices):
+    ClickHouse = "CLICKHOUSE", "ClickHouse"
     Datadog = "DATADOG", "Datadog"
     Elasticsearch = "ELASTICSEARCH", "Elasticsearch"
     HTTP = "HTTP", "HTTP"
