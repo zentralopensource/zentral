@@ -541,6 +541,23 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event, awaiting_configuration=False)
         session.refresh_from_db()
+        self.assertFalse(session.enrolled_device.awaiting_configuration)
+        self.assertEqual(session.enrolled_device.get_bootstrap_token(), bootstrap_token)
+
+    def test_set_bootstrap_token_awaiting_configuration(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        bootstrap_token = get_random_string(12).encode("utf-8")
+        payload = {
+            "UDID": udid,
+            "MessageType": "SetBootstrapToken",
+            "AwaitingConfiguration": True,
+            "BootstrapToken": bootstrap_token,
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, awaiting_configuration=True)
+        session.refresh_from_db()
+        self.assertTrue(session.enrolled_device.awaiting_configuration)
         self.assertEqual(session.enrolled_device.get_bootstrap_token(), bootstrap_token)
 
     # checkin - get bootstrap token

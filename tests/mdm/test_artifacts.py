@@ -1760,14 +1760,14 @@ class TestMDMArtifacts(TestCase):
     def test_update_os_info_user_channel(self):
         status_report = self._build_status_report([])
         target = Target(self.enrolled_device, self.enrolled_user)
-        self.assertTrue(target.update_os_info_with_status_report(status_report) is False)
+        self.assertEqual(target.update_os_info_with_status_report(status_report), [])
 
     @patch("zentral.contrib.mdm.artifacts.logger.warning")
     def test_update_os_info_missing_operating_sytem(self, logger_warning):
         status_report = self._build_status_report([])
         status_report["StatusItems"]["device"].pop("operating-system")
         target = Target(self.enrolled_device)
-        self.assertTrue(target.update_os_info_with_status_report(status_report) is False)
+        self.assertEqual(target.update_os_info_with_status_report(status_report), [])
         logger_warning.assert_called_once_with(
             "Enrolled device %s: Missing operating system info in status report",
             self.enrolled_device.udid
@@ -1781,7 +1781,10 @@ class TestMDMArtifacts(TestCase):
         status_report = self._build_status_report([])
         status_report["StatusItems"]["device"]["operating-system"].pop("supplemental")
         target = Target(self.enrolled_device)
-        self.assertTrue(target.update_os_info_with_status_report(status_report) is True)
+        self.assertEqual(
+            target.update_os_info_with_status_report(status_report),
+            ['os_version', 'os_version_extra', 'build_version', 'build_version_extra'],
+        )
         self.assertEqual(self.enrolled_device.os_version, "13.3.1")
         self.assertEqual(self.enrolled_device.os_version_extra, "")
         self.assertEqual(self.enrolled_device.build_version, "22E261")
@@ -1794,7 +1797,10 @@ class TestMDMArtifacts(TestCase):
         self.enrolled_device.build_version_extra = ""
         status_report = self._build_status_report([])
         target = Target(self.enrolled_device)
-        self.assertTrue(target.update_os_info_with_status_report(status_report) is True)
+        self.assertEqual(
+            target.update_os_info_with_status_report(status_report),
+            ['os_version', 'os_version_extra', 'build_version', 'build_version_extra'],
+        )
         self.assertEqual(self.enrolled_device.os_version, "13.3.1")
         self.assertEqual(self.enrolled_device.os_version_extra, "(a)")
         self.assertEqual(self.enrolled_device.build_version, "22E261")
@@ -1807,7 +1813,7 @@ class TestMDMArtifacts(TestCase):
         self.enrolled_device.build_version = "22E261"
         self.enrolled_device.build_version_extra = "22E772610a"
         target = Target(self.enrolled_device)
-        self.assertTrue(target.update_os_info_with_status_report(status_report) is False)
+        self.assertEqual(target.update_os_info_with_status_report(status_report), [])
         self.assertEqual(self.enrolled_device.os_version, "13.3.1")
         self.assertEqual(self.enrolled_device.os_version_extra, "(a)")
         self.assertEqual(self.enrolled_device.build_version, "22E261")

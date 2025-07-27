@@ -1265,10 +1265,12 @@ class EnrollmentSession(models.Model):
 
     def _set_next_status(self, next_status, test, **update_dict):
         if test:
+            update_fields = ["status", "updated_at"]
             self.status = next_status
             for attr, val in update_dict.items():
+                update_fields.append(attr)
                 setattr(self, attr, val)
-            self.save()
+            self.save(update_fields=update_fields)
         else:
             raise EnrollmentSessionStatusError(self, next_status)
 

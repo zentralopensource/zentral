@@ -211,7 +211,7 @@ class Target:
 
     def update_last_seen(self):
         self.target.last_seen_at = datetime.utcnow()
-        self.target.save()
+        self.target.save(update_fields=["last_seen_at", "updated_at"])
 
     # blueprint filtering method
 
@@ -874,64 +874,64 @@ class Target:
         return tokens_response, declarations_token
 
     def update_declarations_token(self, declarations_token):
-        target_updated = False
+        update_fields = []
         if not self.target.declarative_management:
+            update_fields.append("declarative_management")
             self.target.declarative_management = True
-            target_updated = True
         if self.target.declarations_token != declarations_token:
+            update_fields.append("declarations_token")
             self.target.declarations_token = declarations_token
-            target_updated = True
-        if target_updated:
-            self.target.save()
+        if update_fields:
+            self.target.save(update_fields=update_fields + ["updated_at"])
 
     # status report updates
 
     def update_os_info_with_status_report(self, status_report):
-        target_updated = False
+        update_fields = []
         if not self.is_device:
-            return target_updated
+            return update_fields
         try:
             operating_system = status_report["StatusItems"]["device"]["operating-system"]
         except KeyError:
             logger.warning("Enrolled device %s: Missing operating system info in status report", self.udid)
-            return target_updated
+            return update_fields
         supplemental = operating_system.get("supplemental", {})
         os_version = operating_system.get("version")
         if os_version and self.target.os_version != os_version:
+            update_fields.append("os_version")
             self.target.os_version = os_version
-            target_updated = True
         os_version_extra = supplemental.get("extra-version", "")
         if os_version and self.target.os_version_extra != os_version_extra:
+            update_fields.append("os_version_extra")
             self.target.os_version_extra = os_version_extra
-            target_updated = True
         build_version = operating_system.get("build-version")
         if build_version and self.target.build_version != build_version:
+            update_fields.append("build_version")
             self.target.build_version = build_version
-            target_updated = True
         build_version_extra = supplemental.get("build-version", "")
         if build_version and self.target.build_version_extra != build_version_extra:
+            update_fields.append("build_version_extra")
             self.target.build_version_extra = build_version_extra
-            target_updated = True
-        return target_updated
+        return update_fields
 
     def update_client_capabilities_with_status_report(self, status_report):
-        target_updated = False
+        update_fields = []
         try:
             client_capabilities = status_report["StatusItems"]["management"]["client-capabilities"]
         except KeyError:
             logger.warning("Enrolled device %s: Could not find client capabilities in status report", self.udid)
         else:
             if client_capabilities != self.client_capabilities:
+                update_fields.append("client_capabilities")
                 self.target.client_capabilities = client_capabilities
-                target_updated = True
-        return target_updated
+        return update_fields
 
     def update_target_with_status_report(self, status_report):
-        target_updated = self.update_os_info_with_status_report(status_report)
-        target_updated |= self.update_client_capabilities_with_status_report(status_report)
-        if target_updated:
-            self.target.save()
-        target_updated |= self.update_target_artifacts_with_status_report(status_report)
-        if target_updated:
+        update_fields = self.update_os_info_with_status_report(status_report)
+        update_fields.extend(self.update_client_capabilities_with_status_report(status_report))
+        if update_fields:
+            self.target.save(update_fields=update_fields + ["updated_at"])
+        target_artifacts_updated = self.update_target_artifacts_with_status_report(status_report)
+        if update_fields or target_artifacts_updated:
             func = send_enrolled_device_notification if self.is_device else send_enrolled_user_notification
             transaction.on_commit(lambda: func(self.target))

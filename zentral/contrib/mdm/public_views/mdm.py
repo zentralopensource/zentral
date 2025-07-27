@@ -102,7 +102,6 @@ class MDMView(PostEventMixin, View):
             try:
                 self.enrollment_session = (
                     OTAEnrollmentSession.objects
-                    .select_for_update()
                     .select_related("ota_enrollment")
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
@@ -112,7 +111,6 @@ class MDMView(PostEventMixin, View):
             try:
                 self.enrollment_session = (
                     DEPEnrollmentSession.objects
-                    .select_for_update()
                     .select_related("dep_enrollment")
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
@@ -122,7 +120,6 @@ class MDMView(PostEventMixin, View):
             try:
                 self.enrollment_session = (
                     ReEnrollmentSession.objects
-                    .select_for_update()
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
             except ReEnrollmentSession.DoesNotExist:
@@ -131,7 +128,6 @@ class MDMView(PostEventMixin, View):
             try:
                 self.enrollment_session = (
                     UserEnrollmentSession.objects
-                    .select_for_update()
                     .select_related("user_enrollment")
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
@@ -322,7 +318,7 @@ class CheckinView(MDMView):
         unlock_token = self.payload.get("UnlockToken")
         if unlock_token:
             enrolled_device.set_unlock_token(unlock_token)
-            enrolled_device.save()
+            enrolled_device.save(update_fields=["unlock_token", "updated_at"])
 
         # Update enrollment session
         if enrolled_device.token and not self.enrollment_session.is_completed():
@@ -353,7 +349,7 @@ class CheckinView(MDMView):
         # https://developer.apple.com/documentation/devicemanagement/setbootstraptokenrequest
         self.enrolled_device.awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
         self.enrolled_device.set_bootstrap_token(self.payload.get("BootstrapToken", None))
-        self.enrolled_device.save()
+        self.enrolled_device.save(update_fields=["awaiting_configuration", "bootstrap_token", "updated_at"])
         self.post_event("success", awaiting_configuration=self.payload.get("AwaitingConfiguration"))
 
     def do_get_bootstrap_token(self):
