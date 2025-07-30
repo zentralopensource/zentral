@@ -1,6 +1,7 @@
 import logging
 import clickhouse_connect
 from django.utils.functional import cached_property
+from kombu.utils import json
 from rest_framework import serializers
 from .base import BaseStore
 
@@ -104,7 +105,7 @@ class ClickHouseStore(BaseStore):
                 needles.append(f"_o:{obj_k}:{obj_val}")
         for probe in metadata.get("probes", []):
             needles.append(f"_p:{probe['pk']}")
-        payload = event_d
+        payload = json.dumps(event_d)
         return (
             # event key
             (metadata["id"], metadata["index"]),

@@ -1,3 +1,4 @@
+from datetime import datetime
 from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -175,6 +176,8 @@ class ClickHouseStoreTestCase(TestCase):
     def test_event_serialization_min(self):
         username = get_random_string(12)
         event = build_login_event(username)
+        dt = datetime(1982, 5, 26)
+        event.payload["dt"] = dt
         self.assertEqual(
             self.get_store()._serialize_event(event),
             ((str(event.metadata.uuid), 0),
@@ -186,7 +189,8 @@ class ClickHouseStoreTestCase(TestCase):
               {'id': str(event.metadata.uuid),
                'index': 0,
                'namespace': 'zentral'},
-              {'user': {'username': username}}))
+              f'{{"user": {{"username": "{username}"}}, '
+              '"dt": {"__type__": "datetime", "__value__": "1982-05-26T00:00:00"}}'))
         )
 
     def test_event_serialization_max(self):
@@ -215,7 +219,7 @@ class ClickHouseStoreTestCase(TestCase):
                'namespace': 'zentral',
                'objects': {'fomo': ['a'], 'yolo': ['un|deux', 'trois|quatre']},
                'probes': [{'name': probe.name, 'pk': probe.pk}]},
-              {'user': {'username': username}}))
+              f'{{"user": {{"username": "{username}"}}}}'))
         )
 
     def test_dict_event_serialization(self):
@@ -232,7 +236,7 @@ class ClickHouseStoreTestCase(TestCase):
               {'id': str(event.metadata.uuid),
                'index': 0,
                'namespace': 'zentral'},
-              {'user': {'username': username}}))
+              f'{{"user": {{"username": "{username}"}}}}'))
         )
 
     # event storage
