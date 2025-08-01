@@ -6,6 +6,7 @@ from celery import shared_task
 from django.core.files.storage import default_storage
 from django.db import connection
 from django.http import QueryDict
+from django.utils.text import Truncator
 import xlsxwriter
 from .events import post_cleanup_finished_event, post_cleanup_started_event
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
@@ -88,7 +89,7 @@ def export_apps(form_class, form_data, filename):
         content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         with tempfile.TemporaryFile() as of:
             workbook = xlsxwriter.Workbook(of)
-            worksheet = workbook.add_worksheet(form.title)
+            worksheet = workbook.add_worksheet(Truncator(form.title).chars(31))
             row_idx = 0
             col_idx = 0
             for label in headers:

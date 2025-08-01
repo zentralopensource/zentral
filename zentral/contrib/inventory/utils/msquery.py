@@ -14,7 +14,7 @@ from django import forms
 from django.db import connection
 from django.http import QueryDict
 from django.urls import reverse
-from django.utils.text import slugify
+from django.utils.text import slugify, Truncator
 import weakref
 import xlsxwriter
 from zentral.contrib.inventory.conf import EC2, os_version_display, os_version_version_display
@@ -1918,7 +1918,7 @@ class MSQuery:
         )
         # machines
         for title, headers, rows in self.export_sheets_data():
-            ws = workbook.add_worksheet(title)
+            ws = workbook.add_worksheet(Truncator(title).chars(31))
             row_idx = col_idx = 0
             for header in headers:
                 ws.write_string(row_idx, col_idx, header)
