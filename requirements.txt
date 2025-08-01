@@ -25,7 +25,6 @@ jinja2                          # events templates
 kombu<6                         # events queues
 msgraph-sdk
 opensearch-py<3
-pip
 prometheus_client               # publish prometheus metrics
 psycopg2
 pygments                        # SQL syntax highlighting
@@ -36,7 +35,6 @@ python-dateutil
 pyyaml
 requests
 requests_oauthlib               # MDM DEP
-setuptools
 snowflake-connector-python
 sqlparse                        # SQL syntax highlighting
 tqdm
