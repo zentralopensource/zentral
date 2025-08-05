@@ -1,4 +1,4 @@
-## 2025.1 (TBD)
+## 2025.8
 
 ### Features (some, not all…)
 
@@ -76,9 +76,11 @@ New `zentral.core.stores.backends.snowflake` store backend for [Snowflake](https
 
 New `zentral.core.stores.backends.panther` store backend for [Panther](https://panther.com/)
 
+New `zentral.core.stores.backends.clickhouse` store backend for [ClickHouse](https://clickhouse.com/)
+
 #### One more thing…
 
-🚧 Alpha release of the new UI.
+Release of the new UI.
 
 ### Backward incompatibilities
 
