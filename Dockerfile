@@ -39,14 +39,18 @@ RUN set -eux ; \
     \
     tini_bin="" ; \
     case "$(arch)" in \
-        aarch64) tini_bin='tini-arm64' ;; \
-        x86_64)  tini_bin='tini-amd64' ;; \
+        aarch64) \
+          tini_bin='tini-arm64'; \
+          tini_bin_sha256='07952557df20bfd2a95f9bef198b445e006171969499a1d361bd9e6f8e5e0e81' \
+          ;; \
+        x86_64)  \
+          tini_bin='tini-amd64'; \
+          tini_bin_sha256='93dcc18adc78c65a028a84799ecf8ad40c936fdfc5f2a57b1acda5a8117fa82c' \
+          ;; \
         *) echo >&2 ; echo >&2 "Unsupported architecture $(arch)" ; echo >&2 ; exit 1 ;; \
     esac ; \
     curl --retry 8 -S -L -O https://github.com/krallin/tini/releases/download/v0.19.0/${tini_bin} ; \
-    curl --retry 8 -S -L -O https://github.com/krallin/tini/releases/download/v0.19.0/${tini_bin}.sha256sum ; \
-    sha256sum -c ${tini_bin}.sha256sum ; \
-    rm ${tini_bin}.sha256sum ; \
+    echo "${tini_bin_sha256} ${tini_bin}" | sha256sum --check --status ; \
     mv ${tini_bin} /tini ; \
     chmod +x /tini
 
