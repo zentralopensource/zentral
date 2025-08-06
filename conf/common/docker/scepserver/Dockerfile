@@ -2,7 +2,9 @@ FROM golang:bullseye as build_container
 
 WORKDIR /go/src/
 RUN mkdir -p github.com/micromdm && \
-    git clone https://github.com/micromdm/scep.git github.com/micromdm/scep
+    git clone --depth 1 --branch v2.3.0 https://github.com/micromdm/scep.git github.com/micromdm/scep && \
+    cd github.com/micromdm/scep &&\
+    git reset --hard 8eb5412c850c98aaa83c3b96b2facae3710777d6  # the v2.3.0 commit
 WORKDIR /go/src/github.com/micromdm/scep/
 RUN GOOS=linux \
     GOARCH=$(go env GOHOSTARCH) \
