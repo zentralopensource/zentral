@@ -14,7 +14,7 @@ Filters can be configured to display events, and trigger actions outside of Zent
 
 ## Quick start
 
-You can deploy it on your machine with [Docker](./deployment/docker-compose), or start a cloud instance from our custome _Zentral all in one_ images on [AWS](./deployment/zaio-aws) or [Google Cloud Platform](./deployment/zaio-gcp).
+You can deploy it on your machine with [Docker](./deployment/docker-compose).
 
 ## Supported agents
 

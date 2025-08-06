@@ -1,12 +1,11 @@
 # Zentral deployment
 
-To help you evaluate Zentral, or kick-start your first production setup, we maintain 2 kinds of deployment:
+Zentral relies on many components (datatase, event queues, web server, SCEP server, …). It could be challenging to maintain or deploy on your own. This is why we recommend [requesting a test environment](https://www.zentral.com/contact/) in our SaaS.
 
-* [Docker with docker-compose](./docker-compose) for local and simple deployments. We use it also internally for the Zentral development.
-* `Zentral all in one` images on [AWS](./zaio-aws) and [Google Cloud](./zaio-gcp), which are great for testing Zentral with a small fleet of real machines.
+For the more adventurous, we maintain [Docker with docker-compose](./docker-compose) deployments. They can be used to evaluate Zentral and for simple setups. We also use them internally to work on Zentral.
 
 ## Support
 
-We have different plans for custom support. Contact us via email, [Twitter](<https://twitter.com/zentral_io>) or on the **#macadmins** Slack channel – subscribe [here](https://macadmins.herokuapp.com).
+Contact us via email, or on the **#macadmins** Slack channel – subscribe [here](https://macadmins.herokuapp.com).
 
-We build and support Zentral setups for business customers. Details are available on request.
+Visit [zentral.com](https://www.zentral.com) for more info about our paid plans.
