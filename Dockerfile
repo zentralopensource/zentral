@@ -58,13 +58,13 @@ RUN set -eux ; \
 # as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
 RUN set -eux ; \
     \
-    curl -fsSL https://github.com/zentralopensource/bomutils/archive/master.tar.gz | tar xvz ; \
+    curl -fsSL https://github.com/zentralopensource/bomutils/archive/03652e9ba61afc6bfd328e6b114a00d7125f0d5f.tar.gz | tar xvz ; \
     cd bomutils-* ; \
     make ; make install ; \
     cd .. ; rm -rf bomutils-*
 RUN set -eux ; \
     \
-    curl -fsSL https://github.com/zentralopensource/xar/archive/zentral.tar.gz | tar xvz; \
+    curl -fsSL https://github.com/zentralopensource/xar/archive/f1578944c4539960053b5902951dbe5643478fbc.tar.gz | tar xvz; \
     cd xar-*/xar ; \
     ./autogen.sh && ./configure --with-bzip2 ; \
     make ; make install ; \
