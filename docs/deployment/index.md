@@ -6,6 +6,6 @@ For the more adventurous, we maintain [Docker with docker-compose](./docker-comp
 
 ## Support
 
-Contact us via email, or on the **#macadmins** Slack channel – subscribe [here](https://macadmins.herokuapp.com).
+Contact us via email, or on the [#Zentral](https://macadmins.slack.com/archives/C0BNC1SLC) MacAdmins Slack channel – You can join [here](https://www.macadmins.org/).
 
 Visit [zentral.com](https://www.zentral.com) for more info about our paid plans.
