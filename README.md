@@ -20,7 +20,7 @@ Zentral can run compliance checks against custom benchmarks. Compliance checks c
 ### How to run Zentral
 There are many moving parts in the Zentral platform and not all are self-explanatory. If you want to get the most out of it, we recommend the Zentral SaaS offering or supported Zentral private cloud deployments for developer pairing and guidance. We offer managed instances for PoCs and are happy to help.
   
-For testing purposes (and for features not licensed under the [ZPEL-1.0](https://github.com/zentralopensource/zentral/blob/main/LICENSE)) you can deploy a ["Zentral all in one"](https://docs.zentral.io/en/latest/deployment/zaio-aws/). 
+For testing purposes (and for features not licensed under the [ZPEL-1.0](https://github.com/zentralopensource/zentral/blob/main/LICENSE)) you can use ["docker compose"](https://docs.zentral.io/en/latest/deployment/docker-compose/).
 
 ### How to learn Zentral
 - Read the [Zentral docs](https://docs.zentral.io) and the [Terraform provider docs](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs)  
