@@ -11,12 +11,15 @@ from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaMachine
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Query
 from zentral.core.compliance_checks.models import MachineStatus, Status
+from zentral.utils.provisioning import provision
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class InventoryComplianceChecksViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))

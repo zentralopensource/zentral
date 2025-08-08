@@ -3279,6 +3279,7 @@ class APIViewsTestCase(TestCase):
             "id": configuration_pack.pk,
             "configuration": configuration.pk,
             "tags": [],
+            "excluded_tags": [],
             "pack": pack.pk
         }])
 
@@ -3293,6 +3294,7 @@ class APIViewsTestCase(TestCase):
             "id": configuration_pack.pk,
             "configuration": configuration.pk,
             "tags": [],
+            "excluded_tags": [],
             "pack": pack.pk
         }])
 
@@ -3305,6 +3307,7 @@ class APIViewsTestCase(TestCase):
             "id": configuration_pack.pk,
             "configuration": configuration_pack.configuration.pk,
             "tags": [],
+            "excluded_tags": [],
             "pack": configuration_pack.pack.pk
         }])
 
@@ -3335,6 +3338,7 @@ class APIViewsTestCase(TestCase):
             "id": configuration_pack.pk,
             "configuration": configuration_pack.configuration.pk,
             "tags": [t.id for t in configuration_pack.tags.all()],
+            "excluded_tags": [],
             "pack": configuration_pack.pack.pk
         })
 
@@ -3380,16 +3384,33 @@ class APIViewsTestCase(TestCase):
             "non_field_errors": ["The fields configuration, pack must make a unique set."]
         })
 
+    def test_update_configuration_pack_tag_conflict(self):
+        self.set_permissions("osquery.change_configurationpack")
+        configuration_pack = self.force_configuration_pack()
+        tag, = self.force_tags(1)
+        data = {
+            "configuration": configuration_pack.configuration.pk,
+            "pack": configuration_pack.pack.pk,
+            "tags": [tag.id],
+            "excluded_tags": [tag.id],
+        }
+        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            "non_field_errors": [f"'{tag.name}' cannot be both included and excluded"]
+        })
+
     def test_update_configuration_pack(self):
         self.set_permissions("osquery.change_configurationpack")
         configuration_pack = self.force_configuration_pack(force_tags=True)
         new_configuration = self.force_configuration()
         new_pack = self.force_pack()
-        new_tag = self.force_tags(1)
+        new_tag, new_excluded_tag = self.force_tags(2)
         data = {
             "configuration": new_configuration.pk,
             "pack": new_pack.pk,
-            "tags": [t.id for t in new_tag]
+            "tags": [new_tag.id],
+            "excluded_tags": [new_excluded_tag.id]
         }
         response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
         self.assertEqual(response.status_code, 200)
@@ -3397,11 +3418,13 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {
             "id": configuration_pack.pk,
             "configuration": new_configuration.pk,
-            "tags": [t.id for t in new_tag],
+            "tags": [new_tag.id],
+            "excluded_tags": [new_excluded_tag.id],
             "pack": new_pack.pk
         })
         self.assertEqual(configuration_pack.configuration, new_configuration)
         self.assertEqual(configuration_pack.tags.count(), 1)
+        self.assertEqual(configuration_pack.excluded_tags.count(), 1)
         self.assertEqual(configuration_pack.pack, new_pack)
 
     # create configuration pack
@@ -3455,6 +3478,7 @@ class APIViewsTestCase(TestCase):
                 "id": configuration_pack.pk,
                 "configuration": configuration.pk,
                 "tags": [],
+                "excluded_tags": [],
                 "pack": pack
             })
             self.assertEqual(configuration_pack.pack.pk, pack)
@@ -3477,6 +3501,7 @@ class APIViewsTestCase(TestCase):
             "id": configuration_pack.pk,
             "configuration": configuration.pk,
             "tags": [],
+            "excluded_tags": [],
             "pack": configuration_pack.pack.pk
         })
         self.assertEqual(configuration_pack.configuration, configuration)
@@ -3485,11 +3510,12 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("osquery.add_configurationpack")
         configuration = self.force_configuration()
         pack = self.force_pack()
-        tags = self.force_tags(1)
+        tag, excluded_tag = self.force_tags(2)
         data = {
             "configuration": configuration.pk,
             "pack": pack.pk,
-            "tags": [t.id for t in tags]
+            "tags": [tag.id],
+            "excluded_tags":  [excluded_tag.id],
         }
         response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
         self.assertEqual(response.status_code, 201)
@@ -3497,12 +3523,14 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {
             "id": configuration_pack.pk,
             "configuration": configuration.pk,
-            "tags": [t.id for t in tags],
+            "tags": [tag.id],
+            "excluded_tags": [excluded_tag.id],
             "pack": pack.pk
         })
         self.assertEqual(configuration_pack.configuration, configuration)
         self.assertEqual(configuration_pack.pack, pack)
         self.assertEqual(configuration_pack.tags.count(), 1)
+        self.assertEqual(configuration_pack.excluded_tags.count(), 1)
 
     # delete configuration pack
 

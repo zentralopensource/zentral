@@ -98,6 +98,7 @@ class ConfigurationPackResource(Resource):
     configuration_id = RefAttr(ConfigurationResource, required=True)
     pack_id = RefAttr(PackResource, required=True)
     tag_ids = RefAttr(TagResource, many=True)
+    excluded_tag_ids = RefAttr(TagResource, many=True)
 
 
 def iter_resources():

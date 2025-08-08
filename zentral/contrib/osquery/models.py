@@ -488,7 +488,8 @@ class Configuration(models.Model):
 class ConfigurationPack(models.Model):
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE, editable=False)
     pack = models.ForeignKey(Pack, on_delete=models.CASCADE)
-    tags = models.ManyToManyField(Tag, blank=True)
+    tags = models.ManyToManyField(Tag, blank=True, related_name="+")
+    excluded_tags = models.ManyToManyField(Tag, blank=True, related_name="+")
 
     class Meta:
         unique_together = (("configuration", "pack"),)

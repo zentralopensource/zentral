@@ -114,6 +114,7 @@
         <th>Name</th>
         <th>Query count</th>
         <th>Tags</th>
+        <th>Excluded tags</th>
         {% if perms.osquery.change_configuration %}
         <th></th>
         {% endif %}
@@ -126,6 +127,13 @@
         <td>{{ configuration_pack.query_count }}</td>
         <td>
             {% for tag in configuration_pack.tags.all %}
+            {% inventory_tag tag %}
+            {% empty %}
+            -
+            {% endfor %}
+        </td>
+        <td>
+            {% for tag in configuration_pack.excluded_tags.all %}
             {% inventory_tag tag %}
             {% empty %}
             -

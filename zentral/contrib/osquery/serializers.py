@@ -306,6 +306,17 @@ class ConfigurationPackSerializer(serializers.ModelSerializer):
         model = ConfigurationPack
         fields = "__all__"
 
+    def validate(self, data):
+        data = super().validate(data)
+        tags = data.get("tags")
+        excluded_tags = data.get("excluded_tags")
+        if tags and excluded_tags:
+            common_tags = set(tags).intersection(excluded_tags)
+            if common_tags:
+                tag_names = ", ".join(sorted(f"'{t.name}'" for t in common_tags))
+                raise serializers.ValidationError(f"{tag_names} cannot be both included and excluded")
+        return data
+
 
 class PackSerializer(serializers.ModelSerializer):
     class Meta:

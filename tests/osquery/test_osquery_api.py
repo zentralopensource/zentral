@@ -415,18 +415,29 @@ class OsqueryAPIViewsTestCase(TestCase):
 
     def test_config_ok(self):
         tag = Tag.objects.create(name=get_random_string(12))
+        tag2 = Tag.objects.create(name=get_random_string(12))
+        tag3 = Tag.objects.create(name=get_random_string(12))
+        # first pack with one query included because machine tag and excluded tag not a match
         query1, pack1, _ = self.force_query(force_pack=True)
         pack_query1 = pack1.packquery_set.get(query=query1)
         cp1 = ConfigurationPack.objects.create(configuration=self.configuration, pack=pack1)
         cp1.tags.add(tag)
+        cp1.tags.add(tag3)  # not a match but not an issue
+        cp1.excluded_tags.add(tag2)
+        # second pack included because no tags
         event_routing_key = get_random_string(12)
         query2, pack2, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
         pack_query2 = pack2.packquery_set.get(query=query2)
         ConfigurationPack.objects.create(configuration=self.configuration, pack=pack2)
+        # third pack not included because different tag
         _, pack3, _ = self.force_query(force_pack=True, event_routing_key=event_routing_key)
-        tag2 = Tag.objects.create(name=get_random_string(12))
         cp3 = ConfigurationPack.objects.create(configuration=self.configuration, pack=pack3)
         cp3.tags.add(tag2)
+        # fourth pack not included because excluded tag
+        _, pack4, _ = self.force_query(force_pack=True)
+        cp4 = ConfigurationPack.objects.create(configuration=self.configuration, pack=pack4)
+        cp4.excluded_tags.add(tag)
+        cp4.excluded_tags.add(tag3)  # not a match but not an issue
         em = self.force_enrolled_machine()
         MachineTag.objects.create(serial_number=em.serial_number, tag=tag)
         response = self.post_as_json("config", {"node_key": em.node_key})

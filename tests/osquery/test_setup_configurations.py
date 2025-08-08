@@ -206,7 +206,7 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         self.assertEqual(response.context["configuration"], configuration_pack.configuration)
         self.assertEqual(response.context["object"], configuration_pack)
 
-    def test_update_configuration_pack_post(self):
+    def test_update_configuration_pack_same_tag_post_error(self):
         configuration_pack = self._force_configuration_pack()
         self._login("osquery.change_configuration", "osquery.view_configuration")
         tag = Tag.objects.create(name=get_random_string(12))
@@ -214,7 +214,32 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
             reverse("osquery:update_configuration_pack",
                     args=(configuration_pack.configuration.pk, configuration_pack.pk)),
             {"pack": configuration_pack.pack.pk,
-             "tags": [tag.pk]},
+             "tags": [tag.pk],
+             "excluded_tags": [tag.pk]},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/configurationpack_form.html")
+        self.assertFormError(
+            response.context["form"], "tags",
+            f"'{tag.name}' cannot be both included and excluded"
+        )
+        self.assertFormError(
+            response.context["form"], "excluded_tags",
+            f"'{tag.name}' cannot be both included and excluded"
+        )
+
+    def test_update_configuration_pack_post(self):
+        configuration_pack = self._force_configuration_pack()
+        self._login("osquery.change_configuration", "osquery.view_configuration")
+        tag = Tag.objects.create(name=get_random_string(12))
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+        response = self.client.post(
+            reverse("osquery:update_configuration_pack",
+                    args=(configuration_pack.configuration.pk, configuration_pack.pk)),
+            {"pack": configuration_pack.pack.pk,
+             "tags": [tag.pk],
+             "excluded_tags": [excluded_tag.pk]},
             follow=True
         )
         self.assertEqual(response.status_code, 200)
@@ -226,6 +251,7 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase):
         self.assertEqual(resp_configuration_pack, configuration_pack)
         self.assertEqual(resp_configuration_pack.pack, configuration_pack.pack)
         self.assertEqual(list(resp_configuration_pack.tags.all()), [tag])
+        self.assertEqual(list(resp_configuration_pack.excluded_tags.all()), [excluded_tag])
         self.assertContains(response, tag.name)
 
     # remove configuration pack

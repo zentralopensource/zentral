@@ -71,6 +71,15 @@ class ConfigurationPackForm(forms.ModelForm):
 
     def clean(self):
         super().clean()
+        tags = self.cleaned_data.get("tags")
+        excluded_tags = self.cleaned_data.get("excluded_tags")
+        if tags and excluded_tags:
+            common_tags = set(tags).intersection(excluded_tags)
+            if common_tags:
+                tag_names = ", ".join(sorted(f"'{t.name}'" for t in common_tags))
+                tag_err = f"{tag_names} cannot be both included and excluded"
+                for field_name in ("tags", "excluded_tags"):
+                    self.add_error(field_name, tag_err)
         self.instance.configuration = self.configuration
 
 

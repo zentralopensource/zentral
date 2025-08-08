@@ -1,3 +1,9 @@
+## 2025.9
+
+#### Osquery
+
+Add excluded tags when linking a pack to a configuration.
+
 ## 2025.8
 
 ### Features (some, not all…)

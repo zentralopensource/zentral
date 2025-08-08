@@ -191,6 +191,7 @@ def build_osquery_conf(machine, enrollment):
     # Packs
     for configuration_pack in (configuration.configurationpack_set
                                             .distinct()
+                                            .exclude(excluded_tags__in=machine.tags)
                                             .filter(Q(tags__isnull=True) | Q(tags__in=machine.tags))
                                             .select_related("pack")
                                             .prefetch_related("pack__packquery_set__query__compliance_check",
