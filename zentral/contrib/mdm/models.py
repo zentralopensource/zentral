@@ -372,16 +372,8 @@ class BlueprintManager(models.Manager):
     def can_be_deleted(self):
         return self.annotate(
             bpa_count=Count("blueprintartifact"),
-            da_count=Count("blueprintartifact__artifact__artifactversion__deviceartifact"),
-            ua_count=Count("blueprintartifact__artifact__artifactversion__userartifact"),
-            dc_count=Count("blueprintartifact__artifact__artifactversion__devicecommand"),
-            uc_count=Count("blueprintartifact__artifact__artifactversion__usercommand"),
         ).filter(
             bpa_count=0,
-            da_count=0,
-            ua_count=0,
-            dc_count=0,
-            uc_count=0,
         )
 
 
