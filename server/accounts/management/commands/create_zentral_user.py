@@ -130,11 +130,12 @@ class Command(BaseCommand):
         if not self.service_account:
             created = self.context["created"]
             if self.send_reset:
-                pr_context = password_reset_handler.send_password_reset(self.user, invitation=created)
+                password_reset_handler.send_password_reset(self.user, invitation=created)
+                self.print("Password reset sent.")
             else:
                 pr_context = password_reset_handler.get_password_reset_context(self.user, invitation=created)
-            self.context["password_reset_url"] = pr_context["reset_url"]
-            self.print("Password reset:", self.context["password_reset_url"])
+                self.context["password_reset_url"] = pr_context["reset_url"]
+                self.print("Password reset:", self.context["password_reset_url"])
 
     def output_json(self):
         if not self.json:
