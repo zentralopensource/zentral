@@ -72,7 +72,7 @@ class UpdateMachineTags(APIView):
                     self.taxonomies_to_clear.append(taxonomy_name)
             elif kind == "ADD":
                 self.tags_to_add.extend(
-                    Tag.objects.get_or_create(taxonomy=taxonomy, name=name)[0]
+                    Tag.objects.get_or_create(name=name, defaults={"taxonomy": taxonomy})[0]
                     for name in names
                 )
             elif kind == "REMOVE":
