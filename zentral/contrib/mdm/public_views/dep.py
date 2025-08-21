@@ -30,22 +30,22 @@ class DEPEnrollMixin(PostEventMixin):
         except ValueError:
             self.abort("could not verify payload signer certificate")
 
-        payload = plistlib.loads(payload_data)
+        self.payload = plistlib.loads(payload_data)
 
-        self.mdm_can_request_software_update = payload.get("MDM_CAN_REQUEST_SOFTWARE_UPDATE", False)
+        self.mdm_can_request_software_update = self.payload.get("MDM_CAN_REQUEST_SOFTWARE_UPDATE", False)
         self.os_version = " ".join(
             s for s in (
-                payload.get(k) for k in ("OS_VERSION", "SUPPLEMENTAL_OS_VERSION_EXTRA")
+                self.payload.get(k) for k in ("OS_VERSION", "SUPPLEMENTAL_OS_VERSION_EXTRA")
             )
             if s
         )
-        self.software_update_device_id = payload.get("SOFTWARE_UPDATE_DEVICE_ID")
-        self.build = payload.get("SUPPLEMENTAL_BUILD_VERSION") or payload.get("VERSION")
-        self.product = payload["PRODUCT"]
-        self.serial_number = payload["SERIAL"]
-        self.udid = payload["UDID"]
+        self.software_update_device_id = self.payload.get("SOFTWARE_UPDATE_DEVICE_ID")
+        self.build = self.payload.get("SUPPLEMENTAL_BUILD_VERSION") or self.payload.get("VERSION")
+        self.product = self.payload["PRODUCT"]
+        self.serial_number = self.payload["SERIAL"]
+        self.udid = self.payload["UDID"]
 
-        return payload
+        return self.payload
 
     def verify_blocked_device(self):
         if EnrolledDevice.objects.blocked().filter(serial_number=self.serial_number).exists():
@@ -111,7 +111,10 @@ class DEPEnrollMixin(PostEventMixin):
 
 class MDMProfileResponseMixin:
     def build_mdm_configuration_profile_response(self, dep_enrollment_session):
-        configuration_profile = build_mdm_configuration_profile(dep_enrollment_session)
+        configuration_profile = build_mdm_configuration_profile(
+            dep_enrollment_session,
+            machine_info=self.payload
+        )
         configuration_profile_filename = "zentral_mdm"
         self.post_event("success", **dep_enrollment_session.serialize_for_event())
         return build_configuration_profile_response(configuration_profile, configuration_profile_filename)
@@ -221,7 +224,7 @@ class DEPWebEnrollView(DEPEnrollMixin, View):
             self.abort("Missing x-apple-aspen-deviceinfo header")
 
     def get(self, request, *args, **kwargs):
-        payload = self.get_payload()
+        self.get_payload()
         err_response = self.verify()
         if err_response:
             return err_response
@@ -230,7 +233,7 @@ class DEPWebEnrollView(DEPEnrollMixin, View):
             self.abort("this DEP enrollment has no realm")
 
         # save payload
-        request.session[DEP_ENROLLMENT_PAYLOAD_KEY] = payload
+        request.session[DEP_ENROLLMENT_PAYLOAD_KEY] = self.payload
 
         # redirect to next view
         return HttpResponseRedirect(
@@ -306,6 +309,7 @@ class DEPWebEnrollProfileView(PostEventMixin, MDMProfileResponseMixin, View):
             dep_enrollment__enrollment_secret__secret=kwargs["dep_enrollment_secret"],
             dep_enrollment__realm__isnull=False,
         )
+        self.payload = request.session[DEP_ENROLLMENT_PAYLOAD_KEY]
 
         # for PostEventMixin
         enrollment_secret = dep_enrollment_session.enrollment_secret

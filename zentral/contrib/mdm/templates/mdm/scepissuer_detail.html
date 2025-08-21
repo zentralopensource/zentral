@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:scep_issuers' %}">SCEP issuers</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">SCEP issuer</h3>
+        <div class="ms-auto">
+        </div>
+    </div>
+
+<table class="table-object-properties">
+  <tbody>
+    <tr>
+      <th width="160px">Name</th>
+      <td>{{ object.name }}</td>
+    </tr>
+    <tr>
+      <th>Description</th>
+      <td>{{ object.description|default:"-" }}</th>
+    </tr>
+    <tr>
+      <th>URL</th>
+      <td>{{ object.url }}</th>
+    </tr>
+    <tr>
+      <th>Key size</th>
+      <td>{{ object.get_key_size_display }}</td>
+    </tr>
+    <tr>
+      <th>Key usage</th>
+      <td>{{ object.key_usage }}</td>
+    </tr>
+    {% if not object.provisioning_uid %}
+    <tr>
+      <th>Backend
+      <td>
+        <dl class="row">
+          <dt class="col-sm-3 text-md-end">Type</dt>
+          <dd class="col-sm-9">{{ object.get_backend_display }}</dd>
+          {% if object.backend == "STATIC_CHALLENGE" %}
+          <dt class="col-sm-3 text-md-end">Challenge</dt>
+          <dd class="col-sm-9">
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ object.get_static_challenge_kwargs.challenge }}</span>
+          </dd>
+          {% elif object.backend == "MICROSOFT_CA" %}
+          {% with object.get_microsoft_ca_kwargs as kwargs %}
+          <dt class="col-sm-3 text-md-end">NDES mscep_admin/ endpoint</dt>
+          <dd class="col-sm-9">{{ kwargs.url }}</dd>
+          <dt class="col-sm-3 text-md-end">mscep admin user</dt>
+          <dd class="col-sm-9">{{ kwargs.username }}</dt>
+          <dt class="col-sm-3 text-md-end">mscep admin password</dt>
+          <dd class="col-sm-9">
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ kwargs.password }}</span>
+          </dd>
+          {% endwith %}
+          {% elif object.backend == "OKTA_CA" %}
+          {% with object.get_okta_ca_kwargs as kwargs %}
+          <dt class="col-sm-3 text-md-end">Challenge URL</dt>
+          <dd class="col-sm-9">{{ kwargs.url }}</dd>
+          <dt class="col-sm-3 text-md-end">Username</dt>
+          <dd class="col-sm-9">{{ kwargs.username }}</dt>
+          <dt class="col-sm-3 text-md-end">Password</dt>
+          <dd class="col-sm-9">
+            <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
+            <span hidden>{{ kwargs.password }}</span>
+          </dd>
+          {% endwith %}
+          {% endif %}
+        </dl>
+      </td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+{% created_updated_at object %}
+
+</div>
+
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  var openEyes = document.querySelectorAll(".bi-eye");
+  openEyes.forEach(function(openEye) {
+    openEye.addEventListener("click", function(event) {
+      var valueSpan = openEye.nextElementSibling;
+      if (valueSpan.hidden) {
+        valueSpan.hidden = false;
+        openEye.classList.remove("bi-eye");
+        openEye.classList.add("bi-eye-slash");
+      } else {
+        valueSpan.hidden = true;
+        openEye.classList.remove("bi-eye-slash");
+        openEye.classList.add("bi-eye");
+      }
+    });
+  });
+</script>
+{% endblock %}

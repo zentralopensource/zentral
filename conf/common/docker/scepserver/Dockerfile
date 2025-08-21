@@ -31,11 +31,6 @@ VOLUME $SCEP_FILE_DEPOT
 RUN mkdir -p /etc/scep/
 ADD openssl.conf /etc/scep/
 
-ADD requirements.txt /tmp/
-RUN pip3 install -r /tmp/requirements.txt
-ADD verify_zentral_csr.py /usr/local/bin
-ENV SCEP_CSR_VERIFIER_EXEC /usr/local/bin/verify_zentral_csr.py
-
 ADD docker-entrypoint.py /usr/local/bin/
 
 USER scep:scep

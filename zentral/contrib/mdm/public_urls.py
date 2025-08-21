@@ -54,11 +54,6 @@ urlpatterns = [
          kwargs={"session": True},
          name='ota_session_enroll'),
 
-    # SCEP verification / scep view
-    path('verify_scep_csr/',
-         csrf_exempt(public_views.VerifySCEPCSRView.as_view()),
-         name='verify_scep_csr'),
-
     # User enrollment / user views
     path('user_enrollment/<str:secret>/com.apple.remotemanagement/',
          csrf_exempt(public_views.UserEnrollmentServiceDiscoveryView.as_view()),

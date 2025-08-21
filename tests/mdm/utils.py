@@ -16,9 +16,10 @@ from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmGroup, RealmUser
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
+from zentral.contrib.mdm.cert_issuer_backends import CertIssuerBackend
 from zentral.contrib.mdm.crypto import load_push_certificate_and_key
 from zentral.contrib.mdm.declarations import get_declaration_info
-from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
+from zentral.contrib.mdm.models import (ACMEIssuer, Artifact, ArtifactVersion, Asset,
                                         Blueprint, BlueprintArtifact,
                                         Channel, DataAsset, Declaration, DeclarationRef, Platform,
                                         DEPDevice, DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
@@ -26,7 +27,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
                                         EnterpriseApp, FileVaultConfig, Location, LocationAsset,
                                         OTAEnrollment, OTAEnrollmentSession,
-                                        Profile, PushCertificate, RecoveryPasswordConfig, SCEPConfig,
+                                        Profile, PushCertificate, RecoveryPasswordConfig, SCEPIssuer,
                                         RealmGroupTagMapping,
                                         SoftwareUpdate, SoftwareUpdateDeviceID, SoftwareUpdateEnforcement,
                                         StoreApp,
@@ -162,20 +163,79 @@ def force_push_certificate(
     return push_certificate
 
 
-# SCEP config
+# ACME issuer
 
 
-def force_scep_config(provisioning_uid=None):
-    scep_config = SCEPConfig(
+def force_acme_issuer(
+    provisioning_uid=None,
+    backend=CertIssuerBackend.MicrosoftCA,
+    **backend_kwargs,
+):
+    acme_issuer = ACMEIssuer(
+        provisioning_uid=provisioning_uid,
+        name=get_random_string(12),
+        directory_url="https://example.com/{}".format(get_random_string(12)),
+        key_size=384,
+        key_type=ACMEIssuer.KeyType.ECSECPrimeRandom,
+        usage_flags=1,
+        hardware_bound=True,
+        attest=True,
+        backend=backend,
+    )
+    if not backend_kwargs:
+        if backend == CertIssuerBackend.StaticChallenge:
+            backend_kwargs = {"challenge": get_random_string(12)}
+        elif backend == CertIssuerBackend.IDent:
+            backend_kwargs = {
+                "url": "https://www.example.com/{}".format(get_random_string(12)),
+                "bearer_token": get_random_string(12),
+                "request_timeout": 123,
+                "max_retries": 2,
+            }
+        else:
+            backend_kwargs = {
+                "url": "https://www.example.com/{}".format(get_random_string(12)),
+                "username": get_random_string(12),
+                "password": get_random_string(12),
+            }
+    acme_issuer.set_backend_kwargs(backend_kwargs)
+    acme_issuer.save()
+    return acme_issuer
+
+
+# SCEP issuer
+
+
+def force_scep_issuer(
+    provisioning_uid=None,
+    backend=CertIssuerBackend.StaticChallenge,
+    **backend_kwargs
+):
+    scep_issuer = SCEPIssuer(
         provisioning_uid=provisioning_uid,
         name=get_random_string(12),
         url="https://example.com/{}".format(get_random_string(12)),
-        challenge_type="STATIC",
-        challenge_kwargs={"challenge": get_random_string(12)}
+        backend=backend,
     )
-    scep_config.set_challenge_kwargs({"challenge": get_random_string(12)})
-    scep_config.save()
-    return scep_config
+    if not backend_kwargs:
+        if backend == CertIssuerBackend.StaticChallenge:
+            backend_kwargs = {"challenge": get_random_string(12)}
+        elif backend == CertIssuerBackend.IDent:
+            backend_kwargs = {
+                "url": "https://www.example.com/{}".format(get_random_string(12)),
+                "bearer_token": get_random_string(12),
+                "request_timeout": 123,
+                "max_retries": 2,
+            }
+        else:
+            backend_kwargs = {
+                "url": "https://www.example.com/{}".format(get_random_string(12)),
+                "username": get_random_string(12),
+                "password": get_random_string(12),
+            }
+    scep_issuer.set_backend_kwargs(backend_kwargs)
+    scep_issuer.save()
+    return scep_issuer
 
 
 # DEP virtual server
@@ -251,7 +311,7 @@ def force_dep_device(
 # enrollments
 
 
-def force_dep_enrollment(mbu, push_certificate=None, display_name=None, tags=None):
+def force_dep_enrollment(mbu, push_certificate=None, display_name=None, tags=None, acme_issuer=False):
     if push_certificate is None:
         push_certificate = force_push_certificate()
     enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=mbu)
@@ -262,7 +322,8 @@ def force_dep_enrollment(mbu, push_certificate=None, display_name=None, tags=Non
         name=get_random_string(12),
         uuid=uuid.uuid4(),
         push_certificate=push_certificate,
-        scep_config=force_scep_config(),
+        acme_issuer=force_acme_issuer() if acme_issuer else None,
+        scep_issuer=force_scep_issuer(),
         virtual_server=force_dep_virtual_server(),
         enrollment_secret=enrollment_secret,
         skip_setup_items=[k for k, _ in skippable_setup_panes],
@@ -274,7 +335,8 @@ def force_ota_enrollment(mbu=None, realm=None, display_name=None):
         mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
     return OTAEnrollment.objects.create(
         push_certificate=force_push_certificate(),
-        scep_config=force_scep_config(),
+        acme_issuer=force_acme_issuer(),
+        scep_issuer=force_scep_issuer(),
         name=get_random_string(12),
         enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu),
         realm=realm,
@@ -285,8 +347,9 @@ def force_ota_enrollment(mbu=None, realm=None, display_name=None):
 def force_user_enrollment(mbu, realm=None, enrollment_display_name=None):
     return UserEnrollment.objects.create(
         push_certificate=force_push_certificate(),
+        acme_issuer=force_acme_issuer(),
+        scep_issuer=force_scep_issuer(),
         realm=realm or force_realm(),
-        scep_config=force_scep_config(),
         name=get_random_string(12),
         enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=mbu),
         display_name=enrollment_display_name or get_random_string(12)
@@ -353,9 +416,16 @@ def force_dep_enrollment_session(
     realm_user_email=None,
     realm_user_username=None,
     enrollment_display_name=None,
-    tags=None
+    tags=None,
+    acme_issuer=False,
 ):
-    dep_enrollment = force_dep_enrollment(mbu, push_certificate, display_name=enrollment_display_name, tags=tags)
+    dep_enrollment = force_dep_enrollment(
+        mbu,
+        push_certificate,
+        display_name=enrollment_display_name,
+        tags=tags,
+        acme_issuer=acme_issuer
+    )
     if realm_user:
         dep_enrollment.use_realm_user = True
         dep_enrollment.username_pattern = DEPEnrollment.UsernamePattern.DEVICE_USERNAME

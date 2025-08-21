@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from .utils import force_push_certificate, force_realm, force_scep_config, force_user_enrollment
+from .utils import force_acme_issuer, force_push_certificate, force_realm, force_scep_issuer, force_user_enrollment
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -61,11 +61,10 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self._login("mdm.add_userenrollment", "mdm.view_userenrollment")
         name = get_random_string(64)
         push_certificate = force_push_certificate()
-        scep_config = force_scep_config()
+        scep_issuer = force_scep_issuer()
         response = self.client.post(reverse("mdm:create_user_enrollment"),
                                     {"ue-name": name,
-                                     "ue-scep_config": scep_config.pk,
-                                     "ue-scep_verification": "",
+                                     "ue-scep_issuer": scep_issuer.pk,
                                      "ue-push_certificate": push_certificate.pk,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -80,13 +79,14 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         name = get_random_string(64)
         display_name = get_random_string(12)
         push_certificate = force_push_certificate()
-        scep_config = force_scep_config()
+        acme_issuer = force_acme_issuer()
+        scep_issuer = force_scep_issuer()
         response = self.client.post(reverse("mdm:create_user_enrollment"),
                                     {"ue-realm": realm.pk,
                                      "ue-name": name,
                                      "ue-display_name": display_name,
-                                     "ue-scep_config": scep_config.pk,
-                                     "ue-scep_verification": "",
+                                     "ue-acme_issuer": acme_issuer.pk,
+                                     "ue-scep_issuer": scep_issuer.pk,
                                      "ue-push_certificate": push_certificate.pk,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -95,13 +95,14 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, name)
         self.assertContains(response, display_name)
         self.assertContains(response, push_certificate.name)
-        self.assertContains(response, scep_config.name)
-        self.assertContains(response, "without CSR verification")
+        self.assertContains(response, acme_issuer.name)
+        self.assertContains(response, scep_issuer.name)
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, name)
         self.assertEqual(enrollment.display_name, display_name)
         self.assertEqual(enrollment.push_certificate, push_certificate)
-        self.assertEqual(enrollment.scep_config, scep_config)
+        self.assertEqual(enrollment.acme_issuer, acme_issuer)
+        self.assertEqual(enrollment.scep_issuer, scep_issuer)
 
     # view User enrollment
 
@@ -125,20 +126,27 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, enrollment.display_name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertNotContains(response, enrollment.push_certificate.get_absolute_url())
-        self.assertContains(response, enrollment.scep_config.name)
-        self.assertNotContains(response, enrollment.scep_config.get_absolute_url())
+        self.assertContains(response, enrollment.acme_issuer.name)
+        self.assertNotContains(response, enrollment.acme_issuer.get_absolute_url())
+        self.assertContains(response, enrollment.scep_issuer.name)
+        self.assertNotContains(response, enrollment.scep_issuer.get_absolute_url())
 
     def test_view_user_enrollment_extra_perms(self):
         enrollment = force_user_enrollment(self.mbu)
-        self._login("mdm.view_userenrollment", "mdm.view_pushcertificate", "mdm.view_scepconfig")
+        self._login(
+            "mdm.view_acmeissuer", "mdm.view_userenrollment",
+            "mdm.view_pushcertificate", "mdm.view_scepissuer"
+        )
         response = self.client.get(reverse("mdm:user_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/userenrollment_detail.html")
         self.assertContains(response, enrollment.name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertContains(response, enrollment.push_certificate.get_absolute_url())
-        self.assertContains(response, enrollment.scep_config.name)
-        self.assertContains(response, enrollment.scep_config.get_absolute_url())
+        self.assertContains(response, enrollment.acme_issuer.name)
+        self.assertContains(response, enrollment.acme_issuer.get_absolute_url())
+        self.assertContains(response, enrollment.scep_issuer.name)
+        self.assertContains(response, enrollment.scep_issuer.get_absolute_url())
 
     # update User enrollment
 
@@ -170,8 +178,8 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
                                     {"ue-realm": new_realm.pk,
                                      "ue-name": new_name,
                                      "ue-display_name": new_display_name,
-                                     "ue-scep_config": enrollment.scep_config.pk,
-                                     "ue-scep_verification": "on",
+                                     "ue-acme_issuer": enrollment.acme_issuer.pk,
+                                     "ue-scep_issuer": enrollment.scep_issuer.pk,
                                      "ue-push_certificate": enrollment.push_certificate.pk,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -181,8 +189,8 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, new_name)
         self.assertContains(response, new_display_name)
         self.assertContains(response, enrollment.push_certificate.name)
-        self.assertContains(response, enrollment.scep_config.name)
-        self.assertContains(response, "with CSR verification")
+        self.assertContains(response, enrollment.acme_issuer.name)
+        self.assertContains(response, enrollment.scep_issuer.name)
         enrollment = response.context["object"]
         self.assertEqual(enrollment.realm, new_realm)
         self.assertEqual(enrollment.name, new_name)

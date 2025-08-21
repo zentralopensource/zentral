@@ -5,7 +5,7 @@ import uuid
 from django.core.management import call_command
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.mdm.models import Location, SCEPConfig
+from zentral.contrib.mdm.models import ACMEIssuer, Location, SCEPIssuer
 from zentral.contrib.mdm.dep_client import DEPClientError
 from .utils import force_dep_virtual_server
 
@@ -207,17 +207,40 @@ class MDMManagementCommandsTest(TestCase):
 
     # provisioning
 
-    def test_scep_config_provisioning(self):
-        qs = SCEPConfig.objects.all()
-        self.assertEqual(qs.count(), 0)
+    def test_scep_issuer_provisioning(self):
+        aqs = ACMEIssuer.objects.all()
+        sqs = SCEPIssuer.objects.all()
+        self.assertEqual(aqs.count(), 0)
+        self.assertEqual(sqs.count(), 0)
         call_command('provision')
-        self.assertEqual(qs.count(), 1)
-        scep_config = qs.first()
-        # see tests/conf/base.json
-        self.assertEqual(scep_config.name, "YoloFomo")
-        self.assertEqual(scep_config.challenge_type, "MICROSOFT_CA")
+        self.assertEqual(aqs.count(), 1)
+        self.assertEqual(sqs.count(), 1)
+        acme_issuer = aqs.first()
+        scep_issuer = sqs.first()
+        # tests/conf/base.json ACME issuer
+        self.assertEqual(acme_issuer.name, "ACME issuer")
+        self.assertEqual(acme_issuer.description, "ACME issuer description")
+        self.assertEqual(acme_issuer.directory_url, "https://www.example.com/acme/")
+        self.assertEqual(acme_issuer.key_size, 384)
+        self.assertEqual(acme_issuer.key_type, "ECSECPrimeRandom")
+        self.assertEqual(acme_issuer.usage_flags, 1)
+        self.assertEqual(acme_issuer.extended_key_usage, ["1.3.6.1.5.5.7.3.2"])
+        self.assertTrue(acme_issuer.hardware_bound is True)
+        self.assertTrue(acme_issuer.attest is True)
+        self.assertEqual(acme_issuer.backend, "STATIC_CHALLENGE")
         self.assertEqual(
-            scep_config.get_challenge_kwargs(),
+            acme_issuer.get_backend_kwargs(),
+            {"challenge": "Challenge"}
+        )
+        # tests/conf/base.json SCEP issuer
+        self.assertEqual(scep_issuer.name, "SCEP issuer")
+        self.assertEqual(scep_issuer.description, "SCEP issuer description")
+        self.assertEqual(scep_issuer.url, "https://www.example.com/scep/")
+        self.assertEqual(scep_issuer.key_size, 2048)
+        self.assertEqual(scep_issuer.key_usage, 1)
+        self.assertEqual(scep_issuer.backend, "MICROSOFT_CA")
+        self.assertEqual(
+            scep_issuer.get_backend_kwargs(),
             {"url": "https://www.example.com/ndes/",
              "username": "Yolo",
              "password": "Fomo"}

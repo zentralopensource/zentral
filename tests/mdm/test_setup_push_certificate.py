@@ -11,7 +11,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.mdm.models import UserEnrollment
-from .utils import force_push_certificate, force_push_certificate_material, force_scep_config
+from .utils import force_push_certificate, force_push_certificate_material, force_scep_issuer
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -47,7 +47,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def _force_user_enrollment(self):
         return UserEnrollment.objects.create(
             push_certificate=force_push_certificate(with_material=True),
-            scep_config=force_scep_config(),
+            scep_issuer=force_scep_issuer(),
             name=get_random_string(12),
             enrollment_secret=EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
         )

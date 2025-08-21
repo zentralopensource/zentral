@@ -51,7 +51,11 @@ class MDMViewsTestCase(TestCase):
 
     # utility methods
 
-    def _call(self, method, url, payload, session=None, serial_number=None, sign_message=False, bad_signature=False):
+    def _call(
+        self, method, url, payload, session=None,
+        serial_number=None, att_serial_number=None, att_udid=None,
+        sign_message=False, bad_signature=False
+    ):
         kwargs = {}
         if payload:
             kwargs["data"] = plistlib.dumps(payload)
@@ -78,11 +82,20 @@ class MDMViewsTestCase(TestCase):
                     key_size=512,  # faster
                 )
             builder = x509.CertificateBuilder()
-            builder = builder.subject_name(x509.Name([
+            subj_name_attrs = [
                 x509.NameAttribute(NameOID.COMMON_NAME, cn),
                 x509.NameAttribute(NameOID.ORGANIZATION_NAME, o),
                 x509.NameAttribute(NameOID.SERIAL_NUMBER, serial_number),
-            ]))
+            ]
+            if att_serial_number:
+                subj_name_attrs.append(
+                    x509.NameAttribute(x509.ObjectIdentifier("1.2.840.113635.100.8.9.1"), att_serial_number)
+                )
+            if att_udid:
+                subj_name_attrs.append(
+                    x509.NameAttribute(x509.ObjectIdentifier("1.2.840.113635.100.8.9.2"), att_udid)
+                )
+            builder = builder.subject_name(x509.Name(subj_name_attrs))
             builder = builder.issuer_name(x509.Name([
                 x509.NameAttribute(NameOID.COMMON_NAME, cn),
                 x509.NameAttribute(NameOID.ORGANIZATION_NAME, o),
@@ -127,8 +140,16 @@ class MDMViewsTestCase(TestCase):
                 kwargs["HTTP_MDM_SIGNATURE"] = base64.b64encode(sig.dump())
         return method(url, **kwargs)
 
-    def _put(self, url, payload, session=None, serial_number=None, sign_message=False, bad_signature=False):
-        return self._call(self.client.put, url, payload, session, serial_number, sign_message, bad_signature)
+    def _put(
+        self, url, payload, session=None,
+        serial_number=None, att_serial_number=None, att_udid=None,
+        sign_message=False, bad_signature=False
+    ):
+        return self._call(
+            self.client.put, url, payload, session,
+            serial_number, att_serial_number, att_udid,
+            sign_message, bad_signature
+        )
 
     def _get(self, url, session, sign_message=False):
         return self._call(self.client.get, url, payload=None, session=session, sign_message=sign_message)
@@ -249,14 +270,53 @@ class MDMViewsTestCase(TestCase):
         self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
         session.refresh_from_db()
         self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
-        self.assertEqual(session.enrolled_device.udid, udid)
-        self.assertEqual(session.enrolled_device.serial_number, serial_number)
-        self.assertEqual(session.enrolled_device.cert_not_valid_after, datetime(2034, 5, 6))
-        self.assertEqual(session.enrolled_device.platform, "macOS")
-        self.assertTrue(session.enrolled_device.dep_enrollment)
-        self.assertTrue(session.enrolled_device.user_enrollment is False)
-        self.assertTrue(session.enrolled_device.user_approved_enrollment)
-        self.assertTrue(session.enrolled_device.supervised)
+        enrolled_device = session.enrolled_device
+        self.assertEqual(enrolled_device.udid, udid)
+        self.assertEqual(enrolled_device.serial_number, serial_number)
+        self.assertEqual(enrolled_device.cert_not_valid_after, datetime(2034, 5, 6))
+        self.assertIsNone(enrolled_device.cert_att_serial_number)
+        self.assertIsNone(enrolled_device.cert_att_udid)
+        self.assertEqual(enrolled_device.platform, "macOS")
+        self.assertTrue(enrolled_device.dep_enrollment)
+        self.assertTrue(enrolled_device.user_enrollment is False)
+        self.assertTrue(enrolled_device.user_approved_enrollment)
+        self.assertTrue(enrolled_device.supervised)
+
+    def test_authenticate_dep_enrollment_session_macos_with_cert_att(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
+        self.assertIsNone(session.enrolled_device)
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            # No UserID or EnrollmentUserID → Device Channel
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(12),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "15.6.1",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(
+            reverse("mdm_public:checkin"), payload, session,
+            att_serial_number=serial_number, att_udid="att-udid"
+        )
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
+        enrolled_device = session.enrolled_device
+        self.assertEqual(enrolled_device.udid, udid)
+        self.assertEqual(enrolled_device.serial_number, serial_number)
+        self.assertEqual(enrolled_device.cert_not_valid_after, datetime(2034, 5, 6))
+        self.assertEqual(enrolled_device.cert_att_serial_number, serial_number)
+        self.assertEqual(enrolled_device.cert_att_udid, "att-udid")
+        self.assertEqual(enrolled_device.platform, "macOS")
+        self.assertTrue(enrolled_device.dep_enrollment)
+        self.assertTrue(enrolled_device.user_enrollment is False)
+        self.assertTrue(enrolled_device.user_approved_enrollment)
+        self.assertTrue(enrolled_device.supervised)
 
     def test_authenticate_dep_enrollment_session_macos_mdm_signature_header(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu)

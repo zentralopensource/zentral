@@ -48,7 +48,7 @@ class TestUserEnrollment(TestCase):
         session.set_started_status()
         scep_payload = build_scep_payload(session)
         self.assertEqual(scep_payload["PayloadContent"]["Challenge"],
-                         enrollment.scep_config.get_challenge_kwargs()["challenge"])
+                         enrollment.scep_issuer.get_backend_kwargs()["challenge"])
 
     def test_user_enrollment_reenrollment_session_error(self):
         enrollment = force_user_enrollment(self.mbu, self.realm)

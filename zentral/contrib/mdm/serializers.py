@@ -2,6 +2,7 @@ import base64
 import logging
 import os
 import plistlib
+import uuid
 import zipfile
 from django.core.files import File
 from django.db import transaction
@@ -13,10 +14,16 @@ from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.ssl import ensure_bytes
 from .app_manifest import read_package_info, validate_configuration
 from .artifacts import update_blueprint_serialized_artifacts
+from .cert_issuer_backends import CertIssuerBackend
+from .cert_issuer_backends.ident import IDentSerializer
+from .cert_issuer_backends.microsoft_ca import MicrosoftCASerializer
+from .cert_issuer_backends.okta_ca import OktaCASerializer
+from .cert_issuer_backends.static_challenge import StaticChallengeSerializer
 from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
 from .declarations import verify_declaration_source
 from .dep import assign_dep_device_profile, DEPClientError
-from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
+from .models import (ACMEIssuer,
+                     Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
                      DEPDevice,
                      DataAsset,
@@ -27,12 +34,10 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      OTAEnrollment,
                      Platform, Profile, PushCertificate,
                      RecoveryPasswordConfig,
-                     SCEPConfig,
+                     SCEPIssuer,
                      SoftwareUpdateEnforcement,
                      UserCommand)
 from .payloads import get_configuration_profile_info
-from .scep.microsoft_ca import MicrosoftCAChallengeSerializer, OktaCAChallengeSerializer
-from .scep.static import StaticChallengeSerializer
 
 
 logger = logging.getLogger("zentral.contrib.mdm.serializers")
@@ -189,7 +194,7 @@ class OTAEnrollmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OTAEnrollment
-        fields = "__all__"
+        exclude = ('scep_config', 'scep_verification')
 
     def create(self, validated_data):
         secret_data = validated_data.pop('enrollment_secret')
@@ -315,71 +320,156 @@ class RecoveryPasswordConfigSerializer(serializers.ModelSerializer):
         return instance
 
 
-class SCEPConfigSerializer(serializers.ModelSerializer):
-    microsoft_ca_challenge_kwargs = MicrosoftCAChallengeSerializer(
-        source="get_microsoft_ca_challenge_kwargs",
-        required=False,
-    )
-    okta_ca_challenge_kwargs = OktaCAChallengeSerializer(
-        source="get_okta_ca_challenge_kwargs",
-        required=False,
-    )
+class CertIssuerSerializer(serializers.Serializer):
+    ident_kwargs = IDentSerializer(
+        source="get_ident_kwargs", required=False, allow_null=True)
+    microsoft_ca_kwargs = MicrosoftCASerializer(
+        source="get_microsoft_ca_kwargs", required=False, allow_null=True)
+    okta_ca_kwargs = OktaCASerializer(
+        source="get_okta_ca_kwargs", required=False, allow_null=True)
     static_challenge_kwargs = StaticChallengeSerializer(
-        source="get_static_challenge_kwargs",
-        required=False,
-    )
-
-    class Meta:
-        model = SCEPConfig
-        fields = (
-            "id",
-            "provisioning_uid",
-            "name",
-            "url",
-            "key_usage",
-            "key_is_extractable",
-            "keysize",
-            "allow_all_apps_access",
-            "challenge_type",
-            "microsoft_ca_challenge_kwargs",
-            "okta_ca_challenge_kwargs",
-            "static_challenge_kwargs",
-            "created_at",
-            "updated_at",
-        )
+        source="get_static_challenge_kwargs", required=False, allow_null=True)
 
     def validate(self, data):
         data = super().validate(data)
-        challenge_type = data.get("challenge_type")
-        if challenge_type:
-            field_name = f"{challenge_type.lower()}_challenge_kwargs"
-            data["challenge_kwargs"] = data.pop(f"get_{field_name}", {})
-            if not data["challenge_kwargs"]:
-                raise serializers.ValidationError({field_name: "This field is required."})
+        # backend
+        backend = CertIssuerBackend(data["backend"])
+        # backend kwargs
+        backend_slug = backend.value.lower()
+        data["backend_kwargs"] = data.pop(f"get_{backend_slug}_kwargs", None)
+        if not data["backend_kwargs"]:
+            raise serializers.ValidationError(
+                {f"{backend_slug}_kwargs": "This field is required."}
+            )
+        # other backend kwargs
+        for other_backend in CertIssuerBackend:
+            if other_backend == backend:
+                continue
+            other_backend_slug = other_backend.value.lower()
+            if data.pop(f"get_{other_backend_slug}_kwargs", None):
+                raise serializers.ValidationError(
+                    {f"{other_backend_slug}_kwargs": "This field cannot be set for this backend."}
+                )
         return data
 
     def create(self, validated_data):
-        challenge_kwargs = validated_data.pop("challenge_kwargs", {})
-        validated_data["challenge_kwargs"] = {}
-        scep_config = super().create(validated_data)
-        scep_config.set_challenge_kwargs(challenge_kwargs)
-        scep_config.save()
-        return scep_config
+        # we do not use the inherited create method because we want to avoid a double DB save
+        backend_kwargs = validated_data.pop("backend_kwargs", {})
+        cert_issuer = self.Meta.model(pk=uuid.uuid4(), **validated_data)
+        cert_issuer.set_backend_kwargs(backend_kwargs)
+        cert_issuer.save()
+        # version set to one, no need to refresh from DB
+        return cert_issuer
 
     def update(self, instance, validated_data):
-        challenge_kwargs = validated_data.pop("challenge_kwargs", {})
-        scep_config = super().update(instance, validated_data)
-        scep_config.set_challenge_kwargs(challenge_kwargs)
-        scep_config.save()
-        return scep_config
+        # we do not use the inherited create method because we want to avoid a double DB save
+        backend_kwargs = validated_data.pop("backend_kwargs", {})
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.set_backend_kwargs(backend_kwargs)
+        instance.save()
+        # version updated in the DB, we need to refresh to resolve the value
+        instance.refresh_from_db()
+        return instance
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         if instance.provisioning_uid:
             for field in list(ret.keys()):
-                if "challenge" in field:
+                if field == "backend" or "kwargs" in field:
                     ret.pop(field)
+        else:
+            # other backends kwargs
+            for other_backend in CertIssuerBackend:
+                if other_backend == ret["backend"]:
+                    continue
+                other_backend_slug = other_backend.value.lower()
+                ret.pop(f"{other_backend_slug}_kwargs", None)
         return ret
+
+
+class ACMEIssuerSerializer(CertIssuerSerializer, serializers.ModelSerializer):
+    class Meta:
+        model = ACMEIssuer
+        fields = (
+            "id",
+            "provisioning_uid",
+            "name",
+            "description",
+            "version",
+            "created_at",
+            "updated_at",
+            # specific fields
+            "directory_url",
+            "key_size",
+            "key_type",
+            "usage_flags",
+            "extended_key_usage",
+            "hardware_bound",
+            "attest",
+            # backends
+            "backend",
+            "ident_kwargs",
+            "microsoft_ca_kwargs",
+            "okta_ca_kwargs",
+            "static_challenge_kwargs",
+        )
+
+    def validate(self, data):
+        data = super().validate(data)
+        key_size = data.get("key_size")
+        key_type = data.get("key_type")
+        attest = data.get("attest")
+        hardware_bound = data.get("hardware_bound")
+        if key_type == "RSA":
+            if hardware_bound:
+                raise serializers.ValidationError(
+                    {"key_type": "Hardware bound keys must be of type ECSECPrimeRandom"}
+                )
+            if key_size < 1024 or key_size > 4096 or key_size % 8:
+                raise serializers.ValidationError(
+                    {"key_size": "RSA Key size must be a multiple of 8 in the range of 1024 through 4096"}
+                )
+        else:
+            if hardware_bound:
+                if key_size not in (256, 384):
+                    raise serializers.ValidationError(
+                        {"key_size": "Hardware bound ECSECPrimeRandom keys must be one of the P-256 or P-384 curves"}
+                    )
+            else:
+                if key_size not in (192, 256, 384, 521):
+                    raise serializers.ValidationError(
+                        {"key_size": "ECSECPrimeRandom keys must be one of the P-192, P-256, P-384, or P-521 curves"}
+                    )
+        if attest and not hardware_bound:
+            raise serializers.ValidationError(
+                {"hardware_bound": "When attest is true, hardware_bound also needs to be true"}
+            )
+        return data
+
+
+class SCEPIssuerSerializer(CertIssuerSerializer, serializers.ModelSerializer):
+    class Meta:
+        model = SCEPIssuer
+        fields = (
+            "id",
+            "provisioning_uid",
+            "name",
+            "description",
+            "version",
+            "created_at",
+            "updated_at",
+            # specific fields
+            "url",
+            "key_size",
+            "key_usage",
+            # backends
+            "backend",
+            "ident_kwargs",
+            "microsoft_ca_kwargs",
+            "okta_ca_kwargs",
+            "static_challenge_kwargs",
+        )
 
 
 class SoftwareUpdateEnforcementSerializer(serializers.ModelSerializer):

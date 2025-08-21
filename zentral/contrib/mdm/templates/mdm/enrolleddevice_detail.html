@@ -144,6 +144,14 @@
         <td>{{ object.cert_not_valid_after|date:"SHORT_DATETIME_FORMAT" }}</td>
         </tr>
         <tr>
+        <th>Certificate att. serial number</th>
+        <td>{{ object.cert_att_serial_number|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Certificate att. UDID</th>
+        <td>{{ object.cert_att_udid|default:"-" }}</td>
+        </tr>
+        <tr>
         <th>DEP enrollment?</th>
         <td>{{ object.dep_enrollment|yesno }}</td>
         </tr>

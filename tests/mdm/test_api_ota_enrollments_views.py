@@ -10,8 +10,8 @@ from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import OTAEnrollment
 from zentral.core.events.base import AuditEvent
-from .utils import (force_blueprint, force_ota_enrollment, force_ota_enrollment_session,
-                    force_push_certificate, force_realm, force_scep_config)
+from .utils import (force_acme_issuer, force_blueprint, force_ota_enrollment, force_ota_enrollment_session,
+                    force_push_certificate, force_realm, force_scep_issuer)
 
 
 class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
@@ -111,8 +111,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
               'name': oe.name,
               'push_certificate': oe.push_certificate.pk,
               'realm': str(realm.pk),
-              'scep_config': oe.scep_config.pk,
-              'scep_verification': False,
+              'acme_issuer': str(oe.acme_issuer.pk),
+              'scep_issuer': str(oe.scep_issuer.pk),
               'updated_at': oe.updated_at.isoformat()}]
         )
 
@@ -141,8 +141,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
               'name': oe.name,
               'push_certificate': oe.push_certificate.pk,
               'realm': None,
-              'scep_config': oe.scep_config.pk,
-              'scep_verification': False,
+              'acme_issuer': str(oe.acme_issuer.pk),
+              'scep_issuer': str(oe.scep_issuer.pk),
               'updated_at': oe.updated_at.isoformat()}]
         )
 
@@ -183,8 +183,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
              'name': oe.name,
              'push_certificate': oe.push_certificate.pk,
              'realm': None,
-             'scep_config': oe.scep_config.pk,
-             'scep_verification': False,
+             'acme_issuer': str(oe.acme_issuer.pk),
+             'scep_issuer': str(oe.scep_issuer.pk),
              'updated_at': oe.updated_at.isoformat()}
         )
 
@@ -209,7 +209,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
             {'enrollment_secret': ['This field is required.'],
              'name': ['This field is required.'],
              'push_certificate': ['This field is required.'],
-             'scep_config': ['This field is required.']}
+             'scep_issuer': ['This field is required.']}
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -219,7 +219,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
         blueprint = force_blueprint()
         push_certificate = force_push_certificate()
         realm = force_realm()
-        scep_config = force_scep_config()
+        acme_issuer = force_acme_issuer()
+        scep_issuer = force_scep_issuer()
         tags = sorted((Tag.objects.create(name=get_random_string(12)) for _ in range(2)), key=lambda t: t.pk)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:ota_enrollments"),
@@ -231,7 +232,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
                                   "name": name,
                                   "push_certificate": push_certificate.pk,
                                   "realm": str(realm.pk),
-                                  "scep_config": scep_config.pk})
+                                  "acme_issuer": str(acme_issuer.pk),
+                                  "scep_issuer": str(scep_issuer.pk)})
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(callbacks), 1)
         oe = OTAEnrollment.objects.get(name=name)
@@ -243,7 +245,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
         )
         self.assertEqual(oe.name, name)
         self.assertEqual(oe.push_certificate, push_certificate)
-        self.assertEqual(oe.scep_config, scep_config)
+        self.assertEqual(oe.acme_issuer, acme_issuer)
+        self.assertEqual(oe.scep_issuer, scep_issuer)
         response_json = response.json()
         response_json['enrollment_secret']['tags'].sort()
         self.assertEqual(
@@ -265,8 +268,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
              'name': name,
              'push_certificate': push_certificate.pk,
              'realm': str(realm.pk),
-             'scep_config': scep_config.pk,
-             'scep_verification': False,
+             'acme_issuer': str(acme_issuer.pk),
+             'scep_issuer': str(scep_issuer.pk),
              'updated_at': oe.updated_at.isoformat()}
         )
         event = post_event.call_args_list[0].args[0]
@@ -325,7 +328,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
         new_name = get_random_string(12)
         new_blueprint = force_blueprint()
         new_push_certificate = force_push_certificate()
-        new_scep_config = force_scep_config()
+        new_acme_issuer = force_acme_issuer()
+        new_scep_issuer = force_scep_issuer()
         new_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(reverse("mdm_api:ota_enrollment", args=(oe.pk,)),
@@ -336,7 +340,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
                                  },
                                  "name": new_name,
                                  "push_certificate": new_push_certificate.pk,
-                                 "scep_config": new_scep_config.pk})
+                                 "acme_issuer": str(new_acme_issuer.pk),
+                                 "scep_issuer": str(new_scep_issuer.pk)})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         oe.refresh_from_db()
@@ -348,7 +353,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
         )
         self.assertEqual(oe.name, new_name)
         self.assertEqual(oe.push_certificate, new_push_certificate)
-        self.assertEqual(oe.scep_config, new_scep_config)
+        self.assertEqual(oe.acme_issuer, new_acme_issuer)
+        self.assertEqual(oe.scep_issuer, new_scep_issuer)
         response_json = response.json()
         response_json['enrollment_secret']['tags'].sort()
         self.assertEqual(
@@ -370,8 +376,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase):
              'name': new_name,
              'push_certificate': new_push_certificate.pk,
              'realm': None,
-             'scep_config': new_scep_config.pk,
-             'scep_verification': False,
+             'acme_issuer': str(new_acme_issuer.pk),
+             'scep_issuer': str(new_scep_issuer.pk),
              'updated_at': oe.updated_at.isoformat()}
         )
         event = post_event.call_args_list[0].args[0]

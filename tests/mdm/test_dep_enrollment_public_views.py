@@ -282,6 +282,64 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         payload = plistlib.loads(data)
         self.assertEqual(payload["PayloadIdentifier"], "zentral.mdm")
 
+    def test_dep_enroll_unknown_product_scep_fallback(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        enrollment = force_dep_enrollment(self.mbu, acme_issuer=True)
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Yolo9,1",
+                                                         "SERIAL": get_random_string(10),
+                                                         "UDID": str(uuid.uuid4()).upper(),
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "14.1"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertSuccess(post_event)
+        _, data = verify_signed_payload(response.content)
+        payload = plistlib.loads(data)
+        self.assertEqual(payload["PayloadIdentifier"], "zentral.mdm")
+        self.assertFalse(any(p["PayloadType"] == "com.apple.security.acme" for p in payload["PayloadContent"]))
+        self.assertTrue(any(p["PayloadType"] == "com.apple.security.scep" for p in payload["PayloadContent"]))
+
+    def test_dep_enroll_version_too_old_scep_fallback(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        enrollment = force_dep_enrollment(self.mbu, acme_issuer=True)
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": get_random_string(10),
+                                                         "UDID": str(uuid.uuid4()).upper(),
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "13.0"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertSuccess(post_event)
+        _, data = verify_signed_payload(response.content)
+        payload = plistlib.loads(data)
+        self.assertEqual(payload["PayloadIdentifier"], "zentral.mdm")
+        self.assertFalse(any(p["PayloadType"] == "com.apple.security.acme" for p in payload["PayloadContent"]))
+        self.assertTrue(any(p["PayloadType"] == "com.apple.security.scep" for p in payload["PayloadContent"]))
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    def test_dep_enroll_acme(self, requests_get, vicsp, post_event):
+        response = Mock()
+        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
+        requests_get.return_value = response
+        vicsp.side_effect = lambda d: d
+        enrollment = force_dep_enrollment(self.mbu, acme_issuer=True)
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": get_random_string(10),
+                                                         "UDID": str(uuid.uuid4()).upper(),
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "13.1"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertSuccess(post_event)
+        _, data = verify_signed_payload(response.content)
+        payload = plistlib.loads(data)
+        self.assertEqual(payload["PayloadIdentifier"], "zentral.mdm")
+        self.assertTrue(any(p["PayloadType"] == "com.apple.security.acme" for p in payload["PayloadContent"]))
+        self.assertFalse(any(p["PayloadType"] == "com.apple.security.scep" for p in payload["PayloadContent"]))
+
     # dep_web_enroll
 
     def test_dep_web_enroll_missing_header(self, vicsp, post_event):
@@ -349,14 +407,23 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(last_event.payload["status"], "warning")
         self.assertEqual(last_event.payload["reason"], "OS update to version 17.1 (b) required")
 
-    def test_dep_web_enroll_no_custom_views(self, vicsp, post_event):
+    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    def test_dep_web_enroll_no_custom_views(self, requests_get, vicsp, post_event):
+        response = Mock()
+        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
+        requests_get.return_value = response
         vicsp.side_effect = lambda d: d
         display_name = get_random_string(12)
-        session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True, enrollment_display_name=display_name)
+        session, _, _ = force_dep_enrollment_session(
+            self.mbu,
+            realm_user=True,
+            enrollment_display_name=display_name,
+            acme_issuer=True
+        )
         enrollment = session.dep_enrollment
         serial_number = get_random_string(10)
         udid = str(uuid.uuid4()).upper()
-        payload = {"PRODUCT": "Macmini9,1", "SERIAL": serial_number, "UDID": udid}
+        payload = {"PRODUCT": "Macmini9,1", "SERIAL": serial_number, "UDID": udid, "OS_VERSION": "15.6.1"}
         # first  request redirects to realm auth
         response = self.client.get(reverse("mdm_public:dep_web_enroll", args=(enrollment.enrollment_secret.secret,)),
                                    HTTP_X_APPLE_ASPEN_DEVICEINFO=base64.b64encode(
@@ -387,6 +454,8 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         profile = plistlib.loads(profile_data)
         self.assertEqual(profile["PayloadIdentifier"], "zentral.mdm")
         self.assertEqual(profile["PayloadOrganization"], display_name)
+        self.assertTrue(any(p["PayloadType"] == "com.apple.security.acme" for p in profile["PayloadContent"]))
+        self.assertFalse(any(p["PayloadType"] == "com.apple.security.scep" for p in profile["PayloadContent"]))
 
     def test_dep_web_enroll_custom_view_unknown_dep_enrollment_session(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
@@ -427,17 +496,23 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         ras = realm.realmauthenticationsession_set.order_by("-created_at").first()
         self.assertEqual(response.url, f"/public/realms/{realm.pk}/ldap/{ras.pk}/login/")
 
-    def test_dep_web_enroll_custom_views(self, vicsp, post_event):
+    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    def test_dep_web_enroll_custom_views(self, requests_get, vicsp, post_event):
+        response = Mock()
+        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
+        requests_get.return_value = response
         vicsp.side_effect = lambda d: d
         display_name = get_random_string(12)
-        session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True, enrollment_display_name=display_name)
+        session, _, _ = force_dep_enrollment_session(
+            self.mbu, realm_user=True, enrollment_display_name=display_name, acme_issuer=True
+        )
         enrollment = session.dep_enrollment
         cv1 = force_dep_enrollment_custom_view(enrollment, 100, requires_authentication=False, extra="CV1")
         cv2 = force_dep_enrollment_custom_view(enrollment, 200, requires_authentication=False, extra="CV2")
         cv3 = force_dep_enrollment_custom_view(enrollment, 10, requires_authentication=True, extra="CV3")
         serial_number = get_random_string(10)
         udid = str(uuid.uuid4()).upper()
-        payload = {"PRODUCT": "Macmini9,1", "SERIAL": serial_number, "UDID": udid}
+        payload = {"PRODUCT": "Macmini9,1", "SERIAL": serial_number, "UDID": udid, "OS_VERSION": "13.1"}
         # first request redirects to first custom view
         response = self.client.get(reverse("mdm_public:dep_web_enroll", args=(enrollment.enrollment_secret.secret,)),
                                    HTTP_X_APPLE_ASPEN_DEVICEINFO=base64.b64encode(
@@ -492,3 +567,8 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         profile = plistlib.loads(profile_data)
         self.assertEqual(profile["PayloadIdentifier"], "zentral.mdm")
         self.assertEqual(profile["PayloadOrganization"], display_name)
+        cert_profile = profile["PayloadContent"][1]
+        self.assertEqual(cert_profile["PayloadType"], "com.apple.security.acme")
+        self.assertTrue(cert_profile["Attest"] is True)
+        self.assertTrue(cert_profile["HardwareBound"] is True)
+        self.assertEqual(cert_profile["ClientIdentifier"], "1000000000000002")

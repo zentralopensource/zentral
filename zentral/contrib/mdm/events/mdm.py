@@ -30,14 +30,6 @@ class UserEnrollmentRequestEvent(BaseEvent):
 register_event_type(UserEnrollmentRequestEvent)
 
 
-class MDMSCEPVerificationEvent(BaseEvent):
-    event_type = "mdm_scep_verification"
-    tags = ["mdm", "heartbeat"]
-
-
-register_event_type(MDMSCEPVerificationEvent)
-
-
 class MDMRequestEvent(BaseEvent):
     event_type = "mdm_request"
     tags = ["mdm", "heartbeat"]

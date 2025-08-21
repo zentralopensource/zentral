@@ -1,16 +1,16 @@
 import logging
 import plistlib
 from zentral.utils.payloads import sign_payload
-from zentral.contrib.mdm.models import Artifact, Channel, Platform, SCEPConfig, TargetArtifact
+from zentral.contrib.mdm.models import Artifact, Channel, Platform, SCEPIssuer, TargetArtifact
 from zentral.contrib.mdm.payloads import substitute_variables
-from zentral.contrib.mdm.scep import update_scep_payload
+from zentral.contrib.mdm.cert_issuer_backends import get_cached_cert_issuer_backend
 from .base import register_command, Command
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.install_profile")
 
 
-def process_scep_payloads(profile_payload):
+def process_scep_payloads(profile_payload, enrollment_session, enrolled_user):
     for payload in profile_payload.get("PayloadContent", []):
         if payload.get("PayloadType") == "com.apple.security.scep":
             # does the payload have a PayloadContent?
@@ -24,17 +24,21 @@ def process_scep_payloads(profile_payload):
                 continue
             # do we have a matching config in the DB?
             try:
-                scep_config = SCEPConfig.objects.get(name=name)
-            except SCEPConfig.DoesNotExist:
+                scep_issuer = SCEPIssuer.objects.get(name=name)
+            except SCEPIssuer.DoesNotExist:
                 # nothing to do
                 continue
-            update_scep_payload(payload_content, scep_config)
+            get_cached_cert_issuer_backend(scep_issuer).update_scep_payload(
+                payload_content,
+                enrollment_session,
+                enrolled_user,
+            )
 
 
 def build_payload(profile, enrollment_session, enrolled_user=None):
     payload = plistlib.loads(profile.source)
     payload = substitute_variables(payload, enrollment_session, enrolled_user)
-    process_scep_payloads(payload)
+    process_scep_payloads(payload, enrollment_session, enrolled_user)
     payload["PayloadIdentifier"] = profile.installed_payload_identifier()
     payload["PayloadUUID"] = profile.installed_payload_uuid()
     # TODO encryption

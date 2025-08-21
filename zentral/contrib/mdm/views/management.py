@@ -25,7 +25,6 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        FileVaultConfigForm,
                                        OTAEnrollmentForm,
                                        RecoveryPasswordConfigForm,
-                                       SCEPConfigForm,
                                        SoftwareUpdateEnforcementForm,
                                        UpdateArtifactForm,
                                        UserEnrollmentForm,
@@ -45,15 +44,11 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         OTAEnrollment,
                                         RealmGroupTagMapping,
                                         RecoveryPasswordConfig,
-                                        SCEPConfig,
                                         SoftwareUpdateEnforcement,
                                         UserEnrollment,
                                         Profile, StoreApp)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_profile_service_configuration_profile)
-from zentral.contrib.mdm.scep import SCEPChallengeType
-from zentral.contrib.mdm.scep.microsoft_ca import MicrosoftCAChallengeForm, OktaCAChallengeForm
-from zentral.contrib.mdm.scep.static import StaticChallengeForm
 from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
@@ -1155,192 +1150,6 @@ class DeleteSoftwareUpdateEnforcementView(PermissionRequiredMixin, DeleteViewWit
 
     def get_queryset(self):
         return SoftwareUpdateEnforcement.objects.can_be_deleted()
-
-
-# SCEP Configurations
-
-
-class SCEPConfigListView(PermissionRequiredMixin, ListView):
-    permission_required = "mdm.view_scepconfig"
-    model = SCEPConfig
-    paginate_by = 20
-
-
-class CreateSCEPConfigView(PermissionRequiredMixin, TemplateView):
-    template_name = "mdm/scepconfig_form.html"
-    permission_required = "mdm.add_scepconfig"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        scep_config_form = kwargs.get("scep_config_form")
-        if not scep_config_form:
-            scep_config_form = SCEPConfigForm(prefix="sc")
-        context["scep_config_form"] = scep_config_form
-        microsoft_ca_form = kwargs.get("microsoft_ca_form")
-        if not microsoft_ca_form:
-            microsoft_ca_form = MicrosoftCAChallengeForm(prefix="mc")
-        context["microsoft_ca_form"] = microsoft_ca_form
-        okta_ca_form = kwargs.get("okta_ca_form")
-        if not okta_ca_form:
-            okta_ca_form = OktaCAChallengeForm(prefix="oc")
-        context["okta_ca_form"] = okta_ca_form
-        static_form = kwargs.get("static_form")
-        if not static_form:
-            static_form = StaticChallengeForm(prefix="s")
-        context["static_form"] = static_form
-        return context
-
-    def post(self, request, *args, **kwargs):
-        scep_config_form = SCEPConfigForm(request.POST, prefix="sc")
-        microsoft_ca_form = MicrosoftCAChallengeForm(request.POST, prefix="mc")
-        okta_ca_form = OktaCAChallengeForm(request.POST, prefix="oc")
-        static_form = StaticChallengeForm(request.POST, prefix="s")
-        if scep_config_form.is_valid():
-            challenge_type = SCEPChallengeType[scep_config_form.cleaned_data["challenge_type"]]
-            if challenge_type == SCEPChallengeType.MICROSOFT_CA:
-                challenge_form = microsoft_ca_form
-            elif challenge_type == SCEPChallengeType.OKTA_CA:
-                challenge_form = okta_ca_form
-            elif challenge_type == SCEPChallengeType.STATIC:
-                challenge_form = static_form
-            if challenge_form.is_valid():
-                scep_config = scep_config_form.save(commit=False)
-                scep_config.set_challenge_kwargs(challenge_form.cleaned_data)
-                scep_config.save()
-                return redirect(scep_config)
-        else:
-            return self.render_to_response(
-                self.get_context_data(scep_config_form=scep_config_form,
-                                      microsoft_ca_form=microsoft_ca_form,
-                                      okta_ca_form=okta_ca_form,
-                                      static_form=static_form)
-            )
-
-
-class SCEPConfigView(PermissionRequiredMixin, DetailView):
-    permission_required = "mdm.view_scepconfig"
-    model = SCEPConfig
-
-
-class UpdateSCEPConfigView(PermissionRequiredMixin, TemplateView):
-    template_name = "mdm/scepconfig_form.html"
-    permission_required = "mdm.change_scepconfig"
-
-    def dispatch(self, request, *args, **kwargs):
-        self.scep_config = get_object_or_404(SCEPConfig, pk=kwargs["pk"], provisioning_uid__isnull=True)
-        self.challenge_type = SCEPChallengeType[self.scep_config.challenge_type]
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["object"] = self.scep_config
-        scep_config_form = kwargs.get("scep_config_form")
-        if not scep_config_form:
-            scep_config_form = SCEPConfigForm(
-                instance=self.scep_config,
-                prefix="sc"
-            )
-        context["scep_config_form"] = scep_config_form
-        microsoft_ca_form = kwargs.get("microsoft_ca_form")
-        if not microsoft_ca_form:
-            microsoft_ca_form = MicrosoftCAChallengeForm(
-                prefix="mc",
-                initial=(
-                    self.scep_config.get_challenge_kwargs()
-                    if self.challenge_type == SCEPChallengeType.MICROSOFT_CA
-                    else None
-                )
-            )
-        context["microsoft_ca_form"] = microsoft_ca_form
-        okta_ca_form = kwargs.get("okta_ca_form")
-        if not okta_ca_form:
-            okta_ca_form = OktaCAChallengeForm(
-                prefix="oc",
-                initial=(
-                    self.scep_config.get_challenge_kwargs()
-                    if self.challenge_type == SCEPChallengeType.OKTA_CA
-                    else None
-                )
-            )
-        context["okta_ca_form"] = okta_ca_form
-        static_form = kwargs.get("static_form")
-        if not static_form:
-            static_form = StaticChallengeForm(
-                prefix="s",
-                initial=(
-                    self.scep_config.get_challenge_kwargs()
-                    if self.challenge_type == SCEPChallengeType.STATIC
-                    else None
-                )
-            )
-        context["static_form"] = static_form
-        return context
-
-    def post(self, request, *args, **kwargs):
-        scep_config_form = SCEPConfigForm(
-            request.POST,
-            instance=self.scep_config,
-            prefix="sc"
-        )
-        microsoft_ca_form = MicrosoftCAChallengeForm(
-            request.POST,
-            prefix="mc",
-            initial=(
-                self.scep_config.get_challenge_kwargs()
-                if self.challenge_type == SCEPChallengeType.MICROSOFT_CA
-                else None
-            )
-        )
-        okta_ca_form = OktaCAChallengeForm(
-            request.POST,
-            prefix="oc",
-            initial=(
-                self.scep_config.get_challenge_kwargs()
-                if self.challenge_type == SCEPChallengeType.OKTA_CA
-                else None
-            )
-        )
-        static_form = StaticChallengeForm(
-            request.POST,
-            prefix="s",
-            initial=(
-                self.scep_config.get_challenge_kwargs()
-                if self.challenge_type == SCEPChallengeType.STATIC
-                else None
-            )
-        )
-        if scep_config_form.is_valid():
-            challenge_type = SCEPChallengeType[scep_config_form.cleaned_data["challenge_type"]]
-            if challenge_type == SCEPChallengeType.MICROSOFT_CA:
-                challenge_form = microsoft_ca_form
-            elif challenge_type == SCEPChallengeType.OKTA_CA:
-                challenge_form = okta_ca_form
-            elif challenge_type == SCEPChallengeType.STATIC:
-                challenge_form = static_form
-            if challenge_form.is_valid():
-                scep_config = scep_config_form.save(commit=False)
-                scep_config.set_challenge_kwargs(challenge_form.cleaned_data)
-                scep_config.save()
-                return redirect(scep_config)
-        else:
-            return self.render_to_response(
-                self.get_context_data(scep_config_form=scep_config_form,
-                                      microsoft_ca_form=microsoft_ca_form,
-                                      okta_ca_form=okta_ca_form,
-                                      static_form=static_form)
-            )
-
-
-class DeleteSCEPConfigView(PermissionRequiredMixin, DeleteView):
-    permission_required = "mdm.delete_scepconfig"
-    model = SCEPConfig
-    success_url = reverse_lazy("mdm:scep_configs")
-
-    def get_object(self, queryset=None):
-        obj = super().get_object(queryset)
-        if not obj.can_be_deleted():
-            raise SuspiciousOperation("This SCEP config cannot be deleted")
-        return obj
 
 
 # Enrolled devices

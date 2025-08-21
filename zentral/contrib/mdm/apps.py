@@ -6,6 +6,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
     default = True
     verbose_name = "Zentral MDM contrib app"
     permission_models = (
+        "acmeissuer",
         "artifact",
         "artifactversion",
         "asset",
@@ -30,7 +31,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "otaenrollment",
         "realmgrouptagmapping",
         "recoverypasswordconfig",
-        "scepconfig",
+        "scepissuer",
         "softwareupdate",
         "softwareupdateenforcement",
         "userartifact",

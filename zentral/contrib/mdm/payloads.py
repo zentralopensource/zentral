@@ -6,9 +6,10 @@ from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
 from zentral.utils.payloads import sign_payload
+from .cert_issuer_backends import get_cached_cert_issuer_backend, test_acme_payload
 from .crypto import verify_signed_payload
-from .models import Channel, OTAEnrollment, OTAEnrollmentSession
-from .scep import update_scep_payload
+from .models import Channel, OTAEnrollment, OTAEnrollmentSession, Platform
+from .utils import model_from_machine_info, platform_and_os_from_machine_info
 
 
 logger = logging.getLogger("zentral.contrib.mdm.payloads")
@@ -114,14 +115,56 @@ def build_root_ca_configuration_profile():
                          build_root_ca_payloads())
 
 
-def build_scep_payload(enrollment_session):
+def build_cert_payload(enrollment_session):
     subject = [[["CN", enrollment_session.get_common_name()]]]
     serial_number = enrollment_session.get_serial_number()
     if serial_number:
         subject.append([["2.5.4.5", serial_number]])
     subject.append([["O", enrollment_session.get_organization()]])
-    scep_payload = {"Subject": subject}
-    update_scep_payload(scep_payload, enrollment_session.get_enrollment().scep_config)
+    return {
+        "Subject": subject,
+        "KeyIsExtractable": False,
+        "AllowAllAppsAccess": False,
+    }
+
+
+def build_acme_payload(enrollment_session, machine_info):
+    platform = model = None
+    comparable_os_version = (0,)
+    if machine_info:
+        platform, comparable_os_version = platform_and_os_from_machine_info(machine_info)
+        model = model_from_machine_info(machine_info)
+    elif enrollment_session.enrolled_device:
+        enrolled_device = enrollment_session.enrolled_device
+        platform = Platform(enrolled_device.platform)
+        comparable_os_version = enrolled_device.comparable_os_version
+        model = enrolled_device.model
+    acme, hardware_bound, attest = test_acme_payload(
+        platform, comparable_os_version, model
+    )
+    if not acme or not hardware_bound:
+        # no benefit from ACME
+        return
+    acme_issuer = enrollment_session.get_enrollment().acme_issuer
+    if not acme_issuer:
+        return
+    acme_payload = build_cert_payload(enrollment_session)
+    get_cached_cert_issuer_backend(acme_issuer).update_acme_payload(
+        acme_payload, hardware_bound, attest,
+        enrollment_session,
+    )
+    return build_payload("com.apple.security.acme",
+                         "ACME",
+                         "acme",
+                         acme_payload,
+                         encapsulate_content=False)
+
+
+def build_scep_payload(enrollment_session):
+    scep_payload = build_cert_payload(enrollment_session)
+    get_cached_cert_issuer_backend(
+        enrollment_session.get_enrollment().scep_issuer
+    ).update_scep_payload(scep_payload, enrollment_session)
     return build_payload("com.apple.security.scep",
                          "SCEP",
                          "scep",
@@ -161,11 +204,13 @@ def build_ota_scep_configuration_profile(ota_enrollment_session):
     )
 
 
-def build_mdm_configuration_profile(enrollment_session):
-    scep_payload = build_scep_payload(enrollment_session)
+def build_mdm_configuration_profile(enrollment_session, machine_info=None):
+    cert_payload = build_acme_payload(enrollment_session, machine_info)
+    if not cert_payload:
+        cert_payload = build_scep_payload(enrollment_session)
     payloads = build_root_ca_payloads()
     mdm_config = {
-        "IdentityCertificateUUID": scep_payload["PayloadUUID"],
+        "IdentityCertificateUUID": cert_payload["PayloadUUID"],
         "Topic": enrollment_session.get_enrollment().push_certificate.topic,
         "ServerCapabilities": ["com.apple.mdm.bootstraptoken",
                                "com.apple.mdm.per-user-connections"],
@@ -187,7 +232,7 @@ def build_mdm_configuration_profile(enrollment_session):
     else:
         mdm_config["AccessRights"] = 8191  # TODO: config
     payloads.extend([
-        scep_payload,
+        cert_payload,
         build_payload("com.apple.mdm",
                       "MDM",
                       "mdm", mdm_config)

@@ -1,5 +1,4 @@
 import datetime
-from functools import partial
 import hashlib
 import logging
 import mimetypes
@@ -9,7 +8,7 @@ import uuid
 from django.contrib.postgres.fields import ArrayField, DateRangeField
 from django.core.validators import MinLengthValidator, MinValueValidator, MaxValueValidator
 from django.db import connection, models
-from django.db.models import Count
+from django.db.models import Count, F
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 from django.urls import reverse
@@ -24,6 +23,7 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaMachine, Tag
 from zentral.core.incidents.models import Severity
 from zentral.core.secret_engines import decrypt, decrypt_str, encrypt, encrypt_str, rewrap
+from zentral.utils.backend_model import BackendInstance
 from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
 from zentral.utils.iso_639_1 import ISO_639_1_CHOICES
 from zentral.utils.os_version import make_comparable_os_version
@@ -31,7 +31,7 @@ from zentral.utils.payloads import get_payload_identifier
 from zentral.utils.storage import select_dist_storage
 from zentral.utils.time import naive_truncated_isoformat
 from .exceptions import EnrollmentSessionStatusError
-from .scep import SCEPChallengeType, get_scep_challenge, load_scep_challenge
+from .cert_issuer_backends import CertIssuerBackend, get_cert_issuer_backend
 
 
 logger = logging.getLogger("zentral.contrib.mdm.models")
@@ -473,7 +473,109 @@ class Blueprint(models.Model):
         return Blueprint.objects.can_be_deleted().filter(pk=self.pk).count() == 1
 
 
-# SCEP
+# Cert issuers
+
+
+class CertIssuer(BackendInstance):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    provisioning_uid = models.CharField(max_length=256, unique=True, null=True, editable=False)
+    backend = models.CharField(choices=CertIssuerBackend.choices)
+    backend_enum = CertIssuerBackend
+    version = models.PositiveIntegerField(default=1, editable=False)
+
+    class Meta:
+        abstract = True
+
+    def can_be_deleted(self):
+        return (
+            self.provisioning_uid is None
+            and self.depenrollment_set.count() == 0
+            and self.otaenrollment_set.count() == 0
+            and self.userenrollment_set.count() == 0
+        )
+
+    def can_be_updated(self):
+        return self.provisioning_uid is None
+
+    def get_backend(self, load=False):
+        return get_cert_issuer_backend(self, load)
+
+    def save(self, *args, **kwargs):
+        if self.created_at:
+            self.version = F("version") + 1
+        else:
+            self.version = 1
+        super().save(*args, **kwargs)
+
+    def serialize_for_event(self, keys_only=False):
+        d = super().serialize_for_event(keys_only)
+        if not keys_only:
+            if self.provisioning_uid:
+                d["provisioning_uid"] = self.provisioning_uid
+            d["version"] = self.version
+        return d
+
+
+class ACMEIssuer(CertIssuer):
+    class KeyType(models.TextChoices):
+        RSA = "RSA", "RSA"
+        ECSECPrimeRandom = "ECSECPrimeRandom", "ECSECPrimeRandom"
+    directory_url = models.URLField()
+    key_size = models.PositiveIntegerField()
+    key_type = models.CharField(choices=KeyType.choices)
+    usage_flags = models.IntegerField(choices=((0, 'None (0)'),
+                                               (1, 'Signing (1)'),
+                                               (4, 'Encryption (4)'),
+                                               (5, 'Signing & Encryption (1 | 4 = 5)')),
+                                      default=0,
+                                      help_text="A bitmask indicating the use of the key.")
+    extended_key_usage = ArrayField(models.CharField(validators=[MinLengthValidator(3)]),
+                                    blank=True, default=list)
+    hardware_bound = models.BooleanField(default=True)
+    attest = models.BooleanField(default=True)
+
+    def get_absolute_url(self):
+        return reverse("mdm:acme_issuer", args=(self.pk,))
+
+    def serialize_for_event(self, keys_only=False):
+        d = super().serialize_for_event(keys_only)
+        if not keys_only:
+            d.update({"directory_url": self.directory_url,
+                      "key_size": self.key_size,
+                      "key_type": str(self.key_type),
+                      "usage_flags": self.usage_flags,
+                      "extended_key_usage": self.extended_key_usage,
+                      "hardware_bound": self.hardware_bound,
+                      "attest": self.attest})
+        return d
+
+
+class SCEPIssuer(CertIssuer):
+    url = models.URLField()
+    key_size = models.IntegerField(choices=((1024, '1024-bit'),
+                                            (2048, '2048-bit'),
+                                            (4096, '4096-bit')),
+                                   default=2048)
+    key_usage = models.IntegerField(choices=((0, 'None (0)'),
+                                             (1, 'Signing (1)'),
+                                             (4, 'Encryption (4)'),
+                                             (5, 'Signing & Encryption (1 | 4 = 5)')),
+                                    default=0,
+                                    help_text="A bitmask indicating the use of the key.")
+
+    def get_absolute_url(self):
+        return reverse("mdm:scep_issuer", args=(self.pk,))
+
+    def serialize_for_event(self, keys_only=False):
+        d = super().serialize_for_event(keys_only)
+        if not keys_only:
+            d.update({"url": self.url,
+                      "key_size": self.key_size,
+                      "key_usage": self.key_usage})
+        return d
+
+
+# Legacy SCEP config
 
 
 class SCEPConfig(models.Model):
@@ -494,49 +596,15 @@ class SCEPConfig(models.Model):
                                   default=2048)
     allow_all_apps_access = models.BooleanField(default=False,
                                                 help_text="If true, all apps have access to the private key.")
-    challenge_type = models.CharField(max_length=64, choices=SCEPChallengeType.choices())
+    challenge_type = models.CharField(
+        max_length=64,
+        choices=[('STATIC', 'Static'),
+                 ('MICROSOFT_CA', 'Microsoft CA Web Enrollment (certsrv)'),
+                 ('OKTA_CA', 'Okta CA Dynamic Challenge')]
+    )
     challenge_kwargs = models.JSONField(editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.name
-
-    def get_absolute_url(self):
-        return reverse("mdm:scep_config", args=(self.pk,))
-
-    def get_challenge_kwargs(self):
-        challenge = load_scep_challenge(self)
-        return challenge.get_kwargs()
-
-    def set_challenge_kwargs(self, kwargs):
-        challenge = get_scep_challenge(self)
-        challenge.set_kwargs(kwargs)
-
-    def rewrap_secrets(self):
-        challenge = load_scep_challenge(self)
-        challenge.rewrap_kwargs()
-
-    def can_be_deleted(self):
-        return (
-            self.provisioning_uid is None
-            and self.depenrollment_set.count() == 0
-            and self.otaenrollment_set.count() == 0
-            and self.userenrollment_set.count() == 0
-        )
-
-    def can_be_updated(self):
-        return self.provisioning_uid is None
-
-    def _get_CHALLENGE_TYPE_challenge_kwargs(self, challenge_type):
-        if self.challenge_type == challenge_type.name:
-            return self.get_challenge_kwargs()
-
-    def __getattr__(self, name):
-        for challenge_type in SCEPChallengeType:
-            if name == f"get_{challenge_type.name.lower()}_challenge_kwargs":
-                return partial(self._get_CHALLENGE_TYPE_challenge_kwargs, challenge_type)
-        raise AttributeError
 
 
 # Apps and (not!) Books
@@ -852,6 +920,8 @@ class EnrolledDevice(models.Model):
     # cert
     cert_fingerprint = models.BinaryField(blank=True, null=True)
     cert_not_valid_after = models.DateTimeField(blank=True, null=True)
+    cert_att_serial_number = models.TextField(null=True)
+    cert_att_udid = models.TextField(null=True)
 
     # artifacts
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
@@ -1339,12 +1409,13 @@ class MDMEnrollment(models.Model):
                                     help_text="Name displayed in the device settings")
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
 
-    scep_config = models.ForeignKey(SCEPConfig, on_delete=models.PROTECT)
-    scep_verification = models.BooleanField(
-        default=False,
-        help_text="Set to true if the SCEP service is configured to post the CSR to Zentral for verification. "
-                  "If true, successful verifications will be required during the enrollments."
-    )
+    acme_issuer = models.ForeignKey(ACMEIssuer, verbose_name="ACME issuer",
+                                    on_delete=models.PROTECT, blank=True, null=True)
+    # TODO Finish migration!
+    scep_issuer = models.ForeignKey(SCEPIssuer, verbose_name="SCEP issuer",
+                                    on_delete=models.PROTECT)
+    scep_config = models.ForeignKey(SCEPConfig, on_delete=models.SET_NULL, null=True)
+    scep_verification = models.BooleanField(null=True)
 
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
 
@@ -1456,17 +1527,13 @@ class OTAEnrollmentSessionManager(models.Manager):
 class OTAEnrollmentSession(EnrollmentSession):
     PHASE_1 = "PHASE_1"
     PHASE_2 = "PHASE_2"
-    PHASE_2_SCEP_VERIFIED = "PHASE_2_SCEP_VERIFIED"
     PHASE_3 = "PHASE_3"
-    PHASE_3_SCEP_VERIFIED = "PHASE_3_SCEP_VERIFIED"
     AUTHENTICATED = "AUTHENTICATED"
     COMPLETED = "COMPLETED"
     STATUS_CHOICES = (
         (PHASE_1, _("Phase 1")),
         (PHASE_2, _("Phase 2")),
-        (PHASE_2_SCEP_VERIFIED, _("Phase 2 SCEP verified")),
         (PHASE_3, _("Phase 3")),
-        (PHASE_3_SCEP_VERIFIED, _("Phase 3 SCEP verified")),
         (AUTHENTICATED, _("Authenticated")),  # first MDM Checkin Authenticate call
         (COMPLETED, _("Completed")),  # first MDM Checkin TokenUpdate call
     )
@@ -1517,59 +1584,22 @@ class OTAEnrollmentSession(EnrollmentSession):
         self.enrollment_secret.udids = [udid]
         self.enrollment_secret.save()
 
-    def set_phase2_scep_verified_status(self, es_request):
-        test = (es_request
-                and self.status == self.PHASE_2
-                and not self.phase2_scep_request
-                and not self.phase3_scep_request
-                and not self.enrolled_device)
-        self._set_next_status(self.PHASE_2_SCEP_VERIFIED, test, phase2_scep_request=es_request)
-
     def set_phase3_status(self):
-        if self.ota_enrollment.scep_verification:
-            allowed_statuses = (self.PHASE_2_SCEP_VERIFIED,)
-            scep_ok = self.phase2_scep_request is not None and self.phase3_scep_request is None
-        else:
-            allowed_statuses = (self.PHASE_2, self.PHASE_2_SCEP_VERIFIED)
-            scep_ok = self.phase3_scep_request is None
         test = (
-            scep_ok
-            and self.status in allowed_statuses
+            self.phase3_scep_request is None
+            and self.status == self.PHASE_2
             and not self.enrolled_device
         )
         self._set_next_status(self.PHASE_3, test)
 
-    def set_phase3_scep_verified_status(self, es_request):
-        if self.ota_enrollment.scep_verification:
-            scep_ok = self.phase2_scep_request is not None and self.phase3_scep_request is None
-        else:
-            scep_ok = self.phase3_scep_request is None
-        test = (es_request
-                and scep_ok
-                and self.status == self.PHASE_3
-                and not self.enrolled_device)
-        self._set_next_status(self.PHASE_3_SCEP_VERIFIED, test, phase3_scep_request=es_request)
-
     def set_authenticated_status(self, enrolled_device):
-        if self.ota_enrollment.scep_verification:
-            allowed_statuses = (self.PHASE_3_SCEP_VERIFIED,)
-            scep_ok = self.phase2_scep_request is not None and self.phase3_scep_request is not None
-        else:
-            allowed_statuses = (self.PHASE_3, self.PHASE_3_SCEP_VERIFIED)
-            scep_ok = True
         test = (enrolled_device
-                and scep_ok
-                and self.status in allowed_statuses
+                and self.status == self.PHASE_3
                 and not self.enrolled_device)
         self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
 
     def set_completed_status(self, enrolled_device):
-        if self.ota_enrollment.scep_verification:
-            scep_ok = self.phase2_scep_request is not None and self.phase3_scep_request is not None
-        else:
-            scep_ok = True
         test = (enrolled_device
-                and scep_ok
                 and self.status == self.AUTHENTICATED
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)
@@ -1916,12 +1946,10 @@ class DEPEnrollmentSessionManager(models.Manager):
 
 class DEPEnrollmentSession(EnrollmentSession):
     STARTED = "STARTED"
-    SCEP_VERIFIED = "SCEP_VERIFIED"
     AUTHENTICATED = "AUTHENTICATED"
     COMPLETED = "COMPLETED"
     STATUS_CHOICES = (
         (STARTED, _("Started")),
-        (SCEP_VERIFIED, _("SCEP verified")),
         (AUTHENTICATED, _("Authenticated")),  # first MDM Checkin Authenticate call
         (COMPLETED, _("Completed")),  # first MDM Checkin TokenUpdate call
     )
@@ -1950,33 +1978,14 @@ class DEPEnrollmentSession(EnrollmentSession):
 
     # status update methods
 
-    def set_scep_verified_status(self, es_request):
-        test = (es_request
-                and self.status == self.STARTED
-                and self.scep_request is None
-                and not self.enrolled_device)
-        self._set_next_status(self.SCEP_VERIFIED, test, scep_request=es_request)
-
     def set_authenticated_status(self, enrolled_device):
-        if self.dep_enrollment.scep_verification:
-            allowed_statuses = (self.SCEP_VERIFIED,)
-            scep_ok = self.scep_request is not None
-        else:
-            allowed_statuses = (self.STARTED, self.SCEP_VERIFIED)
-            scep_ok = True
         test = (enrolled_device
-                and scep_ok
-                and self.status in allowed_statuses
+                and self.status == self.STARTED
                 and not self.enrolled_device)
         self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
 
     def set_completed_status(self, enrolled_device):
-        if self.dep_enrollment.scep_verification:
-            scep_ok = self.scep_request is not None
-        else:
-            scep_ok = True
         test = (enrolled_device
-                and scep_ok
                 and self.status == self.AUTHENTICATED
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)
@@ -2082,14 +2091,12 @@ class UserEnrollmentSession(EnrollmentSession):
     ACCOUNT_DRIVEN_START = "ACCOUNT_DRIVEN_START"
     ACCOUNT_DRIVEN_AUTHENTICATED = "ACCOUNT_DRIVEN_AUTHENTICATED"
     STARTED = "STARTED"
-    SCEP_VERIFIED = "SCEP_VERIFIED"
     AUTHENTICATED = "AUTHENTICATED"
     COMPLETED = "COMPLETED"
     STATUS_CHOICES = (
         (ACCOUNT_DRIVEN_START, _("Account-based onboarding initiated")),
         (ACCOUNT_DRIVEN_AUTHENTICATED, _("Account-based onboarding authenticated")),
         (STARTED, _("Started")),
-        (SCEP_VERIFIED, _("SCEP verified")),
         (AUTHENTICATED, _("Authenticated")),  # first MDM Checkin Authenticate call
         (COMPLETED, _("Completed")),  # first MDM Checkin TokenUpdate call
     )
@@ -2137,33 +2144,14 @@ class UserEnrollmentSession(EnrollmentSession):
                 and self.status == self.ACCOUNT_DRIVEN_AUTHENTICATED)
         self._set_next_status(self.STARTED, test)
 
-    def set_scep_verified_status(self, es_request):
-        test = (es_request
-                and self.status == self.STARTED
-                and self.scep_request is None
-                and not self.enrolled_device)
-        self._set_next_status(self.SCEP_VERIFIED, test, scep_request=es_request)
-
     def set_authenticated_status(self, enrolled_device):
-        if self.user_enrollment.scep_verification:
-            allowed_statuses = (self.SCEP_VERIFIED,)
-            scep_ok = self.scep_request is not None
-        else:
-            allowed_statuses = (self.STARTED, self.SCEP_VERIFIED)
-            scep_ok = True
         test = (enrolled_device
-                and scep_ok
-                and self.status in allowed_statuses
+                and self.status == self.STARTED
                 and not self.enrolled_device)
         self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
 
     def set_completed_status(self, enrolled_device):
-        if self.user_enrollment.scep_verification:
-            scep_ok = self.scep_request is not None
-        else:
-            scep_ok = True
         test = (enrolled_device
-                and scep_ok
                 and self.status == self.AUTHENTICATED
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)
@@ -2219,12 +2207,10 @@ class ReEnrollmentSessionManager(models.Manager):
 
 class ReEnrollmentSession(EnrollmentSession):
     STARTED = "STARTED"
-    SCEP_VERIFIED = "SCEP_VERIFIED"
     AUTHENTICATED = "AUTHENTICATED"
     COMPLETED = "COMPLETED"
     STATUS_CHOICES = (
         (STARTED, _("Started")),
-        (SCEP_VERIFIED, _("SCEP verified")),  # Optional, the SCEP service verified the MDM CSR
         (AUTHENTICATED, _("Authenticated")),  # first MDM Checkin Authenticate call
         (COMPLETED, _("Completed")),  # first MDM Checkin TokenUpdate call
     )
@@ -2265,32 +2251,14 @@ class ReEnrollmentSession(EnrollmentSession):
 
     # status update methods
 
-    def set_scep_verified_status(self, es_request):
-        test = (es_request
-                and self.status == self.STARTED
-                and self.scep_request is None)
-        self._set_next_status(self.SCEP_VERIFIED, test, scep_request=es_request)
-
     def set_authenticated_status(self, enrolled_device):
-        if self.get_enrollment().scep_verification:
-            allowed_statuses = (self.SCEP_VERIFIED,)
-            scep_ok = self.scep_request is not None
-        else:
-            allowed_statuses = (self.STARTED, self.SCEP_VERIFIED)
-            scep_ok = True
         test = (enrolled_device
-                and scep_ok
-                and self.status in allowed_statuses
+                and self.status == self.STARTED
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
 
     def set_completed_status(self, enrolled_device):
-        if self.get_enrollment().scep_verification:
-            scep_ok = self.scep_request is not None
-        else:
-            scep_ok = True
         test = (enrolled_device
-                and scep_ok
                 and self.status == self.AUTHENTICATED
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)

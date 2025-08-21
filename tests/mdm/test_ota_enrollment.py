@@ -58,7 +58,7 @@ class TestOTAEnrollment(TestCase):
         )
         scep_payload = build_scep_payload(session)
         self.assertEqual(scep_payload["PayloadContent"]["Challenge"],
-                         enrollment.scep_config.get_challenge_kwargs()["challenge"])
+                         enrollment.scep_issuer.get_backend_kwargs()["challenge"])
 
     def test_ota_enrollment_reenrollment_session_error(self):
         enrollment = force_ota_enrollment(self.mbu)
@@ -174,6 +174,7 @@ class TestOTAEnrollment(TestCase):
         session.refresh_from_db()
         self.assertEqual(session.status, OTAEnrollmentSession.PHASE_2)
 
+    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
     @patch("zentral.contrib.mdm.public_views.ota.verify_zentral_scep_ca_issuer")
     @patch("zentral.contrib.mdm.public_views.ota.verify_apple_iphone_device_ca_issuer")
     @patch("zentral.contrib.mdm.public_views.ota.verify_signed_payload")
@@ -182,6 +183,7 @@ class TestOTAEnrollment(TestCase):
         mocked_verify_signed_payload,
         mocked_verify_apple_iphone_device_ca_issuer,
         mocked_verify_zentral_scep_ca_issuer,
+        requests_get,
     ):
         enrollment = force_ota_enrollment(self.mbu)
         serial_number = get_random_string(12)
@@ -191,6 +193,8 @@ class TestOTAEnrollment(TestCase):
             "SERIAL": serial_number,
             "UDID": udid,
             "CHALLENGE": session.enrollment_secret.secret,
+            "PRODUCT": "Mac14,2",
+            "OS_VERSION": "15.6.1",
         }
         signing_certificate = Mock()
         serial_number_attr = Mock()
@@ -208,6 +212,9 @@ class TestOTAEnrollment(TestCase):
         mocked_verify_signed_payload.return_value = (certificates, plistlib.dumps(payload))
         mocked_verify_apple_iphone_device_ca_issuer.return_value = False
         mocked_verify_zentral_scep_ca_issuer.return_value = True
+        challenge_resp = Mock()
+        challenge_resp.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
+        requests_get.return_value = challenge_resp
         response = self.client.post(reverse("mdm_public:ota_enroll"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
@@ -216,7 +223,7 @@ class TestOTAEnrollment(TestCase):
         payload_content = profile["PayloadContent"]
         self.assertEqual(len(payload_content), 3)
         self.assertEqual(payload_content[0]["PayloadType"], "com.apple.security.pem")  # cert chain
-        self.assertEqual(payload_content[1]["PayloadType"], "com.apple.security.scep")  # SCEP
+        self.assertEqual(payload_content[1]["PayloadType"], "com.apple.security.acme")  # ACME
         self.assertEqual(payload_content[2]["PayloadType"], "com.apple.mdm")  # MDM
         session_qs = enrollment.otaenrollmentsession_set.all()
         self.assertEqual(session_qs.count(), 1)

@@ -23,11 +23,9 @@ __pycache__
 !/.readthedocs.yaml
 
 /conf/*
-!/conf/start
 !/conf/mdm
 !/conf/puppet
-!/conf/saml2
-!/conf/syslog
+!/conf/start
 
 tests/osquery/fixtures/*
 tests/santa/fixtures/*

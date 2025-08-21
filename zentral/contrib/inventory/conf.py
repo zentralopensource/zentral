@@ -434,3 +434,36 @@ def cleanup_windows_os_version(os_version):
     # TODO: better?
     os_version["name"] = "Windows"
     return os_version
+
+
+# Mac secure enclave
+
+
+APPLE_MODEL_RE = re.compile(r"^([a-zA-Z]+)([0-9]+)(?:,([0-9]+))$")
+
+
+def mac_secure_enclave_from_model(model):
+    if not isinstance(model, str):
+        return
+    if model in ("MacBookPro13,2", "MacBookPro13,3", "MacBookPro14,2", "MacBookPro14,3"):
+        return "T1"
+    elif model in ("iMac20,1", "iMacPro1,1", "MacPro7,1", "Macmini8,1",
+                   "MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1",
+                   "MacBookPro15,1", "MacBookPro15,2", "MacBookPro15,3", "MacBookPro15,4",
+                   "MacBookPro16,1", "MacBookPro16,2", "MacBookPro16,3", "MacBookPro16,4"):
+        return "T2"
+    else:
+        m = APPLE_MODEL_RE.match(model)
+        if m:
+            product, major, _ = m.groups()
+            if product == "Mac":
+                return "SILICON"
+            else:
+                major = int(major)
+                if (
+                    (product == "MacBookPro" and major >= 17)
+                    or (product == "MacBookAir" and major >= 10)
+                    or (product == "iMac" and major >= 21)
+                    or (product == "Macmini" and major >= 9)
+                ):
+                    return "SILICON"

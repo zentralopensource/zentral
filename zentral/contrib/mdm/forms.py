@@ -27,7 +27,7 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      DataAsset, Declaration, DeclarationRef,
                      DEPDevice, DEPOrganization, DEPEnrollment, DEPEnrollmentCustomView, DEPToken, DEPVirtualServer,
                      EnrolledDevice, EnterpriseApp, Platform,
-                     FileVaultConfig, RecoveryPasswordConfig, SCEPConfig,
+                     FileVaultConfig, RecoveryPasswordConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
                      Profile, Location, LocationAsset, StoreApp,
                      SoftwareUpdateEnforcement,
@@ -52,7 +52,7 @@ class OTAEnrollmentForm(forms.ModelForm):
     class Meta:
         model = OTAEnrollment
         fields = ("name", "display_name", "realm", "push_certificate",
-                  "scep_config", "scep_verification",
+                  "acme_issuer", "scep_issuer",
                   "blueprint")
 
 
@@ -60,7 +60,7 @@ class UserEnrollmentForm(forms.ModelForm):
     class Meta:
         model = UserEnrollment
         fields = ("name", "display_name", "realm", "push_certificate",
-                  "scep_config", "scep_verification",
+                  "acme_issuer", "scep_issuer",
                   "blueprint")
 
     def clean(self):
@@ -417,7 +417,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         field_order = [
-            "push_certificate", "scep_config", "scep_verification",
+            "push_certificate", "acme_issuer", "scep_issuer",
             "blueprint",
             "virtual_server", "name",
             "allow_pairing", "is_supervised", "is_mandatory", "is_mdm_removable", "is_multi_user",
@@ -445,7 +445,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
 
     class Meta:
         model = DEPEnrollment
-        fields = "__all__"
+        exclude = ["scep_config", "scep_verification"]
 
     def clean_is_mdm_removable(self):
         is_mdm_removable = self.cleaned_data.get("is_mdm_removable")
@@ -552,7 +552,7 @@ class UpdateDEPEnrollmentForm(CreateDEPEnrollmentForm):
 
     class Meta:
         model = DEPEnrollment
-        exclude = ("virtual_server",)
+        exclude = ("scep_config", "scep_verification", "virtual_server",)
 
     def admin_info_incomplete(self):
         attr_count = len(
@@ -1347,12 +1347,6 @@ class SoftwareUpdateEnforcementForm(forms.ModelForm):
                 self.add_error(field, "This field is required")
         for field in other_fields:
             setattr(self.instance, field, "" if field not in ("delay_days", "local_time", "local_datetime") else None)
-
-
-class SCEPConfigForm(forms.ModelForm):
-    class Meta:
-        model = SCEPConfig
-        fields = "__all__"
 
 
 class LocationForm(forms.ModelForm):

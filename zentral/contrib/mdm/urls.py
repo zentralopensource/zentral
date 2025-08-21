@@ -322,22 +322,21 @@ urlpatterns = [
          views.DeleteSoftwareUpdateEnforcementView.as_view(),
          name="delete_software_update_enforcement"),
 
-    # SCEP configurations
-    path('scep_configurations/',
-         views.SCEPConfigListView.as_view(),
-         name="scep_configs"),
-    path('scep_configurations/create/',
-         views.CreateSCEPConfigView.as_view(),
-         name="create_scep_config"),
-    path('scep_configurations/<int:pk>/',
-         views.SCEPConfigView.as_view(),
-         name="scep_config"),
-    path('scep_configurations/<int:pk>/update/',
-         views.UpdateSCEPConfigView.as_view(),
-         name="update_scep_config"),
-    path('scep_configurations/<int:pk>/delete/',
-         views.DeleteSCEPConfigView.as_view(),
-         name="delete_scep_config"),
+    # ACME issuers
+    path('acme_issuers/',
+         views.ACMEIssuerListView.as_view(),
+         name="acme_issuers"),
+    path('acme_issuers/<uuid:pk>/',
+         views.ACMEIssuerView.as_view(),
+         name="acme_issuer"),
+
+    # SCEP issuers
+    path('scep_issuers/',
+         views.SCEPIssuerListView.as_view(),
+         name="scep_issuers"),
+    path('scep_issuers/<uuid:pk>/',
+         views.SCEPIssuerView.as_view(),
+         name="scep_issuer"),
 
     # enrolled devices
     path('devices/',

@@ -5,17 +5,13 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="breadcrumb-item active">SCEP configurations</a></li>
+  <li class="breadcrumb-item active">SCEP issuers</a></li>
   <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
 </ol>
 
 <div class="d-flex align-items-center mb-1">
-    <h2 class="m-0">SCEP configuration{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+    <h2 class="m-0">SCEP issuer{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
     <div class="ms-auto">
-        {% if perms.mdm.add_scepconfig %}
-            {% url 'mdm:create_scep_config' as url %}
-            {% button 'CREATE' url "Create new SCEP configuration" %}
-        {% endif %}  
     </div>
 </div>
 
@@ -33,16 +29,16 @@
         </tr>
     </thead>
     <tbody>
-        {% for scep_config in object_list %}
+        {% for scep_issuer in object_list %}
         <tr>
         <td>
-            <a href="{{ scep_config.get_absolute_url }}">{{ scep_config }}</a>
+            <a href="{{ scep_issuer.get_absolute_url }}">{{ scep_issuer }}</a>
         </td>
         <td>
-            {{ scep_config.url }}
+            {{ scep_issuer.url }}
         </td>
-        <td>{{ scep_config.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
-        <td>{{ scep_config.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        <td>{{ scep_issuer.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        <td>{{ scep_issuer.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
         </tr>
         {% endfor %}
     </tbody>
@@ -51,12 +47,7 @@
     {% pagination next_url previous_url %}
 
 {% else %}
-    {% if perms.mdm.add_scepconfig %}
-        {% url 'mdm:create_scep_config' as link %}
-        {% no_entities 'SCEP Configurations' link %}
-    {% else %}
-        {% no_entities 'SCEP Configurations' %}
-    {% endif %}
+        {% no_entities 'SCEP issuers' %}
 {% endif %}
 
 {% endblock %}
