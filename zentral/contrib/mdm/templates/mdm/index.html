@@ -41,8 +41,11 @@
 {% if perms.mdm.view_softwareupdateenforcement %}
 <p><a href="{% url 'mdm:software_update_enforcements' %}">Software update enforcements</a></p>
 {% endif %}
-{% if perms.mdm.view_scepconfig %}
-<p><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></p>
+{% if perms.mdm.view_acmeissuer %}
+<p><a href="{% url 'mdm:acme_issuers' %}">ACME issuers</a></p>
+{% endif %}
+{% if perms.mdm.view_scepissuer %}
+<p><a href="{% url 'mdm:scep_issuers' %}">SCEP issuers</a></p>
 {% endif %}
 {% if perms.mdm.view_realmgrouptagmapping %}
 <p><a href="{% url 'mdm:realm_group_tag_mappings' %}">Group → Tag mappings</a></p>

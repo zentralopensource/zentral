@@ -4,7 +4,6 @@ import logging
 import plistlib
 from urllib.parse import unquote
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
 from django.core import signing
 from django.core.exceptions import SuspiciousOperation
@@ -18,7 +17,7 @@ from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.base import get_command
 from zentral.contrib.mdm.commands.scheduling import get_next_command_response
-from zentral.contrib.mdm.crypto import verify_signed_payload
+from zentral.contrib.mdm.crypto import build_enrolled_device_cert_defaults, verify_signed_payload
 from zentral.contrib.mdm.declarations import (build_declaration_response,
                                               load_data_asset_token,
                                               load_legacy_profile_token,
@@ -257,10 +256,7 @@ class CheckinView(MDMView):
             enrolled_device_defaults["user_enrollment"] = True
             enrolled_device_defaults["supervised"] = False
         if self.certificate:
-            enrolled_device_defaults.update({
-                "cert_fingerprint": self.certificate.fingerprint(hashes.SHA256()),
-                "cert_not_valid_after": self.certificate.not_valid_after,
-            })
+            enrolled_device_defaults.update(build_enrolled_device_cert_defaults(self.certificate))
         enrolled_device, created = EnrolledDevice.objects.update_or_create(udid=self.enrolled_device_udid,
                                                                            defaults=enrolled_device_defaults)
 

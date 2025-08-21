@@ -1,10 +1,11 @@
+from unittest.mock import Mock, patch
 import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmUser
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentSession, ReEnrollmentSession
-from zentral.contrib.mdm.payloads import build_scep_payload
+from zentral.contrib.mdm.payloads import build_acme_payload, build_scep_payload
 from .utils import complete_enrollment_session, force_dep_enrollment, force_realm_user
 
 
@@ -63,6 +64,29 @@ class TestDEPEnrollment(TestCase):
             {"enrollment_session": {"pk": session.pk, "type": "dep", "status": "STARTED"}}
         )
 
+    def test_dep_enrollment_session_no_acme_payload(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
+            enrollment, get_random_string(12), str(uuid.uuid4())
+        )
+        self.assertIsNone(build_acme_payload(session, {"PRODUCT": "Mac14,2", "OS_VERSION": "15.6.1"}))
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    def test_dep_enrollment_session_acme_payload(self, requests_get):
+        response = Mock()
+        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
+        requests_get.return_value = response
+        enrollment = force_dep_enrollment(self.mbu, acme_issuer=True)
+        session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
+            enrollment, get_random_string(12), str(uuid.uuid4())
+        )
+        acme_payload = build_acme_payload(session, {"PRODUCT": "Mac14,2", "OS_VERSION": "15.6.1"})
+        self.assertTrue(acme_payload["AllowAllAppsAccess"] is False)
+        self.assertTrue(acme_payload["KeyIsExtractable"] is False)
+        self.assertTrue(acme_payload["KeyType"], "ECSECPrimeRandom")
+        self.assertTrue(acme_payload["KeySize"], 384)
+        self.assertTrue(acme_payload["ClientIdentifier"], "1000000000000002")
+
     def test_dep_enrollment_session_scep_payload(self):
         enrollment = force_dep_enrollment(self.mbu)
         session = DEPEnrollmentSession.objects.create_from_dep_enrollment(
@@ -70,7 +94,7 @@ class TestDEPEnrollment(TestCase):
         )
         scep_payload = build_scep_payload(session)
         self.assertEqual(scep_payload["PayloadContent"]["Challenge"],
-                         enrollment.scep_config.get_challenge_kwargs()["challenge"])
+                         enrollment.scep_issuer.get_backend_kwargs()["challenge"])
 
     def test_dep_enrollment_reenrollment_session_error(self):
         enrollment = force_dep_enrollment(self.mbu)

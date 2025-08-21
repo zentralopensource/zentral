@@ -4,7 +4,6 @@
     "tls_hostname_for_client_cert_auth": "https://zentral-mtls",
     "tls_fullchain": "{{ file:/zentral/conf/start/docker/tls/zentral_fullchain.crt }}",
     "tls_privkey": "{{ file:/zentral/conf/start/docker/tls/zentral.key }}",
-    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
     "metrics_bearer_token": "CHANGE ME!!!"
   },
   "extra_links": [
@@ -98,12 +97,32 @@
               "name": "Default"
             }
         },
-        "scep_configs": {
-          "test": {
-            "name": "YoloFomo",
+        "acme_issuers": {
+          "test-acme": {
+            "name": "ACME issuer",
+            "description": "ACME issuer description",
+            "directory_url": "https://www.example.com/acme/",
+            "key_size": 384,
+            "key_type": "ECSECPrimeRandom",
+            "usage_flags": 1,
+            "extended_key_usage": ["1.3.6.1.5.5.7.3.2"],
+            "hardware_bound": true,
+            "attest": true,
+            "backend": "STATIC_CHALLENGE",
+            "static_challenge_kwargs": {
+                "challenge": "Challenge"
+            }
+          }
+        },
+        "scep_issuers": {
+          "test-scep": {
+            "name": "SCEP issuer",
+            "description": "SCEP issuer description",
             "url": "https://www.example.com/scep/",
-            "challenge_type": "MICROSOFT_CA",
-            "microsoft_ca_challenge_kwargs": {
+            "key_size": 2048,
+            "key_usage": 1,
+            "backend": "MICROSOFT_CA",
+            "microsoft_ca_kwargs": {
               "url": "https://www.example.com/ndes/",
               "username": "Yolo",
               "password": "Fomo"

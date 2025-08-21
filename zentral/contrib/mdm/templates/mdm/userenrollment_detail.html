@@ -41,17 +41,26 @@
         </td>
         </tr>
         <tr>
-        <th width="160px">SCEP config</th>
+        <th width="160px">ACME issuer</th>
         <td>
-            {% if perms.mdm.view_scepconfig %}
-            <a href="{{ object.scep_config.get_absolute_url }}">{{ object.scep_config }}</a>
+          {% if object.acme_issuer %}
+            {% if perms.mdm.view_acmeissuer %}
+            <a href="{{ object.acme_issuer.get_absolute_url }}">{{ object.acme_issuer }}</a>
             {% else %}
-            {{ object.scep_config }}
+            {{ object.acme_issuer }}
             {% endif %}
-            {% if object.scep_verification %}
-            / with CSR verification
+          {% else %}
+          -
+          {% endif %}
+        </td>
+        </tr>
+        <tr>
+        <th width="160px">SCEP issuer</th>
+        <td>
+            {% if perms.mdm.view_scepissuer %}
+            <a href="{{ object.scep_issuer.get_absolute_url }}">{{ object.scep_issuer }}</a>
             {% else %}
-            / without CSR verification
+            {{ object.scep_issuer }}
             {% endif %}
         </td>
         </tr>

@@ -94,6 +94,10 @@ class BaseView(JSONPostAPIView):
 
 class JobDetailsView(BaseView):
     def check_data_secret(self, data):
+        if not isinstance(data, dict):
+            raise APIAuthError(
+                f"Bad data. Request SN {self.machine_serial_number}."
+            )
         msn = data.get('machine_serial_number')
         if not msn:
             raise APIAuthError(

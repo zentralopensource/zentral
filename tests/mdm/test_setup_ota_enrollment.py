@@ -9,7 +9,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
-from .utils import force_ota_enrollment, force_push_certificate, force_realm, force_scep_config
+from .utils import force_acme_issuer, force_ota_enrollment, force_push_certificate, force_realm, force_scep_issuer
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -64,12 +64,13 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         name = get_random_string(64)
         display_name = get_random_string(12)
         push_certificate = force_push_certificate()
-        scep_config = force_scep_config()
+        acme_issuer = force_acme_issuer()
+        scep_issuer = force_scep_issuer()
         response = self.client.post(reverse("mdm:create_ota_enrollment"),
                                     {"oe-name": name,
                                      "oe-display_name": display_name,
-                                     "oe-scep_config": scep_config.pk,
-                                     "oe-scep_verification": "",
+                                     "oe-acme_issuer": acme_issuer.pk,
+                                     "oe-scep_issuer": scep_issuer.pk,
                                      "oe-push_certificate": push_certificate.pk,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -78,13 +79,14 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, name)
         self.assertContains(response, display_name)
         self.assertContains(response, push_certificate.name)
-        self.assertContains(response, scep_config.name)
-        self.assertContains(response, "without CSR verification")
+        self.assertContains(response, acme_issuer.name)
+        self.assertContains(response, scep_issuer.name)
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, name)
         self.assertEqual(enrollment.display_name, display_name)
         self.assertEqual(enrollment.push_certificate, push_certificate)
-        self.assertEqual(enrollment.scep_config, scep_config)
+        self.assertEqual(enrollment.acme_issuer, acme_issuer)
+        self.assertEqual(enrollment.scep_issuer, scep_issuer)
 
     # view OTA enrollment
 
@@ -108,20 +110,24 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, enrollment.display_name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertNotContains(response, enrollment.push_certificate.get_absolute_url())
-        self.assertContains(response, enrollment.scep_config.name)
-        self.assertNotContains(response, enrollment.scep_config.get_absolute_url())
+        self.assertContains(response, enrollment.acme_issuer.name)
+        self.assertNotContains(response, enrollment.acme_issuer.get_absolute_url())
+        self.assertContains(response, enrollment.scep_issuer.name)
+        self.assertNotContains(response, enrollment.scep_issuer.get_absolute_url())
 
     def test_view_ota_enrollment_extra_perms(self):
         enrollment = force_ota_enrollment(self.mbu)
-        self._login("mdm.view_otaenrollment", "mdm.view_pushcertificate", "mdm.view_scepconfig")
+        self._login("mdm.view_otaenrollment", "mdm.view_pushcertificate", "mdm.view_acmeissuer", "mdm.view_scepissuer")
         response = self.client.get(reverse("mdm:ota_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/otaenrollment_detail.html")
         self.assertContains(response, enrollment.name)
         self.assertContains(response, enrollment.push_certificate.name)
         self.assertContains(response, enrollment.push_certificate.get_absolute_url())
-        self.assertContains(response, enrollment.scep_config.name)
-        self.assertContains(response, enrollment.scep_config.get_absolute_url())
+        self.assertContains(response, enrollment.acme_issuer.name)
+        self.assertContains(response, enrollment.acme_issuer.get_absolute_url())
+        self.assertContains(response, enrollment.scep_issuer.name)
+        self.assertContains(response, enrollment.scep_issuer.get_absolute_url())
 
     # download OTA profile
 
@@ -179,8 +185,8 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm:update_ota_enrollment", args=(enrollment.pk,)),
                                     {"oe-name": new_name,
                                      "oe-display_name": new_display_name,
-                                     "oe-scep_config": enrollment.scep_config.pk,
-                                     "oe-scep_verification": "on",
+                                     "oe-acme_issuer": enrollment.acme_issuer.pk,
+                                     "oe-scep_issuer": enrollment.scep_issuer.pk,
                                      "oe-push_certificate": enrollment.push_certificate.pk,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -189,8 +195,8 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, new_name)
         self.assertContains(response, new_display_name)
         self.assertContains(response, enrollment.push_certificate.name)
-        self.assertContains(response, enrollment.scep_config.name)
-        self.assertContains(response, "with CSR verification")
+        self.assertContains(response, enrollment.acme_issuer.name)
+        self.assertContains(response, enrollment.scep_issuer.name)
         enrollment = response.context["object"]
         self.assertEqual(enrollment.name, new_name)
         self.assertEqual(enrollment.display_name, new_display_name)

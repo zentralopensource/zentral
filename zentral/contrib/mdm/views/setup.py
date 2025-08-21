@@ -37,8 +37,10 @@ class IndexView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class RootCAView(View):
+class RootCAView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
+        if not self.request.user.has_module_perms("mdm"):
+            raise PermissionDenied("Not allowed")
         return build_configuration_profile_response(build_root_ca_configuration_profile(), "zentral_root_ca")
 
 

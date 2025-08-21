@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import plistlib
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -26,7 +26,7 @@ class ReenrollCommandTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
         cls.dep_enrollment_session, _, _ = force_dep_enrollment_session(
-            cls.mbu, authenticated=True, completed=True, realm_user=True
+            cls.mbu, authenticated=True, completed=True, realm_user=True, acme_issuer=True
         )
         cls.dep_enrollment = cls.dep_enrollment_session.dep_enrollment
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
@@ -91,8 +91,12 @@ class ReenrollCommandTestCase(TestCase):
     # build_command
 
     @patch("zentral.contrib.mdm.payloads.sign_payload")
-    def test_build_command(self, sign_payload):
+    def test_build_command_scep_default(self, sign_payload):
         sign_payload.side_effect = lambda a: a  # bypass payload signature
+        # enrolled device doesn't have enough information for the ACME issuer
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        self.assertIsNone(enrolled_device.model)
+        self.assertEqual(enrolled_device.comparable_os_version, (0, 0, 0, ""))
         cmd = Reenroll.create_for_enrollment_session(self.dep_enrollment_session)
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
@@ -105,9 +109,129 @@ class ReenrollCommandTestCase(TestCase):
         self.assertEqual(
             [pc["PayloadType"] for pc in loadedPayloadPayload["PayloadContent"]],
             ["com.apple.security.pem",
-             "com.apple.security.scep",
+             "com.apple.security.scep",  # because not enough info for ACME
              "com.apple.mdm"]
         )
+
+    @patch("zentral.contrib.mdm.payloads.sign_payload")
+    def test_build_command_too_old_scep(self, sign_payload):
+        sign_payload.side_effect = lambda a: a  # bypass payload signature
+        # enrolled device too old for ACME
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        enrolled_device.model = "Macmini3,1"
+        enrolled_device.os_version = "11.6.1"
+        enrolled_device.save()
+        self.assertEqual(enrolled_device.platform, Platform.MACOS)
+        self.assertEqual(enrolled_device.comparable_os_version, (11, 6, 1, ""))
+        cmd = Reenroll.create_for_enrollment_session(self.dep_enrollment_session)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(payload["RequestType"], "InstallProfile")
+        payloadPayload = payload["Payload"]
+        sign_payload.assert_called_once_with(payloadPayload)
+        loadedPayloadPayload = plistlib.loads(payloadPayload)
+        self.assertEqual(loadedPayloadPayload["PayloadIdentifier"], "zentral.mdm")
+        self.assertEqual(loadedPayloadPayload["PayloadType"], "Configuration")
+        self.assertEqual(
+            [pc["PayloadType"] for pc in loadedPayloadPayload["PayloadContent"]],
+            ["com.apple.security.pem",
+             "com.apple.security.scep",  # too old
+             "com.apple.mdm"]
+        )
+
+    @patch("zentral.contrib.mdm.payloads.sign_payload")
+    def test_build_command_t1_scep(self, sign_payload):
+        sign_payload.side_effect = lambda a: a  # bypass payload signature
+        # Enrolled device has a T1 secure enclave, there is no advantage using an ACME payload
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        enrolled_device.model = "MacBookPro14,3"  # T1
+        enrolled_device.os_version = "13.7.8"  # enough for ACME
+        enrolled_device.save()
+        self.assertEqual(enrolled_device.platform, Platform.MACOS)
+        self.assertEqual(enrolled_device.comparable_os_version, (13, 7, 8, ""))
+        cmd = Reenroll.create_for_enrollment_session(self.dep_enrollment_session)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(payload["RequestType"], "InstallProfile")
+        payloadPayload = payload["Payload"]
+        sign_payload.assert_called_once_with(payloadPayload)
+        loadedPayloadPayload = plistlib.loads(payloadPayload)
+        self.assertEqual(loadedPayloadPayload["PayloadIdentifier"], "zentral.mdm")
+        self.assertEqual(loadedPayloadPayload["PayloadType"], "Configuration")
+        self.assertEqual(
+            [pc["PayloadType"] for pc in loadedPayloadPayload["PayloadContent"]],
+            ["com.apple.security.pem",
+             "com.apple.security.scep",  # no reason to use the ACME issuer
+             "com.apple.mdm"]
+        )
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("zentral.contrib.mdm.payloads.sign_payload")
+    def test_build_command_t2_acme_no_attest(self, sign_payload, requests_get):
+        response = Mock()
+        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
+        requests_get.return_value = response
+        sign_payload.side_effect = lambda a: a  # bypass payload signature
+        # Enrolled device has a T1 secure enclave, there is no advantage using an ACME payload
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        enrolled_device.model = "MacBookPro16,4"  # T2
+        enrolled_device.os_version = "15.6.1"  # enough for ACME
+        enrolled_device.save()
+        self.assertEqual(enrolled_device.platform, Platform.MACOS)
+        self.assertEqual(enrolled_device.comparable_os_version, (15, 6, 1, ""))
+        cmd = Reenroll.create_for_enrollment_session(self.dep_enrollment_session)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(payload["RequestType"], "InstallProfile")
+        payloadPayload = payload["Payload"]
+        sign_payload.assert_called_once_with(payloadPayload)
+        loadedPayloadPayload = plistlib.loads(payloadPayload)
+        self.assertEqual(loadedPayloadPayload["PayloadIdentifier"], "zentral.mdm")
+        self.assertEqual(loadedPayloadPayload["PayloadType"], "Configuration")
+        self.assertEqual(
+            [pc["PayloadType"] for pc in loadedPayloadPayload["PayloadContent"]],
+            ["com.apple.security.pem",
+             "com.apple.security.acme",  # ACME OK
+             "com.apple.mdm"]
+        )
+        acme_payload = loadedPayloadPayload["PayloadContent"][1]
+        self.assertEqual(acme_payload["ClientIdentifier"], "1000000000000002")
+        self.assertTrue(acme_payload["Attest"] is False)
+        self.assertTrue(acme_payload["HardwareBound"] is True)
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("zentral.contrib.mdm.payloads.sign_payload")
+    def test_build_command_silicon_acme_attest(self, sign_payload, requests_get):
+        response = Mock()
+        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
+        requests_get.return_value = response
+        sign_payload.side_effect = lambda a: a  # bypass payload signature
+        # Enrolled device has a T1 secure enclave, there is no advantage using an ACME payload
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        enrolled_device.model = "Mac16,1"  # SILICON
+        enrolled_device.os_version = "15.6.1"  # enough for ACME
+        enrolled_device.save()
+        self.assertEqual(enrolled_device.platform, Platform.MACOS)
+        self.assertEqual(enrolled_device.comparable_os_version, (15, 6, 1, ""))
+        cmd = Reenroll.create_for_enrollment_session(self.dep_enrollment_session)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(payload["RequestType"], "InstallProfile")
+        payloadPayload = payload["Payload"]
+        sign_payload.assert_called_once_with(payloadPayload)
+        loadedPayloadPayload = plistlib.loads(payloadPayload)
+        self.assertEqual(loadedPayloadPayload["PayloadIdentifier"], "zentral.mdm")
+        self.assertEqual(loadedPayloadPayload["PayloadType"], "Configuration")
+        self.assertEqual(
+            [pc["PayloadType"] for pc in loadedPayloadPayload["PayloadContent"]],
+            ["com.apple.security.pem",
+             "com.apple.security.acme",  # ACME OK
+             "com.apple.mdm"]
+        )
+        acme_payload = loadedPayloadPayload["PayloadContent"][1]
+        self.assertEqual(acme_payload["ClientIdentifier"], "1000000000000002")
+        self.assertTrue(acme_payload["Attest"] is True)
+        self.assertTrue(acme_payload["HardwareBound"] is True)
 
     # _reenroll
 

@@ -7,8 +7,6 @@ services:
     environment:
       SCEP_CA_PASS: "CHANGE THIS, DO NOT USE IN PRODUCTION"
       SCEP_CERT_RENEW: 0  # Renewal always accepted
-      ZENTRAL_API_SECRET: "CHANGE THIS, DO NOT USE IN PRODUCTION"
-      ZENTRAL_API_BASE_URL: "http://web:8000"
     volumes:
       - scep_ca:/var/lib/scep/CA
   nginx:

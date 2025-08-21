@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item active">ACME issuers</a></li>
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">ACME issuer{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+    <div class="ms-auto">
+    </div>
+</div>
+
+{% if object_list %}
+
+    {% pagination next_url previous_url %}
+
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <tr>
+        <th>Name</th>
+        <th>Directory URL</th>
+        <th>created at</th>
+        <th>updated at</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for acme_issuer in object_list %}
+        <tr>
+        <td>
+            <a href="{{ acme_issuer.get_absolute_url }}">{{ acme_issuer }}</a>
+        </td>
+        <td>
+            {{ acme_issuer.directory_url }}
+        </td>
+        <td>{{ acme_issuer.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        <td>{{ acme_issuer.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+
+    {% pagination next_url previous_url %}
+
+{% else %}
+        {% no_entities 'ACME issuers' %}
+{% endif %}
+
+{% endblock %}

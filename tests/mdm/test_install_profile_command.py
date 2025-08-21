@@ -18,7 +18,7 @@ from zentral.contrib.mdm.models import (
     Platform,
     Profile,
     RequestStatus,
-    SCEPConfig,
+    SCEPIssuer,
     TargetArtifact,
     UserArtifact,
 )
@@ -183,6 +183,8 @@ class InstallProfileCommandTestCase(TestCase):
                         [["CN", "YOLO"]],
                         [["2.5.4.5", "$ENROLLED_DEVICE.SERIAL_NUMBER"]],
                     ],
+                    "AllowAllAppsAccess": True,
+                    "KeyIsExtractable": False,
                 },
                 "PayloadIdentifier": "com.example.yolo",
                 "PayloadType": "com.apple.security.scep",
@@ -224,14 +226,14 @@ class InstallProfileCommandTestCase(TestCase):
                 "PayloadVersion": 1,
             },
         ]
-        scep_config = SCEPConfig(
+        scep_issuer = SCEPIssuer(
             name="YOLO",
             url="https://example.com/scep",
-            challenge_type="STATIC",
+            backend="STATIC_CHALLENGE",
         )
         challenge = get_random_string(12)
-        scep_config.set_challenge_kwargs({"challenge": challenge})
-        scep_config.save()
+        scep_issuer.set_backend_kwargs({"challenge": challenge})
+        scep_issuer.save()
         artifact_version, profile = self._force_profile(payload_content=payload_content)
         cmd = InstallProfile.create_for_device(self.enrolled_device, artifact_version)
         response = cmd.build_http_response(self.dep_enrollment_session)
@@ -252,7 +254,7 @@ class InstallProfileCommandTestCase(TestCase):
                                 [["2.5.4.5", self.enrolled_device.serial_number]],
                             ],
                             "URL": "https://example.com/scep",
-                            "AllowAllAppsAccess": False,
+                            "AllowAllAppsAccess": True,
                             "Challenge": challenge,
                             "Key Type": "RSA",
                             "Key Usage": 0,

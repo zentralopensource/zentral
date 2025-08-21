@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.urlpatterns import format_suffix_patterns
-from .api_views import (ArtifactDetail, ArtifactList,
+from .api_views import (ACMEIssuerDetail, ACMEIssuerList,
+                        ArtifactDetail, ArtifactList,
                         BlueprintDetail, BlueprintList,
                         BlueprintArtifactDetail, BlueprintArtifactList,
                         DEPDeviceDetail, DEPDeviceList, DisownDEPDevice,
@@ -16,7 +17,7 @@ from .api_views import (ArtifactDetail, ArtifactList,
                         ProfileDetail, ProfileList,
                         PushCertificateDetail, PushCertificateList,
                         RecoveryPasswordConfigDetail, RecoveryPasswordConfigList,
-                        SCEPConfigDetail, SCEPConfigList,
+                        SCEPIssuerDetail, SCEPIssuerList,
                         SoftwareUpdateEnforcementList, SoftwareUpdateEnforcementDetail,
                         DEPVirtualServerSyncDevicesView,
                         EnrolledDeviceFileVaultPRK, EnrolledDeviceRecoveryPassword,
@@ -27,6 +28,8 @@ from .api_views import (ArtifactDetail, ArtifactList,
 
 app_name = "mdm_api"
 urlpatterns = [
+    path('acme_issuers/', ACMEIssuerList.as_view(), name="acme_issuers"),
+    path('acme_issuers/<uuid:pk>/', ACMEIssuerDetail.as_view(), name="acme_issuer"),
     path('artifacts/', ArtifactList.as_view(), name="artifacts"),
     path('artifacts/<uuid:pk>/', ArtifactDetail.as_view(), name="artifact"),
     path('blueprints/', BlueprintList.as_view(), name="blueprints"),
@@ -52,8 +55,8 @@ urlpatterns = [
     path('recovery_password_configs/', RecoveryPasswordConfigList.as_view(), name="recovery_password_configs"),
     path('recovery_password_configs/<int:pk>/', RecoveryPasswordConfigDetail.as_view(),
          name="recovery_password_config"),
-    path('scep_configs/', SCEPConfigList.as_view(), name="scep_configs"),
-    path('scep_configs/<int:pk>/', SCEPConfigDetail.as_view(), name="scep_config"),
+    path('scep_issuers/', SCEPIssuerList.as_view(), name="scep_issuers"),
+    path('scep_issuers/<uuid:pk>/', SCEPIssuerDetail.as_view(), name="scep_issuer"),
     path('software_update_enforcements/', SoftwareUpdateEnforcementList.as_view(),
          name="software_update_enforcements"),
     path('software_update_enforcements/<int:pk>/', SoftwareUpdateEnforcementDetail.as_view(),
