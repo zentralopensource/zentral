@@ -1056,6 +1056,18 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(response.context["reset_link"], "?target_type=CDHASH")
         self.assertEqual(response.context["previous_url"], "?target_type=CDHASH&page=1")
 
+    def test_configuration_rules_is_voting_rule(self):
+        rule = force_rule(target_type=Target.Type.BINARY)
+        voting_rule = force_rule(configuration=rule.configuration, is_voting_rule=True)
+        self._login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)),
+                                   {"is_voting_rule": "true"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "Rule (1)")
+        self.assertContains(response, voting_rule.target.identifier)
+        self.assertNotContains(response, rule.target.identifier)
+
     # create configuration rule
 
     def test_create_configuration_rule_redirect(self):

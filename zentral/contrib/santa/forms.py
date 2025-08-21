@@ -181,8 +181,12 @@ class RuleSearchForm(forms.Form):
             }
         ),
     )
+    is_voting_rule = forms.ChoiceField(
+        choices=[('', '...'), ('true', 'yes'), ('false', 'no')],
+        required=False
+    )
 
-    field_order = ['identifier', 'policy', 'ruleset', 'target_type']
+    field_order = ['identifier', 'policy', 'ruleset', 'target_type', 'is_voting_rule']
 
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration")
@@ -211,6 +215,9 @@ class RuleSearchForm(forms.Form):
         identifier = self.cleaned_data.get("identifier")
         if identifier:
             qs = qs.filter(target__identifier__icontains=identifier)
+        is_voting_rule = self.cleaned_data.get("is_voting_rule")
+        if is_voting_rule:
+            qs = qs.filter(is_voting_rule=is_voting_rule == 'true')
         return qs
 
 
