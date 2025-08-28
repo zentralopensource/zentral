@@ -61,11 +61,11 @@ grpcio==1.67.1
 grpcio-status==1.67.1
 gunicorn==23.0.0
 h11==0.16.0
-h2==4.1.0
-hpack==4.0.0
+h2==4.3.0
+hpack==4.1.0
 httpcore==1.0.9
 httpx==0.27.2
-hyperframe==6.0.1
+hyperframe==6.1.0
 idna==3.10
 importlib_metadata==8.4.0
 ipython==8.29.0
