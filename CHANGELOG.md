@@ -4,6 +4,10 @@
 
 Add excluded tags when linking a pack to a configuration.
 
+#### MDM
+
+Add API endpoint to send custom commands to enrolled devices.
+
 ## 2025.8
 
 ### Features (some, not all…)

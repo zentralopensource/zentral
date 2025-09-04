@@ -876,6 +876,49 @@ Response:
 }
 ```
 
+### `/api/mdm/devices/<int:pk>/send_custom_command/`
+
+ * method: `POST`
+ * required permission: `mdm.add_devicecommand`
+ * arguments:
+     * `command`
+
+Queues up a custom command for the device and notifies it.
+
+`command` is the raw `Command` value of an MDM command serialized as a plist (the `<plist/>` encapsulation can be omitted).
+
+A serialized device command is returned.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "<dict><key>RequestType</key><string>EnableRemoteDesktop</string></dict>"}' \
+  https://$ZTL_FQDN/api/mdm/devices/27/send_custom_command/ | python -m json.tool
+```
+
+Response:
+
+```json
+{
+  "uuid": "4ec709ba-542e-4adf-8002-7d782e9eae9e",
+  "enrolled_device": 27,
+  "name": "CustomCommand",
+  "artifact_version": null,
+  "artifact_operation": null,
+  "not_before": null,
+  "time": null,
+  "result": null,
+  "result_time": null,
+  "status": null,
+  "error_chain": null,
+  "created_at": "2024-03-28T16:27:05.829954",
+  "updated_at": "2024-03-28T16:27:05.829959"
+}
+```
+
 ### `/api/mdm/devices/commands/`
 
  * method: `GET`

@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
 from zentral.contrib.mdm.artifacts import Target
-from zentral.contrib.mdm.commands import EraseDevice, DeviceLock
+from zentral.contrib.mdm.commands import CustomCommand, EraseDevice, DeviceLock
 from zentral.contrib.mdm.events import post_filevault_prk_viewed_event, post_recovery_password_viewed_event
 from zentral.contrib.mdm.models import Channel, EnrolledDevice
 from zentral.contrib.mdm.serializers import DeviceCommandSerializer, EnrolledDeviceSerializer
@@ -82,6 +82,10 @@ class EraseEnrolledDevice(CreateEnrolledDeviceCommandView):
 
 class LockEnrolledDevice(CreateEnrolledDeviceCommandView):
     command_class = DeviceLock
+
+
+class SendCustomEnrolledDeviceCommand(CreateEnrolledDeviceCommandView):
+    command_class = CustomCommand
 
 
 class EnrolledDeviceFileVaultPRK(APIView):

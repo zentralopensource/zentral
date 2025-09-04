@@ -2,10 +2,29 @@ import logging
 import plistlib
 from django import forms
 from django.core.exceptions import ValidationError
-from .base import register_command, Command, CommandBaseForm
+from rest_framework import serializers
+from .base import register_command, Command, CommandBaseForm, CommandBaseSerializer
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.custom")
+
+
+def clean_command(cmd):
+    if not cmd:
+        raise ValueError("Empty command")
+    if cmd.startswith("<dict>"):
+        # to make it easier for the users
+        cmd = f'<plist version="1.0">{cmd}</plist>'
+    try:
+        loaded_cmd = plistlib.loads(cmd.encode("utf-8"))
+    except Exception:
+        raise ValueError("Invalid property list")
+    if not isinstance(loaded_cmd, dict):
+        raise ValueError("Not a dictionary")
+    request_type = loaded_cmd.get("RequestType")
+    if not request_type:
+        raise ValueError("Missing or empty RequestType")
+    return plistlib.dumps(loaded_cmd).decode("utf-8")
 
 
 class CustomCommandForm(CommandBaseForm):
@@ -15,25 +34,26 @@ class CustomCommandForm(CommandBaseForm):
     )
 
     def clean_command(self):
-        cmd = self.cleaned_data.get("command")
-        if cmd:
-            if cmd.startswith("<dict>"):
-                # to make it easier for the users
-                cmd = f'<plist version="1.0">{cmd}</plist>'
-            try:
-                loaded_cmd = plistlib.loads(cmd.encode("utf-8"))
-            except Exception:
-                raise ValidationError("Invalid property list")
-            if not isinstance(loaded_cmd, dict):
-                raise ValidationError("Not a dictionary")
-            request_type = loaded_cmd.get("RequestType")
-            if not request_type:
-                raise ValidationError("Missing or empty RequestType")
-            cmd = plistlib.dumps(loaded_cmd).decode("utf-8")
-        return cmd
+        try:
+            return clean_command(self.cleaned_data.get("command"))
+        except ValueError as e:
+            raise ValidationError(str(e))
 
     def get_command_kwargs(self, uuid):
         return {"command": self.cleaned_data["command"]}
+
+
+class CustomCommandSerializer(CommandBaseSerializer):
+    command = serializers.CharField(required=True)
+
+    def validate_command(self, value):
+        try:
+            return clean_command(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
+
+    def get_command_kwargs(self, uuid):
+        return self.validated_data
 
 
 class CustomCommand(Command):
@@ -42,6 +62,7 @@ class CustomCommand(Command):
     store_result = True
     reschedule_notnow = True
     form_class = CustomCommandForm
+    serializer_class = CustomCommandSerializer
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

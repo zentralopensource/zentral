@@ -653,6 +653,86 @@ class APIViewsTestCase(TestCase):
              "PhoneNumber": "123"}
         )
 
+    # send custom enrolled device command
+
+    def test_send_custom_enrolled_device_command_unauthorized(self):
+        response = self.post(reverse("mdm_api:send_custom_enrolled_device_command", args=(self.enrolled_device.pk,)),
+                             {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_send_custom_enrolled_device_command_permission_denied(self):
+        self.set_permissions("mdm.view_devicecommand")
+        response = self.post(reverse("mdm_api:send_custom_enrolled_device_command", args=(self.enrolled_device.pk,)),
+                             {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_send_custom_enrolled_device_command_required_fields(self):
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:send_custom_enrolled_device_command", args=(self.enrolled_device.pk,)),
+                             {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'command': ['This field is required.']})
+
+    def test_send_custom_enrolled_device_command_empty_command(self):
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:send_custom_enrolled_device_command", args=(self.enrolled_device.pk,)),
+                             {"command": ""})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'command': ['This field may not be blank.']})
+
+    def test_send_custom_enrolled_device_command_invalid_plist(self):
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:send_custom_enrolled_device_command", args=(self.enrolled_device.pk,)),
+                             {"command": "abc"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'command': ['Invalid property list']})
+
+    def test_send_custom_enrolled_device_command_not_a_dict(self):
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:send_custom_enrolled_device_command", args=(self.enrolled_device.pk,)),
+                             {"command": plistlib.dumps([1]).decode("utf-8")})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'command': ['Not a dictionary']})
+
+    def test_send_custom_enrolled_device_command_missing_request_type(self):
+        self.set_permissions("mdm.add_devicecommand")
+        response = self.post(reverse("mdm_api:send_custom_enrolled_device_command", args=(self.enrolled_device.pk,)),
+                             {"command": plistlib.dumps({}).decode("utf-8")})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'command': ['Missing or empty RequestType']})
+
+    def test_send_custom_enrolled_device_command(self):
+        self.assertEqual(self.enrolled_device.platform, Platform.MACOS)
+        self.set_permissions("mdm.add_devicecommand")
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+        response = self.post(reverse("mdm_api:send_custom_enrolled_device_command", args=(self.enrolled_device.pk,)),
+                             {"command": plistlib.dumps({"RequestType": "EnableRemoteDesktop"}).decode("utf-8")})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+        db_command = self.enrolled_device.commands.first()
+        self.assertEqual(
+            response.json(),
+            {'artifact_operation': None,
+             'artifact_version': None,
+             'created_at': db_command.created_at.isoformat(),
+             'enrolled_device': self.enrolled_device.pk,
+             'error_chain': None,
+             'name': 'CustomCommand',
+             'not_before': None,
+             'result': None,
+             'result_time': None,
+             'status': None,
+             'time': None,
+             'updated_at': db_command.updated_at.isoformat(),
+             'uuid': str(db_command.uuid)}
+        )
+        response = load_command(db_command).build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "EnableRemoteDesktop"},
+        )
+
     # enrolled device filevault prk
 
     def test_enrolled_device_filevault_prk_unauthorized(self):
