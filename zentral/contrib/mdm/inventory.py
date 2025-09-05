@@ -254,13 +254,20 @@ def update_realm_user_machine_tags(realm_user, serial_number, request):
     realm_user_groups = set(g for (g, _) in realm_user.groups_with_types())
     tags_to_add = []
     tags_to_remove = []
+    group_tags = {}
     for rgtm in (
         RealmGroupTagMapping.objects.select_related("realm_group__realm", "tag")
                                     .filter(realm_group__realm=realm_user.realm)
     ):
-        if rgtm.realm_group in realm_user_groups:
-            tags_to_add.append(rgtm.tag)
-        else:
-            tags_to_remove.append(rgtm.tag)
+        group_tags.setdefault(rgtm.realm_group, []).append(rgtm.tag)
+    for group in realm_user_groups:
+        for tag in group_tags.get(group, []):
+            if tag not in tags_to_add:
+                tags_to_add.append(tag)
+    for group, tags in group_tags.items():
+        if group not in realm_user_groups:
+            for tag in tags:
+                if tag not in tags_to_add and tag not in tags_to_remove:
+                    tags_to_remove.append(tag)
     add_machine_tags(serial_number, tags_to_add, request)
     remove_machine_tags(serial_number, tags_to_remove, request)

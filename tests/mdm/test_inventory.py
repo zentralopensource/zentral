@@ -12,7 +12,7 @@ from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.installed_application_list import InstalledApplicationList
 from zentral.contrib.mdm.commands.profile_list import ProfileList
 from zentral.contrib.mdm.inventory import (ms_tree_from_payload, realm_group_members_updated_receiver,
-                                           update_realm_tags)
+                                           update_realm_tags, update_realm_user_machine_tags)
 from zentral.contrib.mdm.models import Blueprint, RealmGroupTagMapping
 from .utils import force_dep_enrollment_session
 
@@ -155,13 +155,21 @@ class MDMInventoryTestCase(TestCase):
                                               display_name=get_random_string(12),
                                               parent=group)
         RealmUserGroupMembership.objects.create(user=self.realm_user, group=sub_group)
+        other_group = RealmGroup.objects.create(realm=self.realm,
+                                                display_name=get_random_string(12))
         # tag to add because of a matching tag mapping
         tag_to_add = Tag.objects.create(name=get_random_string(12))
         RealmGroupTagMapping.objects.create(realm_group=group, tag=tag_to_add)
+        # mapping on the same tag but on the group that the user is not a member of
+        # this should not interfere
+        RealmGroupTagMapping.objects.create(realm_group=other_group, tag=tag_to_add)
         # tag already present
         tag_already_present = Tag.objects.create(name=get_random_string(12))
         RealmGroupTagMapping.objects.create(realm_group=group, tag=tag_already_present)
         MachineTag.objects.create(serial_number=serial_number, tag=tag_already_present)
+        # mapping on the same tag but on the group that the user is not a member of
+        # this should not interfere
+        RealmGroupTagMapping.objects.create(realm_group=other_group, tag=tag_already_present)
         # tag not managed via the mappings
         unmanaged_tag = Tag.objects.create(name=get_random_string(12))
         MachineTag.objects.create(serial_number=serial_number, tag=unmanaged_tag)
@@ -246,3 +254,68 @@ class MDMInventoryTestCase(TestCase):
             event.payload,
             {'action': 'added', 'tag': {'name': tag_to_add.name, 'pk': tag_to_add.pk}}
         )
+
+    # update_realm_user_machine_tags
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_realm_user_machine_tags(self, post_event):
+        serial_number = self.enrolled_device.serial_number
+        mt_qs = MachineTag.objects.filter(serial_number=serial_number)
+        self.assertFalse(mt_qs.exists())
+
+        # tags
+        # add realm user to a group
+        group = RealmGroup.objects.create(realm=self.realm,
+                                          display_name=get_random_string(12))
+        sub_group = RealmGroup.objects.create(realm=self.realm,
+                                              display_name=get_random_string(12),
+                                              parent=group)
+        RealmUserGroupMembership.objects.create(user=self.realm_user, group=sub_group)
+        other_group = RealmGroup.objects.create(realm=self.realm,
+                                                display_name=get_random_string(12))
+        # tag to add because of a matching tag mapping
+        tag_to_add = Tag.objects.create(name=get_random_string(12))
+        RealmGroupTagMapping.objects.create(realm_group=group, tag=tag_to_add)
+        # mapping on the same tag but on the group that the user is not a member of
+        # this should not interfere
+        RealmGroupTagMapping.objects.create(realm_group=other_group, tag=tag_to_add)
+        # tag already present
+        tag_already_present = Tag.objects.create(name=get_random_string(12))
+        RealmGroupTagMapping.objects.create(realm_group=group, tag=tag_already_present)
+        MachineTag.objects.create(serial_number=serial_number, tag=tag_already_present)
+        # mapping on the same tag but on the group that the user is not a member of
+        # this should not interfere
+        RealmGroupTagMapping.objects.create(realm_group=other_group, tag=tag_already_present)
+        # tag not managed via the mappings
+        unmanaged_tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number=serial_number, tag=unmanaged_tag)
+        # tag to remove
+        tag_to_remove = Tag.objects.create(name=get_random_string(12))
+        non_matching_group = RealmGroup.objects.create(realm=self.realm,
+                                                       display_name=get_random_string(12))
+        RealmGroupTagMapping.objects.create(realm_group=non_matching_group, tag=tag_to_remove)
+        MachineTag.objects.create(serial_number=serial_number, tag=tag_to_remove)
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            update_realm_user_machine_tags(self.realm_user, serial_number, None)
+
+        self.assertEqual(len(callbacks), 2)
+        event1, event2 = sorted(
+            [c.args[0] for c in post_event.call_args_list],
+            key=lambda e: e.payload["action"]
+        )
+        self.assertIsInstance(event1, MachineTagEvent)
+        self.assertEqual(
+            event1.payload,
+            {'action': 'added', 'tag': {'name': tag_to_add.name, 'pk': tag_to_add.pk}}
+        )
+        self.assertIsInstance(event2, MachineTagEvent)
+        self.assertEqual(
+            event2.payload,
+            {'action': 'removed', 'tag': {'name': tag_to_remove.name, 'pk': tag_to_remove.pk}}
+        )
+        self.assertEqual(mt_qs.count(), 3)
+        self.assertTrue(mt_qs.filter(tag=tag_to_add).exists())
+        self.assertTrue(mt_qs.filter(tag=tag_already_present).exists())
+        self.assertTrue(mt_qs.filter(tag=unmanaged_tag).exists())
+        self.assertFalse(mt_qs.filter(tag=tag_to_remove).exists())
