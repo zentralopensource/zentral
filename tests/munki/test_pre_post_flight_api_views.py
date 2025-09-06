@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
+import gzip
 import json
 from unittest.mock import patch
 import uuid
+import zlib
 from django.urls import reverse, NoReverseMatch
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
@@ -101,11 +103,81 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 403)
 
+    def test_job_details_not_json(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self.client.post(
+            reverse("munki_public:job_details"), "not json", content_type="application/json",
+            HTTP_AUTHORIZATION=f"MunkiEnrolledMachine {enrolled_machine.token}"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_job_details_unicode_error(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self.client.post(
+            reverse("munki_public:job_details"),
+            "été".encode("utf-16"),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"MunkiEnrolledMachine {enrolled_machine.token}"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_job_details_empty_request(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self.client.post(
+            reverse("munki_public:job_details"),
+            b"",
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"MunkiEnrolledMachine {enrolled_machine.token}"
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_job_details_bad_encoding(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number},
+                                      HTTP_AUTHORIZATION=f"MunkiEnrolledMachine {enrolled_machine.token}",
+                                      HTTP_CONTENT_ENCODING="YOLO")
+        self.assertEqual(response.status_code, 415)
+
     def test_job_details(self):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+        expected_response = {
+            "apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,
+            "incidents": [],
+            "tags": [],
+        }
+        self.assertEqual(expected_response, response.json())
+
+    def test_job_details_deflate(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self.client.post(
+            reverse("munki_public:job_details"),
+            zlib.compress(json.dumps({"machine_serial_number": enrolled_machine.serial_number}).encode("utf-8")),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"MunkiEnrolledMachine {enrolled_machine.token}",
+            HTTP_CONTENT_ENCODING="deflate"
+        )
+        self.assertEqual(response.status_code, 200)
+        expected_response = {
+            "apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,
+            "incidents": [],
+            "tags": [],
+        }
+        self.assertEqual(expected_response, response.json())
+
+    def test_job_details_gzip(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self.client.post(
+            reverse("munki_public:job_details"),
+            gzip.compress(json.dumps({"machine_serial_number": enrolled_machine.serial_number}).encode("utf-8")),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"MunkiEnrolledMachine {enrolled_machine.token}",
+            HTTP_CONTENT_ENCODING="gzip"
+        )
         self.assertEqual(response.status_code, 200)
         expected_response = {
             "apps_full_info_shard": self.configuration.inventory_apps_full_info_shard,

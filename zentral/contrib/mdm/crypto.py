@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.x509.oid import NameOID
 from django.utils.crypto import get_random_string
 from django.utils.functional import SimpleLazyObject
+from django.utils.timezone import make_naive
 from zentral.conf import settings
 from OpenSSL import crypto
 
@@ -267,3 +268,25 @@ def load_push_certificate_and_key(cert_pem_bytes, key_pem_bytes, password=None):
             "not_before": cert.not_valid_before_utc,
             "not_after": cert.not_valid_after_utc,
             "topic": topic}
+
+
+# device certificate
+
+
+def build_enrolled_device_cert_defaults(cert):
+    defaults = {
+        "cert_fingerprint": cert.fingerprint(hashes.SHA256()),
+        "cert_not_valid_after": make_naive(cert.not_valid_after_utc),
+        "cert_att_serial_number": None,
+        "cert_att_udid": None,
+    }
+    for attr, oid in (
+        ("cert_att_serial_number", x509.ObjectIdentifier("1.2.840.113635.100.8.9.1")),
+        ("cert_att_udid", x509.ObjectIdentifier("1.2.840.113635.100.8.9.2")),
+    ):
+        name_attrs = cert.subject.get_attributes_for_oid(oid)
+        if len(name_attrs) == 1:
+            name_attr = name_attrs[0]
+            if isinstance(name_attr.value, str):
+                defaults[attr] = name_attr.value
+    return defaults

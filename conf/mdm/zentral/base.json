@@ -4,7 +4,6 @@
     "tls_hostname_for_client_cert_auth": "https://zentral-clicertauth",
     "tls_server_certs": "/zentral/conf/start/docker/tls/zentral_fullchain.crt",
     "tls_server_key": "/zentral/conf/start/docker/tls/zentral.key",
-    "secret": "API SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
     "metrics_bearer_token": "CHANGE ME!!!"
   },
   "extra_links": [
@@ -60,7 +59,14 @@
     },
     "zentral.contrib.audit": {},
     "zentral.contrib.mdm": {
-      "scep_ca_fullchain": "/scep_CA/ca.pem"
+      "scep_ca_fullchain": "/scep_CA/ca.pem",
+      "provisioning": {
+        "push_certificates": {
+          "default": {
+            "name": "Default"
+          }
+        }
+      }
     },
     "zentral.contrib.munki": {
       "metrics": true

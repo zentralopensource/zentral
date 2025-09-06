@@ -110,6 +110,9 @@ class MDMUserEnrollmentPublicViewsTestCase(TestCase):
         mdm_payload = [p for p in payload["PayloadContent"] if p["PayloadType"] == "com.apple.mdm"][0]
         self.assertEqual(mdm_payload["AssignedManagedAppleID"], realm_user.email)
         self.assertEqual(mdm_payload["EnrollmentMode"], "BYOD")
+        scep_payload = [p for p in payload["PayloadContent"] if p["PayloadType"] == "com.apple.security.scep"][0]
+        self.assertEqual(scep_payload["PayloadContent"]["Challenge"],
+                         enrollment.scep_issuer.get_backend_kwargs()["challenge"])
 
     # authenticate user view
 

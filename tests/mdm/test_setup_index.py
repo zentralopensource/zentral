@@ -1,6 +1,7 @@
 from functools import reduce
 import io
 import operator
+import plistlib
 import zipfile
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -8,6 +9,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
+from zentral.contrib.mdm.crypto import verify_signed_payload
 from .utils import (force_artifact, force_blueprint, force_blueprint_artifact,
                     force_filevault_config, force_recovery_password_config)
 
@@ -69,6 +71,25 @@ class SetupIndexViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("mdm:artifacts"))
         self.assertContains(response, reverse("mdm:blueprints"))
         self.assertContains(response, reverse("mdm:terraform_export"))
+
+    # root CA
+
+    def test_root_ca_redirect(self):
+        self._login_redirect(reverse("mdm:root_ca"))
+
+    def test_root_ca_permission_denied(self):
+        self._login()
+        response = self.client.get(reverse("mdm:root_ca"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_root_ca(self):
+        self._login("mdm.view_artifact")
+        response = self.client.get(reverse("mdm:root_ca"))
+        self.assertEqual(response.status_code, 200)
+        _, data = verify_signed_payload(response.content)
+        payload = plistlib.loads(data)
+        self.assertEqual(len(payload["PayloadContent"]), 1)
+        self.assertEqual(payload["PayloadContent"][0]["PayloadType"], "com.apple.security.pem")
 
     # terraform export
 

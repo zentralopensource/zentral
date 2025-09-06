@@ -5,7 +5,7 @@
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'mdm:scep_configs' %}">SCEP configurations</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:acme_issuers' %}">ACME issuers</a></li>
   <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
 
@@ -14,66 +14,82 @@
         <h2 class="m-0">{{ object }}</h2>
     </div>
     <div class="d-flex align-items-center mb-3">
-        <h3 class="m-0 fs-5 text-secondary">SCEP Configuration</h3>
+        <h3 class="m-0 fs-5 text-secondary">ACME issuer</h3>
         <div class="ms-auto">
-            {% if perms.mdm.change_scepconfig and object.can_be_updated %}
-                {% url 'mdm:update_scep_config' object.pk as url %}
-                {% button 'UPDATE' url "Edit SCEP Configuration" %}
-            {% endif %}
-            {% if perms.mdm.delete_scepconfig and object.can_be_deleted %}
-                {% url 'mdm:delete_scep_config' object.pk as url %}
-                {% button 'DELETE' url "Delete SCEP Configuration" %}
-            {% endif %}
         </div>
     </div>
 
 <table class="table-object-properties">
   <tbody>
     <tr>
-      <th width="160px">URL</th>
-      <td>{{ object.url }}</th>
+      <th width="160px">Name</th>
+      <td>{{ object.name }}</td>
     </tr>
     <tr>
-      <th>Key usage</th>
-      <td>{{ object.key_usage }}</td>
+      <th>Description</th>
+      <td>{{ object.description|default:"-" }}</th>
     </tr>
     <tr>
-      <th>Key is extractable</th>
-      <td>{{ object.key_is_extractable|yesno }}</td>
+      <th>Directory URL</th>
+      <td>{{ object.directory_url }}</th>
     </tr>
     <tr>
-      <th>Keysize</th>
-      <td>{{ object.get_keysize_display }}</td>
+      <th>Key size</th>
+      <td>{{ object.key_size }}-bit</td>
     </tr>
     <tr>
-      <th>Allow all apps access</th>
-      <td>{{ object.allow_all_apps_access|yesno }}</td>
+      <th>Key type</th>
+      <td>{{ object.get_key_type_display }}</td>
+    </tr>
+    <tr>
+      <th>Usage flags</th>
+      <td>{{ object.usage_flags }}</td>
+    </tr>
+    <tr>
+      <th>Extended key usage</th>
+      <td>
+        {% for ku in object.extended_key_usage %}
+        <code>{{ ku }}</code>{% if not forloop.last %}<br>{% endif %}
+        {% empty %}
+        -
+        {% endfor %}
+      </td>
+    </tr>
+    <tr>
+      <th>Hardware bound</th>
+      <td>{{ object.hardware_bound|yesno }}</td>
+    </tr>
+    <tr>
+      <th>Attest</th>
+      <td>{{ object.attest|yesno }}</td>
     </tr>
     {% if not object.provisioning_uid %}
     <tr>
-      <th>Challenge
+      <th>Backend
       <td>
         <dl class="row">
           <dt class="col-sm-3 text-md-end">Type</dt>
-          <dd class="col-sm-9">{{ object.get_challenge_type_display }}</dd>
-          {% with object.get_challenge_kwargs as kwargs %}
-          {% if object.challenge_type == "STATIC" %}
+          <dd class="col-sm-9">{{ object.get_backend_display }}</dd>
+          {% if object.backend == "STATIC_CHALLENGE" %}
           <dt class="col-sm-3 text-md-end">Challenge</dt>
           <dd class="col-sm-9">
             <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
-            <span hidden>{{ kwargs.challenge }}</span>
+            <span hidden>{{ object.get_static_challenge_kwargs.challenge }}</span>
           </dd>
-          {% elif object.challenge_type == "MICROSOFT_CA" %}
-          <dt class="col-sm-3 text-md-end">NDES mscep_admin/ endpoint</dt>
+          {% elif object.backend == "MICROSOFT_CA" %}
+          {% with object.get_microsoft_ca_kwargs as kwargs %}
+          <dt class="col-sm-3 text-md-end">NDES macme_admin/ endpoint</dt>
           <dd class="col-sm-9">{{ kwargs.url }}</dd>
-          <dt class="col-sm-3 text-md-end">mscep admin user</dt>
+          <dt class="col-sm-3 text-md-end">macme admin user</dt>
           <dd class="col-sm-9">{{ kwargs.username }}</dt>
-          <dt class="col-sm-3 text-md-end">mscep admin password</dt>
+          <dt class="col-sm-3 text-md-end">macme admin password</dt>
           <dd class="col-sm-9">
             <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
             <span hidden>{{ kwargs.password }}</span>
           </dd>
-          {% elif object.challenge_type == "OKTA_CA" %}
+          {% endwith %}
+          {% elif object.backend == "OKTA_CA" %}
+          {% with object.get_okta_ca_kwargs as kwargs %}
           <dt class="col-sm-3 text-md-end">Challenge URL</dt>
           <dd class="col-sm-9">{{ kwargs.url }}</dd>
           <dt class="col-sm-3 text-md-end">Username</dt>
@@ -83,8 +99,8 @@
             <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
             <span hidden>{{ kwargs.password }}</span>
           </dd>
-          {% endif %}
           {% endwith %}
+          {% endif %}
         </dl>
       </td>
     </tr>

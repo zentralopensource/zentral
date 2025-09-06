@@ -1,7 +1,7 @@
 from django.core.management import call_command
 from django.test import TestCase
 from accounts.models import ProvisionedRole
-from zentral.contrib.mdm.models import PushCertificate, SCEPConfig
+from zentral.contrib.mdm.models import ACMEIssuer, PushCertificate, SCEPIssuer
 from zentral.contrib.monolith.models import Repository
 from zentral.core.stores.models import Store
 
@@ -9,9 +9,10 @@ from zentral.core.stores.models import Store
 class ProvisionBaseManagementCommandsTest(TestCase):
     def test_provision(self):
         expected_objects = (
+            (ACMEIssuer, ("test-acme",)),
             (ProvisionedRole, ("first-role", "second-role")),
             (PushCertificate, ("Default",)),
-            (SCEPConfig, ("test",)),
+            (SCEPIssuer, ("test-scep",)),
             (Repository, ("test",)),
             (Store, ("elasticsearch",)),
         )
