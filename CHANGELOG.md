@@ -1,5 +1,7 @@
 ## 2025.9
 
+### Features
+
 #### Osquery
 
 Add excluded tags when linking a pack to a configuration.
@@ -7,6 +9,14 @@ Add excluded tags when linking a pack to a configuration.
 #### MDM
 
 Add API endpoint to send custom commands to enrolled devices.
+
+### Bug fixes
+
+Fix MDM realm group tagging during enrollment with multiple groups pointing to the same tag.
+
+Fix update machine tags API when referencing an existing taxonomy tag without its taxonomy.
+
+Fix MDM slow blueprint deletion check.
 
 ## 2025.8
 
