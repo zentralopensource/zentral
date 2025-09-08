@@ -30,8 +30,13 @@ docker compose exec web python server/manage.py spectacular --file openapi-schem
 Start a local HTTP server to view the documentation:
 
 ```bash
-python -m http.server 8080 && open http://localhost:8080/swagger-ui.html
+python -m http.server 8080
 ```
+
+Then open either:
+
+- **Swagger UI**: http://localhost:8080/swagger-ui.html
+- **ReDoc**: http://localhost:8080/redoc.html
 
 We didn't manage to get this working in the current docker-compose environment, but that should be
 a relatively straightforward next step, should we like this solution.
@@ -40,6 +45,7 @@ a relatively straightforward next step, should we like this solution.
 
 - `openapi-schema.yaml` - Generated OpenAPI 3.0 specification
 - `swagger-ui.html` - Standalone Swagger UI for local viewing
+- `redoc.html` - Standalone ReDoc for local viewing
 - `server/server/settings.py` - Django settings with drf-spectacular configuration
 - `server/server/urls.py` - URL patterns for schema endpoints
 
