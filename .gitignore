@@ -34,3 +34,5 @@ tests/santa/fixtures/*
 
 /server/static/dist/
 /node_modules/
+
+openapi-schema.yaml
