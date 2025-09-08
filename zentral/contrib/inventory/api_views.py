@@ -46,6 +46,7 @@ from .utils import MSQuery, add_machine_tags, remove_machine_tags
 
 
 class UpdateMachineTags(APIView):
+    serializer_class = MachineTagsUpdateSerializer
     permission_required = ("inventory.add_tag", "inventory.add_taxonomy",
                            "inventory.add_machinetag", "inventory.delete_machinetag")
     permission_classes = [DjangoPermissionRequired]
@@ -173,6 +174,7 @@ class MetaMachineView(APIView):
 
 
 class ArchiveMachines(APIView):
+    serializer_class = MachineSerialNumbersSerializer
     permission_required = "inventory.change_machinesnapshot"
     permission_classes = [DjangoPermissionRequired]
 
@@ -184,6 +186,7 @@ class ArchiveMachines(APIView):
 
 
 class PruneMachines(APIView):
+    serializer_class = MachineSerialNumbersSerializer
     permission_required = "inventory.delete_machinesnapshot"
     permission_classes = [DjangoPermissionRequired]
 
@@ -203,6 +206,7 @@ class PruneMachines(APIView):
 
 
 class MachinesExport(APIView):
+    serializer_class = None
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "inventory.view_machinesnapshot"
     permission_classes = [DjangoPermissionRequired]
@@ -220,6 +224,7 @@ class MachinesExport(APIView):
 
 
 class BaseAppsExport(APIView):
+    serializer_class = None  # Uses form validation instead of serializer
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = None
     permission_classes = [DjangoPermissionRequired]
@@ -358,6 +363,7 @@ class CleanupInventory(APIView):
     """
     Start inventory cleanup task
     """
+    serializer_class = CleanupInventorySerializer
     permission_required = ("inventory.delete_machinesnapshot",)
     permission_classes = [DjangoPermissionRequired]
     parser_classes = [FormParser, JSONParser, MultiPartParser]
@@ -378,6 +384,7 @@ class CleanupInventory(APIView):
 
 
 class FullExport(APIView):
+    serializer_class = None  # No request body
     permission_required = "inventory.view_machinesnapshot"
     permission_classes = [DjangoPermissionRequired]
 
