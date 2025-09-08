@@ -2,6 +2,8 @@ import logging
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from accounts.views import login
 from accounts.forms import PasswordResetForm
 from zentral.conf import settings as zentral_settings
@@ -12,6 +14,11 @@ logger = logging.getLogger(__name__)
 urlpatterns = [
     path('', include('base.urls')),
     path('api/', include('base.api_urls')),
+
+    # OpenAPI schema endpoints
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     # special login view with verification device redirect
     path('accounts/login/', login, name='login'),
