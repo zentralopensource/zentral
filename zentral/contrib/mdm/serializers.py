@@ -100,6 +100,8 @@ class EnrolledDeviceSerializer(serializers.ModelSerializer):
             "build_version",
             "apple_silicon",
             "cert_not_valid_after",
+            "cert_att_serial_number",
+            "cert_att_udid",
             "blueprint",
             "awaiting_configuration",
             "declarative_management",

@@ -30,7 +30,7 @@ class DEPVirtualServerSyncDevicesView(APIView):
 
 
 class DEPDeviceList(ListAPIView):
-    queryset = DEPDevice.objects.all().order_by("-created_at")
+    queryset = DEPDevice.objects.all()
     serializer_class = DEPDeviceSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend, OrderingFilter)

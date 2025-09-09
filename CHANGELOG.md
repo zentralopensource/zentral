@@ -18,6 +18,12 @@ Fix update machine tags API when referencing an existing taxonomy tag without it
 
 Fix MDM slow blueprint deletion check.
 
+### Backward incompatibilities
+
+#### 🧨 MDM enrolled devices API
+
+This API endpoint is now paginated.
+
 ## 2025.8
 
 ### Features (some, not all…)

@@ -584,7 +584,6 @@ Response:
 }
 ```
 
-
 ### `/api/mdm/devices/`
 
  * method: `GET`
@@ -592,8 +591,12 @@ Response:
  * available filters:
      * `serial_number`
      * `udid`
+     * `tags`
+     * `excluded_tags`
 
 Use this endpoint to list the MDM enrolled devices.
+
+`tags` and `excluded_tags` can be repeated to specify multiple machine tags. The `ID` of the tags must be used.
 
 Example:
 
@@ -605,37 +608,45 @@ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-  {
-    "id": 27,
-    "udid": "2A7F9BCE-9B52-4073-BE21-E419C85068E9",
-    "serial_number": "012345678910",
-    "name": "John’s Mac mini",
-    "model": "Macmini8,1",
-    "platform": "macOS",
-    "os_version": "14.2.1",
-    "build_version": "23C71",
-    "apple_silicon": false,
-    "cert_not_valid_after": "2024-08-05T14:44:01",
-    "blueprint": 1,
-    "awaiting_configuration": false,
-    "declarative_management": true,
-    "dep_enrollment": true,
-    "user_enrollment": false,
-    "user_approved_enrollment": true,
-    "supervised": true,
-    "bootstrap_token_escrowed": true,
-    "filevault_enabled": true,
-    "filevault_prk_escrowed": true,
-    "activation_lock_manageable": true,
-    "last_seen_at": "2024-02-17T20:31:34.848107",
-    "last_notified_at": "2024-03-27T20:44:21.751091",
-    "checkout_at": null,
-    "blocked_at": null,
-    "created_at": "2023-08-06T14:44:01.847058",
-    "updated_at": "2024-02-17T20:31:34.848262"
-  }
-]
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 27,
+            "udid": "2A7F9BCE-9B52-4073-BE21-E419C85068E9",
+            "serial_number": "012345678910",
+            "name": "John’s Mac mini",
+            "model": "Mac14,2",
+            "platform": "macOS",
+            "os_version": "15.6.1",
+            "build_version": "24G90",
+            "apple_silicon": true,
+            "cert_not_valid_after": "2026-09-05T14:32:40",
+            "cert_att_serial_number": "012345678910",
+            "cert_att_udid": "1111-2222-3333",
+            "blueprint": 1,
+            "awaiting_configuration": false,
+            "declarative_management": true,
+            "dep_enrollment": true,
+            "user_enrollment": false,
+            "user_approved_enrollment": true,
+            "supervised": true,
+            "bootstrap_token_escrowed": true,
+            "filevault_enabled": true,
+            "filevault_prk_escrowed": false,
+            "recovery_password_escrowed": false,
+            "activation_lock_manageable": true,
+            "last_seen_at": "2025-09-04T14:33:05.817386",
+            "last_notified_at": "2025-09-09T10:54:43.798841",
+            "checkout_at": null,
+            "blocked_at": null,
+            "created_at": "2025-09-02T14:46:54.885897",
+            "updated_at": "2025-09-04T14:33:05.817441"
+        }
+    ]
+}
 ```
 
 ### `/api/mdm/devices/<int:pk>/block/`
@@ -667,6 +678,8 @@ Response:
   "build_version": "23C71",
   "apple_silicon": false,
   "cert_not_valid_after": "2024-08-05T14:44:01",
+  "cert_att_serial_number": "012345678910",
+  "cert_att_udid": "1111-2222-3333",
   "blueprint": 1,
   "awaiting_configuration": false,
   "declarative_management": true,
@@ -716,6 +729,8 @@ Response:
   "build_version": "23C71",
   "apple_silicon": false,
   "cert_not_valid_after": "2024-08-05T14:44:01",
+  "cert_att_serial_number": "012345678910",
+  "cert_att_udid": "1111-2222-3333",
   "blueprint": 1,
   "awaiting_configuration": false,
   "declarative_management": true,

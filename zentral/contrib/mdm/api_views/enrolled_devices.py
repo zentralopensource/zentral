@@ -1,4 +1,5 @@
 from uuid import uuid4
+from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import status
@@ -7,12 +8,56 @@ from rest_framework.generics import ListAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
+from zentral.contrib.inventory.models import MachineTag, Tag
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import CustomCommand, EraseDevice, DeviceLock
 from zentral.contrib.mdm.events import post_filevault_prk_viewed_event, post_recovery_password_viewed_event
 from zentral.contrib.mdm.models import Channel, EnrolledDevice
 from zentral.contrib.mdm.serializers import DeviceCommandSerializer, EnrolledDeviceSerializer
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired, MaxLimitOffsetPagination
+
+
+class EnrolledDeviceFilter(filters.FilterSet):
+    tags = filters.ModelMultipleChoiceFilter(
+        field_name="id",
+        to_field_name="id",
+        queryset=Tag.objects.all(),
+        method="filter_tags",
+    )
+    excluded_tags = filters.ModelMultipleChoiceFilter(
+        field_name="id",
+        to_field_name="id",
+        queryset=Tag.objects.all(),
+        method="filter_excluded_tags",
+    )
+
+    def filter_tags(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Exists(
+                MachineTag.objects.filter(
+                    serial_number=OuterRef("serial_number"),
+                    tag__in=value
+                )
+            )
+        )
+
+    def filter_excluded_tags(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            ~Exists(
+                MachineTag.objects.filter(
+                    serial_number=OuterRef("serial_number"),
+                    tag__in=value
+                )
+            )
+        )
+
+    class Meta:
+        model = EnrolledDevice
+        fields = ["udid", "serial_number", "tags", "excluded_tags"]
 
 
 class EnrolledDeviceList(ListAPIView):
@@ -20,7 +65,10 @@ class EnrolledDeviceList(ListAPIView):
     serializer_class = EnrolledDeviceSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_fields = ('udid', 'serial_number')
+    filterset_class = EnrolledDeviceFilter
+    ordering_fields = ('created_at', 'last_seen_at', 'updated_at')
+    ordering = ['-created_at']
+    pagination_class = MaxLimitOffsetPagination
 
 
 class BlockEnrolledDevice(APIView):
