@@ -48,6 +48,7 @@ class Migration(migrations.Migration):
                     "backend",
                     models.CharField(
                         choices=[
+                            ("CLICKHOUSE", "ClickHouse"),
                             ("DATADOG", "Datadog"),
                             ("ELASTICSEARCH", "Elasticsearch"),
                             ("HTTP", "HTTP"),
