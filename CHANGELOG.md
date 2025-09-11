@@ -8,6 +8,8 @@ Add excluded tags when linking a pack to a configuration.
 
 #### MDM
 
+Add ACME and SCEP issuers. Hardware bound ACME certificates with device attestations will be used when the device and the CA are compatible. SCEP must be configured as the fallback mechanism.
+
 Add API endpoint to send custom commands to enrolled devices.
 
 ### Bug fixes
@@ -23,6 +25,10 @@ Fix MDM slow blueprint deletion check.
 #### 🧨 MDM enrolled devices API
 
 This API endpoint is now paginated.
+
+#### 🧨 MDM SCEP configs replaced by SCEP issuers
+
+SCEP configurations have been replaced by SCEP issuers. The migration will take care of this but do not forget to update your Terraform provider.
 
 ## 2025.8
 
