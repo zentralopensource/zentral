@@ -299,17 +299,22 @@ def macos_version_from_build(build):
                 patch = 6
             elif build in ("21G651", "22G720", "22H722", "23H723"):
                 patch = 7
-            elif build in ("21G725", "22G820", "22H730"):
+            elif build in ("21G725", "22G820", "22H730", "23H730"):
                 patch = 8
             elif build in ("21G726", "22G830"):
                 patch = 9
             else:
                 patch = 0
-            if patch_letter >= "G" and major == 12 and patch_number >= 816:
+            if patch_letter >= "G" and major == 15 and patch_number >= 222:
+                minor = 7
+            elif patch_letter >= "G" and major == 12 and patch_number >= 816:
                 minor = 7
             elif patch_letter == "G" and major in (12, 13) and patch_number >= 115:
                 minor = 6
-            elif patch_letter < "H" and minor > 0 and major < 14:
+            elif (
+                   (patch_letter < "H" and minor > 0 and major < 14)
+                   or (patch_letter >= "J" and major == 14)
+            ):
                 minor -= 1
         elif minor == 20:
             major = 11
