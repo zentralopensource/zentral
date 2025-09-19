@@ -1,4 +1,3 @@
-import base64
 from datetime import datetime, timedelta
 from functools import reduce
 import operator
@@ -12,7 +11,6 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import DEPDevice, DEPEnrollment
-from zentral.utils.passwords import build_password_hash_dict
 from .utils import (force_acme_issuer, force_dep_enrollment, force_dep_device, force_dep_virtual_server,
                     force_push_certificate, force_realm, force_scep_issuer)
 
@@ -90,7 +88,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertFormError(response.context["dep_enrollment_form"], "macos_max_version", "Not a valid OS version")
         self.assertFormError(response.context["dep_enrollment_form"], "macos_min_version", "Not a valid OS version")
 
-    def test_create_dep_enrollment_macos_admin_info_incomplete(self):
+    def test_create_dep_enrollment_macos_admin_only_admin_shortname(self):
         self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         push_certificate = force_push_certificate()
@@ -101,14 +99,15 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-scep_issuer": scep_issuer.pk,
                                      "de-push_certificate": push_certificate.pk,
                                      "de-virtual_server": dep_virtual_server.pk,
-                                     "de-admin_full_name": "yolo",
                                      "de-admin_short_name": "fomo",
                                      "de-await_device_configured": "on",
+                                     "de-admin_password_complexity": 3,
+                                     "de-admin_password_rotation_delay": 60,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
-        self.assertFormError(response.context["dep_enrollment_form"], None, "Admin information incomplete")
+        self.assertFormError(response.context["dep_enrollment_form"], None, "Auto admin information incomplete")
 
     def test_create_dep_enrollment_macos_admin_info_await_device_configured_error(self):
         self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
@@ -123,14 +122,15 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-virtual_server": dep_virtual_server.pk,
                                      "de-admin_full_name": "yolo",
                                      "de-admin_short_name": "fomo",
-                                     "de-admin_password": "1234",
+                                     "de-admin_password_complexity": 3,
+                                     "de-admin_password_rotation_delay": 60,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
         self.assertFormError(response.context["dep_enrollment_form"],
                              "await_device_configured",
-                             "Required for the admin account setup")
+                             "Required for the auto admin account setup")
 
     def test_create_dep_enrollment_missing_realm(self):
         self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
@@ -236,7 +236,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-push_certificate": push_certificate.pk,
                                      "de-virtual_server": dep_virtual_server.pk,
                                      "es-meta_business_unit": self.mbu.pk,
-                                     "de-is_supervised": "on"},
+                                     "de-is_supervised": "on",
+                                     "de-admin_password_complexity": 3,
+                                     "de-admin_password_rotation_delay": 60},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
@@ -260,7 +262,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-push_certificate": push_certificate.pk,
                                      "de-virtual_server": dep_virtual_server.pk,
                                      "es-meta_business_unit": self.mbu.pk,
-                                     "de-is_supervised": "on"},
+                                     "de-is_supervised": "on",
+                                     "de-admin_password_complexity": 3,
+                                     "de-admin_password_rotation_delay": 60},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
@@ -295,6 +299,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-macos_max_version": "15",
                                      "de-admin_full_name": "yolo",
                                      "de-admin_short_name": "fomo",
+                                     "de-admin_password_complexity": 3,
+                                     "de-admin_password_rotation_delay": 60,
                                      "de-await_device_configured": "on",
                                      "de-admin_password": "1234",
                                      "de-ssp-Accessibility": "on",
@@ -320,13 +326,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(enrollment.skip_setup_items, ["Accessibility"])
         self.assertEqual(enrollment.admin_full_name, "yolo")
         self.assertEqual(enrollment.admin_short_name, "fomo")
-        pwd_hash_data = enrollment.admin_password_hash["SALTED-SHA512-PBKDF2"]
-        salt = base64.b64decode(pwd_hash_data["salt"])
-        iterations = pwd_hash_data["iterations"]
-        self.assertEqual(
-            build_password_hash_dict("1234", iterations=iterations, salt=salt),
-            enrollment.admin_password_hash
-        )
+        self.assertEqual(enrollment.admin_password_complexity, 3)
+        self.assertEqual(enrollment.admin_password_rotation_delay, 60)
         client.add_profile.assert_called_once()
         self.assertEqual(enrollment.uuid, profile_uuid)
         self.assertContains(response, "OS version &lt; 15")
@@ -442,25 +443,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
-        self.assertFormError(response.context["dep_enrollment_form"], None, "Admin information incomplete")
-
-    def test_update_dep_enrollment_post_add_admin_without_prev_pwd_missing_info(self):
-        enrollment = force_dep_enrollment(self.mbu)
-        self._login("mdm.change_depenrollment")
-        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
-                                    {"de-name": enrollment.name,
-                                     "de-scep_issuer": enrollment.scep_issuer.pk,
-                                     "de-push_certificate": enrollment.push_certificate.pk,
-                                     "de-virtual_server": enrollment.virtual_server.pk,
-                                     "de-is_mdm_removable": False,
-                                     "de-is_supervised": True,
-                                     "de-admin_full_name": "Yolo",
-                                     "de-admin_short_name": "Fomo",
-                                     "es-meta_business_unit": self.mbu.pk},
-                                    follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
-        self.assertFormError(response.context["dep_enrollment_form"], None, "Admin information incomplete")
+        self.assertFormError(response.context["dep_enrollment_form"], None, "Auto admin information incomplete")
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_update_dep_enrollment_post(self, from_dep_virtual_server):
@@ -499,7 +482,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-macos_min_version": "13.3.1",
                                      "de-admin_full_name": "Yolo",
                                      "de-admin_short_name": "Fomo",
-                                     "de-admin_password": "123456",
+                                     "de-admin_password_complexity": 2,
+                                     "de-admin_password_rotation_delay": 15,
                                      "de-await_device_configured": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -517,13 +501,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(enrollment.realm, realm)
         self.assertEqual(enrollment.macos_min_version, "13.3.1")
         self.assertEqual(enrollment.skip_setup_items, ["AppleID"])
-        pwd_hash_data = enrollment.admin_password_hash["SALTED-SHA512-PBKDF2"]
-        salt = base64.b64decode(pwd_hash_data["salt"])
-        iterations = pwd_hash_data["iterations"]
-        self.assertEqual(
-            build_password_hash_dict("123456", iterations=iterations, salt=salt),
-            enrollment.admin_password_hash
-        )
         client.add_profile.assert_called_once()
         self.assertEqual(enrollment.uuid, profile_uuid)
         device1.refresh_from_db()
@@ -537,7 +514,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment = force_dep_enrollment(self.mbu)
         enrollment.admin_full_name = "yolo"
         enrollment.admin_short_name = "fomo"
-        enrollment.admin_password_hash = build_password_hash_dict("1234")
         enrollment.save()
         profile_uuid = uuid.uuid4()
         client = Mock()
@@ -554,6 +530,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-scep_issuer": enrollment.scep_issuer.pk,
                                      "de-push_certificate": enrollment.push_certificate.pk,
                                      "de-virtual_server": enrollment.virtual_server.pk,
+                                     "de-admin_password_complexity": 3,
+                                     "de-admin_password_rotation_delay": 60,
                                      "de-is_mdm_removable": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -562,7 +540,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment.refresh_from_db()
         self.assertIsNone(enrollment.admin_full_name)
         self.assertIsNone(enrollment.admin_short_name)
-        self.assertIsNone(enrollment.admin_password_hash)
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_update_dep_enrollment_post_update_admin_keep_pwd(self, from_dep_virtual_server):
@@ -570,7 +547,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment = force_dep_enrollment(self.mbu)
         enrollment.admin_full_name = "yolo"
         enrollment.admin_short_name = "fomo"
-        enrollment.admin_password_hash = existing_password_hash = build_password_hash_dict("1234")
         enrollment.save()
         profile_uuid = uuid.uuid4()
         client = Mock()
@@ -590,6 +566,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-is_mdm_removable": "on",
                                      "de-admin_full_name": "yolo2",
                                      "de-admin_short_name": "fomo2",
+                                     "de-admin_password_complexity": 2,
+                                     "de-admin_password_rotation_delay": 15,
                                      "de-await_device_configured": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -598,7 +576,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.admin_full_name, "yolo2")
         self.assertEqual(enrollment.admin_short_name, "fomo2")
-        self.assertEqual(enrollment.admin_password_hash, existing_password_hash)
+        self.assertEqual(enrollment.admin_password_complexity, 2)
+        self.assertEqual(enrollment.admin_password_rotation_delay, 15)
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_update_dep_enrollment_post_update_admin_update_pwd(self, from_dep_virtual_server):
@@ -606,7 +585,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment = force_dep_enrollment(self.mbu)
         enrollment.admin_full_name = "yolo"
         enrollment.admin_short_name = "fomo"
-        enrollment.admin_password_hash = build_password_hash_dict("1234")
         enrollment.save()
         profile_uuid = uuid.uuid4()
         client = Mock()
@@ -626,7 +604,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                      "de-is_mdm_removable": "on",
                                      "de-admin_full_name": "yolo2",
                                      "de-admin_short_name": "fomo2",
-                                     "de-admin_password": "654321",
+                                     "de-hidden_admin": "on",
+                                     "de-admin_password_complexity": 2,
+                                     "de-admin_password_rotation_delay": 15,
                                      "de-await_device_configured": "on",
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
@@ -635,13 +615,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.admin_full_name, "yolo2")
         self.assertEqual(enrollment.admin_short_name, "fomo2")
-        pwd_hash_data = enrollment.admin_password_hash["SALTED-SHA512-PBKDF2"]
-        salt = base64.b64decode(pwd_hash_data["salt"])
-        iterations = pwd_hash_data["iterations"]
-        self.assertEqual(
-            build_password_hash_dict("654321", iterations=iterations, salt=salt),
-            enrollment.admin_password_hash
-        )
+        self.assertTrue(enrollment.hidden_admin)
+        self.assertEqual(enrollment.admin_password_complexity, 2)
+        self.assertEqual(enrollment.admin_password_rotation_delay, 15)
 
     # list DEP enrollments
 

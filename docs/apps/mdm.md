@@ -637,6 +637,9 @@ Response:
             "filevault_enabled": true,
             "filevault_prk_escrowed": false,
             "recovery_password_escrowed": false,
+            "admin_guid": null,
+            "admin_shortname": null,
+            "admin_password_escrowed": false,
             "activation_lock_manageable": true,
             "last_seen_at": "2025-09-04T14:33:05.817386",
             "last_notified_at": "2025-09-09T10:54:43.798841",
@@ -646,6 +649,30 @@ Response:
             "updated_at": "2025-09-04T14:33:05.817441"
         }
     ]
+}
+```
+
+### `/api/mdm/devices/<int:pk>/admin_password/`
+
+ * method: `GET`
+ * required permission: `mdm.view_admin_password`
+
+Returns the decrypted auto admin password for an MDM enrolled device.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/devices/27/admin_password/
+```
+
+Response:
+
+```json
+{
+  "id": 27,
+  "serial_number": "012345678910",
+  "admin_password": "ABCDEF-012345-ABCDEF-012345"
 }
 ```
 
@@ -690,6 +717,10 @@ Response:
   "bootstrap_token_escrowed": true,
   "filevault_enabled": true,
   "filevault_prk_escrowed": true,
+  "recovery_password_escrowed": false,
+  "admin_guid": null,
+  "admin_shortname": null,
+  "admin_password_escrowed": false,
   "activation_lock_manageable": true,
   "last_seen_at": "2024-02-17T20:31:34.848107",
   "last_notified_at": "2024-03-27T20:44:21.751091",
@@ -741,6 +772,10 @@ Response:
   "bootstrap_token_escrowed": true,
   "filevault_enabled": true,
   "filevault_prk_escrowed": true,
+  "recovery_password_escrowed": false,
+  "admin_guid": null,
+  "admin_shortname": null,
+  "admin_password_escrowed": false,
   "activation_lock_manageable": true,
   "last_seen_at": "2024-02-17T20:31:34.848107",
   "last_notified_at": "2024-03-27T20:44:21.751091",

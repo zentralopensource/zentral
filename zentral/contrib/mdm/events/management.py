@@ -6,6 +6,26 @@ from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
 logger = logging.getLogger('zentral.contrib.mdm.events.management')
 
 
+# Admin password
+
+
+class AdminPasswordViewedEvent(BaseEvent):
+    event_type = "admin_password_viewed"
+    tags = ["mdm", "admin_password"]
+
+
+register_event_type(AdminPasswordViewedEvent)
+
+
+def post_admin_password_viewed_event(request, enrolled_device):
+    event_metadata = EventMetadata(
+        machine_serial_number=enrolled_device.serial_number,
+        request=EventRequest.build_from_request(request),
+    )
+    event = AdminPasswordViewedEvent(event_metadata, {})
+    event.post()
+
+
 # FileVault PRK
 
 

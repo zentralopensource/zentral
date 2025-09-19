@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
@@ -13,7 +13,8 @@ from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import CustomCommand, EraseDevice, DeviceLock
 from zentral.contrib.mdm.events import post_filevault_prk_viewed_event, post_recovery_password_viewed_event
 from zentral.contrib.mdm.models import Channel, EnrolledDevice
-from zentral.contrib.mdm.serializers import DeviceCommandSerializer, EnrolledDeviceSerializer
+from zentral.contrib.mdm.serializers import (DeviceCommandSerializer,
+                                             EnrolledDeviceSerializer, EnrolledDeviceAdminPasswordSerializer)
 from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired, MaxLimitOffsetPagination
 
 
@@ -134,6 +135,14 @@ class LockEnrolledDevice(CreateEnrolledDeviceCommandView):
 
 class SendCustomEnrolledDeviceCommand(CreateEnrolledDeviceCommandView):
     command_class = CustomCommand
+
+
+class EnrolledDeviceAdminPassword(RetrieveAPIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
+    permission_required = "mdm.view_admin_password"
+    permission_classes = [DjangoPermissionRequired]
+    serializer_class = EnrolledDeviceAdminPasswordSerializer
+    queryset = EnrolledDevice.objects.all()
 
 
 class EnrolledDeviceFileVaultPRK(APIView):

@@ -13,7 +13,7 @@ from zentral.utils.external_resources import download_external_resource
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.ssl import ensure_bytes
 from .app_manifest import read_package_info, validate_configuration
-from .artifacts import update_blueprint_serialized_artifacts
+from .artifacts import Target, update_blueprint_serialized_artifacts
 from .cert_issuer_backends import CertIssuerBackend
 from .cert_issuer_backends.ident import IDentSerializer
 from .cert_issuer_backends.microsoft_ca import MicrosoftCASerializer
@@ -22,10 +22,11 @@ from .cert_issuer_backends.static_challenge import StaticChallengeSerializer
 from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
 from .declarations import verify_declaration_source
 from .dep import assign_dep_device_profile, DEPClientError
+from .events import post_admin_password_viewed_event
 from .models import (ACMEIssuer,
                      Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
-                     DEPDevice,
+                     DEPDevice, DEPEnrollment,
                      DataAsset,
                      Declaration, DeclarationRef,
                      DeviceCommand,
@@ -113,6 +114,9 @@ class EnrolledDeviceSerializer(serializers.ModelSerializer):
             "filevault_enabled",
             "filevault_prk_escrowed",
             "recovery_password_escrowed",
+            "admin_guid",
+            "admin_shortname",
+            "admin_password_escrowed",
             "activation_lock_manageable",
             "last_seen_at",
             "last_notified_at",
@@ -121,6 +125,31 @@ class EnrolledDeviceSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+
+class EnrolledDeviceAdminPasswordSerializer(serializers.ModelSerializer):
+    admin_password = serializers.CharField(source="get_admin_password")
+
+    class Meta:
+        model = EnrolledDevice
+        fields = ("id", "serial_number", "admin_password")
+        read_only_fields = ("id", "serial_number", "admin_password")
+
+    def to_representation(self, instance):
+        r = super().to_representation(instance)
+        if r.get("admin_password"):
+            post_admin_password_viewed_event(self.context['request'], instance)
+            if (
+                instance.admin_guid
+                and isinstance(instance.current_enrollment, DEPEnrollment)
+                and instance.current_enrollment.admin_password_rotation_delay
+            ):
+                from .commands import SetAutoAdminPassword
+                SetAutoAdminPassword.create_for_auto_rotation(
+                    Target(instance),
+                    instance.current_enrollment.admin_password_rotation_delay
+                )
+        return r
 
 
 class ArtifactSerializer(serializers.ModelSerializer):

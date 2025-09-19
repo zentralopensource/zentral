@@ -1,3 +1,17 @@
+## 2025.10
+
+### Features
+
+#### MDM
+
+Add auto admin unique passwords for ADE. This is similare to Windows LAPS.
+
+### Backward incompatibilities
+
+#### 🧨 MDM auto admin password
+
+The option to set the same auto admin password during ADE has been removed. Passwords are unique for each device now.
+
 ## 2025.9
 
 ### Features

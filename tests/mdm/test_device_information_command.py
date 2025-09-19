@@ -211,6 +211,19 @@ class DeviceInformationCommandTestCase(TestCase):
         self.assertEqual(enrolled_device.build_version_extra, "22E772610a")
         self.assertEqual(enrolled_device.full_os_version, "13.0 (a) (22E772610a)")
 
+    def test_process_acknowledged_response_reset_auto_admin_password(self):
+        response = copy.deepcopy(self.device_information)
+        self.assertNotIn("AutoSetupAdminAccounts", response)
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        enrolled_device.set_admin_password("YOLO")
+        enrolled_device.save()
+        self.assertIsNotNone(enrolled_device.admin_password)
+        cmd = DeviceInformation.create_for_device(enrolled_device)
+        cmd.process_response(response, self.dep_enrollment_session, self.mbu)
+        enrolled_device.refresh_from_db()
+        self.assertIsNone(enrolled_device.admin_password)
+        self.assertIsNone(enrolled_device.admin_password_updated_at)
+
     # _update_base_inventory
 
     def test_update_base_inventory_device_information_updated_at_none(self):

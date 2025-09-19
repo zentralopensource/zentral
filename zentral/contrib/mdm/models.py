@@ -965,6 +965,10 @@ class EnrolledDevice(models.Model):
     pending_firmware_password = models.TextField(null=True)
     pending_firmware_password_created_at = models.DateTimeField(null=True)
 
+    # Auto admin
+    admin_password = models.TextField(null=True)
+    admin_password_updated_at = models.DateTimeField(null=True)
+
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
     blocked_at = models.DateTimeField(blank=True, null=True)
@@ -981,6 +985,7 @@ class EnrolledDevice(models.Model):
 
     class Meta:
         permissions = [
+            ("view_admin_password", "Can view admin password"),
             ("view_filevault_prk", "Can view FileVault PRK"),
             ("view_recovery_password", "Can view recovery password"),
         ]
@@ -1067,6 +1072,19 @@ class EnrolledDevice(models.Model):
         )
         self.pending_firmware_password_created_at = datetime.datetime.utcnow()
 
+    def get_admin_password(self):
+        if not self.admin_password:
+            return
+        return decrypt_str(self.admin_password, **self._get_secret_engine_kwargs("admin_password"))
+
+    def set_admin_password(self, admin_password):
+        if not admin_password:
+            self.admin_password = None
+            self.admin_password_updated_at = None
+            return
+        self.admin_password = encrypt_str(admin_password, **self._get_secret_engine_kwargs("admin_password"))
+        self.admin_password_updated_at = datetime.datetime.utcnow()
+
     def rewrap_secrets(self):
         if self.bootstrap_token:
             self.bootstrap_token = rewrap(self.bootstrap_token, **self._get_secret_engine_kwargs("bootstrap_token"))
@@ -1083,6 +1101,8 @@ class EnrolledDevice(models.Model):
         if self.pending_firmware_password:
             self.pending_firmware_password = rewrap(self.pending_firmware_password,
                                                     **self._get_secret_engine_kwargs("pending_firmware_password"))
+        if self.admin_password:
+            self.admin_password = rewrap(self.admin_password, **self._get_secret_engine_kwargs("admin_password"))
 
     def get_urlsafe_serial_number(self):
         if self.serial_number:
@@ -1227,6 +1247,44 @@ class EnrolledDevice(models.Model):
         for t in cursor.fetchall():
             yield dict(zip(columns, t))
 
+    @cached_property
+    def current_enrollment_session(self):
+        if self.blocked_at:
+            return
+        try:
+            es_info = next(self.iter_enrollment_session_info())
+        except StopIteration:
+            return
+        qs = None
+        if es_info["session_type"] == "DEP":
+            qs = DEPEnrollmentSession.objects.select_related("dep_enrollment")
+        elif es_info["session_type"] == "OTA":
+            qs = OTAEnrollmentSession.objects.select_related("ota_enrollment")
+        elif es_info["session_type"] == "RE":
+            qs = ReEnrollmentSession.objects.select_related(
+                "dep_enrollment",
+                "ota_enrollment",
+                "user_enrollment",
+            )
+        elif es_info["session_type"] == "USER":
+            qs = UserEnrollmentSession.objects.select_related("user_enrollment")
+        if qs:
+            return qs.get(pk=es_info["id"])
+
+    @cached_property
+    def current_enrollment(self):
+        es = self.current_enrollment_session
+        if not es:
+            return
+        if isinstance(es, DEPEnrollmentSession):
+            return es.dep_enrollment
+        elif isinstance(es, OTAEnrollmentSession):
+            return es.ota_enrollment
+        elif isinstance(es, ReEnrollmentSession):
+            return es.dep_enrollment or es.ota_enrollment or es.user_enrollment
+        elif isinstance(es, UserEnrollmentSession):
+            return es.user_enrollment
+
     @property
     def bootstrap_token_escrowed(self):
         if self.bootstrap_token:
@@ -1249,6 +1307,34 @@ class EnrolledDevice(models.Model):
     @property
     def recovery_password_escrowed(self):
         if self.recovery_password:
+            return True
+        return False
+
+    # Auto admin
+
+    def _get_admin_info(self):
+        if not self.device_information:
+            return
+        auto_setup_admin_accounts = self.device_information.get("AutoSetupAdminAccounts")
+        if not isinstance(auto_setup_admin_accounts, list) or len(auto_setup_admin_accounts) != 1:
+            return
+        return auto_setup_admin_accounts[0]
+
+    @property
+    def admin_guid(self):
+        admin_info = self._get_admin_info()
+        if admin_info:
+            return admin_info["GUID"]
+
+    @property
+    def admin_shortname(self):
+        admin_info = self._get_admin_info()
+        if admin_info:
+            return admin_info["shortName"]
+
+    @property
+    def admin_password_escrowed(self):
+        if self.admin_password:
             return True
         return False
 
@@ -1769,10 +1855,21 @@ class DEPEnrollment(MDMEnrollment):
         help_text="If false, the user created from the realm user during the Setup Assistant will be "
                   "a regular user, and the admin account information is required."
     )
-    # optional admin account info
+    # optional auto admin
     admin_full_name = models.CharField(max_length=80, blank=True, null=True)
     admin_short_name = models.CharField(max_length=32, blank=True, null=True)
-    admin_password_hash = models.JSONField(null=True, editable=False)
+    hidden_admin = models.BooleanField(default=False)
+    admin_password_complexity = models.IntegerField(
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(3)]
+    )
+    admin_password_rotation_delay = models.IntegerField(
+        default=60,
+        validators=[MinValueValidator(0), MaxValueValidator(1440)],
+        help_text="When an admin password is read, delay in minutes after which a command to rotate "
+                  "the password on the device will be scheduled. 60 min by default, 1 day max (1440 min). "
+                  "If 0, no automatic password rotation will be scheduled."
+    )
 
     # standard DEP profile configuration
 
@@ -1831,11 +1928,11 @@ class DEPEnrollment(MDMEnrollment):
         })
         return d
 
-    def has_hardcoded_admin(self):
-        return self.admin_full_name and self.admin_short_name and self.admin_password_hash
+    def has_auto_admin(self):
+        return self.admin_full_name and self.admin_short_name
 
     def requires_account_configuration(self):
-        return self.use_realm_user or self.has_hardcoded_admin()
+        return self.use_realm_user or self.has_auto_admin()
 
     def can_be_deleted(self):
         return self.depenrollmentsession_set.count() == 0 and self.reenrollmentsession_set.count() == 0

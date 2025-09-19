@@ -338,7 +338,7 @@ def _configure_dep_enrollment_accounts(target, enrollment_session, status):
                                     status=Command.Status.ACKNOWLEDGED).exists():
         # account configuration already done
         return
-    return AccountConfiguration.create_for_target(target)
+    return AccountConfiguration.create_for_target_and_dep_enrollment(target, dep_enrollment)
 
 
 def _finish_dep_enrollment_configuration(target, enrollment_session, status):

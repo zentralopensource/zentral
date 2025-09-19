@@ -1315,6 +1315,152 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
              "NewPassword": ""},
         )
 
+    # create set auto admin password command
+
+    def test_enrolled_device_no_perms_no_set_auto_admin_password_command_link(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        session.enrolled_device.save()
+        self.assertEqual(session.enrolled_device.admin_guid, "yolo")
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SetAutoAdminPassword"))
+        )
+
+    def test_enrolled_device_no_guid_no_set_auto_admin_password_command_link(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.assertIsNone(session.enrolled_device.admin_guid)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SetAutoAdminPassword"))
+        )
+
+    def test_enrolled_device_set_auto_admin_password_command_link(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        session.enrolled_device.save()
+        self.assertEqual(session.enrolled_device.admin_guid, "yolo")
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SetAutoAdminPassword"))
+        )
+
+    def test_create_enrolled_device_set_auto_admin_password_command_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        session.enrolled_device.save()
+        self._login_redirect(reverse("mdm:create_enrolled_device_command",
+                                     args=(session.enrolled_device.pk, "SetAutoAdminPassword")))
+
+    def test_create_enrolled_device_set_auto_admin_password_command_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetAutoAdminPassword"))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrolled_device_set_auto_admin_password_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        session.enrolled_device.save()
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetAutoAdminPassword"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+
+    def test_create_enrolled_device_set_auto_admin_password_command_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetAutoAdminPassword")),
+            {"new_password": "12345678"},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Set auto admin password command successfully created")
+        db_cmd = session.enrolled_device.commands.first()
+        self.assertEqual(db_cmd.name, "SetAutoAdminPassword")
+        cmd = load_command(db_cmd)
+        payload = cmd.build_command()
+        self.assertEqual(set(payload.keys()), {"GUID", "passwordHash"})
+        self.assertEqual(payload["GUID"], "yolo")
+        ph = plistlib.loads(payload["passwordHash"])
+        self.assertEqual(list(ph.keys()), ["SALTED-SHA512-PBKDF2"])
+
+    def test_create_enrolled_device_set_auto_admin_password_command_default_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "SetAutoAdminPassword")),
+            {},  # no password
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Set auto admin password command successfully created")
+        db_cmd = session.enrolled_device.commands.first()
+        self.assertEqual(db_cmd.name, "SetAutoAdminPassword")
+        cmd = load_command(db_cmd)
+        payload = cmd.build_command()
+        self.assertEqual(set(payload.keys()), {"GUID", "passwordHash"})
+        self.assertEqual(payload["GUID"], "yolo")
+        ph = plistlib.loads(payload["passwordHash"])
+        self.assertEqual(list(ph.keys()), ["SALTED-SHA512-PBKDF2"])
+
     # create rotate filevault key command
 
     def test_enrolled_device_no_rotate_filevault_key_command_link(self):

@@ -18,6 +18,7 @@ from .remove_profile import RemoveProfile  # NOQA
 from .restart_device import RestartDevice  # NOQA
 from .rotate_filevault_key import RotateFileVaultKey  # NOQA
 from .security_info import SecurityInfo  # NOQA
+from .set_auto_admin_password import SetAutoAdminPassword  # NOQA
 from .set_firmware_password import SetFirmwarePassword  # NOQA
 from .set_recovery_lock import SetRecoveryLock  # NOQA
 from .setup_filevault import SetupFileVault  # NOQA

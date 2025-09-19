@@ -1,3 +1,4 @@
+from .admin_password import *  # NOQA
 from .apps_books import *  # NOQA
 from .artifacts import *  # NOQA
 from .filevault import *  # NOQA

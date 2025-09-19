@@ -1,11 +1,12 @@
 import plistlib
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import AccountConfiguration
 from zentral.contrib.mdm.commands.scheduling import _configure_dep_enrollment_accounts
+from zentral.contrib.mdm.events import AdminPasswordUpdatedEvent
 from zentral.contrib.mdm.models import Channel, Command, DEPEnrollment, Platform, RequestStatus
 from zentral.utils.passwords import serialize_password_hash_dict
 from .utils import force_dep_enrollment_session, force_enrolled_user, force_ota_enrollment_session
@@ -53,8 +54,9 @@ class AccountConfigurationCommandTestCase(TestCase):
     # build_command
 
     def test_build_command_realm_user_no_password_hash_admin_default_username(self):
-        cmd = AccountConfiguration.create_for_device(
-            self.dep_enrollment_session.enrolled_device
+        cmd = AccountConfiguration.create_for_target_and_dep_enrollment(
+            Target(self.dep_enrollment_session.enrolled_device),
+            self.dep_enrollment_session.dep_enrollment,
         )
         self.assertEqual(self.dep_enrollment_session.dep_enrollment.username_pattern,
                          DEPEnrollment.UsernamePattern.DEVICE_USERNAME)
@@ -69,8 +71,9 @@ class AccountConfigurationCommandTestCase(TestCase):
         self.assertFalse(payload["SkipPrimarySetupAccountCreation"])
 
     def test_build_command_realm_user_no_password_hash_admin_email_prefix_username(self):
-        cmd = AccountConfiguration.create_for_device(
-            self.dep_enrollment_session.enrolled_device
+        cmd = AccountConfiguration.create_for_target_and_dep_enrollment(
+            Target(self.dep_enrollment_session.enrolled_device),
+            self.dep_enrollment_session.dep_enrollment,
         )
         self.dep_enrollment_session.dep_enrollment.username_pattern = DEPEnrollment.UsernamePattern.EMAIL_PREFIX
         response = cmd.build_http_response(self.dep_enrollment_session)
@@ -83,30 +86,44 @@ class AccountConfigurationCommandTestCase(TestCase):
         self.assertFalse(payload["SetPrimarySetupAccountAsRegularUser"])
         self.assertFalse(payload["SkipPrimarySetupAccountCreation"])
 
-    def test_ota_enrollment_session_error(self):
+    def test_ota_enrollment_error(self):
         session, _, _ = force_ota_enrollment_session(self.mbu, completed=True)
-        cmd = AccountConfiguration.create_for_device(session.enrolled_device)
+        with self.assertRaises(ValueError) as cm:
+            AccountConfiguration.create_for_target_and_dep_enrollment(
+                Target(session.enrolled_device),
+                session.ota_enrollment,
+            )
+        self.assertEqual(cm.exception.args[0], "Invalid enrollment")
+
+    def test_ota_enrollment_session_error(self):
+        cmd = AccountConfiguration.create_for_target_and_dep_enrollment(
+            Target(self.dep_enrollment_session.enrolled_device),
+            self.dep_enrollment_session.dep_enrollment,
+        )
+        session, _, _ = force_ota_enrollment_session(self.mbu, completed=True)
         with self.assertRaises(ValueError) as cm:
             cmd.build_http_response(session)
         self.assertEqual(cm.exception.args[0], "Invalid enrollment session")
 
-    def test_build_command_realm_user_no_password_hash_not_admin(self):
+    def test_build_command_realm_user_not_admin_auto_admin(self):
         dep_enrollment = self.dep_enrollment_session.dep_enrollment
         dep_enrollment.realm_user_is_admin = False
+        dep_enrollment.hidden_admin = True
         dep_enrollment.admin_full_name = "Admin Full Name"
         dep_enrollment.admin_short_name = "admin_short_name"
-        dep_enrollment.admin_password_hash = {"SALTED-SHA512-PBKDF2": {"fake": True}}
-        cmd = AccountConfiguration.create_for_device(
-            self.dep_enrollment_session.enrolled_device
+        cmd = AccountConfiguration.create_for_target_and_dep_enrollment(
+            Target(self.dep_enrollment_session.enrolled_device),
+            dep_enrollment
         )
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
+        asaa = payload["AutoSetupAdminAccounts"]
+        asaa[0].pop("passwordHash")
         self.assertEqual(
             payload["AutoSetupAdminAccounts"],
             [{"fullName": "Admin Full Name",
               "shortName": "admin_short_name",
-              "hidden": True,
-              "passwordHash": serialize_password_hash_dict(dep_enrollment.admin_password_hash)}]
+              "hidden": True}]
         )
         self.assertFalse(payload["DontAutoPopulatePrimaryAccountInfo"])
         self.assertTrue(payload["LockPrimaryAccountInfo"])
@@ -118,8 +135,9 @@ class AccountConfigurationCommandTestCase(TestCase):
     def test_build_command_realm_user_password_hash_admin(self):
         password_hash = {"SALTED-SHA512-PBKDF2": {"fake": True}}
         self.dep_enrollment_session.realm_user.password_hash = password_hash
-        cmd = AccountConfiguration.create_for_device(
-            self.dep_enrollment_session.enrolled_device
+        cmd = AccountConfiguration.create_for_target_and_dep_enrollment(
+            Target(self.dep_enrollment_session.enrolled_device),
+            self.dep_enrollment_session.dep_enrollment,
         )
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
@@ -141,19 +159,21 @@ class AccountConfigurationCommandTestCase(TestCase):
         dep_enrollment.auto_advance_setup = True
         dep_enrollment.admin_full_name = "Admin Full Name"
         dep_enrollment.admin_short_name = "admin_short_name"
-        dep_enrollment.admin_password_hash = {"SALTED-SHA512-PBKDF2": {"fake": True}}
+        dep_enrollment.hidden_admin = False
         dep_enrollment.save()
-        cmd = AccountConfiguration.create_for_device(
-            self.dep_enrollment_session.enrolled_device
+        cmd = AccountConfiguration.create_for_target_and_dep_enrollment(
+            Target(self.dep_enrollment_session.enrolled_device),
+            dep_enrollment,
         )
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
+        asaaa = payload["AutoSetupAdminAccounts"]
+        asaaa[0].pop("passwordHash")
         self.assertEqual(
             payload["AutoSetupAdminAccounts"],
             [{"fullName": "Admin Full Name",
               "shortName": "admin_short_name",
-              "hidden": True,
-              "passwordHash": serialize_password_hash_dict(dep_enrollment.admin_password_hash)}]
+              "hidden": False}],
         )
         self.assertTrue(payload["DontAutoPopulatePrimaryAccountInfo"])
         self.assertTrue(payload["SkipPrimarySetupAccountCreation"])
@@ -211,7 +231,10 @@ class AccountConfigurationCommandTestCase(TestCase):
         self.dep_enrollment_session.enrolled_device.awaiting_configuration = True
         self.dep_enrollment_session.dep_enrollment.use_realm_user = True
         self.assertTrue(self.dep_enrollment_session.dep_enrollment.requires_account_configuration())
-        cmd = AccountConfiguration.create_for_device(self.dep_enrollment_session.enrolled_device)
+        cmd = AccountConfiguration.create_for_target_and_dep_enrollment(
+            Target(self.dep_enrollment_session.enrolled_device),
+            self.dep_enrollment_session.dep_enrollment,
+        )
         cmd.db_command.status = Command.Status.ACKNOWLEDGED
         cmd.db_command.save()
         self.assertIsNone(_configure_dep_enrollment_accounts(
@@ -230,3 +253,52 @@ class AccountConfigurationCommandTestCase(TestCase):
             RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, AccountConfiguration)
+
+    # process_response
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_set_admin_password(self, post_event):
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        self.assertIsNone(enrolled_device.admin_password)
+        self.assertIsNone(enrolled_device.admin_password_updated_at)
+        self.dep_enrollment_session.realm_user = None
+        self.dep_enrollment_session.save()
+        dep_enrollment = self.dep_enrollment_session.dep_enrollment
+        dep_enrollment.use_realm_user = False
+        dep_enrollment.auto_advance_setup = True
+        dep_enrollment.admin_full_name = "Admin Full Name"
+        dep_enrollment.admin_short_name = "admin_short_name"
+        dep_enrollment.hidden_admin = False
+        dep_enrollment.save()
+        cmd = AccountConfiguration.create_for_target_and_dep_enrollment(
+            Target(enrolled_device),
+            dep_enrollment,
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(
+                {"UDID": enrolled_device.udid,
+                 "Status": "Acknowledged",
+                 "CommandUUID": str(cmd.uuid).upper()},
+                self.dep_enrollment_session,
+                self.mbu
+            )
+        cmd.db_command.refresh_from_db()
+        self.assertEqual(cmd.status, Command.Status.ACKNOWLEDGED)
+        self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
+        enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.get_admin_password(), cmd.load_admin_password())
+        self.assertIsNotNone(enrolled_device.admin_password_updated_at)
+        # event
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, AdminPasswordUpdatedEvent)
+        self.assertEqual(
+            event.payload,
+            {'command': {'request_type': 'AccountConfiguration',
+                         'uuid': str(cmd.uuid)}}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(set(metadata["tags"]), {"mdm", "admin_password"})

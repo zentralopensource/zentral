@@ -180,6 +180,11 @@ class DeviceInformation(Command):
         supervised = query_responses.get("IsSupervised")
         if supervised is not None:
             self.enrolled_device.supervised = supervised
+        # Auto admin password
+        auto_setup_admin_accounts = query_responses.get("AutoSetupAdminAccounts")
+        if not auto_setup_admin_accounts:
+            # reset the admin password if not admin accounts are found
+            self.enrolled_device.set_admin_password(None)
         # save enrolled device
         self.enrolled_device.save()
 
