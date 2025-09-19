@@ -230,6 +230,34 @@
             {% endif %}
         </td>
         </tr>
+        <tr>
+          <td colspan="2"><h4>Auto admin</h4></td>
+        </tr>
+        <tr>
+          <th>GUID</th>
+          <td>
+            {% if object.admin_guid %}
+            <code>{{ object.admin_guid }}</code>
+            {% else %}
+            -
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <th>Short name</th>
+          <td>{{ object.admin_shortname|default:"-" }}</td>
+        </tr>
+        <tr>
+          <th>Password</th>
+          <td>
+            {% if object.admin_password and perms.mdm.view_admin_password %}
+            <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_admin_password' object.pk %}" data-key="admin_password" style="cursor:pointer"></span>
+            <span class="ed-secret"></span>
+            {% else %}
+            {{ object.admin_password_escrowed|yesno }}
+            {% endif %}
+          </td>
+        </tr>
         {% with object.security_info as security_info %}
         {% if security_info %}
         <tr>

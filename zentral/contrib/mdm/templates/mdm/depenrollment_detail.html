@@ -31,11 +31,11 @@
     <table class="table-object-properties">
     <tbody>
         <tr>
-        <th width="200px">Display name</th>
+        <th width="240px">Display name</th>
         <td>{{ object.display_name }}</td>
         </tr>
         <tr>
-        <th width="200px">Push certificate</th>
+        <th width="240px">Push certificate</th>
         <td>
             {% if perms.mdm.view_pushcertificate %}
             <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
@@ -45,7 +45,7 @@
         </td>
         </tr>
         <tr>
-        <th width="160px">ACME issuer</th>
+        <th width="240px">ACME issuer</th>
         <td>
           {% if object.acme_issuer %}
             {% if perms.mdm.view_acmeissuer %}
@@ -59,7 +59,7 @@
         </td>
         </tr>
         <tr>
-        <th width="160px">SCEP issuer</th>
+        <th width="240px">SCEP issuer</th>
         <td>
             {% if perms.mdm.view_scepissuer %}
             <a href="{{ object.scep_issuer.get_absolute_url }}">{{ object.scep_issuer }}</a>
@@ -117,7 +117,7 @@
     <table class="table-object-properties">
     <tbody>
         <tr>
-        <th width="200px">Realm</th>
+        <th width="240px">Realm</th>
         <td>
             {% if object.realm %}
             {% if perms.realms.view_realm %}
@@ -145,16 +145,24 @@
         </tr>
         {% endif %}
         <tr>
-        <th>Admin full name</th>
-        <td>{{ object.admin_full_name|default:"-" }}</td>
+          <th>Admin full name</th>
+          <td>{{ object.admin_full_name|default:"-" }}</td>
         </tr>
         <tr>
-        <th>Admin short name</th>
-        <td>{{ object.admin_short_name|default:"-" }}</td>
+          <th>Admin short name</th>
+          <td>{{ object.admin_short_name|default:"-" }}</td>
         </tr>
         <tr>
-        <th>Admin password set</th>
-        <td>{% if object.admin_password_hash %}yes{% else %}no{% endif %}</td>
+          <th>Hidden admin?</th>
+          <td>{{ object.hidden_admin|yesno }}</td>
+        </tr>
+        <tr>
+          <th>Admin password complexity</th>
+          <td>{{ object.admin_password_complexity }}</td>
+        </tr>
+        <tr>
+          <th>Admin password rotation delay</th>
+          <td>{% if object.admin_password_rotation_delay %}{{ object.admin_password_rotation_delay }}min{% else %}no automatic admin password rotation{% endif %}</td>
         </tr>
     </tbody>
     </table>
@@ -165,7 +173,7 @@
     <tbody>
         {% with object.virtual_server as virtual_server %}
         <tr>
-        <th width="200px">Virtual server</th>
+        <th width="240px">Virtual server</th>
         <td>
             {% if perms.mdm.view_depvirtualserver %}
             <a href="{{ virtual_server.get_absolute_url }}">{{ virtual_server }}</a>
@@ -265,7 +273,7 @@
     <table class="table-object-properties">
       <tbody>
         <tr>
-          <th width="200px">Device{{ assigned_devices_count|pluralize }}</th>
+          <th width="240px">Device{{ assigned_devices_count|pluralize }}</th>
           <td>
             {% if assigned_devices_count and perms.mdm.view_depdevice %}
             <a href="{% url 'mdm:dep_devices' %}?enrollment={{ object.pk }}">

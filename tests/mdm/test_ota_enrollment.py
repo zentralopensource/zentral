@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
-from zentral.contrib.mdm.models import OTAEnrollment, OTAEnrollmentSession, ReEnrollmentSession
+from zentral.contrib.mdm.models import EnrolledDevice, OTAEnrollment, OTAEnrollmentSession, ReEnrollmentSession
 from zentral.contrib.mdm.payloads import build_scep_payload
 from .utils import complete_enrollment_session, force_ota_enrollment, force_realm_user
 
@@ -76,6 +76,9 @@ class TestOTAEnrollment(TestCase):
         )
         session.set_phase3_status()
         complete_enrollment_session(session)
+        enrolled_device = EnrolledDevice.objects.get(pk=session.enrolled_device.pk)
+        self.assertEqual(enrolled_device.current_enrollment_session, session)
+        self.assertEqual(enrolled_device.current_enrollment, enrollment)
         reenrollment_session = ReEnrollmentSession.objects.create_from_enrollment_session(session)
         self.assertEqual(reenrollment_session.get_enrollment(), enrollment)
         self.assertIsNone(reenrollment_session.dep_enrollment)
@@ -95,6 +98,9 @@ class TestOTAEnrollment(TestCase):
         self.assertEqual(ota_s["status"], "COMPLETED")
         self.assertEqual(ota_s["enrollment_type"], "OTA")
         self.assertEqual(ota_s["enrollment_id"], enrollment.pk)
+        enrolled_device = EnrolledDevice.objects.get(pk=session.enrolled_device.pk)
+        self.assertEqual(enrolled_device.current_enrollment_session, reenrollment_session)
+        self.assertEqual(enrolled_device.current_enrollment, enrollment)
 
     def test_ota_enrollment_reenrollment_reenrollment_session(self):
         enrollment = force_ota_enrollment(self.mbu)
