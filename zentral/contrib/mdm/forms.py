@@ -12,7 +12,6 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, F, Q, OuterRef, Exists
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.os_version import make_comparable_os_version
-from zentral.utils.passwords import build_password_hash_dict
 from .app_manifest import read_package_info, validate_configuration
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
@@ -412,8 +411,6 @@ class UpdateDEPVirtualServerForm(forms.ModelForm):
 
 
 class CreateDEPEnrollmentForm(forms.ModelForm):
-    admin_password = forms.CharField(required=False, widget=forms.PasswordInput)
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         field_order = [
@@ -437,7 +434,8 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
             )
             field_order.append(key)
         field_order.extend(["display_name", "realm", "use_realm_user", "username_pattern", "realm_user_is_admin",
-                            "admin_full_name", "admin_short_name", "admin_password",
+                            "admin_full_name", "admin_short_name", "hidden_admin",
+                            "admin_password_complexity", "admin_password_rotation_delay",
                             "ios_max_version", "ios_min_version", "macos_max_version", "macos_min_version"])
         self.order_fields(field_order)
         self.fields["language"].choices = sorted(self.fields["language"].choices, key=lambda t: (t[1], t[0]))
@@ -498,25 +496,14 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
     def clean_macos_min_version(self):
         return self._clean_os_version("macos", "min")
 
-    def clean_admin_password(self):
-        password = self.cleaned_data.get("admin_password")
-        if password:
-            self.cleaned_data["admin_password_hash"] = build_password_hash_dict(password)
-
-    def admin_info_incomplete(self):
+    def auto_admin_info_incomplete(self):
         return len([attr for attr in (
                         self.cleaned_data.get(i)
-                        for i in ("admin_full_name", "admin_short_name", "admin_password_hash")
-                    ) if attr]) in (1, 2)
+                        for i in ("admin_full_name", "admin_short_name")
+                    ) if attr]) == 1
 
-    def has_admin_info(self):
-        return self.cleaned_data.get("admin_full_name") and not self.admin_info_incomplete()
-
-    def update_password(self):
-        return not self.admin_info_incomplete()
-
-    def reset_password(self):
-        return False
+    def has_auto_admin(self):
+        return self.cleaned_data.get("admin_full_name") and not self.auto_admin_info_incomplete()
 
     def clean(self):
         super().clean()
@@ -524,10 +511,10 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
         for key, _ in skippable_setup_panes:
             if self.cleaned_data.get(f"ssp-{key}", False):
                 skip_setup_items.append(key)
-        if self.admin_info_incomplete():
-            raise forms.ValidationError("Admin information incomplete")
-        if self.has_admin_info() and not self.cleaned_data.get("await_device_configured"):
-            self.add_error("await_device_configured", "Required for the admin account setup")
+        if self.auto_admin_info_incomplete():
+            raise forms.ValidationError("Auto admin information incomplete")
+        if self.has_auto_admin() and not self.cleaned_data.get("await_device_configured"):
+            self.add_error("await_device_configured", "Required for the auto admin account setup")
         self.cleaned_data['skip_setup_items'] = skip_setup_items
 
     def save(self, *args, **kwargs):
@@ -535,10 +522,6 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
         kwargs["commit"] = False
         dep_profile = super().save(**kwargs)
         dep_profile.skip_setup_items = self.cleaned_data["skip_setup_items"]
-        if self.update_password():
-            dep_profile.admin_password_hash = self.cleaned_data.get("admin_password_hash")
-        elif self.reset_password():
-            dep_profile.admin_password_hash = None
         if commit:
             dep_profile.save()
         return dep_profile
@@ -553,35 +536,6 @@ class UpdateDEPEnrollmentForm(CreateDEPEnrollmentForm):
     class Meta:
         model = DEPEnrollment
         exclude = ("scep_config", "scep_verification", "virtual_server",)
-
-    def admin_info_incomplete(self):
-        attr_count = len(
-            [attr for attr in (
-                 self.cleaned_data.get(i)
-                 for i in ("admin_full_name", "admin_short_name", "admin_password_hash")
-             ) if attr]
-        )
-        return (attr_count == 1 or
-                (attr_count == 2 and (
-                    # full or short name missing
-                    self.cleaned_data.get("admin_password_hash")
-                    # password missing and not already present in the object
-                    or not self.instance.admin_password_hash
-                )))
-
-    def update_password(self):
-        return (
-            self.cleaned_data.get("admin_full_name")
-            and self.cleaned_data.get("admin_short_name")
-            and self.cleaned_data.get("admin_password_hash")
-        )
-
-    def reset_password(self):
-        return (
-            not self.cleaned_data.get("admin_full_name")
-            and not self.cleaned_data.get("admin_short_name")
-            and not self.cleaned_data.get("admin_password_hash")
-        )
 
 
 class DEPEnrollmentCustomViewForm(forms.ModelForm):

@@ -9,8 +9,9 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit, MachineTag, Tag
+from zentral.contrib.mdm.commands import SetAutoAdminPassword
 from zentral.contrib.mdm.commands.base import load_command
-from zentral.contrib.mdm.events import FileVaultPRKViewedEvent, RecoveryPasswordViewedEvent
+from zentral.contrib.mdm.events import AdminPasswordViewedEvent, FileVaultPRKViewedEvent, RecoveryPasswordViewedEvent
 from zentral.contrib.mdm.models import Platform
 from .utils import force_dep_enrollment_session
 
@@ -974,3 +975,114 @@ class APIViewsTestCase(TestCase):
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, RecoveryPasswordViewedEvent)
         self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+
+    # enrolled device admin password
+
+    def test_enrolled_device_admin_password_unauthorized(self):
+        response = self.get(reverse("mdm_api:enrolled_device_admin_password", args=(self.enrolled_device.pk,)),
+                            include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_enrolled_device_admin_password_permission_denied(self):
+        response = self.get(reverse("mdm_api:enrolled_device_admin_password", args=(self.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrolled_device_admin_password_login_permission_denied(self):
+        self.login()
+        response = self.get(reverse("mdm_api:enrolled_device_admin_password", args=(self.enrolled_device.pk,)),
+                            include_token=False)
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_admin_password_null(self, post_event):
+        self.set_permissions("mdm.view_admin_password")
+        response = self.get(reverse("mdm_api:enrolled_device_admin_password", args=(self.enrolled_device.pk,)))
+        self.assertEqual(
+            response.json(),
+            {"id": self.enrolled_device.pk,
+             "serial_number": self.enrolled_device.serial_number,
+             "admin_password": None}
+        )
+        post_event.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_admin_password(self, post_event):
+        self.assertEqual(self.dep_enrollment_session.dep_enrollment.admin_password_rotation_delay, 60)
+        self.enrolled_device.set_admin_password("123456")
+        self.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        self.enrolled_device.save()
+        self.set_permissions("mdm.view_admin_password")
+        response = self.get(reverse("mdm_api:enrolled_device_admin_password", args=(self.enrolled_device.pk,)))
+        self.assertEqual(
+            response.json(),
+            {"id": self.enrolled_device.pk,
+             "serial_number": self.enrolled_device.serial_number,
+             "admin_password": "123456"}
+        )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AdminPasswordViewedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+        command_qs = self.enrolled_device.commands.all()
+        self.assertEqual(command_qs.count(), 1)
+        command = load_command(command_qs.first())
+        self.assertIsInstance(command, SetAutoAdminPassword)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_admin_password_login(self, post_event):
+        self.assertEqual(self.dep_enrollment_session.dep_enrollment.admin_password_rotation_delay, 60)
+        self.enrolled_device.set_admin_password("123456")
+        self.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        self.enrolled_device.save()
+        self.login("mdm.view_admin_password")
+        response = self.get(reverse("mdm_api:enrolled_device_admin_password", args=(self.enrolled_device.pk,)),
+                            include_token=False)
+        self.assertEqual(
+            response.json(),
+            {"id": self.enrolled_device.pk,
+             "serial_number": self.enrolled_device.serial_number,
+             "admin_password": "123456"}
+        )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AdminPasswordViewedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+        command_qs = self.enrolled_device.commands.all()
+        self.assertEqual(command_qs.count(), 1)
+        command = load_command(command_qs.first())
+        self.assertIsInstance(command, SetAutoAdminPassword)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_admin_password_login_no_auto_rotation(self, post_event):
+        self.dep_enrollment_session.dep_enrollment.admin_password_rotation_delay = 0  # no auto rotation
+        self.dep_enrollment_session.dep_enrollment.save()
+        self.enrolled_device.set_admin_password("123456")
+        self.enrolled_device.device_information = {
+            "AutoSetupAdminAccounts": [
+                {"GUID": "yolo", "shortName": "fomo"}
+            ]
+        }
+        self.enrolled_device.save()
+        self.login("mdm.view_admin_password")
+        response = self.get(reverse("mdm_api:enrolled_device_admin_password", args=(self.enrolled_device.pk,)),
+                            include_token=False)
+        self.assertEqual(
+            response.json(),
+            {"id": self.enrolled_device.pk,
+             "serial_number": self.enrolled_device.serial_number,
+             "admin_password": "123456"}
+        )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AdminPasswordViewedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+        command_qs = self.enrolled_device.commands.all()
+        self.assertEqual(command_qs.count(), 0)

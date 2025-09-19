@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.models import ReEnrollmentSession, UserEnrollment, UserEnrollmentSession
+from zentral.contrib.mdm.models import EnrolledDevice, ReEnrollmentSession, UserEnrollment, UserEnrollmentSession
 from zentral.contrib.mdm.payloads import build_scep_payload
 from .utils import complete_enrollment_session, force_realm_user, force_user_enrollment
 
@@ -63,6 +63,9 @@ class TestUserEnrollment(TestCase):
         session.set_account_driven_authenticated_status(self.realm_user)
         session.set_started_status()
         complete_enrollment_session(session)
+        enrolled_device = EnrolledDevice.objects.get(pk=session.enrolled_device.pk)
+        self.assertEqual(enrolled_device.current_enrollment_session, session)
+        self.assertEqual(enrolled_device.current_enrollment, enrollment)
         reenrollment_session = ReEnrollmentSession.objects.create_from_enrollment_session(session)
         self.assertEqual(reenrollment_session.get_enrollment(), enrollment)
         self.assertIsNone(reenrollment_session.dep_enrollment)
@@ -83,6 +86,9 @@ class TestUserEnrollment(TestCase):
         self.assertEqual(user_s["realm_username"], session.realm_user.username)
         self.assertEqual(user_s["enrollment_type"], "USER")
         self.assertEqual(user_s["enrollment_id"], enrollment.pk)
+        enrolled_device = EnrolledDevice.objects.get(pk=session.enrolled_device.pk)
+        self.assertEqual(enrolled_device.current_enrollment_session, reenrollment_session)
+        self.assertEqual(enrolled_device.current_enrollment, enrollment)
 
     def test_user_enrollment_reenrollment_reenrollment_session(self):
         enrollment = force_user_enrollment(self.mbu, self.realm)

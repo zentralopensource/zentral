@@ -649,6 +649,30 @@ Response:
 }
 ```
 
+### `/api/mdm/devices/<int:pk>/admin_password/`
+
+ * method: `GET`
+ * required permission: `mdm.view_admin_password`
+
+Returns the decrypted auto admin password for an MDM enrolled device.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/devices/27/admin_password/
+```
+
+Response:
+
+```json
+{
+  "id": 27,
+  "serial_number": "012345678910",
+  "admin_password": "ABCDEF-012345-ABCDEF-012345"
+}
+```
+
 ### `/api/mdm/devices/<int:pk>/block/`
 
  * method: `POST`
