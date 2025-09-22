@@ -6,6 +6,10 @@
 
 Add auto admin unique passwords for ADE. This is similare to Windows LAPS.
 
+### Bug fixes
+
+Fix DEP enrollment update view timeout when the corresponding profile is assigned to 10000s of devices in ABM.
+
 ### Backward incompatibilities
 
 #### 🧨 MDM auto admin password

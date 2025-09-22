@@ -4,9 +4,11 @@ import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.dep import sync_dep_virtual_server_devices
+from zentral.contrib.mdm.dep import define_dep_profile, sync_dep_virtual_server_devices
 from zentral.contrib.mdm.dep_client import CursorIterator
-from .utils import force_dep_enrollment, force_dep_virtual_server
+from zentral.contrib.mdm.models import DEPDevice
+from zentral.contrib.mdm.tasks import define_dep_profile_task
+from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
 
 
 class TestDEPEnrollment(TestCase):
@@ -194,3 +196,65 @@ class TestDEPEnrollment(TestCase):
         self.assertIsNone(device.profile_uuid)
         self.assertIsNone(device.enrollment)
         self.assertEqual(device.profile_status, "empty")
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_define_dep_profile(self, from_dep_token):
+        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        device1 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_EMPTY, enrollment=enrollment)
+        device2 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=enrollment)
+        device3 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=enrollment)
+        client = Mock()
+        profile_uuid = uuid.uuid4()
+        self.assertNotEqual(enrollment.uuid, profile_uuid)
+        self.assertNotEqual(device1.profile_uuid, profile_uuid)
+        self.assertFalse(device2.is_deleted())
+        client.add_profile.return_value = {
+            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
+            "devices": {
+                device1.serial_number: "SUCCESS",
+                device2.serial_number: "NOT_ACCESSIBLE",
+                device3.serial_number: "FAILED",
+                "yolo": "fomo",
+            }
+        }
+        from_dep_token.return_value = client
+        result = define_dep_profile(enrollment)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.uuid, profile_uuid)
+        self.assertEqual(
+            result,
+            {'devices': {'failed': [device3.serial_number],
+                         'not_accessible': [device2.serial_number],
+                         'success': [device1.serial_number]},
+             'display_name': enrollment.display_name,
+             'name': enrollment.name,
+             'pk': enrollment.pk,
+             'uuid': str(profile_uuid)}
+        )
+        enrollment.refresh_from_db()
+        device1.refresh_from_db()
+        self.assertEqual(device1.profile_status, DEPDevice.PROFILE_STATUS_ASSIGNED)
+        self.assertEqual(device1.profile_uuid, profile_uuid)
+        device2.refresh_from_db()
+        self.assertTrue(device2.is_deleted())
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_define_dep_profile_task(self, from_dep_token):
+        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        client = Mock()
+        profile_uuid = uuid.uuid4()
+        self.assertNotEqual(enrollment.uuid, profile_uuid)
+        client.add_profile.return_value = {
+            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
+            "devices": {},
+        }
+        from_dep_token.return_value = client
+        result = define_dep_profile_task(enrollment.pk)
+        self.assertEqual(
+            result,
+            {'devices': {'failed': [], 'not_accessible': [], 'success': []},
+             'display_name': enrollment.display_name,
+             'name': enrollment.name,
+             'pk': enrollment.pk,
+             'uuid': str(profile_uuid)}
+        )

@@ -391,6 +391,30 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertContains(response, "Username prefix without")
         self.assertContains(response, "Realm user is admin")
 
+    # check DEP enrollment
+
+    def test_check_dep_enrollment_redirect(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        self._login_redirect(reverse("mdm:check_dep_enrollment", args=(enrollment.pk,)))
+
+    def test_check_dep_enrollment_permission_denied(self):
+        enrollment = force_dep_enrollment(self.mbu)
+        self._login()
+        response = self.client.get(reverse("mdm:check_dep_enrollment", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_check_dep_enrollment(self, from_dep_token):
+        client = Mock()
+        client.get_profile.return_value = {"yolo": "fomo"}
+        from_dep_token.return_value = client
+        enrollment = force_dep_enrollment(self.mbu)
+        self._login("mdm.view_depenrollment")
+        response = self.client.get(reverse("mdm:check_dep_enrollment", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depenrollment_check.html")
+        client.get_profile.assert_called_once_with(enrollment.uuid)
+
     # update DEP enrollment
 
     def test_update_dep_enrollment_redirect(self):
@@ -445,50 +469,42 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
         self.assertFormError(response.context["dep_enrollment_form"], None, "Auto admin information incomplete")
 
-    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
-    def test_update_dep_enrollment_post(self, from_dep_virtual_server):
+    @patch("zentral.contrib.mdm.views.dep_enrollments.define_dep_profile_task")
+    def test_update_dep_enrollment_post(self, define_dep_profile_task):
         realm = force_realm()
         enrollment = force_dep_enrollment(self.mbu, acme_issuer=True)
         device1 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=enrollment)
         self.assertFalse(device1.is_deleted())
         device2 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=enrollment)
         self.assertFalse(device2.is_deleted())
-        profile_uuid = uuid.uuid4()
-        client = Mock()
-        client.add_profile.return_value = {
-            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
-            "devices": {
-                device1.serial_number: "SUCCESS",
-                device2.serial_number: "NOT_ACCESSIBLE",
-            }
-        }
-        from_dep_virtual_server.return_value = client
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
         new_name = get_random_string(12)
         new_display_name = get_random_string(12)
-        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
-                                    {"de-name": new_name,
-                                     "de-display_name": new_display_name,
-                                     "de-realm": realm.pk,
-                                     "de-acme_issuer": enrollment.acme_issuer.pk,
-                                     "de-scep_issuer": enrollment.scep_issuer.pk,
-                                     "de-push_certificate": enrollment.push_certificate.pk,
-                                     "de-virtual_server": enrollment.virtual_server.pk,
-                                     "de-is_mdm_removable": "on",
-                                     "de-is_supervised": "",
-                                     "de-ssp-AppleID": "on",
-                                     "de-language": "de",
-                                     "de-include_tls_certificates": "on",
-                                     "de-macos_min_version": "13.3.1",
-                                     "de-admin_full_name": "Yolo",
-                                     "de-admin_short_name": "Fomo",
-                                     "de-admin_password_complexity": 2,
-                                     "de-admin_password_rotation_delay": 15,
-                                     "de-await_device_configured": "on",
-                                     "es-meta_business_unit": self.mbu.pk},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                        {"de-name": new_name,
+                                         "de-display_name": new_display_name,
+                                         "de-realm": realm.pk,
+                                         "de-acme_issuer": enrollment.acme_issuer.pk,
+                                         "de-scep_issuer": enrollment.scep_issuer.pk,
+                                         "de-push_certificate": enrollment.push_certificate.pk,
+                                         "de-virtual_server": enrollment.virtual_server.pk,
+                                         "de-is_mdm_removable": "on",
+                                         "de-is_supervised": "",
+                                         "de-ssp-AppleID": "on",
+                                         "de-language": "de",
+                                         "de-include_tls_certificates": "on",
+                                         "de-macos_min_version": "13.3.1",
+                                         "de-admin_full_name": "Yolo",
+                                         "de-admin_short_name": "Fomo",
+                                         "de-admin_password_complexity": 2,
+                                         "de-admin_password_rotation_delay": 15,
+                                         "de-await_device_configured": "on",
+                                         "es-meta_business_unit": self.mbu.pk},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
+        self.assertEqual(len(callbacks), 1)
         self.assertContains(response, new_name)
         self.assertContains(response, new_display_name)
         self.assertContains(response, realm.name)
@@ -501,117 +517,105 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertEqual(enrollment.realm, realm)
         self.assertEqual(enrollment.macos_min_version, "13.3.1")
         self.assertEqual(enrollment.skip_setup_items, ["AppleID"])
-        client.add_profile.assert_called_once()
-        self.assertEqual(enrollment.uuid, profile_uuid)
-        device1.refresh_from_db()
-        self.assertFalse(device1.is_deleted())
-        device2.refresh_from_db()
-        self.assertTrue(device2.is_deleted())
+        define_dep_profile_task.apply_async.assert_called_once_with((enrollment.pk,))
 
-    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
-    def test_update_dep_enrollment_post_remove_admin(self, from_dep_virtual_server):
+    @patch("zentral.contrib.mdm.views.dep_enrollments.define_dep_profile_task")
+    def test_update_dep_enrollment_post_remove_admin(self, define_dep_profile_task):
         realm = force_realm()
         enrollment = force_dep_enrollment(self.mbu)
         enrollment.admin_full_name = "yolo"
         enrollment.admin_short_name = "fomo"
         enrollment.save()
-        profile_uuid = uuid.uuid4()
-        client = Mock()
-        client.add_profile.return_value = {
-            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
-            "devices": {},
-        }
-        from_dep_virtual_server.return_value = client
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
-        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
-                                    {"de-name": enrollment.name,
-                                     "de-display_name": enrollment.display_name,
-                                     "de-realm": realm.pk,
-                                     "de-scep_issuer": enrollment.scep_issuer.pk,
-                                     "de-push_certificate": enrollment.push_certificate.pk,
-                                     "de-virtual_server": enrollment.virtual_server.pk,
-                                     "de-admin_password_complexity": 3,
-                                     "de-admin_password_rotation_delay": 60,
-                                     "de-is_mdm_removable": "on",
-                                     "es-meta_business_unit": self.mbu.pk},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                        {"de-name": enrollment.name,
+                                         "de-display_name": enrollment.display_name,
+                                         "de-realm": realm.pk,
+                                         "de-scep_issuer": enrollment.scep_issuer.pk,
+                                         "de-push_certificate": enrollment.push_certificate.pk,
+                                         "de-virtual_server": enrollment.virtual_server.pk,
+                                         "de-admin_password_complexity": 3,
+                                         "de-admin_password_rotation_delay": 60,
+                                         "de-is_mdm_removable": "on",
+                                         "es-meta_business_unit": self.mbu.pk},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
+        self.assertEqual(len(callbacks), 1)
+        define_dep_profile_task.apply_async.assert_called_once_with((enrollment.pk,))
         enrollment.refresh_from_db()
         self.assertIsNone(enrollment.admin_full_name)
         self.assertIsNone(enrollment.admin_short_name)
 
-    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
-    def test_update_dep_enrollment_post_update_admin_keep_pwd(self, from_dep_virtual_server):
+    @patch("zentral.contrib.mdm.views.dep_enrollments.define_dep_profile_task")
+    def test_update_dep_enrollment_post_update_admin_keep_pwd(self, define_dep_profile_task):
         realm = force_realm()
         enrollment = force_dep_enrollment(self.mbu)
         enrollment.admin_full_name = "yolo"
         enrollment.admin_short_name = "fomo"
         enrollment.save()
-        profile_uuid = uuid.uuid4()
-        client = Mock()
-        client.add_profile.return_value = {
-            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
-            "devices": {}
-        }
-        from_dep_virtual_server.return_value = client
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
-        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
-                                    {"de-name": enrollment.name,
-                                     "de-display_name": enrollment.display_name,
-                                     "de-realm": realm.pk,
-                                     "de-scep_issuer": enrollment.scep_issuer.pk,
-                                     "de-push_certificate": enrollment.push_certificate.pk,
-                                     "de-virtual_server": enrollment.virtual_server.pk,
-                                     "de-is_mdm_removable": "on",
-                                     "de-admin_full_name": "yolo2",
-                                     "de-admin_short_name": "fomo2",
-                                     "de-admin_password_complexity": 2,
-                                     "de-admin_password_rotation_delay": 15,
-                                     "de-await_device_configured": "on",
-                                     "es-meta_business_unit": self.mbu.pk},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                        {"de-name": enrollment.name,
+                                         "de-display_name": enrollment.display_name,
+                                         "de-realm": realm.pk,
+                                         "de-scep_issuer": enrollment.scep_issuer.pk,
+                                         "de-push_certificate": enrollment.push_certificate.pk,
+                                         "de-virtual_server": enrollment.virtual_server.pk,
+                                         "de-is_mdm_removable": "on",
+                                         "de-admin_full_name": "yolo2",
+                                         "de-admin_short_name": "fomo2",
+                                         "de-admin_password_complexity": 2,
+                                         "de-admin_password_rotation_delay": 15,
+                                         "de-await_device_configured": "on",
+                                         "es-meta_business_unit": self.mbu.pk},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
+        self.assertEqual(len(callbacks), 1)
+        define_dep_profile_task.apply_async.assert_called_once_with((enrollment.pk,))
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.admin_full_name, "yolo2")
         self.assertEqual(enrollment.admin_short_name, "fomo2")
         self.assertEqual(enrollment.admin_password_complexity, 2)
         self.assertEqual(enrollment.admin_password_rotation_delay, 15)
 
-    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
-    def test_update_dep_enrollment_post_update_admin_update_pwd(self, from_dep_virtual_server):
+    @patch("zentral.contrib.mdm.views.dep_enrollments.define_dep_profile_task")
+    def test_update_dep_enrollment_post_update_admin_update_pwd(self, define_dep_profile_task):
         realm = force_realm()
         enrollment = force_dep_enrollment(self.mbu)
+        enrollment.realm = realm
         enrollment.admin_full_name = "yolo"
         enrollment.admin_short_name = "fomo"
+        enrollment.await_device_configured = True
+        enrollment.skip_setup_items = []
         enrollment.save()
-        profile_uuid = uuid.uuid4()
-        client = Mock()
-        client.add_profile.return_value = {
-            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
-            "devices": {}
-        }
-        from_dep_virtual_server.return_value = client
         self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
-        response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
-                                    {"de-name": enrollment.name,
-                                     "de-display_name": enrollment.display_name,
-                                     "de-realm": realm.pk,
-                                     "de-scep_issuer": enrollment.scep_issuer.pk,
-                                     "de-push_certificate": enrollment.push_certificate.pk,
-                                     "de-virtual_server": enrollment.virtual_server.pk,
-                                     "de-is_mdm_removable": "on",
-                                     "de-admin_full_name": "yolo2",
-                                     "de-admin_short_name": "fomo2",
-                                     "de-hidden_admin": "on",
-                                     "de-admin_password_complexity": 2,
-                                     "de-admin_password_rotation_delay": 15,
-                                     "de-await_device_configured": "on",
-                                     "es-meta_business_unit": self.mbu.pk},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
+                                        {"de-name": enrollment.name,
+                                         "de-display_name": enrollment.display_name,
+                                         "de-realm": realm.pk,
+                                         "de-scep_issuer": enrollment.scep_issuer.pk,
+                                         "de-push_certificate": enrollment.push_certificate.pk,
+                                         "de-virtual_server": enrollment.virtual_server.pk,
+                                         "de-is_multi_user": "on",
+                                         "de-is_supervised": "on",
+                                         "de-is_mandatory": "on",
+                                         "de-admin_full_name": "yolo2",
+                                         "de-admin_short_name": "fomo2",
+                                         "de-hidden_admin": "on",
+                                         "de-admin_password_complexity": 2,
+                                         "de-admin_password_rotation_delay": 15,
+                                         "de-await_device_configured": "on",
+                                         "es-meta_business_unit": self.mbu.pk},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
+        self.assertEqual(len(callbacks), 0)  # the DEP profile has not changed
+        define_dep_profile_task.apply_async.assert_not_called()
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.admin_full_name, "yolo2")
         self.assertEqual(enrollment.admin_short_name, "fomo2")

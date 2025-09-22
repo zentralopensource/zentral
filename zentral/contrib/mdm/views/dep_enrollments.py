@@ -1,13 +1,15 @@
 import logging
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import DetailView, TemplateView
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
-from zentral.contrib.mdm.dep import add_dep_profile
+from zentral.contrib.mdm.dep import define_dep_profile, serialize_dep_profile
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import CreateDEPEnrollmentForm, DEPEnrollmentCustomViewForm, UpdateDEPEnrollmentForm
 from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentCustomView
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
+from zentral.contrib.mdm.tasks import define_dep_profile_task
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 
 
@@ -46,9 +48,8 @@ class CreateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
         if dep_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
             dep_enrollment = dep_enrollment_form.save(commit=False)
             dep_enrollment.enrollment_secret = enrollment_secret_form.save()
-            enrollment_secret_form.save_m2m()
             try:
-                add_dep_profile(dep_enrollment)
+                define_dep_profile(dep_enrollment)
             except DEPClientError as error:
                 dep_enrollment_form.add_error(None, str(error))
             else:
@@ -126,6 +127,7 @@ class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        prev_dep_profile = serialize_dep_profile(self.object)
         dep_enrollment_form = UpdateDEPEnrollmentForm(
             request.POST, prefix="de", instance=self.object
         )
@@ -138,13 +140,14 @@ class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
         if dep_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
             dep_enrollment = dep_enrollment_form.save(commit=False)
             dep_enrollment.enrollment_secret = enrollment_secret_form.save()
+            dep_enrollment.save()
             enrollment_secret_form.save_m2m()
-            try:
-                add_dep_profile(dep_enrollment)
-            except DEPClientError as error:
-                dep_enrollment_form.add_error(None, str(error))
+            if serialize_dep_profile(dep_enrollment) != prev_dep_profile:
+                logger.info("Push updated DEP profile %s to ABM", dep_enrollment.pk)
+                transaction.on_commit(lambda: define_dep_profile_task.apply_async((dep_enrollment.pk,)))
             else:
-                return redirect(dep_enrollment)
+                logger.info("DEP profile %s unchanged", dep_enrollment.pk)
+            return redirect(dep_enrollment)
         return self.render_to_response(
             self.get_context_data(
                 dep_enrollment_form=dep_enrollment_form,

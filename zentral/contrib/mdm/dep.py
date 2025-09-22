@@ -289,43 +289,51 @@ def assign_dep_device_profile(dep_device, dep_profile):
         raise DEPClientError(err_msg)
 
 
-def add_dep_profile(dep_profile):
-    dep_client = DEPClient.from_dep_virtual_server(dep_profile.virtual_server)
-    profile_payload = serialize_dep_profile(dep_profile)
+def define_dep_profile(dep_enrollment):
+    logger.info("Define DEP profile %s", dep_enrollment.pk)
+    dep_client = DEPClient.from_dep_virtual_server(dep_enrollment.virtual_server)
+    profile_payload = serialize_dep_profile(dep_enrollment)
     profile_response = dep_client.add_profile(profile_payload)
-    dep_profile.uuid = profile_response["profile_uuid"]
-    dep_profile.save()
+    dep_enrollment.uuid = profile_response["profile_uuid"]
+    dep_enrollment.save()
 
-    success_devices = []
-    not_accessible_devices = []
-    failed_devices = []
-    for serial_number, result in profile_response["devices"].items():
-        if result == "SUCCESS":
-            success_devices.append(serial_number)
-        elif result == "NOT_ACCESSIBLE":
-            not_accessible_devices.append(serial_number)
-        elif result == "FAILED":
-            failed_devices.append(serial_number)
-        else:
-            raise DEPClientError(f"Unknown result {serial_number}: {result}")
+    result = {
+        "pk": dep_enrollment.pk,
+        "display_name": dep_enrollment.display_name,
+        "name": dep_enrollment.name,
+        "uuid": str(uuid.UUID(dep_enrollment.uuid)),
+        "devices": {
+            "success": [],
+            "not_accessible": [],
+            "failed": [],
+        }
+    }
 
-    if failed_devices:
-        # TODO: implement retry
-        raise DEPClientError("Failed devices!")
+    for serial_number, status in profile_response["devices"].items():
+        try:
+            result["devices"][status.lower()].append(serial_number)
+        except KeyError:
+            logger.error("Unknown status %s: %s", serial_number, status)
 
     # update dep devices
-    if success_devices:
+    if result["devices"]["success"]:
         # To avoid some performance issues, only update the devices in the database.
         # The next sync will fix the differences.
-        (DEPDevice.objects.filter(serial_number__in=success_devices)
-                          .update(profile_uuid=dep_profile.uuid,
+        (DEPDevice.objects.filter(serial_number__in=result["devices"]["success"])
+                          .update(profile_uuid=dep_enrollment.uuid,
+                                  profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
                                   profile_assign_time=datetime.datetime.utcnow(),
-                                  enrollment=dep_profile))
+                                  enrollment=dep_enrollment))
 
     # mark unaccessible devices as deleted
-    if not_accessible_devices:
-        (DEPDevice.objects.filter(serial_number__in=not_accessible_devices)
+    if result["devices"]["not_accessible"]:
+        (DEPDevice.objects.filter(serial_number__in=result["devices"]["not_accessible"])
                           .update(last_op_type=DEPDevice.OP_TYPE_DELETED))
+
+    if result["devices"]["failed"]:
+        logger.error("Define DEP profile %s response has failed devices", dep_enrollment.pk)
+
+    return result
 
 
 def refresh_dep_device(dep_device):
