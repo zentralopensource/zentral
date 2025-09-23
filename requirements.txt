@@ -6,7 +6,7 @@ azure-storage-blob
 boto3                           # conf, monolith, events (kinesis, sns/sqs)
 celery<6
 clickhouse-connect
-django-celery-results==2.4.0
+django-celery-results==2.6.0
 cryptography                    # MDM, monolith (cloudfront), munki
 defusedxml
 django>=4.2.8,<5
