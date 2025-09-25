@@ -19,7 +19,7 @@ class InventoryMachineSubview:
         self.user = user
         self.enrolled_devices = list(
             EnrolledDevice.objects.filter(serial_number=serial_number)
-                                  .prefetch_related("enrolleduser_set")
+                                  .prefetch_related("users")
                                   .order_by("-updated_at")
         )
         count = len(self.enrolled_devices)
@@ -29,7 +29,7 @@ class InventoryMachineSubview:
     def render(self):
         enrolled_devices = []
         for enrolled_device in self.enrolled_devices:
-            enrolled_users = list(enrolled_device.enrolleduser_set.all())
+            enrolled_users = list(enrolled_device.users.all())
             enrolled_devices.append((enrolled_device, enrolled_users))
         ctx = {"err_message": self.err_message,
                "enrolled_devices": enrolled_devices,

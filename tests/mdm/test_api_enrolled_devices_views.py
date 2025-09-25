@@ -1,3 +1,4 @@
+from datetime import datetime
 from functools import reduce
 import operator
 import plistlib
@@ -13,7 +14,7 @@ from zentral.contrib.mdm.commands import SetAutoAdminPassword
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.events import AdminPasswordViewedEvent, FileVaultPRKViewedEvent, RecoveryPasswordViewedEvent
 from zentral.contrib.mdm.models import Platform
-from .utils import force_dep_enrollment_session
+from .utils import force_dep_enrollment_session, force_enrolled_user
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -37,6 +38,7 @@ class APIViewsTestCase(TestCase):
             cls.mbu, authenticated=True, completed=True
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
+        cls.enrolled_user = force_enrolled_user(cls.enrolled_device)
 
     # utility methods
 
@@ -119,6 +121,7 @@ class APIViewsTestCase(TestCase):
                           'filevault_prk_escrowed': False,
                           'id': self.enrolled_device.id,
                           'last_notified_at': None,
+                          'last_ip': None,
                           'last_seen_at': None,
                           'model': None,
                           'name': None,
@@ -130,10 +133,28 @@ class APIViewsTestCase(TestCase):
                           'udid': self.enrolled_device.udid,
                           'updated_at': self.enrolled_device.updated_at.isoformat(),
                           'user_approved_enrollment': None,
-                          'user_enrollment': None}]}
+                          'user_enrollment': None,
+                          'users': [{
+                              'id': self.enrolled_user.id,
+                              'enrollment_id': None,
+                              'user_id': self.enrolled_user.user_id,
+                              'long_name': self.enrolled_user.long_name,
+                              'short_name': self.enrolled_user.short_name,
+                              'declarative_management': False,
+                              'last_ip': None,
+                              'last_seen_at': None,
+                              'created_at': self.enrolled_user.created_at.isoformat(),
+                              'updated_at': self.enrolled_user.updated_at.isoformat(),
+                          }]}]}
         )
 
     def test_enrolled_devices_by_serial_number(self):
+        self.enrolled_device.last_ip = "54d0:a11d:dee1:88bf:a120:8ff2:da43:aaad"
+        self.enrolled_device.last_seen_at = datetime(2025, 9, 25)
+        self.enrolled_device.save()
+        self.enrolled_user.last_ip = "54d0:a11d:dee1:88bf:a120:8ff2:da43:aaad"
+        self.enrolled_user.last_seen_at = datetime(2025, 9, 25)
+        self.enrolled_user.save()
         self.set_permissions("mdm.view_enrolleddevice")
         response = self.get(
             reverse("mdm_api:enrolled_devices")
@@ -166,7 +187,8 @@ class APIViewsTestCase(TestCase):
                           'filevault_prk_escrowed': False,
                           'id': self.enrolled_device.id,
                           'last_notified_at': None,
-                          'last_seen_at': None,
+                          'last_ip': "54d0:a11d:dee1:88bf:a120:8ff2:da43:aaad",
+                          'last_seen_at': "2025-09-25T00:00:00",
                           'model': None,
                           'name': None,
                           'os_version': '',
@@ -177,7 +199,19 @@ class APIViewsTestCase(TestCase):
                           'udid': self.enrolled_device.udid,
                           'updated_at': self.enrolled_device.updated_at.isoformat(),
                           'user_approved_enrollment': None,
-                          'user_enrollment': None}]}
+                          'user_enrollment': None,
+                          'users': [{
+                              'id': self.enrolled_user.id,
+                              'enrollment_id': None,
+                              'user_id': self.enrolled_user.user_id,
+                              'long_name': self.enrolled_user.long_name,
+                              'short_name': self.enrolled_user.short_name,
+                              'declarative_management': False,
+                              'last_ip': "54d0:a11d:dee1:88bf:a120:8ff2:da43:aaad",
+                              'last_seen_at': "2025-09-25T00:00:00",
+                              'created_at': self.enrolled_user.created_at.isoformat(),
+                              'updated_at': self.enrolled_user.updated_at.isoformat(),
+                          }]}]}
         )
 
     def test_enrolled_devices_by_serial_number_no_result(self):
@@ -222,6 +256,7 @@ class APIViewsTestCase(TestCase):
                           'filevault_prk_escrowed': False,
                           'id': self.enrolled_device.id,
                           'last_notified_at': None,
+                          'last_ip': None,
                           'last_seen_at': None,
                           'model': None,
                           'name': None,
@@ -233,7 +268,19 @@ class APIViewsTestCase(TestCase):
                           'udid': self.enrolled_device.udid,
                           'updated_at': self.enrolled_device.updated_at.isoformat(),
                           'user_approved_enrollment': None,
-                          'user_enrollment': None}]}
+                          'user_enrollment': None,
+                          'users': [{
+                              'id': self.enrolled_user.id,
+                              'enrollment_id': None,
+                              'user_id': self.enrolled_user.user_id,
+                              'long_name': self.enrolled_user.long_name,
+                              'short_name': self.enrolled_user.short_name,
+                              'declarative_management': False,
+                              'last_ip': None,
+                              'last_seen_at': None,
+                              'created_at': self.enrolled_user.created_at.isoformat(),
+                              'updated_at': self.enrolled_user.updated_at.isoformat(),
+                          }]}]}
         )
 
     def test_enrolled_devices_by_udid_no_result(self):
@@ -286,6 +333,7 @@ class APIViewsTestCase(TestCase):
                           'filevault_prk_escrowed': True,
                           'id': self.enrolled_device.id,
                           'last_notified_at': None,
+                          'last_ip': None,
                           'last_seen_at': None,
                           'model': None,
                           'name': None,
@@ -297,7 +345,19 @@ class APIViewsTestCase(TestCase):
                           'udid': self.enrolled_device.udid,
                           'updated_at': self.enrolled_device.updated_at.isoformat(),
                           'user_approved_enrollment': None,
-                          'user_enrollment': None}]}
+                          'user_enrollment': None,
+                          'users': [{
+                              'id': self.enrolled_user.id,
+                              'enrollment_id': None,
+                              'user_id': self.enrolled_user.user_id,
+                              'long_name': self.enrolled_user.long_name,
+                              'short_name': self.enrolled_user.short_name,
+                              'declarative_management': False,
+                              'last_ip': None,
+                              'last_seen_at': None,
+                              'created_at': self.enrolled_user.created_at.isoformat(),
+                              'updated_at': self.enrolled_user.updated_at.isoformat(),
+                          }]}]}
         )
 
     def test_enrolled_devices_tag_filters_unknown(self):
@@ -362,6 +422,7 @@ class APIViewsTestCase(TestCase):
                           'filevault_prk_escrowed': False,
                           'id': self.enrolled_device.id,
                           'last_notified_at': None,
+                          'last_ip': None,
                           'last_seen_at': None,
                           'model': None,
                           'name': None,
@@ -373,7 +434,19 @@ class APIViewsTestCase(TestCase):
                           'udid': self.enrolled_device.udid,
                           'updated_at': self.enrolled_device.updated_at.isoformat(),
                           'user_approved_enrollment': None,
-                          'user_enrollment': None}]}
+                          'user_enrollment': None,
+                          'users': [{
+                              'id': self.enrolled_user.id,
+                              'enrollment_id': None,
+                              'user_id': self.enrolled_user.user_id,
+                              'long_name': self.enrolled_user.long_name,
+                              'short_name': self.enrolled_user.short_name,
+                              'declarative_management': False,
+                              'last_ip': None,
+                              'last_seen_at': None,
+                              'created_at': self.enrolled_user.created_at.isoformat(),
+                              'updated_at': self.enrolled_user.updated_at.isoformat(),
+                          }]}]}
         )
 
     def test_enrolled_devices_excluded_tag_filter_no_results(self):
@@ -439,6 +512,7 @@ class APIViewsTestCase(TestCase):
              'filevault_prk_escrowed': False,
              'id': self.enrolled_device.pk,
              'last_notified_at': None,
+             'last_ip': None,
              'last_seen_at': None,
              'model': None,
              'name': None,
@@ -450,7 +524,19 @@ class APIViewsTestCase(TestCase):
              'udid': self.enrolled_device.udid,
              'updated_at': self.enrolled_device.updated_at.isoformat(),
              'user_approved_enrollment': None,
-             'user_enrollment': None}
+             'user_enrollment': None,
+             'users': [{
+                 'id': self.enrolled_user.id,
+                 'enrollment_id': None,
+                 'user_id': self.enrolled_user.user_id,
+                 'long_name': self.enrolled_user.long_name,
+                 'short_name': self.enrolled_user.short_name,
+                 'declarative_management': False,
+                 'last_ip': None,
+                 'last_seen_at': None,
+                 'created_at': self.enrolled_user.created_at.isoformat(),
+                 'updated_at': self.enrolled_user.updated_at.isoformat(),
+             }]}
         )
 
     # unblock enrolled device
@@ -501,6 +587,7 @@ class APIViewsTestCase(TestCase):
              'filevault_prk_escrowed': False,
              'id': self.enrolled_device.pk,
              'last_notified_at': None,
+             'last_ip': None,
              'last_seen_at': None,
              'model': None,
              'name': None,
@@ -512,7 +599,19 @@ class APIViewsTestCase(TestCase):
              'udid': self.enrolled_device.udid,
              'updated_at': self.enrolled_device.updated_at.isoformat(),
              'user_approved_enrollment': None,
-             'user_enrollment': None}
+             'user_enrollment': None,
+             'users': [{
+                 'id': self.enrolled_user.id,
+                 'enrollment_id': None,
+                 'user_id': self.enrolled_user.user_id,
+                 'long_name': self.enrolled_user.long_name,
+                 'short_name': self.enrolled_user.short_name,
+                 'declarative_management': False,
+                 'last_ip': None,
+                 'last_seen_at': None,
+                 'created_at': self.enrolled_user.created_at.isoformat(),
+                 'updated_at': self.enrolled_user.updated_at.isoformat(),
+             }]}
         )
 
     # erase enrolled device

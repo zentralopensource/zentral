@@ -199,8 +199,8 @@ class MDMView(PostEventMixin, View):
             return
         enrolled_device = self.enrolled_device
         try:
-            return (enrolled_device.enrolleduser_set.select_related("enrolled_device")
-                                                    .get(user_id=self.enrolled_user_id))
+            return (enrolled_device.users.select_related("enrolled_device")
+                                         .get(user_id=self.enrolled_user_id))
         except EnrolledUser.DoesNotExist:
             self.abort(f"enrolled device {enrolled_device.udid} has no user {self.enrolled_user_id}")
 
@@ -444,8 +444,8 @@ class ConnectView(MDMView):
             if command:
                 command.process_response(self.payload, self.enrollment_session, self.meta_business_unit)
 
-        # update last seen at
-        self.target.update_last_seen()
+        # update last ip & last seen at
+        self.target.update_last_info(self.request)
 
         if self.target.blocked:
             return HttpResponse("Blocked", status=401)

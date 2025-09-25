@@ -63,13 +63,13 @@
         <th>Available update{{ available_software_updates|length|pluralize }}</th>
         <td>{% if available_software_updates %}{{ available_software_updates|join:", " }}{% else %}-{% endif %}</td>
         </tr>
-        {% with object.enrolleduser_set.count as users_count %}
+        {% with object.users.count as users_count %}
         <tr>
         <th>MDM user{{ users_count|pluralize }}</th>
         <td>
             {% if users_count %}
             <ul class="list-unstyled">
-            {% for user in object.enrolleduser_set.all %}
+            {% for user in object.users.all %}
             <li>
                 {% if perms.mdm.view_enrolleduser %}
                 <a href="{{ user.get_absolute_url }}">{{ user.long_name }}</a>

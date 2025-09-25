@@ -909,6 +909,7 @@ class EnrolledDevice(models.Model):
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
     token = models.BinaryField(blank=True, null=True)
     push_magic = models.TextField(blank=True, null=True)
+    last_ip = models.GenericIPAddressField(unpack_ipv4=True, null=True)
     last_seen_at = models.DateTimeField(null=True)
     last_notified_at = models.DateTimeField(null=True)
     notification_queued_at = models.DateTimeField(null=True)
@@ -1120,6 +1121,7 @@ class EnrolledDevice(models.Model):
 
     def purge_state(self, full=False):
         self.declarative_management = False
+        self.last_ip = None
         self.last_seen_at = None
         self.last_notified_at = None
         self.notification_queued_at = None
@@ -1140,7 +1142,7 @@ class EnrolledDevice(models.Model):
         self.save()
         self.commands.all().delete()
         self.target_artifacts.all().delete()
-        self.enrolleduser_set.all().delete()
+        self.users.all().delete()
         # TODO purge tokens?
         # TODO revoke assets?
 
@@ -1340,7 +1342,7 @@ class EnrolledDevice(models.Model):
 
 
 class EnrolledUser(models.Model):
-    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="users")
 
     # user info
     user_id = models.CharField(max_length=255, unique=True)
@@ -1355,6 +1357,7 @@ class EnrolledUser(models.Model):
 
     # notifications
     token = models.BinaryField()
+    last_ip = models.GenericIPAddressField(unpack_ipv4=True, null=True)
     last_seen_at = models.DateTimeField(null=True)
     last_notified_at = models.DateTimeField(null=True)
     notification_queued_at = models.DateTimeField(null=True)

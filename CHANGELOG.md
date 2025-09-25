@@ -6,6 +6,10 @@
 
 Add auto admin unique passwords for ADE. This is similare to Windows LAPS.
 
+Add last IP address to enrolled device & user records.
+
+Return users in enrolled device API responses.
+
 #### Core
 
 Better background task status tracking (`PENDING`, `STARTED`).

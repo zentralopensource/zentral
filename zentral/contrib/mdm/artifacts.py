@@ -11,6 +11,7 @@ from psycopg2 import sql
 import psycopg2.extras
 import uuid
 from zentral.contrib.inventory.models import MetaMachine
+from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.text import shard as compute_shard
 from .apns import send_enrolled_device_notification, send_enrolled_user_notification
@@ -209,9 +210,11 @@ class Target:
     def current_declarations_token(self):
         return self.target.declarations_token
 
-    def update_last_seen(self):
+    def update_last_info(self, request):
+        _, ip = user_agent_and_ip_address_from_request(request)
+        self.target.last_ip = ip or None
         self.target.last_seen_at = datetime.utcnow()
-        self.target.save(update_fields=["last_seen_at", "updated_at"])
+        self.target.save(update_fields=["last_ip", "last_seen_at", "updated_at"])
 
     # blueprint filtering method
 

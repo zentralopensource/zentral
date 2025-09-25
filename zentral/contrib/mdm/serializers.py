@@ -30,7 +30,8 @@ from .models import (ACMEIssuer,
                      DataAsset,
                      Declaration, DeclarationRef,
                      DeviceCommand,
-                     EnrolledDevice, EnterpriseApp, FileVaultConfig,
+                     EnrolledDevice, EnrolledUser,
+                     EnterpriseApp, FileVaultConfig,
                      Location, LocationAsset,
                      OTAEnrollment,
                      Platform, Profile, PushCertificate,
@@ -84,14 +85,33 @@ class UserCommandSerializer(serializers.ModelSerializer):
         )
 
 
+class EnrolledUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EnrolledUser
+        fields = (
+            "id",
+            "user_id",
+            "enrollment_id",
+            "long_name",
+            "short_name",
+            "declarative_management",
+            "last_ip",
+            "last_seen_at",
+            "created_at",
+            "updated_at",
+        )
+
+
 class EnrolledDeviceSerializer(serializers.ModelSerializer):
     os_version = serializers.CharField(source="current_os_version")
     build_version = serializers.CharField(source="current_build_version")
+    users = EnrolledUserSerializer(many=True)
 
     class Meta:
         model = EnrolledDevice
         fields = (
             "id",
+            "users",
             "udid",
             "serial_number",
             "name",
@@ -118,6 +138,7 @@ class EnrolledDeviceSerializer(serializers.ModelSerializer):
             "admin_shortname",
             "admin_password_escrowed",
             "activation_lock_manageable",
+            "last_ip",
             "last_seen_at",
             "last_notified_at",
             "checkout_at",

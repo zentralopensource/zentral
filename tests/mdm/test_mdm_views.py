@@ -491,9 +491,11 @@ class MDMViewsTestCase(TestCase):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         # simulate some state
         ed = session.enrolled_device
+        self.assertIsNone(ed.last_ip)
         self.assertIsNone(ed.last_seen_at)
         self.assertIsNone(ed.last_notified_at)
         self.assertIsNone(ed.notification_queued_at)
+        ed.last_ip = "127.0.0.1"
         ed.last_seen_at = datetime.utcnow()
         ed.last_notified_at = datetime.utcnow()
         ed.notification_queued_at = datetime.utcnow()
@@ -520,6 +522,7 @@ class MDMViewsTestCase(TestCase):
         session.refresh_from_db()
         ed.refresh_from_db()
         self.assertEqual(session.enrolled_device, ed)
+        self.assertIsNone(ed.last_ip)
         self.assertIsNone(ed.last_seen_at)
         self.assertIsNone(ed.last_notified_at)
         self.assertIsNone(ed.notification_queued_at)
@@ -580,7 +583,7 @@ class MDMViewsTestCase(TestCase):
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
         self._assertSuccess(post_event, token_type="user", device_created=False, user_created=True)
-        enrolled_user = session.enrolled_device.enrolleduser_set.first()
+        enrolled_user = session.enrolled_device.users.first()
         self.assertEqual(enrolled_user.user_id, user_id)
         self.assertEqual(enrolled_user.token.tobytes(), token)
         self.assertEqual(enrolled_user.long_name, user_long_name)
@@ -1410,12 +1413,14 @@ class MDMViewsTestCase(TestCase):
         enrolled_device.device_information_updated_at = now
         enrolled_device.security_info_updated_at = now
         enrolled_device.save()
+        self.assertIsNone(enrolled_device.last_ip)
         self.assertIsNone(enrolled_device.last_seen_at)
         payload = {"UDID": udid, "Status": "Idle"}
         response = self._put(reverse("mdm_public:connect"), payload, session)
         self.assertEqual(response.content, b"")
         self.assertEqual(response.status_code, 200)
         enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.last_ip, "127.0.0.1")
         self.assertTrue(enrolled_device.last_seen_at > now)
 
     def test_device_channel_connect_idle_base_inventoryup_to_date_no_command(self, post_event):
@@ -1424,6 +1429,7 @@ class MDMViewsTestCase(TestCase):
         enrolled_device = EnrolledDevice.objects.get(udid=udid)
         self.assertIsNone(enrolled_device.device_information_updated_at)
         self.assertIsNone(enrolled_device.security_info_updated_at)
+        self.assertIsNone(enrolled_device.last_ip)
         self.assertIsNone(enrolled_device.last_seen_at)
         payload = {"UDID": udid, "Status": "Idle"}
         response = self._put(reverse("mdm_public:connect"), payload, session)
@@ -1431,11 +1437,13 @@ class MDMViewsTestCase(TestCase):
         data = plistlib.loads(response.content)
         self.assertEqual(data["Command"]["RequestType"], "DeviceInformation")
         enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.last_ip, "127.0.0.1")
         self.assertTrue(enrolled_device.last_seen_at > now)
 
     def test_user_channel_connect_idle_no_command(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         enrolled_user = force_enrolled_user(session.enrolled_device)
+        self.assertIsNone(enrolled_user.last_ip)
         self.assertIsNone(enrolled_user.last_seen_at)
         now = datetime.utcnow()
         payload = {"UDID": udid, "Status": "Idle",
@@ -1444,6 +1452,7 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(response.content, b"")
         self.assertEqual(response.status_code, 200)
         enrolled_user.refresh_from_db()
+        self.assertEqual(enrolled_user.last_ip, "127.0.0.1")
         self.assertTrue(enrolled_user.last_seen_at > now)
 
     def test_device_channel_connect_idle_device_cert_expiry_reenroll(self, post_event):

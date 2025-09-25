@@ -618,6 +618,20 @@ Response:
             "udid": "2A7F9BCE-9B52-4073-BE21-E419C85068E9",
             "serial_number": "012345678910",
             "name": "John’s Mac mini",
+            "users": [
+              {
+                "id": 29,
+                "enrollment_id": null,
+                "user_id": "0D3E9724-6740-4115-BCC8-3045285AF8C5",
+                "long_name": "John Smith",
+                "short_name": "john",
+                "declarative_management": true,
+                "last_ip": "1.1.1.1",
+                "last_seen_at": "2024-02-17T20:31:35.148923",
+                "created_at": "2023-08-06T14:44:02.829422",
+                "updated_at": "2024-02-17T20:31:35.149274"
+              }
+            ],
             "model": "Mac14,2",
             "platform": "macOS",
             "os_version": "15.6.1",
@@ -641,6 +655,7 @@ Response:
             "admin_shortname": null,
             "admin_password_escrowed": false,
             "activation_lock_manageable": true,
+            "last_ip": "1.1.1.1",
             "last_seen_at": "2025-09-04T14:33:05.817386",
             "last_notified_at": "2025-09-09T10:54:43.798841",
             "checkout_at": null,
@@ -699,6 +714,20 @@ Response:
   "udid": "2A7F9BCE-9B52-4073-BE21-E419C85068E9",
   "serial_number": "012345678910",
   "name": "John’s Mac mini",
+  "users": [
+    {
+      "id": 29,
+      "enrollment_id": null,
+      "user_id": "0D3E9724-6740-4115-BCC8-3045285AF8C5",
+      "long_name": "John Smith",
+      "short_name": "john",
+      "declarative_management": true,
+      "last_ip": "1.1.1.1",
+      "last_seen_at": "2024-02-17T20:31:35.148923",
+      "created_at": "2023-08-06T14:44:02.829422",
+      "updated_at": "2024-02-17T20:31:35.149274"
+    }
+  ],
   "model": "Macmini8,1",
   "platform": "macOS",
   "os_version": "14.2.1",
@@ -722,6 +751,7 @@ Response:
   "admin_shortname": null,
   "admin_password_escrowed": false,
   "activation_lock_manageable": true,
+  "last_ip": "1.1.1.1",
   "last_seen_at": "2024-02-17T20:31:34.848107",
   "last_notified_at": "2024-03-27T20:44:21.751091",
   "checkout_at": null,
@@ -754,6 +784,20 @@ Response:
   "udid": "2A7F9BCE-9B52-4073-BE21-E419C85068E9",
   "serial_number": "012345678910",
   "name": "John’s Mac mini",
+  "users": [
+    {
+      "id": 29,
+      "enrollment_id": null,
+      "user_id": "0D3E9724-6740-4115-BCC8-3045285AF8C5",
+      "long_name": "John Smith",
+      "short_name": "john",
+      "declarative_management": true,
+      "last_ip": "1.1.1.1",
+      "last_seen_at": "2024-02-17T20:31:35.148923",
+      "created_at": "2023-08-06T14:44:02.829422",
+      "updated_at": "2024-02-17T20:31:35.149274"
+    }
+  ],
   "model": "Macmini8,1",
   "platform": "macOS",
   "os_version": "14.2.1",
@@ -777,6 +821,7 @@ Response:
   "admin_shortname": null,
   "admin_password_escrowed": false,
   "activation_lock_manageable": true,
+  "last_ip": "1.1.1.1",
   "last_seen_at": "2024-02-17T20:31:34.848107",
   "last_notified_at": "2024-03-27T20:44:21.751091",
   "checkout_at": null,

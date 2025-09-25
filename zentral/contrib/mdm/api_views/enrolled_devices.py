@@ -62,7 +62,7 @@ class EnrolledDeviceFilter(filters.FilterSet):
 
 
 class EnrolledDeviceList(ListAPIView):
-    queryset = EnrolledDevice.objects.all()
+    queryset = EnrolledDevice.objects.prefetch_related("users").all()
     serializer_class = EnrolledDeviceSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
