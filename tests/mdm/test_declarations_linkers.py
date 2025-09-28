@@ -9,7 +9,7 @@ from .utils import force_artifact
 
 class MDMDeclarationLinkersTestCase(TestCase):
     def test_declaration_linkers_load(self):
-        self.assertEqual(len(declaration_linkers), 38)
+        self.assertEqual(len(declaration_linkers), 42)
 
     def test_activation_simple_refs(self):
         linker = declaration_linkers["com.apple.activation.simple"]

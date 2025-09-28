@@ -205,6 +205,12 @@ reasons:
   - key: Code
     type: <string>
     description: NSError's code.
+- value: Error.UnknownDeclarationType
+  description: The declaration type is not known.
+  details:
+  - key: UnknownDeclarationType
+    type: <string>
+    description: The `Type` of the declaration.
 - value: Error.UnknownPayloadKeys
   description: A declaration contains unknown payloads keys.
   details:
@@ -241,3 +247,9 @@ reasons:
   - key: Predicate
     type: <string>
     description: The predicate description of the predicate that is false.
+- value: Info.UnsupportedSettings
+  description: Unsupported settings in a configuration.
+  details:
+  - key: Settings
+    type: <array>
+    description: Array of strings containing each unsupported setting key-path.

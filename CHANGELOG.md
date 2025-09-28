@@ -10,6 +10,8 @@ Add last IP address to enrolled device & user records.
 
 Return users in enrolled device API responses.
 
+Update Apple [declaration definitions](https://github.com/apple/device-management/tree/8d9958d9b54239344e7190e17ddb559416b017e3/declarative/declarations) and [skipkeys](https://github.com/apple/device-management/blob/8d9958d9b54239344e7190e17ddb559416b017e3/other/skipkeys.yaml).
+
 #### Core
 
 Better background task status tracking (`PENDING`, `STARTED`).
