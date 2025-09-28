@@ -35,22 +35,29 @@ class DeclarationLinker:
         if self.type == "com.apple.activation.simple":
             self.refs[("StandardConfigurations", "*")] = ["com.apple.configuration.*"]
 
-    def _iter_keys(self, root=None, path=None, array=False):
+    def _iter_keys(self, root=None, path=None, id_path=None, array=False):
         if root is None:
             root = self.data["payloadkeys"]
         if path is None:
             path = []
+        if id_path is None:
+            id_path = []
         for key in root:
+            key_id = id(key)
+            if key_id in id_path:
+                logger.warning("recursion detected in %s, path %s, key %s", self.type, ".".join(path), key["key"])
+                continue
+            new_id_path = id_path + [key_id]
             if not array:
                 new_path = path + [key["key"]]
             else:
                 new_path = path + ['*']
             yield new_path, key
             if key["type"] == "<dictionary>":
-                yield from self._iter_keys(key["subkeys"], path=new_path, array=False)
+                yield from self._iter_keys(key["subkeys"], path=new_path, id_path=new_id_path, array=False)
             elif key["type"] == "<array>":
                 assert isinstance(key["subkeys"], list) and len(key["subkeys"]) == 1
-                yield from self._iter_keys(key["subkeys"], path=new_path, array=True)
+                yield from self._iter_keys(key["subkeys"], path=new_path, id_path=new_id_path, array=True)
 
     def iter_refs(self, root, callback, def_path=None, path=None):
         if def_path is None:
