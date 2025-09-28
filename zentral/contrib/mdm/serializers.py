@@ -246,7 +246,7 @@ class OTAEnrollmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OTAEnrollment
-        exclude = ('scep_config', 'scep_verification')
+        fields = "__all__"
 
     def create(self, validated_data):
         secret_data = validated_data.pop('enrollment_secret')

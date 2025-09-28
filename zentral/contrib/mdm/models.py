@@ -1500,11 +1500,8 @@ class MDMEnrollment(models.Model):
 
     acme_issuer = models.ForeignKey(ACMEIssuer, verbose_name="ACME issuer",
                                     on_delete=models.PROTECT, blank=True, null=True)
-    # TODO Finish migration!
     scep_issuer = models.ForeignKey(SCEPIssuer, verbose_name="SCEP issuer",
                                     on_delete=models.PROTECT)
-    scep_config = models.ForeignKey(SCEPConfig, on_delete=models.SET_NULL, null=True)
-    scep_verification = models.BooleanField(null=True)
 
     blueprint = models.ForeignKey(Blueprint, on_delete=models.SET_NULL, blank=True, null=True)
 

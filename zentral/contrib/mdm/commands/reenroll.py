@@ -25,11 +25,14 @@ class Reenroll(Command):
             self.reenrollment_session = (
                 ReEnrollmentSession.objects.select_related("enrolled_device",
                                                            "dep_enrollment__push_certificate",
-                                                           "dep_enrollment__scep_config",
+                                                           "dep_enrollment__acme_issuer",
+                                                           "dep_enrollment__scep_issuer",
                                                            "ota_enrollment__push_certificate",
-                                                           "ota_enrollment__scep_config",
+                                                           "ota_enrollment__acme_issuer",
+                                                           "ota_enrollment__scep_issuer",
                                                            "user_enrollment__push_certificate",
-                                                           "user_enrollment__scep_config")
+                                                           "user_enrollment__acme_issuer",
+                                                           "user_enrollment__scep_issuer")
                                            .get(pk=session_id)
             )
         except ReEnrollmentSession.DoesNotExist:

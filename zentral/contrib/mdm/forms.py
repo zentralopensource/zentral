@@ -443,7 +443,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
 
     class Meta:
         model = DEPEnrollment
-        exclude = ["scep_config", "scep_verification"]
+        fields = "__all__"
 
     def clean_is_mdm_removable(self):
         is_mdm_removable = self.cleaned_data.get("is_mdm_removable")
@@ -535,7 +535,7 @@ class UpdateDEPEnrollmentForm(CreateDEPEnrollmentForm):
 
     class Meta:
         model = DEPEnrollment
-        exclude = ("scep_config", "scep_verification", "virtual_server",)
+        exclude = ("virtual_server",)
 
 
 class DEPEnrollmentCustomViewForm(forms.ModelForm):
