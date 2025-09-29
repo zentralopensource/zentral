@@ -30,16 +30,23 @@ urlpatterns = [
     path('connect/',
          csrf_exempt(public_views.ConnectView.as_view()),
          name='connect'),
-    path('device_commands/<uuid:uuid>/enterprise_app/',
-         public_views.EnterpriseAppDownloadView.as_view(),
-         name="enterprise_app_download"),
-    # DDM
+
+    # Download views
+    path('acme_credential/<str:token>/',
+         public_views.ACMECredentialView.as_view(),
+         name="acme_credential"),
+    path('scep_credential/<str:token>/',
+         public_views.SCEPCredentialView.as_view(),
+         name="scep_credential"),
     path('data_assets/<str:token>/',
          public_views.DataAssetDownloadView.as_view(),
          name="data_asset_download_view"),
     path('profiles/<str:token>/',
          public_views.ProfileDownloadView.as_view(),
          name="profile_download_view"),
+    path('device_commands/<uuid:uuid>/enterprise_app/',
+         public_views.EnterpriseAppDownloadView.as_view(),
+         name="enterprise_app_download"),
 
     # OTA enrollment / ota views
     path('ota_enrollment/<int:pk>/enroll/',

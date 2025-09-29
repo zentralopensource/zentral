@@ -2,6 +2,7 @@ import base64
 import logging
 import os
 import plistlib
+import re
 import uuid
 import zipfile
 from django.core.files import File
@@ -27,7 +28,7 @@ from .models import (ACMEIssuer,
                      Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
                      DEPDevice, DEPEnrollment,
-                     DataAsset,
+                     CertAsset, DataAsset,
                      Declaration, DeclarationRef,
                      DeviceCommand,
                      EnrolledDevice, EnrolledUser,
@@ -742,12 +743,84 @@ class ArtifactVersionSerializer(serializers.Serializer):
         return artifact_version
 
 
-class B64EncodedBinaryField(serializers.Field):
-    def to_representation(self, value):
-        return base64.b64encode(value).decode("ascii")
+class RDNSerializer(serializers.Serializer):
+    type = serializers.CharField()
+    value = serializers.CharField()
 
-    def to_internal_value(self, data):
-        return base64.b64decode(data)
+    def validate_type(self, value):
+        if (
+            # https://github.com/apple/device-management/blob/8d9958d9b54239344e7190e17ddb559416b017e3/declarative/declarations/assets/credentials/scep.yaml#L38C178-L38C180  # NOQA
+            value not in ("C", "CN", "L", "O", "OU", "ST")
+            # very simple OID validator
+            and not re.match(r"^([0-2])((\.0)|(\.[1-9][0-9]*))*$", value)
+        ):
+            raise serializers.ValidationError("Invalid RDN type")
+        return value
+
+
+class CertAssetSANSerializer(serializers.Serializer):
+    rfc822Name = serializers.CharField(required=False, allow_null=True)
+    dNSName = serializers.CharField(required=False, allow_null=True)
+    uniformResourceIdentifier = serializers.CharField(required=False, allow_null=True)
+    ntPrincipalName = serializers.CharField(required=False, allow_null=True)
+
+
+class CertAssetSerializer(ArtifactVersionSerializer):
+    acme_issuer = serializers.PrimaryKeyRelatedField(queryset=ACMEIssuer.objects.all(), allow_null=True)
+    scep_issuer = serializers.PrimaryKeyRelatedField(queryset=SCEPIssuer.objects.all(), allow_null=True)
+    subject = serializers.ListField(child=RDNSerializer(), allow_empty=True, min_length=0)
+    subject_alt_name = CertAssetSANSerializer()
+    accessible = serializers.ChoiceField(choices=CertAsset.Accessibility.choices,
+                                         default=CertAsset.Accessibility.DEFAULT)
+
+    def validate(self, data):
+        data = super().validate(data)
+
+        # at least an ACME issuer or a SCEP issuer
+        acme_issuer = data.get("acme_issuer")
+        scep_issuer = data.get("scep_issuer")
+        if not acme_issuer and not scep_issuer:
+            raise serializers.ValidationError("An ACME issuer or SCEP issuer is required.")
+
+        # at least subject or subject_alt_name
+        subject = data["subject"]
+        san = data["subject_alt_name"]
+        if isinstance(san, dict):
+            san = {k: v for k, v in san.items() if v}
+        if not subject and not san:
+            raise serializers.ValidationError("A Subject or SubjectAltName is required.")
+
+        data["cert_asset"] = {
+            "acme_issuer": acme_issuer,
+            "scep_issuer": scep_issuer,
+            "subject": subject,
+            "subject_alt_name": san,
+            "accessible": data["accessible"]
+        }
+        return data
+
+    def create(self, validated_data):
+        with transaction.atomic(durable=True):
+            artifact_version = super().create(validated_data)
+            instance = CertAsset.objects.create(
+                artifact_version=artifact_version,
+                **validated_data["cert_asset"]
+            )
+        with transaction.atomic(durable=True):
+            for blueprint in artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
+        return instance
+
+    def update(self, instance, validated_data):
+        with transaction.atomic(durable=True):
+            super().update(instance, validated_data)
+            for attr, value in validated_data["cert_asset"].items():
+                setattr(instance, attr, value)
+            instance.save()
+        with transaction.atomic(durable=True):
+            for blueprint in instance.artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
+        return instance
 
 
 class DataAssetSerializer(ArtifactVersionSerializer):
@@ -896,6 +969,14 @@ class DeclarationSerializer(ArtifactVersionSerializer):
             for blueprint in instance.artifact_version.artifact.blueprints():
                 update_blueprint_serialized_artifacts(blueprint)
         return instance
+
+
+class B64EncodedBinaryField(serializers.Field):
+    def to_representation(self, value):
+        return base64.b64encode(value).decode("ascii")
+
+    def to_internal_value(self, data):
+        return base64.b64decode(data)
 
 
 class ProfileSerializer(ArtifactVersionSerializer):

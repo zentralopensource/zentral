@@ -130,7 +130,10 @@ def _find_zentral_ref_artifact(value, types):
         elif type.startswith("com.apple.asset."):
             if not artifact_type.is_asset:
                 continue
-            if artifact_type == Artifact.Type.DATA_ASSET:
+            if artifact_type == Artifact.Type.CERT_ASSET:
+                if type in ("com.apple.asset.credential.acme", "com.apple.asset.credential.scep"):
+                    return artifact
+            elif artifact_type == Artifact.Type.DATA_ASSET:
                 if type == "com.apple.asset.data":
                     return artifact
             elif artifact_type == Artifact.Type.ASSET:

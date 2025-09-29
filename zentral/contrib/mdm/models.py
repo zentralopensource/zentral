@@ -489,6 +489,7 @@ class CertIssuer(BackendInstance):
     def can_be_deleted(self):
         return (
             self.provisioning_uid is None
+            and self.certasset_set.count() == 0
             and self.depenrollment_set.count() == 0
             and self.otaenrollment_set.count() == 0
             and self.userenrollment_set.count() == 0
@@ -2402,6 +2403,7 @@ class Artifact(models.Model):
     class Type(models.TextChoices):
         ACTIVATION = "Activation"
         ASSET = "Asset"
+        CERT_ASSET = "Certificate Asset"
         CONFIGURATION = "Configuration"
         DATA_ASSET = "Data Asset"
         ENTERPRISE_APP = "Enterprise App"
@@ -2415,7 +2417,7 @@ class Artifact(models.Model):
 
         @property
         def is_asset(self):
-            return self.value in (self.ASSET, self.DATA_ASSET)
+            return self.value in (self.ASSET, self.CERT_ASSET, self.DATA_ASSET)
 
         @property
         def is_configuration(self):
@@ -2744,6 +2746,51 @@ class DeclarationRef(models.Model):
 
     class Meta:
         unique_together = (("declaration", "key"),)
+
+
+# https://github.com/apple/device-management/blob/release/declarative/declarations/assets/credentials/acme.yaml
+# https://github.com/apple/device-management/blob/release/declarative/declarations/assets/credentials/scep.yaml
+class CertAsset(models.Model):
+    class Accessibility(models.TextChoices):
+        DEFAULT = "Default", _("Default")
+        AFTER_FIRST_UNLOCK = "AfterFirstUnlock", _("After first unlock")
+
+    artifact_version = models.OneToOneField(ArtifactVersion, related_name="cert_asset",
+                                            on_delete=models.CASCADE, editable=False)
+    acme_issuer = models.ForeignKey(ACMEIssuer, verbose_name="ACME issuer",
+                                    on_delete=models.PROTECT, blank=True, null=True)
+    scep_issuer = models.ForeignKey(SCEPIssuer, verbose_name="SCEP issuer",
+                                    on_delete=models.PROTECT, blank=True, null=True)
+    subject = models.JSONField(default=list, blank=True)
+    subject_alt_name = models.JSONField(verbose_name="SubjectAltName", default=dict, blank=True)
+    accessible = models.CharField(choices=Accessibility.choices, default=Accessibility.DEFAULT)
+
+    def get_subject_alt_name_display(self):
+        return {k: v for k, v in self.subject_alt_name.items() if v}
+
+    def serialize_for_event(self):
+        d = self.artifact_version.serialize_for_event()
+        d.update({
+            "acme_issuer": self.acme_issuer.serialize_for_event(keys_only=True) if self.acme_issuer else None,
+            "scep_issuer": self.scep_issuer.serialize_for_event(keys_only=True) if self.scep_issuer else None,
+            "subject": self.subject,
+            "subject_alt_name": self.get_subject_alt_name_display(),
+            "accessible": self.accessible,
+        })
+        return d
+
+    def delete(self, *args, **kwargs):
+        self.artifact_version.delete(*args, **kwargs)
+        super().delete(*args, **kwargs)
+
+    def build_cert_payload(self):
+        cert_payload = {}
+        for rdn in self.subject:
+            cert_payload.setdefault("Subject", []).append([[rdn["type"], rdn["value"]]])
+        for k, v in self.subject_alt_name.items():
+            if v:
+                cert_payload.setdefault("SubjectAltName", {})[k] = v
+        return cert_payload
 
 
 def data_asset_path(instance, filename):

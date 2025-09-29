@@ -18,7 +18,7 @@ from zentral.contrib.mdm.commands.base import load_command, registered_manual_co
 from zentral.contrib.mdm.dep import assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
-                                       CreateDeclarationForm,
+                                       CreateCertAssetForm, CreateDeclarationForm,
                                        AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
                                        CreateAssetArtifactForm,
                                        DEPDeviceSearchForm, EnrolledDeviceSearchForm,
@@ -28,14 +28,14 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        SoftwareUpdateEnforcementForm,
                                        UpdateArtifactForm,
                                        UserEnrollmentForm,
-                                       UpgradeDataAssetForm, UpgradeEnterpriseAppForm,
+                                       UpgradeCertAssetForm, UpgradeDataAssetForm, UpgradeEnterpriseAppForm,
                                        UpgradeDeclarationForm, UpgradeProfileForm, UpgradeStoreAppForm,
                                        UploadDataAssetForm, UploadEnterpriseAppForm, UploadProfileForm)
 from zentral.contrib.mdm.inventory import update_realm_tags
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Asset, Blueprint, BlueprintArtifact,
                                         Channel,
-                                        DataAsset, Declaration,
+                                        CertAsset, DataAsset, Declaration,
                                         DEPDevice, DEPEnrollment,
                                         DeviceArtifact, UserArtifact,
                                         DeviceCommand, UserCommand,
@@ -486,6 +486,11 @@ class CreateDeclarationView(BaseCreateArtifactView):
         return ctx
 
 
+class CreateCertAssetView(BaseCreateArtifactView):
+    form_class = CreateCertAssetForm
+    template_name = "mdm/certasset_form.html"
+
+
 class UploadDataAssetView(BaseCreateArtifactView):
     form_class = UploadDataAssetForm
     template_name = "mdm/dataasset_form.html"
@@ -510,7 +515,10 @@ class ArtifactView(PermissionRequiredMixin, DetailView):
         model_class = upgrade_view = None
         select_related_extra = ()
         artifact_type = self.object.get_type()
-        if artifact_type == Artifact.Type.DATA_ASSET:
+        if artifact_type == Artifact.Type.CERT_ASSET:
+            model_class = CertAsset
+            upgrade_view = "upgrade_cert_asset"
+        elif artifact_type == Artifact.Type.DATA_ASSET:
             model_class = DataAsset
             upgrade_view = "upgrade_data_asset"
         elif artifact_type.is_raw_declaration:
@@ -535,7 +543,9 @@ class ArtifactView(PermissionRequiredMixin, DetailView):
         if upgrade_view and self.request.user.has_perm("mdm.add_artifactversion"):
             ctx["upgrade_link"] = reverse(f"mdm:{upgrade_view}", args=(self.object.pk,))
         version_qs = (
-            ArtifactVersion.objects.select_related("artifact", "enterprise_app", "profile", "store_app")
+            ArtifactVersion.objects.select_related("artifact",
+                                                   "cert_asset", "data_asset", "declaration",
+                                                   "enterprise_app", "profile", "store_app")
                                    .filter(artifact=self.object)
                                    .order_by("-version")
         )
@@ -692,7 +702,9 @@ class ArtifactVersionView(PermissionRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         ctx["artifact"] = self.artifact
         artifact_type = self.artifact.get_type()
-        if artifact_type == Artifact.Type.DATA_ASSET:
+        if artifact_type == Artifact.Type.CERT_ASSET:
+            ctx["cert_asset"] = self.object.cert_asset
+        elif artifact_type == Artifact.Type.DATA_ASSET:
             ctx["data_asset"] = self.object.data_asset
         elif artifact_type.is_raw_declaration:
             ctx["declaration"] = self.object.declaration
@@ -799,6 +811,12 @@ class BaseUpgradeArtifactVersionView(PermissionRequiredMixin, TemplateView):
             return self.forms_valid(object_form, version_form)
         else:
             return self.forms_invalid(object_form, version_form)
+
+
+class UpgradeCertAssetView(BaseUpgradeArtifactVersionView):
+    form = UpgradeCertAssetForm
+    model = "cert_asset"
+    model_display = "certificate asset"
 
 
 class UpgradeDataAssetView(BaseUpgradeArtifactVersionView):

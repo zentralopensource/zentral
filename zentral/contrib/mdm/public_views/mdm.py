@@ -14,11 +14,13 @@ from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import add_machine_tags
 from zentral.contrib.mdm.artifacts import Target
+from zentral.contrib.mdm.cert_issuer_backends import get_cached_cert_issuer_backend, test_acme_payload
 from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.base import get_command
 from zentral.contrib.mdm.commands.scheduling import get_next_command_response
 from zentral.contrib.mdm.crypto import build_enrolled_device_cert_defaults, verify_signed_payload
 from zentral.contrib.mdm.declarations import (build_declaration_response,
+                                              load_cert_asset_token,
                                               load_data_asset_token,
                                               load_legacy_profile_token,
                                               DeclarationError)
@@ -30,6 +32,7 @@ from zentral.contrib.mdm.models import (ArtifactVersion,
                                         Platform,
                                         ReEnrollmentSession, UserEnrollmentSession,
                                         PushCertificate)
+from zentral.contrib.mdm.payloads import substitute_variables
 from zentral.utils.certificates import parse_dn
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 from .base import PostEventMixin
@@ -454,6 +457,94 @@ class ConnectView(MDMView):
         return get_next_command_response(self.target, self.enrollment_session, request_status)
 
 
+# download views
+
+
+class DownloadView(View):
+    def get_token_loader(self):
+        raise NotImplementedError
+
+    def build_response(self):
+        raise NotImplementedError
+
+    def get(self, response, *args, **kwargs):
+        try:
+            self.object, self.enrollment_session, self.enrolled_user = self.get_token_loader()(kwargs["token"])
+            self.enrolled_device = self.enrollment_session.enrolled_device
+        except signing.BadSignature:
+            raise SuspiciousOperation("Bad token signature")
+        except ArtifactVersion.DoesNotExist:
+            raise Http404
+        return self.build_response()
+
+
+class CertCredentialView(DownloadView):
+    def get_token_loader(self):
+        return load_cert_asset_token
+
+    def build_response(self):
+        cert_payload = self.object.build_cert_payload()
+        cert_payload = substitute_variables(cert_payload, self.enrollment_session, self.enrolled_user)
+        self.update_cert_payload(cert_payload)
+        return JsonResponse(cert_payload)
+
+
+class ACMECredentialView(CertCredentialView):
+    def update_cert_payload(self, cert_payload):
+        if not self.object.acme_issuer:
+            raise SuspiciousOperation("Certificate Asset without ACME issuer")
+        acme, hardware_bound, attest = test_acme_payload(
+                Platform(self.enrolled_device.platform),
+                self.enrolled_device.comparable_os_version,
+                self.enrolled_device.model,
+        )
+        if not acme:
+            raise SuspiciousOperation("Device not ACME compatible")
+        get_cached_cert_issuer_backend(self.object.acme_issuer).update_acme_payload(
+            cert_payload, hardware_bound, attest, self.enrollment_session
+        )
+
+
+class SCEPCredentialView(CertCredentialView):
+    def update_cert_payload(self, cert_payload):
+        if not self.object.scep_issuer:
+            raise SuspiciousOperation("Certificate Asset without SCEP issuer")
+        get_cached_cert_issuer_backend(self.object.scep_issuer).update_scep_payload(
+            cert_payload, self.enrollment_session
+        )
+
+
+class DataAssetDownloadView(DownloadView):
+    def get_token_loader(self):
+        return load_data_asset_token
+
+    @cached_property
+    def _file_storage(self):
+        return select_dist_storage()
+
+    @cached_property
+    def _redirect_to_files(self):
+        return file_storage_has_signed_urls(self._file_storage)
+
+    def build_response(self):
+        if self._redirect_to_files:
+            return HttpResponseRedirect(self._file_storage.url(self.object.file.name))
+        else:
+            return FileResponse(self._file_storage.open(self.object.file.name),
+                                as_attachment=True, content_type=self.object.get_content_type())
+
+
+class ProfileDownloadView(DownloadView):
+    def get_token_loader(self):
+        return load_legacy_profile_token
+
+    def build_response(self):
+        return HttpResponse(build_payload(self.object, self.enrollment_session, self.enrolled_user),
+                            content_type="application/x-apple-aspen-config")
+
+
+# TODO limit access
+# TODO DownloadEnterpriseAppEvent with mdm namespace
 class EnterpriseAppDownloadView(View):
     @cached_property
     def _file_storage(self):
@@ -464,8 +555,6 @@ class EnterpriseAppDownloadView(View):
         return file_storage_has_signed_urls(self._file_storage)
 
     def get(self, response, *args, **kwargs):
-        # TODO limit access
-        # TODO DownloadEnterpriseAppEvent with mdm namespace
         device_command = get_object_or_404(DeviceCommand.objects.select_related("artifact_version__enterprise_app"),
                                            name="InstallEnterpriseApplication", uuid=kwargs["uuid"])
         package_file = device_command.artifact_version.enterprise_app.package
@@ -473,43 +562,3 @@ class EnterpriseAppDownloadView(View):
             return HttpResponseRedirect(self._file_storage.url(package_file.name))
         else:
             return FileResponse(self._file_storage.open(package_file.name), as_attachment=True)
-
-
-# DDM
-
-
-class DataAssetDownloadView(View):
-    @cached_property
-    def _file_storage(self):
-        return select_dist_storage()
-
-    @cached_property
-    def _redirect_to_files(self):
-        return file_storage_has_signed_urls(self._file_storage)
-
-    def get(self, response, *args, **kwargs):
-        # TODO DownloadDataAssetEvent with mdm namespace
-        try:
-            data_asset, enrollment_session, enrolled_user = load_data_asset_token(kwargs["token"])
-        except signing.BadSignature:
-            raise SuspiciousOperation("Bad legacy data asset token signature")
-        except ArtifactVersion.DoesNotExist:
-            raise Http404
-        if self._redirect_to_files:
-            return HttpResponseRedirect(self._file_storage.url(data_asset.file.name))
-        else:
-            return FileResponse(self._file_storage.open(data_asset.file.name),
-                                as_attachment=True, content_type=data_asset.get_content_type())
-
-
-class ProfileDownloadView(View):
-    def get(self, response, *args, **kwargs):
-        # TODO DownloadProfileEvent with mdm namespace
-        try:
-            profile, enrollment_session, enrolled_user = load_legacy_profile_token(kwargs["token"])
-        except signing.BadSignature:
-            raise SuspiciousOperation("Bad legacy profile token signature")
-        except ArtifactVersion.DoesNotExist:
-            raise Http404
-        return HttpResponse(build_payload(profile, enrollment_session, enrolled_user),
-                            content_type="application/x-apple-aspen-config")

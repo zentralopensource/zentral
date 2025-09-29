@@ -1,6 +1,4 @@
 import copy
-import json
-import os.path
 import plistlib
 from unittest.mock import patch
 import uuid
@@ -18,7 +16,8 @@ from zentral.contrib.mdm.models import (Asset, Artifact, ArtifactVersion, Artifa
                                         Platform, Profile, PushCertificate,
                                         StoreApp, TargetArtifact,
                                         UserArtifact)
-from .utils import (force_artifact, force_blueprint_artifact,
+from .utils import (build_status_report,
+                    force_artifact, force_blueprint_artifact,
                     force_software_update, force_software_update_enforcement,
                     MACOS_13_CLIENT_CAPABILITIES, MACOS_14_CLIENT_CAPABILITIES)
 
@@ -241,26 +240,6 @@ class TestMDMArtifacts(TestCase):
         )
         update_blueprint_serialized_artifacts(self.blueprint1)
         return blueprint_artifact, artifact, artifact_versions
-
-    def _build_status_report(self, extra_configurations):
-        status_report = json.load(
-            open(os.path.join(os.path.dirname(__file__), "testdata/status_report.json"), "rb")
-        )
-        configurations = status_report["StatusItems"]["management"]["declarations"]["configurations"]
-        configurations.pop()
-        for artifact_version, valid, active, reasons in extra_configurations:
-            if isinstance(valid, bool):
-                valid = "valid" if valid else "invalid"
-            configuration = {
-                "valid": valid,
-                "active": active,
-                "identifier": f"zentral.legacy-profile.{artifact_version.artifact.pk}",
-                "server-token": str(artifact_version.pk),
-            }
-            if reasons:
-                configuration["reasons"] = reasons
-            configurations.append(configuration)
-        return status_report
 
     # default platforms
 
@@ -1514,7 +1493,7 @@ class TestMDMArtifacts(TestCase):
                                                datetime(2003, 4, 5, 6, 7, 8),]
         _, profile_a, (profile_av2, profile_av) = self._force_blueprint_artifact(version_count=2)
         # v1
-        status_report = self._build_status_report([(profile_av, True, True, None)])
+        status_report = build_status_report([(profile_av, True, True, None)])
         self.enrolled_device.os_version = "10.5.2"
         target = Target(self.enrolled_device)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -1554,7 +1533,7 @@ class TestMDMArtifacts(TestCase):
                                                "mdm_artifactversion": [str(profile_av.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm"])
         # v2
-        status_report = self._build_status_report([(profile_av2, True, True, None)])
+        status_report = build_status_report([(profile_av2, True, True, None)])
         self.enrolled_device.os_version = "10.5.3"
         target = Target(self.enrolled_device)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -1637,7 +1616,7 @@ class TestMDMArtifacts(TestCase):
     def test_update_target_artifacts_from_status_report_uninstalled(self, patched_datetime):
         patched_datetime.utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
-        status_report = self._build_status_report([(profile_av, True, False, None)])
+        status_report = build_status_report([(profile_av, True, False, None)])
         self.enrolled_device.os_version = "10.5.2"
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
@@ -1651,7 +1630,7 @@ class TestMDMArtifacts(TestCase):
     def test_update_target_artifacts_from_status_report_valid_unknown_no_retry(self, patched_datetime):
         patched_datetime.utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
-        status_report = self._build_status_report([(profile_av, "unknown", True, None)])
+        status_report = build_status_report([(profile_av, "unknown", True, None)])
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
@@ -1668,7 +1647,7 @@ class TestMDMArtifacts(TestCase):
         reasons = [{"details": {"Error": "Yolo Fomo"},
                     "description": "Configuration cannot be applied",
                     "code": "Error.ConfigurationCannotBeApplied"}]
-        status_report = self._build_status_report([(profile_av, False, True, reasons)])
+        status_report = build_status_report([(profile_av, False, True, reasons)])
         self.enrolled_device.os_version = "10.5.2"
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
@@ -1684,7 +1663,7 @@ class TestMDMArtifacts(TestCase):
              "active": True}
         )
         # installed
-        status_report = self._build_status_report([(profile_av, True, True, None)])
+        status_report = build_status_report([(profile_av, True, True, None)])
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
@@ -1713,7 +1692,7 @@ class TestMDMArtifacts(TestCase):
             ).count(),
             1
         )
-        status_report = self._build_status_report([])
+        status_report = build_status_report()
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         self.assertEqual(DeviceArtifact.objects.filter(enrolled_device=self.enrolled_device).count(), 0)
@@ -1725,8 +1704,8 @@ class TestMDMArtifacts(TestCase):
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
         _, profile_b, (profile_bv,) = self._force_blueprint_artifact()
         # 2 installed
-        status_report = self._build_status_report([(profile_av, True, True, None),
-                                                   (profile_bv, True, True, None)])
+        status_report = build_status_report([(profile_av, True, True, None),
+                                             (profile_bv, True, True, None)])
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         self.assertEqual(
@@ -1734,7 +1713,7 @@ class TestMDMArtifacts(TestCase):
             set(str(a.pk) for a in (profile_a, profile_b))
         )
         # 1 installed
-        status_report = self._build_status_report([(profile_bv, True, True, None)])
+        status_report = build_status_report([(profile_bv, True, True, None)])
         target = Target(self.enrolled_device)
         self.assertTrue(target.update_target_artifacts_with_status_report(status_report) is True)
         self.assertEqual(
@@ -1758,13 +1737,13 @@ class TestMDMArtifacts(TestCase):
     # test update os info
 
     def test_update_os_info_user_channel(self):
-        status_report = self._build_status_report([])
+        status_report = build_status_report()
         target = Target(self.enrolled_device, self.enrolled_user)
         self.assertEqual(target.update_os_info_with_status_report(status_report), [])
 
     @patch("zentral.contrib.mdm.artifacts.logger.warning")
     def test_update_os_info_missing_operating_sytem(self, logger_warning):
-        status_report = self._build_status_report([])
+        status_report = build_status_report()
         status_report["StatusItems"]["device"].pop("operating-system")
         target = Target(self.enrolled_device)
         self.assertEqual(target.update_os_info_with_status_report(status_report), [])
@@ -1778,7 +1757,7 @@ class TestMDMArtifacts(TestCase):
         self.enrolled_device.os_version_extra = "(a)"
         self.enrolled_device.build_version = "22D261"
         self.enrolled_device.build_version_extra = "22D772610a"
-        status_report = self._build_status_report([])
+        status_report = build_status_report()
         status_report["StatusItems"]["device"]["operating-system"].pop("supplemental")
         target = Target(self.enrolled_device)
         self.assertEqual(
@@ -1795,7 +1774,7 @@ class TestMDMArtifacts(TestCase):
         self.enrolled_device.os_version_extra = ""
         self.enrolled_device.build_version = "22D261"
         self.enrolled_device.build_version_extra = ""
-        status_report = self._build_status_report([])
+        status_report = build_status_report()
         target = Target(self.enrolled_device)
         self.assertEqual(
             target.update_os_info_with_status_report(status_report),
@@ -1807,7 +1786,7 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(self.enrolled_device.build_version_extra, "22E772610a")
 
     def test_update_os_info_standard_no_changes(self):
-        status_report = self._build_status_report([])
+        status_report = build_status_report()
         self.enrolled_device.os_version = "13.3.1"
         self.enrolled_device.os_version_extra = "(a)"
         self.enrolled_device.build_version = "22E261"
@@ -1824,7 +1803,7 @@ class TestMDMArtifacts(TestCase):
     @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
     def test_update_device_target_with_status_report(self, send_enrolled_device_notification):
         target = Target(self.enrolled_device)
-        status_report = self._build_status_report([])
+        status_report = build_status_report()
         self.assertIsNone(target.client_capabilities)
         # first time, device notified
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -1846,7 +1825,7 @@ class TestMDMArtifacts(TestCase):
     @patch("zentral.contrib.mdm.artifacts.send_enrolled_user_notification")
     def test_update_user_target_with_status_report(self, send_enrolled_user_notification):
         target = Target(self.enrolled_device, self.enrolled_user)
-        status_report = self._build_status_report([])
+        status_report = build_status_report()
         self.assertIsNone(target.client_capabilities)
         # first time, device notified
         with self.captureOnCommitCallbacks(execute=True) as callbacks:

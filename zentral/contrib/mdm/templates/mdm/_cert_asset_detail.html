@@ -1,0 +1,45 @@
+{% load base_extras %}
+<tr>
+  <th colspan="2"><h4>Certificate Asset</h4></th>
+</tr>
+<tr>
+  <th>ACME Issuer</th>
+  <td>
+    {% if cert_asset.acme_issuer %}
+      {% if perms.mdm.view_acmeissuer %}
+      <a href="{{ cert_asset.acme_issuer.get_absolute_url }}">{{ cert_asset.acme_issuer }}</a>
+      {% else %}
+      {{ cert_asset.acme_issuer }}
+      {% endif %}
+    {% else %}
+    -
+    {% endif %}
+  </td>
+</tr>
+<tr>
+  <th>SCEP Issuer</th>
+  <td>
+    {% if cert_asset.scep_issuer %}
+      {% if perms.mdm.view_scepissuer %}
+      <a href="{{ cert_asset.scep_issuer.get_absolute_url }}">{{ cert_asset.scep_issuer }}</a>
+      {% else %}
+      {{ cert_asset.scep_issuer }}
+      {% endif %}
+    {% else %}
+    -
+    {% endif %}
+  </td>
+</tr>
+<tr>
+  <th>Subject</th>
+  <td>{{ cert_asset.subject|jsonprettyprint }}</td>
+</tr>
+</tr>
+<tr>
+  <th>SubjectAltName</th>
+  <td>{{ cert_asset.get_subject_alt_name_display|jsonprettyprint }}</td>
+</tr>
+<tr>
+  <th>Accessible</th>
+  <td>{{ cert_asset.accessible }}</td>
+</tr>

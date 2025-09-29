@@ -1,3 +1,4 @@
+from .cert_asset import build_cert_asset
 from .data_asset import build_data_asset
 from .declaration import build_declaration
 from .exceptions import DeclarationError
@@ -21,6 +22,8 @@ def build_declaration_response(endpoint, event_payload, enrollment_session, targ
         return build_specific_software_update_enforcement(target)
     elif ".declaration." in declaration_identifier:
         return build_declaration(enrollment_session, target, declaration_identifier)
+    elif ".cert-asset." in declaration_identifier:
+        return build_cert_asset(enrollment_session, target, declaration_identifier)
     elif ".data-asset." in declaration_identifier:
         return build_data_asset(enrollment_session, target, declaration_identifier)
     elif ".legacy-profile." in declaration_identifier:

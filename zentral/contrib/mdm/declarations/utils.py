@@ -3,7 +3,9 @@ import logging
 import uuid
 from django.contrib.contenttypes.models import ContentType
 from django.core import signing
-from zentral.contrib.mdm.models import Artifact, ArtifactVersion, DataAsset, Declaration, EnrolledUser, Profile
+from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
+                                        CertAsset, DataAsset,
+                                        Declaration, EnrolledUser, Profile)
 from zentral.utils.payloads import get_payload_identifier
 
 
@@ -31,6 +33,8 @@ def artifact_path_for_type(artifact_type):
     artifact_type = Artifact.Type(artifact_type)  # TODO: necessary?
     if artifact_type == Artifact.Type.PROFILE:
         return "legacy-profile"
+    elif artifact_type == Artifact.Type.CERT_ASSET:
+        return "cert-asset"
     elif artifact_type == Artifact.Type.DATA_ASSET:
         return "data-asset"
     elif artifact_type.is_declaration:
@@ -42,6 +46,8 @@ def artifact_path_for_type(artifact_type):
 def artifact_model_for_path(path):
     if path == "legacy-profile":
         return Profile
+    elif path == "cert-asset":
+        return CertAsset
     elif path == "data-asset":
         return DataAsset
     elif path == "declaration":
@@ -122,8 +128,12 @@ def dump_artifact_version_token(enrollment_session, target, artifact_version_pk,
 
 def load_artifact_version_token(token, artifact_type, salt):
     payload = signing.loads(token, salt=salt)
-    # data asset
-    artifact_version = ArtifactVersion.objects.select_related("profile").get(
+    # artifact version
+    artifact_version = ArtifactVersion.objects.select_related(
+        "cert_asset",
+        "data_asset",
+        "profile"
+    ).get(
         pk=payload["avpk"],
         artifact__type=artifact_type,
     )

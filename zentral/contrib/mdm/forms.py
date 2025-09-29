@@ -23,7 +23,7 @@ from .dep_client import DEPClient
 from .payloads import get_configuration_profile_info
 from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag, Channel,
-                     DataAsset, Declaration, DeclarationRef,
+                     CertAsset, DataAsset, Declaration, DeclarationRef,
                      DEPDevice, DEPOrganization, DEPEnrollment, DEPEnrollmentCustomView, DEPToken, DEPVirtualServer,
                      EnrolledDevice, EnterpriseApp, Platform,
                      FileVaultConfig, RecoveryPasswordConfig,
@@ -31,6 +31,7 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      Profile, Location, LocationAsset, StoreApp,
                      SoftwareUpdateEnforcement,
                      DeviceArtifact, TargetArtifact)
+from .serializers import CertAssetSANSerializer, RDNSerializer
 from .skip_keys import skippable_setup_panes
 
 
@@ -809,6 +810,77 @@ class UpgradeDeclarationForm(BaseDeclarationForm):
         declaration = super().save()
         self.save_refs()
         return declaration
+
+
+class BaseCertAssetForm(forms.ModelForm):
+    class Meta:
+        model = CertAsset
+        fields = "__all__"
+
+    def clean_subject(self):
+        subject = self.cleaned_data.get("subject")
+        serializer = RDNSerializer(data=subject, many=True)
+        if not serializer.is_valid():
+            raise forms.ValidationError("Invalid Subject.")
+        return serializer.data
+
+    def clean_subject_alt_name(self):
+        san = self.cleaned_data.get("subject_alt_name")
+        serializer = CertAssetSANSerializer(data=san)
+        if not serializer.is_valid():
+            raise forms.ValidationError("Invalid SubjectAltName.")
+        return serializer.data
+
+    def clean(self):
+        acme_issuer = self.cleaned_data.get("acme_issuer")
+        scep_issuer = self.cleaned_data.get("scep_issuer")
+        if not acme_issuer and not scep_issuer:
+            raise forms.ValidationError("An ACME issuer or SCEP issuer is required.")
+
+        subject = self.cleaned_data.get("subject")
+        san = self.cleaned_data.get("subject_alt_name")
+        if isinstance(san, dict):
+            san = {k: v for k, v in san.items() if v}
+        if not subject and not san:
+            raise forms.ValidationError("A Subject or SubjectAltName is required.")
+
+        return self.cleaned_data
+
+
+class CreateCertAssetForm(BaseCertAssetForm):
+    name = forms.CharField(min_length=1, max_length=256, required=True)
+    channel = forms.ChoiceField(choices=Channel.choices, required=True)
+    platforms = forms.MultipleChoiceField(choices=Platform.choices, widget=PlatformsWidget, required=True)
+
+    def clean_name(self):
+        name = self.cleaned_data.get("name")
+        if name and Artifact.objects.filter(name=name).exists():
+            raise forms.ValidationError("An artifact with this name already exists")
+        return name
+
+    def save(self):
+        artifact = Artifact.objects.create(name=self.cleaned_data["name"],
+                                           type=Artifact.Type.CERT_ASSET,
+                                           channel=self.cleaned_data["channel"],
+                                           platforms=self.cleaned_data["platforms"])
+        self.instance.artifact_version = ArtifactVersion.objects.create(
+            artifact=artifact,
+            version=1,
+            **{platform.lower(): True for platform in self.cleaned_data["platforms"]}
+        )
+        super().save()
+        return artifact
+
+
+class UpgradeCertAssetForm(BaseCertAssetForm):
+    def __init__(self, *args, **kwargs):
+        self.artifact = kwargs.pop("artifact")
+        super().__init__(*args, **kwargs)
+
+    def save(self, artifact_version):
+        self.instance.id = None  # force insert
+        self.instance.artifact_version = artifact_version
+        return super().save()
 
 
 class BaseDataAssetForm(forms.ModelForm):

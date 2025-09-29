@@ -242,7 +242,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
 
     def test_upgrade_data_asset_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
-        self._login("mdm.chane_artifactversion")  # upgrade is creation of a new version
+        self._login("mdm.change_artifactversion")  # upgrade is creation of a new version
         response = self.client.get(reverse("mdm:upgrade_data_asset", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 403)
 

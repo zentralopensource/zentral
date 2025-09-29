@@ -55,7 +55,7 @@ def build_legacy_profile(enrollment_session, target, declaration_identifier):
             "ProfileURL": "https://{}{}".format(
                 settings["api"]["fqdn"],
                 reverse("mdm_public:profile_download_view",
-                        args=(dump_legacy_profile_token(enrollment_session, target, artifact_version["pk"]),))
+                        args=(dump_legacy_profile_token(enrollment_session, target, p_artifact_version["pk"]),))
             )
         },
     }

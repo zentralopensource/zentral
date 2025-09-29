@@ -2,8 +2,8 @@ from datetime import date, datetime, time, timedelta
 import hashlib
 import io
 import json
-import os.path
 import plistlib
+import os.path
 from unittest.mock import patch
 import zipfile
 import uuid
@@ -21,7 +21,7 @@ from zentral.contrib.mdm.crypto import load_push_certificate_and_key
 from zentral.contrib.mdm.declarations import get_declaration_info
 from zentral.contrib.mdm.models import (ACMEIssuer, Artifact, ArtifactVersion, Asset,
                                         Blueprint, BlueprintArtifact,
-                                        Channel, DataAsset, Declaration, DeclarationRef, Platform,
+                                        Channel, CertAsset, DataAsset, Declaration, DeclarationRef, Platform,
                                         DEPDevice, DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
                                         EnrollmentCustomView, DEPEnrollmentCustomView,
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
@@ -791,6 +791,18 @@ def force_artifact(
                 artifact_version=artifact_version,
                 location_asset=force_location_asset(),
             )
+        elif artifact_type == Artifact.Type.CERT_ASSET:
+            CertAsset.objects.create(
+                artifact_version=artifact_version,
+                acme_issuer=force_acme_issuer(backend=CertIssuerBackend.StaticChallenge),
+                scep_issuer=force_scep_issuer(backend=CertIssuerBackend.StaticChallenge),
+                subject=[{"type": "CN", "value": "YOLO"}],
+                subject_alt_name={"rfc822Name": "yolo@example.com",
+                                  "dNSName": "yolo.example.com",
+                                  "ntPrincipalName": "yolo@example.com",
+                                  "uniformResourceIdentifier": "https://example.com/yolo"},
+                accessible="Default",
+            )
         elif artifact_type == Artifact.Type.DATA_ASSET:
             zipfile = build_zipfile()
             content = zipfile.getvalue()
@@ -980,3 +992,29 @@ def force_dep_enrollment_custom_view(dep_enrollment, weight=1, requires_authenti
         custom_view=force_enrollment_custom_view(requires_authentication, extra),
         weight=weight,
     )
+
+
+# status report
+
+
+def build_status_report(extra_configurations=None):
+    if not extra_configurations:
+        extra_configurations = []
+    status_report = json.load(
+        open(os.path.join(os.path.dirname(__file__), "testdata/status_report.json"), "rb")
+    )
+    configurations = status_report["StatusItems"]["management"]["declarations"]["configurations"]
+    configurations.pop()
+    for artifact_version, valid, active, reasons in extra_configurations:
+        if isinstance(valid, bool):
+            valid = "valid" if valid else "invalid"
+        configuration = {
+            "valid": valid,
+            "active": active,
+            "identifier": f"zentral.legacy-profile.{artifact_version.artifact.pk}",
+            "server-token": str(artifact_version.pk),
+        }
+        if reasons:
+            configuration["reasons"] = reasons
+        configurations.append(configuration)
+    return status_report

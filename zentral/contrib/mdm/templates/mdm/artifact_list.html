@@ -46,9 +46,10 @@
           <ul class="dropdown-menu" aria-labelledby="addArtifact">
             <li><a class="dropdown-item" href="{% url 'mdm:create_activation' %}">Activation</a></li>
             <li><a class="dropdown-item" href="{% url 'mdm:create_asset' %}">Asset</a></li>
+            <li><a class="dropdown-item" href="{% url 'mdm:create_cert_asset' %}">Certificate Asset</a></li>
+            <li><a class="dropdown-item" href="{% url 'mdm:upload_data_asset' %}">Data Asset</a></li>
             <li><a class="dropdown-item" href="{% url 'mdm:create_configuration' %}">Configuration</a></li>
             <li><a class="dropdown-item" href="{% url 'mdm:create_manual_configuration' %}">Configuration (Manual)</a></li>
-            <li><a class="dropdown-item" href="{% url 'mdm:upload_data_asset' %}">Data Asset</a></li>
             <li><a class="dropdown-item" href="{% url 'mdm:upload_enterprise_app' %}">Enterprise app</a></li>
             <li><a class="dropdown-item" href="{% url 'mdm:upload_profile' %}">Profile</a></li>
           </ul>

@@ -4,6 +4,8 @@
 
 #### MDM
 
+Add Certificate Assets to manage the [`com.apple.asset.credential.scep`](https://github.com/apple/device-management/blob/8d9958d9b54239344e7190e17ddb559416b017e3/declarative/declarations/assets/credential.scep.yaml) and [`com.apple.asset.credential.acme`](https://github.com/apple/device-management/blob/8d9958d9b54239344e7190e17ddb559416b017e3/declarative/declarations/assets/credential.acme.yaml) DDM assets, with their respective credentials. Certificate Assets can be used for example to issue Okta device certificates via SCEP, with dynamic challenges.
+
 Add auto admin unique passwords for ADE. This is similare to Windows LAPS.
 
 Add last IP address to enrolled device & user records.

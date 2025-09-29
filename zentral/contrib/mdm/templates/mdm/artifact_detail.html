@@ -97,6 +97,12 @@
         </tr>
         {% endif %}
 
+        {% if certasset_list %}
+        {% with certasset_list|first as cert_asset %}
+        {% include "mdm/_cert_asset_detail.html" %}
+        {% endwith %}
+        {% endif %}
+
         {% if dataasset_list %}
         {% with dataasset_list|first as data_asset %}
         {% include "mdm/_data_asset_detail.html" %}

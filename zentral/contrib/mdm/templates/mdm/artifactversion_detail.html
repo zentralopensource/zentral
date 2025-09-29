@@ -43,6 +43,9 @@
 
     <table class="table-object-properties">
         <tbody>
+        {% if cert_asset %}
+        {% include "mdm/_cert_asset_detail.html" %}
+        {% endif %}
         {% if data_asset %}
         {% include "mdm/_data_asset_detail.html" %}
         {% endif %}

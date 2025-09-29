@@ -1,3 +1,4 @@
+from .cert_asset import *  # NOQA
 from .data_asset import *  # NOQA
 from .declaration import *  # NOQA
 from .exceptions import *  # NOQA

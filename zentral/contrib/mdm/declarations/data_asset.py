@@ -60,7 +60,7 @@ def build_data_asset(enrollment_session, target, declaration_identifier):
                 "DataURL": "https://{}{}".format(
                     settings["api"]["fqdn"],
                     reverse("mdm_public:data_asset_download_view",
-                            args=(dump_data_asset_token(enrollment_session, target, artifact_version["pk"]),))
+                            args=(dump_data_asset_token(enrollment_session, target, da_artifact_version["pk"]),))
                 ),
                 "ContentType": data_asset.get_content_type(),
                 "Size": data_asset.file_size,

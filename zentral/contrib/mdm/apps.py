@@ -12,6 +12,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "asset",
         "blueprint",
         "blueprintartifact",
+        "certasset",
         "dataasset",
         "declaration",
         "depdevice",
