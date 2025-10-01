@@ -653,7 +653,11 @@ def force_asset():
         product_type=Asset.ProductType.APP,
         device_assignable=True,
         revocable=True,
-        supported_platforms=["iOS", "macOS"]
+        supported_platforms=[
+            "iOS",
+            "macOS",
+            "visionOS",
+        ]
     )
 
 

@@ -49,7 +49,11 @@ class AssetManagementViewsTestCase(TestCase):
             product_type=Asset.ProductType.APP,
             device_assignable=True,
             revocable=True,
-            supported_platforms=["iOS", "macOS"],
+            supported_platforms=[
+                "iOS",
+                "macOS",
+                "visionOS"  # not supported in artifact version
+            ],
             name=get_random_string(12),
             bundle_id="pro.zentral.tests"
         )

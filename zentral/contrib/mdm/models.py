@@ -735,6 +735,16 @@ class Asset(models.Model):
     def get_absolute_url(self):
         return reverse("mdm:asset", args=(self.pk,))
 
+    def get_artifact_platforms(self):
+        platforms = []
+        for platform in self.supported_platforms:
+            try:
+                platforms.append(Platform(platform))
+            except ValueError:
+                # some platforms are not supported in the artifact and artifact versions (scoping)
+                pass
+        return platforms
+
     def serialize_for_event(self, keys_only=True):
         d = {
             "pk": self.pk,

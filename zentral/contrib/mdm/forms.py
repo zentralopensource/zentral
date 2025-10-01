@@ -1490,12 +1490,12 @@ class CreateAssetArtifactForm(StoreAppForm):
             name=self.cleaned_data["name"],
             type=Artifact.Type.STORE_APP,
             channel=Channel.DEVICE,
-            platforms=self.asset.supported_platforms,
+            platforms=self.asset.get_artifact_platforms(),
         )
         artifact_version = ArtifactVersion.objects.create(
             artifact=artifact,
             version=1,
-            **{platform.lower(): True for platform in self.asset.supported_platforms},
+            **{platform.lower(): True for platform in self.asset.get_artifact_platforms()},
         )
         store_app = super().save(commit=False)
         store_app.artifact_version = artifact_version
