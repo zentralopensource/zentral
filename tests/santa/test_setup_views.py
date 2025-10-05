@@ -1068,6 +1068,38 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, voting_rule.target.identifier)
         self.assertNotContains(response, rule.target.identifier)
 
+    def test_configuration_rules_is_global_rule(self):
+        rule = force_rule(target_type=Target.Type.BINARY)
+        scoped_rule = force_rule(configuration=rule.configuration, serial_numbers=["Yolo"])
+        self._login("santa.view_rule")
+
+        # default
+        response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)),
+                                   {"is_global_rule": ""})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "Rules (2)")
+        self.assertContains(response, rule.target.identifier)
+        self.assertContains(response, scoped_rule.target.identifier)
+        
+        # global only
+        response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)),
+                                   {"is_global_rule": "global_only"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "Rule (1)")
+        self.assertContains(response, rule.target.identifier)
+        self.assertNotContains(response, scoped_rule.target.identifier)
+        
+        # scoped only
+        response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)),
+                                   {"is_global_rule": "scoped_only"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "Rule (1)")
+        self.assertContains(response, scoped_rule.target.identifier)
+        self.assertNotContains(response, rule.target.identifier)
+
     # create configuration rule
 
     def test_create_configuration_rule_redirect(self):

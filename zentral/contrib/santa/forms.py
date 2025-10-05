@@ -185,6 +185,10 @@ class RuleSearchForm(forms.Form):
         choices=[('', '...'), ('true', 'yes'), ('false', 'no')],
         required=False
     )
+    is_global_rule = forms.ChoiceField(
+        choices=[('', '...'), ('global_only', 'Global only'), ('scoped_only', 'Scoped only')],
+        required=False
+    )
 
     field_order = ['identifier', 'policy', 'ruleset', 'target_type', 'is_voting_rule']
 
@@ -218,6 +222,21 @@ class RuleSearchForm(forms.Form):
         is_voting_rule = self.cleaned_data.get("is_voting_rule")
         if is_voting_rule:
             qs = qs.filter(is_voting_rule=is_voting_rule == 'true')
+        is_global_rule = self.cleaned_data.get("is_global_rule")
+        if is_global_rule == 'global_only':
+            qs = qs.filter(serial_numbers__len=0,
+                           excluded_serial_numbers__len=0,
+                           primary_users__len=0,
+                           excluded_primary_users__len=0,
+                           tags__isnull=True,
+                           excluded_tags__isnull=True)
+        elif is_global_rule == 'scoped_only':
+            qs = qs.exclude(serial_numbers__len=0,
+                            excluded_serial_numbers__len=0,
+                            primary_users__len=0,
+                            excluded_primary_users__len=0,
+                            tags__isnull=True,
+                            excluded_tags__isnull=True)
         return qs
 
 
