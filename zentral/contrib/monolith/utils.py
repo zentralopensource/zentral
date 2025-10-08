@@ -20,29 +20,24 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
     installer_item_size = len(package_content)
     installed_size = installer_item_size * 10  # TODO: bug
     installcheck_script = (
-        '#!/usr/local/munki/munki-python\n'
-        'import plistlib\n'
-        'import sys\n'
-        '\n'
-        '\n'
-        'def do_install_check():\n'
-        f'    with open("/usr/local/zentral/{builder.local_subfolder}/enrollment.plist", "rb") as f:\n'
-        '        info = plistlib.load(f)\n'
-        '    return (\n'
-        f'        info["enrollment"]["id"] == {builder.enrollment.pk}\n'
-        f'        and info["enrollment"]["version"] == {builder.enrollment.version}\n'
-        f'        and info["fqdn"] == "{builder.get_tls_hostname()}"\n'
-        '    )\n'
-        '\n'
-        '\n'
-        'if __name__ == "__main__":\n'
-        '    try:\n'
-        '        ok = do_install_check()\n'
-        '    except Exception:\n'
-        '        pass\n'
-        '    else:\n'
-        '        if ok:\n'
-        '            sys.exit(1)\n'
+        '#!/bin/bash\n'
+        f'ENROLLMENT_PLIST="/usr/local/zentral/{builder.local_subfolder}/enrollment.plist"\n'
+        'PLUTIL="/usr/bin/plutil"\n'
+        # if no enrollment, install
+        '[[ ! -f "$ENROLLMENT_PLIST" ]] && exit 0\n'
+        # extract the current enrollment values
+        'ENROLLMENT_ID="$(plutil -extract enrollment.id raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
+        'ENROLLMENT_VERSION="$(plutil -extract enrollment.version raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
+        'FQDN="$(plutil -extract fqdn raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
+        f'if [[ "$ENROLLMENT_ID" != "{builder.enrollment.pk}" ]] '
+        f'|| [[ "$ENROLLMENT_VERSION" != "{builder.enrollment.version}" ]] '
+        f'|| [[ "$FQDN" != "{builder.get_tls_hostname()}" ]]\n'
+        'then\n'
+        # the current values are not the expected values, install
+        'exit 0\n'
+        'fi\n'
+        # everything is as expected, do not install
+        'exit 1\n'
     )
     return {'description': '{} package'.format(builder.name),
             'display_name': builder.name,
