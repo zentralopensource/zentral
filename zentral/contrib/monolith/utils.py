@@ -26,9 +26,9 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
         # if no enrollment, install
         '[[ ! -f "$ENROLLMENT_PLIST" ]] && exit 0\n'
         # extract the current enrollment values
-        'ENROLLMENT_ID="$(plutil -extract enrollment.id raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
-        'ENROLLMENT_VERSION="$(plutil -extract enrollment.version raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
-        'FQDN="$(plutil -extract fqdn raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
+        'ENROLLMENT_ID="$($PLUTIL -extract enrollment.id raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
+        'ENROLLMENT_VERSION="$($PLUTIL -extract enrollment.version raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
+        'FQDN="$($PLUTIL -extract fqdn raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
         f'if [[ "$ENROLLMENT_ID" != "{builder.enrollment.pk}" ]] '
         f'|| [[ "$ENROLLMENT_VERSION" != "{builder.enrollment.version}" ]] '
         f'|| [[ "$FQDN" != "{builder.get_tls_hostname()}" ]]\n'
