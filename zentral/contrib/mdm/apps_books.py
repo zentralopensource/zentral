@@ -1,29 +1,29 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from itertools import islice
 import logging
 import threading
-from django.db import transaction
-from django.db.models import F
+from django.core.cache import cache
+from django.db import connection, transaction
 from django.urls import reverse
 from django.utils.functional import SimpleLazyObject
+import psycopg2.extras
 import requests
 from urllib.parse import urljoin
 from base.utils import deployment_info
 from zentral.conf import settings
 from zentral.core.events.base import EventMetadata
 from zentral.utils.requests import CustomHTTPAdapter
-from .artifacts import Target
-from .commands.install_application import InstallApplication
 from .events import (AssetCreatedEvent, AssetUpdatedEvent,
                      DeviceAssignmentCreatedEvent, DeviceAssignmentDeletedEvent,
                      LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
 from .incidents import MDMAssetAvailabilityIncident
-from .models import (Asset, Artifact, DeviceAssignment,
-                     EnrolledDeviceLocationAssetAssociation,
-                     Location, LocationAsset)
+from .models import Asset, Location, LocationAsset
 
 
 logger = logging.getLogger("zentral.contrib.mdm.apps_books")
+
+
+BATCH_DB_OPS_SIZE = 5000
 
 
 # API client
@@ -75,9 +75,6 @@ class AppsBooksClient:
                    location.name,
                    location.platform,
                    location)
-
-    def close(self):
-        self.session.close()
 
     def make_request(self, path, retry_if_invalid_token=True, verify_mdm_info=False, **kwargs):
         url = urljoin(self.base_url, path)
@@ -237,17 +234,19 @@ class AppsBooksClient:
                     raise ValueError
                 current_page = next_page
 
-    def post_device_association(self, serial_number, asset):
-        return self.make_request(
+    def post_device_associations(self, serial_number, assets):
+        response = self.make_request(
             "assets/associate",
             json={
-                "assets": [{
-                    "adamId": asset.adam_id,
-                    "pricingParam": asset.pricing_param,
-                }],
+                "assets": [{"adamId": adam_id, "pricingParam": pricing_param}
+                           for adam_id, pricing_param in assets],
                 "serialNumbers": [serial_number]
             },
         )
+        event_id = response.get("eventId")
+        if not event_id:
+            raise AppsBooksAPIError("No event id")
+        return event_id
 
     def post_device_disassociation(self, serial_number, asset):
         return self.make_request(
@@ -295,89 +294,40 @@ location_cache = SimpleLazyObject(lambda: LocationCache())
 #
 # on-the-fly assignment
 #
-# Instead of sending the InstallApplication command directly a device asset
-# association is triggered and an EnrolledDeviceLocationAssetAssociation object is
-# created. When the assignment notification is received, the
-# EnrolledDeviceLocationAssetAssociation is retrieved to check if there is an artifact
-# version to install.  The EnrolledDeviceLocationAssetAssociation object is also used
-# to avoid triggering the association too often.
+# Artifacts that references apps & books cannot be sent to the devices
+# before we make sure they have a license for it.
+# The missing assignments are collected in the Target.
+# When missing assigmments are found, associations requests are sent to AxM.
+# The event_id is stored in cache. When the notifications are received,
+# and the event_id is found in the cache, the devices will be notified,
+# to trigger the artifact installations as soon as possible.
 #
 
 
-def ensure_enrolled_device_location_asset_association(enrolled_device, location_asset):
-    serial_number = enrolled_device.serial_number
-    if DeviceAssignment.objects.filter(
-        serial_number=serial_number,
-        location_asset=location_asset,
-    ).count():
-        return True
-    with transaction.atomic():
-        edlaa, created = EnrolledDeviceLocationAssetAssociation.objects.select_for_update().get_or_create(
-            enrolled_device=enrolled_device,
-            location_asset=location_asset
-        )
-        if created or (datetime.utcnow() - edlaa.last_attempted_at) > timedelta(minutes=30):  # TODO hardcoded, verify
-            location = location_asset.location
-            asset = location_asset.asset
-            _, client = location_cache.get(location.mdm_info_id)
-            ok = False
-            try:
-                response = client.post_device_association(serial_number, asset)
-            except Exception:
-                logger.exception("enrolled device %s asset %s/%s/%s: could not post association",
-                                 serial_number, location.name, asset.adam_id, asset.pricing_param)
-            else:
-                event_id = response.get("eventId")
-                if event_id:
-                    ok = True
-            if not ok:
-                edlaa.delete()
-            else:
-                edlaa.attempts = F("attempts") + 1
-                edlaa.last_attempted_at = datetime.utcnow()
-                edlaa.save()
-    return False
+def get_otf_association_cache_key(event_id):
+    return f"apps-books:otfa:{event_id}"
 
 
-def queue_install_application_command_if_necessary(location, serial_number, adam_id, pricing_param):
-    with transaction.atomic():
+def ensure_target_asset_assignments(target):
+    if not target.missing_asset_assignments:
+        return
+    missing_assets = {}
+    for mdm_info_id, adam_id, pricing_param in target.missing_asset_assignments:
+        if not mdm_info_id:
+            logger.error("No location found for enrolled device %s, adamId %s", target.serial_number, adam_id)
+            continue
+        missing_assets.setdefault(mdm_info_id, []).append((adam_id, pricing_param))
+    # Post the assignements
+    for mdm_info_id, assets in missing_assets.items():
         try:
-            edlaa = EnrolledDeviceLocationAssetAssociation.objects.select_for_update().select_related(
-                "enrolled_device",
-                "location_asset__asset",
-            ).get(
-                enrolled_device__serial_number=serial_number,
-                location_asset__location=location,
-                location_asset__asset__adam_id=adam_id,
-                location_asset__asset__pricing_param=pricing_param
-            )
-        except EnrolledDeviceLocationAssetAssociation.DoesNotExist:
-            logger.error("enrolled device %s asset %s/%s/%s: no awaiting association found",
-                         serial_number, location.name, adam_id, pricing_param)
+            _, client = location_cache.get(mdm_info_id)
+            event_id = client.post_device_associations(target.serial_number, assets)
+        except Exception:
+            logger.exception("Could not post device %s associations", target.serial_number)
         else:
-            target = Target(edlaa.enrolled_device)
-            # find the latest artifact version to install for this asset
-            for artifact_version in target.all_to_install(included_types=(Artifact.Type.STORE_APP,)):
-                if artifact_version.store_app.location_asset == edlaa.location_asset:
-                    InstallApplication.create_for_target(target, artifact_version, queue=True)
-                    break
-            else:
-                logger.error("enrolled device %s asset %s/%s/%s: no artifact version to install found",
-                             serial_number, location.name, adam_id, pricing_param)
-            # cleanup
-            edlaa.delete()
-
-
-def clear_on_the_fly_assignment(location, serial_number, adam_id, pricing_param, reason):
-    count, _ = EnrolledDeviceLocationAssetAssociation.objects.filter(
-        enrolled_device__serial_number=serial_number,
-        location_asset__location=location,
-        location_asset__asset__adam_id=adam_id,
-        location_asset__asset__pricing_param=pricing_param
-    ).delete()
-    if count:
-        logger.error("enrolled device %s asset %s/%s/%s: on-the-fly assignment canceled, %s",
-                     serial_number, location.name, adam_id, pricing_param, reason)
+            # The cache key indicates that the event is for on-the-fly assignments.
+            # The device will be poked when a successful notification is received.
+            cache.set(get_otf_association_cache_key(event_id), "1", 14400)
 
 
 # assets & assignments sync
@@ -474,26 +424,12 @@ def _update_assignments(location, all_serial_numbers, notification_id, collected
 
     # prune assignments
     removed_serial_numbers = existing_serial_numbers - all_serial_numbers
-    if removed_serial_numbers:
-        DeviceAssignment.objects.filter(location_asset=location_asset,
-                                        serial_number__in=removed_serial_numbers).delete()
-        for serial_number in removed_serial_numbers:
-            yield DeviceAssignmentDeletedEvent(EventMetadata(machine_serial_number=serial_number), payload)
+    for serial_number in bulk_delete_device_assignments(location_asset, removed_serial_numbers):
+        yield DeviceAssignmentDeletedEvent(EventMetadata(machine_serial_number=serial_number), payload)
 
     # add missing assignments
     added_serial_numbers = all_serial_numbers - existing_serial_numbers
-    if not added_serial_numbers:
-        return
-    batch_size = 1000  # TODO: hard-coded
-    assignments_to_create = (DeviceAssignment(location_asset=location_asset,
-                                              serial_number=serial_number)
-                             for serial_number in added_serial_numbers)
-    while True:
-        batch = list(islice(assignments_to_create, batch_size))
-        if not batch:
-            break
-        DeviceAssignment.objects.bulk_create(batch, batch_size)
-    for serial_number in added_serial_numbers:
+    for serial_number in bulk_insert_device_assignments(location_asset, added_serial_numbers):
         yield DeviceAssignmentCreatedEvent(EventMetadata(machine_serial_number=serial_number), payload)
 
 
@@ -611,6 +547,32 @@ def update_location_asset_counts(location, client, adam_id, pricing_param, updat
     yield from sync_asset(location, client, adam_id, pricing_param, notification_id)
 
 
+def bulk_insert_device_assignments(location_asset, serial_numbers):
+    if not serial_numbers:
+        return
+    query = (
+        "insert into mdm_deviceassignment(location_asset_id, serial_number, created_at) "
+        "values %s "
+        "on conflict do nothing "
+        "returning serial_number"
+    )
+    now = datetime.utcnow()
+    sni = iter(serial_numbers)
+    while True:
+        batch = list(islice(sni, BATCH_DB_OPS_SIZE))
+        if not batch:
+            break
+        with connection.cursor() as cursor:
+            result = psycopg2.extras.execute_values(
+                cursor, query,
+                ((location_asset.pk, serial_number, now)
+                 for serial_number in batch),
+                fetch=True,
+            )
+            for t in result:
+                yield t[0]
+
+
 def associate_location_asset(
     location, client,
     adam_id, pricing_param, serial_numbers,
@@ -636,21 +598,12 @@ def associate_location_asset(
             if notification_id:
                 payload["notification_id"] = notification_id
             assigned_count_delta = 0
-            for serial_number in serial_numbers:
-                _, created = DeviceAssignment.objects.get_or_create(
-                    location_asset=location_asset,
-                    serial_number=serial_number
+            for serial_number in bulk_insert_device_assignments(location_asset, serial_numbers):
+                assigned_count_delta += 1
+                yield DeviceAssignmentCreatedEvent(
+                    EventMetadata(machine_serial_number=serial_number),
+                    payload
                 )
-                if created:
-                    assigned_count_delta += 1
-                    yield DeviceAssignmentCreatedEvent(
-                        EventMetadata(machine_serial_number=serial_number),
-                        payload
-                    )
-                    # on-the-fly asset assignment done?
-                    queue_install_application_command_if_necessary(
-                        location, serial_number, adam_id, pricing_param
-                    )
             try:
                 yield from _update_location_asset_counts(
                     location_asset,
@@ -662,6 +615,24 @@ def associate_location_asset(
                 logger.error("location %s asset %s/%s: bad assigned count after associations, sync required",
                              location.name, adam_id, pricing_param)
                 yield from sync_asset(location, client, adam_id, pricing_param, notification_id)
+
+
+def bulk_delete_device_assignments(location_asset, serial_numbers):
+    if not serial_numbers:
+        return
+    query = (
+        "delete from mdm_deviceassignment where location_asset_id = %s and serial_number in %s "
+        "returning serial_number"
+    )
+    sni = iter(serial_numbers)
+    while True:
+        batch = list(islice(sni, BATCH_DB_OPS_SIZE))
+        if not batch:
+            break
+        with connection.cursor() as cursor:
+            cursor.execute(query, [location_asset.pk, tuple(batch)])
+            for t in cursor.fetchall():
+                yield t[0]
 
 
 def disassociate_location_asset(
@@ -689,20 +660,11 @@ def disassociate_location_asset(
             if notification_id:
                 payload["notification_id"] = notification_id
             assigned_count_delta = 0
-            for serial_number in serial_numbers:
-                deleted = DeviceAssignment.objects.filter(
-                    location_asset=location_asset,
-                    serial_number=serial_number
-                ).delete()
-                if deleted:
-                    assigned_count_delta -= 1
-                    yield DeviceAssignmentDeletedEvent(
-                        EventMetadata(machine_serial_number=serial_number),
-                        payload
-                    )
-                # disassociated, remove the on-the-fly assignment if it exists
-                clear_on_the_fly_assignment(
-                    location, serial_number, adam_id, pricing_param, "disassociate success"
+            for serial_number in bulk_delete_device_assignments(location_asset, serial_numbers):
+                assigned_count_delta -= 1
+                yield DeviceAssignmentDeletedEvent(
+                    EventMetadata(machine_serial_number=serial_number),
+                    payload
                 )
             try:
                 yield from _update_location_asset_counts(

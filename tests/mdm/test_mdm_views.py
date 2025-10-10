@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta
 import io
 import json
 import plistlib
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from urllib.parse import quote
 import uuid
 import zipfile
@@ -13,11 +13,13 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.x509.oid import NameOID
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from realms.models import RealmGroup, RealmUserGroupMembership
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
+from zentral.contrib.mdm.apps_books import get_otf_association_cache_key
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands import CustomCommand, InstallEnterpriseApplication
 from zentral.contrib.mdm.crypto import verify_signed_payload
@@ -38,6 +40,7 @@ from zentral.contrib.mdm.models import (
     Channel,
     Command,
     DEPEnrollmentSession,
+    DeviceAssignment,
     DeviceCommand,
     EnrolledDevice,
     OTAEnrollmentSession,
@@ -54,6 +57,7 @@ from .utils import (
     force_blueprint_artifact,
     force_dep_enrollment_session,
     force_enrolled_user,
+    force_location,
     force_ota_enrollment_session,
     force_software_update,
     force_software_update_enforcement,
@@ -63,7 +67,8 @@ from .utils import (
 
 
 @override_settings(
-    STATICFILES_STORAGE="django.contrib.staticfiles.storage.StaticFilesStorage"
+    STATICFILES_STORAGE="django.contrib.staticfiles.storage.StaticFilesStorage",
+    CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 )
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
 class MDMViewsTestCase(TestCase):
@@ -877,6 +882,79 @@ class MDMViewsTestCase(TestCase):
         session.enrolled_device.refresh_from_db()
         self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
 
+    @patch("zentral.contrib.mdm.apps_books.logger.error")
+    def test_declarative_management_tokens_decl_no_default_loc_missing_assignment(self, logger_error, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._add_blueprint(session)
+        force_blueprint_artifact(
+            blueprint=blueprint,
+            artifact_type=Artifact.Type.CONFIGURATION,
+            decl_type="com.apple.configuration.app.managed",
+            decl_payload={"AppStoreID": "0123456789"},
+        )
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "tokens",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        json_response = json.loads(response.content)
+        tokens_response, declarations_token = Target(
+            session.enrolled_device
+        ).sync_tokens
+        self.assertEqual(json_response, tokens_response)
+        self._assertSuccess(post_event, endpoint="tokens")
+        session.enrolled_device.refresh_from_db()
+        self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
+        logger_error.assert_called_once_with(
+            "No location found for enrolled device %s, adamId %s",
+            session.enrolled_device.serial_number,
+            "0123456789",
+        )
+
+    @patch("zentral.contrib.mdm.apps_books.location_cache.get")
+    def test_declarative_management_tokens_decl_default_loc_missing_assignment(self, location_cache_get, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._add_blueprint(session)
+        force_blueprint_artifact(
+            blueprint=blueprint,
+            artifact_type=Artifact.Type.CONFIGURATION,
+            decl_type="com.apple.configuration.app.managed",
+            decl_payload={"AppStoreID": "0123456789"},
+        )
+        blueprint.default_location = force_location()
+        blueprint.save()
+        client = Mock()
+        event_id = str(uuid.uuid4())
+        client.post_device_associations.return_value = event_id
+        location_cache_get.return_value = blueprint.default_location, client
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "tokens",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        json_response = json.loads(response.content)
+        tokens_response, declarations_token = Target(
+            session.enrolled_device
+        ).sync_tokens
+        self.assertEqual(json_response, tokens_response)
+        self._assertSuccess(post_event, endpoint="tokens")
+        session.enrolled_device.refresh_from_db()
+        self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
+        location_cache_get.assert_called_once_with(str(blueprint.default_location.mdm_info_id))
+        client.post_device_associations.asset_called_once_with(serial_number, [("0123456789", "STDQ")])
+        # event marked as OTF assignment
+        self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
+
     # declaration items
 
     def test_declarative_management_declaration_items(self, post_event):
@@ -896,6 +974,86 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(
             json_response, Target(session.enrolled_device).declaration_items
         )
+
+    @patch("zentral.contrib.mdm.apps_books.logger.exception")
+    @patch("zentral.contrib.mdm.apps_books.location_cache.get")
+    def test_declarative_management_declaration_items_decl_missing_assignment_cli_err(
+        self,
+        location_cache_get,
+        logger_exception,
+        post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._add_blueprint(session)
+        force_blueprint_artifact(
+            blueprint=blueprint,
+            artifact_type=Artifact.Type.CONFIGURATION,
+            decl_type="com.apple.configuration.app.managed",
+            decl_payload={"AppStoreID": "0123456789"},
+        )
+        blueprint.default_location = force_location()
+        blueprint.save()
+        client = Mock()
+        client.post_device_associations.side_effect = ValueError("Yolo")
+        location_cache_get.return_value = blueprint.default_location, client
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration-items",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        json_response = json.loads(response.content)
+        self.assertEqual(
+            json_response, Target(session.enrolled_device).declaration_items
+        )
+        client.post_device_associations.assert_called_once_with(
+            serial_number, [("0123456789", "STDQ")]
+        )
+        logger_exception.assert_called_once_with("Could not post device %s associations", serial_number)
+
+    @patch("zentral.contrib.mdm.apps_books.location_cache.get")
+    def test_declarative_management_declaration_items_decl_missing_assignment(
+        self,
+        location_cache_get,
+        post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._add_blueprint(session)
+        force_blueprint_artifact(
+            blueprint=blueprint,
+            artifact_type=Artifact.Type.CONFIGURATION,
+            decl_type="com.apple.configuration.app.managed",
+            decl_payload={"AppStoreID": "0123456789"},
+        )
+        blueprint.default_location = force_location()
+        blueprint.save()
+        client = Mock()
+        event_id = str(uuid.uuid4())
+        client.post_device_associations.return_value = event_id
+        location_cache_get.return_value = blueprint.default_location, client
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration-items",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        json_response = json.loads(response.content)
+        self.assertEqual(
+            json_response, Target(session.enrolled_device).declaration_items
+        )
+        client.post_device_associations.assert_called_once_with(
+            serial_number, [("0123456789", "STDQ")]
+        )
+        # event marked as OTF assignment
+        self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
 
     # status
 
@@ -2071,7 +2229,7 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(enrolled_device.last_ip, "127.0.0.1")
         self.assertTrue(enrolled_device.last_seen_at > now)
 
-    def test_device_channel_connect_idle_base_inventoryup_to_date_no_command(
+    def test_device_channel_connect_idle_base_inventory_not_up_to_date_command(
         self, post_event
     ):
         session, udid, serial_number = force_dep_enrollment_session(
@@ -2091,6 +2249,80 @@ class MDMViewsTestCase(TestCase):
         enrolled_device.refresh_from_db()
         self.assertEqual(enrolled_device.last_ip, "127.0.0.1")
         self.assertTrue(enrolled_device.last_seen_at > now)
+
+    @patch("zentral.contrib.mdm.apps_books.location_cache.get")
+    def test_device_channel_connect_idle_store_app_missing_assignment(
+        self,
+        location_cache_get,
+        post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._add_blueprint(session)
+        _, _, (av,) = force_blueprint_artifact(
+            blueprint=blueprint,
+            artifact_type=Artifact.Type.STORE_APP,
+        )
+        now = datetime.utcnow()
+        # inventory up to date
+        enrolled_device = EnrolledDevice.objects.get(udid=udid)
+        enrolled_device.device_information_updated_at = now
+        enrolled_device.security_info_updated_at = now
+        enrolled_device.save()
+        client = Mock()
+        event_id = str(uuid.uuid4())
+        client.post_device_associations.return_value = event_id
+        location_cache_get.return_value = av.store_app.location_asset.location, client
+        payload = {"UDID": udid, "Status": "Idle"}
+        response = self._put(reverse("mdm_public:connect"), payload, session)
+        # no available assignment → no command
+        self.assertEqual(response.content, b"")
+        self.assertEqual(response.status_code, 200)
+        # no available assignment → association request
+        client.post_device_associations.assert_called_once_with(
+            serial_number, [(av.store_app.location_asset.asset.adam_id,
+                             av.store_app.location_asset.asset.pricing_param)]
+        )
+        # association event set in cache to be recognized as OTF assignment when processing the notifications
+        self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
+
+    @patch("zentral.contrib.mdm.apps_books.location_cache.get")
+    def test_device_channel_connect_idle_store_app_existing_assignment(
+        self,
+        location_cache_get,
+        post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._add_blueprint(session)
+        _, _, (av,) = force_blueprint_artifact(
+            blueprint=blueprint,
+            artifact_type=Artifact.Type.STORE_APP,
+        )
+        location_asset = av.store_app.location_asset
+        now = datetime.utcnow()
+        # inventory up to date
+        enrolled_device = EnrolledDevice.objects.get(udid=udid)
+        enrolled_device.device_information_updated_at = now
+        enrolled_device.security_info_updated_at = now
+        enrolled_device.save()
+        client = Mock()
+        location_cache_get.return_value = av.store_app.location_asset.location, client
+        # existing assignment
+        DeviceAssignment.objects.create(
+            location_asset=location_asset,
+            serial_number=serial_number,
+        )
+        payload = {"UDID": udid, "Status": "Idle"}
+        response = self._put(reverse("mdm_public:connect"), payload, session)
+        # existing assignment → install app command
+        data = plistlib.loads(response.content)
+        self.assertEqual(data["Command"]["RequestType"], "InstallApplication")
+        self.assertEqual(data["Command"]["iTunesStoreID"], int(location_asset.asset.adam_id))
+        # existing assignment → no association request
+        client.post_device_associations.assert_not_called()
 
     def test_user_channel_connect_idle_no_command(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(

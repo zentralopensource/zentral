@@ -56,6 +56,24 @@
             <td>{{ object.get_collect_profiles_display }}</td>
         </tr>
         <tr>
+          <th>Distribute legacy profile via DDM</th>
+          <td>{{ object.legacy_profiles_via_ddm|yesno }}</td>
+        </tr>
+        <tr>
+          <th>Default apps &amp; books location</th>
+          <td>
+            {% if object.default_location %}
+            {% if perms.mdm.view_location %}
+            <a href="{{ object.default_location.get_absolute_url }}">{{ object.default_location }}</a>
+            {% else %}
+            {{ object.default_location }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
             <th>FileVault configuration</th>
             <td>
             {% if object.filevault_config %}

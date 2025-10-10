@@ -4,6 +4,7 @@ import io
 import json
 import plistlib
 import os.path
+import random
 from unittest.mock import patch
 import zipfile
 import uuid
@@ -648,7 +649,7 @@ def force_blueprint(filevault_config=None, recovery_password_config=None, softwa
 
 def force_asset():
     return Asset.objects.create(
-        adam_id=get_random_string(12),
+        adam_id=str(random.randrange(10000000, 99999999)),
         pricing_param=get_random_string(12),
         product_type=Asset.ProductType.APP,
         device_assignable=True,

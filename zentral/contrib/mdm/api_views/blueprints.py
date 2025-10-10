@@ -10,7 +10,9 @@ class BlueprintList(ListCreateAPIViewWithAudit):
     """
     List all Blueprints, search Blueprint by name, or create a new Blueprint.
     """
-    queryset = Blueprint.objects.all()
+    queryset = Blueprint.objects.select_related(
+        "default_location", "filevault_config", "recovery_password_config"
+    ).all()
     serializer_class = BlueprintSerializer
     filterset_fields = ('name',)
 
@@ -19,7 +21,9 @@ class BlueprintDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a Blueprint instance.
     """
-    queryset = Blueprint.objects.all()
+    queryset = Blueprint.objects.select_related(
+        "default_location", "filevault_config", "recovery_password_config"
+    ).all()
     serializer_class = BlueprintSerializer
 
     def perform_destroy(self, instance):

@@ -1006,6 +1006,8 @@ class CreateBlueprintView(PermissionRequiredMixin, CreateViewWithAudit):
               "collect_apps",
               "collect_certificates",
               "collect_profiles",
+              "legacy_profiles_via_ddm",
+              "default_location",
               "filevault_config",
               "recovery_password_config",
               "software_update_enforcements",)
@@ -1042,6 +1044,8 @@ class UpdateBlueprintView(PermissionRequiredMixin, UpdateViewWithAudit):
               "collect_apps",
               "collect_certificates",
               "collect_profiles",
+              "legacy_profiles_via_ddm",
+              "default_location",
               "filevault_config",
               "recovery_password_config",
               "software_update_enforcements",)

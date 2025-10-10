@@ -772,12 +772,26 @@ class TestMDMArtifacts(TestCase):
     def test_device_activation_enterprise_app_and_profile_not_included(self):
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
         self._force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
+        self.blueprint1.legacy_profiles_via_ddm = False
+        self.blueprint1.save()
         activation = Target(self.enrolled_device).activation
         self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
         self.assertEqual(sorted(activation["Payload"].keys()), ["StandardConfigurations"])
         scs = activation["Payload"]["StandardConfigurations"]
         self.assertEqual(len(scs), 1)
         self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
+
+    def test_device_activation_enterprise_app_and_profile_included(self):
+        _, profile_a, (profile_av,) = self._force_blueprint_artifact()
+        self._force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
+        self.assertTrue(self.blueprint1.legacy_profiles_via_ddm)
+        activation = Target(self.enrolled_device).activation
+        self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
+        self.assertEqual(sorted(activation["Payload"].keys()), ["StandardConfigurations"])
+        scs = activation["Payload"]["StandardConfigurations"]
+        self.assertEqual(len(scs), 2)
+        self.assertIn(f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions", scs)
+        self.assertIn(f"zentral.legacy-profile.{profile_a.pk}", scs)
 
     @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
     def test_device_activation_required_profile_included(self, ddm_managed_artifact_types):

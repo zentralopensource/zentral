@@ -1,5 +1,4 @@
 import plistlib
-from unittest.mock import patch
 import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -35,7 +34,10 @@ class RemoveProfileCommandTestCase(TestCase):
             cls.mbu, authenticated=True, completed=True, realm_user=True
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
-        cls.blueprint = Blueprint.objects.create(name=get_random_string(12))
+        cls.blueprint = Blueprint.objects.create(
+            name=get_random_string(12),
+            legacy_profiles_via_ddm=False,  # to force the use of the commands by default
+        )
         cls.enrolled_device.blueprint = cls.blueprint
         cls.enrolled_device.save()
         cls.enrolled_user = EnrolledUser.objects.create(
@@ -235,6 +237,7 @@ class RemoveProfileCommandTestCase(TestCase):
 
     def test_remove_device_profile_declarative_management(self):
         self.enrolled_device.declarative_management = True
+        self.assertFalse(Artifact.Type.PROFILE in Target(self.enrolled_device).ddm_managed_artifact_types())
         artifact_version, _ = self._force_profile(status=TargetArtifact.Status.INSTALLED)
         command = _remove_artifacts(
             Target(self.enrolled_device),
@@ -245,11 +248,11 @@ class RemoveProfileCommandTestCase(TestCase):
         self.assertEqual(command.channel, Channel.DEVICE)
         self.assertEqual(command.artifact_version, artifact_version)
 
-    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
-    def test_remove_device_profile_declarative_management_noop(self, ddm_managed_artifact_types):
-        # force inclusion of the PROFILE
-        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
+    def test_remove_device_profile_declarative_management_noop(self):
         self.enrolled_device.declarative_management = True
+        self.blueprint.legacy_profiles_via_ddm = True
+        self.blueprint.save()
+        self.assertTrue(Artifact.Type.PROFILE in Target(self.enrolled_device).ddm_managed_artifact_types())
         artifact_version, _ = self._force_profile(status=TargetArtifact.Status.INSTALLED)
         self.assertIsNone(_remove_artifacts(
             Target(self.enrolled_device),

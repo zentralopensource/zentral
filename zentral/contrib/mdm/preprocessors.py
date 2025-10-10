@@ -2,14 +2,16 @@ import logging
 from django.core.cache import cache
 from zentral.core.events.base import EventMetadata, EventRequest
 from zentral.core.incidents.models import Severity
+from .apns import send_enrolled_device_notification
 from .apps_books import (associate_location_asset, disassociate_location_asset,
-                         clear_on_the_fly_assignment,
+                         get_otf_association_cache_key,
                          location_cache, update_location_asset_counts)
 from .events import (AssetCountNotificationEvent,
                      AssetAssociationEvent, AssetAssociationErrorEvent,
                      AssetDisassociationEvent, AssetDisassociationErrorEvent,
                      AssetRevocationEvent, AssetRevocationErrorEvent)
 from .incidents import MDMAssetAssociationIncident, MDMAssetDisassociationIncident, MDMAssetRevocationIncident
+from .models import EnrolledDevice
 
 
 logger = logging.getLogger("zentral.contrib.mdm.preprocessors")
@@ -102,7 +104,7 @@ class AppsBooksNotificationPreprocessor:
                 "message": error.get("errorMessage"),
                 "number": error.get("errorNumber"),
             }
-        serial_numbers = set()
+        assignments = {}
         for assignment in notification.get("assignments", []):
             adam_id = assignment["adamId"]
             pricing_param = assignment["pricingParam"]
@@ -112,12 +114,9 @@ class AppsBooksNotificationPreprocessor:
                 logger.warning("assignment without serial number")
                 continue
             if success:
-                serial_numbers.add(serial_number)
-            elif operation == "ASSOCIATE":
-                # could not associate, remove the on-the-fly assignment if it exists
-                clear_on_the_fly_assignment(
-                    location, serial_number, adam_id, pricing_param, "associate error"
-                )
+                assignments.setdefault((adam_id, pricing_param), []).append(serial_number)
+            else:
+                logger.error("Could not %s adamId %s to %s", operation, adam_id, serial_number)
             event_metadata.machine_serial_number = serial_number
             event_metadata.incident_updates = [
                 incident_cls.build_incident_update(
@@ -131,12 +130,27 @@ class AppsBooksNotificationPreprocessor:
             }
             yield event_cls(event_metadata, payload)
             event_metadata.index += 1
-        if update_func and serial_numbers:
+        if not update_func or not assignments:
+            return
+        notify_devices = (
+            update_func == associate_location_asset
+            and event_id
+            and cache.get(get_otf_association_cache_key(event_id))
+        )
+        devices_to_notify = set()
+        for (adam_id, pricing_param), serial_numbers in assignments.items():
             yield from update_func(
                 location, client,
                 adam_id, pricing_param, serial_numbers,
                 event_id, notification_id
             )
+            if notify_devices:
+                devices_to_notify.update(serial_numbers)
+        if devices_to_notify:
+            for enrolled_device in (EnrolledDevice.objects
+                                                  .select_related("push_certificate")
+                                                  .filter(serial_number__in=devices_to_notify)):
+                send_enrolled_device_notification(enrolled_device)
 
     def process_raw_event(self, raw_event):
         data = raw_event.get("data")

@@ -10,7 +10,8 @@ from accounts.models import APIToken, User
 from zentral.contrib.mdm.models import Blueprint
 from zentral.core.events.base import AuditEvent
 from .utils import (force_blueprint, force_blueprint_artifact,
-                    force_filevault_config, force_recovery_password_config,
+                    force_filevault_config, force_location,
+                    force_recovery_password_config,
                     force_software_update_enforcement)
 
 
@@ -98,7 +99,9 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
               'collect_apps': 0,
               'collect_certificates': 0,
               'collect_profiles': 0,
+              'default_location': None,
               'filevault_config': None,
+              'legacy_profiles_via_ddm': True,
               'recovery_password_config': None,
               'software_update_enforcements': [],
               'created_at': blueprint.created_at.isoformat(),
@@ -124,7 +127,9 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
               'collect_apps': 0,
               'collect_certificates': 0,
               'collect_profiles': 0,
+              'default_location': None,
               'filevault_config': filevault_config.pk,
+              'legacy_profiles_via_ddm': True,
               'recovery_password_config': recovery_password_config.pk,
               'software_update_enforcements': [sue.pk],
               'created_at': blueprint.created_at.isoformat(),
@@ -157,7 +162,9 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
              'collect_apps': 0,
              'collect_certificates': 0,
              'collect_profiles': 0,
+             'default_location': None,
              'filevault_config': None,
+             'legacy_profiles_via_ddm': True,
              'recovery_password_config': None,
              'software_update_enforcements': [],
              'created_at': blueprint.created_at.isoformat(),
@@ -195,7 +202,9 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
              'collect_apps': 0,
              'collect_certificates': 0,
              'collect_profiles': 0,
+             'default_location': None,
              'filevault_config': None,
+             'legacy_profiles_via_ddm': True,
              'recovery_password_config': None,
              'software_update_enforcements': [],
              'created_at': blueprint.created_at.isoformat(),
@@ -216,6 +225,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
                      "collect_apps": 'NO',
                      "collect_certificates": 'NO',
                      "collect_profiles": 'NO',
+                     "legacy_profiles_via_ddm": True,
                      "created_at": blueprint.created_at,
                      "updated_at": blueprint.updated_at
                  }
@@ -249,6 +259,7 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
         prev_value = blueprint.serialize_for_event()
         self.set_permissions("mdm.change_blueprint")
         new_name = get_random_string(12)
+        location = force_location()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(reverse("mdm_api:blueprint", args=(blueprint.pk,)),
                                 {"name": new_name,
@@ -256,7 +267,9 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
                                  "collect_apps": 1,
                                  "collect_certificates": 2,
                                  "collect_profiles": 2,
+                                 "default_location": location.pk,
                                  "filevault_config": filevault_config.pk,
+                                 "legacy_profiles_via_ddm": False,
                                  "recovery_password_config": recovery_password_config.pk,
                                  "software_update_enforcements": [sue.pk]})
         self.assertEqual(response.status_code, 200)
@@ -267,7 +280,9 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
         self.assertEqual(blueprint.collect_apps, 1)
         self.assertEqual(blueprint.collect_certificates, 2)
         self.assertEqual(blueprint.collect_profiles, 2)
+        self.assertEqual(blueprint.default_location, location)
         self.assertEqual(blueprint.filevault_config, filevault_config)
+        self.assertFalse(blueprint.legacy_profiles_via_ddm)
         self.assertEqual(blueprint.recovery_password_config, recovery_password_config)
         self.assertEqual(list(blueprint.software_update_enforcements.all()), [sue])
         self.assertEqual(
@@ -278,7 +293,9 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
              'collect_apps': 1,
              'collect_certificates': 2,
              'collect_profiles': 2,
+             'default_location': location.pk,
              'filevault_config': filevault_config.pk,
+             'legacy_profiles_via_ddm': False,
              'recovery_password_config': recovery_password_config.pk,
              'software_update_enforcements': [sue.pk,],
              'created_at': blueprint.created_at.isoformat(),
@@ -299,7 +316,9 @@ class MDMBlueprintsAPIViewsTestCase(TestCase):
                      "collect_apps": 'MANAGED_ONLY',
                      "collect_certificates": 'ALL',
                      "collect_profiles": 'ALL',
+                     "default_location": {"pk": location.pk, "mdm_info_id": str(location.mdm_info_id)},
                      "filevault_config": {"name": filevault_config.name, "pk": filevault_config.pk},
+                     "legacy_profiles_via_ddm": False,
                      "recovery_password_config": {"name": recovery_password_config.name,
                                                   "pk": recovery_password_config.pk},
                      "software_update_enforcements": [{"pk": sue.pk, "name": sue.name}],

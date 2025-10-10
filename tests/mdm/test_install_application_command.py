@@ -3,14 +3,14 @@ import plistlib
 import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from unittest.mock import patch
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands import InstallApplication, ManagedApplicationList
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.scheduling import _install_artifacts
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
-                                        Asset, Blueprint, BlueprintArtifact, DeviceArtifact, DeviceCommand, Channel,
+                                        Asset, Blueprint, BlueprintArtifact, Channel,
+                                        DeviceArtifact, DeviceAssignment, DeviceCommand,
                                         Location, LocationAsset,
                                         Platform, RequestStatus, StoreApp,
                                         TargetArtifact)
@@ -296,26 +296,29 @@ class InstallApplicationCommandTestCase(TestCase):
 
     # _install_artifacts
 
-    @patch("zentral.contrib.mdm.commands.scheduling.ensure_enrolled_device_location_asset_association")
-    def test_install_artifacts_noop(self, ensure_enrolled_device_location_asset_association):
-        ensure_enrolled_device_location_asset_association.return_value = False
+    def test_install_artifacts_noop(self):
+        target = Target(self.enrolled_device)
         self.assertIsNone(_install_artifacts(
-            Target(self.enrolled_device),
+            target,
             self.dep_enrollment_session,
             RequestStatus.IDLE,
         ))
-        ensure_enrolled_device_location_asset_association.assert_called_once_with(self.enrolled_device,
-                                                                                  self.location_asset)
+        self.assertEqual(
+            target.missing_asset_assignments,
+            [(str(self.location_asset.location.mdm_info_id), self.asset.adam_id, self.asset.pricing_param)]
+        )
 
-    @patch("zentral.contrib.mdm.commands.scheduling.ensure_enrolled_device_location_asset_association")
-    def test_install_artifacts(self, ensure_enrolled_device_location_asset_association):
-        ensure_enrolled_device_location_asset_association.return_value = True
+    def test_install_artifacts(self):
+        DeviceAssignment.objects.create(
+            location_asset=self.location_asset,
+            serial_number=self.enrolled_device.serial_number
+        )
+        target = Target(self.enrolled_device)
         cmd = _install_artifacts(
-            Target(self.enrolled_device),
+            target,
             self.dep_enrollment_session,
             RequestStatus.IDLE,
         )
         self.assertIsInstance(cmd, InstallApplication)
         self.assertEqual(cmd.artifact_version, self.artifact_version)
-        ensure_enrolled_device_location_asset_association.assert_called_once_with(self.enrolled_device,
-                                                                                  self.location_asset)
+        self.assertEqual(target.missing_asset_assignments, [])

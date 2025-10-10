@@ -1,8 +1,11 @@
 import datetime
 from unittest.mock import call, patch, Mock
 import uuid
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
+from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.apps_books import get_otf_association_cache_key
 from zentral.contrib.mdm.events import (AssetAssociationEvent, AssetAssociationErrorEvent,
                                         AssetCountNotificationEvent,
                                         AssetDisassociationEvent, AssetDisassociationErrorEvent,
@@ -10,8 +13,10 @@ from zentral.contrib.mdm.events import (AssetAssociationEvent, AssetAssociationE
 from zentral.contrib.mdm.models import Location
 from zentral.contrib.mdm.preprocessors import get_preprocessors
 from zentral.core.incidents.models import Severity
+from .utils import force_dep_enrollment_session
 
 
+@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
 class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -121,9 +126,15 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         self.assertEqual(len(events), 0)
         logger_warning.assert_called_once_with("Notification %s already received", notification_id)
 
+    @patch("zentral.contrib.mdm.preprocessors.send_enrolled_device_notification")
     @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
     @patch("zentral.contrib.mdm.preprocessors.associate_location_asset")
-    def test_asset_management_associate_success(self, associate_location_asset, location_cache_get):
+    def test_asset_management_associate_success(
+        self,
+        associate_location_asset,
+        location_cache_get,
+        send_enrolled_device_notification
+    ):
         client = Mock()
         location_cache_get.return_value = self.location, client
         associate_location_asset.return_value = []
@@ -168,16 +179,75 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         self.assertEqual(event.metadata.created_at, now)
         associate_location_asset.assert_called_once_with(
             self.location, client, "409203825", "STDQ",
-            set(["C02000000000"]), event_id, notification_id
+            ["C02000000000"], event_id, notification_id
         )
+        send_enrolled_device_notification.assert_not_called()
+
+    @patch("zentral.contrib.mdm.preprocessors.send_enrolled_device_notification")
+    @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
+    @patch("zentral.contrib.mdm.preprocessors.associate_location_asset")
+    def test_asset_management_associate_otf_success(
+        self,
+        associate_location_asset,
+        location_cache_get,
+        send_enrolled_device_notification
+    ):
+        client = Mock()
+        location_cache_get.return_value = self.location, client
+        associate_location_asset.return_value = []
+        notification_id = str(uuid.uuid4())
+        event_id = str(uuid.uuid4())
+        now = datetime.datetime.utcnow()
+        cache.set(get_otf_association_cache_key(event_id), "1")  # mark the event as OTF assignment
+        enrollment_session, _, _ = force_dep_enrollment_session(
+            MetaBusinessUnit.objects.create(name=get_random_string(12)),
+            completed=True,
+        )
+        enrolled_device = enrollment_session.enrolled_device
+        events = list(self.preprocessor.process_raw_event({
+            "data": {"notificationType": "ASSET_MANAGEMENT",
+                     "notificationId": notification_id,
+                     "uId": "2049025000431439",
+                     "notification": {
+                         "assignments": [
+                             {"adamId": "409203825",
+                              "pricingParam": "STDQ",
+                              "serialNumber": enrolled_device.serial_number},
+                         ],
+                         "eventId": event_id,
+                         "result": "SUCCESS",
+                         "type": "ASSOCIATE"
+                     }},
+            "metadata": {"request": {"user_agent": "yolo", "ip": "127.0.0.1"},
+                         "created_at": now.isoformat()},
+            "location": {"mdm_info_id": str(self.location.mdm_info_id)}
+        }))
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, AssetAssociationEvent)
+        self.assertEqual(event.metadata.request.user_agent, "yolo")
+        self.assertEqual(event.metadata.request.ip, "127.0.0.1")
+        self.assertEqual(len(event.metadata.incident_updates), 1)
+        iu = event.metadata.incident_updates[0]
+        self.assertEqual(iu.incident_type, "mdm_asset_association")
+        self.assertEqual(iu.key, {"mdm_l_pk": self.location.pk,
+                                  "mdm_adam_id": "409203825",
+                                  "mdm_pricing_param": "STDQ"})
+        self.assertEqual(iu.severity, Severity.NONE)
+        self.assertEqual(event.payload["asset"]["adam_id"], "409203825")
+        self.assertEqual(event.payload["asset"]["pricing_param"], "STDQ")
+        self.assertEqual(event.metadata.created_at, now)
+        associate_location_asset.assert_called_once_with(
+            self.location, client, "409203825", "STDQ",
+            [enrolled_device.serial_number], event_id, notification_id
+        )
+        send_enrolled_device_notification.assert_called_once_with(enrolled_device)
 
     @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
-    @patch("zentral.contrib.mdm.preprocessors.clear_on_the_fly_assignment")
     @patch("zentral.contrib.mdm.preprocessors.associate_location_asset")
     def test_asset_management_associate_failure(
         self,
         associate_location_asset,
-        clear_on_the_fly_assignment,
         location_cache_get
     ):
         client = Mock()
@@ -230,9 +300,6 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         self.assertEqual(event.payload["error"]["number"], 9709)
         self.assertEqual(event.metadata.created_at, now)
         associate_location_asset.assert_not_called()
-        clear_on_the_fly_assignment.assert_called_once_with(
-            self.location, "C02000000000", "409203825", "STDQ", "associate error"
-        )
 
     @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
     @patch("zentral.contrib.mdm.preprocessors.disassociate_location_asset")
@@ -281,7 +348,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         self.assertEqual(event.metadata.created_at, now)
         disassociate_location_asset.assert_called_once_with(
             self.location, client, "409203825", "STDQ",
-            set(["C02000000000"]), event_id, notification_id
+            ["C02000000000"], event_id, notification_id
         )
 
     @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
@@ -384,7 +451,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         self.assertEqual(event.metadata.created_at, now)
         disassociate_location_asset.assert_called_once_with(
             self.location, client, "409203825", "STDQ",
-            set(["C02000000000"]), event_id, notification_id
+            ["C02000000000"], event_id, notification_id
         )
 
     @patch("zentral.contrib.mdm.preprocessors.location_cache.get")

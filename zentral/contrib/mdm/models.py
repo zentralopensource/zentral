@@ -407,6 +407,18 @@ class Blueprint(models.Model):
         choices=InventoryItemCollectionOption.choices,
         default=InventoryItemCollectionOption.NO
     )
+
+    legacy_profiles_via_ddm = models.BooleanField(
+        verbose_name="Distribute legacy profiles via DDM",
+        default=True,
+    )
+
+    default_location = models.ForeignKey(
+        "mdm.Location",
+        verbose_name="Default apps & books location",
+        null=True, blank=True, on_delete=models.SET_NULL,
+    )
+
     # FileVault
     filevault_config = models.ForeignKey(FileVaultConfig, null=True, blank=True,
                                          on_delete=models.SET_NULL)
@@ -456,9 +468,12 @@ class Blueprint(models.Model):
             "collect_apps": self.get_collect_apps_display(),
             "collect_certificates": self.get_collect_certificates_display(),
             "collect_profiles": self.get_collect_profiles_display(),
+            "legacy_profiles_via_ddm": self.legacy_profiles_via_ddm,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         })
+        if self.default_location:
+            d["default_location"] = self.default_location.serialize_for_event(keys_only=True)
         if self.filevault_config:
             d["filevault_config"] = self.filevault_config.serialize_for_event(keys_only=True)
         if self.recovery_password_config:
@@ -659,7 +674,7 @@ class Location(models.Model):
     def serialize_for_event(self, keys_only=True):
         d = {
             "pk": self.pk,
-            "mdm_info_id": self.mdm_info_id,
+            "mdm_info_id": str(self.mdm_info_id),
         }
         if not keys_only:
             d.update({
@@ -3015,19 +3030,6 @@ class StoreApp(models.Model):
 
     def get_absolute_url(self):
         return self.artifact_version.get_absolute_url()
-
-
-class EnrolledDeviceLocationAssetAssociation(models.Model):
-    """Used for on-the-fly asset association."""
-    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE)
-    location_asset = models.ForeignKey(LocationAsset, on_delete=models.CASCADE)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    attempts = models.IntegerField(default=0)
-    last_attempted_at = models.DateTimeField(null=True)
-
-    class Meta:
-        unique_together = (("enrolled_device", "location_asset"),)
 
 
 class TargetArtifact(models.Model):

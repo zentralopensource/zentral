@@ -6,6 +6,12 @@
 
 Add network interfaces to full export.
 
+#### MDM
+
+On-the-fly device apps & books license assignments work now also with raw `com.apple.configuration.app.managed` declarations when a default apps & books location is set in the blueprint.
+
+Add blueprint option to distribute the legacy profiles via DDM.
+
 ## 2025.10
 
 ### Features

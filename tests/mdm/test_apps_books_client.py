@@ -67,6 +67,12 @@ class MDMAppsBooksClientTestCase(TestCase):
         self.assertEqual(client.make_request("/yolo"), {"ok": True})
         self.assertEqual(client.session.headers["Authorization"], f"Bearer {updated_token}")
 
+    def test_other_error(self):
+        client, _ = self._get_client({"errorNumber": 123}, False)
+        with self.assertRaises(AppsBooksAPIError) as cm:
+            client.make_request("/yolo")
+        self.assertEqual(cm.exception.args[0], "Error 123")
+
     def test_mdm_conflict_error(self):
         client, location = self._get_client({"mdmInfo": {"id": str(uuid.uuid4())}}, True)
         with self.assertRaises(MDMConflictError) as cm:
@@ -230,18 +236,26 @@ class MDMAppsBooksClientTestCase(TestCase):
         )
         self.assertEqual(list(client.iter_asset_device_assignments("yolo", "fomo")), ["un", "deux"])
 
-    # post_device_association
+    # post_device_associations
 
-    def test_post_device_association(self):
-        client, _ = self._get_client({"ok": True}, True)
-        asset = Mock(adam_id="yolo", pricing_param="fomo")
-        self.assertEqual(client.post_device_association("un", asset), {"ok": True})
+    def test_post_device_associations_no_event_id(self):
+        client, _ = self._get_client({}, True)
+        with self.assertRaises(AppsBooksAPIError) as cm:
+            client.post_device_associations("un", [("yolo", "STDQ")])
+        self.assertEqual(cm.exception.args[0], "No event id")
+
+    def test_post_device_associations(self):
+        event_id = str(uuid.uuid4())
+        client, _ = self._get_client({"eventId": event_id}, True)
+        self.assertEqual(client.post_device_associations("un", [("yolo", "STDQ")]), event_id)
         self.assertEqual(len(client.session.post.call_args_list), 1)
         args, kwargs = client.session.post.call_args_list[0]
         self.assertEqual(args, ("https://vpp.itunes.apple.com/mdm/v2/assets/associate",))
         self.assertEqual(kwargs["json"],
-                         {"assets": [{"adamId": "yolo", "pricingParam": "fomo"}],
+                         {"assets": [{"adamId": "yolo", "pricingParam": "STDQ"}],
                           "serialNumbers": ["un"]})
+
+    # post_device_disassociation
 
     def test_post_device_disassociation(self):
         client, _ = self._get_client({"ok": True}, True)

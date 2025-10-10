@@ -250,7 +250,7 @@ class MDMArtifactsAPIViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_artifact(self, post_event):
         required_artifact, _ = force_artifact()
-        blueprint_artifact, artifact, _ = force_blueprint_artifact()
+        blueprint_artifact, artifact, _ = force_blueprint_artifact(artifact_type=Artifact.Type.STORE_APP)
         blueprint = blueprint_artifact.blueprint
         self.assertEqual(blueprint.serialized_artifacts[str(artifact.pk)]["requires"], [])
         prev_value = artifact.serialize_for_event()

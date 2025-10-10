@@ -14,6 +14,7 @@ from django.views.generic import View
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import add_machine_tags
 from zentral.contrib.mdm.artifacts import Target
+from zentral.contrib.mdm.apps_books import ensure_target_asset_assignments
 from zentral.contrib.mdm.cert_issuer_backends import get_cached_cert_issuer_backend, test_acme_payload
 from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.base import get_command
@@ -393,6 +394,7 @@ class CheckinView(MDMView):
                 response = build_declaration_response(endpoint, event_payload, self.enrollment_session, self.target)
             except DeclarationError as e:
                 self.abort(str(e), **event_payload)
+        ensure_target_asset_assignments(self.target)
         self.post_event("success", **event_payload)
         return JsonResponse(response)
 
@@ -454,7 +456,9 @@ class ConnectView(MDMView):
             return HttpResponse("Blocked", status=401)
 
         # return next command if possible
-        return get_next_command_response(self.target, self.enrollment_session, request_status)
+        response = get_next_command_response(self.target, self.enrollment_session, request_status)
+        ensure_target_asset_assignments(self.target)
+        return response
 
 
 # download views

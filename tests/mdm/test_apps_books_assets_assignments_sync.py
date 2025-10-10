@@ -115,7 +115,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(
             event.payload,
             {"asset": {"pk": asset.pk, "adam_id": asset.adam_id, "pricing_param": asset.pricing_param},
-             "location": {"pk": location.pk, "mdm_info_id": location.mdm_info_id},
+             "location": {"pk": location.pk, "mdm_info_id": str(location.mdm_info_id)},
              "assigned_count": 0,
              "available_count": 10,
              "retired_count": 0,
@@ -157,7 +157,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(
             event.payload,
             {"asset": {"pk": asset.pk, "adam_id": asset.adam_id, "pricing_param": asset.pricing_param},
-             "location": {"pk": location.pk, "mdm_info_id": location.mdm_info_id},
+             "location": {"pk": location.pk, "mdm_info_id": str(location.mdm_info_id)},
              "assigned_count": 8,
              "available_count": 2,
              "retired_count": 0,
@@ -195,7 +195,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(
             event.payload,
             {"asset": {"pk": asset.pk, "adam_id": asset.adam_id, "pricing_param": asset.pricing_param},
-             "location": {"pk": location.pk, "mdm_info_id": location.mdm_info_id},
+             "location": {"pk": location.pk, "mdm_info_id": str(location.mdm_info_id)},
              "assigned_count": 9,
              "available_count": 1,
              "retired_count": 0,
@@ -266,7 +266,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(
             event.payload,
             {'asset': {'pk': asset.pk, 'adam_id': asset.adam_id, 'pricing_param': asset.pricing_param},
-             'location': {'pk': location.pk, 'mdm_info_id': location.mdm_info_id},
+             'location': {'pk': location.pk, 'mdm_info_id': str(location.mdm_info_id)},
              'assigned_count': 10,
              'available_count': 0,
              'retired_count': 0,
@@ -341,7 +341,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(
             event.payload,
             {'asset': {'pk': asset.pk, 'adam_id': asset.adam_id, 'pricing_param': asset.pricing_param},
-             'location': {'pk': location.pk, 'mdm_info_id': location.mdm_info_id},
+             'location': {'pk': location.pk, 'mdm_info_id': str(location.mdm_info_id)},
              'assigned_count': 3,
              'available_count': 7,
              'retired_count': 0,
@@ -610,7 +610,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(
             event.payload,
             {'asset': {'pk': asset.pk, 'adam_id': asset.adam_id, 'pricing_param': asset.pricing_param},
-             'location': {'pk': location.pk, 'mdm_info_id': location.mdm_info_id},
+             'location': {'pk': location.pk, 'mdm_info_id': str(location.mdm_info_id)},
              'assigned_count': 10,
              'available_count': 1,
              'retired_count': 0,
@@ -651,6 +651,24 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         location_asset.refresh_from_db()
         self.assertEqual(location_asset.available_count, 1)
         self.assertEqual(location_asset.total_count, 11)
+
+    @patch("zentral.contrib.mdm.apps_books.sync_asset")
+    def test_update_location_asset_counts_unknown_sync_required(self, sync_asset):
+        location = force_location()
+        client = Mock()
+        sync_asset.return_value = []
+        notification_id = str(uuid.uuid4())
+        events = list(
+            update_location_asset_counts(
+                location, client,
+                "00000000", "STDQ",
+                {"total_count": 1,
+                 "available_count": 1},
+                notification_id,
+            )
+        )
+        self.assertEqual(events, [])
+        sync_asset.assert_called_once_with(location, client, "00000000", "STDQ", notification_id)
 
     def test_update_location_asset_counts_sync_required(self):
         asset = force_asset()
@@ -701,8 +719,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
 
     # associate_location_asset
 
-    @patch("zentral.contrib.mdm.apps_books.queue_install_application_command_if_necessary")
-    def test_associate_location_asset(self, queue_install_application_command_if_necessary):
+    def test_associate_location_asset(self):
         asset = force_asset()
         location = force_location()
         location_asset = LocationAsset.objects.create(
@@ -741,9 +758,6 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         location_asset.refresh_from_db()
         self.assertEqual(location_asset.assigned_count, 11)
         self.assertEqual(location_asset.available_count, 0)
-        queue_install_application_command_if_necessary.assert_called_once_with(
-            location, serial_number, asset.adam_id, asset.pricing_param
-        )
 
     def test_associate_location_asset_unknown_location_asset(self):
         location = force_location()
@@ -838,8 +852,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
 
     # disassociate_location_asset
 
-    @patch("zentral.contrib.mdm.apps_books.clear_on_the_fly_assignment")
-    def test_disassociate_location_asset(self, clear_on_the_fly_assignment):
+    def test_disassociate_location_asset(self):
         asset = force_asset()
         location = force_location()
         location_asset = LocationAsset.objects.create(
@@ -879,9 +892,6 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         location_asset.refresh_from_db()
         self.assertEqual(location_asset.assigned_count, 9)
         self.assertEqual(location_asset.available_count, 2)
-        clear_on_the_fly_assignment.assert_called_once_with(
-            location, serial_number, asset.adam_id, asset.pricing_param, "disassociate success"
-        )
 
     def test_disassociate_location_unknown_asset(self):
         location = force_location()

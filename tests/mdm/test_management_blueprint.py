@@ -9,7 +9,8 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.core.events.base import AuditEvent
 from .utils import (force_blueprint, force_blueprint_artifact,
-                    force_filevault_config, force_recovery_password_config, force_software_update_enforcement)
+                    force_filevault_config, force_location,
+                    force_recovery_password_config, force_software_update_enforcement)
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -115,7 +116,8 @@ class BlueprintManagementViewsTestCase(TestCase):
                                          "inventory_interval": 86401,
                                          "collect_apps": 2,
                                          "collect_certificates": 1,
-                                         "collect_profiles": 0},
+                                         "collect_profiles": 0,
+                                         "legacy_profiles_via_ddm": "on"},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
@@ -126,6 +128,7 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertEqual(blueprint.collect_apps, 2)
         self.assertEqual(blueprint.collect_certificates, 1)
         self.assertEqual(blueprint.collect_profiles, 0)
+        self.assertTrue(blueprint.legacy_profiles_via_ddm)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
@@ -141,6 +144,7 @@ class BlueprintManagementViewsTestCase(TestCase):
                      "collect_apps": "ALL",
                      "collect_certificates": "MANAGED_ONLY",
                      "collect_profiles": "NO",
+                     "legacy_profiles_via_ddm": True,
                      "created_at": blueprint.created_at,
                      "updated_at": blueprint.updated_at
                  }
@@ -247,13 +251,15 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertEqual(blueprint.collect_profiles, 0)
         self._login("mdm.change_blueprint", "mdm.view_blueprint")
         new_name = get_random_string(12)
+        location = force_location()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:update_blueprint", args=(blueprint.pk,)),
                                         {"name": new_name,
                                          "inventory_interval": 14401,
                                          "collect_apps": 1,
                                          "collect_certificates": 1,
-                                         "collect_profiles": 2},
+                                         "collect_profiles": 2,
+                                         "default_location": location.pk},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
@@ -265,6 +271,8 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertEqual(blueprint2.collect_apps, 1)
         self.assertEqual(blueprint2.collect_certificates, 1)
         self.assertEqual(blueprint2.collect_profiles, 2)
+        self.assertEqual(blueprint2.default_location, location)
+        self.assertFalse(blueprint2.legacy_profiles_via_ddm)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
@@ -280,6 +288,8 @@ class BlueprintManagementViewsTestCase(TestCase):
                      "collect_apps": "MANAGED_ONLY",
                      "collect_certificates": "MANAGED_ONLY",
                      "collect_profiles": "ALL",
+                     "default_location": {"pk": location.pk, "mdm_info_id": str(location.mdm_info_id)},
+                     "legacy_profiles_via_ddm": False,
                      "created_at": blueprint2.created_at,
                      "updated_at": blueprint2.updated_at
                  },

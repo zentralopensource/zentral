@@ -36,7 +36,10 @@ class InstallProfileCommandTestCase(TestCase):
             cls.mbu, authenticated=True, completed=True, realm_user=True
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
-        cls.blueprint = Blueprint.objects.create(name=get_random_string(12))
+        cls.blueprint = Blueprint.objects.create(
+            name=get_random_string(12),
+            legacy_profiles_via_ddm=False,  # to force the use of the commands by default
+        )
         cls.enrolled_device.blueprint = cls.blueprint
         cls.enrolled_device.save()
         cls.enrolled_user = EnrolledUser.objects.create(
@@ -408,7 +411,7 @@ class InstallProfileCommandTestCase(TestCase):
 
     def test_install_device_profile_declarative_management_no_legacy_profiles(self):
         self.enrolled_device.declarative_management = True
-        self.assertTrue(Artifact.Type.PROFILE not in Target(self.enrolled_device).ddm_managed_artifact_types())
+        self.assertFalse(Artifact.Type.PROFILE in Target(self.enrolled_device).ddm_managed_artifact_types())
         artifact_version, _ = self._force_profile()
         cmd = _install_artifacts(
             Target(self.enrolled_device),
@@ -418,11 +421,11 @@ class InstallProfileCommandTestCase(TestCase):
         self.assertIsInstance(cmd, InstallProfile)
         self.assertEqual(cmd.artifact_version, artifact_version)
 
-    @patch("zentral.contrib.mdm.artifacts.Target.ddm_managed_artifact_types")
-    def test_install_device_profile_declarative_management_noop(self, ddm_managed_artifact_types):
-        # force inclusion of the PROFILE
-        ddm_managed_artifact_types.return_value = tuple(t for t in Artifact.Type if t.is_declaration)
+    def test_install_device_profile_declarative_management_noop(self):
         self.enrolled_device.declarative_management = True
+        self.blueprint.legacy_profiles_via_ddm = True
+        self.blueprint.save()
+        self.assertTrue(Artifact.Type.PROFILE in Target(self.enrolled_device).ddm_managed_artifact_types())
         artifact_version, _ = self._force_profile()
         self.assertIsNone(_install_artifacts(
             Target(self.enrolled_device),

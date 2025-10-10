@@ -27,7 +27,7 @@ from .models import (Artifact, ArtifactVersion,
                      Blueprint, BlueprintArtifact,
                      Channel,
                      DeclarationRef,
-                     DeviceArtifact, DeviceCommand,
+                     DeviceArtifact, DeviceAssignment, DeviceCommand,
                      TargetArtifact,
                      UserArtifact, UserCommand)
 
@@ -76,7 +76,8 @@ def _add_artifact_to_serialization(artifact, artifacts, depth):
         return
     required_artifacts = list(artifact.requires.all())
     referenced_artifacts = []
-    if artifact.get_type().is_raw_declaration:
+    artifact_type = artifact.get_type()
+    if artifact_type.is_raw_declaration:
         # TODO: optimize?
         for ref in (
             DeclarationRef.objects.select_related("artifact")
@@ -98,8 +99,13 @@ def _add_artifact_to_serialization(artifact, artifacts, depth):
         "requires": [str(ra.pk) for ra in required_artifacts],
         "references": [str(ra.pk) for ra in referenced_artifacts],
         "versions": [
-            _serialize_artifact_version(av)
-            for av in artifact.artifactversion_set.all().order_by("-version")
+            _serialize_artifact_version(artifact_type, av)
+            for av in (artifact.artifactversion_set
+                               .select_related("declaration",
+                                               "store_app__location_asset__asset",
+                                               "store_app__location_asset__location")
+                               .all()
+                               .order_by("-version"))
         ],
     }
     # required and referenced artifacts added with extra depth
@@ -107,11 +113,25 @@ def _add_artifact_to_serialization(artifact, artifacts, depth):
         _add_artifact_to_serialization(ra, artifacts, depth + 1)
 
 
-def _serialize_artifact_version(artifact_version):
+def _serialize_artifact_version(artifact_type, artifact_version):
     d = {
         "pk": str(artifact_version.pk),
-        "version": artifact_version.version
+        "version": artifact_version.version,
     }
+    if artifact_type == Artifact.Type.STORE_APP:
+        location_asset = artifact_version.store_app.location_asset
+        d["location_asset"] = {
+            "pk": location_asset.pk,
+            "mdm_info_id": str(location_asset.location.mdm_info_id),
+            "adam_id": location_asset.asset.adam_id,
+            "pricing_param": location_asset.asset.pricing_param,
+        }
+    elif artifact_type == Artifact.Type.CONFIGURATION:
+        declaration = artifact_version.declaration
+        if declaration.type == "com.apple.configuration.app.managed":
+            adam_id = declaration.payload.get("AppStoreID")
+            if adam_id:
+                d["location_asset"] = {"adam_id": adam_id}
     d.update(_serialize_filtered_blueprint_item(artifact_version))
     return d
 
@@ -159,12 +179,18 @@ class Target:
             self.is_device = True
             self.target = self.enrolled_device
             self.channel = Channel.DEVICE
+        self.missing_asset_assignments = []
 
     # properties
 
     @property
     def blueprint(self):
         return self.enrolled_device.blueprint
+
+    @cached_property
+    def default_location(self):
+        if self.blueprint:
+            return self.blueprint.default_location
 
     @property
     def serial_number(self):
@@ -348,7 +374,34 @@ class Target:
                 current_artifact["present_artifact_version_pk"] = artifact_version_pk
         return target_artifacts
 
+    @cached_property
+    def _serialized_device_assignments(self):
+        return (DeviceAssignment.objects
+                                .select_related("location_asset__asset")
+                                .filter(serial_number=self.serial_number)
+                                .values_list("location_asset__asset__adam_id", flat=True))
+
+    def _is_artifact_version_license_missing(self, artifact_version):
+        # missing license ?
+        location_asset = artifact_version.get("location_asset")
+        if location_asset and location_asset["adam_id"] not in self._serialized_device_assignments:
+            logger.info("No device assignment found for serial number %s,  adamId %s",
+                        self.serial_number, location_asset["adam_id"])
+            mdm_info_id = location_asset.get("mdm_info_id")
+            if not mdm_info_id and self.default_location:
+                mdm_info_id = str(self.default_location.mdm_info_id)
+            adam_id = location_asset["adam_id"]
+            # default to Standard Quality
+            pricing_param = location_asset.get("pricing_param") or "STDQ"
+            assignment = (mdm_info_id, adam_id, pricing_param)
+            if assignment not in self.missing_asset_assignments:
+                self.missing_asset_assignments.append(assignment)
+            return True
+        return False
+
     def _test_artifact_version_to_install(self, artifact, artifact_version):
+        if self._is_artifact_version_license_missing(artifact_version):
+            return False
         try:
             target_artifact = self._serialized_target_artifacts[artifact["pk"]]
         except KeyError:
@@ -437,7 +490,7 @@ class Target:
             if artifact["type"] not in included_types:
                 return (
                     False,
-                    # if not the type, mark as done if present
+                    # mark as done if present
                     target_artifact.get("present", False)
                     # or type in done_types
                     or artifact["type"] in done_types
@@ -726,10 +779,18 @@ class Target:
     # declarations
 
     def ddm_managed_artifact_types(self):
-        # We do not include the PROFILEs, because of the issues in the OS implementation
-        # See FB16431103, FB16482722
-        # Later, we could test for a minimum OS version for a given platform
-        return tuple(t for t in Artifact.Type if t.is_ddm_only)
+        return tuple(
+            t for t in Artifact.Type
+            if (
+                t.is_ddm_only
+                or (
+                    # Only include profiles if the option is set in the blueprint
+                    t == Artifact.Type.PROFILE
+                    and self.blueprint
+                    and self.blueprint.legacy_profiles_via_ddm
+                )
+            )
+        )
 
     def supports_software_update_enforcement_specific(self):
         if not self.is_device:
@@ -776,7 +837,7 @@ class Target:
 
     def iter_configuration_artifacts(self):
         """Iterate over the configuration artifacts to include in the managed activation"""
-        yield from self.all_installed_or_to_install_serialized(
+        for artifact, artifact_version, _ in self.all_installed_or_to_install_serialized(
             included_types=tuple(
                 t for t in self.ddm_managed_artifact_types()
                 if t.is_configuration and t.can_be_linked_to_blueprint
@@ -784,8 +845,11 @@ class Target:
             done_types=tuple(
                 t for t in Artifact.Type
                 if t.is_asset
-            )
-        )
+            ),
+        ):
+            # only include configuration if the device has a license
+            if not self._is_artifact_version_license_missing(artifact_version):
+                yield artifact
 
     # https://developer.apple.com/documentation/devicemanagement/activationsimple
     @cached_property
@@ -797,7 +861,7 @@ class Target:
         }
         if self.software_update_enforcement:
             payload["StandardConfigurations"].append(get_software_update_enforcement_specific_identifier(self))
-        for artifact, _, _ in self.iter_configuration_artifacts():
+        for artifact in self.iter_configuration_artifacts():
             payload["StandardConfigurations"].append(get_artifact_identifier(artifact))
         payload["StandardConfigurations"].sort()
         h = hashlib.sha1()
@@ -813,7 +877,12 @@ class Target:
 
     def iter_declaration_artifacts(self):
         """Iterate over the declaration artifacts"""
-        yield from self.all_installed_or_to_install_serialized(self.ddm_managed_artifact_types())
+        for artifact, artifact_version, retry_count in self.all_installed_or_to_install_serialized(
+            self.ddm_managed_artifact_types()
+        ):
+            # only include declaration if the device has a license
+            if not self._is_artifact_version_license_missing(artifact_version):
+                yield artifact, artifact_version, retry_count
 
     # https://developer.apple.com/documentation/devicemanagement/declarationitemsresponse/manifestdeclarationitems
     @cached_property
