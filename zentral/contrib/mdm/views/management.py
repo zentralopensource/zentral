@@ -739,6 +739,12 @@ class UpdateArtifactVersionView(PermissionRequiredMixin, UpdateView):
         ctx["artifact"] = self.artifact
         return ctx
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        for blueprint in self.artifact.blueprints():
+            update_blueprint_serialized_artifacts(blueprint)
+        return response
+
 
 class BaseUpgradeArtifactVersionView(PermissionRequiredMixin, TemplateView):
     permission_required = "mdm.add_artifactversion"

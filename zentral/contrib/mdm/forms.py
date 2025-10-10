@@ -1240,9 +1240,6 @@ class ArtifactVersionForm(BlueprintItemFormMixin, forms.ModelForm):
                 tag=tag,
                 defaults={"shard": shard}
             )
-        # update blueprints
-        for blueprint in self.artifact.blueprints():
-            update_blueprint_serialized_artifacts(blueprint)
         return instance
 
 
