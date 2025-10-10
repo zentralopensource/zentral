@@ -1,3 +1,11 @@
+## 2025.11
+
+### Features
+
+#### Inventory
+
+Add network interfaces to full export.
+
 ## 2025.10
 
 ### Features

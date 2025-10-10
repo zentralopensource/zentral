@@ -38,6 +38,13 @@ class InventoryExportsTests(TestCase):
                          'bundle_version_str': '1.2.3'},
                  'bundle_path': "/Applications/Baller.app"},
             ],
+            "network_interfaces": [
+                {"interface": "en0",
+                 "mac": "b0:be:00:00:00:00",
+                 "address": "192.168.1.18",
+                 "mask": "255.255.255.0",
+                 "broadcast": "192.168.1.255"}
+            ],
             "extra_facts": {"un": 1, "deux": "zwei"}
         }
         MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
@@ -53,9 +60,11 @@ class InventoryExportsTests(TestCase):
                     ['zentral_business_unit_0001.jsonl',
                      'zentral_machine_0001.jsonl',
                      'zentral_machine_macos_app_instance_0001.jsonl',
+                     'zentral_machine_network_interface_0001.jsonl',
                      'zentral_macos_app_0001.jsonl',
                      'zentral_macos_app_instance_0001.jsonl',
                      'zentral_meta_business_unit_0001.jsonl',
+                     'zentral_network_interface_0001.jsonl',
                      'zentral_os_version_0001.jsonl',
                      'zentral_source_0001.jsonl']
                 )
@@ -64,6 +73,18 @@ class InventoryExportsTests(TestCase):
                     self.assertEqual(len(content), 1)
                     machine_d = json.loads(content[0])
                     self.assertEqual(machine_d["serial_number"], serial_number)
+                    ms_id = machine_d["ms_id"]
+                with zf.open("zentral_network_interface_0001.jsonl") as jl:
+                    content = jl.read().decode("utf-8").splitlines()
+                    self.assertEqual(len(content), 1)
+                    network_interface_d = json.loads(content[0])
+                    self.assertEqual(network_interface_d["mac"], "b0:be:00:00:00:00")
+                    ni_id = network_interface_d["id"]
+                with zf.open("zentral_machine_network_interface_0001.jsonl") as jl:
+                    content = jl.read().decode("utf-8").splitlines()
+                    self.assertEqual(len(content), 1)
+                    mni_d = json.loads(content[0])
+                    self.assertEqual(mni_d, {"ms_id": ms_id, "network_interface_id": ni_id})
         default_storage.delete(result["filepath"])
 
     def test_export_machine_snapshots(self):
