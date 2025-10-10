@@ -2580,6 +2580,18 @@ class APIViewsTestCase(TestCase):
 
     # create queries
 
+    def test_create_query_same_name_error(self):
+        query = self.force_query()
+        data = {
+            "name": query.name,
+            "sql": "select * from osquery_info;",
+            "compliance_check_enabled": False
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'name': ['query with this name already exists.']})
+
     def test_create_query(self):
         data = {
             "name": "test_query01",
@@ -2925,6 +2937,15 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     # update query
+
+    def test_update_query_same_name_error(self):
+        query0 = self.force_query()
+        query = self.force_query()
+        data = {"name": query0.name, "sql": query.sql}
+        self.set_permissions("osquery.change_query")
+        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'name': ['query with this name already exists.']})
 
     def test_update_query(self):
         query = self.force_query()

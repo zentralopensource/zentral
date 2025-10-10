@@ -52,12 +52,12 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         name = get_random_string(12)
         return Pack.objects.create(name=name.lower(), slug=slugify(name))
 
-    def _force_query(self, force_compliance_check=False, pack_query_mode=None):
+    def _force_query(self, force_compliance_check=False, pack_query_mode=None, name=None):
         if force_compliance_check:
             sql = "select 'OK' as ztl_status;"
         else:
             sql = "select 1 from processes;"
-        query = Query.objects.create(name=get_random_string(12), sql=sql)
+        query = Query.objects.create(name=name or get_random_string(12), sql=sql)
         if pack_query_mode is not None:
             pack = self._force_pack()
             PackQuery.objects.create(
@@ -83,6 +83,18 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_form.html")
         self.assertContains(response, "Create query")
+
+    def test_create_query_same_name_error(self):
+        query_name = get_random_string(12)
+        self._force_query(name=query_name)
+        self._login("osquery.add_query", "osquery.view_query")
+        response = self.client.post(reverse("osquery:create_query"),
+                                    {"name": query_name,
+                                     "sql": "select 1 from users;",
+                                     "description": "YOLO"}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/query_form.html")
+        self.assertFormError(response.context["form"], "name", "Query with this Name already exists.")
 
     def test_create_query_post(self):
         self._login("osquery.add_query", "osquery.view_query")
@@ -186,6 +198,19 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         response = self.client.get(reverse("osquery:update_query", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_form.html")
+
+    def test_update_query_same_name_error(self):
+        query0 = self._force_query()
+        query = self._force_query()
+        self._login("osquery.change_query", "osquery.view_query")
+        response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
+                                    {"name": query0.name,
+                                     "sql": "select 2 from users;",
+                                     "description": "YOLO2"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/query_form.html")
+        self.assertFormError(response.context["form"], "name", "Query with this Name already exists.")
 
     def test_update_query_post(self):
         query = self._force_query()

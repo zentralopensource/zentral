@@ -360,6 +360,7 @@ class QueryForm(forms.ModelForm):
         return sql
 
     def clean(self):
+        super().clean()
         compliance_check = self.cleaned_data.get("compliance_check")
         tag = self.cleaned_data.get("tag")
         if tag and compliance_check:
