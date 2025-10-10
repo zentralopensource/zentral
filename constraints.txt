@@ -120,7 +120,7 @@ pyOpenSSL==24.3.0
 pyotp==2.9.0
 pysaml2==7.5.0
 python-dateutil==2.9.0.post0
-python-ldap==3.4.4
+python-ldap==3.4.5
 pytz==2024.2
 PyYAML==6.0.2
 redis==6.2.0
