@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView
 from zentral.contrib.mdm.models import Location, LocationAsset
 from zentral.contrib.mdm.serializers import LocationAssetSerializer, LocationSerializer
 from zentral.utils.drf import DefaultDjangoModelPermissions
@@ -10,7 +10,13 @@ class LocationList(ListAPIView):
     serializer_class = LocationSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_fields = ('name', 'organization_name')
+    filterset_fields = ('name', 'organization_name', 'mdm_info_id')
+
+
+class LocationDetail(RetrieveAPIView):
+    queryset = Location.objects.all()
+    serializer_class = LocationSerializer
+    permission_classes = [DefaultDjangoModelPermissions]
 
 
 class LocationAssetFilter(filters.FilterSet):

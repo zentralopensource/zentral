@@ -111,6 +111,33 @@ class APIViewsTestCase(TestCase):
               'website_url': 'https://business.apple.com'}]
         )
 
+    def test_location_by_mdm_info_id(self):
+        self.set_permissions("mdm.view_location")
+        location = force_location()
+        location.refresh_from_db()  # server_token_expiration_date format!!!
+        response = self.get(reverse("mdm_api:locations") + f"?mdm_info_id={location.mdm_info_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [{'country_code': 'DE',
+              'created_at': location.created_at.isoformat(),
+              'id': location.pk,
+              'library_uid': str(location.library_uid),
+              'mdm_info_id': str(location.mdm_info_id),
+              'name': location.name,
+              'organization_name': location.organization_name,
+              'platform': 'enterprisestore',
+              'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
+              'updated_at': location.updated_at.isoformat(),
+              'website_url': 'https://business.apple.com'}]
+        )
+
+    def test_location_by_mdm_info_id_no_results(self):
+        self.set_permissions("mdm.view_location")
+        response = self.get(reverse("mdm_api:locations") + "?mdm_info_id=734898e6-dbcf-4bba-ab60-5ede4633a033")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
     def test_location_by_name(self):
         self.set_permissions("mdm.view_location")
         location = force_location()
@@ -134,8 +161,6 @@ class APIViewsTestCase(TestCase):
 
     def test_location_by_name_no_results(self):
         self.set_permissions("mdm.view_location")
-        location = force_location()
-        location.refresh_from_db()  # server_token_expiration_date format!!!
         response = self.get(reverse("mdm_api:locations") + "?name=yolo")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
@@ -163,11 +188,50 @@ class APIViewsTestCase(TestCase):
 
     def test_location_by_organization_name_no_results(self):
         self.set_permissions("mdm.view_location")
-        location = force_location()
-        location.refresh_from_db()  # server_token_expiration_date format!!!
         response = self.get(reverse("mdm_api:locations") + "?organization_name=yolo")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
+
+    # location
+
+    def test_location_unauthorized(self):
+        location = force_location()
+        response = self.get(reverse("mdm_api:location", args=(location.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_location_permission_denied(self):
+        location = force_location()
+        response = self.get(reverse("mdm_api:location", args=(location.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_location_method_not_allowed(self):
+        location = force_location()
+        self.set_permissions("mdm.change_location")
+        response = self.put(reverse("mdm_api:location", args=(location.pk,)), {})
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.json(), {'detail': 'Method "PUT" not allowed.'})
+
+    def test_location(self):
+        location = force_location()
+        self.set_permissions("mdm.view_location")
+        location = force_location()
+        location.refresh_from_db()  # server_token_expiration_date format!!!
+        response = self.get(reverse("mdm_api:location", args=(location.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'country_code': 'DE',
+             'created_at': location.created_at.isoformat(),
+             'id': location.pk,
+             'library_uid': str(location.library_uid),
+             'mdm_info_id': str(location.mdm_info_id),
+             'name': location.name,
+             'organization_name': location.organization_name,
+             'platform': 'enterprisestore',
+             'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
+             'updated_at': location.updated_at.isoformat(),
+             'website_url': 'https://business.apple.com'}
+        )
 
     # location assets
 
