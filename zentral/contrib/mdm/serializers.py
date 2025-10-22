@@ -16,6 +16,7 @@ from zentral.utils.ssl import ensure_bytes
 from .app_manifest import read_package_info, validate_configuration
 from .artifacts import Target, update_blueprint_serialized_artifacts
 from .cert_issuer_backends import CertIssuerBackend
+from .cert_issuer_backends.digicert import DigicertSerializer
 from .cert_issuer_backends.ident import IDentSerializer
 from .cert_issuer_backends.microsoft_ca import MicrosoftCASerializer
 from .cert_issuer_backends.okta_ca import OktaCASerializer
@@ -374,6 +375,8 @@ class RecoveryPasswordConfigSerializer(serializers.ModelSerializer):
 
 
 class CertIssuerSerializer(serializers.Serializer):
+    digicert_kwargs = DigicertSerializer(
+        source="get_digicert_kwargs", required=False, allow_null=True)
     ident_kwargs = IDentSerializer(
         source="get_ident_kwargs", required=False, allow_null=True)
     microsoft_ca_kwargs = MicrosoftCASerializer(
@@ -462,6 +465,7 @@ class ACMEIssuerSerializer(CertIssuerSerializer, serializers.ModelSerializer):
             "attest",
             # backends
             "backend",
+            "digicert_kwargs",
             "ident_kwargs",
             "microsoft_ca_kwargs",
             "okta_ca_kwargs",
@@ -518,6 +522,7 @@ class SCEPIssuerSerializer(CertIssuerSerializer, serializers.ModelSerializer):
             "key_usage",
             # backends
             "backend",
+            "digicert_kwargs",
             "ident_kwargs",
             "microsoft_ca_kwargs",
             "okta_ca_kwargs",

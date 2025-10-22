@@ -269,6 +269,121 @@ class MDMSCEPIssuerAPIViewsTestCase(TestCase):
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_scep_issuer_errors(self, post_event):
+        self.set_permissions("mdm.add_scepissuer")
+        response = self.post(
+            reverse("mdm_api:scep_issuers"),
+            {'backend': 'DIGICERT',
+             'key_usage': 5,
+             'key_size': 4096,
+             'name': get_random_string(12),
+             'description': 'description',
+             'digicert_kwargs': {
+                 'api_base_url': 'https://www.example.com',
+                 'profile_guid': 'not a valid guid',
+             },
+             'url': 'https://example.com/scep/'}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'digicert_kwargs': {'api_base_url': ["URL path must end with '/api/'"],
+                                 'api_token': ['This field is required.'],
+                                 'business_unit_guid': ['This field is required.'],
+                                 'default_seat_email': ['This field is required.'],
+                                 'profile_guid': ['Not a valid GUID']}},
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_scep_issuer_digicert_min(self, post_event):
+        self.set_permissions("mdm.add_scepissuer")
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(
+                reverse("mdm_api:scep_issuers"),
+                {'backend': 'DIGICERT',
+                 'key_usage': 5,
+                 'key_size': 4096,
+                 'name': name,
+                 'description': 'description',
+                 'digicert_kwargs': {
+                     'api_token': 'haha',
+                     'profile_guid': '60a3ce98-b05f-4f1b-83b0-200d82723134',
+                     'business_unit_guid': '34f0d9a5-4603-4d07-baf3-2071f6e5b874',
+                     'default_seat_email': 'yolo@example.com',
+                 },
+                 'url': 'https://example.com/scep/'}
+            )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
+        data = response.json()
+        scep_issuer = SCEPIssuer.objects.get(name=name)
+        self.assertEqual(
+            data,
+            {'backend': 'DIGICERT',
+             'created_at': scep_issuer.created_at.isoformat(),
+             'description': 'description',
+             'id': str(scep_issuer.pk),
+             'key_size': 4096,
+             'key_usage': 5,
+             'digicert_kwargs': {
+                 'api_base_url': 'https://one.digicert.com/mpki/api/',
+                 'api_token': 'haha',
+                 'profile_guid': '60a3ce98-b05f-4f1b-83b0-200d82723134',
+                 'business_unit_guid': '34f0d9a5-4603-4d07-baf3-2071f6e5b874',
+                 'seat_type': 'DEVICE_SEAT',
+                 'seat_id_mapping': 'common_name',
+                 'default_seat_email': 'yolo@example.com',
+             },
+             'name': name,
+             'provisioning_uid': None,
+             'updated_at': scep_issuer.updated_at.isoformat(),
+             'url': 'https://example.com/scep/',
+             'version': 1}
+        )
+        backend = scep_issuer.get_backend(load=True)
+        self.assertEqual(backend.api_base_url, 'https://one.digicert.com/mpki/api/')
+        self.assertEqual(backend.api_token, 'haha')
+        self.assertEqual(backend.profile_guid, '60a3ce98-b05f-4f1b-83b0-200d82723134'),
+        self.assertEqual(backend.business_unit_guid, '34f0d9a5-4603-4d07-baf3-2071f6e5b874'),
+        self.assertEqual(backend.seat_type, 'DEVICE_SEAT'),
+        self.assertEqual(backend.seat_id_mapping, 'common_name'),
+        self.assertEqual(backend.default_seat_email, 'yolo@example.com')
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {'action': 'created',
+             'object': {
+                 'model': 'mdm.scepissuer',
+                 'new_value': {
+                     'backend': 'DIGICERT',
+                     'backend_kwargs': {
+                         'api_base_url': 'https://one.digicert.com/mpki/api/',
+                         'api_token_hash': '090b235e9eb8f197f2dd927937222c570396d971222d9009a9189e2b6cc0a2c1',
+                         'profile_guid': '60a3ce98-b05f-4f1b-83b0-200d82723134',
+                         'business_unit_guid': '34f0d9a5-4603-4d07-baf3-2071f6e5b874',
+                         'seat_type': 'DEVICE_SEAT',
+                         'seat_id_mapping': 'common_name',
+                         'default_seat_email': 'yolo@example.com',
+                     },
+                     'created_at': scep_issuer.created_at,
+                     'description': 'description',
+                     'key_size': 4096,
+                     'key_usage': 5,
+                     'name': scep_issuer.name,
+                     'pk': str(scep_issuer.pk),
+                     'updated_at': scep_issuer.updated_at,
+                     'url': scep_issuer.url,
+                     'version': 1
+                 },
+                 'pk': str(scep_issuer.pk)}}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"mdm_scep_issuer": [str(scep_issuer.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_scep_issuer_ident(self, post_event):
         self.set_permissions("mdm.add_scepissuer")
         name = get_random_string(12)

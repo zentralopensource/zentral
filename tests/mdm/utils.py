@@ -221,6 +221,16 @@ def force_scep_issuer(
     if not backend_kwargs:
         if backend == CertIssuerBackend.StaticChallenge:
             backend_kwargs = {"challenge": get_random_string(12)}
+        elif backend == CertIssuerBackend.Digicert:
+            backend_kwargs = {
+                "api_base_url": "https://one.digicert.com/mpki/api/",
+                "api_token": get_random_string(12),
+                "profile_guid": str(uuid.uuid4()),
+                "business_unit_guid": str(uuid.uuid4()),
+                "seat_type": "DEVICE_SEAT",
+                "seat_id_mapping": "common_name",
+                "default_seat_email": "yolo@example.com",
+            }
         elif backend == CertIssuerBackend.IDent:
             backend_kwargs = {
                 "url": "https://www.example.com/{}".format(get_random_string(12)),

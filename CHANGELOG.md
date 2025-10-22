@@ -18,6 +18,8 @@ Better apps & books locations read-only API.
 
 Add blueprint option to distribute the legacy profiles via DDM.
 
+Add Digicert - Trust Lifecycle Manager SCEP issuer backend. Support for dynamic enrollment codes.
+
 ### Bug fixes
 
 Fix DDM status report response code. It should be `200`.

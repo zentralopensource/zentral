@@ -1,14 +1,22 @@
+import uuid
 from unittest.mock import Mock, patch
 from django.test import TestCase
+from django.utils.crypto import get_random_string
+from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import Platform
 from zentral.contrib.mdm.cert_issuer_backends import (CertIssuerBackend,
                                                       get_cached_cert_issuer_backend, test_acme_payload)
 from zentral.contrib.mdm.cert_issuer_backends.base import CertIssuer, CertIssuerError
 from zentral.contrib.mdm.cert_issuer_backends.ident import IDent
-from .utils import force_acme_issuer, force_scep_issuer
+from .utils import force_acme_issuer, force_dep_enrollment_session, force_scep_issuer
 
 
 class MDMCertIssuerBackendsTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        cls.dep_enrollment_session, _, _ = force_dep_enrollment_session(cls.mbu, realm_user=True)
+
     # CertIssuer backend
 
     def test_cert_issuer_backend_different_classes_eq_false(self):
@@ -31,6 +39,213 @@ class MDMCertIssuerBackendsTestCase(TestCase):
         base_backend = CertIssuer(issuer, False)
         with self.assertRaises(NotImplementedError):
             base_backend.update_scep_payload({}, Mock())
+
+    # Digicert
+
+    def test_digicert_subject_seat_id(self):
+        backend = force_scep_issuer(
+            backend=CertIssuerBackend.Digicert,
+            api_base_url="https://one.digicert.com/mpki/api/",
+            api_token=get_random_string(12),
+            profile_guid=str(uuid.uuid4()),
+            business_unit_guid=str(uuid.uuid4()),
+            seat_type="DEVICE_SEAT",
+            seat_id_mapping="serial_number",
+            default_seat_email="yolo@example.com",
+        ).get_backend(load=True)
+        self.assertEqual(
+            backend.get_seat_id({"Subject": [[["2.5.4.5", "YoLoFoMo"]]]}),
+            "YoLoFoMo"
+        )
+
+    def test_digicert_subject_seat_id_error(self):
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        with self.assertRaises(CertIssuerError) as cm:
+            backend.get_seat_id({"Subject": [[["O", "YoLoFoMo"]]]}),
+        self.assertEqual(cm.exception.args[0], "Could not get seat ID 'common_name' from Subject")
+
+    def test_digicert_san_seat_id(self):
+        backend = force_scep_issuer(
+            backend=CertIssuerBackend.Digicert,
+            api_base_url="https://one.digicert.com/mpki/api/",
+            api_token=get_random_string(12),
+            profile_guid=str(uuid.uuid4()),
+            business_unit_guid=str(uuid.uuid4()),
+            seat_type="DEVICE_SEAT",
+            seat_id_mapping="dNSName",
+            default_seat_email="yolo@example.com",
+        ).get_backend(load=True)
+        self.assertEqual(
+            backend.get_seat_id({"SubjectAltName": {"dNSName": "YoLoFoMo"}}),
+            "YoLoFoMo"
+        )
+
+    def test_digicert_san_seat_id_error(self):
+        backend = force_scep_issuer(
+            backend=CertIssuerBackend.Digicert,
+            api_base_url="https://one.digicert.com/mpki/api/",
+            api_token=get_random_string(12),
+            profile_guid=str(uuid.uuid4()),
+            business_unit_guid=str(uuid.uuid4()),
+            seat_type="DEVICE_SEAT",
+            seat_id_mapping="rfc822Name",
+            default_seat_email="yolo@example.com",
+        ).get_backend(load=True)
+        with self.assertRaises(CertIssuerError) as cm:
+            backend.get_seat_id({"SubjectAltName": {"dNSName": "YoLoFoMo"}}),
+        self.assertEqual(cm.exception.args[0], "Could not get seat ID 'rfc822Name' from SAN")
+
+    def test_digicert_unknown_seat_id_mapping(self):
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        backend.seat_id_mapping = "YOLO"
+        with self.assertRaises(CertIssuerError) as cm:
+            backend.get_seat_id({"SubjectAltName": {"dNSName": "YoLoFoMo"}})
+        self.assertEqual(cm.exception.args[0], "Unknown seat ID mapping 'YOLO'")
+
+    def test_digicert_seat_email_enrollment_session(self):
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        self.assertEqual(
+            backend.get_seat_email(self.dep_enrollment_session),
+            self.dep_enrollment_session.realm_user.email,
+        )
+
+    def test_digicert_seat_email_default(self):
+        es, _, _ = force_dep_enrollment_session(self.mbu)
+        self.assertIsNone(es.realm_user)
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        self.assertEqual(
+            backend.get_seat_email(es),
+            backend.default_seat_email,
+        )
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_get_seat_404(self, requests_session):
+        requests_session.return_value.get.return_value.status_code = 404
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        self.assertIsNone(backend.get_seat("YOLO"))
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_get_seat_exception(self, requests_session):
+        requests_session.return_value.get.side_effect = ValueError
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        with self.assertRaises(CertIssuerError) as cm:
+            backend.get_seat("FOMO")
+        self.assertEqual(cm.exception.args[0], "Could not get seat 'FOMO'")
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_get_seat(self, requests_session):
+        seat = {"seat_id": "FOMO", "email": "yolo@example.com"}
+        requests_session.return_value.get.return_value.json.return_value = seat
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        self.assertEqual(backend.get_seat("FOMO"), seat)
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_create_seat_exception(self, requests_session):
+        requests_session.return_value.post.return_value.raise_for_status.side_effect = ValueError
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        with self.assertRaises(CertIssuerError) as cm:
+            backend.create_seat("FOMO", self.dep_enrollment_session)
+        self.assertEqual(cm.exception.args[0], "Could not create seat 'FOMO'")
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_create_seat(self, requests_session):
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        self.assertEqual(
+            backend.create_seat("FOMO", self.dep_enrollment_session),
+            {"seat_id": "FOMO", "email": self.dep_enrollment_session.realm_user.email},
+        )
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_get_or_create_seat_existing_seat(self, requests_session):
+        seat = {"seat_id": "FOMO", "email": "yolo@example.com"}
+        requests_session.return_value.get.return_value.json.return_value = seat
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        self.assertEqual(
+            backend.get_or_create_seat({"Subject": [[["CN", "FOMO"]]]}, self.dep_enrollment_session),
+            seat,
+        )
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_get_or_create_seat_new_seat(self, requests_session):
+        requests_session.return_value.get.return_value.status_code = 404
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        self.assertEqual(
+            backend.get_or_create_seat({"Subject": [[["CN", "FoMoYoLo"]]]}, self.dep_enrollment_session),
+            {"seat_id": "FoMoYoLo", "email": self.dep_enrollment_session.realm_user.email}
+        )
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_build_enrollment_request(self, requests_session):
+        seat = {"seat_id": "FOMO", "email": self.dep_enrollment_session.realm_user.email}
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        requests_session.return_value.get.return_value.json.return_value = seat
+        self.assertEqual(
+            backend.build_enrollment_request(
+                {"Subject": [[["CN", "FOMO"]],
+                             [["C", "DE"]],
+                             [["2.5.4.13", "Description"]]]},
+                self.dep_enrollment_session
+            ),
+            {
+                "profile": backend.profile_guid,
+                "seat": seat,
+                "attributes": {"subject": {"country": "DE",
+                                           "description": ["Description"]}}  # no common_name
+            },
+        )
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_get_challenge_exception(self, requests_session):
+        requests_session.return_value.get.side_effect = ValueError
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        with self.assertRaises(CertIssuerError) as cm:
+            backend.get_challenge({"Subject": [[["CN", "FOMO"]]]}, self.dep_enrollment_session)
+        self.assertEqual(cm.exception.args[0], "Request error: Could not get seat 'FOMO'")
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_get_challenge_json_exception(self, requests_session):
+        seat = {"seat_id": "FOMO", "email": self.dep_enrollment_session.realm_user.email}
+        requests_session.return_value.get.return_value.json.return_value = seat
+        requests_session.return_value.post.return_value.json.return_value = {}  # no enrollment_code
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        with self.assertRaises(CertIssuerError) as cm:
+            backend.get_challenge({"Subject": [[["CN", "FOMO"]]]}, self.dep_enrollment_session)
+        self.assertEqual(cm.exception.args[0], "Could get enrollment_code from response")
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_get_challenge(self, requests_session):
+        seat = {"seat_id": "FOMO", "email": self.dep_enrollment_session.realm_user.email}
+        requests_session.return_value.get.return_value.json.return_value = seat
+        requests_session.return_value.post.return_value.json.return_value = {"enrollment_code": "haha"}
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        self.assertEqual(
+            backend.get_challenge({"Subject": [[["CN", "FOMO"]]]}, self.dep_enrollment_session),
+            "haha",
+        )
+
+    def test_digicert_update_acme_payload(self):
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        with self.assertRaises(NotImplementedError):
+            backend.update_acme_payload()
+
+    @patch("zentral.contrib.mdm.cert_issuer_backends.digicert.requests.Session")
+    def test_digicert_update_scep_payload(self, requests_session):
+        seat = {"seat_id": "FOMO", "email": self.dep_enrollment_session.realm_user.email}
+        requests_session.return_value.get.return_value.json.return_value = seat
+        requests_session.return_value.post.return_value.json.return_value = {"enrollment_code": "haha"}
+        backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        scep_payload = {"Subject": [[["CN", "FOMO"]]]}
+        backend.update_scep_payload(scep_payload, self.dep_enrollment_session)
+        self.assertEqual(
+            scep_payload,
+            {"Challenge": "haha",
+             "Key Type": "RSA",
+             "Key Usage": 0,
+             "Keysize": 2048,
+             "Name": backend.instance.name,
+             "Subject": [[["CN", "FOMO"]]],
+             "URL": backend.instance.url},
+        )
 
     # IDent
 

@@ -8,6 +8,7 @@ logger = logging.getLogger("zentral.contrib.mdm.cert_issuer_backends")
 
 
 class CertIssuerBackend(models.TextChoices):
+    Digicert = "DIGICERT", "Digicert One - Trust Lifecycle Manager"
     IDent = "IDENT", "IDent"
     MicrosoftCA = "MICROSOFT_CA", "Microsoft CA"
     OktaCA = "OKTA_CA", "Okta CA"
