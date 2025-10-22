@@ -759,6 +759,8 @@ class Asset(models.Model):
             except ValueError:
                 # some platforms are not supported in the artifact and artifact versions (scoping)
                 pass
+        if Platform.IOS in platforms and Platform.IPADOS not in platforms:
+            platforms.append(Platform.IPADOS)
         return platforms
 
     def serialize_for_event(self, keys_only=True):

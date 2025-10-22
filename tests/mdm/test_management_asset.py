@@ -42,18 +42,20 @@ class AssetManagementViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_asset(self):
+    def _force_asset(self, supported_platforms=None):
+        if supported_platforms is None:
+            supported_platforms = [
+                "iOS",
+                "macOS",
+                "visionOS",  # not supported in artifact version
+            ]
         return Asset.objects.create(
             adam_id=get_random_string(12, allowed_chars="0123456789"),
             pricing_param=get_random_string(12),
             product_type=Asset.ProductType.APP,
             device_assignable=True,
             revocable=True,
-            supported_platforms=[
-                "iOS",
-                "macOS",
-                "visionOS"  # not supported in artifact version
-            ],
+            supported_platforms=supported_platforms,
             name=get_random_string(12),
             bundle_id="pro.zentral.tests"
         )
@@ -139,6 +141,22 @@ class AssetManagementViewsTestCase(TestCase):
             ]
         }
         self.assertEqual(asset.lastest_version, "13.1.1")
+
+    def test_asset_platforms(self):
+        asset = self._force_asset()
+        self.assertIn("iOS", asset.supported_platforms)
+        self.assertNotIn("iPadOS", asset.supported_platforms)
+        self.assertEqual(
+            set(asset.get_artifact_platforms()),
+            set([Platform.IOS, Platform.IPADOS, Platform.MACOS])
+        )
+
+    def test_asset_platforms_2(self):
+        asset = self._force_asset(supported_platforms=["macOS"])
+        self.assertEqual(
+            asset.get_artifact_platforms(),
+            [Platform.MACOS],
+        )
 
     # assets
 
