@@ -137,16 +137,16 @@ To set up Automated Device Enrollment (ADE) to work with Zentral, follow these s
 
 * Navigate to the Zentral *MDM > Overview > DEP Virtual Servers* section and click the *Connect* "power-plug" button in the top right. Do not close this section during the process.
 * Next to the text that says "Download the new public key", click the "down-arrow", "Download public key" button.
-* In ABM/ASM go to the *Preferences* and look for the *Your MDM Servers* section in the middle column.
-* Add a new MDM Server by clicking the "plus-circle" with 'Add' below it at the top of that section (or click *Edit* after clicking on an existing MDM Server)
-* Upload the <your_zentral_domain_name>.zentral.cloud_public_key_1_<datetimestamp>.pem public key in the 'well' section on the page.
-* Click the `Download MDM Server Token` button at the top of the window.
+* Log into your ABM/ASM account and select *Preferences* under your user in the bottom-left corner (assuming your user has the appropriate permissions) and look for the *Device Management Services* section in the middle column, under "API".
+* Add a new MDM Server by clicking the "plus-circle" with 'Add' below it at the top of that section, setting a Service Name as you'd prefer. (You may also choose, now or after the entry has been created, to allow Zentral to release devices on your behalf, in which case you'd click that associated radio button as well.)
+* Upload the <your_zentral_domain_name>.zentral.cloud_public_key_<number>_<datetimestamp>.pem public key as directed in the 'well' section on the right pane, and click the Save button.
+* Once the page refreshes, click the `Download Token` button at the top of the right-pane window. A warning will appear indicating this would reset any pre-existing token, but as this the first time you're interacting with this entry it's safe to confirm by clicking the Download Token button. 
 * Return to Zentral and click the "Choose File" button to upload the MDM server token in the *MDM > Overview > DEP Virtual Servers* section.
 * Once an *Enrollment* profile has been created (see the section below), you can assign it as the default enrollment for this token.
 
-To fully utilize ADE, you need to create an *Enrollment* in the *MDM > Overview > Enrollment* section and select the appropriate *Virtual Server* during the setup process (see below). The assigned *Enrollment* will be reflected in the *MDM > DEP Virtual Servers > [Instance Name] > Profile* section, and the devices assigned in ABM/ASM will appear in the *MDM > DEP Virtual Servers > [Instance Name] > Devices* section.
+To fully utilize ADE, you need to create an *Enrollment* in the *MDM > Overview > Enrollment* section and select the appropriate *Virtual Server* during the setup process (see below). The assigned *Enrollment* will be reflected in the *MDM > DEP Virtual Servers > [Instance Name] > Profile* section, and the devices assigned in ABM/ASM will appear in the *MDM > DEP Virtual Servers > [Instance Name] > Devices* section. You cannot re-use an enrollment that is set as the default for an existing DEP Virtual Server, but the same blueprint can be used for multiple enrollments.
 
-The device assignments will sync automatically. If the existing device assignments in ABM/ASM are not reflected in Zentral, go to the *MDM > DEP Virtual Servers > [Instance Name]* section and manually click the `Synchronize` button. The devices will also be visible in the *MDM > Overview > DEP Devices* section.
+Devices can be assigned from Apple's side to a management service like Zentral via the [ABM](https://support.apple.com/guide/apple-business-manager/create-an-api-account-axm33189f66a/1/web/1) or [ASM](https://support.apple.com/guide/apple-school-manager/create-an-api-account-axm33189f66a/1/web/1) API. For device assignments in ABM/ASM to be reflected in Zentral, go to the *MDM > DEP Virtual Servers > [Instance Name]* section and click the `Synchronize` button. The devices will also be visible in the *MDM > Overview > DEP Devices* section. Syncronizations can be triggered per DEP Virtual Server over the Zentral API as well.
 
 ### Setup an Enrollment Profile
 
