@@ -59,16 +59,28 @@ class EraseDeviceCommandTestCase(TestCase):
             {"RequestType": "EraseDevice"}
         )
 
-    def test_build_command_ios_fields_required(self):
+    def test_build_command_ios_default(self):
         self.enrolled_device.platform = Platform.IOS
         form = EraseDevice.form_class(
             {}, channel=Channel.DEVICE, enrolled_device=self.enrolled_device
         )
-        self.assertFalse(form.is_valid())
+        self.assertTrue(form.is_valid())
         self.assertNotIn("pin", form.fields)
-        for field in ("disallow_proximity_setup", "preserve_data_plan"):
-            self.assertEqual(len(form.errors[field]), 1)
-            self.assertEqual(str(form.errors[field][0]), "This field is required.")
+        self.assertNotIn("pin", form.fields)
+        uuid = uuid4()
+        cmd = EraseDevice.create_for_device(
+            self.enrolled_device,
+            kwargs=form.get_command_kwargs(uuid),
+            uuid=uuid
+        )
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "EraseDevice",
+             "DisallowProximitySetup": False,
+             "PreserveDataPlan": False}
+        )
 
     def test_build_command_ios(self):
         self.enrolled_device.platform = Platform.IOS

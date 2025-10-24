@@ -747,6 +747,114 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
              "PhoneNumber": "+123456789"},
         )
 
+    # create erase device command
+
+    def test_enrolled_device_no_erase_device_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "EraseDevice"))
+        )
+
+    def test_enrolled_device_erase_device_command_link(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(
+            response,
+            reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "EraseDevice"))
+        )
+
+    def test_create_enrolled_device_erase_device_command_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login_redirect(reverse("mdm:create_enrolled_device_command",
+                                     args=(session.enrolled_device.pk, "EraseDevice")))
+
+    def test_create_enrolled_device_erase_device_command_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "EraseDevice"))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enrolled_device_erase_t1_mac_device_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.assertEqual(session.enrolled_device.platform, Platform.MACOS)
+        self.assertFalse(session.enrolled_device.apple_silicon)
+        self.assertFalse(session.enrolled_device.activation_lock_manageable)
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "EraseDevice"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertContains(response, 'id="id_pin"')
+        self.assertNotContains(response, 'id="id_disallow_proximity_setup"')
+        self.assertNotContains(response, 'id="id_preserve_data_plan"')
+
+    def test_create_enrolled_device_erase_modern_mac_device_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.assertEqual(session.enrolled_device.platform, Platform.MACOS)
+        session.enrolled_device.apple_silicon = True
+        session.enrolled_device.activation_lock_manageable = True
+        session.enrolled_device.save()
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "EraseDevice"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertNotContains(response, 'id="id_pin"')
+        self.assertNotContains(response, 'id="id_disallow_proximity_setup"')
+        self.assertNotContains(response, 'id="id_preserve_data_plan"')
+
+    def test_create_enrolled_device_erase_mobile_device_command_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.platform = Platform.IOS
+        session.enrolled_device.save()
+        self._login("mdm.add_devicecommand")
+        response = self.client.get(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "EraseDevice"))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_create_command.html")
+        self.assertNotContains(response, 'id="id_pin"')
+        self.assertContains(response, 'id="id_disallow_proximity_setup"')
+        self.assertContains(response, 'id="id_preserve_data_plan"')
+
+    def test_create_enrolled_device_erase_mobile_device_command_ok(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.platform = Platform.IOS
+        session.enrolled_device.save()
+        self._login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        response = self.client.post(
+            reverse("mdm:create_enrolled_device_command",
+                    args=(session.enrolled_device.pk, "EraseDevice")),
+            {},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Erase Device command successfully created")
+        db_cmd = session.enrolled_device.commands.first()
+        self.assertEqual(db_cmd.name, "EraseDevice")
+        cmd = load_command(db_cmd)
+        self.assertEqual(
+            cmd.build_command(),
+            {'DisallowProximitySetup': False, 'PreserveDataPlan': False},
+        )
+
     # create restart device command
 
     def test_enrolled_device_no_restart_device_command_link(self):

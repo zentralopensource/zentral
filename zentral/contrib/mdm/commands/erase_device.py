@@ -47,11 +47,11 @@ class EraseDeviceHelperMixin:
 
 class EraseDeviceForm(EraseDeviceHelperMixin, CommandBaseForm):
     disallow_proximity_setup = forms.BooleanField(
-        label="Disallow proximity setup", initial=True,
+        label="Disallow proximity setup", initial=True, required=False,
         help_text="If true, disable Proximity Setup on the next reboot and skip the pane in Setup Assistant."
     )
     preserve_data_plan = forms.BooleanField(
-        label="Preserve data plan", initial=True,
+        label="Preserve data plan", initial=True, required=False,
         help_text="If true, preserve the data plan on an iPhone or iPad with eSIM functionality, if one exists."
     )
     pin = forms.RegexField(label="PIN", min_length=6, max_length=6,
