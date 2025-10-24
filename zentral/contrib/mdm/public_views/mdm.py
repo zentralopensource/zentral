@@ -388,7 +388,7 @@ class CheckinView(MDMView):
         elif endpoint == "status":
             self.target.update_target_with_status_report(json_data)
             self.post_event("success", **event_payload)
-            return HttpResponse(status=204)
+            return HttpResponse(status=200)
         elif endpoint.startswith("declaration/"):
             try:
                 response = build_declaration_response(endpoint, event_payload, self.enrollment_session, self.target)

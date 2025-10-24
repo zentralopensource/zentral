@@ -1069,7 +1069,7 @@ class MDMViewsTestCase(TestCase):
             "Endpoint": "status",
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
-        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.status_code, 200)
 
     # legacy profile
 

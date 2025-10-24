@@ -14,6 +14,10 @@ Better apps & books locations read-only API.
 
 Add blueprint option to distribute the legacy profiles via DDM.
 
+### Bug fixes
+
+Fix DDM status report response code. It should be `200`.
+
 ## 2025.10
 
 ### Features
