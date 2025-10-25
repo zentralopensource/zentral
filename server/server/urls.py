@@ -5,6 +5,7 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from accounts.views import login
 from accounts.forms import PasswordResetForm
 from zentral.conf import settings as zentral_settings
+from zentral.utils.views import server_error
 
 logger = logging.getLogger(__name__)
 
@@ -77,3 +78,6 @@ urlpatterns.extend(build_urlpatterns_for_zentral_apps())
 
 # static files
 urlpatterns += staticfiles_urlpatterns()
+
+# JSON 500 errors if possible
+handler500 = server_error

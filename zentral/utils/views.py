@@ -1,4 +1,7 @@
+import json
 from django.db import transaction
+from django.http import HttpResponseServerError
+from django.views.defaults import server_error as django_server_error
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from zentral.core.events.base import AuditEvent
 
@@ -82,3 +85,27 @@ class DeleteViewWithAudit(DeleteView):
 
         transaction.on_commit(on_commit_callback)
         return super().form_valid(form)
+
+
+def server_error(request, *args, **kwargs):
+    accept = request.headers.get("Accept", "")
+    json_content = None
+    json_content_type = "application/json"
+    if "application/scim+json" in accept:
+        json_content_type = "application/scim+json"
+        json_content = {
+            'detail': 'Internal server error.',
+            'schemas': ['urn:ietf:params:scim:api:messages:2.0:Error'],
+            'status': 500
+        }
+    elif (
+        request.path_info.startswith("/api/")
+        or "application/json" in accept
+    ):
+        json_content = {"error": "Server Error (500)"}
+    if json_content:
+        return HttpResponseServerError(
+            json.dumps(json_content),
+            content_type=json_content_type
+        )
+    return django_server_error(request)

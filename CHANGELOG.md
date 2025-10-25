@@ -2,6 +2,10 @@
 
 ### Features
 
+#### Core
+
+JSON HTTP 500 responses for API and SCIM views.
+
 #### Inventory
 
 Add network interfaces to full export.
