@@ -256,12 +256,14 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'asset': la.asset.pk,
+            [{'adam_id': la.asset.adam_id,
+              'asset': la.asset.pk,
               'assigned_count': 0,
               'available_count': 0,
               'created_at': la.created_at.isoformat(),
               'id': la.pk,
               'location': la.location.pk,
+              'pricing_param': la.asset.pricing_param,
               'retired_count': 0,
               'total_count': 0,
               'updated_at': la.updated_at.isoformat()}]
@@ -274,12 +276,14 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'asset': la.asset.pk,
+            [{'adam_id': la.asset.adam_id,
+              'asset': la.asset.pk,
               'assigned_count': 0,
               'available_count': 0,
               'created_at': la.created_at.isoformat(),
               'id': la.pk,
               'location': la.location.pk,
+              'pricing_param': la.asset.pricing_param,
               'retired_count': 0,
               'total_count': 0,
               'updated_at': la.updated_at.isoformat()}]
@@ -299,12 +303,14 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'asset': la.asset.pk,
+            [{'adam_id': la.asset.adam_id,
+              'asset': la.asset.pk,
               'assigned_count': 0,
               'available_count': 0,
               'created_at': la.created_at.isoformat(),
               'id': la.pk,
               'location': la.location.pk,
+              'pricing_param': la.asset.pricing_param,
               'retired_count': 0,
               'total_count': 0,
               'updated_at': la.updated_at.isoformat()}]
@@ -325,12 +331,14 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'asset': la.asset.pk,
+            [{'adam_id': la.asset.adam_id,
+              'asset': la.asset.pk,
               'assigned_count': 0,
               'available_count': 0,
               'created_at': la.created_at.isoformat(),
               'id': la.pk,
               'location': la.location.pk,
+              'pricing_param': la.asset.pricing_param,
               'retired_count': 0,
               'total_count': 0,
               'updated_at': la.updated_at.isoformat()}]
@@ -356,12 +364,14 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'asset': la.asset.pk,
+            [{'adam_id': la.asset.adam_id,
+              'asset': la.asset.pk,
               'assigned_count': 0,
               'available_count': 0,
               'created_at': la.created_at.isoformat(),
               'id': la.pk,
               'location': la.location.pk,
+              'pricing_param': la.asset.pricing_param,
               'retired_count': 0,
               'total_count': 0,
               'updated_at': la.updated_at.isoformat()}]

@@ -26,7 +26,7 @@ class LocationAssetFilter(filters.FilterSet):
 
 
 class LocationAssetList(ListAPIView):
-    queryset = LocationAsset.objects.all()
+    queryset = LocationAsset.objects.select_related("asset", "location").all()
     serializer_class = LocationAssetSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)

@@ -1137,6 +1137,21 @@ class LocationSerializer(serializers.ModelSerializer):
 
 
 class LocationAssetSerializer(serializers.ModelSerializer):
+    adam_id = serializers.CharField(source="asset.adam_id", read_only=True)
+    pricing_param = serializers.CharField(source="asset.pricing_param", read_only=True)
+
     class Meta:
         model = LocationAsset
-        fields = "__all__"
+        fields = (
+            "adam_id",
+            "asset",
+            "assigned_count",
+            "available_count",
+            "created_at",
+            "id",
+            "location",
+            "pricing_param",
+            "retired_count",
+            "total_count",
+            "updated_at",
+        )

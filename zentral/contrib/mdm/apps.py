@@ -27,6 +27,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "enterpriseapp",
         "filevaultconfig",
         "location",
+        "locationasset",
         "profile",
         "pushcertificate",
         "otaenrollment",
