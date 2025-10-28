@@ -24,6 +24,7 @@ from .api_views import (ACMEIssuerDetail, ACMEIssuerList,
                         EnrolledDeviceAdminPassword, EnrolledDeviceFileVaultPRK, EnrolledDeviceRecoveryPassword,
                         EnrolledDeviceCommand, EnrolledDeviceCommandList,
                         EnrolledUserCommand, EnrolledUserCommandList,
+                        StoreAppList, StoreAppDetail,
                         SyncSoftwareUpdatesView)
 
 
@@ -65,6 +66,8 @@ urlpatterns = [
          name="software_update_enforcements"),
     path('software_update_enforcements/<int:pk>/', SoftwareUpdateEnforcementDetail.as_view(),
          name="software_update_enforcement"),
+    path('store_apps/', StoreAppList.as_view(), name="store_apps"),
+    path('store_apps/<uuid:artifact_version_pk>/', StoreAppDetail.as_view(), name="store_app"),
 
     path('dep/virtual_servers/<int:pk>/sync_devices/',
          DEPVirtualServerSyncDevicesView.as_view(), name="dep_virtual_server_sync_devices"),

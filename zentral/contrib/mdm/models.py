@@ -3033,6 +3033,29 @@ class StoreApp(models.Model):
     def get_absolute_url(self):
         return self.artifact_version.get_absolute_url()
 
+    def delete(self, *args, **kwargs):
+        self.artifact_version.delete(*args, **kwargs)
+        super().delete(*args, **kwargs)
+
+    def serialize_for_event(self):
+        d = self.artifact_version.serialize_for_event()
+        d.update({
+            "location_asset": self.location_asset.serialize_for_event(keys_only=True),
+            "associated_domains": self.associated_domains,
+            "associated_domains_enable_direct_downloads": self.associated_domains_enable_direct_downloads,
+            "removable": self.removable,
+            "remove_on_unenroll": self.remove_on_unenroll,
+            "prevent_backup": self.prevent_backup,
+        })
+        for attr in ("vpn_uuid", "content_filter_uuid", "dns_proxy_uuid"):
+            val = getattr(self, attr)
+            if val:
+                d[attr] = val
+        configuration_plist = self.get_configuration_plist()
+        if configuration_plist:
+            d["configuration"] = configuration_plist
+        return d
+
 
 class TargetArtifact(models.Model):
 

@@ -36,6 +36,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "scepissuer",
         "softwareupdate",
         "softwareupdateenforcement",
+        "storeapp",
         "userartifact",
         "usercommand",
         "userenrollment",

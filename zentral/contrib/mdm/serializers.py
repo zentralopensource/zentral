@@ -40,6 +40,7 @@ from .models import (ACMEIssuer,
                      RecoveryPasswordConfig,
                      SCEPIssuer,
                      SoftwareUpdateEnforcement,
+                     StoreApp,
                      UserCommand)
 from .payloads import get_configuration_profile_info
 
@@ -1155,3 +1156,78 @@ class LocationAssetSerializer(serializers.ModelSerializer):
             "total_count",
             "updated_at",
         )
+
+
+class StoreAppSerializer(ArtifactVersionSerializer):
+    location_asset = serializers.PrimaryKeyRelatedField(queryset=LocationAsset.objects.all())
+    associated_domains = serializers.ListField(child=serializers.CharField(max_length=256, min_length=3),
+                                               allow_empty=True, min_length=0, default=list, required=False)
+    associated_domains_enable_direct_downloads = serializers.BooleanField(required=False, default=False)
+    removable = serializers.BooleanField(required=False, default=False)
+    vpn_uuid = serializers.CharField(allow_null=True, allow_blank=False, required=False)
+    content_filter_uuid = serializers.CharField(allow_null=True, allow_blank=False, required=False)
+    dns_proxy_uuid = serializers.CharField(allow_null=True, allow_blank=False, required=False)
+    configuration = serializers.CharField(required=False, source="get_configuration_plist",
+                                          default=None, allow_null=True)
+    remove_on_unenroll = serializers.BooleanField(required=False, default=True)
+    prevent_backup = serializers.BooleanField(required=False, default=False)
+
+    def validate_configuration(self, value):
+        try:
+            return validate_configuration(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
+
+    def validate(self, data):
+        data = super().validate(data)
+        # same location asset?
+        artifact = data["artifact_version"]["artifact"]
+        if (
+            StoreApp.objects.filter(artifact_version__artifact=artifact)
+                            .exclude(location_asset=data["location_asset"]).exists()
+        ):
+            raise serializers.ValidationError(
+                {"location_asset": "The location asset of the new store app is not identical "
+                                   "to the location asset of the other versions"}
+            )
+        sa_data = {}
+        for attr in ("location_asset",
+                     "associated_domains",
+                     "associated_domains_enable_direct_downloads",
+                     "removable",
+                     "vpn_uuid",
+                     "content_filter_uuid",
+                     "dns_proxy_uuid",
+                     "configuration",
+                     "remove_on_unenroll",
+                     "prevent_backup"):
+            if attr == "configuration":
+                data_attr = "get_configuration_plist"
+            else:
+                data_attr = attr
+            sa_data[attr] = data.pop(data_attr, None)
+        data["store_app"] = sa_data
+        return data
+
+    def create(self, validated_data):
+        with transaction.atomic(durable=True):
+            artifact_version = super().create(validated_data)
+            instance = StoreApp.objects.create(
+                artifact_version=artifact_version,
+                **validated_data["store_app"]
+            )
+        with transaction.atomic(durable=True):
+            for blueprint in artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
+        return instance
+
+    def update(self, instance, validated_data):
+        with transaction.atomic(durable=True):
+            super().update(instance, validated_data)
+            for attr, value in validated_data["store_app"].items():
+                setattr(instance, attr, value)
+            instance.save()
+        with transaction.atomic(durable=True):
+            for blueprint in instance.artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
+        return instance
