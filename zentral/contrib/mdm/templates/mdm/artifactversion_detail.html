@@ -43,6 +43,10 @@
 
     <table class="table-object-properties">
         <tbody>
+        <tr>
+          <th>ID</th>
+          <td><code>{{ object.id }}</code></td>
+        </tr>
         {% if cert_asset %}
         {% include "mdm/_cert_asset_detail.html" %}
         {% endif %}
