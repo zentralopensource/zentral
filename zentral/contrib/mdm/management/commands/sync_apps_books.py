@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from zentral.contrib.mdm.models import Location
 from zentral.contrib.mdm.apps_books import sync_assets
+from zentral.core.queues import queues
 
 
 class Command(BaseCommand):
@@ -30,3 +31,4 @@ class Command(BaseCommand):
         for location in location_qs:
             self.write(f"Sync apps & books for location {location.pk} {location}")
             sync_assets(location)
+        queues.stop()
