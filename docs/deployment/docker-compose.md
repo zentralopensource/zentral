@@ -22,6 +22,12 @@ Build the `css` and `js` bundles. You need to have [`npm`](https://nodejs.org/en
 npm install && npm run build
 ```
 
+Alternatively, you can run these commands from a docker container:
+
+```bash
+docker run -v "$PWD":/zentral -w /zentral node:24 bash -c "npm install && npm run build"
+```
+
 _The step above is only required because the default docker deployment is configured for development. The bundles are mounted from the local disk, masking the ones pre-built in the container._
 
 Build and launch all the containers in the background:
