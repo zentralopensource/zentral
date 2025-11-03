@@ -119,8 +119,9 @@ class Command(BaseCommand):
             if APIToken.objects.filter(user=self.user).exists():
                 self.print("Existing API token")
             else:
+                _, api_key = APIToken.objects.update_or_create_for_user(self.user)
                 self.context.update({
-                    "api_token": APIToken.objects.update_or_create_for_user(self.user),
+                    "api_token": api_key,
                     "api_token_created": True,
                 })
                 self.print("Created API token:", self.context["api_token"])

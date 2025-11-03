@@ -28,7 +28,7 @@ class RealmViewsTestCase(TestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
-        cls.api_token = APIToken.objects.update_or_create_for_user(user=cls.service_account)
+        _, cls.api_token = APIToken.objects.update_or_create_for_user(user=cls.service_account)
         cls.realm = force_realm()
         cls.realm.scim_enabled = True
         cls.realm.save()

@@ -13,6 +13,8 @@ import pyotp
 from accounts.models import APIToken, User, UserTOTP, UserWebAuthn
 from accounts.password_validation import PasswordNotAlreadyUsedValidator
 from zentral.conf import ConfigDict, settings
+from zentral.core.events.base import AuditEvent
+from unittest.mock import patch
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -506,28 +508,39 @@ class AccountUsersViewsTestCase(TestCase):
     def test_create_api_token_login_redirect(self):
         self.login_redirect("create_user_api_token", self.user.id)
 
-    def test_create_api_token_not_self(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_api_token_not_self(self, post_event):
         self.login()
         # ui_user != user → 403
-        response = self.client.post(reverse("accounts:create_user_api_token", args=(self.user.id,)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:create_user_api_token", args=(self.user.id,)), follow=True)
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_create_api_token_no_perms(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_api_token_no_perms(self, post_event):
         service_account = User.objects.create_user(get_random_string(19),
                                                    "{}@zentral.io".format(get_random_string(12)),
                                                    get_random_string(12),
                                                    is_service_account=True)
         self.login()
         # service account OK, but without the required permissions
-        response = self.client.post(reverse("accounts:create_user_api_token", args=(service_account.id,)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:create_user_api_token", args=(service_account.id,)), follow=True)
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_self_create_api_token(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_self_create_api_token(self, post_event):
         self.login("accounts.view_user")
-        response = self.client.post(reverse("accounts:create_user_api_token", args=(self.ui_user.id,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:create_user_api_token", args=(self.ui_user.id,)))
         self.assertTemplateUsed(response, "accounts/user_api_token.html")
+        self.assertEqual(len(callbacks), 1)
         user = response.context["object"]
         self.assertEqual(user, self.ui_user)
         self.assertContains(response, "Settings")
@@ -536,15 +549,41 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertContains(response, api_key)
         self.assertEqual(APIToken.objects._hash_key(api_key), self.ui_user.api_token.hashed_key)
 
-    def test_server_account_create_api_token(self):
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "accounts.apitoken",
+                 "pk": user.api_token.pk,
+                 "new_value": {
+                     "pk": user.api_token.pk,
+                     "username": user.username,
+                     "email": user.email,
+                     "is_remote": user.is_remote,
+                     "is_service_account": False,
+                     "is_superuser": user.is_superuser,
+                     "roles": [{"pk": group.pk, "name": group.name} for group in user.groups.all()]
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_api_token": [user.api_token.pk]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_server_account_create_api_token(self, post_event):
         service_account = User.objects.create_user(get_random_string(19),
                                                    "{}@zentral.io".format(get_random_string(12)),
                                                    get_random_string(12),
                                                    is_service_account=True)
         self.login("accounts.view_user", "accounts.add_apitoken")
-        response = self.client.post(reverse("accounts:create_user_api_token", args=(service_account.id,)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:create_user_api_token", args=(service_account.id,)), follow=True)
         self.assertTemplateUsed(response, "accounts/user_api_token.html")
+        self.assertEqual(len(callbacks), 1)
         user = response.context["object"]
         self.assertEqual(user, service_account)
         self.assertNotContains(response, "Settings")
@@ -552,46 +591,110 @@ class AccountUsersViewsTestCase(TestCase):
         api_key = response.context["api_key"]
         self.assertEqual(APIToken.objects._hash_key(api_key), service_account.api_token.hashed_key)
 
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "accounts.apitoken",
+                 "pk": user.api_token.pk,
+                 "new_value": {
+                     "pk": user.api_token.pk,
+                     "username": user.username,
+                     "email": user.email,
+                     "is_remote": user.is_remote,
+                     "is_service_account": True,
+                     "is_superuser": user.is_superuser,
+                     "roles": [{"pk": group.pk, "name": group.name} for group in user.groups.all()]
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_api_token": [user.api_token.pk]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+
     # delete API token
 
-    def test_delete_api_token_not_self(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_api_token_not_self(self, post_event):
         self.login()
         # ui_user != user → 403
-        response = self.client.post(reverse("accounts:delete_user_api_token", args=(self.user.id,)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:delete_user_api_token", args=(self.user.id,)), follow=True)
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_delete_api_token_no_perms(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_api_token_no_perms(self, post_event):
         service_account = User.objects.create_user(get_random_string(19),
                                                    "{}@zentral.io".format(get_random_string(12)),
                                                    get_random_string(12),
                                                    is_service_account=True)
         self.login()
         # service account OK, but without the required permissions
-        response = self.client.post(reverse("accounts:delete_user_api_token", args=(service_account.id,)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:delete_user_api_token", args=(service_account.id,)), follow=True)
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_delete_api_token_self(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_api_token_self(self, post_event):
         self.login()
-        APIToken.objects.update_or_create_for_user(self.ui_user)
-        response = self.client.post(reverse("accounts:delete_user_api_token", args=(self.ui_user.id,)),
-                                    follow=True)
+        token, _ = APIToken.objects.update_or_create_for_user(self.ui_user)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:delete_user_api_token", args=(self.ui_user.id,)), follow=True)
         self.assertTemplateUsed(response, "accounts/profile.html")
         self.assertEqual(APIToken.objects.filter(user=self.ui_user).count(), 0)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "accounts.apitoken",
+                 "pk": token.pk,
+                 "prev_value": token.serialize_for_event()
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_api_token": [token.pk]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
-    def test_delete_service_account_api_token(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_service_account_api_token(self, post_event):
         service_account = User.objects.create_user(get_random_string(19),
                                                    "{}@zentral.io".format(get_random_string(12)),
                                                    get_random_string(12),
                                                    is_service_account=True)
-        APIToken.objects.update_or_create_for_user(service_account)
+        token, _ = APIToken.objects.update_or_create_for_user(service_account)
         self.login("accounts.view_user", "accounts.delete_apitoken")
-        response = self.client.post(reverse("accounts:delete_user_api_token", args=(service_account.id,)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:delete_user_api_token", args=(service_account.id,)), follow=True)
         self.assertTemplateUsed(response, "accounts/user_detail.html")
         self.assertEqual(response.context["object"], service_account)
         self.assertEqual(APIToken.objects.filter(user=service_account).count(), 0)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "accounts.apitoken",
+                 "pk": token.pk,
+                 "prev_value": token.serialize_for_event()
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_api_token": [token.pk]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     # verification devices list
 

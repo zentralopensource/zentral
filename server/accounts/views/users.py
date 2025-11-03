@@ -2,6 +2,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
@@ -9,6 +10,7 @@ from django.views.generic import DetailView, FormView, TemplateView, UpdateView,
 from accounts.events import post_group_membership_updates
 from accounts.forms import InviteUserForm, ServiceAccountForm, UpdateUserForm
 from accounts.models import APIToken, User
+from zentral.core.events.base import AuditEvent
 
 
 logger = logging.getLogger("zentral.accounts.views.users")
@@ -51,7 +53,7 @@ class CreateServiceAccountView(PermissionRequiredMixin, FormView):
 
     def form_valid(self, form):
         user = form.save(self.request)
-        api_key = APIToken.objects.update_or_create_for_user(user)
+        _, api_key = APIToken.objects.update_or_create_for_user(user)
         return render(
             self.request,
             "accounts/user_api_token.html",
@@ -90,7 +92,7 @@ class UserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class CreateUserAPITokenView(LoginRequiredMixin, View):
+class CreateUserAPITokenView(LoginRequiredMixin, View): 
     def post(self, request, *args, **kwargs):
         user = get_object_or_404(User, pk=kwargs["pk"])
         if (
@@ -102,7 +104,17 @@ class CreateUserAPITokenView(LoginRequiredMixin, View):
         if APIToken.objects.filter(user=user).exists():
             messages.warning(request, "User already has an API token")
             return redirect(user)
-        api_key = APIToken.objects.update_or_create_for_user(user)
+        api_token, api_key = APIToken.objects.update_or_create_for_user(user)
+
+        def on_commit_callback():
+            event = AuditEvent.build_from_request_and_instance(
+                request, api_token,
+                action=AuditEvent.Action.CREATED,
+            )
+            event.post()
+
+        transaction.on_commit(on_commit_callback)
+
         return render(
             request,
             "accounts/user_api_token.html",
@@ -112,7 +124,7 @@ class CreateUserAPITokenView(LoginRequiredMixin, View):
         )
 
 
-class DeleteUserAPITokenView(LoginRequiredMixin, TemplateView):
+class DeleteUserAPITokenView(LoginRequiredMixin, TemplateView): 
     template_name = "accounts/api_token_confirm_delete.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -133,7 +145,20 @@ class DeleteUserAPITokenView(LoginRequiredMixin, TemplateView):
         return ctx
 
     def post(self, request, *args, **kwargs):
-        deleted_token_count, _ = APIToken.objects.filter(user=self.user).delete()
+        tokens = APIToken.objects.filter(user=self.user)
+        events = [AuditEvent.build_from_request_and_instance(
+                request, tokens.first(),
+                action=AuditEvent.Action.DELETED,
+                prev_value=token.serialize_for_event()
+            ) for token in tokens.all()]
+        deleted_token_count, _ = tokens.delete()
+
+        def on_commit_callback():
+            for event in events:
+                event.post()
+
+        transaction.on_commit(on_commit_callback)
+
         if deleted_token_count:
             messages.info(request, "User API token deleted")
         else:

@@ -23,7 +23,7 @@ class JMESPathCheckAPITests(APITestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
-        cls.api_key = APIToken.objects.update_or_create_for_user(cls.user)
+        _, cls.api_key = APIToken.objects.update_or_create_for_user(cls.user)
 
     def setUp(self):
         super().setUp()

@@ -22,7 +22,7 @@ class InventoryAPITests(TestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
-        cls.api_key = APIToken.objects.update_or_create_for_user(cls.user)
+        _, cls.api_key = APIToken.objects.update_or_create_for_user(cls.user)
         cls.url = reverse("inventory_api:update_machine_tags")
 
     # utility methods

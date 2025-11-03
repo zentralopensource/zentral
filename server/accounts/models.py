@@ -225,8 +225,8 @@ class APITokenManager(models.Manager):
     def update_or_create_for_user(self, user):
         key = get_random_string(64)
         hashed_key = self._hash_key(key)
-        self.update_or_create(user=user, defaults={"hashed_key": hashed_key})
-        return key
+        token, _ = self.update_or_create(user=user, defaults={"hashed_key": hashed_key})
+        return token, key
 
     def get_with_key(self, key):
         hashed_key = self._hash_key(key)
@@ -239,3 +239,16 @@ class APIToken(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     objects = APITokenManager()
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "username": self.user.username, "email": self.user.email} 
+        if keys_only:
+            return d
+       
+        d.update({
+            "is_remote": self.user.is_remote,
+            "is_service_account": self.user.is_service_account,
+            "is_superuser": self.user.is_superuser,
+            "roles":  [{"pk": group.pk, "name": group.name} for group in self.user.groups.all()]
+        })
+        return d
