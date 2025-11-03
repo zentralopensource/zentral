@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 urlpatterns = [
     path('', include('base.urls')),
     path('api/', include('base.api_urls')),
+    path('metrics/', include('base.metrics_urls')),
 
     # special login view with verification device redirect
     path('accounts/login/', login, name='login'),
