@@ -71,7 +71,7 @@ class InviteUserForm(forms.ModelForm):
             raise forms.ValidationError("Email domain not allowed.")
         return email
 
-    def save(self, request):
+    def save(self):
         user = super(InviteUserForm, self).save(commit=False)
         user.set_password(get_random_string(1024))
         user.save()

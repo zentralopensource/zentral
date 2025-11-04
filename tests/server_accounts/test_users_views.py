@@ -50,6 +50,32 @@ class AccountUsersViewsTestCase(TestCase):
                                                        get_random_string(12),
                                                        is_service_account=True)
 
+    def _create_expected_updated_event_serialization(self, prev_user, changed_user):
+        return {"action": "updated",
+                "object": {
+                    "model": "accounts.user",
+                    "pk": str(prev_user.pk),
+                    "new_value": self._create_user_event_serialization(changed_user),
+                    "prev_value": self._create_user_event_serialization(prev_user)}}
+
+    def _create_expected_created_event_serialization(self, user):
+        return {"action": "created",
+                "object": {
+                    "model": "accounts.user",
+                    "pk": str(user.pk),
+                    "new_value": self._create_user_event_serialization(user)}}
+
+    def _create_user_event_serialization(self, user):
+        return {
+            "pk": user.pk,
+            "username": user.username,
+            "email": user.email,
+            "is_remote":  user.is_remote,
+            "is_service_account":  user.is_service_account,
+            "is_superuser":  user.is_superuser,
+            "roles":  [{"pk": group.pk, "name": group.name} for group in user.groups.all()]
+        }
+
     # auth utils
 
     def login_redirect(self, url_name, *args):
@@ -287,57 +313,100 @@ class AccountUsersViewsTestCase(TestCase):
         response = self.client.get(reverse("accounts:invite_user"))
         self.assertContains(response, "Send an email invitation")
 
-    def test_user_invite_username_error(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_invite_username_error(self, post_event):
         self.login("accounts.add_user")
-        response = self.client.post(reverse("accounts:invite_user"),
-                                    {"username": self.user.username,
-                                     "email": "test@example.com"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:invite_user"),
+                                        {"username": self.user.username,
+                                         "email": "test@example.com"},
+                                        follow=True)
         self.assertFormError(response.context["form"], "username", "A user with that username already exists.")
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_user_invite_email_error(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_invite_email_error(self, post_event):
         self.login("accounts.add_user")
-        response = self.client.post(reverse("accounts:invite_user"),
-                                    {"username": "test",
-                                     "email": self.user.email},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:invite_user"),
+                                        {"username": "test",
+                                         "email": self.user.email},
+                                        follow=True)
         self.assertFormError(response.context["form"], "email", "User with this Email already exists.")
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_user_invite_email_not_allowed(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_invite_email_not_allowed(self, post_event):
         self.login("accounts.add_user", "accounts.view_user")
         settings._collection["users"] = ConfigDict({"allowed_invitation_domains": ["allowed.example.com"]})
-        response = self.client.post(reverse("accounts:invite_user"),
-                                    {"username": "test",
-                                     "email": "test@example.com"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:invite_user"),
+                                        {"username": "test",
+                                         "email": "test@example.com"},
+                                        follow=True)
         del settings._collection["users"]
         self.assertFormError(response.context["form"], "email", "Email domain not allowed.")
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_user_invite_any_ok(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_invite_any_ok(self, post_event):
         self.login("accounts.add_user", "accounts.view_user")
-        response = self.client.post(reverse("accounts:invite_user"),
-                                    {"username": "test",
-                                     "email": "test@example.com"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:invite_user"),
+                                        {"username": "test",
+                                         "email": "test@example.com"},
+                                        follow=True)
         self.assertEqual(len(mail.outbox), 1)
+        user = User.objects.get(email="test@example.com")
         email = mail.outbox[0]
         self.assertEqual(email.subject, "Invitation to Zentral")
         self.assertIn("Your username: test", email.body)
         for text in ("Users (5)", "test", "test@example.com"):
             self.assertContains(response, text)
 
-    def test_user_invite_allowed_ok(self):
+        self.assertEqual(len(callbacks), 1)
+
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            self._create_expected_created_event_serialization(user)
+        )
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_user": [str(user.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_invite_allowed_ok(self, post_event):
         self.login("accounts.add_user", "accounts.view_user")
         settings._collection["users"] = ConfigDict({"allowed_invitation_domains": ["example.com", "example2.com"]})
-        response = self.client.post(reverse("accounts:invite_user"),
-                                    {"username": "test",
-                                     "email": "test@example.com"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:invite_user"),
+                                        {"username": "test",
+                                         "email": "test@example.com"},
+                                        follow=True)
         del settings._collection["users"]
         for text in ("Users (5)", "test", "test@example.com"):
             self.assertContains(response, text)
         user = User.objects.get(email="test@example.com")
         self.assertEqual(user.description, "")
+
+        self.assertEqual(len(callbacks), 1)
+
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            self._create_expected_created_event_serialization(user)
+        )
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_user": [str(user.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     # create service account
 
@@ -348,13 +417,15 @@ class AccountUsersViewsTestCase(TestCase):
         self.login("accounts.add_user")
         self.permission_denied("create_service_account")
 
-    def test_create_service_account(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_service_account(self, post_event):
         self.login("accounts.add_user", "accounts.view_user", "accounts.add_apitoken")
         username = get_random_string(12)
-        response = self.client.post(reverse("accounts:create_service_account"),
-                                    {"username": username,
-                                     "description": "yolo fomo"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:create_service_account"),
+                                        {"username": username,
+                                         "description": "yolo fomo"},
+                                        follow=True)
         self.assertTemplateUsed(response, "accounts/user_api_token.html")
         service_account = response.context["object"]
         self.assertEqual(service_account.username, username)
@@ -363,6 +434,19 @@ class AccountUsersViewsTestCase(TestCase):
         api_key = response.context["api_key"]
         self.assertContains(response, api_key)
         self.assertEqual(APIToken.objects._hash_key(api_key), service_account.api_token.hashed_key)
+
+        self.assertEqual(len(callbacks), 1)
+
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            self._create_expected_created_event_serialization(service_account)
+        )
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_user": [str(service_account.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     # update
 
@@ -433,47 +517,86 @@ class AccountUsersViewsTestCase(TestCase):
         self.assertIn("description", form.fields)
         self.assertNotIn("is_superuser", form.fields)
 
-    def test_user_update_username_error(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_update_username_error(self, post_event):
         self.login("accounts.change_user")
-        response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
-                                    {"username": self.superuser.username,
-                                     "email": self.user.email,
-                                     "is_superuser": self.user.is_superuser})
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
+                                        {"username": self.superuser.username,
+                                         "email": self.user.email,
+                                         "is_superuser": self.user.is_superuser})
         self.assertFormError(response.context["form"], "username", "A user with that username already exists.")
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_user_update_email_error(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_update_email_error(self, post_event):
         self.login("accounts.change_user")
-        response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
-                                    {"username": self.user.username,
-                                     "email": self.superuser.email,
-                                     "is_superuser": self.user.is_superuser})
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
+                                        {"username": self.user.username,
+                                         "email": self.superuser.email,
+                                         "is_superuser": self.user.is_superuser})
         self.assertFormError(response.context["form"], "email", "User with this Email already exists.")
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_user_update_ok(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_update_ok(self, post_event):
         self.login("accounts.change_user", "accounts.view_user")
-        response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
-                                    {"username": "toto",
-                                     "email": "tata@example.com",
-                                     "items_per_page": 10,
-                                     "is_superuser": self.user.is_superuser},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": "toto",
+                 "email": "tata@example.com",
+                 "items_per_page": 10,
+                 "is_superuser": self.user.is_superuser}, follow=True)
+
         self.assertTemplateUsed(response, "accounts/user_detail.html")
         for text in ("User tata@example.com", "toto"):
             self.assertContains(response, text)
         user = User.objects.get(email="tata@example.com")
         self.assertEqual(user.description, "")
 
-    def test_service_account_update_ok(self):
+        self.assertEqual(len(callbacks), 1)
+
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            self._create_expected_updated_event_serialization(self.user, user)
+        )
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_user": [str(self.user.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_service_account_update_ok(self, post_event):
         self.login("accounts.change_user", "accounts.view_user")
-        response = self.client.post(reverse("accounts:update_user", args=(self.service_account.id,)),
-                                    {"username": "toto",
-                                     "description": "yolo2 fomo2"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:update_user", args=(self.service_account.id,)),
+                                        {"username": "toto",
+                                         "description": "yolo2 fomo2"},
+                                        follow=True)
         self.assertTemplateUsed(response, "accounts/user_detail.html")
         self.assertContains(response, "Service Account toto")
         self.assertContains(response, "yolo2 fomo2")
         user = User.objects.get(username="toto")
         self.assertEqual(user.description, "yolo2 fomo2")
+
+        self.assertEqual(len(callbacks), 1)
+
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            self._create_expected_updated_event_serialization(self.service_account, user)
+        )
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_user": [str(self.service_account.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     # delete
 
@@ -484,24 +607,62 @@ class AccountUsersViewsTestCase(TestCase):
         self.login("accounts.add_user")
         self.permission_denied("delete_user", self.user.id)
 
-    def test_user_delete_404(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_delete_404(self, post_event):
         self.login("accounts.delete_user")
-        response = self.client.post(reverse("accounts:delete_user", args=(0,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:delete_user", args=(0,)))
         self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_superuser_delete_redirect(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_superuser_delete_redirect(self, post_event):
         self.login("accounts.delete_user", "accounts.view_user")
-        response = self.client.post(reverse("accounts:delete_user", args=(self.superuser.id,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:delete_user", args=(self.superuser.id,)))
         self.assertRedirects(response, reverse("accounts:users"))
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_user_delete_ok(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_delete_ok(self, post_event):
         self.login("accounts.delete_user", "accounts.view_user")
         user_str = str(self.user)
-        response = self.client.post(reverse("accounts:delete_user", args=(self.user.id,)),
-                                    follow=True)
+        expected_event_payload = {"action": "deleted",
+                                  "object": {
+                                    "model": "accounts.user",
+                                    "pk": str(self.user.pk),
+                                    "prev_value": {
+                                        "pk": self.user.pk,
+                                        "username": self.user.username,
+                                        "email": self.user.email,
+                                        "is_remote":  self.user.is_remote,
+                                        "is_service_account":  self.user.is_service_account,
+                                        "is_superuser":  self.user.is_superuser,
+                                        "roles":  [{"pk": group.pk, "name": group.name}
+                                                   for group in self.user.groups.all()]
+                                    }}}
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("accounts:delete_user", args=(self.user.id,)), follow=True)
+
         self.assertContains(response, "User {} deleted".format(user_str))
         self.assertTemplateUsed(response, "accounts/user_list.html")
         self.assertContains(response, "Users (3)")
+
+        self.assertEqual(len(callbacks), 1)
+
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            expected_event_payload
+        )
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"accounts_user": [str(self.user.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     # create API token
 

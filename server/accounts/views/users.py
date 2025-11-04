@@ -6,11 +6,12 @@ from django.db import transaction
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
-from django.views.generic import DetailView, FormView, TemplateView, UpdateView, View
+from django.views.generic import DetailView, TemplateView, View
 from accounts.events import post_group_membership_updates
 from accounts.forms import InviteUserForm, ServiceAccountForm, UpdateUserForm
 from accounts.models import APIToken, User
 from zentral.core.events.base import AuditEvent
+from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit
 
 
 logger = logging.getLogger("zentral.accounts.views.users")
@@ -29,15 +30,11 @@ class UsersView(PermissionRequiredMixin, TemplateView):
         return ctx
 
 
-class InviteUserView(PermissionRequiredMixin, FormView):
+class InviteUserView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = 'accounts.add_user'
     template_name = "accounts/user_form.html"
     form_class = InviteUserForm
     success_url = reverse_lazy("accounts:users")
-
-    def form_valid(self, form):
-        form.save(self.request)
-        return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -45,14 +42,15 @@ class InviteUserView(PermissionRequiredMixin, FormView):
         return ctx
 
 
-class CreateServiceAccountView(PermissionRequiredMixin, FormView):
+class CreateServiceAccountView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = ('accounts.add_user', 'accounts.add_apitoken')
     template_name = "accounts/user_form.html"
     form_class = ServiceAccountForm
     success_url = reverse_lazy("accounts:users")
 
     def form_valid(self, form):
-        user = form.save(self.request)
+        super().form_valid(form)
+        user = self.object
         _, api_key = APIToken.objects.update_or_create_for_user(user)
         return render(
             self.request,
@@ -169,7 +167,7 @@ class DeleteUserAPITokenView(LoginRequiredMixin, TemplateView):
             return redirect(self.user)
 
 
-class UpdateUserView(PermissionRequiredMixin, UpdateView):
+class UpdateUserView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "accounts.change_user"
     model = User
     # to avoid context collisions
@@ -219,6 +217,17 @@ class DeleteUserView(PermissionRequiredMixin, TemplateView):
             msg = "Service account {} deleted".format(self.user)
         else:
             msg = "User {} deleted".format(self.user)
+        event = AuditEvent.build_from_request_and_instance(
+                request, self.user,
+                action=AuditEvent.Action.DELETED,
+                prev_value=self.user.serialize_for_event()
+            )
         self.user.delete()
+
+        def on_commit_callback():
+            event.post()
+
+        transaction.on_commit(on_commit_callback)
+
         messages.info(request, msg)
         return redirect("accounts:users")

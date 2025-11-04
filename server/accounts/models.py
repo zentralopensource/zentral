@@ -116,6 +116,19 @@ class User(AbstractUser):
         """A set with all the group PKs. Used for authz."""
         return set(self.groups.values_list("pk", flat=True))
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "username": self.username, "email": self.email}
+        if keys_only:
+            return d
+
+        d.update({
+            "is_remote": self.is_remote,
+            "is_service_account": self.is_service_account,
+            "is_superuser": self.is_superuser,
+            "roles":  [{"pk": group.pk, "name": group.name} for group in self.groups.all()]
+        })
+        return d
+
 
 class UserPasswordHistory(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

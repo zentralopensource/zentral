@@ -5,6 +5,23 @@ from accounts.models import APIToken, User
 
 class UsersModelsTestCase(TestCase):
 
+    def test_user_serialize_for_event_keys_only(self):
+        # Given
+        username = get_random_string(19)
+        email = "{}@zentral.io".format(get_random_string(12))
+
+        user = User.objects.create_user(username, email)
+
+        # When
+        actual = user.serialize_for_event(keys_only=True)
+
+        # Then
+        self.assertEqual(actual, {
+            "pk": user.pk,
+            "username": username,
+            "email": email
+        })
+
     def test_api_token_serialize_for_event_keys_only(self):
         # Given
         username = get_random_string(19)
