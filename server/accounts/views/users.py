@@ -147,7 +147,7 @@ class DeleteUserAPITokenView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         tokens = APIToken.objects.filter(user=self.user)
         events = [AuditEvent.build_from_request_and_instance(
-                request, tokens.first(),
+                request, token,
                 action=AuditEvent.Action.DELETED,
                 prev_value=token.serialize_for_event()
             ) for token in tokens.all()]
