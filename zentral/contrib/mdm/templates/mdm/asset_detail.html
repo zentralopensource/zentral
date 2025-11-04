@@ -86,6 +86,7 @@
     <th>Available</th>
     <th>Retired</th>
     <th>Total</th>
+    <th></th>
   </thead>
   <tbody>
     {% for location_asset in location_assets %}
@@ -102,6 +103,13 @@
       <td>{{ location_asset.available_count }}</td>
       <td>{{ location_asset.retired_count }}</td>
       <td>{{ location_asset.total_count }}</td>
+      <td>
+        {% if perms.mdm.change_locationasset and perms.mdm.view_depvirtualserver %}
+        <a href="{% url 'mdm:associate_location_asset' location_asset.asset.pk location_asset.pk %}">
+          <i class="bi bi-share"></i>
+        </a>
+        {% endif %}
+      </td>
     </tr>
     {% endwith %}
     {% endfor %}

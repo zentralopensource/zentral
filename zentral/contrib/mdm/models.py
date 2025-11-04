@@ -1844,6 +1844,9 @@ class DEPVirtualServer(models.Model):
     def get_absolute_url(self):
         return reverse("mdm:dep_virtual_server", args=(self.pk,))
 
+    def serialize_for_event(self, keys_only=False):
+        return {"pk": self.pk, "uuid": str(self.uuid), "name": self.name}
+
 
 class DEPEnrollment(MDMEnrollment):
 

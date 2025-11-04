@@ -675,7 +675,6 @@ def force_asset():
 def force_location(name=None, organization_name=None):
     location = Location(
         server_token_hash=get_random_string(40, allowed_chars='abcdef0123456789'),
-        server_token=get_random_string(12),
         server_token_expiration_date=date(2050, 1, 1),
         organization_name=organization_name or get_random_string(12),
         country_code="DE",
@@ -686,6 +685,8 @@ def force_location(name=None, organization_name=None):
         mdm_info_id=uuid.uuid4(),
     )
     location.set_notification_auth_token()
+    location.save()
+    location.set_server_token(get_random_string(12))
     location.save()
     return location
 

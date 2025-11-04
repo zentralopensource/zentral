@@ -3,6 +3,7 @@ from functools import reduce
 import operator
 import plistlib
 import uuid
+from django_celery_results.models import TaskResult
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase, override_settings
@@ -11,7 +12,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         Channel, Location, LocationAsset, Platform, StoreApp)
-from .utils import force_artifact, force_blueprint_artifact
+from .utils import force_artifact, force_dep_virtual_server, force_blueprint_artifact
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -219,6 +220,48 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "mdm/asset_detail.html")
         self.assertNotContains(response, "No artifacts found for this asset.")
         self.assertContains(response, artifact.name)
+
+    # associate_location_asset
+
+    def test_associate_location_asset_login_redirect(self):
+        location_asset = self._force_location_asset()
+        self._login_redirect(
+            reverse("mdm:associate_location_asset", args=(location_asset.asset.pk, location_asset.pk))
+        )
+
+    def test_associate_location_asset_permission_denied(self):
+        location_asset = self._force_location_asset()
+        self._login()
+        response = self.client.get(
+            reverse("mdm:associate_location_asset", args=(location_asset.asset.pk, location_asset.pk))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_associate_location_asset_get(self):
+        location_asset = self._force_location_asset()
+        self._login("mdm.change_locationasset", "mdm.view_depvirtualserver")
+        response = self.client.get(
+            reverse("mdm:associate_location_asset", args=(location_asset.asset.pk, location_asset.pk))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/associatelocationasset_form.html")
+
+    def test_associate_location_asset_post(self):
+        location_asset = self._force_location_asset()
+        dep_virtual_server = force_dep_virtual_server()
+        self._login("mdm.change_locationasset", "mdm.view_depvirtualserver", "mdm.view_asset")
+        task_qs = TaskResult.objects.filter(task_name="zentral.contrib.mdm.tasks.bulk_assign_location_asset_task")
+        self.assertEqual(task_qs.count(), 0)
+        response = self.client.post(
+            reverse("mdm:associate_location_asset", args=(location_asset.asset.pk, location_asset.pk)),
+            {"dep_virtual_servers": [dep_virtual_server.pk]},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/asset_detail.html")
+        self.assertEqual(task_qs.count(), 1)
+        tr = task_qs.first()
+        self.assertEqual(tr.task_args, f'"({location_asset.pk}, [{dep_virtual_server.pk}])"')
 
     # create_asset_artifact
 

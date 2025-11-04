@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:assets' %}">Store apps</a></li>
+  <li class="breadcrumb-item"><a href="{{ asset.get_absolute_url }}">{{ asset }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ location_asset.get_absolute_url }}">{{ location_asset.location }}</a></li>
+  <li class="breadcrumb-item active">Associate</li>
+</ol>
+
+<h3>Associate {{ location_asset }}</h3>
+
+
+<form class="update-form" method="POST">{% csrf_token %}
+   {{ form }}
+   <p>
+     <a href="{{ location_asset.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+     <button type="submit" class="btn btn-primary">Associate</button>
+   </p>
+</form>
+{% endblock %}

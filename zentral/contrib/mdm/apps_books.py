@@ -17,7 +17,7 @@ from .events import (AssetCreatedEvent, AssetUpdatedEvent,
                      DeviceAssignmentCreatedEvent, DeviceAssignmentDeletedEvent,
                      LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
 from .incidents import MDMAssetAvailabilityIncident
-from .models import Asset, Location, LocationAsset
+from .models import Asset, DEPDevice, Location, LocationAsset
 
 
 logger = logging.getLogger("zentral.contrib.mdm.apps_books")
@@ -234,30 +234,27 @@ class AppsBooksClient:
                     raise ValueError
                 current_page = next_page
 
-    def post_device_associations(self, serial_number, assets):
-        response = self.make_request(
-            "assets/associate",
-            json={
-                "assets": [{"adamId": adam_id, "pricingParam": pricing_param}
-                           for adam_id, pricing_param in assets],
-                "serialNumbers": [serial_number]
-            },
-        )
+    def build_manage_assets_request(self, assets, serial_numbers):
+        return {
+            "assets": [{"adamId": adam_id, "pricingParam": pricing_param}
+                       for adam_id, pricing_param in assets],
+            "serialNumbers": serial_numbers,
+        }
+
+    def post_raw_associations(self,  manage_assets_request):
+        response = self.make_request("assets/associate", json=manage_assets_request)
         event_id = response.get("eventId")
         if not event_id:
             raise AppsBooksAPIError("No event id")
         return event_id
 
+    def post_device_associations(self, serial_number, assets):
+        return self.post_raw_associations(self.build_manage_assets_request(assets, [serial_number]))
+
     def post_device_disassociation(self, serial_number, asset):
         return self.make_request(
             "assets/disassociate",
-            json={
-                "assets": [{
-                    "adamId": asset.adam_id,
-                    "pricingParam": asset.pricing_param,
-                }],
-                "serialNumbers": [serial_number]
-            },
+            json=self.build_manage_assets_request([(asset.adam_id, asset.pricing_param)], [serial_number]),
         )
 
 
@@ -289,6 +286,32 @@ class LocationCache:
 
 
 location_cache = SimpleLazyObject(lambda: LocationCache())
+
+
+#
+# bulk assignments
+#
+
+
+def bulk_assign_location_asset(location_asset, dep_virtual_servers):
+    _, client = location_cache.get(location_asset.location.mdm_info_id)
+    chunk_size = client.get_service_config()["limits"]["maxSerialNumbers"]
+    sni = DEPDevice.objects.filter(
+        virtual_server__in=dep_virtual_servers
+    ).values_list(
+        "serial_number", flat=True
+    ).iterator(
+        chunk_size=chunk_size
+    )
+    total_assignments = 0
+    assets = [(location_asset.asset.adam_id, location_asset.asset.pricing_param)]
+    while True:
+        serial_numbers = list(islice(sni, chunk_size))
+        if not serial_numbers:
+            break
+        client.post_raw_associations(client.build_manage_assets_request(assets, serial_numbers))
+        total_assignments += len(serial_numbers)
+    return total_assignments
 
 
 #

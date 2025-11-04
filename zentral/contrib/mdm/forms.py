@@ -1524,6 +1524,14 @@ class LocationAssetChoiceField(forms.ModelChoiceField):
         return str(obj.location)
 
 
+class AssociateLocationAssetForm(forms.Form):
+    dep_virtual_servers = forms.ModelMultipleChoiceField(
+        queryset=DEPVirtualServer.objects.all(),
+        label="DEP virtual servers",
+        help_text="The devices of the selected DEP virtual servers will receive a license for the location asset."
+    )
+
+
 class CreateAssetArtifactForm(StoreAppForm):
     location_asset = LocationAssetChoiceField(label="Location", queryset=LocationAsset.objects.none(), required=True)
     name = forms.CharField(required=True)

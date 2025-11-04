@@ -18,6 +18,7 @@ from zentral.contrib.mdm.commands.base import load_command, registered_manual_co
 from zentral.contrib.mdm.dep import assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
+                                       AssociateLocationAssetForm,
                                        CreateCertAssetForm, CreateDeclarationForm,
                                        AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
                                        CreateAssetArtifactForm,
@@ -41,6 +42,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         DeviceCommand, UserCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         FileVaultConfig,
+                                        LocationAsset,
                                         OTAEnrollment,
                                         RealmGroupTagMapping,
                                         RecoveryPasswordConfig,
@@ -50,6 +52,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_profile_service_configuration_profile)
 from zentral.contrib.mdm.software_updates import best_available_software_updates
+from zentral.contrib.mdm.tasks import bulk_assign_location_asset_task
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 
@@ -956,6 +959,33 @@ class AssetView(PermissionRequiredMixin, DetailView):
         )
         ctx["artifacts"] = self.object.get_artifacts_store_apps()
         return ctx
+
+
+class AssociateLocationAssetView(PermissionRequiredMixin, FormView):
+    permission_required = ("mdm.change_locationasset", "mdm.view_depvirtualserver")
+    template_name = "mdm/associatelocationasset_form.html"
+    form_class = AssociateLocationAssetForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.location_asset = get_object_or_404(
+            LocationAsset.objects.select_related("asset", "location"),
+            asset__pk=kwargs["asset_pk"], pk=kwargs["pk"]
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["location_asset"] = self.location_asset
+        ctx["asset"] = self.location_asset.asset
+        ctx["location"] = self.location_asset.location
+        return ctx
+
+    def form_valid(self, form):
+        bulk_assign_location_asset_task.apply_async(
+            (self.location_asset.pk, [vs.pk for vs in form.cleaned_data["dep_virtual_servers"]])
+        )
+        messages.info(self.request, "Location asset license association task launched.")
+        return redirect(self.location_asset)
 
 
 class CreateAssetArtifactView(PermissionRequiredMixin, FormView):

@@ -1,4 +1,4 @@
-from unittest.mock import patch, Mock
+from unittest.mock import call, patch, Mock
 import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -8,6 +8,7 @@ from zentral.contrib.mdm.apps_books import (_sync_asset_d,
                                             _update_or_create_location_asset,
                                             _update_location_asset_counts,
                                             associate_location_asset,
+                                            bulk_assign_location_asset,
                                             disassociate_location_asset,
                                             sync_asset, sync_assets,
                                             update_location_asset_counts)
@@ -16,7 +17,7 @@ from zentral.contrib.mdm.events import (AssetCreatedEvent, AssetUpdatedEvent,
                                         LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
 from zentral.contrib.mdm.models import Asset, DeviceAssignment, LocationAsset
 from zentral.core.incidents.models import Severity
-from .utils import force_asset, force_location
+from .utils import force_asset, force_dep_device, force_location, force_location_asset
 
 
 class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
@@ -716,6 +717,38 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(location_asset.available_count, 0)
         self.assertEqual(location_asset.total_count, 9)
         client.get_asset.assert_called_once_with(asset.adam_id, asset.pricing_param)
+
+    # bulk_assign_location_asset
+
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient.make_request")
+    def test_bulk_assign_location_asset(self, make_request):
+        location_asset = force_location_asset()
+        make_request.side_effect = [
+            {"limits": {"maxSerialNumbers": 1}},
+            {"eventId": "123"},
+            {"eventId": "456"}
+        ]
+        dep_device1 = force_dep_device()
+        dep_device2 = force_dep_device()
+        bulk_assign_location_asset(location_asset, [dep_device1.virtual_server, dep_device2.virtual_server])
+        self.assertEqual(len(make_request.call_args_list), 3)
+        self.assertIn(
+            call("service/config"),
+            make_request.call_args_list
+        )
+        self.assertIn(
+            call("service/config"),
+            make_request.call_args_list
+        )
+        assets = [{'adamId': location_asset.asset.adam_id, 'pricingParam': location_asset.asset.pricing_param}]
+        self.assertIn(
+            call("assets/associate", json={'assets': assets, 'serialNumbers': [dep_device1.serial_number]}),
+            make_request.call_args_list
+        )
+        self.assertIn(
+            call("assets/associate", json={'assets': assets, 'serialNumbers': [dep_device2.serial_number]}),
+            make_request.call_args_list
+        )
 
     # associate_location_asset
 

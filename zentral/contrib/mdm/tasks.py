@@ -1,7 +1,8 @@
 import logging
 from celery import shared_task
+from .apps_books import bulk_assign_location_asset
 from .dep import define_dep_profile, sync_dep_virtual_server_devices, DEPClientError
-from .models import DEPEnrollment, DEPVirtualServer
+from .models import DEPEnrollment, DEPVirtualServer, LocationAsset
 from .software_updates import sync_software_updates
 
 
@@ -51,3 +52,20 @@ def define_dep_profile_task(dep_enrollment_pk):
 @shared_task
 def sync_software_updates_task():
     return sync_software_updates()
+
+
+# Apps & Books
+
+
+@shared_task
+def bulk_assign_location_asset_task(location_asset_pk, dep_virtual_server_pks):
+    location_asset = LocationAsset.objects.select_related("location", "asset").get(pk=location_asset_pk)
+    dep_virtual_servers = DEPVirtualServer.objects.filter(pk__in=dep_virtual_server_pks)
+    return {
+        "location_asset": location_asset.serialize_for_event(keys_only=True),
+        "dep_virtual_servers": [
+            dep_virtual_server.serialize_for_event(keys_only=True)
+            for dep_virtual_server in dep_virtual_servers
+        ],
+        "total_assignments": bulk_assign_location_asset(location_asset, dep_virtual_servers),
+    }
