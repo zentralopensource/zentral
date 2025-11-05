@@ -2,8 +2,11 @@ import json
 import sys
 from django.core.management.base import BaseCommand
 from django.core.validators import EmailValidator, ValidationError
+from django.db import transaction
 from accounts.models import APIToken, User
 from accounts.password_reset import handler as password_reset_handler
+from zentral.core.events.base import AuditEvent
+from zentral.core.queues import queues
 
 
 class Command(BaseCommand):
@@ -94,14 +97,36 @@ class Command(BaseCommand):
                 is_superuser=self.superuser
             )
             created = True
+
+            def on_commit_callback():
+                event = AuditEvent.build(
+                    instance=self.user,
+                    action=AuditEvent.Action.CREATED,
+                )
+                event.post()
+
+            transaction.on_commit(on_commit_callback)
+
             self.print("Superuser" if self.superuser else "User", self.username, self.email, "created")
         else:
             if self.skip_if_existing:
                 self.exit_with_error(f"User {self.username} already exists. Nothing to do.", exit_code=0)
             if self.user.is_superuser != self.superuser:
                 updated = True
+                prev_event_value = self.user.serialize_for_event()
                 self.user.is_superuser = self.superuser
                 self.user.save()
+
+                def on_commit_callback():
+                    event = AuditEvent.build(
+                        instance=self.user,
+                        action=AuditEvent.Action.UPDATED,
+                        prev_value=prev_event_value
+                    )
+                    event.post()
+
+                transaction.on_commit(on_commit_callback)
+
                 if self.superuser:
                     self.print("Existing user", self.username, self.email, "promoted to superuser")
                 else:
@@ -119,7 +144,17 @@ class Command(BaseCommand):
             if APIToken.objects.filter(user=self.user).exists():
                 self.print("Existing API token")
             else:
-                _, api_key = APIToken.objects.update_or_create_for_user(self.user)
+                token, api_key = APIToken.objects.update_or_create_for_user(self.user)
+
+                def on_commit_callback():
+                    event = AuditEvent.build(
+                        instance=token,
+                        action=AuditEvent.Action.CREATED,
+                    )
+                    event.post()
+
+                transaction.on_commit(on_commit_callback)
+
                 self.context.update({
                     "api_token": api_key,
                     "api_token_created": True,
@@ -144,21 +179,25 @@ class Command(BaseCommand):
         self.stdout.write(json.dumps(self.context, indent=2))
 
     def handle(self, *args, **kwargs):
-        self.json = kwargs.get("json", False)
-        self.service_account = kwargs.get("service_account", False)
-        self.superuser = kwargs.get("superuser", False)
-        self.skip_if_existing = kwargs.get("skip_if_existing", False)
-        self.with_api_token = kwargs.get("with_api_token", False)
-        self.send_reset = kwargs.get("send_reset", False)
-        self.context = {
-            "service_account": self.service_account,
-            "superuser": self.superuser,
-        }
-        self.check_options()
-        self.check_username(kwargs["username"])
-        self.check_email(kwargs["email"])
-        self.check_user_conflict()
-        self.create_or_update_user()
-        self.create_api_token()
-        self.handle_password_reset()
-        self.output_json()
+        try:
+            self.json = kwargs.get("json", False)
+            self.service_account = kwargs.get("service_account", False)
+            self.superuser = kwargs.get("superuser", False)
+            self.skip_if_existing = kwargs.get("skip_if_existing", False)
+            self.with_api_token = kwargs.get("with_api_token", False)
+            self.send_reset = kwargs.get("send_reset", False)
+            self.context = {
+                "service_account": self.service_account,
+                "superuser": self.superuser,
+            }
+            self.check_options()
+            self.check_username(kwargs["username"])
+            self.check_email(kwargs["email"])
+            with transaction.atomic():
+                self.check_user_conflict()
+                self.create_or_update_user()
+                self.create_api_token()
+            self.handle_password_reset()
+            self.output_json()
+        finally:
+            queues.stop()
