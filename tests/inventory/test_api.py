@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from django_celery_results.models import TaskResult
 from rest_framework import status
 from rest_framework.test import APITestCase
 from accounts.models import APIToken, User
@@ -198,6 +199,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # Android apps export
 

@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
+from django_celery_results.models import TaskResult
 import pyotp
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
 
@@ -265,3 +266,8 @@ class APIToken(models.Model):
             "roles":  [{"pk": group.pk, "name": group.name} for group in self.user.groups.all()]
         })
         return d
+
+
+class UserTask(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    task_result = models.OneToOneField(TaskResult, on_delete=models.CASCADE)

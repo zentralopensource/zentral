@@ -36,12 +36,15 @@ def get_registered_task_names():
 registered_task_names = SimpleLazyObject(get_registered_task_names)
 
 
-def create_task_result_on_publish(sender=None, headers=None, **kwargs):
+def create_task_result_on_publish(sender=None, headers=None, body=None, **kwargs):
     if (
         not isinstance(headers, dict)
         or "id" not in headers
         or "task" not in headers
         or sender not in registered_task_names
+        or not isinstance(body, tuple)
+        or not len(body) == 3
+        or not isinstance(body[1], dict)
     ):
         logger.error("Unexpected calling context")
         return
@@ -49,6 +52,8 @@ def create_task_result_on_publish(sender=None, headers=None, **kwargs):
     # essentially transforms a single-level of the headers dictionary
     # into an object with properties
     request = type('request', (object,), headers)
+
+    (task_args, task_kwargs, task_embed) = body
 
     try:
         db_result_backend.store_result(
@@ -58,8 +63,28 @@ def create_task_result_on_publish(sender=None, headers=None, **kwargs):
             traceback=None,
             request=request,
         )
+
     except Exception:
         logger.exception("Could not store pending task %s result", headers["id"])
+    else:
+        if 'task_user' in task_kwargs:
+            try:
+                task_user_pk = task_kwargs['task_user']
+
+                # TODO: better circular import
+                from accounts.models import User, UserTask
+                from django_celery_results.models import TaskResult
+
+                UserTask.objects.create(
+                    user=User.objects.get(id=task_user_pk),
+                    task_result=TaskResult.objects.get(task_id=headers["id"])
+                )
+            except Exception:
+                logger.exception(
+                    "UserTask could not be created. Is the user %s or task %s result missing?",
+                    task_user_pk,
+                    headers["id"]
+                )
 
 
 before_task_publish.connect(create_task_result_on_publish, dispatch_uid='create_task_result_on_publish')

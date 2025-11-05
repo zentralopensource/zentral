@@ -45,7 +45,7 @@ def export_full_inventory():
 
 
 @shared_task
-def export_inventory(urlencoded_query_dict, filename):
+def export_inventory(urlencoded_query_dict, filename, **kwargs):
     msquery = MSQuery(QueryDict(urlencoded_query_dict))
     _, extension = os.path.splitext(filename)
     filepath = os.path.join("exports", filename)
