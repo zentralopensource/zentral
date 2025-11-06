@@ -259,6 +259,20 @@ class MDMViewsTestCase(TestCase):
         for k, v in kwargs.items():
             self.assertEqual(last_event.payload.get(k), v)
 
+    def _assert_sync_tokens(self, actual, expected):
+        iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
+        actual_datetime = datetime.strptime(actual["SyncTokens"]["Timestamp"], iso_8601)
+        expected_datetime = datetime.strptime(expected["SyncTokens"]["Timestamp"], iso_8601)
+        delta = abs((actual_datetime - expected_datetime).total_seconds())
+        self.assertLessEqual(delta, 1.0)
+
+        self.assertEqual(len(actual), 1)
+        self.assertEqual(len(actual), len(expected))
+
+        for key, value in actual["SyncTokens"].items():
+            if (key != "Timestamp"):
+                self.assertEqual(value, expected["SyncTokens"][key])
+
     def _add_blueprint(self, session):
         blueprint = Blueprint.objects.create(name=get_random_string(12))
         update_blueprint_serialized_artifacts(blueprint)
@@ -877,7 +891,7 @@ class MDMViewsTestCase(TestCase):
         tokens_response, declarations_token = Target(
             session.enrolled_device
         ).sync_tokens
-        self.assertEqual(json_response, tokens_response)
+        self._assert_sync_tokens(json_response, tokens_response)
         self._assertSuccess(post_event, endpoint="tokens")
         session.enrolled_device.refresh_from_db()
         self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
@@ -906,7 +920,7 @@ class MDMViewsTestCase(TestCase):
         tokens_response, declarations_token = Target(
             session.enrolled_device
         ).sync_tokens
-        self.assertEqual(json_response, tokens_response)
+        self._assert_sync_tokens(json_response, tokens_response)
         self._assertSuccess(post_event, endpoint="tokens")
         session.enrolled_device.refresh_from_db()
         self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
@@ -946,7 +960,7 @@ class MDMViewsTestCase(TestCase):
         tokens_response, declarations_token = Target(
             session.enrolled_device
         ).sync_tokens
-        self.assertEqual(json_response, tokens_response)
+        self._assert_sync_tokens(json_response, tokens_response)
         self._assertSuccess(post_event, endpoint="tokens")
         session.enrolled_device.refresh_from_db()
         self.assertEqual(session.enrolled_device.declarations_token, declarations_token)

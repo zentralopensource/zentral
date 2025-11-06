@@ -30,7 +30,7 @@ cryptography==44.0.1
 decorator==5.1.1
 defusedxml==0.7.1
 Deprecated==1.2.14
-Django==4.2.25
+Django==4.2.26
 django-celery-results==2.6.0
 django-filter==24.3
 django-redis==5.4.0
