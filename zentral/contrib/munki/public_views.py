@@ -9,10 +9,9 @@ from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
 from django.views.generic import View
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
+from zentral.contrib.inventory.events import post_machine_snapshot_raw_event
 from zentral.contrib.inventory.models import MetaMachine
-from zentral.contrib.inventory.utils import (add_machine_tags,
-                                             commit_machine_snapshot_and_trigger_events,
-                                             verify_enrollment_secret)
+from zentral.contrib.inventory.utils import add_machine_tags, verify_enrollment_secret
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -217,6 +216,8 @@ class PostJobView(BaseView):
                              'name': 'Munki'}
         ms_tree['reference'] = ms_tree['serial_number']
         ms_tree['public_ip_address'] = self.ip
+        if "last_seen" not in ms_tree:
+            ms_tree["last_seen"] = request_time
         if self.business_unit:
             ms_tree['business_unit'] = self.business_unit.serialize()
         prepare_ms_tree_certificates(ms_tree)
@@ -238,9 +239,7 @@ class PostJobView(BaseView):
         if "os_version" in ms_tree:
             if ms_tree["os_version"].get("patch") is None:
                 ms_tree["os_version"]["patch"] = 0
-        ms = commit_machine_snapshot_and_trigger_events(ms_tree)
-        if not ms:
-            raise RuntimeError(f"Could not commit machine {self.machine_serial_number} snapshot")
+        post_machine_snapshot_raw_event(ms_tree)
 
         # delete all managed installs if last seen report not found
         # which is a good indicator that the machine has been wiped

@@ -10,6 +10,7 @@ from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
+from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.munki.events import (MunkiInstallEvent, MunkiInstallFailedEvent,
                                           MunkiRequestEvent, MunkiScriptCheckStatusUpdated)
 from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
@@ -475,8 +476,12 @@ class MunkiAPIViewsTestCase(TestCase):
 
     # post job
 
+    @patch("zentral.contrib.munki.public_views.post_machine_snapshot_raw_event")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_post_job(self, post_event):
+    def test_post_job(self, post_event, post_machine_snapshot_raw_event):
+        def store_mstree(ms_tree):
+            commit_machine_snapshot_and_trigger_events(ms_tree)
+        post_machine_snapshot_raw_event.side_effect = store_mstree
         tag_name = get_random_string(12)
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment, tag_name=tag_name)
         computer_name = get_random_string(45)
@@ -562,7 +567,11 @@ class MunkiAPIViewsTestCase(TestCase):
              "last_seen_sha1sum": report_sha1sum}
         )
 
-    def test_post_job_duplicated_profile(self):
+    @patch("zentral.contrib.munki.public_views.post_machine_snapshot_raw_event")
+    def test_post_job_duplicated_profile(self, post_machine_snapshot_raw_event):
+        def store_mstree(ms_tree):
+            commit_machine_snapshot_and_trigger_events(ms_tree)
+        post_machine_snapshot_raw_event.side_effect = store_mstree
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         profile = {
             "uuid": "a62a458d-6cdb-4b3c-a440-2ac3129022db",
@@ -594,7 +603,11 @@ class MunkiAPIViewsTestCase(TestCase):
         db_profile = ms.profiles.first()
         self.assertEqual(db_profile.uuid, profile["uuid"])
 
-    def test_post_job_missing_patch_number(self):
+    @patch("zentral.contrib.munki.public_views.post_machine_snapshot_raw_event")
+    def test_post_job_missing_patch_number(self, post_machine_snapshot_raw_event):
+        def store_mstree(ms_tree):
+            commit_machine_snapshot_and_trigger_events(ms_tree)
+        post_machine_snapshot_raw_event.side_effect = store_mstree
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         response = self._post_as_json(reverse("munki_public:post_job"),
                                       {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
@@ -609,7 +622,11 @@ class MunkiAPIViewsTestCase(TestCase):
         ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)
         self.assertEqual(ms.os_version.patch, 0)
 
-    def test_post_job_with_patch_number(self):
+    @patch("zentral.contrib.munki.public_views.post_machine_snapshot_raw_event")
+    def test_post_job_with_patch_number(self, post_machine_snapshot_raw_event):
+        def store_mstree(ms_tree):
+            commit_machine_snapshot_and_trigger_events(ms_tree)
+        post_machine_snapshot_raw_event.side_effect = store_mstree
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         response = self._post_as_json(reverse("munki_public:post_job"),
                                       {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
@@ -625,8 +642,12 @@ class MunkiAPIViewsTestCase(TestCase):
         ms = MachineSnapshot.objects.current().get(serial_number=enrolled_machine.serial_number)
         self.assertEqual(ms.os_version.patch, 1)
 
+    @patch("zentral.contrib.munki.public_views.post_machine_snapshot_raw_event")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_post_job_with_wipe(self, post_event):
+    def test_post_job_with_wipe(self, post_event, post_machine_snapshot_raw_event):
+        def store_mstree(ms_tree):
+            commit_machine_snapshot_and_trigger_events(ms_tree)
+        post_machine_snapshot_raw_event.side_effect = store_mstree
         tag_name = get_random_string(12)
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment, tag_name=tag_name)
         computer_name = get_random_string(45)

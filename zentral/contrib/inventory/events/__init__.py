@@ -3,6 +3,8 @@ import logging
 import uuid
 from zentral.core.events import event_cls_from_type, register_event_type
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
+from zentral.core.queues import queues
+
 
 logger = logging.getLogger('zentral.contrib.inventory.events')
 
@@ -240,3 +242,7 @@ def post_cleanup_finished_event(payload, serialized_event_request):
     metadata = EventMetadata(request=request)
     event = InventoryCleanupFinished(metadata, {"cleanup": payload})
     event.post()
+
+
+def post_machine_snapshot_raw_event(ms_tree):
+    queues.post_raw_event("inventory_machine_snapshot", {"ms_tree": ms_tree})

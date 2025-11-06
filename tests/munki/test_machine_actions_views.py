@@ -7,6 +7,7 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaMachine
+from zentral.utils.provisioning import provision
 from .utils import force_munki_state
 
 
@@ -16,6 +17,8 @@ class MunkiMachineActionsViewsTestCase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
