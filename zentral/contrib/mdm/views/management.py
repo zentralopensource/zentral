@@ -39,6 +39,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         CertAsset, DataAsset, Declaration,
                                         DEPDevice, DEPEnrollment,
                                         DeviceArtifact, UserArtifact,
+                                        DeviceAssignment,
                                         DeviceCommand, UserCommand,
                                         EnrolledDevice, EnrolledUser, EnterpriseApp,
                                         FileVaultConfig,
@@ -1263,11 +1264,20 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
                                                   .get(serial_number=self.object.serial_number))
         except DEPDevice.DoesNotExist:
             pass
+        # device assignments
+        ctx["device_assignments"] = (DeviceAssignment.objects
+                                                     .select_related("location_asset__asset",
+                                                                     "location_asset__location")
+                                                     .filter(serial_number=self.object.serial_number)
+                                                     .order_by("location_asset__asset__name"))
+        ctx["device_assignments_count"] = ctx["device_assignments"].count()
+        # target artifacts
         ctx["target_artifacts"] = (self.object.target_artifacts
                                               .select_related("artifact_version__artifact")
                                               .all()
                                               .order_by("-updated_at"))
         ctx["target_artifacts_count"] = ctx["target_artifacts"].count()
+        # commands
         commands_qs = (
             self.object.commands
                        .select_related("artifact_version__artifact")

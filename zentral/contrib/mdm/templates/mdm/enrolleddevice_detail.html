@@ -394,6 +394,63 @@
 </table>
 {% endif %}
 
+<h3>Device assignment{{ device_assignments_count|pluralize }} ({{ device_assignments_count }})</h3>
+
+{% if device_assignments_count %}
+<table class="table table-striped align-middle">
+  <thead>
+    <tr>
+      <th></th>
+      <th>Location</th>
+      <th>Name</th>
+      <th>Bundle ID</th>
+      <th>Platform</th>
+      <th>Assign time</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for device_assignment in device_assignments %}
+    {% with device_assignment.location_asset as location_asset %}
+    {% with location_asset.asset as asset %}
+    <tr>
+      <td>
+        {% if asset.icon_url %}
+        {% if asset.store_url %}
+        <a href="{{ asset.store_url }}">
+            <img style="max-width:32px;max-height:32px" src="{{ asset.icon_url }}">
+        </a>
+        {% else %}
+        <img style="max-width:32px;max-height:32px" src="{{ asset.icon_url }}">
+        {% endif %}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td>
+        {% if perms.mdm.view_location %}
+        <a href="{{ location_asset.location.get_absolute_url }}">{{ location_asset.location }}</a>
+        {% else %}
+        {{ location_asset.location }}
+        {% endif %}
+      </td>
+      <td>
+        {% if perms.mdm.view_asset %}
+        <a href="{{ location_asset.get_absolute_url }}">{{ asset.name }}</a>
+        {% else %}
+        {{ asset.name }}
+        {% endif %}
+      </td>
+      <td>{{ asset.bundle_id }}</td>
+      <td>{{ asset.supported_platforms|join:", " }}</td>
+      <td>{{ device_assignment.created_at }}</td>
+    </tr>
+    {% endwith %}
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 <div class="d-flex align-items-center mb-1">
     <h3 class="m-0">Last commands</h3>
     <div class="ms-auto">
