@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+{% load task_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Home</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'accounts:tasks' %}">Tasks</a></li>
+    <li class="breadcrumb-item active">{{ task.task_id }}</li>
+</ol>
+
+<div class="object-details">
+
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">{{ task.task_name|partition_replace_capitalize }}</h3>
+    </div>
+</div>
+
+<div class="object-details">
+    <table class="table-object-properties">
+        <tbody>
+            <tr>
+                <th style="width:15%">Taskname</th>
+                <td>{{ task.task_name }}</td>
+            </tr>
+            <tr>
+                <th>Status</th>
+                <td>{% task_status task %}</td>
+            </tr>
+            <tr>
+                <th>Time</th>
+                <td>{% task_time task %}</td>
+            </tr>
+            {% if user.is_superuser %}
+            <tr>
+                <th>User</th>
+                <td><code>{{ task.task_kwargs }}</code></td>
+            </tr>
+            {% endif %}
+            <tr>
+                <th></th>
+                <td>{% task_result task %}</td>
+            </tr>
+        </tbody>
+    </table>    
+</div>
+{% endblock %}

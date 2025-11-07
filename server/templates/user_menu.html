@@ -73,8 +73,9 @@
             <li><a class="dropdown-item" href="{% url 'accounts:verification_devices' %}">Verification Devices</a></li>
             {% else %}
             <li style="padding:3px 20px"><span class="glyphicon glyphicon-cloud" aria-hidden="true"></span> {{ request.realm_authentication_session.realm }}</li>
-            <li role="separator" class="divider"></li>
             {% endif %}
+            <li><a class="dropdown-item" href="{% url 'accounts:tasks' %}">My tasks</a></li>
+            <li role="separator" class="dropdown-divider"></li>
             <li><form id="logout-form" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="dropdown-item">Sign Out</button></form></li>
         </ul>
     </li>

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+{% load task_extras %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item active">Tasks</li>
+        <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+    </ol>
+</nav>
+
+<div class="d-flex align-items-center mb-1">
+    <h3>Task{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }}) for {{user}}</h3>
+</div>
+
+{% if object_list %}
+
+{% pagination next_url previous_url %}
+
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>Task</th>  
+        <th>Created</th>
+        <th class="text-center">Status</th>
+        <th style="width:15%"></th>
+    </thead>
+    <tbody>
+        {% for task in object_list %}
+        <tr class="data-row">
+        <td>
+            <a href="{% url 'accounts:task' task.task_id %}" title="{{ task.task_name }}">{{ task.task_name|partition_replace_capitalize }}</a>
+        </td>
+        <td>
+            {{ task.date_created|date:"SHORT_DATETIME_FORMAT" }}
+        </td>
+        <td class="text-center">
+            
+            {% task_status task %}
+        </td>
+        <td class="text-end py-0">
+            {% if task.can_be_edited %}
+            
+            {% if perms.task.delete_task %}
+                {% url 'accounts:delete_task' task.pk as url %}
+                {% button 'DELETE' url "Delete role" %}
+            {% endif %}
+            {% endif %}
+        </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
+{% pagination next_url previous_url %}
+
+{% else %}
+
+{% no_entities 'Tasks' %}
+
+{% endif %}
+{% endblock %}

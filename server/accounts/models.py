@@ -270,4 +270,4 @@ class APIToken(models.Model):
 
 class UserTask(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    task_result = models.OneToOneField(TaskResult, on_delete=models.CASCADE)
+    task_result = models.OneToOneField(TaskResult, related_name='tasks', on_delete=models.CASCADE)
