@@ -46,7 +46,7 @@ class MDMDeviceNotificationEvent(BaseEvent):
 register_event_type(MDMDeviceNotificationEvent)
 
 
-def post_mdm_device_notification_event(serial_number, udid, priority, expiration_seconds, success, user_id=None):
+def build_mdm_device_notification_event(serial_number, udid, priority, expiration_seconds, success, user_id=None):
     event_metadata = EventMetadata(machine_serial_number=serial_number)
     event_payload = {
         "udid": udid,
@@ -56,5 +56,9 @@ def post_mdm_device_notification_event(serial_number, udid, priority, expiration
     }
     if user_id:
         event_payload["user_id"] = user_id
-    event = MDMDeviceNotificationEvent(event_metadata, event_payload)
+    return MDMDeviceNotificationEvent(event_metadata, event_payload)
+
+
+def post_mdm_device_notification_event(serial_number, udid, priority, expiration_seconds, success, user_id=None):
+    event = build_mdm_device_notification_event(serial_number, udid, priority, expiration_seconds, success, user_id)
     event.post()

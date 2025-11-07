@@ -18,7 +18,7 @@ class Command(BaseCommand):
                 continue
             success = False
             try:
-                success = send_enrolled_device_notification(d)
+                success, _ = send_enrolled_device_notification(d)
             except Exception:
                 pass
             if success:

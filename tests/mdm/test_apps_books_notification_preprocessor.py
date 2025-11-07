@@ -9,7 +9,8 @@ from zentral.contrib.mdm.apps_books import get_otf_association_cache_key
 from zentral.contrib.mdm.events import (AssetAssociationEvent, AssetAssociationErrorEvent,
                                         AssetCountNotificationEvent,
                                         AssetDisassociationEvent, AssetDisassociationErrorEvent,
-                                        AssetRevocationEvent, AssetRevocationErrorEvent)
+                                        AssetRevocationEvent, AssetRevocationErrorEvent,
+                                        MDMDeviceNotificationEvent)
 from zentral.contrib.mdm.models import Location
 from zentral.contrib.mdm.preprocessors import get_preprocessors
 from zentral.core.incidents.models import Severity
@@ -183,18 +184,81 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         )
         send_enrolled_device_notification.assert_not_called()
 
-    @patch("zentral.contrib.mdm.preprocessors.send_enrolled_device_notification")
+    @patch("zentral.contrib.mdm.apns.apns_client_cache")
     @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
     @patch("zentral.contrib.mdm.preprocessors.associate_location_asset")
     def test_asset_management_associate_otf_success(
         self,
         associate_location_asset,
         location_cache_get,
-        send_enrolled_device_notification
+        apns_client_cache,
     ):
+        associate_location_asset.return_value = []
         client = Mock()
         location_cache_get.return_value = self.location, client
+        apns_client_cache.get_or_create_with_push_cert.return_value.send_notification.return_value = True  # success
+        notification_id = str(uuid.uuid4())
+        event_id = str(uuid.uuid4())
+        now = datetime.datetime.utcnow()
+        cache.set(get_otf_association_cache_key(event_id), "1")  # mark the event as OTF assignment
+        enrollment_session, _, _ = force_dep_enrollment_session(
+            MetaBusinessUnit.objects.create(name=get_random_string(12)),
+            completed=True,
+        )
+        enrolled_device = enrollment_session.enrolled_device
+        events = list(self.preprocessor.process_raw_event({
+            "data": {"notificationType": "ASSET_MANAGEMENT",
+                     "notificationId": notification_id,
+                     "uId": "2049025000431439",
+                     "notification": {
+                         "assignments": [
+                             {"adamId": "409203825",
+                              "pricingParam": "STDQ",
+                              "serialNumber": enrolled_device.serial_number},
+                         ],
+                         "eventId": event_id,
+                         "result": "SUCCESS",
+                         "type": "ASSOCIATE"
+                     }},
+            "metadata": {"request": {"user_agent": "yolo", "ip": "127.0.0.1"},
+                         "created_at": now.isoformat()},
+            "location": {"mdm_info_id": str(self.location.mdm_info_id)}
+        }))
+        self.assertEqual(len(events), 2)
+        event = events[0]
+        self.assertIsInstance(event, AssetAssociationEvent)
+        self.assertEqual(event.metadata.request.user_agent, "yolo")
+        self.assertEqual(event.metadata.request.ip, "127.0.0.1")
+        self.assertEqual(len(event.metadata.incident_updates), 1)
+        iu = event.metadata.incident_updates[0]
+        self.assertEqual(iu.incident_type, "mdm_asset_association")
+        self.assertEqual(iu.key, {"mdm_l_pk": self.location.pk,
+                                  "mdm_adam_id": "409203825",
+                                  "mdm_pricing_param": "STDQ"})
+        self.assertEqual(iu.severity, Severity.NONE)
+        self.assertEqual(event.payload["asset"]["adam_id"], "409203825")
+        self.assertEqual(event.payload["asset"]["pricing_param"], "STDQ")
+        self.assertEqual(event.metadata.created_at, now)
+        associate_location_asset.assert_called_once_with(
+            self.location, client, "409203825", "STDQ",
+            [enrolled_device.serial_number], event_id, notification_id
+        )
+        event2 = events[1]
+        self.assertIsInstance(event2, MDMDeviceNotificationEvent)
+
+    @patch("zentral.contrib.mdm.preprocessors.send_enrolled_device_notification")
+    @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
+    @patch("zentral.contrib.mdm.preprocessors.associate_location_asset")
+    def test_asset_management_associate_otf_success_notification_error(
+        self,
+        associate_location_asset,
+        location_cache_get,
+        send_enrolled_device_notification,
+    ):
         associate_location_asset.return_value = []
+        client = Mock()
+        location_cache_get.return_value = self.location, client
+        send_enrolled_device_notification.side_effect = ValueError
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
         now = datetime.datetime.utcnow()
@@ -241,7 +305,6 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
             self.location, client, "409203825", "STDQ",
             [enrolled_device.serial_number], event_id, notification_id
         )
-        send_enrolled_device_notification.assert_called_once_with(enrolled_device)
 
     @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
     @patch("zentral.contrib.mdm.preprocessors.associate_location_asset")

@@ -150,7 +150,12 @@ class AppsBooksNotificationPreprocessor:
             for enrolled_device in (EnrolledDevice.objects
                                                   .select_related("push_certificate")
                                                   .filter(serial_number__in=devices_to_notify)):
-                send_enrolled_device_notification(enrolled_device)
+                try:
+                    _, event = send_enrolled_device_notification(enrolled_device, post_event=False)
+                except Exception:
+                    logger.exception("Could not notify device %s", enrolled_device.serial_number)
+                else:
+                    yield event
 
     def process_raw_event(self, raw_event):
         data = raw_event.get("data")

@@ -90,7 +90,7 @@ class MDMAPNSTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
-        success = send_enrolled_device_notification(session.enrolled_device)
+        success, _ = send_enrolled_device_notification(session.enrolled_device)
         self.assertFalse(success)
         sleep.assert_not_called()
         self.assertEqual(len(post_event.call_args_list), 1)
@@ -110,7 +110,7 @@ class MDMAPNSTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
-        success = send_enrolled_device_notification(session.enrolled_device)
+        success, _ = send_enrolled_device_notification(session.enrolled_device)
         self.assertFalse(success)
         self.assertEqual(len(sleep.call_args), APNSClient.max_retries)
         self.assertEqual(len(post_event.call_args_list), 1)
@@ -130,7 +130,7 @@ class MDMAPNSTestCase(TestCase):
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
-        success = send_enrolled_device_notification(session.enrolled_device)
+        success, _ = send_enrolled_device_notification(session.enrolled_device)
         self.assertTrue(success)
         sleep.assert_not_called()
         self.assertEqual(len(post_event.call_args_list), 1)
@@ -151,7 +151,7 @@ class MDMAPNSTestCase(TestCase):
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         enrolled_user = force_enrolled_user(session.enrolled_device)
-        success = send_enrolled_user_notification(enrolled_user)
+        success, _ = send_enrolled_user_notification(enrolled_user)
         self.assertFalse(success)
         sleep.assert_not_called()
         self.assertEqual(len(post_event.call_args_list), 1)
@@ -172,7 +172,7 @@ class MDMAPNSTestCase(TestCase):
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         enrolled_user = force_enrolled_user(session.enrolled_device)
-        success = send_enrolled_user_notification(enrolled_user)
+        success, _ = send_enrolled_user_notification(enrolled_user)
         self.assertFalse(success)
         self.assertEqual(len(sleep.call_args), APNSClient.max_retries)
         self.assertEqual(len(post_event.call_args_list), 1)
@@ -193,7 +193,7 @@ class MDMAPNSTestCase(TestCase):
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         enrolled_user = force_enrolled_user(session.enrolled_device)
-        success = send_enrolled_user_notification(enrolled_user)
+        success, _ = send_enrolled_user_notification(enrolled_user)
         self.assertTrue(success)
         sleep.assert_not_called()
         self.assertEqual(len(post_event.call_args_list), 1)

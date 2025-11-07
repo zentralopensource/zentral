@@ -5,7 +5,7 @@ import threading
 from django.utils.functional import SimpleLazyObject
 import httpx
 from zentral.utils.ssl import create_client_ssl_context
-from .events import post_mdm_device_notification_event
+from .events import build_mdm_device_notification_event
 from .models import PushCertificate
 
 
@@ -119,17 +119,26 @@ def _send_target_notification(enrolled_device, token, user_id=None, priority=10,
         raise ValueError(f"Enrolled {target_type} {target_pk} cannot be poked.")
     client = apns_client_cache.get_or_create_with_push_cert(enrolled_device.push_certificate)
     success = client.send_notification(token, enrolled_device.push_magic, priority, expiration_seconds)
-    post_mdm_device_notification_event(
+    return success, build_mdm_device_notification_event(
         enrolled_device.serial_number, enrolled_device.udid,
         priority, expiration_seconds,
         success, user_id
     )
-    return success
 
 
-def send_enrolled_user_notification(enrolled_user):
-    return _send_target_notification(enrolled_user.enrolled_device, enrolled_user.token, enrolled_user.user_id)
+def send_enrolled_user_notification(enrolled_user, post_event=True):
+    success, event = _send_target_notification(
+        enrolled_user.enrolled_device, enrolled_user.token, enrolled_user.user_id
+    )
+    if post_event:
+        event.post()
+    return success, event
 
 
-def send_enrolled_device_notification(enrolled_device):
-    return _send_target_notification(enrolled_device, enrolled_device.token)
+def send_enrolled_device_notification(enrolled_device, post_event=True):
+    success, event = _send_target_notification(
+        enrolled_device, enrolled_device.token
+    )
+    if post_event:
+        event.post()
+    return success, event
