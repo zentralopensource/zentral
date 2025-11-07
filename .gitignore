@@ -8,6 +8,7 @@ __pycache__
 !/.gitignore
 !/.dockerignore
 !/.github
+!/.devcontainer
 
 /venv/
 
