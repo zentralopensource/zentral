@@ -10,6 +10,7 @@ from django.db import transaction
 from django.http import Http404, JsonResponse
 from django.utils.crypto import get_random_string
 from django.views.generic import View
+from zentral.contrib.inventory.events import post_machine_snapshot_raw_event
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
 from zentral.contrib.inventory.utils import (add_machine_tags,
@@ -144,6 +145,7 @@ class EnrollView(BaseJsonPostView):
             if business_unit:
                 tree["business_unit"] = business_unit.serialize()
             update_tree_with_enrollment_host_details(tree, self.data.get("host_details"))
+            # commit to push the extra inventory queries quickly
             commit_machine_snapshot_and_trigger_events(tree)
 
         post_enrollment_event(self.serial_number,
@@ -484,7 +486,8 @@ class LogView(BaseNodeView):
                 if business_unit:
                     tree["business_unit"] = business_unit.serialize()
                 update_tree_with_inventory_query_snapshot(tree, last_inventory_snapshot)
-                commit_machine_snapshot_and_trigger_events(tree)
+                # use the raw events queue to process this in the background
+                post_machine_snapshot_raw_event(tree)
             post_results(self.machine.serial_number, results, self.request)
         elif log_type == "status":
             # TODO: configuration option to filter some of those (severity) or maybe simply ignore them

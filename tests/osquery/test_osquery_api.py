@@ -10,6 +10,7 @@ from server.urls import build_urlpatterns_for_zentral_apps
 from zentral.conf import settings
 from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
+from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
 from zentral.contrib.osquery.events import (OsqueryEnrollmentEvent, OsqueryRequestEvent, OsqueryResultEvent,
@@ -273,24 +274,29 @@ class OsqueryAPIViewsTestCase(TestCase):
         missing_windows_build_data=False,
         unknown_windows_build=False,
     ):
-        return self.post_as_json(
-            "log",
-            {"node_key": node_key,
-             "log_type": "result",
-             "data": [{
-                 'action': 'snapshot',
-                 "name": INVENTORY_QUERY_NAME,
-                 "snapshot": self.get_default_inventory_query_snapshot(
-                     platform,
-                     with_app,
-                     with_ec2,
-                     no_windows_build_data,
-                     missing_windows_build_data,
-                     unknown_windows_build,
-                 ),
-                 'unixTime': '1480605737',
-             }]}
-        )
+        with patch("zentral.contrib.osquery.public_views.post_machine_snapshot_raw_event") as pmsre:
+            def store_mstree(ms_tree):
+                # simulate what is done by the preprocessor
+                commit_machine_snapshot_and_trigger_events(ms_tree)
+            pmsre.side_effect = store_mstree
+            return self.post_as_json(
+                "log",
+                {"node_key": node_key,
+                 "log_type": "result",
+                 "data": [{
+                     'action': 'snapshot',
+                     "name": INVENTORY_QUERY_NAME,
+                     "snapshot": self.get_default_inventory_query_snapshot(
+                         platform,
+                         with_app,
+                         with_ec2,
+                         no_windows_build_data,
+                         missing_windows_build_data,
+                         unknown_windows_build,
+                     ),
+                     'unixTime': '1480605737',
+                 }]}
+            )
 
     # enrollment
 
