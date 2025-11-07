@@ -238,7 +238,7 @@ class BaseAppsExport(APIView):
         if not form.is_valid():
             raise ValidationError("Invalid search parameters")
         filename = "{}_export_{:%Y-%m-%d_%H-%M-%S}.{}".format(self.filename_prefix, timezone.now(), export_format)
-        result = self.task.apply_async((request.data, filename,))
+        result = self.task.apply_async((request.data, filename,), {'task_user': request.user.id})
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
@@ -288,7 +288,9 @@ class MachineAndroidAppsExport(APIView):
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
-        result = export_machine_android_apps.apply_async(kwargs={"source_name": source_name})
+        result = export_machine_android_apps.apply_async(
+            kwargs={"source_name": source_name, 'task_user': request.user.id}
+            )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
@@ -300,7 +302,9 @@ class MachineDebPackagesExport(APIView):
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
-        result = export_machine_deb_packages.apply_async(kwargs={"source_name": source_name})
+        result = export_machine_deb_packages.apply_async(
+            kwargs={"source_name": source_name, 'task_user': request.user.id}
+            )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
@@ -312,7 +316,9 @@ class MachineIOSAppsExport(APIView):
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
-        result = export_machine_ios_apps.apply_async(kwargs={"source_name": source_name})
+        result = export_machine_ios_apps.apply_async(
+            kwargs={"source_name": source_name, 'task_user': request.user.id}
+            )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
@@ -324,7 +330,9 @@ class MachineMacOSAppInstancesExport(APIView):
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
-        result = export_machine_macos_app_instances.apply_async(kwargs={"source_name": source_name})
+        result = export_machine_macos_app_instances.apply_async(
+            kwargs={"source_name": source_name, 'task_user': request.user.id}
+            )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
@@ -336,7 +344,9 @@ class MachineProgramInstancesExport(APIView):
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
-        result = export_machine_program_instances.apply_async(kwargs={"source_name": source_name})
+        result = export_machine_program_instances.apply_async(
+            kwargs={"source_name": source_name, 'task_user': request.user.id}
+            )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
@@ -348,7 +358,9 @@ class MachineSnapshotsExport(APIView):
 
     def post(self, request, *args, **kwargs):
         source_name = request.query_params.get('source_name')
-        result = export_machine_snapshots.apply_async(kwargs={"source_name": source_name})
+        result = export_machine_snapshots.apply_async(
+            kwargs={"source_name": source_name, 'task_user': request.user.id}
+            )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
