@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url "google_workspace:index" %}">Google Workspace</a></li>
+  <li class="breadcrumb-item"><a href="{% url "google_workspace:connections" %}">Connections</a></li>
+  <li class="breadcrumb-item active"><a href="{{ connection.get_absolute_url }}">{{ connection }}</a></li>
+  {% if object %}
+  <li class="breadcrumb-item active">Update group tag mapping</li>
+  {% else %}
+  <li class="breadcrumb-item active">Add group tag mapping</li>
+  {% endif %}
+</ol>
+
+<h2>{% if object %}Update{% else %}Add{% endif %} group tag mapping</h2>
+
+<form method="post" class="update-form">{% csrf_token %}
+  {{ form }}
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ connection.get_absolute_url }}">
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+{% endblock %}

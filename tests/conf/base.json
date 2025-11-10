@@ -182,6 +182,7 @@
       "user_portal": true
     },
     "zentral.contrib.wsone": {},
-    "zentral.contrib.intune": {}
+    "zentral.contrib.intune": {},
+    "zentral.contrib.google_workspace": {}
   }
 }

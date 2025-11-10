@@ -98,7 +98,7 @@
 </div>
 
 <div class="d-flex justify-content-between mb-3">
-    <h3 class="m-0" id="packs">Pack{{ pack_count|pluralize }} ({{configuration_pack_count }})</h3>
+    <h3 class="m-0" id="packs">Pack{{ configuration_pack_count|pluralize }} ({{configuration_pack_count }})</h3>
     <div class="ms-auto">
     {% if perms.can_add_configuration_pack %}
         {% url 'osquery:add_configuration_pack' object.id as url %}

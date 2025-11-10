@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url "google_workspace:index" %}">Google Workspace</a></li>
+  <li class="breadcrumb-item"><a href="{% url "google_workspace:connections" %}">Connections</a></li>
+  <li class="breadcrumb-item active"><a href="{{ connection.get_absolute_url }}">{{ object.connection }}</a></li>
+  <li class="breadcrumb-item active">Remove group tag mapping</li>
+</ol>
+
+<h2>Remove group tag mapping</h2>
+
+<form method="post" class="update-form">{% csrf_token %}
+  <p>Do you really want to remove group tag mapping <i>{{ object.group_email }}</i> from the connection <i>{{ object.connection }}</i>?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Remove</button>
+  </p>
+</form>
+{% endblock %}
