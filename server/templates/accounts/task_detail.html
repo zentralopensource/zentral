@@ -3,6 +3,7 @@
 {% load task_extras %}
 
 {% block content %}
+{% if task %}
 <ol class="breadcrumb">
     <li class="breadcrumb-item"><a href="/">Home</a></li>
     <li class="breadcrumb-item"><a href="{% url 'accounts:tasks' %}">Tasks</a></li>
@@ -44,4 +45,5 @@
         </tbody>
     </table>    
 </div>
+{% endif %}
 {% endblock %}

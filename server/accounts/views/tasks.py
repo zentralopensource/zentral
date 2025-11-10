@@ -3,10 +3,10 @@ import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
 
 from django_celery_results.models import TaskResult
+from accounts.models import UserTask
 from django.views.generic import DetailView
 from zentral.utils.views import UserPaginationListView
 from django.shortcuts import get_object_or_404, render
-
 
 logger = logging.getLogger("zentral.accounts.views.tasks")
 
@@ -25,4 +25,9 @@ class TaskView(LoginRequiredMixin, DetailView):
 
     def get(self, request, *args, **kwargs):
         task_result = get_object_or_404(TaskResult, task_id=str(kwargs["task_id"]))
+        if not self.request.user.is_superuser:
+            try:
+                UserTask.objects.get(user=self.request.user, task_result=task_result)
+            except UserTask.DoesNotExist:
+                task_result = None
         return render(request, "accounts/task_detail.html", context={"task": task_result})

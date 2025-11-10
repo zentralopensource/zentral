@@ -1,9 +1,7 @@
 {% if task.result %}
 {% if result_json.filepath %}
-<a class="btn btn-link mb-2" href="/api/task_result/{{ task.task_id }}/download/"><i class="bi bi-download"></i></a>
+<a class="btn btn-default" href="/api/task_result/{{ task.task_id }}/download/"><i class="bi bi-download"></i></a>
 {% else %}
-<code>
-    {{ result_json }}
-</code>
+<button type="button" class="btn " data-toggle="popover" data-bs-title="Result" data-bs-html="true" data-bs-content='<code>{{ result_json }}</code>'><i class="bi bi-info"></i></button>
 {% endif %}
 {% endif %}

@@ -41,13 +41,7 @@
             {% task_status task %}
         </td>
         <td class="text-end py-0">
-            {% if task.can_be_edited %}
-            
-            {% if perms.task.delete_task %}
-                {% url 'accounts:delete_task' task.pk as url %}
-                {% button 'DELETE' url "Delete role" %}
-            {% endif %}
-            {% endif %}
+           {% task_result task %}
         </td>
         </tr>
         {% endfor %}

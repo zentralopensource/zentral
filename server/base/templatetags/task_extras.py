@@ -15,15 +15,24 @@ def task_status(task):
 
 @register.inclusion_tag('accounts/tasks/_time.html')
 def task_time(task):
-    time_diff = task.date_done - task.date_created
+    time_diff = 0
+    try:
+        time_diff = task.date_done - task.date_created
+    except IndexError:
+        pass
     return {'task': task, 'time_diff': time_diff}
 
 
 @register.inclusion_tag('accounts/tasks/_result.html')
 def task_result(task):
-    result_json = json.loads(task.result)
-    return {'task': task, 'result_json': result_json}
-
+    try:
+        if isinstance(task.result, (bytes, bytearray)):
+            result_json = json.loads(task.result)
+            return {'task': task, 'result_json': result_json}
+        else:
+            return {'task': task, 'result_json': "{}"}
+    except IndexError:
+        pass
 
 @register.filter
 def partition_replace_capitalize(value, partition_char=".", find_char="_", replace_char=" "):
