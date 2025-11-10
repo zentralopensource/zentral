@@ -14,6 +14,8 @@ Add network interfaces to full export.
 
 On-the-fly device apps & books license assignments work now also with raw `com.apple.configuration.app.managed` declarations when a default apps & books location is set in the blueprint.
 
+Background task for mass-assignment of apps & books licenses.
+
 Better apps & books locations & location assets read-only API.
 
 Add StoreApp API.
@@ -21,6 +23,12 @@ Add StoreApp API.
 Add blueprint option to distribute the legacy profiles via DDM.
 
 Add Digicert - Trust Lifecycle Manager SCEP issuer backend. Support for dynamic enrollment codes.
+
+#### Core
+
+Add mechanism to link background tasks to users.
+
+Add user and API token CRUD audit events.
 
 ### Bug fixes
 
