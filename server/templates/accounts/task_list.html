@@ -1,6 +1,5 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
-{% load task_extras %}
+{% load ui_extras task_extras %}
 
 {% block content %}
 <nav aria-label="breadcrumb">
@@ -34,7 +33,7 @@
             <a href="{% url 'accounts:task' task.task_id %}" title="{{ task.task_name }}">{{ task.task_name|partition_replace_capitalize }}</a>
         </td>
         <td>
-            {{ task.date_created|date:"SHORT_DATETIME_FORMAT" }}
+            {{ task.date_created|date:"SHORT_DATETIME_FORMAT" }}
         </td>
         <td class="text-center">
             

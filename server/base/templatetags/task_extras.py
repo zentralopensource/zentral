@@ -26,7 +26,7 @@ def task_time(task):
 @register.inclusion_tag('accounts/tasks/_result.html')
 def task_result(task):
     try:
-        if isinstance(task.result, (bytes, bytearray)):
+        if isinstance(task.result, (str, bytes, bytearray)):
             result_json = json.loads(task.result)
             return {'task': task, 'result_json': result_json}
         else:
