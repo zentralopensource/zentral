@@ -9,7 +9,7 @@ from accounts.models import ProvisionedRole, User
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
-class AccountUsersViewsTestCase(TestCase):
+class AccountGroupsViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         # ui user
