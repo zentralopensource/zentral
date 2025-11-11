@@ -24,6 +24,10 @@ Add blueprint option to distribute the legacy profiles via DDM.
 
 Add Digicert - Trust Lifecycle Manager SCEP issuer backend. Support for dynamic enrollment codes.
 
+#### Osquery
+
+Preserve Osquery inventory result time.
+
 #### Core
 
 Add mechanism to link background tasks to users.

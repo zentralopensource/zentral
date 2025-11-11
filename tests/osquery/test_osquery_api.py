@@ -1099,6 +1099,10 @@ class OsqueryAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response, {})
         ms = MachineSnapshot.objects.current().get(serial_number=em.serial_number, reference=em.node_key)
+        self.assertTrue(
+            all(msc.last_seen == datetime(2016, 12, 1, 15, 22, 17)
+                for msc in ms.machinesnapshotcommit_set.all())
+        )
         self.assertEqual(ms.os_version.name, "macOS")
         self.assertEqual(ms.os_version.major, 10)
         self.assertEqual(ms.os_version.minor, 15)

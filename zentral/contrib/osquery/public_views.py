@@ -4,11 +4,13 @@ from gzip import GzipFile
 from itertools import chain, islice
 import json
 import logging
+import pytz
 from django.core.exceptions import SuspiciousOperation, PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.http import Http404, JsonResponse
 from django.utils.crypto import get_random_string
+from django.utils.timezone import make_naive
 from django.views.generic import View
 from zentral.contrib.inventory.events import post_machine_snapshot_raw_event
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
@@ -446,10 +448,10 @@ class LogView(BaseNodeView):
         log_type = self.data.get("log_type")
         if log_type == "result":
             results = []
-            last_inventory_snapshot = None
+            last_inventory_snapshot_record = None
             for record in records:
                 if record.get("name") == INVENTORY_QUERY_NAME:
-                    last_inventory_snapshot = record.get("snapshot")
+                    last_inventory_snapshot_record = record
                 else:
                     results.append(record)
                     # file carving ?
@@ -476,16 +478,22 @@ class LogView(BaseNodeView):
                                 post_file_carve_events(self.machine.serial_number, self.user_agent, self.ip,
                                                        [{"action": "schedule",
                                                          "session_id": str(file_carving_session.pk)}])
-            if last_inventory_snapshot:
-                tree = {"source": {"module": "zentral.contrib.osquery",
-                                   "name": "osquery"},
-                        "serial_number": self.machine.serial_number,
-                        "reference": self.enrolled_machine.node_key,
-                        "public_ip_address": self.ip}
+            if last_inventory_snapshot_record:
+                tree = {
+                    "source": {"module": "zentral.contrib.osquery",
+                               "name": "osquery"},
+                    "serial_number": self.machine.serial_number,
+                    "reference": self.enrolled_machine.node_key,
+                    "public_ip_address": self.ip,
+                    "last_seen": make_naive(
+                        datetime.fromtimestamp(int(last_inventory_snapshot_record["unixTime"]), pytz.UTC),
+                        timezone=pytz.UTC,
+                    )
+                }
                 business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
                 if business_unit:
                     tree["business_unit"] = business_unit.serialize()
-                update_tree_with_inventory_query_snapshot(tree, last_inventory_snapshot)
+                update_tree_with_inventory_query_snapshot(tree, last_inventory_snapshot_record["snapshot"])
                 # use the raw events queue to process this in the background
                 post_machine_snapshot_raw_event(tree)
             post_results(self.machine.serial_number, results, self.request)
