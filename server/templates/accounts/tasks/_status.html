@@ -1,0 +1,9 @@
+{% if task.status == 'SUCCESS' %}
+<span class="badge text-bg-success"><span class="bi bi-check" aria-hidden="true" title="{{ task.status }}"></span></span>
+{% elif task.status == 'PENDING' %}
+<span class="badge text-bg-warning"><span class="bi bi-hourglass-split" aria-hidden="true" title="{{ task.status }}"></span></span>
+{% elif task.status == 'FAILURE' %}
+<span class="badge text-bg-danger"><span class="bi bi-exclamation " aria-hidden="true" title="{{ task.status }}"></span></span>
+{% else %}
+<span class="badge text-bg-info"><span class="bi bi-question" aria-hidden="true" title="{{ task.status }}"></span></span>
+{% endif %}

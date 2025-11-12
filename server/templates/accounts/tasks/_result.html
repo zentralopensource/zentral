@@ -1,0 +1,14 @@
+{% load ui_extras base_extras task_extras %}
+{% if task.result %}
+{% if result_json.filepath %}
+<a class="btn btn-default border" href="/api/task_result/{{ task.task_id }}/download/"><i class="bi bi-download"></i></a>
+{% else %}
+{% if show_result %}
+<code>
+    {{ result_json|jsonprettyprint }}
+</code>
+{% else %}
+<button type="button" class="btn border" data-toggle="popover" data-bs-title="Result" data-bs-html="true" data-bs-content='{{ result_json|jsonprettyprint  }}'><i class="bi bi-info"></i></button>
+{% endif %}
+{% endif %}
+{% endif %}
