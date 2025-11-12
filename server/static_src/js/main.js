@@ -19,3 +19,9 @@ import { Chart, BarController, BarElement, LinearScale, CategoryScale } from 'ch
 Chart.register(BarController, BarElement, LinearScale, CategoryScale)
 // TODO: find better solution!
 window.Chart = Chart;
+
+
+const popoverTriggerList = document.querySelectorAll('[data-toggle="popover"]')
+const popoverList = [...popoverTriggerList].map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl, {
+    trigger : 'click'
+}))

@@ -68,7 +68,7 @@ def export_inventory(urlencoded_query_dict, filename, **kwargs):
     }
 
 
-def export_apps(form_class, form_data, filename):
+def export_apps(form_class, form_data, filename, **kwargs):
     form = form_class(form_data or {}, export=True)
     assert form.is_valid()
     _, extension = os.path.splitext(filename)
@@ -120,55 +120,55 @@ def export_apps(form_class, form_data, filename):
 
 
 @shared_task
-def export_android_apps(form_data, filename):
+def export_android_apps(form_data, filename, **kwargs):
     return export_apps(AndroidAppSearchForm, form_data, filename)
 
 
 @shared_task
-def export_deb_packages(form_data, filename):
+def export_deb_packages(form_data, filename, **kwargs):
     return export_apps(DebPackageSearchForm, form_data, filename)
 
 
 @shared_task
-def export_ios_apps(form_data, filename):
+def export_ios_apps(form_data, filename, **kwargs):
     return export_apps(IOSAppSearchForm, form_data, filename)
 
 
 @shared_task
-def export_macos_apps(form_data, filename):
+def export_macos_apps(form_data, filename, **kwargs):
     return export_apps(MacOSAppSearchForm, form_data, filename)
 
 
 @shared_task
-def export_programs(form_data, filename):
+def export_programs(form_data, filename, **kwargs):
     return export_apps(ProgramsSearchForm, form_data, filename)
 
 
 @shared_task
-def export_machine_macos_app_instances(source_name=None):
+def export_machine_macos_app_instances(source_name=None, **kwargs):
     return do_export_machine_macos_app_instances(source_name=source_name)
 
 
 @shared_task
-def export_machine_android_apps(source_name=None):
+def export_machine_android_apps(source_name=None, **kwargs):
     return do_export_machine_android_apps(source_name=source_name)
 
 
 @shared_task
-def export_machine_deb_packages(source_name=None):
+def export_machine_deb_packages(source_name=None, **kwargs):
     return do_export_machine_deb_packages(source_name=source_name)
 
 
 @shared_task
-def export_machine_ios_apps(source_name=None):
+def export_machine_ios_apps(source_name=None, **kwargs):
     return do_export_machine_ios_apps(source_name=source_name)
 
 
 @shared_task
-def export_machine_program_instances(source_name=None):
+def export_machine_program_instances(source_name=None, **kwargs):
     return do_export_machine_program_instances(source_name=source_name)
 
 
 @shared_task
-def export_machine_snapshots(source_name=None):
+def export_machine_snapshots(source_name=None, **kwargs):
     return do_export_machine_snapshots(source_name=source_name)

@@ -1,0 +1,10 @@
+<dl class="row">
+    <dt class="col-sm-2 text-sm-end">Created</dt>
+    <dd class="col-sm-10 ">{{ task.date_created|date:"D, d M Y H:i:s.u O"|default:"--" }}</dd>
+    <dt class="col-sm-2 text-sm-end">Started</dt>
+    <dd  class="col-sm-10 ">{{ task.date_started|date:"D, d M Y H:i:s.u O"|default:"--" }}</dd>
+    <dt class="col-sm-2 text-sm-end">Done</dt>
+    <dd class="col-sm-10 ">{{ task.date_done|date:"D, d M Y H:i:s.u O"|default:"--" }}</dd>
+    <dt class="col-sm-2 text-sm-end">Duration</dt>
+    <dd class="col-sm-10 time-diff">{{ time_diff }} <i class="bi bi-stopwatch"></i></dd>
+</dl>

@@ -1,0 +1,3 @@
+{% if user %}
+<a href="{% url 'accounts:user' user.pk %}">{{ user.username }}</a>
+{% endif %}

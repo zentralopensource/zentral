@@ -214,6 +214,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # Debian packages export
 
@@ -227,6 +229,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # iOS apps export
 
@@ -240,6 +244,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # macOS apps export
 
@@ -253,6 +259,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # Programs export
 
@@ -266,6 +274,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # machine android apps export
 
@@ -279,6 +289,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # machine Debian packages export
 
@@ -292,6 +304,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # machine iOS apps export
 
@@ -305,6 +319,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # machine macos apps export
 
@@ -318,6 +334,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # machine program instances export
 
@@ -331,6 +349,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # machine snapshots export
 
@@ -344,6 +364,8 @@ class InventoryAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+        tr = TaskResult.objects.get(task_id=response.data['task_id'])
+        self.assertEqual(tr.usertask.user.id, self.user.id)
 
     # cleanup
 
