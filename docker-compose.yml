@@ -9,11 +9,15 @@ services:
   redis:
     image: redis:7
   elastic:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.4
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.1
     environment:
       ES_JAVA_OPTS: -Xms512m -Xmx512m
       discovery.type: single-node
       xpack.security.enabled: "false"
+      # extreme settings only for development environments !!!
+      cluster.routing.allocation.disk.watermark.low: "200mb"
+      cluster.routing.allocation.disk.watermark.high: "100mb"
+      cluster.routing.allocation.disk.watermark.flood_stage: "50mb"
     networks:
       default:
         aliases:
