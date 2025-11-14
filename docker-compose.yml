@@ -1,9 +1,11 @@
 ---
 services:
   db:
-    image: postgres:14
+    image: postgres:18
     env_file:
       - ./conf/start/docker/postgres.env
+    volumes:
+      - postgres_data:/var/lib/postgresql
   redis:
     image: redis:7
   elastic:
@@ -82,6 +84,7 @@ networks:
 
 volumes:
   elasticsearch_data:
+  postgres_data:
   prometheus_sd:
   web_media_root:
   web_static_root:
