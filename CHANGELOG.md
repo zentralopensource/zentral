@@ -1,3 +1,9 @@
+## 2025.12
+
+### Bug fixes
+
+Fixed slow MDM Artifact deletion check.
+
 ## 2025.11
 
 ### Features

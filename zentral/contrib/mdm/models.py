@@ -8,7 +8,7 @@ import uuid
 from django.contrib.postgres.fields import ArrayField, DateRangeField
 from django.core.validators import MinLengthValidator, MinValueValidator, MaxValueValidator
 from django.db import connection, models
-from django.db.models import Count, F
+from django.db.models import Count, Exists, F, OuterRef
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 from django.urls import reverse
@@ -2397,20 +2397,13 @@ class ReEnrollmentSession(EnrollmentSession):
 
 class ArtifactManager(models.Manager):
     def can_be_deleted(self):
-        return self.annotate(
-            bpa_count=Count("blueprintartifact"),
-            da_count=Count("artifactversion__deviceartifact"),
-            ua_count=Count("artifactversion__userartifact"),
-            dc_count=Count("artifactversion__devicecommand"),
-            uc_count=Count("artifactversion__usercommand"),
-            ref_count=Count("declarationref"),
-        ).filter(
-            bpa_count=0,
-            da_count=0,
-            ua_count=0,
-            dc_count=0,
-            uc_count=0,
-            ref_count=0,
+        return self.filter(
+            ~Exists(BlueprintArtifact.objects.filter(artifact=OuterRef("pk"))),
+            ~Exists(DeclarationRef.objects.filter(artifact=OuterRef("pk"))),
+            ~Exists(DeviceArtifact.objects.filter(artifact_version__artifact=OuterRef("pk"))),
+            ~Exists(UserArtifact.objects.filter(artifact_version__artifact=OuterRef("pk"))),
+            ~Exists(DeviceCommand.objects.filter(artifact_version__artifact=OuterRef("pk"))),
+            ~Exists(UserCommand.objects.filter(artifact_version__artifact=OuterRef("pk"))),
         )
 
 
@@ -2530,7 +2523,7 @@ class Artifact(models.Model):
         )
 
     def can_be_deleted(self):
-        return Artifact.objects.can_be_deleted().filter(pk=self.pk).count() == 1
+        return Artifact.objects.can_be_deleted().filter(pk=self.pk).exists()
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": str(self.pk), "name": self.name}
