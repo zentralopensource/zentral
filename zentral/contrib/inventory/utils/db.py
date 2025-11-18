@@ -1,5 +1,4 @@
 import logging
-from zentral.utils.json import save_dead_letter
 from zentral.contrib.inventory.compliance_checks import jmespath_checks_cache
 from zentral.contrib.inventory.events import (iter_inventory_events)
 from zentral.contrib.inventory.models import MachineSnapshotCommit
@@ -83,7 +82,7 @@ def commit_machine_snapshot_and_trigger_events(tree):
         msc, machine_snapshot, last_seen = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
     except Exception:
         logger.exception("Could not commit machine snapshot")
-        save_dead_letter(tree, "machine snapshot commit error")
+        raise
     else:
         # inventory events
         if msc:
@@ -100,6 +99,7 @@ def commit_machine_snapshot_and_yield_events(tree):
         msc, _, last_seen = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
     except Exception:
         logger.exception("Could not commit machine snapshot")
+        raise
     else:
         # inventory events
         if msc:
