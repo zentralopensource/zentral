@@ -36,7 +36,7 @@ def get_status_report_target_artifacts_info(status_report):
     try:
         declarations = status_report["StatusItems"]["management"]["declarations"]
     except KeyError:
-        logger.error("Status report without declarations section")
+        logger.debug("Status report without declarations section")
         return
     target_artifacts_info = []
     for section in ("activations", "assets", "configurations", "management"):
