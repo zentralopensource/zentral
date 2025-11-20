@@ -35,7 +35,7 @@ class MenuConfig:
             if not menu_cfg:
                 logger.debug('App %s w/o %s', app_name, config_attr)
                 continue
-            title = menu_cfg.get('title', app_shortname.title())
+            title = menu_cfg.get('title', app_shortname.replace("_", " ").title())
             section_cfg = prepared_sections.setdefault(
                 title,
                 {'title': title,

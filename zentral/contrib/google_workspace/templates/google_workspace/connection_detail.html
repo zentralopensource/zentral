@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+{% load ui_extras %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url "google_workspace:index" %}">Google Workspace</a></li>
+  <li class="breadcrumb-item"><a href="{% url "google_workspace:connections" %}">Connections</a></li>
+  <li class="breadcrumb-item active"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+      <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Connection</h3>
+        <div class="ms-auto">
+            {% if perms.google_workspace.change_connection and not connection_authorized %}
+            <a href="{% url 'google_workspace:authorize_connection' object.pk %}" class="btn btn-link"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Authorize">
+                <i class="bi bi-arrow-left-right"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="table-responsive mb-3">
+         {% if connection_authorized %}
+        <table class="table-object-properties">
+        <thead>
+            <tr>
+            <th style="width:30vw">Scope</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if api_client %}
+                {% for scope in api_client.credentials.scopes %} 
+            <tr><td>{{scope}}</td></tr>
+                {%endfor%}
+            {% endif %}
+        </tbody>
+        </table>
+        {% else %}
+        <div>Authorization needed for {{ object }} connection</div>
+        {% endif %}
+
+        {% created_updated_at object %}
+
+    </div>
+</div>
+
+<div class="d-flex justify-content-between mb-3">
+    <h3 class="m-0" id="grouptagmappings">Group tag mapping{{ group_tag_mappings_count|pluralize }} ({{ group_tag_mappings_count }})</h3>
+    <div class="ms-auto">
+    {% if perms.google_workspace.add_grouptagmapping and connection_authorized %}
+        {% url 'google_workspace:create_group_tag_mapping' object.id as url %}
+        {% button 'CREATE' url "Create new group tag mapping" %}
+    {% endif %}
+    </div>
+</div>
+
+{% if group_tag_mappings_count %}
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>Name</th>
+        <th>Tags</th>
+        {% if perms.google_workspace.change_grouptagmapping or perms.google_workspace.delete_grouptagmapping %}
+        <th></th>
+        {% endif %}
+    </thead>
+    <tbody>
+        {% for group_tag_mapping in group_tag_mappings %}
+        <tr id="gtm-{{ group_tag_mapping.pk }}" class="data-row">
+        <td>{{ group_tag_mapping.group_email }}</td>
+        <td>
+            {% for tag in group_tag_mapping.tags.all %}
+                {% inventory_tag tag %}
+                {% empty %}
+                -
+            {% endfor %}
+        </td>
+        {% if perms.google_workspace.change_grouptagmapping or perms.google_workspace.delete_grouptagmapping %}
+
+        <td xclass="text-end py-0">
+            {% if connection_authorized %}
+                {% if perms.google_workspace.change_grouptagmapping %}
+                    {% url 'google_workspace:update_group_tag_mapping' object.id group_tag_mapping.pk as url %}
+                    {% button 'UPDATE' url "Edit group tag mapping" %}
+                {% endif %}
+                {% if perms.google_workspace.delete_grouptagmapping %}
+                    {% url 'google_workspace:delete_group_tag_mapping' object.id group_tag_mapping.pk as url %}
+                    {% button 'DELETE' url "Delete group tag mapping" %}
+                {% endif %}
+            {% endif %}
+        </td>
+        {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% endblock %}
