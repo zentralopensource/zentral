@@ -72,6 +72,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_filters',
     'django_celery_results',
+    'drf_spectacular',
     'base',
 ]
 
@@ -89,6 +90,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -339,4 +341,17 @@ LOGGING = {
             'handlers': ['console'],
         },
     }
+}
+
+# drf-spectacular settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Zentral API',
+    'DESCRIPTION': 'API for Zentral - Unified endpoint management and security platform',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'COMPONENT_NO_READ_ONLY_REQUIRED': True,
+    'ENUM_NAME_OVERRIDES': {
+        'StoreBackendEnum': 'zentral.core.stores.models.StoreBackend',
+    },
 }
