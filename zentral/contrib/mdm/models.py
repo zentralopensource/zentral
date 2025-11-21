@@ -8,7 +8,7 @@ import uuid
 from django.contrib.postgres.fields import ArrayField, DateRangeField
 from django.core.validators import MinLengthValidator, MinValueValidator, MaxValueValidator
 from django.db import connection, models
-from django.db.models import Count, Exists, F, OuterRef
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 from django.urls import reverse
@@ -3157,9 +3157,23 @@ class Command(models.Model):
 class DeviceCommand(Command):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="commands")
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["enrolled_device_id"],
+                         condition=Q(time__isnull=True) | Q(result_time__isnull=True),
+                         name="apns_device_opti")
+        ]
+
 
 class UserCommand(Command):
     enrolled_user = models.ForeignKey(EnrolledUser, on_delete=models.CASCADE, related_name="commands")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["enrolled_user_id"],
+                         condition=Q(time__isnull=True) | Q(result_time__isnull=True),
+                         name="apns_user_opti")
+        ]
 
 
 # Apple software lookup service

@@ -180,7 +180,7 @@ class DevicesAPNSWorker(BaseAPNSWorker):
         "    OR ed.last_seen_at < NOW() - interval '1 seconds' * %(default_period)s"
         "    OR EXISTS ("
         "      SELECT 1 FROM mdm_devicecommand"
-        "      WHERE enrolled_device_id = ed.id"
+        "      WHERE enrolled_device_id = ed.id and (time IS NULL OR result_time IS NULL)"
         "      AND ("
         # has an unsent command
         "        (time IS NULL AND (not_before IS NULL OR not_before < NOW()))"
@@ -189,9 +189,9 @@ class DevicesAPNSWorker(BaseAPNSWorker):
         # … sent within the last default period
         "            AND time > NOW() - interval '1 seconds' * %(default_period)s"
         # … sent at least 30s ago
-        "            AND time < NOW() - interval '1 seconds' * %(max_command_waiting_time)s)"
+        "            AND time < NOW() - interval '1 seconds' * %(max_command_waiting_time)s"
         # … more recent than the device last seen
-        "            AND (ed.last_seen_at IS NULL OR ed.last_seen_at < time)"
+        "            AND (ed.last_seen_at IS NULL OR ed.last_seen_at < time))"
         "      )"
         "    )"
         "  )"
@@ -262,7 +262,7 @@ class UsersAPNSWorker(BaseAPNSWorker):
         "    OR eu.last_seen_at < NOW() - interval '1 seconds' * %(default_period)s"
         "    OR EXISTS ("
         "      SELECT 1 FROM mdm_usercommand"
-        "      WHERE enrolled_user_id = eu.id"
+        "      WHERE enrolled_user_id = eu.id and (time IS NULL OR result_time IS NULL)"
         "      AND ("
         # has an unsent command
         "        (time IS NULL AND (not_before IS NULL OR not_before < NOW()))"
@@ -271,9 +271,9 @@ class UsersAPNSWorker(BaseAPNSWorker):
         # … sent within the last default period
         "            AND time > NOW() - interval '1 seconds' * %(default_period)s"
         # … sent at least 30s ago
-        "            AND time < NOW() - interval '1 seconds' * %(max_command_waiting_time)s)"
+        "            AND time < NOW() - interval '1 seconds' * %(max_command_waiting_time)s"
         # … more recent than the user last seen
-        "            AND (eu.last_seen_at IS NULL OR eu.last_seen_at < time)"
+        "            AND (eu.last_seen_at IS NULL OR eu.last_seen_at < time))"
         "      )"
         "    )"
         "  )"
