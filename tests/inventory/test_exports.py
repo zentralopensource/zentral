@@ -38,6 +38,14 @@ class InventoryExportsTests(TestCase):
                          'bundle_version_str': '1.2.3'},
                  'bundle_path': "/Applications/Baller.app"},
             ],
+            "disks": [
+                {"name": "/dev/disk3s1s1",
+                 "size": 62826479616,
+                 "encryption_status": "encrypted",
+                 "filevault_status": "on",
+                 "label": "com.apple.os.update-C6AB179000F92C4C211177BC5C840A511D1AA2A227C324AA9AAC14FC599E9873",
+                 "path": "/"},
+            ],
             "network_interfaces": [
                 {"interface": "en0",
                  "mac": "b0:be:00:00:00:00",
@@ -58,7 +66,9 @@ class InventoryExportsTests(TestCase):
                 self.assertEqual(
                     sorted(zf.namelist()),
                     ['zentral_business_unit_0001.jsonl',
+                     'zentral_disk_0001.jsonl',
                      'zentral_machine_0001.jsonl',
+                     'zentral_machine_disks_0001.jsonl',
                      'zentral_machine_macos_app_instance_0001.jsonl',
                      'zentral_machine_network_interface_0001.jsonl',
                      'zentral_macos_app_0001.jsonl',
@@ -74,6 +84,17 @@ class InventoryExportsTests(TestCase):
                     machine_d = json.loads(content[0])
                     self.assertEqual(machine_d["serial_number"], serial_number)
                     ms_id = machine_d["ms_id"]
+                with zf.open("zentral_disk_0001.jsonl") as jl:
+                    content = jl.read().decode("utf-8").splitlines()
+                    self.assertEqual(len(content), 1)
+                    disk_d = json.loads(content[0])
+                    self.assertEqual(disk_d["filevault_status"], "on")
+                    d_id = disk_d["id"]
+                with zf.open("zentral_machine_disks_0001.jsonl") as jl:
+                    content = jl.read().decode("utf-8").splitlines()
+                    self.assertEqual(len(content), 1)
+                    mdi_d = json.loads(content[0])
+                    self.assertEqual(mdi_d, {"ms_id": ms_id, "disk_id": d_id})
                 with zf.open("zentral_network_interface_0001.jsonl") as jl:
                     content = jl.read().decode("utf-8").splitlines()
                     self.assertEqual(len(content), 1)

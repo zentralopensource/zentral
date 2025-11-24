@@ -52,10 +52,14 @@ LINUX_DISK_QUERY = (
 
 
 MACOS_DISK_QUERY = (
-    "select 'disks' as table_name, "
-    "name, block_size * size as size "
-    "from block_devices "
-    "where type not in ('USB', 'Virtual Interface') and label <> 'AppleAPFSMedia' and parent = '';"
+    "select 'disks' as table_name,"
+    "bd.name, bd.block_size * bd.size as size,"
+    "m.path, bd.label, de.encryption_status, de.filevault_status "
+    "from mounts as m "
+    "join block_devices as bd on (bd.name = m.device) "
+    "join disk_encryption as de on (m.device = de.name) "
+    "where bd.label in ('Macintosh HD', 'Macintosh HD - Data') "
+    "or m.path in ('/', '/System/Volumes/Data');"
 )
 
 

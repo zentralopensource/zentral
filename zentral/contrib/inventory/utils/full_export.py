@@ -36,6 +36,11 @@ FULL_EXPORT_QUERIES = [
     ("principal_user", "select * from inventory_principaluser"),
     ("source", "select id, mt_hash, mt_created_at, module, name from inventory_source"),
     ("system_info", "select * from inventory_systeminfo"),
+    # disks
+    ("disk", "select * from inventory_disk"),
+    ("machine_disks",
+     "select machinesnapshot_id ms_id, disk_id "
+     "from inventory_machinesnapshot_disks"),
     # network interfaces
     ("network_interface", "select * from inventory_networkinterface"),
     ("machine_network_interface",

@@ -296,6 +296,10 @@ class SystemInfo(AbstractMTObject):
 class Disk(AbstractMTObject):
     name = models.TextField()
     size = models.BigIntegerField()
+    path = models.TextField(blank=True, null=True)
+    label = models.TextField(blank=True, null=True)
+    encryption_status = models.TextField(blank=True, null=True)
+    filevault_status = models.TextField(blank=True, null=True)
 
 
 class NetworkInterface(AbstractMTObject):

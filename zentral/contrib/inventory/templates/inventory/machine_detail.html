@@ -235,12 +235,20 @@
         <thead>
           <th>Name</th>
           <th>Size</th>
+          {% if machine.platform == 'MACOS' %}
+          <th>Path</th>
+          <th>FileVault</th>
+          {% endif %}
         <thead>
         <tbody>
           {% for disk in ms.disks.all %}
           <tr>
             <td>{{ disk.name }}</td>
             <td>{{ disk.size|filesizeformat }}</td>
+            {% if machine.platform == 'MACOS' %}
+            <td>{{ disk.path|default:"-" }}</td>
+            <td>{{ disk.filevault_status|default:"-" }}</td>
+            {% endif %}
           {% endfor %}
         </tbody>
       </table>

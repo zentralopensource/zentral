@@ -1,10 +1,22 @@
 ## 2025.12
 
+### Features
+
+Add FileVault & encryption statuses to inventory disk table.
+
+Add disks to inventory full export.
+
 ### Bug fixes
 
 Fixed slow MDM Artifact deletion check.
 
 Fixed slow MDM APNS device and user notification queries.
+
+### Backward incompatibilities
+
+#### 🧨 macOS inventory disk information
+
+The query to collect macOS disk information with Osquery has changed. The logical volumes (OS, Data) with their respective mount points and FileVault statuses are included now instead of the "physical" disk information.
 
 ## 2025.11
 
