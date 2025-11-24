@@ -4,6 +4,8 @@
 
 Fixed slow MDM Artifact deletion check.
 
+Fixed slow MDM APNS device and user notification queries.
+
 ## 2025.11
 
 ### Features
