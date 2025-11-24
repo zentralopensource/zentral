@@ -50,8 +50,8 @@ class ConnectionRedirectView(PermissionRequiredMixin, View):
         try:
             api_client = APIClient.from_oauth2_state(state)
             api_client.complete_authorization(code)
-        except Exception as e:
-            logger.info("Unable to authorize connection.")
+        except Exception:
+            logger.exception("Unable to authorize connection.")
             messages.error(self.request, "Authorization failed.")
 
         return redirect(api_client.connection)
@@ -77,14 +77,11 @@ class ConnectionView(PermissionRequiredMixin, DetailView):
         except Exception as e:
             authorization_needed = True
             if "refresh_token" in str(e):
-                messages.error(
-                    self.request,
-                    f"Configuration of {self.object.name} is invalid. Missing refresh token.")
+                message = f"Configuration of {self.object.name} is invalid. Missing refresh token."
             else:
-                logger.info("Unable to reauthenticate connection.", e)
-                messages.error(
-                    self.request,
-                    f"Authorization needed for {self.object.name} connection")
+                message = f"Authorization needed for {self.object.name} connection"
+            logger.info(message, extra={'request': self.request})
+            messages.error(self.request, message)
         ctx["connection_authorized"] = not authorization_needed
         return ctx
 
