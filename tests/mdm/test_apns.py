@@ -55,30 +55,24 @@ class MDMAPNSTestCase(TestCase):
         self.assertNotEqual(client1, client2)
         self.assertEqual(client2.not_after, push_certificate.not_after)
 
-    def test_apns_send_enrolled_device_notification_cannot_be_poked(self):
+    @patch("zentral.contrib.mdm.apns.logger.error")
+    def test_apns_send_enrolled_device_notification_cannot_be_poked(self, logger_error):
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         session.enrolled_device.token = None
-        with self.assertRaises(ValueError) as cm:
-            send_enrolled_device_notification(session.enrolled_device)
-        self.assertEqual(
-            cm.exception.args[0],
-            f"Enrolled device {session.enrolled_device.pk} cannot be poked.",
-        )
+        send_enrolled_device_notification(session.enrolled_device)
+        logger_error.assert_called_once_with("Enrolled %s %s cannot be poked.", "device", session.enrolled_device.pk)
 
-    def test_apns_send_enrolled_user_notification_cannot_be_poked(self):
+    @patch("zentral.contrib.mdm.apns.logger.error")
+    def test_apns_send_enrolled_user_notification_cannot_be_poked(self, logger_error):
         session, _, _ = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True, push_certificate=self.push_certificate
         )
         session.enrolled_device.token = None
         enrolled_user = force_enrolled_user(session.enrolled_device)
-        with self.assertRaises(ValueError) as cm:
-            send_enrolled_user_notification(enrolled_user)
-        self.assertEqual(
-            cm.exception.args[0],
-            f"Enrolled user {enrolled_user.user_id} cannot be poked."
-        )
+        send_enrolled_user_notification(enrolled_user)
+        logger_error.assert_called_once_with("Enrolled %s %s cannot be poked.", "user", enrolled_user.user_id)
 
     @patch("zentral.contrib.mdm.apns.time.sleep")
     @patch("zentral.contrib.mdm.apns.httpx.Client.post")

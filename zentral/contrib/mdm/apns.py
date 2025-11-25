@@ -116,7 +116,8 @@ def _send_target_notification(enrolled_device, token, user_id=None, priority=10,
     target_type = "device" if user_id is None else "user"
     target_pk = enrolled_device.pk if user_id is None else user_id
     if not enrolled_device.can_be_poked() or not token:
-        raise ValueError(f"Enrolled {target_type} {target_pk} cannot be poked.")
+        logger.error("Enrolled %s %s cannot be poked.", target_type, target_pk)
+        return False, None
     client = apns_client_cache.get_or_create_with_push_cert(enrolled_device.push_certificate)
     success = client.send_notification(token, enrolled_device.push_magic, priority, expiration_seconds)
     return success, build_mdm_device_notification_event(
@@ -130,7 +131,7 @@ def send_enrolled_user_notification(enrolled_user, post_event=True):
     success, event = _send_target_notification(
         enrolled_user.enrolled_device, enrolled_user.token, enrolled_user.user_id
     )
-    if post_event:
+    if post_event and event:
         event.post()
     return success, event
 
@@ -139,6 +140,6 @@ def send_enrolled_device_notification(enrolled_device, post_event=True):
     success, event = _send_target_notification(
         enrolled_device, enrolled_device.token
     )
-    if post_event:
+    if post_event and event:
         event.post()
     return success, event
