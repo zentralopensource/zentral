@@ -109,7 +109,7 @@ class KinesisStore(BaseStore):
 
 class KinesisStoreSerializer(AWSAuthSerializer):
     stream = serializers.CharField(min_length=1)
-    assume_role_arn = serializers.CharField(required=False)
+    assume_role_arn = serializers.CharField(required=False, allow_null=True)
     batch_size = serializers.IntegerField(
         default=1,
         min_value=1,

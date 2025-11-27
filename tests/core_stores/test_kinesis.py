@@ -227,6 +227,9 @@ class KinesisStoreTestCase(TestCase):
         self.assertEqual(
             s.data,
             {"stream": "123",
+             "aws_access_key_id": None,
+             "aws_secret_access_key": None,
+             "assume_role_arn": None,
              "region_name": "us-central-1",
              "batch_size": 1,
              "serialization_format": "zentral"},

@@ -84,8 +84,8 @@ class BaseStore(Backend):
 
 class AWSAuthSerializer(serializers.Serializer):
     region_name = serializers.CharField(min_length=1)
-    aws_access_key_id = serializers.CharField(required=False)
-    aws_secret_access_key = serializers.CharField(required=False)
+    aws_access_key_id = serializers.CharField(required=False, allow_null=True)
+    aws_secret_access_key = serializers.CharField(required=False, allow_null=True)
 
     def validate(self, data):
         aws_access_key_id = data.get("aws_access_key_id")
