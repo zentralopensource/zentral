@@ -1,5 +1,7 @@
 import json
 import uuid
+import logging
+from typing import Callable
 from django.core.cache import cache
 from django.urls import reverse
 from google.oauth2.credentials import Credentials
@@ -8,6 +10,9 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from zentral.conf import settings
 from .models import Connection
+
+
+logger = logging.getLogger('zentral.contrib.google_workspace.api_client')
 
 
 class APIClientError(Exception):
@@ -26,7 +31,10 @@ class APIClient:
         self.client_config = client_config
         self.credentials = None
         if user_info:
-            self.credentials = Credentials.from_authorized_user_info(user_info, self.scopes)
+            try:
+                self.credentials = Credentials.from_authorized_user_info(user_info, self.scopes)
+            except ValueError:
+                logger.exception("Invalid user info. Unable to get credentials")
         self._services = {}
 
     @classmethod
@@ -67,6 +75,21 @@ class APIClient:
             raise APIClientError("Invalid Google Workspace connection")
         return cls.from_connection(connection)
 
+    def is_healthy(self, error_message_callback: Callable[[str], None] = None) -> bool:
+        try:
+            self.dir_svc().groups().list(customer="my_customer", maxResults=1).execute()
+            return True
+        except Exception as err:
+            if isinstance(err, HttpError):
+                if err.resp.status == 404:
+                    return True
+
+            message = f"Authorization needed for {self.connection} connection."
+            logger.info(message, exc_info=True)
+            if (error_message_callback):
+                error_message_callback(message)
+        return False
+
     def start_flow(self):
         return self._get_flow().authorization_url(state=self._get_new_oauth2_state())[0]
 
@@ -81,6 +104,8 @@ class APIClient:
         key = (sdk, api)
         service = self._services.get(key)
         if service is None:
+            if not self.credentials:
+                raise APIClientError("No credentials for Google Workspace Connection")
             service = build(sdk, api, credentials=self.credentials)
             self._services[key] = service
         return service
@@ -113,3 +138,10 @@ class APIClient:
             page_token = response.get("nextPageToken")
             if not page_token:
                 break
+
+
+def validate_group_in_connection(
+        connection: Connection, group_email: str, error_supplier: Callable[[], Exception]) -> None:
+    api_client = APIClient.from_connection(connection)
+    if group_email not in [group["email"] for group in api_client.iter_groups()]:
+        raise error_supplier()

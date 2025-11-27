@@ -68,21 +68,13 @@ class ConnectionView(PermissionRequiredMixin, DetailView):
             "tags__meta_business_unit").all()
         ctx["group_tag_mappings_count"] = ctx["group_tag_mappings"].count()
 
-        authorization_needed = False
-        try:
-            api_client = APIClient.from_connection(self.object)
-            api_client.get_group("noreply@zentral.com")
-
-            ctx["api_client"] = api_client
-        except Exception as e:
-            authorization_needed = True
-            if "refresh_token" in str(e):
-                message = f"Configuration of {self.object.name} is invalid. Missing refresh token."
-            else:
-                message = f"Authorization needed for {self.object.name} connection"
-            logger.info(message, extra={'request': self.request})
+        def messages_callback(message: str) -> None:
             messages.error(self.request, message)
-        ctx["connection_authorized"] = not authorization_needed
+
+        api_client = APIClient.from_connection(self.object)
+        ctx["connection_authorized"] = api_client.is_healthy(messages_callback)
+        ctx["api_client"] = api_client
+
         return ctx
 
 

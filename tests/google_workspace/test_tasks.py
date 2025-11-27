@@ -1,4 +1,5 @@
 import uuid
+import json
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from unittest.mock import patch
@@ -10,7 +11,7 @@ class SyncGroupTagMappingsTaskTestCase(TestCase):
 
     def _given_connection(self):
         name = get_random_string(12)
-        client_config = """{"web":{}}"""
+        client_config = json.dumps({"web": {}})
         connection = Connection.objects.create(name=name)
         connection.set_client_config(client_config)
         connection.save()

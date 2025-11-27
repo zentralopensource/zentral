@@ -1,7 +1,7 @@
 import json
 from django import forms
 from .models import Connection, GroupTagMapping
-from .api_client import APIClient, InstalledAppFlow
+from .api_client import APIClient, InstalledAppFlow, validate_group_in_connection
 
 
 class ConnectionForm(forms.ModelForm):
@@ -48,9 +48,8 @@ class GroupTagMappingForm(forms.ModelForm):
                 .exists()):
             raise forms.ValidationError("A mapping for this group already exists.")
 
-        client = APIClient.from_connection(self.connection)
-        if group_email not in [group["email"] for group in client.iter_groups()]:
-            raise forms.ValidationError("Group email not found for this connection.")
+        validate_group_in_connection(self.connection, group_email,
+                                     lambda: forms.ValidationError("Group email not found for this connection."))
 
         return group_email
 
