@@ -1,3 +1,4 @@
+import json
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.google_workspace.models import GroupTagMapping, Connection
@@ -6,9 +7,9 @@ from unittest.mock import patch
 
 class ConnectionsModelsTestCase(TestCase):
 
-    def _given_connection(self, user_info="{}"):
+    def _given_connection(self, user_info=json.dumps({})):
         name = get_random_string(12)
-        client_config = """{"web":{}}"""
+        client_config = json.dumps({"web": {}})
         connection = Connection.objects.create(name=name)
         if user_info:
             connection.set_user_info(user_info)

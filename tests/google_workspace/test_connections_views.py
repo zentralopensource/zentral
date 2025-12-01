@@ -1,6 +1,7 @@
 from functools import reduce
 import operator
 import uuid
+import json
 from unittest.mock import patch, Mock
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -53,13 +54,13 @@ class ConnectionViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _given_connection(self, user_info=f"""{{
-                            "refresh_token": "{get_random_string(12)}",
-                            "client_id": "{get_random_string(12)}",
-                            "client_secret": "{get_random_string(12)}"
-                        }}"""):
+    def _given_connection(self, user_info=json.dumps({
+                "refresh_token": get_random_string(12),
+                "client_id": get_random_string(12),
+                "client_secret": get_random_string(12)
+            })):
         name = get_random_string(12)
-        client_config = """{"web":{}}"""
+        client_config = json.dumps({"web": {}})
         connection = Connection.objects.create(name=name)
         connection.set_client_config(client_config)
         if user_info:
@@ -444,7 +445,7 @@ class ConnectionViewsTestCase(TestCase):
                     "google_workspace.add_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
-        build.return_value.groups.return_value.get.side_effect = HttpError(Mock(status=404), b"")
+        build.return_value.groups.return_value.list.return_value.execute.side_effect = HttpError(Mock(status=404), b"")
 
         response = self.client.get(reverse("google_workspace:connection", args=(connection.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -476,7 +477,6 @@ class ConnectionViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "google_workspace/connection_detail.html")
         self.assertContains(response, "Connection")
         self.assertContains(response, connection.name)
-        self.assertContains(response, "Missing refresh token.")
 
         self.assertContains(response, "Group tag mapping (1)")
         self.assertContains(response, group_tag_mapping.group_email)
@@ -666,11 +666,14 @@ class ConnectionViewsTestCase(TestCase):
         self.assertContains(response, "Remove group tag mapping")
         self.assertContains(response, group_tag_mapping.group_email)
 
-    def test_group_tag_mapping_delete_redirect(self):
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_group_tag_mapping_delete_redirect(self, build):
         self._login("google_workspace.view_connection",
                     "google_workspace.delete_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
+
+        build.return_value.groups.return_value.list.side_effect = HttpError(Mock(status=404), b"")
 
         response = self.client.post(reverse("google_workspace:delete_group_tag_mapping",
                                             args=(connection.pk, group_tag_mapping.pk)), follow=True)

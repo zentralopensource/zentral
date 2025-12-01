@@ -1,3 +1,4 @@
+import json
 from django.test import TestCase
 from unittest.mock import patch, Mock
 from django.utils.crypto import get_random_string
@@ -43,9 +44,15 @@ class UtilsTestCase(TestCase):
 
     def _given_connection(self):
         name = get_random_string(12)
-        client_config = """{"web":{}}"""
+        client_config = json.dumps({"web": {}})
+        user_info = json.dumps({
+            "refresh_token": get_random_string(12),
+            "client_id": get_random_string(12),
+            "client_secret": get_random_string(12)
+        })
         connection = Connection.objects.create(name=name)
         connection.set_client_config(client_config)
+        connection.set_user_info(user_info)
         connection.save()
 
         return connection
