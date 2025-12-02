@@ -313,31 +313,83 @@ class ApiViewsTestCase(TestCase):
     # GroupTagMappingList
 
     def test_list_group_tag_mappings_unauthorized(self):
-        connection = self._given_connection()
-        response = self.get(reverse("google_workspace_api:group_tag_mappings",
-                                    args=(connection.pk,)), include_token=False)
+        response = self.get(reverse("google_workspace_api:group_tag_mappings"), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_list_group_tag_mappings_permission_denied(self):
-        connection = self._given_connection()
-        response = self.get(reverse("google_workspace_api:group_tag_mappings", args=(connection.pk,)))
+        response = self.get(reverse("google_workspace_api:group_tag_mappings"))
         self.assertEqual(response.status_code, 403)
 
     def test_list_group_tag_mappings(self):
         self.set_permissions("google_workspace.view_grouptagmapping")
         connection = self._given_connection()
+        other_connection = self._given_connection()
         tag = self._given_tag()
+        other_tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
-        response = self.get(reverse("google_workspace_api:group_tag_mappings", args=(connection.pk,)))
+        other_group_tag_mapping = self._given_group_tag_mapping(other_connection, other_tag)
+        expected_mappings = [
+            self._group_tag_mapping_to_dict(group_tag_mapping),
+            self._group_tag_mapping_to_dict(other_group_tag_mapping)
+        ]
+
+        response = self.get(reverse("google_workspace_api:group_tag_mappings"))
+
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            self._group_tag_mapping_to_list(group_tag_mapping))
+
+        actual_mappings = response.json()
+        self.assertEqual(len(actual_mappings), len(expected_mappings))
+        self.assertTrue(all(expected in actual_mappings for expected in expected_mappings))
+
+    def test_list_group_tag_mappings_by_group_email_no_result(self):
+        self.set_permissions("google_workspace.view_grouptagmapping")
+        response = self.get(
+            reverse("google_workspace_api:group_tag_mappings") + f"?group_email={get_random_string(12)}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_list_group_tag_mappings_by_group_email(self):
+        self.set_permissions("google_workspace.view_grouptagmapping")
+        connection = self._given_connection()
+        other_connection = self._given_connection()
+        tag = self._given_tag()
+        other_tag = self._given_tag()
+        group_tag_mapping = self._given_group_tag_mapping(connection, tag)
+        self._given_group_tag_mapping(other_connection, other_tag)
+
+        response = self.get(
+            reverse("google_workspace_api:group_tag_mappings") + f"?group_email={group_tag_mapping.group_email}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), self._group_tag_mapping_to_list(group_tag_mapping))
+
+    def test_list_group_tag_mappings_by_connection_no_result(self):
+        self.set_permissions("google_workspace.view_grouptagmapping")
+        connection = self._given_connection()
+        response = self.get(reverse("google_workspace_api:group_tag_mappings") + f"?connection_id={connection.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_list_group_tag_mappings_by_connection(self):
+        self.set_permissions("google_workspace.view_grouptagmapping")
+        connection = self._given_connection()
+        other_connection = self._given_connection()
+        tag = self._given_tag()
+        other_tag = self._given_tag()
+        group_tag_mapping = self._given_group_tag_mapping(connection, tag)
+        self._given_group_tag_mapping(other_connection, other_tag)
+
+        response = self.get(reverse("google_workspace_api:group_tag_mappings") + f"?connection_id={connection.id}")
+
+        self.assertEqual(response.status_code, 200)
+
+        self.assertEqual(response.json(), self._group_tag_mapping_to_list(group_tag_mapping))
 
     def test_list_group_tag_mappings__method_not_allowed(self):
-        connection = self._given_connection()
         self.set_permissions("google_workspace.delete_grouptagmapping")
-        response = self.delete(reverse("google_workspace_api:group_tag_mappings", args=(connection.pk, )))
+        response = self.delete(reverse("google_workspace_api:group_tag_mappings"))
         self.assertEqual(response.status_code, 405)
         self.assertEqual(response.json(), {'detail': 'Method "DELETE" not allowed.'})
 
@@ -350,8 +402,10 @@ class ApiViewsTestCase(TestCase):
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
 
-        response = self.get(reverse("google_workspace_api:group_tag_mapping",
-                                    args=(connection.pk, group_tag_mapping.pk)), include_token=False)
+        response = self.get(
+            reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk, )),
+            include_token=False
+        )
         self.assertEqual(response.status_code, 401)
 
     def test_get_group_tag_mapping_permission_denied(self):
@@ -359,8 +413,7 @@ class ApiViewsTestCase(TestCase):
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
 
-        response = self.get(reverse("google_workspace_api:group_tag_mapping",
-                                    args=(connection.pk, group_tag_mapping.pk)))
+        response = self.get(reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk, )))
         self.assertEqual(response.status_code, 403)
 
     def test_get_group_tag_mapping(self):
@@ -369,22 +422,21 @@ class ApiViewsTestCase(TestCase):
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
 
-        response = self.get(reverse("google_workspace_api:group_tag_mapping",
-                                    args=(connection.pk, group_tag_mapping.pk)))
+        response = self.get(reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk, )))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            self._group_tag_mapping_to_dict(group_tag_mapping))
+            self._group_tag_mapping_to_dict(group_tag_mapping)
+        )
 
     # create group tag mapping
 
     def test_create_group_tag_mapping_unauthorized(self):
-        response = self.post(reverse("google_workspace_api:group_tag_mappings",
-                                     args=(uuid.uuid4(),)), {}, include_token=False)
+        response = self.post(reverse("google_workspace_api:group_tag_mappings"), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_group_tag_mapping_permission_denied(self):
-        response = self.post(reverse("google_workspace_api:group_tag_mappings", args=(uuid.uuid4(),)), {})
+        response = self.post(reverse("google_workspace_api:group_tag_mappings"), {})
         self.assertEqual(response.status_code, 403)
 
     @patch('zentral.contrib.google_workspace.api_client.build')
@@ -394,10 +446,11 @@ class ApiViewsTestCase(TestCase):
         group_email = self._given_email()
 
         build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": [{"email": group_email}]}
+            "groups": [{"email": group_email}]
+        }
 
         response = self.post(
-            reverse("google_workspace_api:group_tag_mappings", args=(connection.pk,)),
+            reverse("google_workspace_api:group_tag_mappings"),
             self._group_tag_mapping_request(connection.pk, group_email, 1)
         )
 
@@ -415,10 +468,11 @@ class ApiViewsTestCase(TestCase):
         tag = self._given_tag()
 
         build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": []}
+            "groups": []
+        }
 
         response = self.post(
-            reverse("google_workspace_api:group_tag_mappings", args=(connection.pk,)),
+            reverse("google_workspace_api:group_tag_mappings"),
             self._group_tag_mapping_request(connection.pk, group_email, tag.pk)
         )
 
@@ -437,38 +491,43 @@ class ApiViewsTestCase(TestCase):
         tag = self._given_tag()
 
         build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": [{"email": group_email}]}
+            "groups": [{"email": group_email}]
+        }
 
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(
-                reverse("google_workspace_api:group_tag_mappings", args=(connection.pk,)),
-                self._group_tag_mapping_request(connection.pk, group_email, tag.pk))
+                reverse("google_workspace_api:group_tag_mappings"),
+                self._group_tag_mapping_request(connection.pk, group_email, tag.pk)
+            )
 
         group_tag_mapping = GroupTagMapping.objects.get(group_email=group_email)
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(
             response.json(),
-            self._group_tag_mapping_to_dict(group_tag_mapping))
+            self._group_tag_mapping_to_dict(group_tag_mapping)
+        )
 
         self._assert_audit_event_send(group_tag_mapping, post_event, callbacks, AuditEvent.Action.CREATED)
 
-    # update group tag mappings
+    # update group tag mapping
 
     def test_update_group_tag_mapping_unauthorized(self):
         connection = self._given_connection()
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
-        response = self.put(reverse("google_workspace_api:group_tag_mapping",
-                                    args=(connection.pk, group_tag_mapping.pk)), {}, include_token=False)
+        response = self.put(
+            reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk,)),
+            {},
+            include_token=False
+        )
         self.assertEqual(response.status_code, 401)
 
     def test_update_group_tag_mapping_permission_denied(self):
         connection = self._given_connection()
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
-        response = self.put(reverse("google_workspace_api:group_tag_mapping",
-                                    args=(connection.pk, group_tag_mapping.pk)), {})
+        response = self.put(reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk,)), {})
         self.assertEqual(response.status_code, 403)
 
     @patch('zentral.contrib.google_workspace.api_client.build')
@@ -482,12 +541,12 @@ class ApiViewsTestCase(TestCase):
         group_email = self._given_email()
 
         build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": []}
+            "groups": []
+        }
 
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(
-                reverse("google_workspace_api:group_tag_mapping",
-                        args=(connection.pk, group_tag_mapping.pk)),
+                reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk, )),
                 self._group_tag_mapping_request(connection.pk, group_email, tag.pk)
             )
 
@@ -510,12 +569,12 @@ class ApiViewsTestCase(TestCase):
         group_email = self._given_email()
 
         build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": [{"email": group_email}]}
+            "groups": [{"email": group_email}]
+        }
 
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(
-                reverse("google_workspace_api:group_tag_mapping",
-                        args=(connection.pk, group_tag_mapping.pk)),
+                reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk,)),
                 self._group_tag_mapping_request(connection.pk, group_email, other_tag.pk)
             )
 
@@ -526,20 +585,22 @@ class ApiViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            self._group_tag_mapping_to_dict(group_tag_mapping))
+            self._group_tag_mapping_to_dict(group_tag_mapping)
+        )
 
         self._assert_audit_event_send(group_tag_mapping, post_event, callbacks, AuditEvent.Action.UPDATED, prev_value)
 
-    # delete acme_issuer
+    # delete group tag mapping
 
     def test_delete_group_tag_mapping_unauthorized(self):
         connection = self._given_connection()
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
 
-        response = self.delete(reverse("google_workspace_api:group_tag_mapping",
-                                       args=(connection.pk, group_tag_mapping.pk)),
-                               include_token=False)
+        response = self.delete(
+            reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk,)),
+            include_token=False
+        )
 
         self.assertEqual(response.status_code, 401)
 
@@ -548,8 +609,7 @@ class ApiViewsTestCase(TestCase):
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
 
-        response = self.delete(reverse("google_workspace_api:group_tag_mapping",
-                                       args=(connection.pk, group_tag_mapping.pk)))
+        response = self.delete(reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk,)))
 
         self.assertEqual(response.status_code, 403)
 
@@ -563,8 +623,7 @@ class ApiViewsTestCase(TestCase):
         prev_value = group_tag_mapping.serialize_for_event()
 
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.delete(reverse("google_workspace_api:group_tag_mapping",
-                                           args=(connection.pk, group_tag_mapping.pk)))
+            response = self.delete(reverse("google_workspace_api:group_tag_mapping", args=(group_tag_mapping.pk,)))
 
         self.assertFalse(GroupTagMapping.objects.filter(pk=group_tag_mapping.pk).exists())
         self.assertEqual(response.status_code, 204)
