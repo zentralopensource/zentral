@@ -408,7 +408,7 @@ class ESOSStore(BaseStore):
         if from_dt:
             range_kwargs["gte"] = from_dt
         if to_dt:
-            range_kwargs["lte"] = to_dt
+            range_kwargs["lt"] = to_dt
         if range_kwargs:
             filters.append({'range': {'created_at': range_kwargs}})
         if event_type:
@@ -482,7 +482,7 @@ class ESOSStore(BaseStore):
         for bucket in r["aggregations"]["inventory_heartbeats"]["sources"]["buckets"]:
             heartbeats.append((event_types["inventory_heartbeat"],
                                bucket["key"],
-                               [(None, parser.parse(bucket["max_created_at"]["value_as_string"]))]))
+                               [(None, parser.parse(bucket["max_created_at"]["value_as_string"], ignoretz=True))]))
         for bucket in r["aggregations"]["other_events"]["event_types"]["buckets"]:
             event_type = bucket["key"]
             event_type_class = event_types.get(event_type, None)
@@ -492,7 +492,7 @@ class ESOSStore(BaseStore):
                 ua_list = []
                 for sub_bucket in bucket["user_agents"]["buckets"]:
                     ua = sub_bucket["key"]
-                    ua_list.append((ua, parser.parse(sub_bucket["max_created_at"]["value_as_string"])))
+                    ua_list.append((ua, parser.parse(sub_bucket["max_created_at"]["value_as_string"], ignoretz=True)))
                 heartbeats.append((event_type_class, None, ua_list))
         return heartbeats
 
@@ -513,7 +513,7 @@ class ESOSStore(BaseStore):
         if from_dt:
             range_kwargs["gte"] = from_dt
         if to_dt:
-            range_kwargs["lte"] = to_dt
+            range_kwargs["lt"] = to_dt
         if range_kwargs:
             filters.append({'range': {'created_at': range_kwargs}})
         if event_type:
@@ -545,7 +545,7 @@ class ESOSStore(BaseStore):
         if from_dt:
             range_kwargs["gte"] = from_dt
         if to_dt:
-            range_kwargs["lte"] = to_dt
+            range_kwargs["lt"] = to_dt
         if range_kwargs:
             filters.append({'range': {'created_at': range_kwargs}})
         if event_type:
@@ -617,7 +617,7 @@ class ESOSStore(BaseStore):
                   }
                 }}
         r = self._client.search(index=self.read_index, body=body)
-        return [(parser.parse(b["key_as_string"]), b["doc_count"], b["unique_msn"]["value"])
+        return [(parser.parse(b["key_as_string"], ignoretz=True), b["doc_count"], b["unique_msn"]["value"])
                 for b in r['aggregations']['buckets']['buckets']]
 
     def close(self):

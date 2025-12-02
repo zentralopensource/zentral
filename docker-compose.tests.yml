@@ -1,0 +1,16 @@
+---
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    environment:
+      CLICKHOUSE_DB: "zentral_tests"
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      CLICKHOUSE_USER: "zentral_tests"
+      CLICKHOUSE_PASSWORD: "zentral_tests"
+  web:
+    depends_on:
+      - clickhouse
+      - db
+      - elastic
+      - rabbitmq
+      - redis

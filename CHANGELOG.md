@@ -8,6 +8,8 @@ Add disks to inventory full export.
 
 Google Workspace connection with group tag mappings.
 
+ClickHouse store for admin console use (beta).
+
 ### Bug fixes
 
 Fixed slow MDM Artifact deletion check.
