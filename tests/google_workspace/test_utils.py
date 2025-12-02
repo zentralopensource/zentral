@@ -107,7 +107,7 @@ class UtilsTestCase(TestCase):
         # Given
         user_email = self._given_user_email()
         build.return_value.members.return_value.list.return_value.execute.return_value = {
-            "members": [{'email': user_email}]}
+            "members": [{'email': user_email, 'type': "USER"}]}
 
         # snapshots for one device
         serial_number = self._force_machine(user_email)
@@ -145,7 +145,7 @@ class UtilsTestCase(TestCase):
         # Given
         user_email = self._given_user_email()
         build.return_value.members.return_value.list.return_value.execute.return_value = {
-            "members": [{'email': user_email}]}
+            "members": [{'email': user_email, 'type': "USER"}]}
 
         # snapshots for one device
         serial_number = self._force_machine(user_email)
@@ -176,12 +176,12 @@ class UtilsTestCase(TestCase):
         user_email = self._given_user_email()
         other_group_email = "other_group@zentral.com"
 
-        def group_member_list_side_effect(groupKey, pageToken):
+        def group_member_list_side_effect(groupKey, includeDerivedMembership, pageToken):
             mock = Mock()
             if groupKey == other_group_email:
                 mock.execute.return_value = {"members": []}
             else:
-                mock.execute.return_value = {"members": [{'email': user_email}]}
+                mock.execute.return_value = {"members": [{'email': user_email, 'type': "USER"}]}
             return mock
         build.return_value.members.return_value.list.side_effect = group_member_list_side_effect
 
@@ -227,12 +227,12 @@ class UtilsTestCase(TestCase):
         user_email = self._given_user_email()
         other_group_email = "other_group@zentral.com"
 
-        def group_member_list_side_effect(groupKey, pageToken):
+        def group_member_list_side_effect(groupKey, includeDerivedMembership, pageToken):
             mock = Mock()
             if groupKey == other_group_email:
                 mock.execute.return_value = {"members": []}
             else:
-                mock.execute.return_value = {"members": [{'email': user_email}]}
+                mock.execute.return_value = {"members": [{'email': user_email, 'type': "USER"}]}
             return mock
         build.return_value.members.return_value.list.side_effect = group_member_list_side_effect
 
@@ -264,7 +264,7 @@ class UtilsTestCase(TestCase):
         # Given
         user_email = self._given_user_email()
         build.return_value.members.return_value.list.return_value.execute.return_value = {
-            "members": [{'email': user_email}]}
+            "members": [{'email': user_email, 'type': "USER"}]}
 
         # multiple devices
         serial_number = self._given_serial_number()
@@ -312,12 +312,14 @@ class UtilsTestCase(TestCase):
         other_user_email = self._given_user_email()
         other_group_email = "other_group@zentral.com"
 
-        def group_member_list_side_effect(groupKey, pageToken):
+        def group_member_list_side_effect(groupKey, includeDerivedMembership, pageToken):
             mock = Mock()
             if groupKey == other_group_email:
-                mock.execute.return_value = {"members": [{'email': user_email}, {'email': other_user_email}]}
+                mock.execute.return_value = {"members":
+                                             [{'email': user_email, 'type': "USER"},
+                                              {'email': other_user_email, 'type': "USER"}]}
             else:
-                mock.execute.return_value = {"members": [{'email': user_email}]}
+                mock.execute.return_value = {"members": [{'email': user_email, 'type': "USER"}]}
             return mock
         build.return_value.members.return_value.list.side_effect = group_member_list_side_effect
 
@@ -365,7 +367,7 @@ class UtilsTestCase(TestCase):
         other_user_email = self._given_user_email()
 
         build.return_value.members.return_value.list.return_value.execute.return_value = {
-            "members": [{'email': user_email}]}
+            "members": [{'email': user_email, 'type': "USER"}]}
 
         # a device for each user
         serial_number = self._force_machine(user_email)
@@ -403,7 +405,7 @@ class UtilsTestCase(TestCase):
         # Given
         user_email = self._given_user_email()
         build.return_value.members.return_value.list.return_value.execute.return_value = {
-            "members": [{'email': user_email}]}
+            "members": [{'email': user_email, 'type': "USER"}]}
 
         # snapshots for one device
         serial_number = self._force_machine(user_email)

@@ -39,7 +39,17 @@ class ApiClientTestCase(TestCase):
             APIClient.from_oauth2_state(state)
 
     @patch('zentral.contrib.google_workspace.api_client.build')
-    def test_get_groups_non_404_error_response(self, build):
+    def test_get_group_404_error_response(self, build):
+        build.return_value.groups.return_value.get.side_effect = HttpError(Mock(status=404), b"")
+        connection = self._given_connection()
+
+        api_client = APIClient.from_connection(connection)
+        actual = api_client.get_group("no-reply@zentral.com")
+
+        self.assertIsNone(actual)
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_get_group_non_404_error_response(self, build):
         build.return_value.groups.return_value.get.side_effect = HttpError(Mock(status=403), b"")
         connection = self._given_connection()
 
@@ -50,7 +60,8 @@ class ApiClientTestCase(TestCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_iter_group_members(self, build):
         build.return_value.members.return_value.list.return_value.execute.return_value = {
-            "members": [{"email": "no-reply@zentral.com"}]}
+            "members": [{"email": "no-reply@zentral.com", 'type': "USER"},
+                        {"email": "any-group@zentral.com", 'type': "GROUP"}]}
         connection = self._given_connection()
 
         members = [member["email"] for member in APIClient.from_connection(connection).iter_group_members("group")]
