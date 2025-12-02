@@ -1,9 +1,10 @@
 import logging
+import os
 import clickhouse_connect
 from django.utils.functional import cached_property
 from kombu.utils import json
 from rest_framework import serializers
-from .base import BaseStore
+from zentral.core.stores.backends.base import BaseStore
 
 
 logger = logging.getLogger('zentral.core.stores.backends.clickhouse')
@@ -47,6 +48,15 @@ class ClickHouseStore(BaseStore):
     default_tls_port = 8443
     default_ttl_days = 90
     max_batch_size = 1000
+    column_names = (
+        "created_at",
+        "type",
+        "tags",
+        "needles",
+        "serial_number",
+        "metadata",
+        "payload",
+    )
 
     @cached_property
     def client(self):
@@ -55,35 +65,28 @@ class ClickHouseStore(BaseStore):
                for k in self.client_kwargs_keys}
         )
 
+    def migrate(self):
+        # TODO: much to be done here in the future!
+        migration_filepath = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "0001_initial.sql"
+        )
+        with open(migration_filepath) as f:
+            sql = f.read()
+        sql = sql.format(
+            database=self.database,
+            table_name=self.table_name,
+            table_engine=self.table_engine,
+            ttl_days=self.ttl_days,
+        )
+        for statement in (s.strip() for s in sql.split(";")):
+            if not statement:
+                continue
+            self.client.command(statement)
+
     def wait_and_configure(self):
-        # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/7592debad2e93652412f2cd9eb299e9ac8d169f3/exporter/clickhouseexporter/internal/sqltemplates/logs_json_table.sql  # NOQA
-        self.client.command(
-            f'CREATE TABLE IF NOT EXISTS "{self.database}"."{self.table_name}" ('
-            "created_at DateTime64(9, 'UTC') CODEC(Delta(8), ZSTD(1)),"
-            "type LowCardinality(String) CODEC(ZSTD(1)),"
-            "tags Array(LowCardinality(String)) CODEC(ZSTD(1)),"
-            "needles Array(LowCardinality(String)) CODEC(ZSTD(1)),"
-            "serial_number LowCardinality(String) CODEC(ZSTD(1)),"
-            "metadata JSON CODEC(ZSTD(1)),"
-            "payload JSON CODEC(ZSTD(1)),"
-            "INDEX needles_idx needles TYPE bloom_filter GRANULARITY 1"
-            f") ENGINE = {self.table_engine} "
-            "PARTITION BY toDate(created_at) "
-            "PRIMARY KEY (type, toDateTime(created_at)) "
-            "ORDER BY (type, toDateTime(created_at), created_at) "
-            f"TTL created_at + toIntervalDay({self.ttl_days}) "
-            "SETTINGS ttl_only_drop_parts = 1"
-        )
-        self.column_names = (
-            "created_at",
-            "type",
-            "tags",
-            "needles",
-            "serial_number",
-            "metadata",
-            "payload",
-        )
-        self.configured = True
+        self.migrate()
+        super().wait_and_configure()
 
     def _serialize_event(self, event):
         if not isinstance(event, dict):
