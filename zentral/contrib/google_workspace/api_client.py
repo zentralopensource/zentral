@@ -133,8 +133,12 @@ class APIClient:
     def iter_group_members(self, group_key):
         page_token = None
         while True:
-            response = self.dir_svc().members().list(groupKey=group_key, pageToken=page_token).execute()
-            yield from response.get("members", [])
+            response = self.dir_svc().members().list(
+                groupKey=group_key, includeDerivedMembership=True, pageToken=page_token
+            ).execute()
+            for member in response.get("members", []):
+                if member["type"].upper() == "USER":
+                    yield member
             page_token = response.get("nextPageToken")
             if not page_token:
                 break
