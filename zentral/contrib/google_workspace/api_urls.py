@@ -11,9 +11,9 @@ urlpatterns = [
          ConnectionList.as_view(), name="connections"),
     path('connections/<uuid:pk>/',
          ConnectionDetail.as_view(), name="connection"),
-    path('connections/<uuid:conn_pk>/group_tag_mappings/',
+    path('group_tag_mappings/',
          GroupTagMappingList.as_view(), name="group_tag_mappings"),
-    path('connections/<uuid:conn_pk>/group_tag_mappings/<uuid:pk>/',
+    path('group_tag_mappings/<uuid:pk>/',
          GroupTagMappingDetail.as_view(), name="group_tag_mapping"),
 ]
 

@@ -52,7 +52,7 @@ class ConnectionDetail(RetrieveAPIView):
 class GroupTagMappingList(ListCreateAPIViewWithAudit):
     queryset = GroupTagMapping.objects.all()
     serializer_class = GroupTagMappingSerializer
-    filterset_fields = ('group_email',)
+    filterset_fields = ('connection_id', 'group_email')
 
 
 class GroupTagMappingDetail(RetrieveUpdateDestroyAPIViewWithAudit):
