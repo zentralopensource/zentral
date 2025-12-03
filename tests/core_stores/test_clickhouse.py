@@ -8,9 +8,38 @@ from zentral.core.probes.probe import Probe
 from zentral.core.stores.backends.all import StoreBackend
 from zentral.core.stores.backends.clickhouse import ClickHouseStore, ClickHouseStoreSerializer
 from .utils import build_login_event, force_store
+from . import BaseTestStore
 
 
-class ClickHouseStoreTestCase(TestCase):
+class TestClickHouseStoreStorage(TestCase, BaseTestStore):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.database = "zentral_tests"
+        cls.store = force_store(
+            backend=StoreBackend.ClickHouse,
+            backend_kwargs={
+                "host": "clickhouse",
+                "port": 8123,
+                "secure": False,
+                "database": cls.database,
+                "username": cls.database,
+                "password": cls.database,
+                "batch_size": 1,
+                "ttl_days": 15,
+                "send_receive_timeout": 10,
+                "table_name": "zentral_events",
+                "table_engine": "MergeTree",
+            }
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        cls.store.client.command(f"TRUNCATE DATABASE `{cls.database}`;")
+
+
+class TestClickHouseStore(TestCase):
     maxDiff = None
 
     def get_store(self, **kwargs):
@@ -248,7 +277,7 @@ class ClickHouseStoreTestCase(TestCase):
         store = self.get_store()
         event = build_login_event()
         store.store(event)
-        mocked_client.command.assert_called_once()
+        mocked_client.command.assert_called()
         mocked_client.insert.assert_called_once()
 
     @patch("zentral.core.stores.backends.clickhouse.clickhouse_connect.get_client")
@@ -259,7 +288,7 @@ class ClickHouseStoreTestCase(TestCase):
         event = build_login_event()
         event_keys = store.bulk_store([event])
         self.assertEqual(event_keys, [(str(event.metadata.uuid), 0)])
-        mocked_client.command.assert_called_once()
+        mocked_client.command.assert_called()
         mocked_client.insert.assert_called_once()
 
     # serializer

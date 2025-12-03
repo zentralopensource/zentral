@@ -71,7 +71,7 @@ GROUP BY
 
 -- Event types machines aggregations
 
-CREATE TABLE IF NOT EXISTS `{database}`.`{table_name}_types_machines_aggs`
+CREATE TABLE IF NOT EXISTS `{database}`.`{table_name}_types_needles_aggs`
 (
     `needle` LowCardinality(String),
     `type` LowCardinality(String),
@@ -82,7 +82,7 @@ ENGINE = SummingMergeTree
 ORDER BY (needle, type, date)
 TTL date + toIntervalDay(31);
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS `{database}`.`{table_name}_types_machines_aggs_mv` TO `{database}`.`{table_name}_types_machines_aggs`
+CREATE MATERIALIZED VIEW IF NOT EXISTS `{database}`.`{table_name}_types_needles_aggs_mv` TO `{database}`.`{table_name}_types_needles_aggs`
 AS SELECT
     needles AS needle,
     type,

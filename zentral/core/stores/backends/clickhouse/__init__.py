@@ -1,9 +1,12 @@
+from datetime import datetime, timedelta
 import logging
 import os
 import clickhouse_connect
 from django.utils.functional import cached_property
+from django.utils.timezone import is_naive, make_aware, make_naive
 from kombu.utils import json
 from rest_framework import serializers
+from zentral.core.events import event_from_event_d, event_types
 from zentral.core.stores.backends.base import BaseStore
 
 
@@ -61,6 +64,7 @@ class ClickHouseStore(BaseStore):
     @cached_property
     def client(self):
         return clickhouse_connect.get_client(
+            autogenerate_session_id=False,  # we do run queries concurrently when querying the database
             **{k: getattr(self, k)
                for k in self.client_kwargs_keys}
         )
@@ -122,6 +126,13 @@ class ClickHouseStore(BaseStore):
              payload),
         )
 
+    def _deserialize_event(self, result):
+        event_d = result["payload"]
+        event_d["_zentral"] = result["metadata"]
+        event_d["_zentral"]["type"] = result["type"]
+        event_d["_zentral"]["created_at"] = self._datetime_to_zentral(result["created_at"])
+        return event_from_event_d(event_d)
+
     def _insert(self, data):
         self.wait_and_configure_if_necessary()
         self.client.insert(
@@ -144,6 +155,159 @@ class ClickHouseStore(BaseStore):
             data.append(event_t)
         self._insert(data)
         return event_keys
+
+    # common
+
+    @staticmethod
+    def _serialize_datetime(dt):
+        if not is_naive(dt):
+            dt = make_naive(dt)
+        return dt.isoformat()
+
+    @staticmethod
+    def _datetime_to_zentral(dt):
+        if is_naive(dt):
+            dt = make_aware(dt)
+        return dt
+
+    def _get_aggregated_needle_event_counts(self, needle, from_dt, to_dt=None):
+        wheres = [
+            "date >= {from_dt:Datetime(9, 'UTC')}",
+            "needle = {needle:String}"
+        ]
+        params = {"from_dt": from_dt, "needle": needle}
+        if to_dt:
+            wheres.append("date < {to_dt:Datetime(9, 'UTC')}")
+            params["to_dt"] = to_dt
+        wheres = " AND ".join(wheres)
+        query_ctx = self.client.create_query_context(
+            query=f"SELECT type, sum(count) FROM `{self.table_name}_types_needles_aggs` WHERE {wheres} GROUP BY type",
+            parameters=params,
+        )
+        aggs = {}
+        for result in self.client.query(context=query_ctx).named_results():
+            aggs[result["type"]] = result["sum(count)"]
+        return aggs
+
+    def _fetch_needle_events(self, needle, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        wheres = [
+            "has(needles, {needle:String})",
+            "created_at >= toDateTime64({from_dt:String}, 9, 'UTC')",
+        ]
+        params = {
+            "needle": needle,
+            "from_dt": self._serialize_datetime(from_dt),
+            "limit": limit
+        }
+        if cursor or to_dt:
+            wheres.append("created_at < toDateTime64({to_dt:String}, 9, 'UTC')")
+            if cursor:
+                to_dt = cursor
+            else:
+                to_dt = self._serialize_datetime(to_dt)
+            params["to_dt"] = to_dt
+        if event_type:
+            wheres.append("type = {event_type:String}")
+            params["event_type"] = event_type
+        wheres = " AND ".join(wheres)
+        query_ctx = self.client.create_query_context(
+            query=(
+                f"SELECT metadata, type, created_at, payload FROM `{self.table_name}` WHERE {wheres} "
+                "ORDER BY created_at DESC, metadata.id.:String ASC, metadata.idx.:UInt32 ASC LIMIT {limit:UInt32}"
+            ),
+            parameters=params
+        )
+        events = []
+        cursor = None
+        for result in self.client.query(context=query_ctx).named_results():
+            event = self._deserialize_event(result)
+            if cursor is None or cursor > event.metadata.created_at:
+                cursor = event.metadata.created_at
+            events.append(event)
+        return events, self._serialize_datetime(cursor)
+
+    # machine events
+
+    def fetch_machine_events(self, serial_number, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        return self._fetch_needle_events(f"_s:{serial_number}", from_dt, to_dt, event_type, limit, cursor)
+
+    def get_aggregated_machine_event_counts(self, serial_number, from_dt, to_dt=None):
+        return self._get_aggregated_needle_event_counts(f"_s:{serial_number}", from_dt, to_dt)
+
+    def get_last_machine_heartbeats(self, serial_number, from_dt):
+        wheres = [
+            "serial_number = {serial_number:String}",
+            "last_seen >= toDateTime64({from_dt:String}, 9, 'UTC')",
+        ]
+        params = {
+            "serial_number": serial_number,
+            "from_dt": self._serialize_datetime(from_dt)
+        }
+        wheres = " AND ".join(wheres)
+        query_ctx = self.client.create_query_context(
+            query=(
+                f"SELECT type, key, maxMerge(last_seen) AS last_seen FROM `{self.table_name}_machine_heartbeats` "
+                f"WHERE {wheres} GROUP BY type, key"
+            ),
+            parameters=params,
+        )
+        heartbeats = {}
+        for result in self.client.query(context=query_ctx).named_results():
+            if result["type"] == "inventory_heartbeat":
+                key = result["key"]
+                ua = None
+            else:
+                key = None
+                ua = result["key"]
+            heartbeats.setdefault((result["type"], key), []).append((ua, result["last_seen"]))
+        heartbeats = []
+        for event_type, key in sorted(heartbeats.keys()):
+            event_class = event_types.get(event_type, None)
+            heartbeats.append((event_class, key, sorted(heartbeats[(event_type, key)], reverse=True)))
+        return heartbeats
+
+    # object events
+
+    def fetch_object_events(self, key, val, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        return self._fetch_needle_events(f"_o:{key}:{val}", from_dt, to_dt, event_type, limit, cursor)
+
+    def get_aggregated_object_event_counts(self, key, val, from_dt, to_dt=None):
+        return self._get_aggregated_needle_event_counts(f"_o:{key}:{val}", from_dt, to_dt)
+
+    # probe events
+
+    def fetch_probe_events(self, probe, from_dt, to_dt=None, event_type=None, limit=10, cursor=None):
+        return self._fetch_needle_events(f"_p:{probe.pk}", from_dt, to_dt, event_type, limit, cursor)
+
+    def get_aggregated_probe_event_counts(self, probe, from_dt, to_dt=None):
+        return self._get_aggregated_needle_event_counts(f"_p:{probe.pk}", from_dt, to_dt)
+
+    # zentral apps data
+
+    def get_app_hist_data(self, interval, bucket_number, tag):
+        if interval != "day":
+            raise NotImplementedError("Only 'day' is supported")
+        wheres = [
+            "tag = {tag:String}",
+            "date >= toDate(minus(NOW(), toIntervalDay({days:UInt32})))"
+        ]
+        params = {"tag": tag, "days": bucket_number}
+        wheres = " AND ".join(wheres)
+        query_ctx = self.client.create_query_context(
+            query=(f"SELECT toDateTime(date) AS date, events, machines FROM `{self.table_name}_tags_aggs` "
+                   f"WHERE {wheres} ORDER BY date ASC"),
+            parameters=params,
+        )
+        data = {}
+        for result in self.client.query(context=query_ctx).named_results():
+            data[result["date"]] = (result["events"], result["machines"])
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        buckets = []
+        for days in range(-1 * bucket_number, 1):
+            day = today + timedelta(days=days)
+            events, machines = data.get(day, (0, 0))
+            buckets.append((day, events, machines))
+        return buckets
 
 
 # Serializers

@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: run tests with coverage
-        run: docker compose run --quiet-pull --quiet-build -u root web tests_with_coverage
+        run: docker compose -f docker-compose.yml -f docker-compose.tests.yml run --quiet-pull --quiet-build -u root web tests_with_coverage
         env:
           COMPOSE_DOCKER_CLI_BUILD: 1
           DOCKER_BUILDKIT: 1
