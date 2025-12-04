@@ -33,7 +33,7 @@
         {% for task in object_list %}
         <tr class="data-row">
         <td>
-            <a href="{% url 'accounts:task' task.task_id %}" title="{{ task.task_name }}">{{ task.task_name|partition_replace_capitalize }}</a>
+            <a href="{% url 'accounts:task' task.task_id %}" title="{{ task.task_name }}">{{ task.task_name|default_if_none:"-"|partition_replace_capitalize }}</a>
         </td>
         <td>
             {{ task.date_created|date:"SHORT_DATETIME_FORMAT" }}

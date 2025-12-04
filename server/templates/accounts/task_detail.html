@@ -12,7 +12,7 @@
 <div class="object-details">
 
     <div class="d-flex align-items-center mb-3">
-        <h3 class="m-0 fs-5 text-secondary">{{ object.task_name|partition_replace_capitalize }}</h3>
+        <h3 class="m-0 fs-5 text-secondary">{{ object.task_name|default_if_none:"-"|partition_replace_capitalize }}</h3>
     </div>
 </div>
 
@@ -21,7 +21,7 @@
         <tbody>
             <tr>
                 <th style="width:15%">Taskname</th>
-                <td>{{ object.task_name }}</td>
+                <td>{{ object.task_name|default_if_none:"-" }}</td>
             </tr>
             <tr>
                 <th>Status</th>

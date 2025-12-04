@@ -29,7 +29,7 @@ class AccountTasksViewsTestCase(TestCase):
 
         # Tasks
         cls.task_with_errors = TaskResult.objects.create(
-            task_name='zentral.test.error_task',
+            task_name=None,
             task_id=str(uuid.uuid4()),
             status="FINISHED",
             result=None,
@@ -120,7 +120,7 @@ class AccountTasksViewsTestCase(TestCase):
         response = self.client.get(reverse("accounts:task", args=(self.task_with_errors.task_id,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "accounts/task_detail.html")
-        self.assertContains(response, 'Error Task')
+        self.assertContains(response, '<h3 class="m-0 fs-5 text-secondary">-</h3>')
         # check for Exceptions
         self.assertEqual(response.context["time_diff"], 0)
         self.assertEqual(response.context["result_json"], {})
