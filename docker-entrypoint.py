@@ -102,15 +102,12 @@ KNOWN_COMMANDS = {
     "createuser": ["python", 'server/manage.py', 'create_zentral_user'],
 }
 
-KNOWN_COMMANDS_EXTRA_ENV = {
-    "tests": {"ZENTRAL_CONF_DIR": "/zentral/tests/conf",
-              "ZENTRAL_FORCE_ES_OS_INDEX_REFRESH": "1",
-              "ZENTRAL_PROBES_SYNC": "0",
-              "ZENTRAL_STORES_SYNC": "0"},
-    "tests_with_coverage": {"ZENTRAL_CONF_DIR": "/zentral/tests/conf",
-                            "ZENTRAL_FORCE_ES_OS_INDEX_REFRESH": "1",
-                            "ZENTRAL_PROBES_SYNC": "0",
-                            "ZENTRAL_STORES_SYNC": "0"},
+TESTS_EXTRA_ENV = {
+    "ZENTRAL_CONF_DIR": "/zentral/tests/conf",
+    "ZENTRAL_FORCE_ES_OS_INDEX_REFRESH": "1",
+    "ZENTRAL_PROBES_SYNC": "0",
+    "ZENTRAL_QUIET": "1",
+    "ZENTRAL_STORES_SYNC": "0",
 }
 
 KNOWN_COMMANDS_CHDIR = {
@@ -133,13 +130,13 @@ if __name__ == '__main__':
     if args:
         filename = args[0]
         args.extend(sys.argv[2:])
-        env.update(KNOWN_COMMANDS_EXTRA_ENV.get(cmd, {}))
-        if cmd != "tests":
-            wait_for_db_migration()
-            create_zentral_superuser()
-        else:
+        if cmd in ("tests", "tests_with_coverage"):
+            env.update(TESTS_EXTRA_ENV)
             wait_for_db(env)
-        wait_for_provisioning()
+        elif cmd not in ("coverage_lcov",):
+            wait_for_db_migration()
+            wait_for_provisioning()
+            create_zentral_superuser()
         if cmd in KNOWN_COMMANDS_TRIGGERING_COLLECTSTATIC:
             django_collectstatic()
         wd = KNOWN_COMMANDS_CHDIR.get(cmd)

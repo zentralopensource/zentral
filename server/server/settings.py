@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/1.8/ref/settings/
 """
 
 import os
+import sys
 from django.core.management import utils
 # Import the zentral settings (base.json)
 from zentral.conf import settings as zentral_settings
@@ -277,7 +278,6 @@ if log_formatter:
     # the warnings are not formatted, and can cause some parsing issues
     # → disable all warnings when not in DEBUG mode
     if not DEBUG:
-        import sys
         if not sys.warnoptions:
             import warnings
             warnings.simplefilter("ignore")
@@ -288,7 +288,9 @@ else:
     }
 
 
-if DEBUG:
+if (len(sys.argv) > 1 and sys.argv[1] == "test") or os.getenv("ZENTRAL_QUIET", "0") == "1":
+    log_level = "CRITICAL"
+elif DEBUG:
     log_level = "DEBUG"
 else:
     log_level = "INFO"
@@ -309,6 +311,9 @@ LOGGING = {
     },
     'loggers': {
         'django': {
+            'handlers': ['console'],
+        },
+        'django.request': {
             'handlers': ['console'],
         },
         'py.warnings': {
