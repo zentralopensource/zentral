@@ -27,6 +27,7 @@ class ACMEIssuerView(PermissionRequiredMixin, DetailView):
 class SCEPIssuerListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_scepissuer"
     model = SCEPIssuer
+    ordering = ("name",)
 
 
 class SCEPIssuerView(PermissionRequiredMixin, DetailView):

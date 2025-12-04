@@ -1179,6 +1179,7 @@ class DeleteRecoveryPasswordConfigView(PermissionRequiredMixin, DeleteViewWithAu
 class SoftwareUpdateEnforcementListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_softwareupdateenforcement"
     model = SoftwareUpdateEnforcement
+    ordering = ("name",)
 
 
 class CreateSoftwareUpdateEnforcementView(PermissionRequiredMixin, CreateViewWithAudit):
