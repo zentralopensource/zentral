@@ -164,7 +164,7 @@ def filter_catalog_data(catalog_data, serial_number, tag_names):
 
 
 def filter_sub_manifest_data_dict(smd, serial_number, tag_names):
-    for key in ('managed_installs', 'optional_installs'):
+    for key in ('managed_installs', 'managed_updates', 'optional_installs'):
         if key not in smd:
             continue
         smd[key] = [

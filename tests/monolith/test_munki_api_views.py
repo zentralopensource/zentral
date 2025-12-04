@@ -453,6 +453,29 @@ class MonolithAPIViewsTestCase(TestCase):
             {'managed_installs': ['premier nom']}
         )
 
+    def test_sub_manifest_managed_updates_one_tag_shard_excluded(self):
+        _, catalog, sub_manifest = self._force_smpi(name="premier nom")
+        self._force_smpi(
+            name="deuxième nom",
+            catalog=catalog,
+            sub_manifest=sub_manifest,
+            sub_manifest_key="managed_updates",
+            smo_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                         "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 76}}}  # NAME + SN → 77
+        )
+        response = self._make_munki_request(
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+            tags=["INCL2"]
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'managed_installs': ['premier nom'],
+             'managed_updates': []}
+        )
+
     def test_sub_manifest_one_tag_shard_included(self):
         _, _, sub_manifest = self._force_smpi(
             name="deuxième nom",
@@ -469,6 +492,25 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(
             sub_manifest,
             {'managed_installs': ['deuxième nom']}
+        )
+
+    def test_sub_manifest_managed_updates_one_tag_shard_included(self):
+        _, _, sub_manifest = self._force_smpi(
+            name="deuxième nom",
+            sub_manifest_key="managed_updates",
+            smo_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                         "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 78}}}  # NAME + SN → 77
+        )
+        response = self._make_munki_request(
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+            tags=["INCL2"]
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'managed_updates': ['deuxième nom']}
         )
 
     # repository package

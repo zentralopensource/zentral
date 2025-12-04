@@ -661,7 +661,7 @@ class SubManifest(models.Model):
                     options = smpi.options
                 else:
                     options = None
-                if key in ('managed_installs', 'optional_installs'):
+                if key in ('managed_installs', 'managed_updates', 'optional_installs'):
                     val = (name, options)
                 else:
                     val = name

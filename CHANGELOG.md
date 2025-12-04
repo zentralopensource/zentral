@@ -12,6 +12,8 @@ Fixed slow MDM Artifact deletion check.
 
 Fixed slow MDM APNS device and user notification queries.
 
+Fixed `managed_updates` filtering in the Monolith sub manifests.
+
 ### Backward incompatibilities
 
 #### 🧨 macOS inventory disk information
