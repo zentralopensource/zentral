@@ -13,7 +13,7 @@ def sync_group_tag_mappings_task(connection_pk: uuid) -> dict[str, dict[str, str
     try:
         connection = Connection.objects.get(pk=connection_pk)
     except Connection.DoesNotExist:
-        logging.warning(f"Connection for pk {connection_pk} not found.")
+        logger.warning(f"Connection for pk {connection_pk} not found.")
         return {"connection_not_found": {"pk": str(connection_pk)}}
     count = sync(connection)
     return {

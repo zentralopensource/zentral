@@ -28,7 +28,7 @@ class ApiClientTestCase(TestCase):
 
     def test_from_oauth2_state_no_cached_connection(self):
         with self.assertRaisesMessage(APIClientError, "Invalid OAUTH2 state"):
-            APIClient.from_oauth2_state("unkown state")
+            APIClient.from_oauth2_state("unknown_state")
 
     def test_from_oauth2_state_no_connection(self):
         state = get_random_string(5)
