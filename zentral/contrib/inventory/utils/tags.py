@@ -5,12 +5,14 @@ from django.utils.text import slugify
 import psycopg2.extras
 from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.core.events.base import EventMetadata, EventRequest
+from django.http import HttpRequest
 
 
 __all__ = [
     "add_machine_tags",
     "remove_machine_tags",
     "send_machine_tag_events",
+    "send_machine_tag_events_with_event_request",
     "set_machine_taxonomy_tags",
 ]
 
@@ -21,12 +23,18 @@ def fetch_tags_if_required(tags):
     return tags
 
 
-def send_machine_tag_events(results, request=None):
+def send_machine_tag_events(results, request: HttpRequest = None) -> None:
     if not results:
         return
     event_request = None
     if request:
         event_request = EventRequest.build_from_request(request)
+    return send_machine_tag_events_with_event_request(results, event_request)
+
+
+def send_machine_tag_events_with_event_request(results, event_request: EventRequest = None) -> None:
+    if not results:
+        return
     event_uuid = uuid.uuid4()
     event_index = 0
     for serial_number, action, pk, name, taxonomy_pk, taxonomy_name in results:
