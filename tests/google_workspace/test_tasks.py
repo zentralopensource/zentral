@@ -17,6 +17,15 @@ class SyncGroupTagMappingsTaskTestCase(TestCase):
         connection.save()
 
         return connection
+    
+    def _given_serialized_event_request(self):
+        return {
+            "user_agent": f"TestAgent:{get_random_string(6)}",
+            "ip": "127.0.0.1",
+            "method": "POST",
+            "path": "/test/",
+            "view": "TestView"
+        }
 
     @patch("zentral.contrib.google_workspace.tasks.sync")
     def test_sync_group_tag_mappings_task(self, sync):
@@ -27,9 +36,10 @@ class SyncGroupTagMappingsTaskTestCase(TestCase):
             "removed": 1
         }
         sync.return_value = count
+        event_request = self._given_serialized_event_request()
 
         # When
-        actual = sync_group_tag_mappings_task(connection.pk)
+        actual = sync_group_tag_mappings_task(connection.pk, event_request)
 
         # Then
         expected = {

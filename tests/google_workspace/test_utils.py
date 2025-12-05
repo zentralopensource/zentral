@@ -12,6 +12,7 @@ from zentral.contrib.inventory.models import (Tag,
 from zentral.contrib.google_workspace.models import Connection, GroupTagMapping
 from zentral.contrib.google_workspace.utils import sync_group_tag_mappings
 from zentral.contrib.inventory.events import MachineTagEvent
+from zentral.core.events.base import EventRequest
 
 
 class UtilsTestCase(TestCase):
@@ -101,6 +102,15 @@ class UtilsTestCase(TestCase):
             d["taxonomy"] = {"pk": taxonomy.pk, "name": taxonomy.name}
         return d
 
+    def _given_serialized_event_request(self):
+        return {
+            "user_agent": f"TestAgent:{get_random_string(6)}",
+            "ip": "127.0.0.1",
+            "method": "POST",
+            "path": "/test/",
+            "view": "TestView"
+        }
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_sync_group_tag_mappings_adds_tag(self, build, post_event):
@@ -108,6 +118,10 @@ class UtilsTestCase(TestCase):
         user_email = self._given_user_email()
         build.return_value.members.return_value.list.return_value.execute.return_value = {
             "members": [{'email': user_email, 'type': "USER"}]}
+
+        # event request
+        serialized_event_request = self._given_serialized_event_request()
+        event_request = EventRequest.deserialize(serialized_event_request)
 
         # snapshots for one device
         serial_number = self._force_machine(user_email)
@@ -120,7 +134,7 @@ class UtilsTestCase(TestCase):
 
         # When
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            sync_group_tag_mappings(connection)
+            sync_group_tag_mappings(connection, event_request)
 
         # Then
         actual = MachineTag.objects.filter(serial_number=serial_number, tag_id=tag.pk)
@@ -138,6 +152,7 @@ class UtilsTestCase(TestCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], serial_number)
         self.assertEqual(metadata["tags"], ["machine"])
+        self.assertEqual(metadata["request"], serialized_event_request)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch('zentral.contrib.google_workspace.api_client.build')
