@@ -236,7 +236,7 @@ class EnrollmentConfigurationProfile(EnrollmentConfiguration):
 # manifests
 
 
-class ManifestList(generics.ListCreateAPIView):
+class ManifestList(ListCreateAPIViewWithAudit):
     queryset = Manifest.objects.all()
     serializer_class = ManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
@@ -244,7 +244,7 @@ class ManifestList(generics.ListCreateAPIView):
     filterset_fields = ("meta_business_unit_id", "name")
 
 
-class ManifestDetail(generics.RetrieveUpdateDestroyAPIView):
+class ManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = Manifest.objects.all()
     serializer_class = ManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]

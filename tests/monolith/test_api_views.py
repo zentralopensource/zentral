@@ -987,15 +987,36 @@ class MonolithAPIViewsTestCase(TestCase):
             'meta_business_unit': ['This field is required.']
         })
 
-    def test_create_manifest(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_manifest(self, post_event):
         self._set_permissions("monolith.add_manifest")
         name = get_random_string(12)
-        response = self._post_json_data(reverse("monolith_api:manifests"), data={
-            'name': name,
-            'meta_business_unit': self.mbu.pk
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data(reverse("monolith_api:manifests"), data={
+                'name': name,
+                'meta_business_unit': self.mbu.pk
+            })
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
         manifest = Manifest.objects.get(name=name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, 
+            {"action": "created",
+             "object": {
+                 "model": "monolith.manifest",
+                 "pk": str(manifest.pk),
+                 "new_value": {
+                    "pk": manifest.pk,
+                    "name": name,
+                    "version": 1,
+                    "created_at": manifest.created_at,
+                    "updated_at": manifest.updated_at,
+                    "meta_business_unit": self.mbu.serialize_for_event(keys_only=True)
+                 }
+             }}
+        )
         self.assertEqual(response.json(), {
             'id': manifest.pk,
             'name': name,
@@ -1005,6 +1026,9 @@ class MonolithAPIViewsTestCase(TestCase):
             'meta_business_unit': self.mbu.pk
         })
         self.assertEqual(manifest.name, name)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest": [str(manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update manifest
 
@@ -1046,24 +1070,61 @@ class MonolithAPIViewsTestCase(TestCase):
             'meta_business_unit': ['Invalid pk "9999" - object does not exist.']
         })
 
-    def test_update_manifest(self):
-        manifest = force_manifest()
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_manifest(self, post_event):
+        manifest = force_manifest(self.mbu)
+        prev_name = manifest.name
+        prev_updated_at = manifest.updated_at
+        new_name = get_random_string(12)
         self._set_permissions("monolith.change_manifest")
-        response = self._put_json_data(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
-            'name': 'spam',
-            'meta_business_unit': self.mbu.pk
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._put_json_data(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
+                'name': new_name,
+                'meta_business_unit': self.mbu.pk
+            })
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         manifest.refresh_from_db()
+        self.assertEqual(manifest.name, new_name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, {
+                "action": "updated",
+                "object": {
+                    "model": "monolith.manifest",
+                    "pk": str(manifest.pk),
+                    "prev_value": {
+                        "pk": manifest.pk,
+                        "name": prev_name,
+                        "version": 1,
+                        "created_at": manifest.created_at,
+                        "updated_at": prev_updated_at,
+                        "meta_business_unit": self.mbu.serialize_for_event(keys_only=True)
+                    },
+                    "new_value": {
+                        "pk": manifest.pk,
+                        "name": new_name,
+                        "version": 1,
+                        "created_at": manifest.created_at,
+                        "updated_at": manifest.updated_at,
+                        "meta_business_unit": self.mbu.serialize_for_event(keys_only=True)
+                    }
+                }
+            }
+        )
         self.assertEqual(response.json(), {
             'id': manifest.pk,
-            'name': 'spam',
+            'name': new_name,
             'version': 1,
             'created_at': manifest.created_at.isoformat(),
             'updated_at': manifest.updated_at.isoformat(),
             'meta_business_unit': self.mbu.pk
         })
-        self.assertEqual(manifest.name, 'spam')
+        self.assertEqual(manifest.name, new_name)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest": [str(manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # delete manifest
 
