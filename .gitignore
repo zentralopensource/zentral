@@ -14,12 +14,11 @@ __pycache__
 
 /*.yml
 !/docker-compose.yml
-!/docker-compose.basic-auth.yml
 !/docker-compose.common.yml
 !/docker-compose.mdm.yml
 !/docker-compose.puppet.yml
-!/docker-compose.saml2.yml
 !/docker-compose.syslog.yml
+!/docker-compose.tests.yml
 !/mkdocs.yml
 !/.readthedocs.yaml
 
