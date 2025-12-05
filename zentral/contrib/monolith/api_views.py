@@ -236,7 +236,7 @@ class EnrollmentConfigurationProfile(EnrollmentConfiguration):
 # manifests
 
 
-class ManifestList(generics.ListCreateAPIView):
+class ManifestList(ListCreateAPIViewWithAudit):
     queryset = Manifest.objects.all()
     serializer_class = ManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
