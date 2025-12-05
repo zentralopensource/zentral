@@ -593,7 +593,7 @@ class SubManifestsView(PermissionRequiredMixin, UserPaginationListView):
         return context
 
 
-class CreateSubManifestView(PermissionRequiredMixin, CreateView):
+class CreateSubManifestView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "monolith.add_submanifest"
     model = SubManifest
     form_class = SubManifestForm
@@ -621,14 +621,14 @@ class SubManifestView(PermissionRequiredMixin, DetailView):
         return context
 
 
-class UpdateSubManifestView(PermissionRequiredMixin, UpdateView):
+class UpdateSubManifestView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "monolith.change_submanifest"
     model = SubManifest
     form_class = SubManifestForm
     template_name = 'monolith/edit_sub_manifest.html'
 
 
-class DeleteSubManifestView(PermissionRequiredMixin, DeleteView):
+class DeleteSubManifestView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "monolith.delete_submanifest"
     model = SubManifest
     success_url = reverse_lazy("monolith:sub_manifests")

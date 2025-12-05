@@ -2023,15 +2023,147 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/edit_sub_manifest.html")
 
-    def test_create_submanifest_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_submanifest_post(self, post_event):
         self._login("monolith.add_submanifest", "monolith.view_submanifest")
         name = get_random_string(12)
-        response = self.client.post(reverse("monolith:create_sub_manifest"),
-                                    {"name": name},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:create_sub_manifest"),
+                                        {"name": name,
+                                         "description": name,
+                                         "meta_business_unit": self.mbu.pk},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
-        self.assertEqual(response.context["object"].name, name)
+        submanifest = response.context["object"]
+        self.assertEqual(submanifest.name, name)
+        self.assertEqual(submanifest.meta_business_unit, self.mbu)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, {
+                "action": "created",
+                "object": {
+                    "model": "monolith.submanifest",
+                    "pk": str(submanifest.pk),
+                    "new_value": {
+                        "pk": submanifest.pk,
+                        "name": name,
+                        "description": name,
+                        "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
+                        "created_at": submanifest.created_at,
+                        "updated_at": submanifest.updated_at,
+                    }
+                }
+            }
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_sub_manifest": [str(submanifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    # update submanifest
+
+    def test_update_submanifest_redirect(self):
+        sub_manifest = force_sub_manifest()
+        self._login_redirect(reverse("monolith:update_sub_manifest", args=(sub_manifest.pk,)))
+
+    def test_post_update_configuration_view_permission_denied(self):
+        self._login("monolith.add_submanifest", "monolith.view_submanifest")
+        sub_manifest = force_sub_manifest()
+        response = self.client.post(reverse("monolith:update_sub_manifest", args=(sub_manifest.pk,)),
+                                    {"name": 'Deny me', "meta_business_unit": self.mbu.pk},
+                                    follow=True)
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_submanifest(self, post_event):
+        sub_manifest = force_sub_manifest(self.mbu)
+        prev_value = sub_manifest.serialize_for_event()
+        self._login("monolith.change_submanifest", "monolith.view_submanifest")
+        new_name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:update_sub_manifest", args=(sub_manifest.pk,)),
+                                        {"name": new_name,
+                                         "meta_business_unit": self.mbu.pk},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        sub_manifest = response.context["object"]
+        self.assertEqual(sub_manifest.name, new_name)
+        self.assertEqual(sub_manifest.meta_business_unit, self.mbu)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.submanifest",
+                 "pk": str(sub_manifest.pk),
+                 "new_value": {
+                     "pk": sub_manifest.pk,
+                     "name": new_name,
+                     "description": "",
+                     "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
+                     "created_at": sub_manifest.created_at,
+                     "updated_at": sub_manifest.updated_at,
+                 },
+                 "prev_value": prev_value,
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_sub_manifest": [str(sub_manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+
+    # delete submanifest
+
+    def test_delete_submanifest_redirect(self):
+        sub_manifest = force_sub_manifest()
+        self._login_redirect(reverse("monolith:delete_sub_manifest", args=(sub_manifest.pk,)))
+
+    def test_delete_submanifest_permission_denied(self):
+        self._login("monolith.add_submanifest", "monolith.view_submanifest")
+        sub_manifest = force_sub_manifest()
+        response = self.client.get(reverse("monolith:delete_sub_manifest", args=(sub_manifest.pk,)))
+        self.assertEqual(response.status_code, 403)
+        response = self.client.post(reverse("monolith:delete_sub_manifest", args=(sub_manifest.pk,)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_submanifest_cannot_delete(self):
+        sub_manifest = force_sub_manifest()
+        force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
+        self._login("monolith.delete_condition")
+        response = self.client.get(reverse("monolith:delete_condition", args=(sub_manifest.pk,)))
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_submanifest(self, post_event):
+        self._login("monolith.delete_submanifest", "monolith.view_submanifest")
+        sub_manifest = force_sub_manifest()
+        prev_value = sub_manifest.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("monolith:delete_sub_manifest", args=(sub_manifest.pk,)),
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "monolith/sub_manifest_list.html")
+        self.assertNotContains(response, sub_manifest.name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "monolith.submanifest",
+                 "pk": str(sub_manifest.pk),
+                 "prev_value": prev_value
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_sub_manifest": [str(sub_manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # add submanifest pkginfo
 

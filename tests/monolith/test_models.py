@@ -173,6 +173,10 @@ class MonolithModelsTestCase(TestCase):
                          {mep_1.builder: mep_1,
                           mep_2.builder: mep_2})
 
+    def test_submanifest_serialize_for_event(self):
+        d = self.sub_manifest_1.serialize_for_event(keys_only=True)
+        self.assertEqual(d, {'pk': self.sub_manifest_1.pk, 'name': self.sub_manifest_1.name})
+
     # PkgInfo.objects.alles
 
     def test_alles_all(self):
