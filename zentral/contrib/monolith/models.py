@@ -690,6 +690,21 @@ class SubManifest(models.Model):
             mwt.append((msn.tags.all(), msn.manifest))
         return mwt
 
+    # events
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        if self.meta_business_unit:
+            d["meta_business_unit"] = self.meta_business_unit.serialize_for_event(keys_only=True)
+        d.update({
+            "description": self.description,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        })
+        return d
+
 
 class ConditionManager(models.Manager):
     def for_deletion(self):

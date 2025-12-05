@@ -318,7 +318,7 @@ class ManifestSubManifestDetail(generics.RetrieveUpdateDestroyAPIView):
 # sub manifests
 
 
-class SubManifestList(generics.ListCreateAPIView):
+class SubManifestList(ListCreateAPIViewWithAudit):
     queryset = SubManifest.objects.all()
     serializer_class = SubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
@@ -326,7 +326,7 @@ class SubManifestList(generics.ListCreateAPIView):
     filterset_fields = ('name',)
 
 
-class SubManifestDetail(generics.RetrieveUpdateDestroyAPIView):
+class SubManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = SubManifest.objects.all()
     serializer_class = SubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]

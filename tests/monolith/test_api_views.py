@@ -2511,14 +2511,34 @@ class MonolithAPIViewsTestCase(TestCase):
             'name': ['This field is required.'],
         })
 
-    def test_create_sub_manifest(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_sub_manifest(self, post_event):
         self._set_permissions("monolith.add_submanifest")
         name = get_random_string(12)
-        response = self._post_json_data(reverse("monolith_api:sub_manifests"), data={
-            'name': name,
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data(reverse("monolith_api:sub_manifests"), data={
+                'name': name
+            })
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
         sub_manifest = SubManifest.objects.get(name=name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, 
+            {"action": "created",
+             "object": {
+                 "model": "monolith.submanifest",
+                 "pk": str(sub_manifest.pk),
+                 "new_value": {
+                    "pk": sub_manifest.pk,
+                    "name": name,
+                    "description": "",
+                    "created_at": sub_manifest.created_at,
+                    "updated_at": sub_manifest.updated_at
+                 }
+             }}
+        )
         self.assertEqual(response.json(), {
             'id': sub_manifest.pk,
             'name': name,
@@ -2529,6 +2549,9 @@ class MonolithAPIViewsTestCase(TestCase):
         })
         self.assertEqual(sub_manifest.description, "")
         self.assertIsNone(sub_manifest.meta_business_unit)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_sub_manifest": [str(sub_manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update sub manifest
 
@@ -2546,19 +2569,43 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
-    def test_update_sub_manifest(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_sub_manifest(self, post_event):
         sub_manifest = force_sub_manifest()
         self._set_permissions("monolith.change_submanifest")
+        prev_value = sub_manifest.serialize_for_event()
         new_name = get_random_string(12)
         new_description = get_random_string(12)
-        response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)), data={
-            'name': new_name,
-            'description': new_description,
-            'meta_business_unit': self.mbu.pk,
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)), data={
+                'name': new_name,
+                'description': new_description,
+                'meta_business_unit': self.mbu.pk,
+            })
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         test_sub_manifest = SubManifest.objects.get(name=new_name)
         self.assertEqual(sub_manifest, test_sub_manifest)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, {
+                "action": "updated",
+                "object": {
+                    "model": "monolith.submanifest",
+                    "pk": str(sub_manifest.pk),
+                    "prev_value": prev_value,
+                    "new_value": {
+                        "pk": test_sub_manifest.pk,
+                        "name": new_name,
+                        "description": new_description,
+                        "created_at": test_sub_manifest.created_at,
+                        "updated_at": test_sub_manifest.updated_at,
+                        "meta_business_unit": self.mbu.serialize_for_event(keys_only=True)
+                    }
+                }
+            }
+        )
         self.assertEqual(response.json(), {
             'id': test_sub_manifest.pk,
             'name': new_name,
@@ -2569,6 +2616,9 @@ class MonolithAPIViewsTestCase(TestCase):
         })
         self.assertEqual(test_sub_manifest.description, new_description)
         self.assertEqual(test_sub_manifest.meta_business_unit, self.mbu)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_sub_manifest": [str(sub_manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # delete sub manifest
 
@@ -2585,11 +2635,30 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self.delete(reverse("monolith_api:sub_manifest", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_sub_manifest(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_sub_manifest(self, post_event):
         sub_manifest = force_sub_manifest()
+        prev_value = sub_manifest.serialize_for_event()
         self._set_permissions("monolith.delete_submanifest")
-        response = self.delete(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 204)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, {
+                "action": "deleted",
+                "object": {
+                    "model": "monolith.submanifest",
+                    "pk": str(prev_value['pk']),
+                    "prev_value": prev_value
+                }
+            }
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_sub_manifest": [str(prev_value['pk'])]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # list sub manifest pkg infos
 
