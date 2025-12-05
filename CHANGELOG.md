@@ -6,6 +6,8 @@ Add FileVault & encryption statuses to inventory disk table.
 
 Add disks to inventory full export.
 
+Google Workspace connection with group tag mappings.
+
 ### Bug fixes
 
 Fixed slow MDM Artifact deletion check.
