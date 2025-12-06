@@ -130,7 +130,7 @@ python-ldap==3.4.5
 pytz==2024.2
 PyYAML==6.0.2
 redis==6.2.0
-requests==2.32.4
+requests==2.32.5
 requests-oauthlib==2.0.0
 rsa==4.9
 s3transfer==0.10.3
