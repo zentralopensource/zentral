@@ -3,6 +3,7 @@
 asn1crypto                      # MDM, mTLS, SCEP
 azure-identity
 azure-storage-blob
+backports.zstd ; python_version<'3.14'
 boto3                           # conf, monolith, events (kinesis, sns/sqs)
 celery<6
 clickhouse-connect
