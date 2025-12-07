@@ -27,7 +27,7 @@ kombu<6                         # events queues
 msgraph-sdk
 opensearch-py<4
 prometheus_client               # publish prometheus metrics
-psycopg2
+psycopg2-binary
 pygments                        # SQL syntax highlighting
 pyopenssl                       # MDM
 pyotp                           # Auth / 2nd factor

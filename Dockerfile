@@ -23,8 +23,6 @@ RUN apt-get update && \
             libssl-dev \
             libffi-dev \
             python3-dev \
-# dep for psycopg2
-            libpq-dev \
 # dep for python-ldap
             libldap2-dev \
             libsasl2-dev \
@@ -126,8 +124,6 @@ RUN apt-get update && \
             libarchive-tools \
 # xmlsec1 for PySAML2
             xmlsec1 \
-# libpq5 for psycopg2
-            libpq5 \
 # extra dependencies for python crypto / WebAuthn
             libssl3 \
             libffi8 \
