@@ -25,7 +25,7 @@ jmespath                        # inventory compliance checks
 jinja2                          # events templates
 kombu<6                         # events queues
 msgraph-sdk
-opensearch-py<3
+opensearch-py<4
 prometheus_client               # publish prometheus metrics
 psycopg2
 pygments                        # SQL syntax highlighting
