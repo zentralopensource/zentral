@@ -5,7 +5,8 @@ from collections.abc import Iterator
 from django.db import connection, transaction
 from zentral.contrib.google_workspace.models import Connection
 from zentral.contrib.google_workspace.api_client import APIClient
-from zentral.contrib.inventory.utils import send_machine_tag_events
+from zentral.contrib.inventory.utils import send_machine_tag_events_with_event_request
+from zentral.core.events.base import EventRequest
 
 
 logger = logging.getLogger('zentral.contrib.google_workspace.utils')
@@ -30,7 +31,10 @@ def _iter_group_members_tags(email_tags: dict[str, set[int]], tag_pks: set[int])
             yield (email, tag_pk, tag_pk in expected_tags)
 
 
-def _sync_machine_tags(group_member_tags: Iterator[tuple[str, int, bool]]) -> dict[str, int]:
+def _sync_machine_tags(
+        group_member_tags: Iterator[tuple[str, int, bool]],
+        event_request: EventRequest
+        ) -> dict[str, int]:
     query = """
         with given_values as (
              select email, tag_id, add_operation from (values %s) as v(email, tag_id, add_operation)),
@@ -81,7 +85,7 @@ def _sync_machine_tags(group_member_tags: Iterator[tuple[str, int, bool]]) -> di
         )
 
     def send_machine_tag_added_events():
-        send_machine_tag_events(results)
+        send_machine_tag_events_with_event_request(results, event_request)
 
     transaction.on_commit(send_machine_tag_added_events)
 
@@ -101,7 +105,7 @@ def _sync_machine_tags(group_member_tags: Iterator[tuple[str, int, bool]]) -> di
     return result_count
 
 
-def sync_group_tag_mappings(api_connection: Connection) -> None:
+def sync_group_tag_mappings(api_connection: Connection, event_request: EventRequest = None) -> None:
     email_tags, tag_pks = _resolve_group_members_to_tags(api_connection)
     group_member_tags = _iter_group_members_tags(email_tags, tag_pks)
-    return _sync_machine_tags(group_member_tags)
+    return _sync_machine_tags(group_member_tags, event_request)
