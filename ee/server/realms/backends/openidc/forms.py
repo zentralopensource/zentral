@@ -10,7 +10,7 @@ class OpenIDConnectRealmForm(RealmForm):
                   "Leave blank, and the session reverts to using the "
                   "'exp' claim provided by the IDP in the ID token."
     )
-    discovery_url = forms.URLField(required=True)
+    discovery_url = forms.URLField(required=True, assume_scheme="https")
     client_id = forms.CharField(required=True)
     client_secret = forms.CharField(
         required=False,

@@ -36,7 +36,7 @@ class S3RepositoryForm(forms.Form):
     secret_access_key = forms.CharField(required=False)
     assume_role_arn = forms.CharField(label="Assume role ARN", required=False)
     signature_version = forms.CharField(required=False)
-    endpoint_url = forms.URLField(label="Endpoint URL", required=False)
+    endpoint_url = forms.URLField(label="Endpoint URL", required=False, assume_scheme="https")
     cloudfront_domain = forms.CharField(required=False)
     cloudfront_key_id = forms.CharField(required=False)
     cloudfront_privkey_pem = forms.CharField(widget=forms.Textarea, required=False)
