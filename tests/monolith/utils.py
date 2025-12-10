@@ -99,8 +99,21 @@ def force_category(repository=None, name=None):
     return PkgInfoCategory.objects.create(repository=repository, name=name or get_random_string(12))
 
 
+def force_name_with_info(name=None):
+    pkg_info_name, _, _, _ = _force_pkg_info(local=True,
+                                             version="1.0",
+                                             archived=False,
+                                             catalog=None,
+                                             sub_manifest=None,
+                                             options=None,
+                                             condition=None,
+                                             name=name)
+    return pkg_info_name
+
+
 def force_name(name=None):
-    return PkgInfoName.objects.get_or_create(name=name or get_random_string(12))[0]
+    pkginfo_name = PkgInfoName.objects.get_or_create(name=name or get_random_string(12))[0]
+    return pkginfo_name
 
 
 def _force_pkg_info(

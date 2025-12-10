@@ -2818,20 +2818,22 @@ class MonolithAPIViewsTestCase(TestCase):
                                 f'{tag2.pk}: cannot be excluded']}
         )
 
-    def test_create_sub_manifest_pkg_info(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_sub_manifest_pkg_info(self, post_event):
         self._set_permissions("monolith.add_submanifestpkginfo")
         manifest = force_manifest()
         sub_manifest = force_sub_manifest(manifest=manifest)
         self.assertEqual(manifest.version, 1)
         pkg_info_name = force_name()
-        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={
-            'sub_manifest': sub_manifest.pk,
-            'pkg_info_name': pkg_info_name.name,
-            'featured_item': True,
-            'key': 'default_installs',
-            'excluded_tags': [],
-            'tag_shards': []
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+                'sub_manifest': sub_manifest.pk,
+                'pkg_info_name': pkg_info_name.name,
+                'featured_item': True,
+                'key': 'default_installs',
+                'excluded_tags': [],
+                'tag_shards': []
+            })
         self.assertEqual(response.status_code, 201)
         sub_manifest_pkg_info = SubManifestPkgInfo.objects.get(sub_manifest=sub_manifest,
                                                                pkg_info_name=pkg_info_name)
@@ -2855,6 +2857,32 @@ class MonolithAPIViewsTestCase(TestCase):
                          {"shards": {"modulo": 100, "default": 100}})
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, 
+            {"action": "created",
+             "object": {
+                 "model": "monolith.submanifestpkginfo",
+                 "pk": str(sub_manifest_pkg_info.pk),
+                 "new_value": {
+                    "pk": sub_manifest_pkg_info.pk,
+                    "key": 'default_installs',
+                    "sub_manifest": sub_manifest.serialize_for_event(keys_only=True),
+                    "pkg_info_name": pkg_info_name.serialize_for_event(),
+                    "featured_item": True,
+                    "options": {'shards': {'default': 100, 'modulo': 100}},
+                    "created_at": sub_manifest_pkg_info.created_at,
+                    "updated_at": sub_manifest_pkg_info.updated_at
+                 }
+             }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_sub_manifest_pkg_info": [str(sub_manifest_pkg_info.pk)],
+                                               "monolith_sub_manifest": [str(sub_manifest.pk)],
+                                               "monolith_pkg_info_name": [str(pkg_info_name.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update sub manifest pkg info
 
@@ -2872,8 +2900,10 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._put_json_data(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
-    def test_update_sub_manifest_pkg_info(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_sub_manifest_pkg_info(self, post_event):
         sub_manifest_pkg_info = force_sub_manifest_pkg_info()
+        prev_value = sub_manifest_pkg_info.serialize_for_event()
         self._set_permissions("monolith.change_submanifestpkginfo")
         new_manifest = force_manifest()
         new_sub_manifest = force_sub_manifest(manifest=new_manifest)
@@ -2882,21 +2912,22 @@ class MonolithAPIViewsTestCase(TestCase):
         new_condition = force_condition()
         excluded_tag = Tag.objects.create(name=get_random_string(12))
         shard_tag = Tag.objects.create(name=get_random_string(12))
-        response = self._put_json_data(
-            reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)),
-            data={
-                'sub_manifest': new_sub_manifest.pk,
-                'pkg_info_name': new_pkg_info_name.name,
-                'key': 'managed_updates',
-                'condition': new_condition.pk,
-                'excluded_tags': [excluded_tag.pk],
-                'shard_modulo': 42,
-                'default_shard': 0,
-                'tag_shards': [
-                    {"tag": shard_tag.pk, "shard": 17},
-                ]
-            }
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._put_json_data(
+                reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)),
+                data={
+                    'sub_manifest': new_sub_manifest.pk,
+                    'pkg_info_name': new_pkg_info_name.name,
+                    'key': 'managed_updates',
+                    'condition': new_condition.pk,
+                    'excluded_tags': [excluded_tag.pk],
+                    'shard_modulo': 42,
+                    'default_shard': 0,
+                    'tag_shards': [
+                        {"tag": shard_tag.pk, "shard": 17},
+                    ]
+                }
+            )
         self.assertEqual(response.status_code, 200)
         test_sub_manifest_pkg_info = SubManifestPkgInfo.objects.get(sub_manifest=new_sub_manifest,
                                                                     pkg_info_name=new_pkg_info_name)
@@ -2923,8 +2954,38 @@ class MonolithAPIViewsTestCase(TestCase):
             {"shards": {"modulo": 42, "default": 0, "tags": {shard_tag.name: 17}},
              "excluded_tags": [excluded_tag.name]}
         )
-        new_manifest.refresh_from_db()
-        self.assertEqual(new_manifest.version, 2)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, {
+                "action": "updated",
+                "object": {
+                    "model": "monolith.submanifestpkginfo",
+                    "pk": str(test_sub_manifest_pkg_info.pk),
+                    "prev_value": prev_value,
+                    "new_value": {
+                        "condition": new_condition.serialize_for_event(keys_only=True),
+                        "pk": test_sub_manifest_pkg_info.pk,
+                        "key": 'managed_updates',
+                        "sub_manifest": new_sub_manifest.serialize_for_event(keys_only=True),
+                        "pkg_info_name": new_pkg_info_name.serialize_for_event(),
+                        "featured_item": False,
+                        "options": {'excluded_tags': [str(excluded_tag.name)], 'shards': {'default': 0,
+                                                                                          'modulo': 42,
+                                                                                          'tags':
+                                                                                          {str(shard_tag.name): 17}}},
+                        "created_at": test_sub_manifest_pkg_info.created_at,
+                        "updated_at": test_sub_manifest_pkg_info.updated_at
+                    }
+                }
+            }
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_sub_manifest_pkg_info": [str(test_sub_manifest_pkg_info.pk)],
+                                               "monolith_sub_manifest": [str(new_sub_manifest.pk)],
+                                               "monolith_pkg_info_name": [str(new_pkg_info_name.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # delete sub manifest pkg info
 
@@ -2941,14 +3002,36 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_sub_manifest_pkg_info(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_sub_manifest_pkg_info(self, post_event):
         sub_manifest_pkg_info = force_sub_manifest_pkg_info()
+        prev_value = sub_manifest_pkg_info.serialize_for_event()
         sub_manifest = sub_manifest_pkg_info.sub_manifest
         manifest = sub_manifest.manifestsubmanifest_set.first().manifest
         self.assertEqual(manifest.version, 1)
         force_pkg_info(sub_manifest=sub_manifest)
         self._set_permissions("monolith.delete_submanifestpkginfo")
-        response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)))
         self.assertEqual(response.status_code, 204)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, {
+                "action": "deleted",
+                "object": {
+                    "model": "monolith.submanifestpkginfo",
+                    "pk": str(prev_value['pk']),
+                    "prev_value": prev_value
+                }
+            }
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], 
+                         {"monolith_sub_manifest_pkg_info": [str(sub_manifest_pkg_info.pk)],
+                          "monolith_sub_manifest": [str(sub_manifest.pk)],
+                          "monolith_pkg_info_name": [str(sub_manifest_pkg_info.pkg_info_name.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])

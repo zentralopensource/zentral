@@ -634,7 +634,7 @@ class DeleteSubManifestView(PermissionRequiredMixin, DeleteViewWithAudit):
     success_url = reverse_lazy("monolith:sub_manifests")
 
 
-class SubManifestAddPkgInfoView(PermissionRequiredMixin, FormView):
+class SubManifestAddPkgInfoView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "monolith.add_submanifestpkginfo"
     form_class = SubManifestPkgInfoForm
     template_name = 'monolith/edit_sub_manifest_pkg_info.html'
@@ -654,15 +654,13 @@ class SubManifestAddPkgInfoView(PermissionRequiredMixin, FormView):
         return context
 
     def form_valid(self, form):
-        smpi = form.save(commit=False)
-        smpi.sub_manifest = self.sub_manifest
-        smpi.save()
+        response = super().form_valid(form)
         for _, manifest in self.sub_manifest.manifests_with_tags():
             manifest.bump_version()
-        return redirect(self.sub_manifest)
+        return response
 
 
-class UpdateSubManifestPkgInfoView(PermissionRequiredMixin, UpdateView):
+class UpdateSubManifestPkgInfoView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "monolith.change_submanifestpkginfo"
     model = SubManifestPkgInfo
     form_class = SubManifestPkgInfoForm
@@ -674,13 +672,14 @@ class UpdateSubManifestPkgInfoView(PermissionRequiredMixin, UpdateView):
         return context
 
     def form_valid(self, form):
-        smpi = form.save()
-        for _, manifest in smpi.sub_manifest.manifests_with_tags():
+        sub_manifest = self.object.sub_manifest
+        response = super().form_valid(form)
+        for _, manifest in sub_manifest.manifests_with_tags():
             manifest.bump_version()
-        return redirect(smpi.sub_manifest)
+        return response
 
 
-class DeleteSubManifestPkgInfoView(PermissionRequiredMixin, DeleteView):
+class DeleteSubManifestPkgInfoView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "monolith.delete_submanifestpkginfo"
     model = SubManifestPkgInfo
     template_name = "monolith/delete_sub_manifest_pkg_info.html"
