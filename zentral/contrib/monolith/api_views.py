@@ -335,7 +335,7 @@ class SubManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # sub manifest pkg infos
 
 
-class SubManifestPkgInfoList(generics.ListCreateAPIView):
+class SubManifestPkgInfoList(ListCreateAPIViewWithAudit):
     queryset = SubManifestPkgInfo.objects.all()
     serializer_class = SubManifestPkgInfoSerializer
     permission_classes = [DefaultDjangoModelPermissions]
@@ -343,7 +343,7 @@ class SubManifestPkgInfoList(generics.ListCreateAPIView):
     filterset_fields = ('sub_manifest_id',)
 
 
-class SubManifestPkgInfoDetail(generics.RetrieveUpdateDestroyAPIView):
+class SubManifestPkgInfoDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = SubManifestPkgInfo.objects.all()
     serializer_class = SubManifestPkgInfoSerializer
     permission_classes = [DefaultDjangoModelPermissions]

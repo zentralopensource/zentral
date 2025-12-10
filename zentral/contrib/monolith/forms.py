@@ -190,6 +190,10 @@ class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
             )
         self.tag_shards.sort(key=lambda t: t[0].name.lower())
 
+    def save(self, *args, **kwargs):
+        self.instance.sub_manifest = self.sub_manifest
+        return super().save(*args, **kwargs)
+
     def clean(self):
         super().clean()
         # shards

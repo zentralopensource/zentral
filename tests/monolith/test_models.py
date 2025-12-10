@@ -6,7 +6,8 @@ from zentral.contrib.monolith.models import (CachedPkgInfo,
                                              Manifest, ManifestCatalog, ManifestSubManifest,
                                              PkgInfo, PkgInfoName, SubManifest)
 from zentral.contrib.munki.models import ManagedInstall
-from .utils import force_catalog, force_pkg_info, force_manifest_enrollment_package, force_repository
+from .utils import (force_catalog, force_pkg_info, force_manifest_enrollment_package, force_repository,
+                    force_sub_manifest_pkg_info)
 
 
 def sorted_objects(object_list):
@@ -344,3 +345,8 @@ class MonolithModelsTestCase(TestCase):
         pkg_info = PkgInfo.objects.get(name__name="osquery")
         cpi = self.manifest.get_pkginfo_for_cache([self.tag_1, self.tag_2], pkg_info.pk)
         self.assertEqual(cpi.name, pkg_info.name.name)
+
+    def test_submanifestpkginfo_serialize_for_event(self):
+        smpi = force_sub_manifest_pkg_info(sub_manifest=self.sub_manifest_1)
+        d = smpi.serialize_for_event(keys_only=True)
+        self.assertEqual(d, {'pk': smpi.pk})

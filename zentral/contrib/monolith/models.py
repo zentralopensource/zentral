@@ -306,8 +306,9 @@ class PkgInfoName(models.Model):
     def serialize_for_event(self):
         return {"pk": self.pk, "name": self.name, "created_at": self.created_at}
 
+    # TODO: reevaluate for backward compatibility
     def linked_objects_keys_for_event(self):
-        return {"munki_pkginfo_name": ((self.name,),)}
+        return {"monolith_pkg_info_name": ((self.pk,),), "munki_pkginfo_name": ((self.name,),)}
 
 
 class PkgInfoManager(models.Manager):
@@ -557,7 +558,10 @@ class PkgInfo(models.Model):
 
     def linked_objects_keys_for_event(self):
         return {"munki_pkginfo_name": ((self.name.name,),),
-                "munki_pkginfo": ((self.name.name, self.version),)}
+                "munki_pkginfo": ((self.name.name, self.version),),
+                "monolith_pkg_info": [(self.pk,)],
+                "monolith_pkg_info_name": [(self.name.pk,)],
+                "monolith_repository": [(self.repository.pk,)]}
 
 
 @dataclass
@@ -796,6 +800,30 @@ class SubManifestPkgInfo(models.Model):
     @property
     def shard_modulo(self):
         return self.options.get("shards", {}).get("modulo", 100)
+
+    # events
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk}
+        if keys_only:
+            return d
+        if self.condition:
+            d["condition"] = self.condition.serialize_for_event(keys_only=True)
+        d.update({
+            "key": self.key,
+            "sub_manifest": self.sub_manifest.serialize_for_event(keys_only=True),
+            "pkg_info_name": self.pkg_info_name.serialize_for_event(),
+            "featured_item": self.featured_item,
+            "options": self.options,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        })
+        return d
+
+    def linked_objects_keys_for_event(self):
+        return {"monolith_sub_manifest_pkg_info": [(self.pk,)],
+                "monolith_sub_manifest": [(self.sub_manifest.pk,)],
+                "monolith_pkg_info_name": [(self.pkg_info_name.pk,)]}
 
 
 def attachment_path(instance, filename):
