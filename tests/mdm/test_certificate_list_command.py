@@ -28,14 +28,8 @@ class CertificateListCommandTestCase(TestCase):
         )
         cls.enrolled_device.blueprint = cls.blueprint
         cls.enrolled_device.save()
-        cls.certificate_list = plistlib.load(
-            open(
-                os.path.join(
-                    os.path.dirname(__file__), "testdata/certificate_list.plist"
-                ),
-                "rb",
-            )
-        )
+        with open(os.path.join(os.path.dirname(__file__), "testdata/certificate_list.plist"), "rb") as f:
+            cls.certificate_list = plistlib.load(f)
 
     # verify_channel_and_device
 

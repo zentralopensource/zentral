@@ -35,17 +35,10 @@ class SecurityInfoCommandTestCase(TestCase):
             realm_user=True
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
-        cls.security_info = plistlib.load(
-            open(os.path.join(os.path.dirname(__file__),
-                              "testdata/security_info.plist"),
-                 "rb")
-        )
-        cls.security_info_ios = plistlib.load(
-            open(os.path.join(os.path.dirname(__file__),
-                              "testdata/security_info_ios.plist"),
-                 "rb")
-        )
-
+        with open(os.path.join(os.path.dirname(__file__), "testdata/security_info.plist"), "rb") as f:
+            cls.security_info = plistlib.load(f)
+        with open(os.path.join(os.path.dirname(__file__), "testdata/security_info_ios.plist"), "rb") as f:
+            cls.security_info_ios = plistlib.load(f)
         cls.blueprint = Blueprint.objects.create(name=get_random_string(12))
         cls.enrolled_device.blueprint = cls.blueprint
         cls.enrolled_device.save()

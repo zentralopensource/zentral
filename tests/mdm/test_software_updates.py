@@ -22,11 +22,13 @@ class MDMSoftwareUpdateTestCase(TestCase):
     def setUpTestData(cls):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
-        cls.fake_response = json.load(
-            open(os.path.join(os.path.dirname(__file__),
-                              "testdata/software_lookup_service_response.json"),
-                 "rb")
-        )
+        with open(
+            os.path.join(
+                os.path.dirname(__file__),
+                "testdata/software_lookup_service_response.json"
+            ), "rb"
+        ) as f:
+            cls.fake_response = json.load(f)
 
     # utils
 

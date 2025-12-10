@@ -26,11 +26,8 @@ class DeviceInformationCommandTestCase(TestCase):
             completed=True,
             realm_user=True
         )
-        cls.device_information = plistlib.load(
-            open(os.path.join(os.path.dirname(__file__),
-                              "testdata/device_information.plist"),
-                 "rb")
-        )
+        with open(os.path.join(os.path.dirname(__file__), "testdata/device_information.plist"), "rb") as f:
+            cls.device_information = plistlib.load(f)
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
         blueprint = Blueprint.objects.create(name=get_random_string(12))
         cls.enrolled_device.blueprint = blueprint

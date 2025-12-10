@@ -53,12 +53,8 @@ class TestMDMCommandsBase(TestCase):
         self.assertEqual(cm.exception.args[0], "Unknown command model class: Ceci n'est pas un nom de commande")
 
     def test_load_device_command_with_result(self):
-        result = plistlib.load(
-            open(
-                os.path.join(os.path.dirname(__file__), "testdata/profile_list.plist"),
-                "rb",
-            )
-        )
+        with open(os.path.join(os.path.dirname(__file__), "testdata/profile_list.plist"), "rb") as f:
+            result = plistlib.load(f)
         result["UDID"] = self.enrolled_device.udid.upper()
         result_time = datetime.utcnow()
         db_command = DeviceCommand.objects.create(

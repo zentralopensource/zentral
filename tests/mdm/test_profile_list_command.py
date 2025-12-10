@@ -28,12 +28,8 @@ class ProfileListCommandTestCase(TestCase):
         )
         cls.enrolled_device.blueprint = cls.blueprint
         cls.enrolled_device.save()
-        cls.profile_list = plistlib.load(
-            open(
-                os.path.join(os.path.dirname(__file__), "testdata/profile_list.plist"),
-                "rb",
-            )
-        )
+        with open(os.path.join(os.path.dirname(__file__), "testdata/profile_list.plist"), "rb") as f:
+            cls.profile_list = plistlib.load(f)
 
     # verify_channel_and_device
 

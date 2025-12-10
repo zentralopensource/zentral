@@ -517,11 +517,8 @@ def build_payload(
     missing_payload_uuid=False,
     payload_scope=None,
 ):
-    payload = plistlib.load(
-        open(os.path.join(os.path.dirname(__file__),
-                          "testdata/test.mobileconfig"),
-             "rb")
-    )
+    with open(os.path.join(os.path.dirname(__file__), "testdata/test.mobileconfig"), "rb") as f:
+        payload = plistlib.load(f)
     if channel == Channel.DEVICE:
         payload["PayloadScope"] = "System"
     elif channel == Channel.USER:
@@ -1012,9 +1009,8 @@ def force_dep_enrollment_custom_view(dep_enrollment, weight=1, requires_authenti
 def build_status_report(extra_configurations=None):
     if not extra_configurations:
         extra_configurations = []
-    status_report = json.load(
-        open(os.path.join(os.path.dirname(__file__), "testdata/status_report.json"), "rb")
-    )
+    with open(os.path.join(os.path.dirname(__file__), "testdata/status_report.json"), "rb") as f:
+        status_report = json.load(f)
     configurations = status_report["StatusItems"]["management"]["declarations"]["configurations"]
     configurations.pop()
     for artifact_version, valid, active, reasons in extra_configurations:

@@ -44,24 +44,12 @@ class ManagedApplicationListCommandTestCase(TestCase):
         )
         cls.enrolled_device.blueprint = cls.blueprint
         cls.enrolled_device.save()
-        cls.device_information = plistlib.load(
-            open(
-                os.path.join(
-                    os.path.dirname(__file__), "testdata/device_information.plist"
-                ),
-                "rb",
-            )
-        )
+        with open(os.path.join(os.path.dirname(__file__), "testdata/device_information.plist"), "rb") as f:
+            cls.device_information = plistlib.load(f)
         cls.device_information["UDID"] = cls.enrolled_device.udid
         cls.device_information["SerialNumber"] = cls.enrolled_device.serial_number
-        cls.managed_application_list = plistlib.load(
-            open(
-                os.path.join(
-                    os.path.dirname(__file__), "testdata/managed_application_list.plist"
-                ),
-                "rb",
-            )
-        )
+        with open(os.path.join(os.path.dirname(__file__), "testdata/managed_application_list.plist"), "rb") as f:
+            cls.managed_application_list = plistlib.load(f)
 
     def _get_response(self, cmd, status=None):
         response = copy.deepcopy(self.managed_application_list)

@@ -38,11 +38,8 @@ class MDMInventoryTestCase(TestCase):
         cls.enrolled_device.save()
 
     def read_plist(self, filename):
-        return plistlib.load(
-            open(os.path.join(os.path.dirname(__file__),
-                              "testdata", filename),
-                 "rb")
-        )
+        with open(os.path.join(os.path.dirname(__file__), "testdata", filename), "rb") as f:
+            return plistlib.load(f)
 
     def test_ms_tree_from_payload(self):
         device_information = self.read_plist("device_information.plist")
