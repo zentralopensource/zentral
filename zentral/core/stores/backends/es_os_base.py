@@ -203,7 +203,7 @@ class ESOSStore(BaseStore):
                 # wait for index recovery
                 waiting_for_recovery = False
                 while True:
-                    recovery = self._client.indices.recovery(index=self.index, params={"active_only": "true"})
+                    recovery = self._client.indices.recovery(index=self.index, active_only=True)
                     shards = recovery.get(self.index, {}).get("shards", [])
                     if any(c["stage"] != "DONE" for c in shards):
                         waiting_for_recovery = True
