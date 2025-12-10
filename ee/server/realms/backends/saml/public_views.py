@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from dateutil import parser
 from django.core.exceptions import PermissionDenied
@@ -6,7 +6,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.decorators import method_decorator
-from django.utils.timezone import is_aware, make_naive, utc
+from django.utils.timezone import is_aware, make_naive
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
 from saml2 import BINDING_HTTP_POST
@@ -133,7 +133,7 @@ class AssertionConsumerServiceView(BaseSPView):
                 except (TypeError, parser.ParserError):
                     pass
         if expires_at and is_aware(expires_at):
-            expires_at = make_naive(expires_at, utc)
+            expires_at = make_naive(expires_at, timezone.utc)
 
         # finalize the authentication session
         return finalize_session(ras, request, realm_user, expires_at)

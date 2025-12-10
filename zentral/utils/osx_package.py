@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from importlib import import_module
 from itertools import chain
 import logging
@@ -10,7 +10,7 @@ from subprocess import check_call, check_output
 import tempfile
 import xml.etree.ElementTree as ET
 from django.http import HttpResponse, HttpResponseNotModified
-from django.utils import timezone
+from django.utils.timezone import is_aware, make_aware
 from django.utils.http import http_date, parse_etags, parse_http_date_safe, quote_etag
 from zentral.conf import settings
 
@@ -370,8 +370,8 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
             response['ETag'] = quote_etag(etag)
         last_modified_dt = self.get_last_modified_dt()
         if last_modified_dt and isinstance(last_modified_dt, datetime):
-            if not timezone.is_aware(last_modified_dt):
-                last_modified_dt = timezone.make_aware(last_modified_dt, timezone.utc)
+            if not is_aware(last_modified_dt):
+                last_modified_dt = make_aware(last_modified_dt, timezone.utc)
             response['Last-Modified'] = http_date(last_modified_dt.timestamp())
 
     def build_and_make_response(self):
