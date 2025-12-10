@@ -61,8 +61,8 @@ payloadkeys:
       - supervised
   type: <dictionary>
   presence: optional
-  content: This object configures the deferral of software updates. Rapid Security
-    Responses aren't considered in `Major`, `Minor`, or `System` deferral mechanism.
+  content: This object configures the deferral of software updates. Background Security
+    Improvements aren't considered in `Major`, `Minor`, or `System` deferral mechanism.
   subkeys:
   - key: CombinedPeriodInDays
     title: Combined Major/Minor Update Deferral Period
@@ -224,7 +224,7 @@ payloadkeys:
       - `AlwaysOn` - automatic installations are always enabled.
       - `AlwaysOff` - automatic installations are always disabled.
 - key: RapidSecurityResponse
-  title: Rapid Security Response Settings
+  title: Background Security Improvement Settings
   supportedOS:
     iOS:
       allowed-enrollments:
@@ -235,29 +235,29 @@ payloadkeys:
       introduced: n/a
   type: <dictionary>
   presence: optional
-  content: These configurations set user access to interacting with Rapid Security
-    Responses (RSRs).
+  content: These configurations set user access to interacting with Background Security
+    Improvement.
   subkeys:
   - key: Enable
-    title: Enable Rapid Security Response Installation
+    title: Enable Background Security Improvement Installation
     type: <boolean>
     presence: optional
     default: true
     combinetype: boolean-and
     content: |-
-      If set to `false`, Rapid Security Responses aren't offered for user installation. The system can still install Rapid Security Responses with `com.apple.configuration.softwareupdate.enforcement.specific` configurations.
+      If set to `false`, Background Security Improvements aren't offered for user installation. The system can still install Background Security Improvements with `com.apple.configuration.softwareupdate.enforcement.specific` configurations.
 
-      If set to `true`, the system offers Rapid Security Responses to the user.
+      If set to `true`, the system offers Background Security Improvements to the user.
   - key: EnableRollback
-    title: Enable Rapid Security Response Rollbacks
+    title: Enable Background Security Improvement Rollbacks
     type: <boolean>
     presence: optional
     default: true
     combinetype: boolean-and
     content: |-
-      If set to `false`, the system doesn't offer Rapid Security Response rollbacks to the user.
+      If set to `false`, the system doesn't offer Background Security Improvement rollbacks to the user.
 
-      If set to `true`, the system offers Rapid Security Response rollbacks to the user.
+      If set to `true`, the system offers Background Security Improvement rollbacks to the user.
 - key: AllowStandardUserOSUpdates
   title: Allow Standard User OS Updates
   supportedOS:
