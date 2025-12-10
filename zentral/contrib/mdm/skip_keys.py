@@ -4,9 +4,8 @@ from django.utils.functional import SimpleLazyObject
 
 
 def load_yaml():
-    return yaml.safe_load(
-        open(os.path.join(os.path.dirname(__file__), "schema_data/other/skipkeys.yaml"), "r")
-    )
+    with open(os.path.join(os.path.dirname(__file__), "schema_data/other/skipkeys.yaml"), "r") as f:
+        return yaml.safe_load(f)
 
 
 def build_skippable_setup_panes():
