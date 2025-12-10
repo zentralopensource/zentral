@@ -166,7 +166,7 @@ if MAX_PASSWORD_AGE_DAYS:
 
 ROOT_URLCONF = 'server.urls'
 
-FORM_RENDERER = 'django.forms.renderers.TemplatesSetting'
+FORM_RENDERER = 'zentral.utils.forms.ZentralFormRenderer'
 
 TEMPLATES = [
     {
