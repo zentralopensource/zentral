@@ -27,7 +27,7 @@ class TestElasticsearchStoreStorage(TestCase, BaseTestStore):
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
-        cls.store._client.indices.delete(index=cls.index, ignore=[404])
+        cls.store._client.options(ignore_status=404).indices.delete(index=cls.index)
         cls.store.close()
 
 
