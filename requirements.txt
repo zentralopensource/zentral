@@ -10,7 +10,7 @@ clickhouse-connect
 django-celery-results==2.6.0
 cryptography                    # MDM, monolith (cloudfront), munki
 defusedxml
-django>=4.2.8,<5
+django>=5.2.9,<6
 djangorestframework
 djangorestframework-yaml
 django-filter                   # API
