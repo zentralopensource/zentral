@@ -1,15 +1,12 @@
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.wsone.models import Instance
 from zentral.contrib.wsone.preprocessors import get_preprocessors
 
 
-@override_settings(
-    STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage'
-)
 @patch.multiple(
     "zentral.contrib.wsone.api_client.Client",
     get_device=MagicMock(return_value={}),  # empty device

@@ -1,12 +1,11 @@
 from django.contrib.auth.models import Group
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.conf import settings
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class NginxAuthRequestViewTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

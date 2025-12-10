@@ -1,14 +1,13 @@
 from importlib import import_module
 from django.conf import settings
 from django.http import HttpRequest
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from realms.backends.views import finalize_session
 from realms.models import RealmAuthenticationSession
 from .utils import force_realm, force_realm_user
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class SantaSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

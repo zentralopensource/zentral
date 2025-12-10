@@ -9,7 +9,7 @@ import uuid
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from accounts.models import User
@@ -34,7 +34,6 @@ from .utils import (CLOUDFRONT_PRIVKEY_PEM,
                     force_repository)
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class MonolithSetupViewsTestCase(TestCase):
     maxDiff = None
 

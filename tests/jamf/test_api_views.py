@@ -1,6 +1,6 @@
 import json
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from zentral.contrib.jamf.models import JamfInstance
 from zentral.core.events.base import EventObserver
 
@@ -30,7 +30,6 @@ PAYLOAD = {"webhook": {"webhookEvent": "ComputerCheckIn"},
            "event": COMPUTER_CHECKIN}
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class JssAPIViewsTestCase(TestCase):
     def post_as_json(self, secret, data):
         return self.client.post(reverse("jamf:post_event", args=(secret,)),

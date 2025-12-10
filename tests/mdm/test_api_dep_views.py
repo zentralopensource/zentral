@@ -6,7 +6,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep_client import DEPClientError
@@ -14,7 +14,6 @@ from zentral.contrib.mdm.events import DEPDeviceDisownedEvent
 from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class APIViewsTestCase(TestCase):
     maxDiff = None
 

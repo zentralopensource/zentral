@@ -63,8 +63,8 @@ class MDMTerraformTestCase(TestCase):
         resource = ProfileResource(profile)
         self.assertEqual(
             resource.to_representation(),
-            f'resource "zentral_mdm_profile" "profile{ profile.pk }" {{\n'
-            f'  artifact_id = zentral_mdm_artifact.artifact{ artifact.pk}.id\n'
+            f'resource "zentral_mdm_profile" "profile{profile.pk}" {{\n'
+            f'  artifact_id = zentral_mdm_artifact.artifact{artifact.pk}.id\n'
             f'  source      = filebase64("${{path.module}}/profiles/{profile_filename}")\n'
             '  macos       = true\n'
             '  version     = 1\n'
@@ -88,8 +88,8 @@ class MDMTerraformTestCase(TestCase):
         resource = ProfileResource(profile)
         self.assertEqual(
             resource.to_representation(),
-            f'resource "zentral_mdm_profile" "profile{ profile.pk }" {{\n'
-            f'  artifact_id       = zentral_mdm_artifact.artifact{ artifact.pk}.id\n'
+            f'resource "zentral_mdm_profile" "profile{profile.pk}" {{\n'
+            f'  artifact_id       = zentral_mdm_artifact.artifact{artifact.pk}.id\n'
             f'  source            = filebase64("${{path.module}}/profiles/{profile_filename}")\n'
             '  macos             = true\n'
             '  macos_min_version = "13.3.1"\n'

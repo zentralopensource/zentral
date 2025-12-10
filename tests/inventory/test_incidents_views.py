@@ -5,14 +5,13 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from accounts.models import User
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaMachine
 from zentral.core.incidents.models import MachineIncident, Incident, Severity, Status
 from zentral.core.probes.models import ProbeSource
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class InventoryIncidentsViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

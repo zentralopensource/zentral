@@ -10,7 +10,6 @@ from .utils import build_report, build_self_signed_cert
 
 @override_settings(
     CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
-    STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage'
 )
 class PuppetPostReportViewTestCase(TestCase):
     @classmethod

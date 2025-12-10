@@ -1,7 +1,7 @@
 import os.path
 import plistlib
 from unittest.mock import Mock, patch
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from realms.models import RealmAuthenticationSession
@@ -12,7 +12,6 @@ from zentral.contrib.mdm.public_views.ota import ota_enroll_callback
 from .utils import force_ota_enrollment, force_ota_enrollment_session, force_realm, force_realm_user
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
 class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
     @classmethod

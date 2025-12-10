@@ -2,7 +2,7 @@ from functools import reduce
 import operator
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
@@ -11,7 +11,6 @@ from zentral.contrib.mdm.models import Artifact, DeviceArtifact, TargetArtifact
 from .utils import force_artifact, force_blueprint_artifact, force_dep_enrollment_session
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class ArtifactVersionManagementViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

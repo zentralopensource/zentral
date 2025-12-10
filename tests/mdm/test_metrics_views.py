@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils.crypto import get_random_string
 from prometheus_client.parser import text_string_to_metric_families
 from zentral.conf import settings
@@ -12,9 +12,6 @@ from .utils import (force_artifact, force_blueprint, force_dep_enrollment_sessio
                     force_enrolled_user, force_ota_enrollment_session)
 
 
-@override_settings(
-    STATICFILES_STORAGE="django.contrib.staticfiles.storage.StaticFilesStorage"
-)
 class MDMMetricsViewsTestCase(TestCase):
     maxDiff = None
 

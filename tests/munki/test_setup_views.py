@@ -8,7 +8,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from unittest.mock import patch
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.munki.models import Enrollment
@@ -19,7 +19,6 @@ from zentral.utils.provisioning import provision
 from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class MunkiSetupViewsTestCase(TestCase):
     maxDiff = None
 

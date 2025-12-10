@@ -5,7 +5,7 @@ from unittest.mock import patch
 import uuid
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
-from django.test import override_settings, TestCase
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
@@ -14,7 +14,6 @@ from zentral.contrib.intune.models import Tenant
 from zentral.core.events.base import AuditEvent
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class IntuneViewsTestCase(TestCase):
     maxDiff = None
 

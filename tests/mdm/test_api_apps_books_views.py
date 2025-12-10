@@ -4,13 +4,12 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from .utils import force_dep_enrollment_session, force_location, force_location_asset
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class APIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

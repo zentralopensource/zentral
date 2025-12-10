@@ -6,7 +6,7 @@ from django.contrib.auth.models import Group, Permission
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 import pyotp
@@ -17,7 +17,6 @@ from zentral.core.events.base import AuditEvent
 from unittest.mock import patch
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class AccountUsersViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

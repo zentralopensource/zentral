@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.http import HttpRequest
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from realms.backends.views import finalize_session
@@ -22,7 +22,6 @@ from .utils import (add_file_to_test_class, force_ballot, force_configuration,
                     new_sha256)
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class SantaSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

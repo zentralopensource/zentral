@@ -1,6 +1,6 @@
 import plistlib
 from unittest.mock import Mock, patch
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.mdm.crypto import verify_signed_payload
@@ -11,7 +11,6 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from .utils import force_realm_user, force_user_enrollment
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
 class MDMUserEnrollmentPublicViewsTestCase(TestCase):
     @classmethod

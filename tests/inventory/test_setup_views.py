@@ -5,13 +5,12 @@ from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag, Taxonomy
 from zentral.core.events.base import AuditEvent
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class InventorySetupViewsTestCase(TestCase):
     maxDiff = None
 

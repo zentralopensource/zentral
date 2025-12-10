@@ -1,11 +1,10 @@
 import urllib.parse
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from zentral.contrib.inventory.models import BusinessUnit, MachineSnapshotCommit, MachineTag, Tag
 from accounts.models import User
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class InventoryLoginRedirectTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

@@ -56,7 +56,7 @@ class OsqueryTerraformTestCase(TestCase):
         resource = QueryResource(query)
         self.assertIn(
           "scheduling = { interval = 12983, log_removed_actions = false, "
-          f"pack_id = zentral_osquery_pack.pack{ pack.id}.id }}",
+          f"pack_id = zentral_osquery_pack.pack{pack.id}.id }}",
           resource.to_representation()
         )
 

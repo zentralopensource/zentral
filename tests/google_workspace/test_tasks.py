@@ -17,7 +17,7 @@ class SyncGroupTagMappingsTaskTestCase(TestCase):
         connection.save()
 
         return connection
-    
+
     def _given_serialized_event_request(self):
         return {
             "user_agent": f"TestAgent:{get_random_string(6)}",

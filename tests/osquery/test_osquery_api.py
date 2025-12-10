@@ -2,7 +2,7 @@ from datetime import datetime
 import json
 from unittest.mock import patch
 import uuid
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse, NoReverseMatch
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
@@ -159,7 +159,6 @@ EC2_INSTANCE_TAGS = [
 ]
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class OsqueryAPIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

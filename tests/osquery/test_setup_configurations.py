@@ -2,7 +2,7 @@ from functools import reduce
 import operator
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
@@ -10,7 +10,6 @@ from zentral.contrib.inventory.models import Tag
 from zentral.contrib.osquery.models import Configuration, ConfigurationPack, Pack, PackQuery, Query
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class OsquerySetupConfigurationsViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

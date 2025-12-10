@@ -3,7 +3,7 @@ import operator
 from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
@@ -13,7 +13,6 @@ from .utils import (force_blueprint, force_blueprint_artifact,
                     force_recovery_password_config, force_software_update_enforcement)
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class BlueprintManagementViewsTestCase(TestCase):
     maxDiff = None
 

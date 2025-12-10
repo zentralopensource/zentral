@@ -6,7 +6,7 @@ from django.conf import settings
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from realms.backends.views import finalize_session
 from realms.models import RealmAuthenticationSession
 from zentral.contrib.santa.ballot_box import BallotBox
@@ -15,7 +15,6 @@ from zentral.contrib.santa.models import Ballot, Rule, Target
 from .utils import add_file_to_test_class, force_configuration, force_enrolled_machine, force_realm, force_realm_user
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class SantaSetupViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

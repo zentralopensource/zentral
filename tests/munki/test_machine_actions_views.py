@@ -4,14 +4,13 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.provisioning import provision
 from .utils import force_munki_state
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class MunkiMachineActionsViewsTestCase(TestCase):
     maxDiff = None
 

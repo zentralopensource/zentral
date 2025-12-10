@@ -4,7 +4,7 @@ import operator
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from django.utils.text import slugify
@@ -12,7 +12,6 @@ from zentral.contrib.osquery.compliance_checks import sync_query_compliance_chec
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class OsquerySetupPacksViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

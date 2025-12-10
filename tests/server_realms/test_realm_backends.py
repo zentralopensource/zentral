@@ -1,7 +1,7 @@
 from unittest.mock import patch
 from urllib.parse import urlparse, parse_qs
 import uuid
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmAuthenticationSession
@@ -66,7 +66,6 @@ KKbzX9i21E/u9379kpBdfZE18RWsDw==
 """
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class RealmBackendsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

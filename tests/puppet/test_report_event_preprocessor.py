@@ -1,16 +1,13 @@
 from datetime import datetime
 from unittest.mock import patch
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.puppet.models import Instance
 from zentral.contrib.puppet.preprocessors import get_preprocessors
 from .utils import build_report, build_self_signed_cert
 
 
-@override_settings(
-    STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage'
-)
 class PuppetWebhookPreprocessorTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

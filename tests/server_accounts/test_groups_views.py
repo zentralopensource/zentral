@@ -2,13 +2,12 @@ from functools import reduce
 import operator
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import ProvisionedRole, User
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class AccountUsersViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

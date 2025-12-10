@@ -8,7 +8,6 @@ class BuildCustomErrorPagesBaseManagementCommandsTest(TestCase):
     def test_default(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
             with self.settings(
-                STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage',
                 STATIC_ROOT=tmpdirname,
             ):
                 self.assertEqual(len(os.listdir(tmpdirname)), 0)

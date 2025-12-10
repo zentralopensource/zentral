@@ -20,6 +20,11 @@
       "web"
     ],
     "MEDIA_ROOT": "/var/zentral",
+    "STORAGES": {
+      "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+      }
+    },
     "POSTGRES_HOST": "{{ env:POSTGRES_HOST }}",
     "POSTGRES_PASSWORD": "{{ env:POSTGRES_PASSWORD }}"
   },

@@ -4,7 +4,7 @@ from unittest.mock import patch
 import uuid
 from django.db.models import F
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import NoReverseMatch
 from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
@@ -17,7 +17,6 @@ from zentral.core.incidents.models import Severity
 from .utils import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class SantaAPIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

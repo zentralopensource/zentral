@@ -9,7 +9,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, File, Tag
@@ -22,7 +22,6 @@ from .utils import (force_configuration,
                     new_cdhash, new_sha256, new_signing_id_identifier, new_team_id)
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class SantaSetupViewsTestCase(TestCase):
     maxDiff = None
 
@@ -1081,7 +1080,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, "Rules (2)")
         self.assertContains(response, rule.target.identifier)
         self.assertContains(response, scoped_rule.target.identifier)
-        
+
         # global only
         response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)),
                                    {"is_global_rule": "global_only"})
@@ -1090,7 +1089,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, "Rule (1)")
         self.assertContains(response, rule.target.identifier)
         self.assertNotContains(response, scoped_rule.target.identifier)
-        
+
         # scoped only
         response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)),
                                    {"is_global_rule": "scoped_only"})

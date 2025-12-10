@@ -29,8 +29,8 @@ def do_rules_download(enrollment_url, uuid):
 
 if __name__ == "__main__":
     # enrollment_url, uuid, sn = sys.argv[1:]
-    # enrollment_url = "https://zentral.sidewalklabs.com/santa/sync/kb9hMOLwSCVyTtlErd0hTWzubB22iZksbCqiVbOohYQWqrbRXobodiNfSy0nMnef/"
-    # enrollment_url = "https://zaio.zentral.dev/santa/sync/uyQ5ssb4wwx5RNEwireWwo9nVEaFxQuZo4It3yf37xoJdsO7dmcM4K4fFn6a9s0Q/"
+    # enrollment_url = "https://zentral.sidewalklabs.com/santa/sync/kb9hMOLwSCVyTtlErd0hTWzubB22iZksbCqiVbOohYQWqrbRXobodiNfSy0nMnef/" # NOQA
+    # enrollment_url = "https://zaio.zentral.dev/santa/sync/uyQ5ssb4wwx5RNEwireWwo9nVEaFxQuZo4It3yf37xoJdsO7dmcM4K4fFn6a9s0Q/" # NOQA
     enrollment_url = "https://zentral/santa/sync/dIMvUv8xzcDOw4twfq55SPtAfqlpf4cXzmpwDwLZtNZmFLSRcoXt45Ut1FaXLDcB/"
     verify_tls = False
     uuid = "564DEB9A-4C88-D431-75BC-A30036909992"

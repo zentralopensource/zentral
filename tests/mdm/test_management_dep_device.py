@@ -4,7 +4,7 @@ import operator
 from unittest.mock import Mock, patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
@@ -13,7 +13,6 @@ from zentral.contrib.mdm.models import DEPDevice
 from .utils import force_dep_device, force_dep_enrollment
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class DEPDeviceManagementViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

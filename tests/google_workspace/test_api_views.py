@@ -3,7 +3,7 @@ import operator
 import uuid
 import json
 from unittest.mock import patch, Mock
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -15,7 +15,6 @@ from zentral.contrib.inventory.models import Tag
 from zentral.core.events.base import AuditEvent
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class ApiViewsTestCase(TestCase):
 
     @classmethod

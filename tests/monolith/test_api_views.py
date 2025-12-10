@@ -1002,7 +1002,7 @@ class MonolithAPIViewsTestCase(TestCase):
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
-            event.payload, 
+            event.payload,
             {"action": "created",
              "object": {
                  "model": "monolith.manifest",
@@ -2525,7 +2525,7 @@ class MonolithAPIViewsTestCase(TestCase):
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
-            event.payload, 
+            event.payload,
             {"action": "created",
              "object": {
                  "model": "monolith.submanifest",

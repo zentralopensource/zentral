@@ -3,7 +3,7 @@ import operator
 import uuid
 import json
 from unittest.mock import patch, Mock
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
@@ -18,7 +18,6 @@ from zentral.contrib.google_workspace.api_client import APIClient
 from googleapiclient.errors import HttpError
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class ConnectionViewsTestCase(TestCase):
 
     @classmethod
@@ -137,7 +136,7 @@ class ConnectionViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "google_workspace/connection_list.html")
         self.assertContains(response, "Connection")
         self.assertContains(response, connection.name)
-        
+
         self.assertNotContains(response, "Create connection")
         self.assertNotContains(response, "Edit connection")
         self.assertNotContains(response, "Delete connection")

@@ -5,7 +5,7 @@ from unittest.mock import patch
 import uuid
 import zlib
 from django.urls import reverse, NoReverseMatch
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
 from zentral.conf import settings
@@ -20,7 +20,6 @@ from zentral.core.incidents.models import Incident, MachineIncident, Severity, S
 from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class MunkiAPIViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):

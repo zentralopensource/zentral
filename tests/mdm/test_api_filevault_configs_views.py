@@ -5,14 +5,13 @@ from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from accounts.models import APIToken, User
 from zentral.contrib.mdm.models import FileVaultConfig
 from zentral.core.events.base import AuditEvent
 from .utils import force_blueprint, force_filevault_config
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class MDMFileVaultConfigsAPIViewsTestCase(TestCase):
     maxDiff = None
 

@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from django.utils.http import http_date
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from accounts.models import APIToken, User
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
@@ -20,7 +20,6 @@ from zentral.contrib.osquery.models import (Configuration, DistributedQuery, Enr
 from zentral.core.compliance_checks.models import ComplianceCheck
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class APIViewsTestCase(TestCase):
     maxDiff = None
 

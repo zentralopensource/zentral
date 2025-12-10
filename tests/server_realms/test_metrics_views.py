@@ -1,13 +1,10 @@
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from prometheus_client.parser import text_string_to_metric_families
 from zentral.conf import settings
 from .utils import force_realm, force_realm_group, force_realm_user
 
 
-@override_settings(
-    STATICFILES_STORAGE="django.contrib.staticfiles.storage.StaticFilesStorage"
-)
 class RealmsMetricsViewsTestCase(TestCase):
     # utility methods
 

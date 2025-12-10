@@ -67,7 +67,6 @@ from .utils import (
 
 
 @override_settings(
-    STATICFILES_STORAGE="django.contrib.staticfiles.storage.StaticFilesStorage",
     CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 )
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")

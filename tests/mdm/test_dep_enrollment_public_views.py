@@ -3,7 +3,7 @@ import datetime
 import plistlib
 from unittest.mock import Mock, patch
 import uuid
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
@@ -14,7 +14,6 @@ from .utils import (force_dep_enrollment, force_dep_enrollment_custom_view, forc
                     force_realm_user, force_software_update)
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
 @patch("zentral.contrib.mdm.public_views.dep.verify_iphone_ca_signed_payload")
 class MDMDEPEnrollmentPublicViewsTestCase(TestCase):

@@ -1,10 +1,9 @@
 import json
 from django.http import HttpResponseServerError
-from django.test import override_settings, RequestFactory, TestCase
+from django.test import RequestFactory, TestCase
 from zentral.utils.views import server_error
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class ViewsTestCase(TestCase):
     maxDiff = None
 

@@ -1,4 +1,4 @@
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User, UserTask
@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 import uuid
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class AccountTasksViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -145,4 +144,3 @@ class AccountTasksViewsTestCase(TestCase):
         self.assertContains(response, self.ui_user.username)
         # check for result display
         self.assertContains(response, "result_error")
-

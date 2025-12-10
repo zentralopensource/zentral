@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.urls import reverse
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.core.incidents.models import Incident, MachineIncident, Status, Severity
@@ -14,7 +14,6 @@ from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
 
 
-@override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class InventoryViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
