@@ -13,5 +13,5 @@ class IncidentsExtrasTestCase(SimpleTestCase):
                 f'{display}&nbsp;<i class="bi bi-exclamation-triangle-fill"></i>'
                 '</span>'
             )
-            self.assertEquals(incident_severity(severity), result)
-        self.assertEquals(incident_severity(None), "")
+            self.assertEqual(incident_severity(severity), result)
+        self.assertEqual(incident_severity(None), "")
