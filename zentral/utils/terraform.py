@@ -355,6 +355,7 @@ def build_zip_file(resource_iterator):
                 tf_file.close()
             zip_a.write(tf_file_p, arcname=tf_filename)
             os.unlink(tf_file_p)
+    zip_f.close()
     return zip_p
 
 
