@@ -19,11 +19,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         if kwargs.get("list_clients"):
-            print("Configured clients:")
+            self.stdout.write(self.style.SUCCESS("Configured clients:"))
             for idx, client in enumerate(clients):
-                print(idx)
+                self.stdout.write(f"{idx}")
                 for key, val in client.source.items():
-                    print(key, val)
+                    self.stdout.write(f"key: {key} => val: {val} ")
         client_id = kwargs.get("client_id")
         serial_number = kwargs.get("serial_number")
         if client_id:
@@ -38,5 +38,5 @@ class Command(BaseCommand):
             for tree in client.get_machines():
                 n += 1
                 if serial_number is None or tree.get("serial_number") == serial_number:
-                    pprint.pprint(tree)
-            print(n, "MACHINES")
+                    pprint.pprint(tree, stream=self.stdout._out)
+            self.stdout.write(' %s MACHINES' % n)
