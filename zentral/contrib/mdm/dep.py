@@ -289,11 +289,13 @@ def assign_dep_device_profile(dep_device, dep_profile):
         raise DEPClientError(err_msg)
 
 
-def define_dep_profile(dep_enrollment):
+def define_dep_profile(dep_enrollment: DEPEnrollment):
     logger.info("Define DEP profile %s", dep_enrollment.pk)
     dep_client = DEPClient.from_dep_virtual_server(dep_enrollment.virtual_server)
     profile_payload = serialize_dep_profile(dep_enrollment)
+
     profile_response = dep_client.add_profile(profile_payload)
+
     dep_enrollment.uuid = profile_response["profile_uuid"]
     dep_enrollment.save()
 

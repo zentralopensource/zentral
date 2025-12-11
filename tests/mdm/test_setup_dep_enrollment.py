@@ -106,7 +106,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
-        self.assertFormError(response.context["dep_enrollment_form"], None, "Auto admin information incomplete")
+        self.assertFormError(response.context["dep_enrollment_form"],
+                             "admin_full_name",
+                             "Auto admin information incomplete")
 
     def test_create_dep_enrollment_macos_admin_info_await_device_configured_error(self):
         self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
@@ -466,7 +468,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
-        self.assertFormError(response.context["dep_enrollment_form"], None, "Auto admin information incomplete")
+        self.assertFormError(response.context["dep_enrollment_form"],
+                             "admin_short_name",
+                             "Auto admin information incomplete")
 
     @patch("zentral.contrib.mdm.views.dep_enrollments.define_dep_profile_task")
     def test_update_dep_enrollment_post(self, define_dep_profile_task):

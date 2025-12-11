@@ -25,7 +25,10 @@ from .api_views import (ACMEIssuerDetail, ACMEIssuerList,
                         EnrolledDeviceCommand, EnrolledDeviceCommandList,
                         EnrolledUserCommand, EnrolledUserCommandList,
                         StoreAppList, StoreAppDetail,
-                        SyncSoftwareUpdatesView)
+                        SyncSoftwareUpdatesView,
+                        DEPEnrollmentList, DEPEnrollmentDetail,
+                        EnrollmentCustomViewList, EnrollmentCustomViewDetail,
+                        DEPEnrollmentCustomViewList, DEPEnrollmentCustomViewDetail)
 
 
 app_name = "mdm_api"
@@ -93,6 +96,16 @@ urlpatterns = [
     path('users/commands/<uuid:uuid>/', EnrolledUserCommand.as_view(), name="enrolled_user_command"),
     path('software_updates/sync/',
          SyncSoftwareUpdatesView.as_view(), name="sync_software_updates"),
+    path('dep_enrollments/', DEPEnrollmentList.as_view(), name="dep_enrollments"),
+    path('dep_enrollments/<int:pk>/', DEPEnrollmentDetail.as_view(), name="dep_enrollment"),
+    path('enrollment_custom_views', EnrollmentCustomViewList.as_view(),
+         name="enrollment_custom_views"),
+    path('enrollment_custom_views/<uuid:pk>/', EnrollmentCustomViewDetail.as_view(),
+         name="enrollment_custom_view"),
+    path('dep_enrollment_custom_views', DEPEnrollmentCustomViewList.as_view(),
+         name="dep_enrollment_custom_views"),
+    path('dep_enrollment_custom_views/<uuid:pk>/', DEPEnrollmentCustomViewDetail.as_view(),
+         name="dep_enrollment_custom_view")
 ]
 
 

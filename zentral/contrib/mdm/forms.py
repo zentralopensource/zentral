@@ -33,6 +33,7 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      DeviceArtifact, TargetArtifact)
 from .serializers import CertAssetSANSerializer, RDNSerializer
 from .skip_keys import skippable_setup_panes
+from .validators import DEPEnrollmentValidator
 
 
 logger = logging.getLogger("zentral.contrib.mdm.forms")
@@ -444,67 +445,40 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
 
     class Meta:
         model = DEPEnrollment
-        fields = "__all__"
-
-    def clean_is_mdm_removable(self):
-        is_mdm_removable = self.cleaned_data.get("is_mdm_removable")
-        is_supervised = self.cleaned_data.get("is_supervised")
-        if not is_mdm_removable and not is_supervised:
-            raise forms.ValidationError("Can only be set to False if 'Is supervised' is set to True")
-        return is_mdm_removable
-
-    def clean_use_realm_user(self):
-        realm = self.cleaned_data.get("realm")
-        use_realm_user = self.cleaned_data.get("use_realm_user")
-        if use_realm_user and not realm:
-            raise forms.ValidationError("This option is only valid if a 'realm' is selected")
-        return use_realm_user
-
-    def clean_username_pattern(self):
-        use_realm_user = self.cleaned_data.get("use_realm_user")
-        username_pattern = self.cleaned_data.get("username_pattern")
-        if not use_realm_user:
-            if username_pattern:
-                raise forms.ValidationError("This field can only be used if the 'use realm user' option is ticked")
-        else:
-            if not username_pattern:
-                raise forms.ValidationError("This field is required when the 'use realm user' option is ticked")
-        return username_pattern
-
-    def clean_realm_user_is_admin(self):
-        use_realm_user = self.cleaned_data.get("use_realm_user")
-        realm_user_is_admin = self.cleaned_data.get("realm_user_is_admin")
-        if realm_user_is_admin and not use_realm_user:
-            raise forms.ValidationError("This option is only valid if the 'use realm user' option is ticked too")
-        return realm_user_is_admin
-
-    def _clean_os_version(self, platform, limit):
-        fieldname = f"{platform}_{limit}_version"
-        min_version = self.cleaned_data.get(fieldname)
-        if min_version and make_comparable_os_version(min_version) == (0, 0, 0):
-            raise forms.ValidationError("Not a valid OS version")
-        return min_version
-
-    def clean_ios_max_version(self):
-        return self._clean_os_version("ios", "max")
-
-    def clean_ios_min_version(self):
-        return self._clean_os_version("ios", "min")
-
-    def clean_macos_max_version(self):
-        return self._clean_os_version("macos", "max")
-
-    def clean_macos_min_version(self):
-        return self._clean_os_version("macos", "min")
-
-    def auto_admin_info_incomplete(self):
-        return len([attr for attr in (
-                        self.cleaned_data.get(i)
-                        for i in ("admin_full_name", "admin_short_name")
-                    ) if attr]) == 1
-
-    def has_auto_admin(self):
-        return self.cleaned_data.get("admin_full_name") and not self.auto_admin_info_incomplete()
+        fields = ['display_name',
+                  'push_certificate',
+                  'acme_issuer',
+                  'scep_issuer',
+                  'blueprint',
+                  'realm',
+                  'virtual_server',
+                  'use_realm_user',
+                  'username_pattern',
+                  'realm_user_is_admin',
+                  'admin_full_name',
+                  'admin_short_name',
+                  'hidden_admin',
+                  'admin_password_complexity',
+                  'admin_password_rotation_delay',
+                  'name',
+                  'allow_pairing',
+                  'auto_advance_setup',
+                  'await_device_configured',
+                  'department',
+                  'is_mandatory',
+                  'is_mdm_removable',
+                  'is_multi_user',
+                  'is_supervised',
+                  'language',
+                  'org_magic',
+                  'region',
+                  'support_email_address',
+                  'support_phone_number',
+                  'include_tls_certificates',
+                  'ios_max_version',
+                  'ios_min_version',
+                  'macos_max_version',
+                  'macos_min_version']
 
     def clean(self):
         super().clean()
@@ -512,11 +486,10 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
         for key, _ in skippable_setup_panes:
             if self.cleaned_data.get(f"ssp-{key}", False):
                 skip_setup_items.append(key)
-        if self.auto_admin_info_incomplete():
-            raise forms.ValidationError("Auto admin information incomplete")
-        if self.has_auto_admin() and not self.cleaned_data.get("await_device_configured"):
-            self.add_error("await_device_configured", "Required for the auto admin account setup")
         self.cleaned_data['skip_setup_items'] = skip_setup_items
+
+        for key, error in DEPEnrollmentValidator(self.cleaned_data).validate().items():
+            self.add_error(key, error)
 
     def save(self, *args, **kwargs):
         commit = kwargs.pop("commit", True)
@@ -536,7 +509,7 @@ class UpdateDEPEnrollmentForm(CreateDEPEnrollmentForm):
 
     class Meta:
         model = DEPEnrollment
-        exclude = ("virtual_server",)
+        exclude = ("virtual_server", "skip_setup_items")
 
 
 class DEPEnrollmentCustomViewForm(forms.ModelForm):

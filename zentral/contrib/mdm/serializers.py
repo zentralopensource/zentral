@@ -41,8 +41,11 @@ from .models import (ACMEIssuer,
                      SCEPIssuer,
                      SoftwareUpdateEnforcement,
                      StoreApp,
-                     UserCommand)
+                     UserCommand,
+                     EnrollmentCustomView, DEPEnrollmentCustomView)
 from .payloads import get_configuration_profile_info
+from .validators import DEPEnrollmentValidator
+from zentral.contrib.mdm.dep import define_dep_profile, serialize_dep_profile
 
 
 logger = logging.getLogger("zentral.contrib.mdm.serializers")
@@ -1231,3 +1234,112 @@ class StoreAppSerializer(ArtifactVersionSerializer):
             for blueprint in instance.artifact_version.artifact.blueprints():
                 update_blueprint_serialized_artifacts(blueprint)
         return instance
+
+
+class DEPEnrollmentSerializer(serializers.ModelSerializer):
+    enrollment_secret = EnrollmentSecretSerializer(many=False)
+
+    class Meta:
+        model = DEPEnrollment
+        fields = [
+            'id',
+            'enrollment_secret',
+            'display_name',
+            'use_realm_user',
+            'username_pattern',
+            'realm_user_is_admin',
+            'admin_full_name',
+            'admin_short_name',
+            'hidden_admin',
+            'admin_password_complexity',
+            'admin_password_rotation_delay',
+            'name',
+            'allow_pairing',
+            'auto_advance_setup',
+            'await_device_configured',
+            'department',
+            'is_mandatory',
+            'is_mdm_removable',
+            'is_multi_user',
+            'is_supervised',
+            'language',
+            'org_magic',
+            'region',
+            'skip_setup_items',
+            'support_email_address',
+            'support_phone_number',
+            'include_tls_certificates',
+            'ios_max_version',
+            'ios_min_version',
+            'macos_max_version',
+            'macos_min_version',
+            'push_certificate',
+            'acme_issuer',
+            'scep_issuer',
+            'blueprint',
+            'realm',
+            'virtual_server'
+        ]
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        errors = DEPEnrollmentValidator(data).validate()
+        if errors:
+            raise serializers.ValidationError(errors)
+        return data
+
+    def create(self, validated_data):
+        enrollment_secret = validated_data.pop('enrollment_secret')
+        enrollment_secret = self.fields["enrollment_secret"].create(enrollment_secret)
+        validated_data['enrollment_secret'] = enrollment_secret
+
+        enrollment = DEPEnrollment(**validated_data)
+        define_dep_profile(enrollment)
+
+        return enrollment
+
+    def update(self, instance, validated_data):
+        prev_dep_profile = serialize_dep_profile(instance)
+        enrollment_secret = validated_data.pop('enrollment_secret')
+        enrollment_secret = self.fields["enrollment_secret"].update(instance.enrollment_secret, enrollment_secret)
+        validated_data['enrollment_secret'] = enrollment_secret
+
+        enrollment = super().update(instance, validated_data)
+
+        if serialize_dep_profile(enrollment) != prev_dep_profile:
+            define_dep_profile(enrollment)
+
+        return enrollment
+
+
+class DEPEnrollmentDetailSerializer(DEPEnrollmentSerializer):
+
+    class Meta:
+        model = DEPEnrollment
+        fields = DEPEnrollmentSerializer.Meta.fields
+        read_only_fields = ('virtual_server', )
+
+
+class EnrollmentCustomViewSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = EnrollmentCustomView
+        fields = [
+            "id",
+            "name",
+            "description",
+            "html",
+            "requires_authentication"
+        ]
+
+
+class DEPEnrollmentCustomViewSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = DEPEnrollmentCustomView
+        fields = [
+            "id",
+            "dep_enrollment",
+            "custom_view",
+            "weight"
+        ]
