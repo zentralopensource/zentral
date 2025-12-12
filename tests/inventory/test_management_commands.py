@@ -1,6 +1,6 @@
 from io import StringIO
 from unittest import mock
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from django.core.management import call_command
 from django.test import TestCase
 from zentral.contrib.inventory.models import MACAddressBlockAssignment
@@ -49,14 +49,20 @@ class InventoryManagementCommandsTest(TestCase):
     def test_import_mac_assignments(self):
         out = StringIO()
         with mock.patch('requests.get') as mock_requests:
-            mock_resp = mock.Mock()
-            mock_resp.text = "Header1, Header2, Header3, Header4\none, two, three, four"
+            side_effects = [
+                ["Registry,Assignment,Organization Name,Organization Address",
+                 'MA-L,286FB9,"Nokia Shanghai Bell Co., Ltd.","No.388 Ning Qiao Road,Jin Qiao Pudong Shanghai Shanghai   CN 201206 "'],
+                ["Registry,Assignment,Organization Name,Organization Address",
+                 'MA-M,C85CE27,SYNERGY SYSTEMS AND SOLUTIONS,"A1526, GREEN FIELDS COLONY Faridabad HARYANA IN 121001 "'],
+                ["Registry,Assignment,Organization Name,Organization Address",
+                 'MA-S,8C1F64AFA,"DATA ELECTRONIC DEVICES, INC",32 NORTHWESTERN DR SALEM NH US 03079']
+                 ]
+            mock_resp = MagicMock()
+            mock_resp.text.splitlines.side_effect = side_effects
             mock_requests.return_value = mock_resp
 
-            call_command('import_mac_assignments', stdout=out)
-            result = out.getvalue()
-            self.assertIn('Import https://standards.ieee.org', result)
-            self.assertEqual(1, MACAddressBlockAssignment.objects.count())
+            call_command('import_mac_assignments', '--verbosity', 0, stdout=out)
+            self.assertEqual(3, MACAddressBlockAssignment.objects.count())
 
     # Debug inventory clients
 

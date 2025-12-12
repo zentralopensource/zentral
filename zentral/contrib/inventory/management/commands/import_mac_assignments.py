@@ -10,9 +10,9 @@ logger = logging.getLogger("zentral.contrib.inventory.management.commands.import
 
 class Command(BaseCommand):
     help = "Import MAC assignment blocks"
-    sources = ["https://standards.ieee.org/develop/regauth/oui/oui.csv",
-               "https://standards.ieee.org/develop/regauth/oui28/mam.csv",
-               "https://standards.ieee.org/develop/regauth/oui36/oui36.csv"]
+    sources = ["https://standards-oui.ieee.org/oui/oui.csv",
+               "https://standards-oui.ieee.org/oui28/mam.csv",
+               "https://standards-oui.ieee.org/oui36/oui36.csv"]
 
     def add_arguments(self, parser):
         parser.add_argument('--update', action='store_true', dest='update', default=False, help='force update')
@@ -43,7 +43,7 @@ class Command(BaseCommand):
             if self.verbosity:
                 row_iterator = tqdm(csv.reader(lines), total=len(lines))
             else:
-                row_iterator = lines
+                row_iterator = csv.reader(lines)
             for row in row_iterator:
                 if skip_headers:
                     skip_headers = False
