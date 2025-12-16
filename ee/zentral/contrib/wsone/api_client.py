@@ -13,6 +13,7 @@ from requests.packages.urllib3.util.ssl_ import create_urllib3_context
 from base.utils import deployment_info
 from zentral.contrib.inventory.conf import cleanup_windows_os_version
 from zentral.utils.json import remove_null_character
+from zentral.utils.time import naive_utc_fromisoformat
 
 
 logger = logging.getLogger("zentral.contrib.wsone.api_client")
@@ -506,8 +507,8 @@ class Client:
             }
         }
         try:
-            ms_tree["last_seen"] = datetime.fromisoformat(device_d["LastSeen"])
-        except (KeyError, TypeError, ValueError):
+            ms_tree["last_seen"] = naive_utc_fromisoformat(device_d["LastSeen"])
+        except Exception:
             logger.warning("Device %s: could not parse last seen timestamp", device_uuid)
 
         self.add_ms_tree_extra_facts(ms_tree, device_d)

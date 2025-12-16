@@ -1,4 +1,3 @@
-from datetime import datetime
 import logging
 from django.db import transaction
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_yield_events
@@ -6,6 +5,7 @@ from zentral.contrib.wsone.api_client import Client, TooManyRequestsError
 from zentral.contrib.wsone.models import Instance
 from zentral.core.events import event_cls_from_type
 from zentral.core.queues.exceptions import RetryLater
+from zentral.utils.time import naive_utc_fromisoformat
 
 
 logger = logging.getLogger("zentral.contrib.wsone.preprocessors.webhook")
@@ -109,13 +109,11 @@ class WebhookEventPreprocessor(object):
             if not event_time:
                 logger.error("EventTime not found or empty in %s event", event_type)
                 return
-            for ts_length in (26, 23):
-                # Workspace ONE has sometimes 5 or 7 decimal places for the microseconds
-                try:
-                    return datetime.fromisoformat(event_time[:ts_length])
-                except Exception:
-                    pass
-            logger.error("Could not parse event time '%s' in %s event", event_time, event_type)
+            # Workspace ONE has sometimes 5 or 7 decimal places for the microseconds
+            try:
+                return naive_utc_fromisoformat(event_time)
+            except Exception:
+                logger.error("Could not parse event time '%s' in %s event", event_time, event_type)
 
         event_cls = event_cls_from_type(event_type)
         yield from event_cls.build_from_machine_request_payloads(

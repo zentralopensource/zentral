@@ -20,3 +20,10 @@ def duration_repr(seconds):
 
 def naive_truncated_isoformat(t, timespec="seconds"):
     return t.isoformat(timespec=timespec).split("+")[0]
+
+
+def naive_utc_fromisoformat(s):
+    dt = datetime.fromisoformat(s)
+    if is_aware(dt):
+        dt = make_naive(dt)
+    return dt
