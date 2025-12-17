@@ -44,7 +44,7 @@ elementpath==4.6.0
 Events==0.5
 exceptiongroup==1.2.2
 executing==2.1.0
-filelock==3.16.1
+filelock==3.20.1
 frozenlist==1.7.0
 geoip2==5.1.0
 google-api-core==2.22.0
