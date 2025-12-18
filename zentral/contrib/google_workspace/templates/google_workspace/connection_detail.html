@@ -26,17 +26,42 @@
             {% endif %}
         </div>
     </div>
+
     
     <div class="table-responsive mb-3">
-         {% if connection_authorized %}
+      <table class="table-object-properties">
+        <thead>
+          <th width="width:30vw">Attribute</th>
+          <th>Value</th>
+        </thead>
+        <tbody>
+        <tr>
+          <td>Type</td>
+          <td>{{ object.get_type_display }}</td>
+        </tr>
+        {% if object.type == "SA_CLOUD_ID" %}
+        <tr>
+          <td>Customer ID</td>
+          <td>{{ object.customer_id }}</td>
+        </tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+    
+    
+    <div class="table-responsive mb-3">
+        {% if connection_authorized %}
         <table class="table-object-properties">
         <thead>
+            {% if api_client.credentials %}
             <tr>
             <th style="width:30vw">Scope</th>
             </tr>
+            {% endif %}
         </thead>
         <tbody>
-            {% if api_client %}
+            {% if api_client.credentials %}
                 {% for scope in api_client.credentials.scopes %} 
             <tr><td>{{scope}}</td></tr>
                 {%endfor%}

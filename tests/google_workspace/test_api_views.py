@@ -466,9 +466,7 @@ class ApiViewsTestCase(TestCase):
         group_email = self._given_email()
         tag = self._given_tag()
 
-        build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": []
-        }
+        build.return_value.groups.return_value.get.side_effect = HttpError(Mock(status=404), b"")
 
         response = self.post(
             reverse("google_workspace_api:group_tag_mappings"),
@@ -539,9 +537,7 @@ class ApiViewsTestCase(TestCase):
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
         group_email = self._given_email()
 
-        build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": []
-        }
+        build.return_value.groups.return_value.get.side_effect = HttpError(Mock(status=404), b"")
 
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(

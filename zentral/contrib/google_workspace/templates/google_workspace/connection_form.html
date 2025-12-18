@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% load base_extras %}
+{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -28,4 +30,43 @@
     <button class="btn btn-primary">Save</button>
   </p>
 </form>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function setEnabled(id, enabled) {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    el.disabled = !enabled;
+  }
+
+  function toggleByType() {
+    const typeEl = document.getElementById("id_type");
+    if (!typeEl) return;
+
+    const t = typeEl.value;
+
+    const usesClientId = (t === "SA_CLOUD_ID");
+    const usesFile     = (t === "OAUTH");
+
+    setEnabled("id_customer_id", usesClientId);
+    setEnabled("id_serialized_client_config", usesFile);
+
+    if (usesClientId) {
+      const f = document.getElementById("id_serialized_client_config");
+      if (f) f.value = "";
+    }
+    if (usesFile) {
+      const c = document.getElementById("id_customer_id");
+      if (c) c.value = "";
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const typeEl = document.getElementById("id_type");
+    if (typeEl) typeEl.addEventListener("change", toggleByType);
+    toggleByType(); // initial
+  });
+</script>
 {% endblock %}

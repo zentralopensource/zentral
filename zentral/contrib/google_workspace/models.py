@@ -5,6 +5,7 @@ from django.db import models
 from django.urls import reverse
 from zentral.contrib.inventory.models import Tag
 from zentral.core.secret_engines import decrypt_str, encrypt_str, rewrap
+from django.utils.translation import gettext_lazy as _
 
 
 logger = logging.getLogger("zentral.contrib.google_worspace.models")
@@ -18,10 +19,16 @@ class ConnectionManager(models.Manager):
 
 
 class Connection(models.Model):
+    class Type(models.TextChoices):
+        OAUTH_ADMIN_SDK = "OAUTH", _("OAuth Admin SDK"),
+        SERVICE_ACCOUNT_CLOUD_IDENTITY = "SA_CLOUD_ID", _("Service Account Could Identity")
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(unique=True)
     client_config = models.TextField(editable=False)
     user_info = models.TextField(null=True, editable=False)
+    customer_id = models.CharField(blank=True, null=True)
+    type = models.CharField(choices=Type, default=Type.OAUTH_ADMIN_SDK)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -41,6 +48,8 @@ class Connection(models.Model):
         }
 
     def get_client_config(self):
+        if not self.client_config:
+            return
         return decrypt_str(self.client_config, **self._get_secret_engine_kwargs("client_config"))
 
     def set_client_config(self, client_config):
@@ -65,8 +74,13 @@ class Connection(models.Model):
         d = {"pk": str(self.pk), "name": self.name}
         if keys_only:
             return d
+        match self.type:
+            case Connection.Type.OAUTH_ADMIN_SDK:
+                d.update({"client_config_hash": hashlib.sha256(self.get_client_config().encode("utf-8")).hexdigest()})
+            case Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY:
+                d.update({"customer_id": self.customer_id})
         d.update({
-            "client_config_hash": hashlib.sha256(self.get_client_config().encode("utf-8")).hexdigest(),
+            "type": self.type,
             "created_at": self.created_at,
             "updated_at": self.updated_at
             })

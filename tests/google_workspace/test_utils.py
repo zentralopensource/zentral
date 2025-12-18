@@ -58,6 +58,15 @@ class UtilsTestCase(TestCase):
 
         return connection
 
+    def _given_cloud_id_connection(self):
+        name = get_random_string(12)
+        customer_id = f"C{get_random_string(5)}"
+        return Connection.objects.create(
+            name=name,
+            customer_id=customer_id,
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY
+        )
+
     def _given_tag(self, taxomony=None):
         meta_business_unit = None
         if taxomony:
@@ -131,6 +140,62 @@ class UtilsTestCase(TestCase):
         taxonomy = self._given_taxonomy()
         tag = self._given_tag(taxonomy)
         self._given_group_tag_mapping(connection, tag)
+
+        # When
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            sync_group_tag_mappings(connection, event_request)
+
+        # Then
+        actual = MachineTag.objects.filter(serial_number=serial_number, tag_id=tag.pk)
+        self.assertTrue(actual.exists())
+
+        self.assertEqual(len(callbacks), 1)
+
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, MachineTagEvent)
+        self.assertEqual(
+            event.payload,
+            self._expected_machine_tag_event_payload(tag, taxonomy=taxonomy)
+        )
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], serial_number)
+        self.assertEqual(metadata["tags"], ["machine"])
+        self.assertEqual(metadata["request"], serialized_event_request)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_sync_group_tag_mappings_adds_tag_cloud_id(self, build, post_event):
+        # Given
+        group_email = self._given_user_email()
+        user_email = self._given_user_email()
+        build.return_value.groups.return_value.lookup.return_value.execute.return_value = {"name": group_email}
+        (build.return_value
+            .groups.return_value
+            .memberships.return_value
+            .searchTransitiveMemberships.return_value
+            .execute.return_value) = {
+                "memberships": [
+                    {
+                        'preferredMemberKey': [
+                            {"id": user_email}
+                        ]
+                    }
+                ]
+            }
+
+        # event request
+        serialized_event_request = self._given_serialized_event_request()
+        event_request = EventRequest.deserialize(serialized_event_request)
+
+        # snapshots for one device
+        serial_number = self._force_machine(user_email)
+
+        # one group tag mapping
+        connection = self._given_cloud_id_connection()
+        taxonomy = self._given_taxonomy()
+        tag = self._given_tag(taxonomy)
+        self._given_group_tag_mapping(connection, tag, group_email)
 
         # When
         with self.captureOnCommitCallbacks(execute=True) as callbacks:

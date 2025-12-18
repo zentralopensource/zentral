@@ -1,33 +1,50 @@
 import json
 from django import forms
 from .models import Connection, GroupTagMapping
-from .api_client import APIClient, InstalledAppFlow, validate_group_in_connection
+from .api_client import _AdminSDKClient, APIClient, InstalledAppFlow, validate_group_in_connection
 
 
 class ConnectionForm(forms.ModelForm):
-    serialized_client_config = forms.FileField(label="Client config")
+    serialized_client_config = forms.FileField(label="Client config", required=False)
 
     class Meta:
         model = Connection
-        fields = ("name", "serialized_client_config")
+        fields = ("name", "type", "customer_id", "serialized_client_config")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.reauthorization_required = False
-        if self.instance.name:  # this checks if instance is a new object initialized without a name
-            self.fields["serialized_client_config"].required = False
 
-    def clean_serialized_client_config(self):
-        f = self.cleaned_data["serialized_client_config"]
-        if f:
-            try:
-                content = f.read().decode("utf-8")
-                InstalledAppFlow.from_client_config(json.loads(content), APIClient.scopes)
-            except Exception:
-                raise forms.ValidationError("Invalid client config")
-            else:
-                self.instance.set_client_config(content)
-                self.reauthorization_required = True
+    def clean(self):
+        data = super().clean()
+        match data["type"]:
+            case Connection.Type.OAUTH_ADMIN_SDK:
+                f = data.get("serialized_client_config")
+                if f:
+                    try:
+                        content = f.read().decode("utf-8")
+                        InstalledAppFlow.from_client_config(json.loads(content), _AdminSDKClient.scopes)
+                    except Exception:
+                        self.add_error("serialized_client_config", "Invalid client config.")
+                    else:
+                        self.instance.set_client_config(content)
+                        self.reauthorization_required = True
+                elif not self.instance.name:
+                    self.add_error("serialized_client_config", 
+                                   f"Required for {Connection.Type.OAUTH_ADMIN_SDK.label} connection.")
+
+            case Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY:
+                customer_id = data.get("customer_id")
+                if not customer_id:
+                    self.add_error("customer_id",
+                                   f"Required for {Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY.label} connection.")
+                elif not customer_id.startswith("C"):
+                    self.add_error("customer_id", "Invalid customer id.")
+                else:
+                    api_client = APIClient.from_customer_id(data["name"], customer_id)
+                    if not api_client.is_healthy():
+                        self.add_error("customer_id", "Customer ID is not supported.")
+        return data
 
 
 class GroupTagMappingForm(forms.ModelForm):

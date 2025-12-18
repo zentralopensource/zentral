@@ -36,9 +36,12 @@ class CreateConnectionView(PermissionRequiredMixin, CreateViewWithAudit):
     form_class = ConnectionForm
 
     def form_valid(self, form):
+        response = super().form_valid(form)
         connection = form.save()
-        api_client = APIClient.from_connection(connection)
-        return HttpResponseRedirect(api_client.start_flow())
+        if (connection.type == Connection.Type.OAUTH_ADMIN_SDK):
+            api_client = APIClient.from_connection(connection)
+            return HttpResponseRedirect(api_client.start_flow())
+        return response
 
 
 class ConnectionRedirectView(PermissionRequiredMixin, View):
@@ -93,6 +96,7 @@ class UpdateConnectionView(PermissionRequiredMixin, UpdateViewWithAudit):
     form_class = ConnectionForm
 
     def form_valid(self, form):
+        super().form_valid(form)
         connection = form.save()
         if form.reauthorization_required:
             api_client = APIClient.from_connection(connection)

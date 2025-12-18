@@ -18,6 +18,15 @@ class ConnectionsModelsTestCase(TestCase):
 
         return connection
 
+    def _given_cloud_id_connection(self):
+        name = get_random_string(12)
+        customer_id = f"C{get_random_string(5)}"
+        return Connection.objects.create(
+            name=name,
+            customer_id=customer_id,
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY
+        )
+
     def _given_group_tag_mapping(self, connection):
         group_email = f"{get_random_string(12)}@zentral.io"
         return GroupTagMapping.objects.create(group_email=group_email, connection=connection)
@@ -35,6 +44,16 @@ class ConnectionsModelsTestCase(TestCase):
             "pk": str(group_tag_mapping.pk),
             "group_email": group_tag_mapping.group_email
         })
+
+    def test_connection_get_client_info_none(self):
+        # Given
+        connection = self._given_cloud_id_connection()
+
+        # When
+        actual = connection.get_client_config()
+
+        # Then
+        self.assertIsNone(actual)
 
     def test_connection_get_user_info(self):
         # Given

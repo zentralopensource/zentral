@@ -14,8 +14,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from oauthlib.oauth2.rfc6749.errors import InvalidGrantError
 from zentral.contrib.inventory.models import Tag
 from django.core.cache import cache
-from zentral.contrib.google_workspace.api_client import APIClient
+from zentral.contrib.google_workspace.api_client import _AdminSDKClient
 from googleapiclient.errors import HttpError
+from zentral.core.events.base import AuditEvent
 
 
 class ConnectionViewsTestCase(TestCase):
@@ -53,17 +54,28 @@ class ConnectionViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _given_connection(self, user_info=json.dumps({
+    def _given_connection(
+            self,
+            user_info: str = json.dumps({
                 "refresh_token": get_random_string(12),
                 "client_id": get_random_string(12),
                 "client_secret": get_random_string(12)
-            })):
+            }),
+            type: Connection.Type = Connection.Type.OAUTH_ADMIN_SDK,
+            customer_id: str = None):
         name = get_random_string(12)
-        client_config = json.dumps({"web": {}})
-        connection = Connection.objects.create(name=name)
-        connection.set_client_config(client_config)
-        if user_info:
-            connection.set_user_info(user_info)
+        
+        connection = Connection.objects.create(name=name, type=type)
+
+        match type:
+            case Connection.Type.OAUTH_ADMIN_SDK:
+                client_config = json.dumps({"web": {}})
+                connection.set_client_config(client_config)
+                if user_info:
+                    connection.set_user_info(user_info)
+            case Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY:
+                connection.customer_id = customer_id
+
         connection.save()
 
         return connection
@@ -95,6 +107,34 @@ class ConnectionViewsTestCase(TestCase):
             "config.json",
             content.encode("utf-8")
         )
+
+    def _assert_audit_event_send(self, connection: Connection, post_event, callbacks,
+                                 action: AuditEvent.Action, prev_value: dict[str, str] = None):
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+
+        expected_payload = {'action': action.value,
+                            'object': {
+                                'model': 'google_workspace.connection',
+                                'pk': str(connection.id)}}
+        match action:
+            case AuditEvent.Action.CREATED:
+                expected_payload["object"].update({'new_value': connection.serialize_for_event()})
+            case AuditEvent.Action.UPDATED:
+                expected_payload["object"].update({'prev_value': prev_value})
+                expected_payload["object"].update({'new_value': connection.serialize_for_event()})
+            case AuditEvent.Action.DELETED:
+                expected_payload["object"].update({'prev_value': prev_value})
+
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            expected_payload
+        )
+
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"google_workspace_connection": [str(connection.id)]})
+        self.assertEqual(sorted(metadata["tags"]), ["google_workspace", "zentral"])
 
     # IndexView
 
@@ -206,29 +246,101 @@ class ConnectionViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "google_workspace/connection_form.html")
         self.assertContains(response, "Create connection")
 
-    def test_connection_create_redirect(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_connection_create_redirect(self, post_event):
         self._login("google_workspace.add_connection")
         connection_name = get_random_string(12)
         client_config = self._given_client_config()
 
-        response = self.client.post(reverse("google_workspace:create_connection"),
-                                    {"name": connection_name,
-                                     "serialized_client_config": client_config})
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("google_workspace:create_connection"),
+                                        {
+                                            "name": connection_name,
+                                            "serialized_client_config": client_config,
+                                            "type": Connection.Type.OAUTH_ADMIN_SDK
+                                        })
 
-        connection = Connection.objects.filter(name=connection_name)
-        self.assertTrue(connection.exists())
+        connection = Connection.objects.get(name=connection_name)
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response.headers["Location"].startswith("https://zentral.com/oauth2/auth"))
+        self._assert_audit_event_send(connection, post_event, callbacks, AuditEvent.Action.CREATED)
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_connection_create_redirect_cloud_id(self, post_event, build):
+        self._login("google_workspace.add_connection")
+        connection_name = get_random_string(12)
+        customer_id = f"C{get_random_string(5)}"
+        build.return_value.groups.side_effect = HttpError(Mock(status=404), b"")
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("google_workspace:create_connection"),
+                                        {
+                                            "name": connection_name,
+                                            "customer_id": customer_id,
+                                            "type": Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY
+                                        })
+
+        connection = Connection.objects.get(name=connection_name)
+        self.assertEqual(response.status_code, 302)
+        self.maxDiff = None
+        self._assert_audit_event_send(connection, post_event, callbacks, AuditEvent.Action.CREATED)
 
     def test_connection_create_form_errors(self):
         self._login("google_workspace.add_connection")
 
         response = self.client.post(reverse("google_workspace:create_connection"),
-                                    {},
+                                    {"type": Connection.Type.OAUTH_ADMIN_SDK},
                                     follow=True)
         self.assertTemplateUsed(response, "google_workspace/connection_form.html")
         self.assertFormError(response.context["form"], "name", "This field is required.")
-        self.assertFormError(response.context["form"], "serialized_client_config", "This field is required.")
+        self.assertFormError(
+            response.context["form"],
+            "serialized_client_config",
+            "Required for OAuth Admin SDK connection."
+        )
+
+    def test_connection_create_form_errors_cloud_id(self):
+        self._login("google_workspace.add_connection")
+
+        response = self.client.post(reverse("google_workspace:create_connection"),
+                                    {"type": Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY},
+                                    follow=True)
+        self.assertTemplateUsed(response, "google_workspace/connection_form.html")
+        self.assertFormError(response.context["form"], "name", "This field is required.")
+        self.assertFormError(
+            response.context["form"],
+            "customer_id",
+            "Required for Service Account Could Identity connection."
+        )
+
+    def test_connection_create_form_errors_cloud_id_customer_id(self):
+        self._login("google_workspace.add_connection")
+
+        response = self.client.post(reverse("google_workspace:create_connection"),
+                                    {
+                                        "name": get_random_string(12),
+                                        "customer_id": f"B{get_random_string(5)}",
+                                        "type": Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY
+                                    },
+                                    follow=True)
+        self.assertTemplateUsed(response, "google_workspace/connection_form.html")
+        self.assertFormError(response.context["form"], "customer_id", "Invalid customer id.")
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_connection_create_form_errors_cloud_id_not_healthy(self, build):
+        self._login("google_workspace.add_connection")
+        build.return_value.groups.side_effect = HttpError(Mock(status=400), b"")
+
+        response = self.client.post(reverse("google_workspace:create_connection"),
+                                    {
+                                        "name": get_random_string(12),
+                                        "customer_id": f"C{get_random_string(5)}",
+                                        "type": Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY
+                                    },
+                                    follow=True)
+        self.assertTemplateUsed(response, "google_workspace/connection_form.html")
+        self.assertFormError(response.context["form"], "customer_id", "Customer ID is not supported.")
 
     # ConnectionRedirectView
 
@@ -245,7 +357,7 @@ class ConnectionViewsTestCase(TestCase):
         self._login("google_workspace.add_connection",
                     "google_workspace.view_connection")
         state = get_random_string(5)
-        cache_key = f"{APIClient.oauth2_state_cache_key_prefix}{state}"
+        cache_key = f"{_AdminSDKClient.oauth2_state_cache_key_prefix}{state}"
         connection = self._given_connection()
         group_email = f"{connection.name}@zentral.com"
         cache.set(cache_key, str(connection.pk), 3600)
@@ -265,7 +377,7 @@ class ConnectionViewsTestCase(TestCase):
         self._login("google_workspace.add_connection",
                     "google_workspace.view_connection")
         state = get_random_string(5)
-        cache_key = f"{APIClient.oauth2_state_cache_key_prefix}{state}"
+        cache_key = f"{_AdminSDKClient.oauth2_state_cache_key_prefix}{state}"
         connection = self._given_connection(user_info=None)
         group_email = f"{connection.name}@zentral.com"
         cache.set(cache_key, str(connection.pk), 3600)
@@ -331,21 +443,57 @@ class ConnectionViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "google_workspace/connection_form.html")
         self.assertContains(response, f"Update {connection.name}")
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch('zentral.contrib.google_workspace.api_client.build')
-    def test_connection_udpate_redirect(self, build):
+    def test_connection_udpate_redirect(self, build, post_event):
         self._login("google_workspace.change_connection",
                     "google_workspace.view_connection")
         connection_name = get_random_string(12)
         connection = self._given_connection()
-        group_email = f"{connection.name}@zentral.com"
-        build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": [{"email": group_email}]}
+        prev_value = connection.serialize_for_event()
 
-        response = self.client.post(reverse("google_workspace:update_connection", args=(connection.pk,)),
-                                    {"name": connection_name},
-                                    follow=True)
+        build.return_value.groups.side_effect = Exception()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("google_workspace:update_connection", args=(connection.pk,)),
+                {
+                    "name": connection_name,
+                    "type": Connection.Type.OAUTH_ADMIN_SDK
+                },
+                follow=True
+            )
         self.assertRedirects(response, reverse("google_workspace:connection", args={connection.pk}))
         self.assertContains(response, connection_name)
+        connection.refresh_from_db()
+        self._assert_audit_event_send(connection, post_event, callbacks, AuditEvent.Action.UPDATED, prev_value)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_connection_udpate_redirect_cloud_id(self, build, post_event):
+        self._login("google_workspace.change_connection",
+                    "google_workspace.view_connection")
+        connection_name = get_random_string(12)
+        connection = self._given_connection(
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
+            customer_id=f"C{get_random_string(5)}",
+        )
+        prev_value = connection.serialize_for_event()
+        build.return_value.groups.side_effect = HttpError(Mock(status=404), b"")
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("google_workspace:update_connection", args=(connection.pk,)),
+                {
+                    "name": connection_name,
+                    "customer_id": connection.customer_id,
+                    "type": Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY
+                },
+                follow=True
+            )
+        self.assertRedirects(response, reverse("google_workspace:connection", args={connection.pk}))
+        self.assertContains(response, connection_name)
+        connection.refresh_from_db()
+        self._assert_audit_event_send(connection, post_event, callbacks, AuditEvent.Action.UPDATED, prev_value)
 
     def test_connection_udpate_authenticate(self):
         self._login("google_workspace.change_connection",
@@ -354,8 +502,11 @@ class ConnectionViewsTestCase(TestCase):
         client_config = self._given_client_config()
 
         response = self.client.post(reverse("google_workspace:update_connection", args=(connection.pk,)),
-                                    {"name": connection.name,
-                                     "serialized_client_config": client_config})
+                                    {
+                                        "name": connection.name,
+                                        "serialized_client_config": client_config,
+                                        "type": Connection.Type.OAUTH_ADMIN_SDK
+                                    })
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response.headers["Location"].startswith("https://zentral.com/oauth2/auth"))
 
@@ -369,11 +520,34 @@ class ConnectionViewsTestCase(TestCase):
         )
 
         response = self.client.post(reverse("google_workspace:update_connection", args=(connection.pk,)),
-                                    {"serialized_client_config": client_config},
+                                    {
+                                        "serialized_client_config": client_config,
+                                        "type": Connection.Type.OAUTH_ADMIN_SDK
+                                    },
                                     follow=True)
         self.assertTemplateUsed(response, "google_workspace/connection_form.html")
         self.assertFormError(response.context["form"], "name", "This field is required.")
-        self.assertFormError(response.context["form"], "serialized_client_config", "Invalid client config")
+        self.assertFormError(response.context["form"], "serialized_client_config", "Invalid client config.")
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_connection_udpate_form_errors_cloud_id(self, build):
+        self._login("google_workspace.change_connection",
+                    "google_workspace.view_connection")
+        connection = self._given_connection(
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
+            customer_id=f"C{get_random_string(5)}"
+        )
+        build.return_value.groups.side_effect = Exception()
+
+        response = self.client.post(reverse("google_workspace:update_connection", args=(connection.pk,)),
+                                    {
+                                        "customer_id": f"B{get_random_string(5)}",
+                                        "type": Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY
+                                    },
+                                    follow=True)
+        self.assertTemplateUsed(response, "google_workspace/connection_form.html")
+        self.assertFormError(response.context["form"], "name", "This field is required.")
+        self.assertFormError(response.context["form"], "customer_id", "Invalid customer id.")
 
     # DeleteConnectionView
 
@@ -394,15 +568,23 @@ class ConnectionViewsTestCase(TestCase):
         self.assertContains(response, "Remove connection")
         self.assertContains(response, connection.name)
 
-    def test_connection_delete_redirect(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_connection_delete_redirect(self, post_event):
         self._login("google_workspace.view_connection",
                     "google_workspace.delete_connection")
         connection = self._given_connection()
+        prev_value = connection.serialize_for_event()
 
-        response = self.client.post(reverse("google_workspace:delete_connection", args=(connection.pk,)), follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("google_workspace:delete_connection", args=(connection.pk,)),
+                follow=True
+            )
 
         self.assertRedirects(response, reverse("google_workspace:connections"))
         self.assertNotContains(response, connection.name)
+
+        self._assert_audit_event_send(connection, post_event, callbacks, AuditEvent.Action.DELETED, prev_value)
 
     # ConnectionView
 
@@ -425,7 +607,33 @@ class ConnectionViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "google_workspace/connection_detail.html")
         self.assertContains(response, "Connection")
         self.assertContains(response, connection.name)
+        self.assertContains(response, "Type")
+        self.assertContains(response, connection.type.label)
         self.assertContains(response, "Scope")
+
+        self.assertContains(response, "Group tag mappings (0)")
+
+        self.assertNotContains(response, "Create new group tag mapping")
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_connection_cloud_id(self, build):
+        self._login("google_workspace.view_connection")
+        connection = self._given_connection(
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
+            customer_id=f"C{get_random_string(5)}",
+        )
+        build.return_value = Mock()
+
+        response = self.client.get(reverse("google_workspace:connection", args=(connection.pk,)))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "google_workspace/connection_detail.html")
+        self.assertContains(response, "Connection")
+        self.assertContains(response, connection.name)
+        self.assertContains(response, "Type")
+        self.assertContains(response, connection.type.label)
+        self.assertContains(response, "Customer ID")
+        self.assertContains(response, connection.customer_id)
 
         self.assertContains(response, "Group tag mappings (0)")
 
@@ -557,19 +765,51 @@ class ConnectionViewsTestCase(TestCase):
         tag = self._given_tag()
         group_email = f"{connection.name}@zentral.com"
         build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": [{"email": group_email}]}
+            "groups": [{"email": group_email}]
+        }
 
         response = self.client.post(
             reverse("google_workspace:create_group_tag_mapping", args=(connection.pk, )),
             {"group_email": group_email, "tags": tag.pk},
-            follow=True)
+            follow=True
+        )
 
         group_tag_mapping = GroupTagMapping.objects.filter(group_email=group_email)
         self.assertTrue(group_tag_mapping.exists())
         group_tag_mapping = group_tag_mapping.get()
         self.assertRedirects(
             response,
-            f'{reverse("google_workspace:connection", args=(connection.pk, ))}#gtm-{group_tag_mapping.pk}')
+            f'{reverse("google_workspace:connection", args=(connection.pk, ))}#gtm-{group_tag_mapping.pk}'
+        )
+        self.assertTemplateUsed(response, "google_workspace/connection_detail.html")
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_group_tag_mapping_create_redirect_cloud_id(self, build):
+        self._login("google_workspace.view_connection",
+                    "google_workspace.add_grouptagmapping")
+        connection = self._given_connection(
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
+            customer_id=f"C{get_random_string(5)}",
+        )
+        tag = self._given_tag()
+        group_email = f"{connection.name}@zentral.com"
+        build.return_value.groups.return_value.list.return_value.execute.return_value = {
+            "groups": [{"groupKey": {"id": group_email}}]
+        }
+
+        response = self.client.post(
+            reverse("google_workspace:create_group_tag_mapping", args=(connection.pk, )),
+            {"group_email": group_email, "tags": tag.pk},
+            follow=True
+        )
+
+        group_tag_mapping = GroupTagMapping.objects.filter(group_email=group_email)
+        self.assertTrue(group_tag_mapping.exists())
+        group_tag_mapping = group_tag_mapping.get()
+        self.assertRedirects(
+            response,
+            f'{reverse("google_workspace:connection", args=(connection.pk, ))}#gtm-{group_tag_mapping.pk}'
+        )
         self.assertTemplateUsed(response, "google_workspace/connection_detail.html")
 
     @patch('zentral.contrib.google_workspace.api_client.build')
@@ -578,7 +818,28 @@ class ConnectionViewsTestCase(TestCase):
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
         build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": []}
+            "groups": []
+        }
+
+        response = self.client.post(
+            reverse("google_workspace:create_group_tag_mapping", args=(connection.pk,)),
+            {"group_email": group_tag_mapping.group_email},
+            follow=True)
+        self.assertTemplateUsed(response, "google_workspace/grouptagmapping_form.html")
+        self.assertFormError(response.context["form"], "group_email", "A mapping for this group already exists.")
+        self.assertFormError(response.context["form"], "tags", "This field is required.")
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_group_tag_mapping_create_form_errors_cloud_id(self, build):
+        self._login("google_workspace.add_grouptagmapping")
+        connection = self._given_connection(
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
+            customer_id=f"C{get_random_string(5)}",
+        )
+        group_tag_mapping = self._given_group_tag_mapping(connection)
+        build.return_value.groups.return_value.list.return_value.execute.return_value = {
+            "groups": []
+        }
 
         response = self.client.post(
             reverse("google_workspace:create_group_tag_mapping", args=(connection.pk,)),
@@ -617,15 +878,43 @@ class ConnectionViewsTestCase(TestCase):
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
         build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": [{"email": group_tag_mapping.group_email}]}
+            "groups": [{"email": group_tag_mapping.group_email}]
+        }
 
         response = self.client.post(
             reverse("google_workspace:update_group_tag_mapping", args=(connection.pk, group_tag_mapping.pk)),
             {"group_email": group_tag_mapping.group_email, "tags": group_tag_mapping.tags.first().pk},
-            follow=True)
+            follow=True
+        )
         self.assertRedirects(
             response,
-            f'{reverse("google_workspace:connection", args=(connection.pk, ))}#gtm-{group_tag_mapping.pk}')
+            f'{reverse("google_workspace:connection", args=(connection.pk, ))}#gtm-{group_tag_mapping.pk}'
+        )
+        self.assertTemplateUsed(response, "google_workspace/connection_detail.html")
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_group_tag_mapping_update_redirect_cloud_id(self, build):
+        self._login("google_workspace.view_connection",
+                    "google_workspace.change_grouptagmapping")
+        connection = self._given_connection(
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
+            customer_id=f"C{get_random_string(5)}",
+        )
+        tag = self._given_tag()
+        group_tag_mapping = self._given_group_tag_mapping(connection, tag)
+        build.return_value.groups.return_value.list.return_value.execute.return_value = {
+            "groups": [{"groupKey": {"id": group_tag_mapping.group_email}}]
+        }
+
+        response = self.client.post(
+            reverse("google_workspace:update_group_tag_mapping", args=(connection.pk, group_tag_mapping.pk)),
+            {"group_email": group_tag_mapping.group_email, "tags": group_tag_mapping.tags.first().pk},
+            follow=True
+        )
+        self.assertRedirects(
+            response,
+            f'{reverse("google_workspace:connection", args=(connection.pk, ))}#gtm-{group_tag_mapping.pk}'
+        )
         self.assertTemplateUsed(response, "google_workspace/connection_detail.html")
 
     @patch('zentral.contrib.google_workspace.api_client.build')
@@ -633,13 +922,31 @@ class ConnectionViewsTestCase(TestCase):
         self._login("google_workspace.change_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
-        build.return_value.groups.return_value.list.return_value.execute.return_value = {
-            "groups": []}
+        build.return_value.groups.return_value.get.side_effect = HttpError(Mock(status=404), b"")
 
         response = self.client.post(
             reverse("google_workspace:update_group_tag_mapping", args=(connection.pk, group_tag_mapping.pk)),
             {"group_email": group_tag_mapping.group_email},
             follow=True)
+        self.assertTemplateUsed(response, "google_workspace/grouptagmapping_form.html")
+        self.assertFormError(response.context["form"], "group_email", "Group email not found for this connection.")
+        self.assertFormError(response.context["form"], "tags", "This field is required.")
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_group_tag_mapping_update_form_errors_cloud_id(self, build):
+        self._login("google_workspace.change_grouptagmapping")
+        connection = self._given_connection(
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
+            customer_id=f"C{get_random_string(5)}",
+        )
+        group_tag_mapping = self._given_group_tag_mapping(connection)
+        build.return_value.groups.return_value.lookup.side_effect = HttpError(Mock(status=404), b"")
+
+        response = self.client.post(
+            reverse("google_workspace:update_group_tag_mapping", args=(connection.pk, group_tag_mapping.pk)),
+            {"group_email": group_tag_mapping.group_email},
+            follow=True
+        )
         self.assertTemplateUsed(response, "google_workspace/grouptagmapping_form.html")
         self.assertFormError(response.context["form"], "group_email", "Group email not found for this connection.")
         self.assertFormError(response.context["form"], "tags", "This field is required.")
@@ -670,6 +977,24 @@ class ConnectionViewsTestCase(TestCase):
         self._login("google_workspace.view_connection",
                     "google_workspace.delete_grouptagmapping")
         connection = self._given_connection()
+        group_tag_mapping = self._given_group_tag_mapping(connection)
+
+        build.return_value.groups.return_value.list.side_effect = HttpError(Mock(status=404), b"")
+
+        response = self.client.post(reverse("google_workspace:delete_group_tag_mapping",
+                                            args=(connection.pk, group_tag_mapping.pk)), follow=True)
+
+        self.assertRedirects(response, reverse("google_workspace:connection", args=(connection.pk, )))
+        self.assertTemplateUsed(response, "google_workspace/connection_detail.html")
+
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_group_tag_mapping_delete_redirect_cloud_id(self, build):
+        self._login("google_workspace.view_connection",
+                    "google_workspace.delete_grouptagmapping")
+        connection = self._given_connection(
+            type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
+            customer_id=f"C{get_random_string(5)}",
+        )
         group_tag_mapping = self._given_group_tag_mapping(connection)
 
         build.return_value.groups.return_value.list.side_effect = HttpError(Mock(status=404), b"")
