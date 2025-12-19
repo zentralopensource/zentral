@@ -200,9 +200,27 @@ class TestDEPEnrollment(TestCase):
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
     def test_define_dep_profile(self, from_dep_token):
         enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
-        device1 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_EMPTY, enrollment=enrollment)
-        device2 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=enrollment)
-        device3 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=enrollment)
+        prev_profile_uuid = enrollment.uuid
+        device1 = force_dep_device(
+            server=enrollment.virtual_server,
+            profile_status=DEPDevice.PROFILE_STATUS_EMPTY,
+        )
+        device2 = force_dep_device(
+            server=enrollment.virtual_server,
+            profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
+            enrollment=enrollment
+        )
+        device3 = force_dep_device(
+            server=enrollment.virtual_server,
+            profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
+            enrollment=enrollment
+        )
+        enrollment2 = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        device4 = force_dep_device(
+            server=enrollment2.virtual_server,
+            profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
+            enrollment=enrollment2
+        )
         client = Mock()
         profile_uuid = uuid.uuid4()
         self.assertNotEqual(enrollment.uuid, profile_uuid)
@@ -214,6 +232,7 @@ class TestDEPEnrollment(TestCase):
                 device1.serial_number: "SUCCESS",
                 device2.serial_number: "NOT_ACCESSIBLE",
                 device3.serial_number: "FAILED",
+                device4.serial_number: "NOT_ACCESSIBLE",
                 "yolo": "fomo",
             }
         }
@@ -224,19 +243,30 @@ class TestDEPEnrollment(TestCase):
         self.assertEqual(
             result,
             {'devices': {'failed': [device3.serial_number],
-                         'not_accessible': [device2.serial_number],
+                         'not_accessible': [device2.serial_number,
+                                            device4.serial_number],
                          'success': [device1.serial_number]},
              'display_name': enrollment.display_name,
              'name': enrollment.name,
              'pk': enrollment.pk,
              'uuid': str(profile_uuid)}
         )
-        enrollment.refresh_from_db()
+        # device1 updated
         device1.refresh_from_db()
         self.assertEqual(device1.profile_status, DEPDevice.PROFILE_STATUS_ASSIGNED)
         self.assertEqual(device1.profile_uuid, profile_uuid)
+        # device2 deleted because NOT_ACCESSIBLE
         device2.refresh_from_db()
         self.assertTrue(device2.is_deleted())
+        # device3 not changed because FAILED
+        device3.refresh_from_db()
+        self.assertEqual(device3.profile_status, DEPDevice.PROFILE_STATUS_ASSIGNED)
+        self.assertEqual(device3.profile_uuid, prev_profile_uuid)
+        # device4 not deleted because not part of the same virtual server
+        device4.refresh_from_db()
+        self.assertFalse(device4.is_deleted())
+        self.assertEqual(device4.profile_status, DEPDevice.PROFILE_STATUS_ASSIGNED)
+        self.assertEqual(device4.profile_uuid, enrollment2.uuid)
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
     def test_define_dep_profile_task(self, from_dep_token):

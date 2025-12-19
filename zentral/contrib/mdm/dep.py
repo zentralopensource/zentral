@@ -206,7 +206,7 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
     for device in devices:
         serial_number = device["serial_number"]
         found_serial_numbers.append(serial_number)
-        defaults = {"virtual_server": dep_virtual_server}
+        defaults = {}
 
         # default assignment
         if (
@@ -225,7 +225,7 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
             if timezone.is_aware(op_date):
                 op_date = timezone.make_naive(op_date)
             try:
-                dep_device = DEPDevice.objects.get(serial_number=serial_number)
+                dep_device = DEPDevice.objects.get(virtual_server=dep_virtual_server, serial_number=serial_number)
             except DEPDevice.DoesNotExist:
                 dep_device = None
             if dep_device and dep_device.last_op_date and dep_device.last_op_date > op_date:
@@ -239,7 +239,11 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
 
         defaults.update(dep_device_update_dict(device, known_enrollments))
 
-        yield DEPDevice.objects.update_or_create(serial_number=serial_number, defaults=defaults)
+        yield DEPDevice.objects.update_or_create(
+            virtual_server=dep_virtual_server,
+            serial_number=serial_number,
+            defaults=defaults
+        )
     dep_token.sync_cursor = devices.cursor
     dep_token.last_synced_at = timezone.now()
     dep_token.save()
@@ -262,7 +266,8 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         if success_devices:
             # To avoid some performance issues, only update the devices in the database.
             # The next sync will fix the differences.
-            (DEPDevice.objects.filter(serial_number__in=success_devices)
+            (DEPDevice.objects.filter(virtual_server=dep_virtual_server,
+                                      serial_number__in=success_devices)
                               .update(profile_uuid=default_enrollment.uuid,
                                       profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
                                       profile_assign_time=datetime.datetime.utcnow(),
@@ -291,7 +296,8 @@ def assign_dep_device_profile(dep_device, dep_profile):
 
 def define_dep_profile(dep_enrollment: DEPEnrollment):
     logger.info("Define DEP profile %s", dep_enrollment.pk)
-    dep_client = DEPClient.from_dep_virtual_server(dep_enrollment.virtual_server)
+    dep_virtual_server = dep_enrollment.virtual_server
+    dep_client = DEPClient.from_dep_virtual_server(dep_virtual_server)
     profile_payload = serialize_dep_profile(dep_enrollment)
 
     profile_response = dep_client.add_profile(profile_payload)
@@ -321,7 +327,8 @@ def define_dep_profile(dep_enrollment: DEPEnrollment):
     if result["devices"]["success"]:
         # To avoid some performance issues, only update the devices in the database.
         # The next sync will fix the differences.
-        (DEPDevice.objects.filter(serial_number__in=result["devices"]["success"])
+        (DEPDevice.objects.filter(virtual_server=dep_virtual_server,
+                                  serial_number__in=result["devices"]["success"])
                           .update(profile_uuid=dep_enrollment.uuid,
                                   profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
                                   profile_assign_time=datetime.datetime.utcnow(),
@@ -329,7 +336,8 @@ def define_dep_profile(dep_enrollment: DEPEnrollment):
 
     # mark unaccessible devices as deleted
     if result["devices"]["not_accessible"]:
-        (DEPDevice.objects.filter(serial_number__in=result["devices"]["not_accessible"])
+        (DEPDevice.objects.filter(virtual_server=dep_virtual_server,
+                                  serial_number__in=result["devices"]["not_accessible"])
                           .update(last_op_type=DEPDevice.OP_TYPE_DELETED))
 
     if result["devices"]["failed"]:

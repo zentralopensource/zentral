@@ -313,7 +313,7 @@ def force_dep_device(
         if enrollment is None:
             enrollment = force_dep_enrollment(mbu)
         dep_device.enrollment = enrollment
-        dep_device.profile_uuid = dep_device.enrollment.uuid
+        dep_device.profile_uuid = enrollment.uuid
         dep_device.profile_assign_time = datetime.utcnow()
     dep_device.save()
     return dep_device

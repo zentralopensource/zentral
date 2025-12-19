@@ -1,3 +1,9 @@
+## 2026.1
+
+### Bug fixes
+
+Fix DEP device sync issues when same device is moved between two DEP virtual servers.
+
 ## 2025.12
 
 ### Features

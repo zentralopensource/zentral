@@ -1992,7 +1992,7 @@ class DEPDevice(models.Model):
 
     # link with the Apple DEP web services
     virtual_server = models.ForeignKey(DEPVirtualServer, on_delete=models.CASCADE, editable=False)
-    serial_number = models.TextField(unique=True)
+    serial_number = models.TextField()
 
     # ABM info
     # device
@@ -2025,7 +2025,8 @@ class DEPDevice(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ("serial_number",)
+        unique_together = (("virtual_server", "serial_number"),)
+        ordering = ("serial_number", "virtual_server__name")
         permissions = [
             ("disown_depdevice", "Can disown a DEP device"),
         ]
