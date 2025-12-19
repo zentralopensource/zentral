@@ -7,7 +7,7 @@ from zentral.contrib.monolith.models import (CachedPkgInfo,
                                              PkgInfo, PkgInfoName, SubManifest)
 from zentral.contrib.munki.models import ManagedInstall
 from .utils import (force_catalog, force_pkg_info, force_manifest_enrollment_package, force_repository,
-                    force_sub_manifest_pkg_info)
+                    force_sub_manifest_pkg_info, force_category)
 
 
 def sorted_objects(object_list):
@@ -29,11 +29,11 @@ class MonolithModelsTestCase(TestCase):
         cls.tag_2 = Tag.objects.create(name=get_random_string(13))
         cls.tag_3 = Tag.objects.create(name=get_random_string(13))
         ManifestCatalog.objects.create(manifest=cls.manifest, catalog=cls.catalog_1)
-        mc = ManifestCatalog.objects.create(manifest=cls.manifest, catalog=cls.catalog_2)
-        mc.tags.set([cls.tag_1, cls.tag_2])
+        cls.mc = ManifestCatalog.objects.create(manifest=cls.manifest, catalog=cls.catalog_2)
+        cls.mc.tags.set([cls.tag_1, cls.tag_2])
         ManifestSubManifest.objects.create(manifest=cls.manifest, sub_manifest=cls.sub_manifest_1)
-        msm = ManifestSubManifest.objects.create(manifest=cls.manifest, sub_manifest=cls.sub_manifest_2)
-        msm.tags.set([cls.tag_1, cls.tag_2])
+        cls.msm = ManifestSubManifest.objects.create(manifest=cls.manifest, sub_manifest=cls.sub_manifest_2)
+        cls.msm.tags.set([cls.tag_1, cls.tag_2])
         cls.pkginfo_name_1 = PkgInfoName.objects.create(name="aaaa first name")
         cls.pkginfo_1_1 = PkgInfo.objects.create(repository=cls.catalog_1.repository,
                                                  name=cls.pkginfo_name_1, version="1.0",
@@ -174,9 +174,54 @@ class MonolithModelsTestCase(TestCase):
                          {mep_1.builder: mep_1,
                           mep_2.builder: mep_2})
 
+    def test_pkginfocategory_serialize_for_event(self):
+        category = force_category()
+        result = {
+            'pk': category.pk,
+            'repository': category.repository.serialize_for_event(keys_only=True),
+            'name': category.name
+        }
+        d = category.serialize_for_event(keys_only=True)
+        self.assertEqual(d, result)
+        result['created_at'] = category.created_at
+        d = category.serialize_for_event(keys_only=False)
+        self.assertEqual(d, result)
+
+    def test_pkginfo_serialize_for_event(self):
+        d = self.pkginfo_1_1.serialize_for_event(keys_only=True)
+        self.assertEqual(d, {'pk': self.pkginfo_1_1.pk,
+                             'name': self.pkginfo_1_1.name.name,
+                             'version': self.pkginfo_1_1.version})
+
     def test_submanifest_serialize_for_event(self):
         d = self.sub_manifest_1.serialize_for_event(keys_only=True)
         self.assertEqual(d, {'pk': self.sub_manifest_1.pk, 'name': self.sub_manifest_1.name})
+
+    def test_manifestcatalog_serialize_for_event(self):
+        d = self.msm.serialize_for_event(keys_only=True)
+        self.assertEqual(d, {'pk': self.msm.pk})
+        d = self.msm.serialize_for_event(keys_only=False)
+        self.assertEqual(d, {'pk': self.msm.pk,
+                             'sub_manifest': self.sub_manifest_2.serialize_for_event(keys_only=True),
+                             'manifest': self.manifest.serialize_for_event(keys_only=True),
+                             'tags': [t.serialize_for_event(keys_only=True) for t in self.msm.tags.all()]})
+
+    def test_manifestsubmanifest_serialize_for_event(self):
+        d = self.mc.serialize_for_event(keys_only=True)
+        self.assertEqual(d, {'pk': self.mc.pk})
+        d = self.mc.serialize_for_event(keys_only=False)
+        self.assertEqual(d, {'pk': self.mc.pk,
+                             'catalog': self.catalog_2.serialize_for_event(keys_only=True),
+                             'manifest': self.manifest.serialize_for_event(keys_only=True),
+                             'tags': [t.serialize_for_event(keys_only=True) for t in self.mc.tags.all()]})
+
+    def test_manifestenrollmentpackage_serialize_for_event(self):
+        mep = force_manifest_enrollment_package(self.manifest, module="munki")
+        # TODO: check the different signature and return format of serialize_for_event
+        d = mep.serialize_for_event()
+        self.assertEqual(d, {"monolith_manifest_enrollment_package": {
+            'pk': mep.pk,
+            'manifest': mep.manifest.serialize_for_event(keys_only=True)}})
 
     # PkgInfo.objects.alles
 

@@ -253,7 +253,7 @@ class ManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # manifest catalogs
 
 
-class ManifestCatalogList(generics.ListCreateAPIView):
+class ManifestCatalogList(ListCreateAPIViewWithAudit):
     queryset = ManifestCatalog.objects.all()
     serializer_class = ManifestCatalogSerializer
     permission_classes = [DefaultDjangoModelPermissions]
@@ -261,7 +261,7 @@ class ManifestCatalogList(generics.ListCreateAPIView):
     filterset_fields = ("manifest_id", "catalog_id")
 
 
-class ManifestCatalogDetail(generics.RetrieveUpdateDestroyAPIView):
+class ManifestCatalogDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = ManifestCatalog.objects.all()
     serializer_class = ManifestCatalogSerializer
     permission_classes = [DefaultDjangoModelPermissions]
@@ -295,7 +295,7 @@ class ManifestEnrollmentPackageDetail(generics.RetrieveUpdateDestroyAPIView):
 # manifest sub manifests
 
 
-class ManifestSubManifestList(generics.ListCreateAPIView):
+class ManifestSubManifestList(ListCreateAPIViewWithAudit):
     queryset = ManifestSubManifest.objects.all()
     serializer_class = ManifestSubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
@@ -303,7 +303,7 @@ class ManifestSubManifestList(generics.ListCreateAPIView):
     filterset_fields = ("manifest_id", "sub_manifest_id")
 
 
-class ManifestSubManifestDetail(generics.RetrieveUpdateDestroyAPIView):
+class ManifestSubManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = ManifestSubManifest.objects.all()
     serializer_class = ManifestSubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]

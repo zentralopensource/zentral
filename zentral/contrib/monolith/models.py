@@ -185,15 +185,13 @@ class CatalogManager(models.Manager):
     def for_upload(self):
         return self.filter(repository__backend=RepositoryBackend.VIRTUAL)
 
-    def available_for_manifest(self, manifest, add_only=False):
+    def available_for_manifest(self, manifest):
         qs = self.filter(
             Q(repository__meta_business_unit__isnull=True)
             | Q(repository__meta_business_unit=manifest.meta_business_unit)
+        ).exclude(
+            pk__in=[mc.catalog_id for mc in manifest.manifestcatalog_set.all()]
         )
-        if add_only:
-            qs = qs.exclude(
-                pk__in=[mc.catalog_id for mc in manifest.manifestcatalog_set.all()]
-            )
         return qs
 
 
@@ -605,6 +603,17 @@ SUB_MANIFEST_PKG_INFO_KEY_CHOICES = (
 SUB_MANIFEST_PKG_INFO_KEY_CHOICES_DICT = dict(SUB_MANIFEST_PKG_INFO_KEY_CHOICES)
 
 
+class SubManifestManager(models.Manager):
+    def available_for_manifest(self, manifest):
+        qs = self.filter(
+            Q(meta_business_unit__isnull=True)
+            | Q(meta_business_unit=manifest.meta_business_unit)
+        ).exclude(
+            pk__in=[msm.sub_manifest_id for msm in manifest.manifestsubmanifest_set.all()]
+        )
+        return qs
+
+
 class SubManifest(models.Model):
     """Group of pkginfo or attachments (pkgs or scripts)."""
 
@@ -615,6 +624,8 @@ class SubManifest(models.Model):
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = SubManifestManager()
 
     class Meta:
         ordering = ('name',)
@@ -1164,11 +1175,37 @@ class ManifestCatalog(models.Model):
         unique_together = (("manifest", "catalog"),)
         ordering = ('catalog__name',)
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk}
+        if keys_only:
+            return d
+        d.update({
+            "manifest": self.manifest.serialize_for_event(keys_only=True),
+            "catalog": self.catalog.serialize_for_event(keys_only=True),
+            "tags": [t.serialize_for_event(keys_only=True) for t in self.tags.all()]
+        })
+        return d
+
 
 class ManifestSubManifest(models.Model):
     manifest = models.ForeignKey(Manifest, on_delete=models.CASCADE)
     sub_manifest = models.ForeignKey(SubManifest, on_delete=models.PROTECT)
     tags = models.ManyToManyField(Tag)
+
+    class Meta:
+        unique_together = (("manifest", "sub_manifest"),)
+        ordering = ('sub_manifest__name',)
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk}
+        if keys_only:
+            return d
+        d.update({
+            "manifest": self.manifest.serialize_for_event(keys_only=True),
+            "sub_manifest": self.sub_manifest.serialize_for_event(keys_only=True),
+            "tags": [t.serialize_for_event(keys_only=True) for t in self.tags.all()]
+        })
+        return d
 
 
 def enrollment_package_path(instance, filename):

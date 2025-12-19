@@ -2117,18 +2117,21 @@ class MonolithAPIViewsTestCase(TestCase):
             'tags': ['This field is required.'],
         })
 
-    def test_create_manifest_catalog(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_manifest_catalog(self, post_event):
         self._set_permissions("monolith.add_manifestcatalog")
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         catalog = force_catalog()
         tag = Tag.objects.create(name=get_random_string(12))
-        response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), data={
-            'manifest': manifest.pk,
-            'catalog': catalog.pk,
-            'tags': [tag.pk],
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), data={
+                'manifest': manifest.pk,
+                'catalog': catalog.pk,
+                'tags': [tag.pk],
+            })
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
         manifest_catalog = ManifestCatalog.objects.get(manifest=manifest, catalog=catalog)
         self.assertEqual(response.json(), {
             'id': manifest_catalog.pk,
@@ -2139,6 +2142,26 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(list(t.pk for t in manifest_catalog.tags.all()), [tag.pk])
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, {
+                "action": "created",
+                "object": {
+                    "model": "monolith.manifestcatalog",
+                    "pk": str(manifest_catalog.pk),
+                    "new_value": {
+                        "manifest": manifest.serialize_for_event(keys_only=True),
+                        "catalog": catalog.serialize_for_event(keys_only=True),
+                        "tags": [tag.serialize_for_event(keys_only=True),],
+                        "pk": manifest_catalog.pk,
+                    }
+                }
+            }
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest_catalog": [str(manifest_catalog.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update manifest catalog
 
@@ -2156,22 +2179,26 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
-    def test_update_manifest_catalog(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_manifest_catalog(self, post_event):
         manifest = force_manifest()
         tags = [Tag.objects.create(name=get_random_string(12))]
         catalog = force_catalog(manifest=manifest, tags=tags)
         manifest_catalog = manifest.manifestcatalog_set.first()
+        prev_value = manifest_catalog.serialize_for_event()
         self.assertEqual(manifest_catalog.tags.count(), 1)
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         catalog = force_catalog()
         self._set_permissions("monolith.change_manifestcatalog")
-        response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)), data={
-            'manifest': manifest.pk,
-            'catalog': catalog.pk,
-            'tags': [],
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._put_json_data(reverse("monolith_api:manifest_catalog",
+                                                   args=(manifest_catalog.pk,)), data={
+                                                       'manifest': manifest.pk,
+                                                       'catalog': catalog.pk,
+                                                       'tags': [], })
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         test_manifest_catalog = ManifestCatalog.objects.get(manifest=manifest, catalog=catalog)
         self.assertEqual(manifest_catalog, test_manifest_catalog)
         self.assertEqual(response.json(), {
@@ -2183,6 +2210,26 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(test_manifest_catalog.tags.count(), 0)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.manifestcatalog",
+                 "pk": str(test_manifest_catalog.pk),
+                 "new_value": {
+                    "manifest": test_manifest_catalog.manifest.serialize_for_event(keys_only=True),
+                    "catalog": test_manifest_catalog.catalog.serialize_for_event(keys_only=True),
+                    "tags": [],
+                    "pk": test_manifest_catalog.pk,
+                 },
+                 "prev_value": prev_value,
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest_catalog": [str(test_manifest_catalog.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # delete manifest catalog
 
@@ -2199,16 +2246,34 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self.delete(reverse("monolith_api:manifest_catalog", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_manifest_catalog(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_manifest_catalog(self, post_event):
         manifest = force_manifest()
         force_catalog(manifest=manifest)
         manifest_catalog = manifest.manifestcatalog_set.first()
+        prev_value = manifest_catalog.serialize_for_event()
         self.assertEqual(manifest.version, 1)
         self._set_permissions("monolith.delete_manifestcatalog")
-        response = self.delete(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)))
         self.assertEqual(response.status_code, 204)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "monolith.manifestcatalog",
+                 "pk": str(manifest_catalog.pk),
+                 "prev_value": prev_value
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest_catalog": [str(manifest_catalog.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # list manifest sub manifests
 
@@ -2322,17 +2387,19 @@ class MonolithAPIViewsTestCase(TestCase):
             'tags': ['This field is required.'],
         })
 
-    def test_create_manifest_sub_manifest(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_manifest_sub_manifest(self, post_event):
         self._set_permissions("monolith.add_manifestsubmanifest")
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         sub_manifest = force_sub_manifest()
         tag = Tag.objects.create(name=get_random_string(12))
-        response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), data={
-            'manifest': manifest.pk,
-            'sub_manifest': sub_manifest.pk,
-            'tags': [tag.pk],
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), data={
+                'manifest': manifest.pk,
+                'sub_manifest': sub_manifest.pk,
+                'tags': [tag.pk],
+            })
         self.assertEqual(response.status_code, 201)
         manifest_sub_manifest = ManifestSubManifest.objects.get(manifest=manifest, sub_manifest=sub_manifest)
         self.assertEqual(response.json(), {
@@ -2344,6 +2411,27 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(list(t.pk for t in manifest_sub_manifest.tags.all()), [tag.pk])
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload, {
+                "action": "created",
+                "object": {
+                    "model": "monolith.manifestsubmanifest",
+                    "pk": str(manifest_sub_manifest.pk),
+                    "new_value": {
+                        "manifest": manifest.serialize_for_event(keys_only=True),
+                        "sub_manifest": sub_manifest.serialize_for_event(keys_only=True),
+                        "tags": [tag.serialize_for_event(keys_only=True)],
+                        "pk": manifest_sub_manifest.pk,
+                    }
+                }
+            }
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest_sub_manifest": [str(manifest_sub_manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update manifest sub manifest
 
@@ -2361,24 +2449,27 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._put_json_data(reverse("monolith_api:manifest_sub_manifest", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
-    def test_update_manifest_sub_manifest(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_manifest_sub_manifest(self, post_event):
         manifest = force_manifest()
         tags = [Tag.objects.create(name=get_random_string(12))]
         force_sub_manifest(manifest=manifest, tags=tags)
         manifest_sub_manifest = manifest.manifestsubmanifest_set.first()
+        prev_value = manifest_sub_manifest.serialize_for_event()
         self.assertEqual(manifest.version, 1)
         self.assertEqual(list(manifest_sub_manifest.tags.all()), tags)
         manifest = force_manifest()
         sub_manifest = force_sub_manifest()
         self._set_permissions("monolith.change_manifestsubmanifest")
-        response = self._put_json_data(
-            reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)),
-            data={
-                'manifest': manifest.pk,
-                'sub_manifest': sub_manifest.pk,
-                'tags': [],
-            }
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self._put_json_data(
+                reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)),
+                data={
+                    'manifest': manifest.pk,
+                    'sub_manifest': sub_manifest.pk,
+                    'tags': [],
+                }
+            )
         self.assertEqual(response.status_code, 200)
         test_manifest_sub_manifest = ManifestSubManifest.objects.get(manifest=manifest, sub_manifest=sub_manifest)
         self.assertEqual(manifest_sub_manifest, test_manifest_sub_manifest)
@@ -2391,6 +2482,27 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(test_manifest_sub_manifest.tags.count(), 0)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "updated",
+             "object": {
+                 "model": "monolith.manifestsubmanifest",
+                 "pk": str(test_manifest_sub_manifest.pk),
+                 "new_value": {
+                    "manifest": test_manifest_sub_manifest.manifest.serialize_for_event(keys_only=True),
+                    "sub_manifest": test_manifest_sub_manifest.sub_manifest.serialize_for_event(keys_only=True),
+                    "tags": [],
+                    "pk": test_manifest_sub_manifest.pk,
+                 },
+                 "prev_value": prev_value,
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest_sub_manifest": [str(test_manifest_sub_manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # delete manifest sub manifest
 
@@ -2407,16 +2519,34 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_manifest_sub_manifest(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_manifest_sub_manifest(self, post_event):
         manifest = force_manifest()
         force_sub_manifest(manifest=manifest)
         manifest_sub_manifest = manifest.manifestsubmanifest_set.first()
+        prev_value = manifest_sub_manifest.serialize_for_event()
         self.assertEqual(manifest.version, 1)
         self._set_permissions("monolith.delete_manifestsubmanifest")
-        response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)))
         self.assertEqual(response.status_code, 204)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "deleted",
+             "object": {
+                 "model": "monolith.manifestsubmanifest",
+                 "pk": str(manifest_sub_manifest.pk),
+                 "prev_value": prev_value
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_manifest_sub_manifest": [str(manifest_sub_manifest.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # list sub manifests
 
