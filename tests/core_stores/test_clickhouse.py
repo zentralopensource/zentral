@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -301,6 +301,23 @@ class TestClickHouseStore(TestCase):
         self.assertEqual(event_keys, [(str(event.metadata.uuid), 0)])
         mocked_client.command.assert_called()
         mocked_client.insert.assert_called_once()
+
+    # get_app_hist_data with timezones
+
+    @patch("zentral.core.stores.backends.clickhouse.clickhouse_connect.get_client")
+    def test_get_app_hist_data_with_timezones(self, get_client):
+        mocked_client = Mock()
+        get_client.return_value = mocked_client
+        store = self.get_store()
+        today_with_tz = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        mocked_client.query.return_value.named_results.return_value = [{
+            "date": today_with_tz,
+            "events": 42,
+            "machines": 17,
+        }]
+        aggs = store.get_app_hist_data("day", 15, "osquery")
+        self.assertEqual(len(aggs), 15)
+        self.assertEqual(aggs[-1], (today_with_tz.replace(tzinfo=None), 42, 17))
 
     # serializer
 

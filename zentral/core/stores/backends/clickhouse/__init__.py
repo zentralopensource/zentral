@@ -311,7 +311,10 @@ class ClickHouseStore(BaseStore):
         )
         data = {}
         for result in self.client.query(context=query_ctx).named_results():
-            data[result["date"]] = (result["events"], result["machines"])
+            day = result["date"]
+            if not is_naive(day):
+                day = make_naive(day)
+            data[day] = (result["events"], result["machines"])
         today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         buckets = []
         for days in range(-1 * bucket_number + 1, 1):
