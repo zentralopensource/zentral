@@ -15,53 +15,6 @@ class MonolithTerraformTestCase(TestCase):
 
     # utility methods
 
-    def force_catalog(self, name=None, archived=False):
-        if name is None:
-            name = get_random_string(12)
-        archived_at = None
-        if archived:
-            archived_at = datetime.utcnow()
-        return Catalog.objects.create(name=name, priority=1, archived_at=archived_at)
-
-    def force_condition(self):
-        return Condition.objects.create(
-            name=get_random_string(12),
-            predicate=get_random_string(12)
-        )
-
-    def force_enrollment(self, tag_count=0):
-        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
-        tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(tag_count)]
-        if tags:
-            enrollment_secret.tags.set(tags)
-        return (
-            Enrollment.objects.create(manifest=self.force_manifest(), secret=enrollment_secret),
-            tags
-        )
-
-    def force_manifest(self, mbu=None, name=None):
-        if mbu is None:
-            mbu = self.mbu
-        if name is None:
-            name = get_random_string(12)
-        return Manifest.objects.create(meta_business_unit=mbu, name=name)
-
-    def force_manifest_catalog(self, tag=None):
-        manifest = self.force_manifest()
-        catalog = self.force_catalog()
-        mc = ManifestCatalog.objects.create(manifest=manifest, catalog=catalog)
-        if tag:
-            mc.tags.add(tag)
-        return mc
-
-    def force_manifest_sub_manifest(self, tag=None):
-        manifest = self.force_manifest()
-        sub_manifest = self.force_sub_manifest()
-        msm = ManifestSubManifest.objects.create(manifest=manifest, sub_manifest=sub_manifest)
-        if tag:
-            msm.tags.add(tag)
-        return msm
-
     def force_pkg_info_name(self):
         return PkgInfoName.objects.create(name=get_random_string(12))
 

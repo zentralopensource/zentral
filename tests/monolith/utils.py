@@ -166,6 +166,29 @@ def force_sub_manifest_pkg_info(sub_manifest=None, archived=False, condition=Non
     return smpi
 
 
+def force_manifest_catalog(tag=None):
+    manifest = force_manifest()
+    catalog = force_catalog()
+    mc = ManifestCatalog.objects.create(manifest=manifest, catalog=catalog)
+    if tag:
+        mc.tags.add(tag)
+    return mc
+
+
+def force_manifest_sub_manifest(tag=None):
+    manifest = force_manifest()
+    sub_manifest = force_sub_manifest()
+    msm = ManifestSubManifest.objects.create(manifest=manifest, sub_manifest=sub_manifest)
+    if tag:
+        msm.tags.add(tag)
+    return msm
+
+
+def force_tag(name=None):
+    tag = Tag.objects.get_or_create(name=name or get_random_string(12))[0]
+    return tag
+
+
 def force_enrollment(mbu=None, tag_count=0):
     if not mbu:
         mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))

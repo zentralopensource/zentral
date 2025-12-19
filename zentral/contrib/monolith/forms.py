@@ -427,7 +427,7 @@ class AddManifestCatalogForm(forms.Form):
     def __init__(self, *args, **kwargs):
         self.manifest = kwargs.pop('manifest')
         super().__init__(*args, **kwargs)
-        self.fields['catalog'].queryset = Catalog.objects.available_for_manifest(self.manifest, add_only=True)
+        self.fields['catalog'].queryset = Catalog.objects.available_for_manifest(self.manifest)
         self.fields['tags'].queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
 
     def save(self):
@@ -487,12 +487,8 @@ class AddManifestSubManifestForm(forms.Form):
     def __init__(self, *args, **kwargs):
         self.manifest = kwargs.pop('manifest')
         super().__init__(*args, **kwargs)
-        field = self.fields['sub_manifest']
-        field.queryset = (field.queryset.filter(Q(meta_business_unit__isnull=True)
-                                                | Q(meta_business_unit=self.manifest.meta_business_unit))
-                                        .exclude(id__in=[sm.id for sm in self.manifest.sub_manifests()]))
-        field = self.fields['tags']
-        field.queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
+        self.fields['sub_manifest'].queryset = SubManifest.objects.available_for_manifest(self.manifest)
+        self.fields['tags'].queryset = Tag.objects.available_for_meta_business_unit(self.manifest.meta_business_unit)
 
     def save(self):
         msn = ManifestSubManifest(manifest=self.manifest,

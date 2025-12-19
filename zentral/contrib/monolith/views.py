@@ -35,7 +35,7 @@ from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManif
 from .models import (Catalog, CacheServer,
                      EnrolledMachine,
                      Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
-                     Condition,
+                     Condition, ManifestCatalog, ManifestSubManifest,
                      Repository,
                      SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestPkgInfo)
 from .repository_backends import load_repository_backend, RepositoryBackend
@@ -998,13 +998,18 @@ class ManifestMachineInfoView(PermissionRequiredMixin, TemplateView):
 
 class BaseManifestM2MView(FormView):
     m2m_model = None
+    m2m_through_model = None
 
     def dispatch(self, request, *args, **kwargs):
         self.manifest = Manifest.objects.get(pk=kwargs['pk'])
         if self.m2m_model and 'm2m_pk' in kwargs:
             self.m2m_object = self.m2m_model.objects.get(pk=kwargs['m2m_pk'])
+            if self.m2m_through_model and self.m2m_attr:
+                p = {self.m2m_attr: kwargs['m2m_pk'], 'manifest': kwargs['pk']}
+                self.m2m_through_object = self.m2m_through_model.objects.get(**p) or None
         else:
             self.m2m_object = None
+            self.m2m_through_object = None
         return super(BaseManifestM2MView, self).dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -1016,21 +1021,44 @@ class BaseManifestM2MView(FormView):
         context = super(BaseManifestM2MView, self).get_context_data(**kwargs)
         context['manifest'] = self.manifest
         context['m2m_object'] = self.m2m_object
+        context['m2m_through_object'] = self.m2m_through_object
         return context
 
     def get_success_url(self):
         return self.manifest.get_absolute_url()
 
     def form_valid(self, form):
-        form.save()
+        prev_value = None
+        if self.m2m_through_object:
+            prev_value = self.m2m_through_object.serialize_for_event()
+        saved_object = form.save()
         self.manifest.bump_version()
-        return HttpResponseRedirect(self.get_success_url())
+
+        p = {'action': self.audit_action}
+        if prev_value is not None:
+            p.update({'prev_value': prev_value})
+
+        def on_commit_callback():
+            event = AuditEvent.build_from_request_and_instance(
+              self.request, saved_object if saved_object is not None else self.m2m_through_object, **p
+            )
+            event.post()
+
+        transaction.on_commit(on_commit_callback)
+        return super().form_valid(form)
 
 
-class AddManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
+class BaseManifestCatalogView(BaseManifestM2MView):
+    m2m_model = Catalog
+    m2m_attr = 'catalog'
+    m2m_through_model = ManifestCatalog
+
+
+class AddManifestCatalogView(PermissionRequiredMixin, BaseManifestCatalogView):
     permission_required = "monolith.add_manifestcatalog"
     form_class = AddManifestCatalogForm
     template_name = "monolith/manifest_catalog_form.html"
+    audit_action = AuditEvent.Action.CREATED
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -1038,11 +1066,11 @@ class AddManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
         return ctx
 
 
-class EditManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
+class EditManifestCatalogView(PermissionRequiredMixin, BaseManifestCatalogView):
     permission_required = "monolith.change_manifestcatalog"
     form_class = EditManifestCatalogForm
     template_name = "monolith/manifest_catalog_form.html"
-    m2m_model = Catalog
+    audit_action = AuditEvent.Action.UPDATED
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -1055,11 +1083,11 @@ class EditManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
         return ctx
 
 
-class DeleteManifestCatalogView(PermissionRequiredMixin, BaseManifestM2MView):
+class DeleteManifestCatalogView(PermissionRequiredMixin, BaseManifestCatalogView):
     permission_required = "monolith.delete_manifestcatalog"
     form_class = DeleteManifestCatalogForm
     template_name = "monolith/delete_manifest_catalog.html"
-    m2m_model = Catalog
+    audit_action = AuditEvent.Action.DELETED
 
     def get_initial(self):
         return {'catalog': self.m2m_object}
@@ -1190,11 +1218,17 @@ class DeleteManifestEnrollmentPackageView(PermissionRequiredMixin, TemplateView)
 
 # manifest sub manifests
 
+class BaseManifestSubManifestView(BaseManifestM2MView):
+    m2m_model = SubManifest
+    m2m_attr = 'sub_manifest'
+    m2m_through_model = ManifestSubManifest
 
-class AddManifestSubManifestView(PermissionRequiredMixin, BaseManifestM2MView):
+
+class AddManifestSubManifestView(PermissionRequiredMixin, BaseManifestSubManifestView):
     permission_required = "monolith.add_manifestsubmanifest"
     form_class = AddManifestSubManifestForm
     template_name = "monolith/manifest_sub_manifest_form.html"
+    audit_action = AuditEvent.Action.CREATED
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -1202,11 +1236,11 @@ class AddManifestSubManifestView(PermissionRequiredMixin, BaseManifestM2MView):
         return ctx
 
 
-class EditManifestSubManifestView(PermissionRequiredMixin, BaseManifestM2MView):
+class EditManifestSubManifestView(PermissionRequiredMixin, BaseManifestSubManifestView):
     permission_required = "monolith.change_manifestsubmanifest"
     form_class = EditManifestSubManifestForm
     template_name = "monolith/manifest_sub_manifest_form.html"
-    m2m_model = SubManifest
+    audit_action = AuditEvent.Action.UPDATED
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -1219,11 +1253,11 @@ class EditManifestSubManifestView(PermissionRequiredMixin, BaseManifestM2MView):
         return ctx
 
 
-class DeleteManifestSubManifestView(PermissionRequiredMixin, BaseManifestM2MView):
+class DeleteManifestSubManifestView(PermissionRequiredMixin, BaseManifestSubManifestView):
     permission_required = "monolith.delete_manifestsubmanifest"
     form_class = DeleteManifestSubManifestForm
     template_name = "monolith/delete_manifest_sub_manifest.html"
-    m2m_model = SubManifest
+    audit_action = AuditEvent.Action.DELETED
 
     def get_initial(self):
         return {'sub_manifest': self.m2m_object}
