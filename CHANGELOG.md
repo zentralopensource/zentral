@@ -4,6 +4,8 @@
 
 Fix DEP device sync issues when same device is moved between two DEP virtual servers.
 
+Add lock to avoid concurrent DEP device syncs.
+
 ## 2025.12
 
 ### Features

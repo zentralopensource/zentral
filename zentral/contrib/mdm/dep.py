@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from dateutil import parser
+from django.db import connection, transaction
 from django.urls import reverse
 from django.utils import timezone
 from zentral.conf import settings
@@ -188,7 +189,21 @@ def dep_device_update_dict(device, known_enrollments=None):
     return update_d
 
 
-def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
+def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, lock_timeout=600):
+    PG_ADVISORY_LOCK_ID = 12345678
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = %s", [f"{lock_timeout}s"])
+            logger.info("Acquire advisory lock %s for DEP virtual server %s",
+                        PG_ADVISORY_LOCK_ID, dep_virtual_server.pk)
+            cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)",
+                           [PG_ADVISORY_LOCK_ID, dep_virtual_server.pk])
+            logger.info("Advisory lock %s for DEP virtual server %s acquired",
+                        PG_ADVISORY_LOCK_ID, dep_virtual_server.pk)
+        yield from _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch)
+
+
+def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
     dep_token = dep_virtual_server.token
     client = DEPClient.from_dep_token(dep_token)
     if force_fetch or not dep_token.sync_cursor:
