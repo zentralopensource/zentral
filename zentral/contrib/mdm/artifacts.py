@@ -830,7 +830,7 @@ class Target:
             if common_tag_count > matching_tag_count or (not sue_tag_ids and not selected_sue):
                 matching_tag_count = common_tag_count
                 selected_sue = sue
-            elif sue_tag_ids and common_tag_count == matching_tag_count:
+            elif sue_tag_ids and (common_tag_count > 0 and common_tag_count == matching_tag_count):
                 logger.warning("Machine %s: software update enforcement conflict", self.serial_number)
 
         return selected_sue

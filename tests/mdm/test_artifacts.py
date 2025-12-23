@@ -1883,6 +1883,16 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(target.blueprint.software_update_enforcements.count(), 0)
         self.assertIsNone(target.software_update_enforcement)
 
+    @patch("zentral.contrib.mdm.artifacts.logger.warning")
+    def test_software_update_enforcement_no_matching_sue(self, logger_warning):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        tag = Tag.objects.create(name=get_random_string(12))
+        sue = force_software_update_enforcement(tags=[tag])  # not matching
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue])
+        target = Target(self.enrolled_device)
+        self.assertIsNone(target.software_update_enforcement)
+        logger_warning.assert_not_called()
+
     def test_software_update_enforcement_tags(self):
         self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
