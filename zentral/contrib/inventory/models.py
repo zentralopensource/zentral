@@ -515,7 +515,7 @@ class PrincipalUser(AbstractMTObject):
 
 
 class Payload(AbstractMTObject):
-    uuid = models.TextField()
+    uuid = models.TextField(blank=True, null=True)
     identifier = models.TextField(blank=True, null=True)
     display_name = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
