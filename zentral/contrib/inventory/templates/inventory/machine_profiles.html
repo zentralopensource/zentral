@@ -78,7 +78,7 @@
             {% endfor %}
           </ul>
         </td>
-        <td><code class="search-field">{{ profile.uuid }}</code></td>
+        <td>{% if profile.uuid %}<code class="search-field">{{ profile.uuid }}</code>{% else %}-{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
