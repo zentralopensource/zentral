@@ -95,3 +95,19 @@ class AWSAuthSerializer(serializers.Serializer):
         elif aws_secret_access_key and not aws_access_key_id:
             raise serializers.ValidationError({"aws_access_key_id": "This field is required"})
         return data
+
+
+# Utils
+
+
+def serialize_needles(metadata):
+    needles = []  # for serial_number, object, probe lookups
+    serial_number = metadata.get("machine_serial_number")
+    if serial_number:
+        needles.append(f"_s:{serial_number}")
+    for obj_k, obj_vals in metadata.get("objects", {}).items():
+        for obj_val in obj_vals:
+            needles.append(f"_o:{obj_k}:{obj_val}")
+    for probe in metadata.get("probes", []):
+        needles.append(f"_p:{probe['pk']}")
+    return needles
