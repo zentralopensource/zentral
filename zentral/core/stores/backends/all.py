@@ -14,6 +14,7 @@ class StoreBackend(models.TextChoices):
     Kinesis = "KINESIS", "Kinesis"
     OpenSearch = "OPENSEARCH", "OpenSearch"
     Panther = "PANTHER", "Panther"
+    S3Parquet = "S3_PARQUET", "S3 Parquet"
     Snowflake = "SNOWFLAKE", "Snowflake"
     Splunk = "SPLUNK", "Splunk"
     SumoLogic = "SUMO_LOGIC", "Sumo Logic"
