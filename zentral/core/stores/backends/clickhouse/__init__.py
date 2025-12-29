@@ -7,7 +7,7 @@ from django.utils.timezone import is_naive, make_aware, make_naive
 from kombu.utils import json
 from rest_framework import serializers
 from zentral.core.events import event_from_event_d, event_types
-from zentral.core.stores.backends.base import BaseStore
+from zentral.core.stores.backends.base import BaseStore, serialize_needles
 
 
 logger = logging.getLogger('zentral.core.stores.backends.clickhouse')
@@ -105,17 +105,8 @@ class ClickHouseStore(BaseStore):
         created_at = metadata.pop("created_at")
         event_type = metadata.pop("type")
         tags = metadata.pop("tags", [])
-        needles = []  # for serial_number, object, probe lookups
-        serial_number = metadata.get("machine_serial_number")
-        if serial_number:
-            needles.append(f"_s:{serial_number}")
-        else:
-            serial_number = ""
-        for obj_k, obj_vals in metadata.get("objects", {}).items():
-            for obj_val in obj_vals:
-                needles.append(f"_o:{obj_k}:{obj_val}")
-        for probe in metadata.get("probes", []):
-            needles.append(f"_p:{probe['pk']}")
+        needles = serialize_needles(metadata)
+        serial_number = metadata.get("machine_serial_number") or ""
         payload = json.dumps(event_d)
         return (
             # event key
@@ -133,6 +124,7 @@ class ClickHouseStore(BaseStore):
     def _deserialize_event(self, result):
         event_d = result["payload"]
         event_d["_zentral"] = result["metadata"]
+        event_d["_zentral"]["tags"] = result["tags"]
         event_d["_zentral"]["type"] = result["type"]
         event_d["_zentral"]["created_at"] = self._datetime_to_zentral(result["created_at"])
         return event_from_event_d(event_d)
@@ -222,7 +214,7 @@ class ClickHouseStore(BaseStore):
         wheres = " AND ".join(wheres)
         query_ctx = self.client.create_query_context(
             query=(
-                f"SELECT metadata, type, created_at, payload FROM `{self.table_name}` WHERE {wheres} "
+                f"SELECT metadata, type, tags, created_at, payload FROM `{self.table_name}` WHERE {wheres} "
                 "ORDER BY created_at DESC, metadata.id.:String ASC, metadata.idx.:UInt32 ASC LIMIT {limit:UInt32}"
             ),
             parameters=params

@@ -9,9 +9,7 @@ logger = logging.getLogger("zentral.core.queues.backends.aws_sns_sqs.sns")
 
 
 class SNSPublishThread(threading.Thread):
-    def __init__(self, thread_id, topic_arn, stop_event, in_queue, out_queue, client_kwargs=None):
-        if client_kwargs is None:
-            client_kwargs = {}
+    def __init__(self, thread_id, topic_arn, stop_event, in_queue, out_queue, client_kwargs):
         self.client = boto3.client("sns", **client_kwargs)
         self.topic_arn = topic_arn
         self.stop_event = stop_event

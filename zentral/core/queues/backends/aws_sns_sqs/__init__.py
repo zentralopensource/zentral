@@ -254,6 +254,7 @@ class BulkStoreWorker(StoreWorkerMixin, BatchConsumer):
         super().__init__(
             event_queues.setup_store_worker_queue(event_store),
             event_store.batch_size,
+            event_store.max_batch_age_seconds,
             event_queues.client_kwargs
         )
         self.event_store = event_store

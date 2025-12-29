@@ -1,5 +1,9 @@
 ## 2026.1
 
+### Features
+
+Add S3 Parquet event store (write only).
+
 ### Bug fixes
 
 Fix DEP device sync issues when same device is moved between two DEP virtual servers.

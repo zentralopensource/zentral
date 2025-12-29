@@ -10,6 +10,7 @@ from zentral.core.stores.backends.http import HTTPStoreSerializer
 from zentral.core.stores.backends.kinesis import KinesisStoreSerializer
 from zentral.core.stores.backends.opensearch import OpenSearchStoreSerializer
 from zentral.core.stores.backends.panther import PantherStoreSerializer
+from zentral.core.stores.backends.s3_parquet import S3ParquetStoreSerializer
 from zentral.core.stores.backends.snowflake import SnowflakeStoreSerializer
 from zentral.core.stores.backends.splunk import SplunkStoreSerializer
 from zentral.core.stores.backends.sumo_logic import SumoLogicStoreSerializer
@@ -25,6 +26,7 @@ class StoreSerializer(serializers.ModelSerializer):
     kinesis_kwargs = KinesisStoreSerializer(source="get_kinesis_kwargs", required=False, allow_null=True)
     opensearch_kwargs = OpenSearchStoreSerializer(source="get_opensearch_kwargs", required=False, allow_null=True)
     panther_kwargs = PantherStoreSerializer(source="get_panther_kwargs", required=False, allow_null=True)
+    s3_parquet_kwargs = S3ParquetStoreSerializer(source="get_s3_parquet_kwargs", required=False, allow_null=True)
     snowflake_kwargs = SnowflakeStoreSerializer(source="get_snowflake_kwargs", required=False, allow_null=True)
     splunk_kwargs = SplunkStoreSerializer(source="get_splunk_kwargs", required=False, allow_null=True)
     sumo_logic_kwargs = SumoLogicStoreSerializer(source="get_sumo_logic_kwargs", required=False, allow_null=True)
@@ -50,6 +52,7 @@ class StoreSerializer(serializers.ModelSerializer):
             "kinesis_kwargs",
             "opensearch_kwargs",
             "panther_kwargs",
+            "s3_parquet_kwargs",
             "snowflake_kwargs",
             "splunk_kwargs",
             "sumo_logic_kwargs",
