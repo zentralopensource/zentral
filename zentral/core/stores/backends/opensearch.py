@@ -4,7 +4,7 @@ from opensearchpy import AWSV4SignerAuth, OpenSearch, RequestsHttpConnection
 from opensearchpy.helpers import streaming_bulk
 from opensearchpy.exceptions import ConnectionError, RequestError
 from rest_framework import serializers
-from .base import AWSAuthSerializer
+from .base import AWSBaseAuthSerializer
 from .es_os_base import ESOSStore, ESOSStoreSerializer
 
 
@@ -51,7 +51,7 @@ class OpenSearchStore(ESOSStore):
 
 
 class OpenSearchStoreSerializer(ESOSStoreSerializer):
-    aws_auth = AWSAuthSerializer(required=False)
+    aws_auth = AWSBaseAuthSerializer(required=False)
 
     def validate(self, data):
         data = super().validate(data)

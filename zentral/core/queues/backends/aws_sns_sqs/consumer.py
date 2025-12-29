@@ -160,7 +160,7 @@ class ConcurrentConsumer(BaseConsumer):
 
 class BatchConsumer(BaseConsumer):
     def __init__(self, queue_url, batch_size, max_batch_age_seconds, client_kwargs):
-        visibility_timeout = max_batch_age_seconds + 180,  # TODO hardcoded 3 mins extra
+        visibility_timeout = max_batch_age_seconds + 180  # TODO hardcoded 3 mins extra
         super().__init__(queue_url, client_kwargs, visibility_timeout)
         self.batch_size = batch_size
         self.max_batch_age_seconds = max_batch_age_seconds
@@ -196,16 +196,13 @@ class BatchConsumer(BaseConsumer):
                 if self.skip_event(receipt_handle, event_d):
                     logger.debug("receipt handle %s: event skipped", receipt_handle[-7:])
                     self.delete_message_queue.put((receipt_handle, time.monotonic()))
-                    if self._batch_is_too_old():
-                        logger.debug("process events because max batch age reached")
-                        self._process_batch()
                 else:
                     logger.debug("receipt handle %s: queue new event for batch processing", receipt_handle[-7:])
                     self.batch.append((receipt_handle, routing_key, event_d))
                     if self.batch_start_ts is None:
                         self.batch_start_ts = time.monotonic()
-                    if self._batch_is_big_enough() or self._batch_is_too_old():
-                        self._process_batch()
+                if self._batch_is_big_enough() or self._batch_is_too_old():
+                    self._process_batch()
 
     def _process_batch(self):
         for receipt_handle in self.process_events(self.batch):

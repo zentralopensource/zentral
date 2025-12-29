@@ -83,7 +83,7 @@ class BaseStore(Backend):
 # Serializers
 
 
-class AWSAuthSerializer(serializers.Serializer):
+class AWSBaseAuthSerializer(serializers.Serializer):
     region_name = serializers.CharField(min_length=1)
     aws_access_key_id = serializers.CharField(required=False, allow_null=True)
     aws_secret_access_key = serializers.CharField(required=False, allow_null=True)
@@ -95,6 +95,16 @@ class AWSAuthSerializer(serializers.Serializer):
             raise serializers.ValidationError({"aws_secret_access_key": "This field is required"})
         elif aws_secret_access_key and not aws_access_key_id:
             raise serializers.ValidationError({"aws_access_key_id": "This field is required"})
+        return data
+
+
+class AWSAuthSerializer(AWSBaseAuthSerializer):
+    assume_role_arn = serializers.CharField(required=False, allow_null=True)
+
+    def validate(self, data):
+        data = super().validate(data)
+        if data.get("assume_role_arn") and data.get("aws_access_key_id"):
+            raise serializers.ValidationError({"assume_role_arn": "Cannot be used with an access key ID"})
         return data
 
 

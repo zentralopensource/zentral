@@ -235,13 +235,12 @@ class KinesisStoreTestCase(TestCase):
              "serialization_format": "zentral"},
         )
 
-    def test_serializer_full(self):
+    def test_serializer_key_full(self):
         s = KinesisStoreSerializer(data={
             "stream": "123",
             "region_name": "us-central-1",
             "aws_access_key_id": "yolo",
             "aws_secret_access_key": "fomo",
-            "assume_role_arn": "arn::role",
             "batch_size": 42,
             "serialization_format": "firehose_v1",
         })
@@ -252,6 +251,26 @@ class KinesisStoreTestCase(TestCase):
              "region_name": "us-central-1",
              "aws_access_key_id": "yolo",
              "aws_secret_access_key": "fomo",
+             "assume_role_arn": None,
+             "batch_size": 42,
+             "serialization_format": "firehose_v1"},
+        )
+
+    def test_serializer_role_full(self):
+        s = KinesisStoreSerializer(data={
+            "stream": "123",
+            "region_name": "us-central-1",
+            "assume_role_arn": "arn::role",
+            "batch_size": 42,
+            "serialization_format": "firehose_v1",
+        })
+        self.assertTrue(s.is_valid())
+        self.assertEqual(
+            s.data,
+            {"stream": "123",
+             "region_name": "us-central-1",
+             "aws_access_key_id": None,
+             "aws_secret_access_key": None,
              "assume_role_arn": "arn::role",
              "batch_size": 42,
              "serialization_format": "firehose_v1"},

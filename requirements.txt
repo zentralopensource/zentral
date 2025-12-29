@@ -28,6 +28,7 @@ msgraph-sdk
 opensearch-py<4
 prometheus_client               # publish prometheus metrics
 psycopg2-binary
+pyarrow
 pygments                        # SQL syntax highlighting
 pyopenssl                       # MDM
 pyotp                           # Auth / 2nd factor

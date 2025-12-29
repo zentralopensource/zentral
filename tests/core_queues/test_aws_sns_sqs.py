@@ -1,13 +1,19 @@
 from datetime import datetime
 import json
-from unittest.mock import patch
+import os.path
+import queue
+from unittest.mock import Mock, patch
 import boto3
 from botocore.stub import Stubber
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
+from pyarrow.fs import LocalFileSystem
 from zentral.conf.config import ConfigDict
-from zentral.core.queues.backends.aws_sns_sqs import EventQueues
+from zentral.core.queues.backends.aws_sns_sqs import (BulkStoreWorker, ConcurrentStoreWorker, EnrichWorker,
+                                                      EventQueues, PreprocessWorker, ProcessWorker, SimpleStoreWorker)
+from zentral.core.stores.backends.http import HTTPStoreSerializer
+from zentral.core.stores.backends.s3_parquet import S3ParquetStoreSerializer
 from zentral.core.stores.models import Store
 
 
@@ -15,18 +21,21 @@ class AWSSNSSQSQueuesTestCase(TestCase):
     maxDiff = None
 
     @staticmethod
-    def build_store(name=None, event_filters=None, provisioned=False):
+    def build_store(name=None, event_filters=None, provisioned=False, backend="HTTP", backend_kwargs=None):
         if event_filters is None:
             event_filters = {}
+        if backend_kwargs is None:
+            backend_kwargs = {"endpoint_url": "https://www.example.com",
+                              "concurrency": 1}
         name = name or get_random_string(12)
         store = Store.objects.create(
             name=name,
             slug=slugify(name),
             event_filters=event_filters,
-            backend="HTTP",
-            backend_kwargs={}
+            backend=backend,
+            backend_kwargs={},
         )
-        store.set_backend_kwargs({"endpoint_url": "https://www.example.com"})
+        store.set_backend_kwargs(backend_kwargs)
         if provisioned:
             store.provisioning_uid = get_random_string(12)
         store.save()
@@ -39,6 +48,8 @@ class AWSSNSSQSQueuesTestCase(TestCase):
                 "prefix": "prefix-",
                 "tags": {"un": "1"},
                 "region_name": "eu-central-1",
+                "aws_access_key_id": "aaki",  # do not wait for default credentials!
+                "aws_secret_access_key": "asak",
                 "predefined_queues": {
                     "store-enriched-events-opensearch": "https://www.example.com/yolo"
                 },
@@ -61,8 +72,11 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         eq = self.get_queues()
         self.assertEqual(eq._prefix, "prefix-")
         self.assertEqual(eq._tags, {"un": "1"})
-        self.assertEqual(list(eq.client_kwargs.keys()), ["config", "region_name"])
+        self.assertEqual(list(eq.client_kwargs.keys()),
+                         ["config", "region_name", "aws_access_key_id", "aws_secret_access_key"])
         self.assertEqual(eq.client_kwargs["region_name"], "eu-central-1")
+        self.assertEqual(eq.client_kwargs["aws_access_key_id"], "aaki")
+        self.assertEqual(eq.client_kwargs["aws_secret_access_key"], "asak")
         self.assertEqual(eq._known_queues, {
             "store-enriched-events-opensearch": "https://www.example.com/yolo",
         })
@@ -384,3 +398,152 @@ class AWSSNSSQSQueuesTestCase(TestCase):
             eq = self.get_queues()
             eq.mark_store_worker_queue_for_deletion(store)
         get_queue.assert_called_once_with("store-enriched-events-elasticsearch")
+
+    # workers
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
+    def test_get_preprocess_worker(self, get_queue):
+        get_queue.return_value = (True, "raw-events", "https://www.example.com/fomo")
+        eq = self.get_queues()
+        self.assertIsInstance(eq.get_preprocess_worker(), PreprocessWorker)
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
+    def test_get_enrich_worker(self, get_queue):
+        get_queue.return_value = (True, "events", "https://www.example.com/fomo")
+        eq = self.get_queues()
+        self.assertIsInstance(eq.get_enrich_worker(lambda e: e), EnrichWorker)
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
+    def test_get_process_worker(self, get_queue):
+        get_queue.return_value = (True, "process-enriched-events", "https://www.example.com/fomo")
+        eq = self.get_queues()
+        self.assertIsInstance(eq.get_process_worker(lambda e: e), ProcessWorker)
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
+    @patch("zentral.core.stores.backends.s3_parquet.S3ParquetStore._get_filesystem")
+    def test_get_bulk_store_worker(self, get_fs, get_queue):
+        get_fs.return_value = LocalFileSystem()
+        get_queue.return_value = (True, "store-worker-s3-parquet", "https://www.example.com/fomo")
+        prefix = get_random_string(12) + "/"
+        store = self.build_store(
+            name="S3 Parquet", provisioned=True,
+            backend="S3_PARQUET",
+            backend_kwargs=S3ParquetStoreSerializer({
+                "bucket": "/tmp",
+                "prefix": prefix,
+                "region_name": "eu-central-1"
+            }).data,
+        )
+        store.wait_and_configure_if_necessary()
+        store._fs.create_dir(os.path.dirname(store._get_parquet_path()))
+        self.assertTrue(store.batch_size > 1)
+        eq = self.get_queues()
+        w = eq.get_store_worker(store)
+        self.assertIsInstance(w, BulkStoreWorker)
+        self.assertEqual(w.max_batch_age_seconds, 300)
+        self.assertFalse(w._batch_is_big_enough())
+        self.assertFalse(w._batch_is_too_old())
+        self.assertEqual(w._threads[0].visibility_timeout, 480)
+
+        # process one message in the queue if in queue empty
+        # and stop_receiving_event is set
+        w.process_message_queue.get = Mock(side_effect=queue.Empty)
+        w.stop_receiving_event.is_set = Mock(return_value=True)
+        w.batch.append(
+            ("receipt_handle_0", "routing_key",
+             {"_zentral": {
+                 "id": "00000000-0000-0000-0000-000000000000",
+                 "index": 1,
+                 "type": "event_type",
+                 "created_at": "2026-01-01",
+              }})
+        )
+        w.setup_metrics_exporter()
+        w.start_run_loop()
+        w.process_message_queue.get.assert_called_once()
+        self.assertEqual(w.delete_message_queue.get()[0], "receipt_handle_0")
+        self.assertEqual(len(w.batch), 0)
+        self.assertIsNone(w.batch_start_ts)
+
+        # process one message in the queue if in queue empty
+        # and batch is too old
+        w.process_message_queue.get = Mock(side_effect=queue.Empty)
+        w.stop_receiving_event.is_set = Mock(side_effect=[False, True])
+        w.batch.append(
+            ("receipt_handle_1", "routing_key",
+             {"_zentral": {
+                 "id": "00000000-0000-0000-0000-000000000001",
+                 "index": 1,
+                 "type": "event_type",
+                 "created_at": "2026-01-01",
+              }})
+        )
+        w.batch_start_ts = -1000
+        w.max_batch_age_seconds = 0
+        w.start_run_loop()
+        self.assertEqual(w.delete_message_queue.get()[0], "receipt_handle_1")
+        self.assertEqual(len(w.batch), 0)
+        self.assertIsNone(w.batch_start_ts)
+
+        # process one message in the queue if in queue empty
+        # and batch is too old
+        w.stop_receiving_event.is_set = Mock(return_value=True)
+        w.process_message_queue.get = Mock(side_effect=[
+            ("receipt_handle_2", "routing_key",
+             {"_zentral": {
+                 "id": "00000000-0000-0000-0000-000000000002",
+                 "index": 1,
+                 "type": "event_type",
+                 "created_at": "2026-01-01",
+              }}),
+            queue.Empty,
+        ])
+        w.max_batch_age_seconds = 0
+        w.start_run_loop()
+        self.assertEqual(w.delete_message_queue.get()[0], "receipt_handle_2")
+        self.assertEqual(len(w.batch), 0)
+        self.assertIsNone(w.batch_start_ts)
+
+        # skip message
+        w.skip_event = Mock(return_value=True)
+        w.process_message_queue.get = Mock(side_effect=[
+            ("receipt_handle_3", "routing_key",
+             {"_zentral": {
+                 "id": "00000000-0000-0000-0000-000000000003",
+                 "index": 1,
+                 "type": "event_type",
+                 "created_at": "2026-01-01",
+              }}),
+            queue.Empty,
+        ])
+        w.start_run_loop()
+        w.skip_event.assert_called_once()
+        self.assertEqual(w.delete_message_queue.get()[0], "receipt_handle_3")
+        self.assertEqual(len(w.batch), 0)
+        self.assertIsNone(w.batch_start_ts)
+
+        # cleanup
+        store._fs.delete_dir(os.path.join("/tmp", prefix))
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
+    def test_get_concurrent_store_worker(self, get_queue):
+        get_queue.return_value = (True, "store-worker-http", "https://www.example.com/fomo")
+        store = self.build_store(
+            name="HTTP", provisioned=True,
+            backend_kwargs=HTTPStoreSerializer({
+                "endpoint_url": "https://store.example.com",
+                "concurrency": 2,
+            }).data,
+        )
+        self.assertEqual(store.concurrency, 2)
+        eq = self.get_queues()
+        self.assertIsInstance(eq.get_store_worker(store), ConcurrentStoreWorker)
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
+    def test_get_simple_store_worker(self, get_queue):
+        get_queue.return_value = (True, "store-worker-http", "https://www.example.com/fomo")
+        store = self.build_store(name="HTTP", provisioned=True)
+        self.assertEqual(store.batch_size, 1)
+        self.assertEqual(store.concurrency, 1)
+        eq = self.get_queues()
+        self.assertIsInstance(eq.get_store_worker(store), SimpleStoreWorker)
