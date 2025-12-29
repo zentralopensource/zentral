@@ -15,16 +15,16 @@ logger = logging.getLogger("zentral.core.queues.backends.aws_sns_sqs.consumer")
 
 
 class BaseConsumer:
-    def __init__(self, queue_url, client_kwargs=None):
-        if client_kwargs is None:
-            client_kwargs = {}
+    def __init__(self, queue_url, client_kwargs, visibility_timeout=None):
         self.process_message_queue = queue.Queue(maxsize=15)
         self.delete_message_queue = queue.Queue(maxsize=15)
         self.stop_receiving_event = threading.Event()
         self.stop_event = threading.Event()
         self._threads = [
-            SQSReceiveThread(queue_url, self.stop_receiving_event, self.process_message_queue, client_kwargs),
-            SQSDeleteThread(queue_url, self.stop_event, self.delete_message_queue, client_kwargs)
+            SQSReceiveThread(queue_url, self.stop_receiving_event, self.process_message_queue,
+                             client_kwargs, visibility_timeout),
+            SQSDeleteThread(queue_url, self.stop_event, self.delete_message_queue,
+                            client_kwargs),
         ]
 
     def _handle_signal(self, signum, frame):
@@ -121,7 +121,7 @@ class ConcurrentConsumerFinalThread(threading.Thread):
 
 
 class ConcurrentConsumer(BaseConsumer):
-    def __init__(self, queue_url, concurrency, client_kwargs=None):
+    def __init__(self, queue_url, concurrency, client_kwargs):
         super().__init__(queue_url, client_kwargs)
         self.concurrency = concurrency
         self.process_event_queue = queue.Queue(maxsize=concurrency)
@@ -159,13 +159,23 @@ class ConcurrentConsumer(BaseConsumer):
 
 
 class BatchConsumer(BaseConsumer):
-    max_event_age_seconds = 5
-
-    def __init__(self, queue_url, batch_size, client_kwargs=None):
-        super().__init__(queue_url, client_kwargs)
+    def __init__(self, queue_url, batch_size, max_batch_age_seconds, client_kwargs):
+        visibility_timeout = max_batch_age_seconds + 180,  # TODO hardcoded 3 mins extra
+        super().__init__(queue_url, client_kwargs, visibility_timeout)
         self.batch_size = batch_size
+        self.max_batch_age_seconds = max_batch_age_seconds
         self.batch = deque()
         self.batch_start_ts = None
+
+    def _batch_is_big_enough(self):
+        return len(self.batch) >= self.batch_size
+
+    def _batch_is_too_old(self):
+        return (
+            self.batch
+            and self.batch_start_ts is not None
+            and time.monotonic() > self.batch_start_ts + self.max_batch_age_seconds
+        )
 
     def start_run_loop(self):
         while True:
@@ -177,8 +187,8 @@ class BatchConsumer(BaseConsumer):
                     if self.stop_receiving_event.is_set():
                         logger.debug("process events before graceful exit")
                         self._process_batch()
-                    elif time.monotonic() > self.batch_start_ts + self.max_event_age_seconds:
-                        logger.debug("process events because max event age reached")
+                    elif self._batch_is_too_old():
+                        logger.debug("process events because max batch age reached")
                         self._process_batch()
                 if self.stop_receiving_event.is_set():
                     break
@@ -186,15 +196,15 @@ class BatchConsumer(BaseConsumer):
                 if self.skip_event(receipt_handle, event_d):
                     logger.debug("receipt handle %s: event skipped", receipt_handle[-7:])
                     self.delete_message_queue.put((receipt_handle, time.monotonic()))
-                    if self.batch and time.monotonic() > self.batch_start_ts + self.max_event_age_seconds:
-                        logger.debug("process events because max event age reached")
+                    if self._batch_is_too_old():
+                        logger.debug("process events because max batch age reached")
                         self._process_batch()
                 else:
                     logger.debug("receipt handle %s: queue new event for batch processing", receipt_handle[-7:])
                     self.batch.append((receipt_handle, routing_key, event_d))
                     if self.batch_start_ts is None:
                         self.batch_start_ts = time.monotonic()
-                    if len(self.batch) >= self.batch_size:
+                    if self._batch_is_big_enough() or self._batch_is_too_old():
                         self._process_batch()
 
     def _process_batch(self):
@@ -241,7 +251,7 @@ class ConsumerProducerFinalThread(threading.Thread):
 class ConsumerProducer(BaseConsumer):
     max_in_flight_receipt_handle_count = 100
 
-    def __init__(self, queue_url, client_kwargs=None):
+    def __init__(self, queue_url, client_kwargs):
         super().__init__(queue_url, client_kwargs)
         self.publish_message_queue = queue.Queue(maxsize=20)
         self.published_message_queue = queue.Queue(maxsize=20)

@@ -15,17 +15,15 @@ class SQSReceiveThread(threading.Thread):
     attribute_names = ['All']
     message_attribute_names = ['All']
     max_number_of_messages = 10
-    visibility_timeout = 120
     wait_time_seconds = 10
 
-    def __init__(self, queue_url, stop_event, out_queue, client_kwargs=None):
+    def __init__(self, queue_url, stop_event, out_queue, client_kwargs, visibility_timeout=120):
         logger.debug("build receive thread on SQS queue %s", queue_url)
-        if client_kwargs is None:
-            client_kwargs = {}
         self.client = boto3.client("sqs", **client_kwargs)
         self.queue_url = queue_url
         self.stop_event = stop_event
         self.out_queue = out_queue
+        self.visibility_timeout = visibility_timeout
         super().__init__(name="SQS receive thread")
 
     def run(self):
@@ -78,9 +76,7 @@ class SQSDeleteThread(threading.Thread):
     max_number_of_messages = 10
     max_receipt_handle_age_seconds = 5
 
-    def __init__(self, queue_url, stop_event, in_queue, client_kwargs=None):
-        if client_kwargs is None:
-            client_kwargs = {}
+    def __init__(self, queue_url, stop_event, in_queue, client_kwargs):
         self.client = boto3.client("sqs", **client_kwargs)
         self.queue_url = queue_url
         self.stop_event = stop_event
@@ -148,9 +144,7 @@ class SQSSendThread(threading.Thread):
     max_number_of_messages = 10
     max_event_age_seconds = 5
 
-    def __init__(self, queue_url, stop_event, in_queue, out_queue, client_kwargs=None):
-        if client_kwargs is None:
-            client_kwargs = {}
+    def __init__(self, queue_url, stop_event, in_queue, out_queue, client_kwargs):
         self.client = boto3.client("sqs", **client_kwargs)
         self.queue_url = queue_url
         self.stop_event = stop_event

@@ -6,6 +6,7 @@ from zentral.utils.backend_model import Backend
 class BaseStore(Backend):
     read_only = False  # if read only, we do not need a store worker
     batch_size = 1
+    max_batch_age_seconds = 60
     concurrency = 1
     machine_events = False
     machine_events_url = False
