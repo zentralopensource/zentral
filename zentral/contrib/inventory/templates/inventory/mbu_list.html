@@ -37,8 +37,8 @@
             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Merge Business Units">
             <i class="bi bi-sign-merge-left"></i>
         </button>
-    </div>
     {% endif %}
+    </div>
 </div>
 
 {% if object_list %}
@@ -55,24 +55,22 @@
                     <th>Tags</th>
                     <th>API enrollment</th>
                     <th></th>
-                <tr>
+                </tr>
             </thead>
             {% for mbu in object_list %}
             <tr class="data-row">
-                {% if perms.inventory.change_metabusinessunit %}
-                    <td>
-                        <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
-                    </td>
-                {% endif %}
-                {% if perms.inventory.view_machinesnapshot %}
-                    <td>
-                        <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu.name }}</a>
-                    </td>
-                {% else %}
-                    <td>
-                        {{ mbu.name }}
-                    </td>
-                {% endif %}
+                <td>
+                    {% if perms.inventory.change_metabusinessunit %}
+                    <input type="checkbox" name="mbu_id" value="{{ mbu.id }}">
+                    {% endif %}
+                </td>
+                <td>
+                    {% if perms.inventory.view_machinesnapshot %}
+                    <a href="{% url 'inventory:mbu_machines' mbu.id %}">{{ mbu.name }}</a>
+                    {% else %}
+                    {{ mbu.name }}
+                    {% endif %}
+                </td>    
                 <td>
                 {% for tag in mbu.tags %}
                     {% inventory_tag tag %}
@@ -102,15 +100,15 @@
             </tr>
             {% for bu in mbu.get_current_business_units %}
             <tr>
-            <td>{{ bu.source.name }}</td>
-            <td>{{ bu.name }}</td>
-            <td>
-                {% for link in bu.links.all %}
-                <a href="{{ link.url }}" class="btn btn-outline-secondary">
-                {{ bu.source.name }} - {{ link.anchor_text }}
-                </a>
-                {% endfor %}
-            </td>
+                <td>{{ bu.source.name }}</td>
+                <td>{{ bu.name }}</td>
+                <td>
+                    {% for link in bu.links.all %}
+                    <a href="{{ link.url }}" class="btn btn-outline-secondary">
+                    {{ bu.source.name }} - {{ link.anchor_text }}
+                    </a>
+                    {% endfor %}
+                </td>
             </tr>
             {% endfor %}
             {% endfor %}
