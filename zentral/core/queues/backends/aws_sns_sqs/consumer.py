@@ -15,7 +15,7 @@ logger = logging.getLogger("zentral.core.queues.backends.aws_sns_sqs.consumer")
 
 
 class BaseConsumer:
-    def __init__(self, queue_url, client_kwargs, visibility_timeout=None):
+    def __init__(self, queue_url, client_kwargs, visibility_timeout=120):
         self.process_message_queue = queue.Queue(maxsize=15)
         self.delete_message_queue = queue.Queue(maxsize=15)
         self.stop_receiving_event = threading.Event()

@@ -405,19 +405,25 @@ class AWSSNSSQSQueuesTestCase(TestCase):
     def test_get_preprocess_worker(self, get_queue):
         get_queue.return_value = (True, "raw-events", "https://www.example.com/fomo")
         eq = self.get_queues()
-        self.assertIsInstance(eq.get_preprocess_worker(), PreprocessWorker)
+        w = eq.get_preprocess_worker()
+        self.assertIsInstance(w, PreprocessWorker)
+        self.assertEqual(w._threads[0].visibility_timeout, 120)
 
     @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
     def test_get_enrich_worker(self, get_queue):
         get_queue.return_value = (True, "events", "https://www.example.com/fomo")
         eq = self.get_queues()
-        self.assertIsInstance(eq.get_enrich_worker(lambda e: e), EnrichWorker)
+        w = eq.get_enrich_worker(lambda e: e)
+        self.assertIsInstance(w, EnrichWorker)
+        self.assertEqual(w._threads[0].visibility_timeout, 120)
 
     @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
     def test_get_process_worker(self, get_queue):
         get_queue.return_value = (True, "process-enriched-events", "https://www.example.com/fomo")
         eq = self.get_queues()
-        self.assertIsInstance(eq.get_process_worker(lambda e: e), ProcessWorker)
+        w = eq.get_process_worker(lambda e: e)
+        self.assertIsInstance(w, ProcessWorker)
+        self.assertEqual(w._threads[0].visibility_timeout, 120)
 
     @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
     @patch("zentral.core.stores.backends.s3_parquet.S3ParquetStore._get_filesystem")
@@ -537,7 +543,9 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         )
         self.assertEqual(store.concurrency, 2)
         eq = self.get_queues()
-        self.assertIsInstance(eq.get_store_worker(store), ConcurrentStoreWorker)
+        w = eq.get_store_worker(store)
+        self.assertIsInstance(w, ConcurrentStoreWorker)
+        self.assertEqual(w._threads[0].visibility_timeout, 120)
 
     @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
     def test_get_simple_store_worker(self, get_queue):
@@ -546,4 +554,6 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         self.assertEqual(store.batch_size, 1)
         self.assertEqual(store.concurrency, 1)
         eq = self.get_queues()
-        self.assertIsInstance(eq.get_store_worker(store), SimpleStoreWorker)
+        w = eq.get_store_worker(store)
+        self.assertIsInstance(w, SimpleStoreWorker)
+        self.assertEqual(w._threads[0].visibility_timeout, 120)

@@ -17,7 +17,7 @@ class SQSReceiveThread(threading.Thread):
     max_number_of_messages = 10
     wait_time_seconds = 10
 
-    def __init__(self, queue_url, stop_event, out_queue, client_kwargs, visibility_timeout=120):
+    def __init__(self, queue_url, stop_event, out_queue, client_kwargs, visibility_timeout):
         logger.debug("build receive thread on SQS queue %s", queue_url)
         self.client = boto3.client("sqs", **client_kwargs)
         self.queue_url = queue_url
