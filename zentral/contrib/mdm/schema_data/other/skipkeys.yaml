@@ -51,6 +51,20 @@ payloadkeys:
   type: <string>
   presence: optional
   content: The key to skip the Action Button configuration pane.
+- key: AgeAssurance
+  title: Skip Age Assurance pane
+  supportedOS:
+    iOS:
+      introduced: '26.2'
+    macOS:
+      introduced: n/a
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: n/a
+  type: <string>
+  presence: optional
+  content: The key to skip the Age Assurance pane.
 - key: AgeBasedSafetySettings
   title: Skip Age Based Safety Settings pane
   supportedOS:
