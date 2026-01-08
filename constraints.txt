@@ -150,7 +150,7 @@ traitlets==5.14.3
 typing_extensions==4.12.2
 tzdata==2024.2
 uritemplate==4.2.0
-urllib3==2.6.0
+urllib3==2.6.3
 vine==5.1.0
 wcwidth==0.2.13
 webauthn==2.2.0
