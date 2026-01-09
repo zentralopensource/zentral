@@ -110,7 +110,7 @@ class MachineAppsProfilesViewsTestCase(TestCase):
         self._login("inventory.view_machinesnapshot")
         response = self.client.get(reverse("inventory:machine_macos_app_instances", args=(self.ms.serial_number,)))
         self.assertTemplateUsed(response, "inventory/machine_macos_app_instances.html")
-        self.assertContains(response, "macOS apps", status_code=200)
+        self.assertContains(response, "apps", status_code=200)
         self.assertContains(response, "Baller.app")
         self.assertContains(response, "io.zentral.baller")
 

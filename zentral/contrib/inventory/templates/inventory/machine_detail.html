@@ -77,11 +77,11 @@
         <ul class="dropdown-menu">
           {% for category, links in actions %}
           {% if category %}
-          <li><span class="dropdown-item disabled">{{ category }}</span></li>
+          <li><span class="dropdown-item disabled">{{ category }}</span></li>
           {% endif %}
           {% for link, disabled, anchor_text, display_class in links %}
           <li>
-            <a href="{{ link }}" class="dropdown-item{% if disabled %} disabled{% endif %}{% if display_class %} text-{{ display_class }}{% endif %}">{{ anchor_text }}</a>
+            <a href="{{ link }}" class="dropdown-item{% if disabled %} disabled{% endif %}{% if display_class %} text-{{ display_class }}{% endif %}">{{ anchor_text }}</a>
           </li>
           {% endfor %}
           {% if not forloop.last %}
@@ -193,9 +193,9 @@
         <dt class="col-sm-3 text-md-end">Local IPv4</dt>
         <dd class="col-sm-9">{{ ms.ec2_instance_metadata.local_ipv4|default:"-" }}</dd>
         <dt class="col-sm-3 text-md-end">MAC</dt>
-        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.mac }}</dd>
-        <dt class="col-sm-3 text-md-end">Security group{{ ms.ec2_instance_metadata.security_group_list|length|pluralize }}</dt>
-        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.security_group_list|join:", "|default:"-" }}</dd>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.mac }}</dd>
+        <dt class="col-sm-3 text-md-end">Security group{{ ms.ec2_instance_metadata.security_group_list|length|pluralize }}</dt>
+        <dd class="col-sm-9">{{ ms.ec2_instance_metadata.security_group_list|join:", "|default:"-" }}</dd>
         <dt class="col-sm-3 text-md-end">IAM profile ARN</dt>
         <dd class="col-sm-9">{{ ms.ec2_instance_metadata.iam_arn|default:"-" }}</dd>
         <dt class="col-sm-3 text-md-end">AMI ID</dt>
@@ -243,11 +243,11 @@
         <tbody>
           {% for disk in ms.disks.all %}
           <tr>
-            <td>{{ disk.name }}</td>
-            <td>{{ disk.size|filesizeformat }}</td>
+            <td>{{ disk.name }}</td>
+            <td>{{ disk.size|filesizeformat }}</td>
             {% if machine.platform == 'MACOS' %}
             <td>{{ disk.path|default:"-" }}</td>
-            <td>{{ disk.filevault_status|default:"-" }}</td>
+            <td>{{ disk.filevault_status|default:"-" }}</td>
             {% endif %}
           {% endfor %}
         </tbody>
@@ -270,7 +270,7 @@
           {% for ni in ms.network_interfaces.all %}
           {% with ni.get_mac_organization as org %}
           <tr>
-            <td>{{ ni.interface }}</td>
+            <td>{{ ni.interface }}</td>
             <td>
               {{ ni.mac|default:"-" }}
               {% if org %}<br><small>{{ org.name }}</small>{% endif %}
@@ -311,7 +311,7 @@
               {% if perms.inventory.view_machinegroup %}
               <a href="{% url 'inventory:group_machines' group.id %}">{{ group.name }}</a>
               {% else %}
-              {{ group.name }}
+              {{ group.name }}
               {% endif %}
             </td>
             {% if perms.inventory.view_link %}
@@ -357,7 +357,7 @@
         <dt class="col-sm-3 text-md-end">Extensions</dt>
         <dd class="col-sm-9">
           {% for key, val in trusted_facts.extensions.items %}
-          <p><em>{{ key }}</em> - {{ val }}</p>
+          <p><em>{{ key }}</em> - {{ val }}</p>
           {% endfor %}
         </dd>
         {% endif %}
@@ -379,7 +379,7 @@
         <dd class="col-sm-9">{{ core_facts.facter_version }}</dd>
         <dt class="col-sm-3 text-md-end">ruby</dt>
         <dd class="col-sm-9">
-          {{ core_facts.ruby_platform }}<br>
+          {{ core_facts.ruby_platform }}<br>
           {{ core_facts.ruby_sitedir }}<br>
           {{ core_facts.ruby_version }}
         </dd>
@@ -392,7 +392,7 @@
       <h4>Extra facts</h4>
       <dl class="row">
         {% for key, val in extra_facts.items %}
-        <dt class="col-sm-3 text-md-end">{{ key }}</dt>
+        <dt class="col-sm-3 text-md-end">{{ key }}</dt>
         <dd class="col-sm-9">{{ val }}</dd>
         {% endfor %}
       </dl>
@@ -432,12 +432,12 @@
       {% for certificate in certificates %}
       <dl class="row">
         <dt class="col-sm-3 text-md-end">Common Name</dt>
-        <dd style="col-sm-9">{{ certificate.short_repr }}</dd>
+        <dd class="col-sm-9">{{ certificate.short_repr }}</dd>
         <dt class="col-sm-3 text-md-end">Dates</dt>
-        <dd class="col-sm-9">{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
+        <dd class="col-sm-9">{{ certificate.valid_from }} - {{ certificate.valid_until }}</dd>
         {% if certificate.signed_by %}
         <dt class="col-sm-3 text-md-end">Issuer</dt>
-        <dd style="col-sm-9">{{ certificate.signed_by.short_repr|default:"?" }}</dd>
+        <dd class="col-sm-9">{{ certificate.signed_by.short_repr|default:"?" }}</dd>
         {% endif %}
       </dl>
       {% endfor %}
@@ -480,10 +480,10 @@
   </div><!-- end col-md-6 -->
   <div class="col-md-6">
     {% if perms.compliance_checks.view_machinestatus %}
-    <h3>Compliance check{{ compliance_check_total|pluralize }} ({{ compliance_check_total }})</h3>
+    <h3>Compliance check{{ compliance_check_total|pluralize }} ({{ compliance_check_total }})</h3>
     {% if compliance_check_total %}
     <p>
-      {{ compliance_check_ok }} OK{% if compliance_check_failed %}, {{ compliance_check_failed }} Failed{% endif %}{% if compliance_check_pending %}, {{ compliance_check_pending }} Pending{% endif %}{% if compliance_check_unknown %}, {{ compliance_check_unknown }} Unknown{% endif %}
+      {{ compliance_check_ok }} OK{% if compliance_check_failed %}, {{ compliance_check_failed }} Failed{% endif %}{% if compliance_check_pending %}, {{ compliance_check_pending }} Pending{% endif %}{% if compliance_check_unknown %}, {{ compliance_check_unknown }} Unknown{% endif %}
     </p>
     {% endif %}
     {% if compliance_check_statuses %}
@@ -498,7 +498,7 @@
         <tr>
           <td>
             {% if cc_url %}
-            <a href="{{ cc_url }}">{{ cc_name }}</a>
+            <a href="{{ cc_url }}">{{ cc_name }}</a>
             {% else %}
             {{ cc_name }}
             {% endif %}
