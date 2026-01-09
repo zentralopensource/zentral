@@ -6,13 +6,13 @@
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'inventory:index' %}">Inventory machines</a></li>
   <li class="breadcrumb-item"><a href="{{ machine.get_absolute_url }}">{{ serial_number|privacywrapper }}</a></li>
-  <li class="breadcrumb-item active">macOS apps</li>
+  <li class="breadcrumb-item active">apps</li>
 </ol>
 
 <h2>
   {% machine_type_icon machine %}
   {% machine_platform_icon machine %}
-  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number|privacywrapper }}</a> / macOS apps
+  {% if machine.computer_name %}{{ machine.computer_name }} / {% endif %}<a href="{{ machine.get_absolute_url }}">{{ serial_number|privacywrapper }}</a> / apps
 </h2>
 
 <p>
@@ -56,7 +56,7 @@
           <a href="{{ version_link }}">
           {% endif %}
           {% for v in app.all_versions %}
-          {% if not forloop.first %}<br>{% endif %}{{ v }}
+          {% if not forloop.first %}<br>{% endif %}{{ v }}
           {% empty %}
           -
           {% endfor %}
