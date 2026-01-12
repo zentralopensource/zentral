@@ -301,7 +301,12 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(
             response.json()["script_checks"],
-            [{'pk': sc.pk, 'version': 1, 'type': 'ZSH_BOOL', 'source': 'echo true', 'expected_result': True}]
+            [{'pk': sc.pk,
+              'version': 1,
+              'type': 'ZSH_BOOL',
+              'source': 'echo true',
+              'expected_bool_result': True,
+              'expected_result': True}]
         )
 
     def test_job_details_first_time_script_check_amd64(self):
@@ -321,7 +326,12 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(
             response.json()["script_checks"],
-            [{'pk': sc.pk, 'version': 1, 'type': 'ZSH_BOOL', 'source': 'echo true', 'expected_result': True}]
+            [{'pk': sc.pk,
+              'version': 1,
+              'type': 'ZSH_BOOL',
+              'source': 'echo true',
+              'expected_bool_result': True,
+              'expected_result': True}]
         )
 
     def test_job_details_second_time_too_early_no_script_check(self):
@@ -361,7 +371,11 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(
             response.json()["script_checks"],
-            [{'pk': sc.pk, 'version': 1, 'type': 'ZSH_BOOL', 'source': 'echo true', 'expected_result': True}]
+            [{'pk': sc.pk, 'version': 1,
+              'type': 'ZSH_BOOL',
+              'source': 'echo true',
+              'expected_bool_result': True,
+              'expected_result': True}]
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -404,7 +418,11 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(len(callbacks), 1)
         self.assertEqual(
             response.json()["script_checks"],
-            [{'pk': sc.pk, 'version': 1, 'type': 'ZSH_INT', 'source': 'echo 10', 'expected_result': 10}]
+            [{'pk': sc.pk, 'version': 1,
+              'type': 'ZSH_INT',
+              'source': 'echo 10',
+              'expected_int_result': 10,
+              'expected_result': 10}]
         )
         self.assertEqual(MachineStatus.objects.filter(serial_number=enrolled_machine.serial_number).count(), 0)
         event1, event2 = [cal.args[0] for cal in post_event.call_args_list]

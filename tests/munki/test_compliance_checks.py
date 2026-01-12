@@ -64,7 +64,8 @@ class MunkiComplianceChecksTestCase(TestCase):
              "type": "ZSH_INT",
              "version": sc.compliance_check.version,
              "source": "echo 10",
-             "expected_result": 10}
+             "expected_result": 10,
+             "expected_int_result": 10}
         )
 
     def test_serialize_zsh_bool_script_check_for_job(self):
@@ -79,7 +80,8 @@ class MunkiComplianceChecksTestCase(TestCase):
              "type": "ZSH_BOOL",
              "version": sc.compliance_check.version,
              "source": "echo 1",
-             "expected_result": True}
+             "expected_result": True,
+             "expected_bool_result": True}
         )
 
     def test_serialize_zsh_str_script_check_for_job(self):
@@ -94,7 +96,8 @@ class MunkiComplianceChecksTestCase(TestCase):
              "type": "ZSH_STR",
              "version": sc.compliance_check.version,
              "source": "echo un",
-             "expected_result": "un"}
+             "expected_result": "un",
+             "expected_str_result": "un"}
         )
 
     # ScriptCheck

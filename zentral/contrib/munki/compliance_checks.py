@@ -47,11 +47,16 @@ def serialize_script_check_for_job(script_check):
         "source": script_check.source,
     }
     if script_check.type == ScriptCheck.Type.ZSH_INT:
-        d["expected_result"] = int(script_check.expected_result)
+        r = int(script_check.expected_result)
+        d["expected_result"] = r
+        d["expected_int_result"] = r
     elif script_check.type == ScriptCheck.Type.ZSH_BOOL:
-        d["expected_result"] = convert_bool_expected_result(script_check.expected_result)
+        r = convert_bool_expected_result(script_check.expected_result)
+        d["expected_result"] = r
+        d["expected_bool_result"] = r
     else:
         d["expected_result"] = script_check.expected_result
+        d["expected_str_result"] = script_check.expected_result
     return d
 
 
