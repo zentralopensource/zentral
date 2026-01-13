@@ -8,11 +8,14 @@ RANDOM_LENGTH = 30  # math.ceil(ENTROPY / math.log(len(ALLOWED_CHARS), 2))
 CHECKSUM_LENGTH = 6
 PREFIX_LENGTH = 4  # ztlx
 
+USER_API_TOKEN = 'u'
+SERVICE_ACCOUNT_API_TOKEN = 's'
+RESERVED_PREFIXES = (USER_API_TOKEN, SERVICE_ACCOUNT_API_TOKEN)
 
-def generate_ztl_token(token_prefix: str) -> str:
-    if len(token_prefix) != 1 or token_prefix[0] not in ALLOWED_CHARS:
-        raise ValueError("Token prefix must be a single character")
-    prefix = token_prefix[0]
+
+def generate_ztl_token(prefix: str) -> str:
+    if prefix not in RESERVED_PREFIXES:
+        raise ValueError("Unknown token prefix")
     suffix = get_random_string(RANDOM_LENGTH, allowed_chars=ALLOWED_CHARS)
     first_part = f"ztl{prefix}_{suffix}"
     checksum = _generate_checksum(first_part)

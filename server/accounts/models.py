@@ -6,12 +6,12 @@ from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from django_celery_results.models import TaskResult
 import pyotp
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
+from zentral.utils.token import generate_ztl_token, USER_API_TOKEN, SERVICE_ACCOUNT_API_TOKEN
 
 
 class UserManager(DjangoUserManager):
@@ -237,7 +237,8 @@ class APITokenManager(models.Manager):
         return h.hexdigest()
 
     def update_or_create_for_user(self, user):
-        key = get_random_string(64)
+        token_prefix = SERVICE_ACCOUNT_API_TOKEN if user.is_service_account else USER_API_TOKEN
+        key = generate_ztl_token(token_prefix)
         hashed_key = self._hash_key(key)
         token, _ = self.update_or_create(user=user, defaults={"hashed_key": hashed_key})
         return token, key
@@ -258,7 +259,7 @@ class APIToken(models.Model):
         d = {"pk": self.pk, "username": self.user.username, "email": self.user.email} 
         if keys_only:
             return d
-       
+
         d.update({
             "is_remote": self.user.is_remote,
             "is_service_account": self.user.is_service_account,
