@@ -1260,11 +1260,10 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
             software_update for software_update in best_available_software_updates(self.object)
             if software_update
         ]
-        try:
-            ctx["dep_device"] = (DEPDevice.objects.select_related("virtual_server", "enrollment")
-                                                  .get(serial_number=self.object.serial_number))
-        except DEPDevice.DoesNotExist:
-            pass
+        ctx["dep_devices"] = (DEPDevice.objects.select_related("virtual_server", "enrollment")
+                                               .filter(serial_number=self.object.serial_number)
+                                               .order_by(F("last_op_date").desc(nulls_last=True)))
+        ctx["dep_device_count"] = ctx["dep_devices"].count()
         # device assignments
         ctx["device_assignments"] = (DeviceAssignment.objects
                                                      .select_related("location_asset__asset",

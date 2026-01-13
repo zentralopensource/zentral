@@ -122,17 +122,48 @@
         <td>{{ object.declarative_management|yesno }}</td>
         </tr>
         <tr>
-        <th>DEP assignment</th>
+        <th>DEP device{{ dep_device_count|pluralize }}</th>
         <td>
-            {% if dep_device %}
-            {% if perms.mdm.view_depvirtualserver %}
-            <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
-            {% else %}
-            {{ dep_device.virtual_server }}
-            {% endif %}
-            {% else %}
-            -
-            {% endif %}
+          {% if dep_device_count %}
+          <table class="table table-condensed">
+            <tr>
+              <th>Virtual server</th>
+              <th>Enrollment</th>
+              <th>Last OP</th>
+              <th>Last OP date</th>
+            </tr>
+            {% for dep_device in dep_devices %}
+            <tr>
+              <td>
+                {% if perms.mdm.view_depvirtualserver %}
+                <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
+                {% else %}
+                {{ dep_device.virtual_server }}
+                {% endif %}
+              </td>
+              <td>
+                {% if dep_device.enrollment %}
+                {% if perms.mdm.view_depenrollment %}
+                <a href="{{ dep_device.enrollment.get_absolute_url }}">{{ dep_device.enrollment }}</a>
+                {% else %}
+                {{ dep_device.enrollment }}
+                {% endif %}
+                {% else %}
+                -
+                {% endif %}
+              </td>
+              <td>
+                {{ dep_device.get_last_op_type_display|default:"-" }}
+              </td>
+              <td>
+                {{ dep_device.last_op_date|date:'SHORT_DATETIME_FORMAT'|default:"-" }}
+              </td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% else %}
+          -
+          {% endif %}
         </td>
         </tr>
         <tr>
