@@ -17,16 +17,29 @@ class TestMDMPayloads(TestCase):
 
     def test_build_mdm_configuration_profile_default(self):
         self.assertNotIn("mtls_proxy", settings["apps"]["zentral.contrib.mdm"])
+        self.assertNotIn("distribute_tls_chain", settings["apps"]["zentral.contrib.mdm"])
         session, _, _ = force_dep_enrollment_session(self.mbu)
         config_profile = build_mdm_configuration_profile(session)
         _, profile_data = verify_signed_payload(config_profile)
         profile = plistlib.loads(profile_data)
-        mdm_payload = None
-        for payload in profile["PayloadContent"]:
-            payload_type = payload["PayloadType"]
-            if payload_type == "com.apple.mdm":
-                mdm_payload = payload
-                break
+        payloads = {payload["PayloadType"]: payload for payload in profile["PayloadContent"]}
+        self.assertEqual(set(payloads), {"com.apple.security.pem", "com.apple.security.scep", "com.apple.mdm"})
+        mdm_payload = payloads["com.apple.mdm"]
+        self.assertNotIn("SignMessage", mdm_payload)
+        self.assertEqual(urlparse(mdm_payload["ServerURL"]).netloc, settings["api"]["fqdn_mtls"])
+        self.assertEqual(urlparse(mdm_payload["CheckInURL"]).netloc, settings["api"]["fqdn_mtls"])
+
+    def test_build_mdm_configuration_profile_distribute_tls_chain_false(self):
+        self.assertNotIn("mtls_proxy", settings["apps"]["zentral.contrib.mdm"])
+        settings["apps"]["zentral.contrib.mdm"]._collection["distribute_tls_chain"] = False
+        session, _, _ = force_dep_enrollment_session(self.mbu)
+        config_profile = build_mdm_configuration_profile(session)
+        settings["apps"]["zentral.contrib.mdm"]._collection.pop("distribute_tls_chain")
+        _, profile_data = verify_signed_payload(config_profile)
+        profile = plistlib.loads(profile_data)
+        payloads = {payload["PayloadType"]: payload for payload in profile["PayloadContent"]}
+        self.assertEqual(set(payloads), {"com.apple.security.scep", "com.apple.mdm"})
+        mdm_payload = payloads["com.apple.mdm"]
         self.assertNotIn("SignMessage", mdm_payload)
         self.assertEqual(urlparse(mdm_payload["ServerURL"]).netloc, settings["api"]["fqdn_mtls"])
         self.assertEqual(urlparse(mdm_payload["CheckInURL"]).netloc, settings["api"]["fqdn_mtls"])

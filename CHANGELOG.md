@@ -4,6 +4,8 @@
 
 Add S3 Parquet event store (write only).
 
+Add `distribute_tls_chain` option (defaults to `true`) in the MDM app config to control the inclusion of the configured TLS chain in the MDM enrollment payloads.
+
 ### Bug fixes
 
 Fix DEP device sync issues when same device is moved between two DEP virtual servers.

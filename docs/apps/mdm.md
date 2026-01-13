@@ -6,6 +6,8 @@ Zentral can be used as MDM server for Apple devices.
 
 To activate the MDM module, you need to add a `zentral.contrib.mdm` section to the `apps` section in `base.json`.
 
+If Zentral is served with a TLS certificate signed with a public CA (like Let's encrypt), set `distribute_tls_chain` to `false` to no include the CA chain in the MDM enrollment payloads.
+
 ### SCEP CA issuer chain
 
 To authenticate the OTA enrollments, Zentral needs the SCEP CA issuer certificate chain in PEM form in the `scep_ca_fullchain` key of the `zentral.contrib.mdm` section. It is possible to use the `{{ file:PATH_TO_PEM_CHAIN }}` substitution to load the chain from a file on disk.

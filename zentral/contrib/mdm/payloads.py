@@ -208,7 +208,10 @@ def build_mdm_configuration_profile(enrollment_session, machine_info=None):
     cert_payload = build_acme_payload(enrollment_session, machine_info)
     if not cert_payload:
         cert_payload = build_scep_payload(enrollment_session)
-    payloads = build_root_ca_payloads()
+    if settings["apps"]["zentral.contrib.mdm"].get("distribute_tls_chain", True):
+        payloads = build_root_ca_payloads()
+    else:
+        payloads = []
     mdm_config = {
         "IdentityCertificateUUID": cert_payload["PayloadUUID"],
         "Topic": enrollment_session.get_enrollment().push_certificate.topic,
