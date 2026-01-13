@@ -86,6 +86,7 @@ HARDWARE_MODEL_SERIAL_MACHINE_TYPES = [
     ('mac16,7', LAPTOP),
     ('mac16,8', LAPTOP),
     ('mac16,9', DESKTOP),
+    ('mac17,2', LAPTOP),
     ('appletv', TV),
     ('imac', DESKTOP),
     ('ipad', TABLET),
