@@ -413,11 +413,12 @@ class DebPackage(AbstractMTObject):
 
 class Program(AbstractMTObject):
     name = models.TextField(blank=True, null=True)
-    upgrade_code = models.TextField(blank=True, null=True)
     version = models.TextField(blank=True, null=True)
     language = models.TextField(blank=True, null=True)
     publisher = models.TextField(blank=True, null=True)
     identifying_number = models.TextField(blank=True, null=True)
+    package_family_name = models.TextField(blank=True, null=True)
+    upgrade_code = models.TextField(blank=True, null=True)
 
 
 class ProgramInstance(AbstractMTObject):

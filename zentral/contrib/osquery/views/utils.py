@@ -147,7 +147,8 @@ def collect_osx_app_instance(osx_app_instances, t):
 def collect_program_instance(program_instances, t):
     program = clean_dict(
         {k: t.pop(k, None)
-         for k in ("name", "upgrade_code", "version", "language", "publisher", "identifying_number")}
+         for k in ("name", "version", "language", "publisher",
+                   "identifying_number", "package_family_name", "upgrade_code")}
     )
     program_instance = clean_dict(
         {k: t.pop(k, None)

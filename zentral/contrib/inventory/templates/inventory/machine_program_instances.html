@@ -37,7 +37,6 @@
       <tr>
         <th>Name</th>
         <th>Publisher</th>
-        <th>Upgrade Code</th>
         <th>Version</th>
         <th>Install date</th>
         <th>Path</th>
@@ -48,9 +47,28 @@
       <tr>
         <td class="search-cell">
           <a href="{{ program_link }}">{{ program.name|default:"-" }}</a>
+          <table>
+            {% if program.identifying_number %}
+            <tr>
+              <th>Identifying number:</th>
+              <td style="padding-left:3px"><code>{{ program.identifying_number }}</code></td>
+            </tr>
+            {% endif %}
+            {% if program.package_family_name %}
+            <tr>
+              <th>Package family name:</th>
+              <td style="padding-left:3px"><code>{{ program.package_family_name }}</code></td>
+            </tr>
+            {% endif %}
+            {% if program.upgrade_code %}
+            <tr>
+              <th>Upgrade code:</th>
+              <td style="padding-left:3px"><code>{{ program.upgrade_code }}</code></td>
+            </tr>
+            {% endif %}
+          </table>
         </td>
         <td class="search-cell">{{ program.publisher|default:"-" }}</td>
-        <td>{% if program.upgrade_code %}<code>{{ program.upgrade_code }}</code>{% else %}-{% endif %}</td>
         <td>
           <a href="{{ version_link }}">{{ program.version|default:"-" }}</a>
         </td>
