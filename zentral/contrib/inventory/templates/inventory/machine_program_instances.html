@@ -37,6 +37,7 @@
       <tr>
         <th>Name</th>
         <th>Publisher</th>
+        <th>Upgrade Code</th>
         <th>Version</th>
         <th>Install date</th>
         <th>Path</th>
@@ -49,6 +50,7 @@
           <a href="{{ program_link }}">{{ program.name|default:"-" }}</a>
         </td>
         <td class="search-cell">{{ program.publisher|default:"-" }}</td>
+        <td>{% if program.upgrade_code %}<code>{{ program.upgrade_code }}</code>{% else %}-{% endif %}</td>
         <td>
           <a href="{{ version_link }}">{{ program.version|default:"-" }}</a>
         </td>

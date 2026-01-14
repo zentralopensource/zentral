@@ -147,9 +147,12 @@ def collect_osx_app_instance(osx_app_instances, t):
 def collect_program_instance(program_instances, t):
     program = clean_dict(
         {k: t.pop(k, None)
-         for k in ("name", "version", "language", "publisher", "identifying_number")}
+         for k in ("name", "upgrade_code", "version", "language", "publisher", "identifying_number")}
     )
-    program_instance = clean_dict(t)
+    program_instance = clean_dict(
+        {k: t.pop(k, None)
+         for k in ("install_location", "install_source", "uninstall_string", "install_date")}
+    )
     install_date = program_instance.pop("install_date", None)
     if install_date:
         try:
