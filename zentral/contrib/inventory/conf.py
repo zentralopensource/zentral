@@ -99,6 +99,11 @@ HARDWARE_MODEL_SERIAL_MACHINE_TYPES = [
     ('vmware', VM),
     ('xserve', SERVER),
     # DELL
+    ('pro micro', DESKTOP),
+    ('inspiron 36', DESKTOP),
+    ('inspiron 38', DESKTOP),
+    ('inspiron 5', DESKTOP),
+    ('inspiron 6', DESKTOP),
     ('latitude', LAPTOP),
     ('optiplex', DESKTOP),
     ('xps', LAPTOP),
@@ -113,6 +118,9 @@ HARDWARE_MODEL_SERIAL_MACHINE_TYPES = [
     # HUAWEI
     ('huawei ane', MOBILE),
     ('huawei wgr', TABLET),
+    # LENOVO
+    ('thinkcentre', DESKTOP),
+    ('thinkpad', LAPTOP),
     # SAMSUNG
     ('samsung gt-p', TABLET),
     ('samsung sm-a', MOBILE),
