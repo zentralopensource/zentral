@@ -12,6 +12,7 @@ from accounts.models import APIToken, User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.intune.models import Tenant
 from zentral.core.events.base import AuditEvent
+from .utils import force_tenant
 
 
 class APIViewsTestCase(TestCase):
@@ -31,19 +32,6 @@ class APIViewsTestCase(TestCase):
         _, cls.api_key = APIToken.objects.update_or_create_for_user(cls.service_account)
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.bu = cls.mbu.create_enrollment_business_unit()
-
-    def force_tenant(self):
-        tenant = Tenant.objects.create(
-            business_unit=self.bu,
-            name=get_random_string(12),
-            description=get_random_string(30),
-            tenant_id=str(uuid.uuid4()),
-            client_id=str(uuid.uuid4()),
-        )
-        tenant.set_client_secret(get_random_string(12))
-        tenant.save()
-        tenant.refresh_from_db()
-        return tenant
 
     def set_permissions(self, *permissions):
         if permissions:
@@ -115,7 +103,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_get_tenants(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         self.set_permissions("intune.view_tenant")
         response = self.get(reverse("intune_api:tenants"))
         self.assertEqual(response.status_code, 200)
@@ -136,23 +124,23 @@ class APIViewsTestCase(TestCase):
     # get tenant
 
     def test_get_tenant_unauthorized(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         response = self.get(reverse("intune_api:tenant", args=(tenant.tenant_id,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_get_tenant_token_permission_denied(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         response = self.get(reverse("intune_api:tenant", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_tenant_login_unauthorized(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         self.login()
         response = self.client.get(reverse("intune_api:tenant", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 401)
 
     def test_get_tenant(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         self.set_permissions("intune.view_tenant")
         response = self.get(reverse("intune_api:tenant", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 200)
@@ -173,29 +161,29 @@ class APIViewsTestCase(TestCase):
     # start tenant sync
 
     def test_start_sync_unauthorized(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         response = self.post(reverse("intune_api:start_tenant_sync", args=(tenant.tenant_id,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_start_sync_token_permission_denied(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         response = self.post(reverse("intune_api:start_tenant_sync", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 403)
 
     def test_start_sync_login_unauthorized(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         self.login()
         response = self.client.post(reverse("intune_api:start_tenant_sync", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 401)
 
     def test_start_sync_wrong_method(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         self.set_permissions("intune.view_tenant", "inventory.change_machinesnapshot")
         response = self.get(reverse("intune_api:start_tenant_sync", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 405)
 
     def test_start_sync(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         self.set_permissions("intune.view_tenant", "inventory.change_machinesnapshot")
         response = self.post(reverse("intune_api:start_tenant_sync", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 201)
@@ -291,7 +279,7 @@ class APIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_tenant(self, post_event):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         prev_value = tenant.serialize_for_event()
         data = {
             'business_unit': tenant.business_unit.pk,
@@ -350,7 +338,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(sorted(metadata["tags"]), ["intune", "zentral"])
 
     def test_update_tenant_unauthorized(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         data = {
             'description': 'Tenant Description',
         }
@@ -362,7 +350,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_update_tenant_permission_denied(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         data = {
             'description': 'Tenant Description',
         }
@@ -376,7 +364,7 @@ class APIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_tenant(self, post_event):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         prev_value = tenant.serialize_for_event()
         self.set_permissions("intune.delete_tenant")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -398,12 +386,12 @@ class APIViewsTestCase(TestCase):
         )
 
     def test_delete_tenant_unauthorized(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         self.set_permissions("intune.delete_tenant")
         response = self.delete(reverse("intune_api:tenant", args=(tenant.tenant_id,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_delete_tenant_permission_denied(self):
-        tenant = self.force_tenant()
+        tenant = force_tenant(self.bu)
         response = self.delete(reverse("intune_api:tenant", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 403)

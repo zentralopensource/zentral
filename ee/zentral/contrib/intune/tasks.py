@@ -35,7 +35,7 @@ def do_sync_inventory(client):
                                                   .delete()
                 )
     except Exception as e:
-        logger.exception("MS Intune Inventory sync error")
+        logger.exception("Intune Inventory sync error")
         error = str(e)
     result = {
         "status": "SUCCESS" if error is None else "FAILURE",

@@ -18,16 +18,16 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         if kwargs.get("list_tenants"):
             for tenant in Tenant.objects.all().order_by("name"):
-                print("Name:", tenant.name, "UUID:", tenant.tenant_id)
+                self.stdout.write(f"Name: {tenant.name} UUID: {tenant.tenant_id}")
             return
         tenant_id = kwargs.get("tenant_id")
         if not tenant_id:
-            raise CommandError("A Intune tenant_id is needed")
+            raise CommandError("An Intune tenant_id is needed")
         try:
             tenant = Tenant.objects.get(tenant_id=tenant_id)
         except Tenant.DoesNotExist:
-            raise CommandError(f"MS Intune tenant with tenant_id {tenant_id} does not exist")
+            raise CommandError(f"Intune tenant with tenant_id {tenant_id} does not exist")
         client = Client.from_tenant(tenant)
         result = do_sync_inventory(client)
         for key, val in result.items():
-            print(f"{key}: {val}")
+            self.stdout.write(f"{key}: {val}")

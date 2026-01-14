@@ -10,8 +10,8 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.intune.models import Tenant
 from zentral.core.events.base import AuditEvent
+from .utils import force_tenant
 
 
 class IntuneViewsTestCase(TestCase):
@@ -47,18 +47,6 @@ class IntuneViewsTestCase(TestCase):
             self.group.permissions.clear()
         self.client.force_login(self.user)
 
-    def _force_tenant(self):
-        tenant = Tenant.objects.create(
-            business_unit=self.bu,
-            name=get_random_string(12),
-            description=get_random_string(30),
-            tenant_id=get_random_string(12),
-            client_id=str(uuid.uuid4()),
-        )
-        tenant.set_client_secret(get_random_string(12))
-        tenant.save()
-        return tenant
-
     # Tenants
 
     def test_tenants_redirect(self):
@@ -70,7 +58,7 @@ class IntuneViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_tenants(self):
-        tenant = self._force_tenant()
+        tenant = force_tenant(self.bu)
         self._login("intune.view_tenant")
         response = self.client.get(reverse("intune:tenants"))
         self.assertEqual(response.status_code, 200)
@@ -148,17 +136,17 @@ class IntuneViewsTestCase(TestCase):
     # Update Tenant
 
     def test_update_tenant_redirect(self):
-        tenant = self._force_tenant()
+        tenant = force_tenant(self.bu)
         self._login_redirect(reverse("intune:update_tenant", args=(tenant.pk,)))
 
     def test_update_tenant_permission_denied(self):
-        tenant = self._force_tenant()
+        tenant = force_tenant(self.bu)
         self._login()
         response = self.client.get(reverse("intune:update_tenant", args=(tenant.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_tenant_get(self):
-        tenant = self._force_tenant()
+        tenant = force_tenant(self.bu)
         self._login("intune.change_tenant")
         response = self.client.get(reverse("intune:update_tenant", args=(tenant.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -166,7 +154,7 @@ class IntuneViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_tenant_post(self, post_event):
-        tenant = self._force_tenant()
+        tenant = force_tenant(self.bu)
         prev_value = tenant.serialize_for_event()
         self._login("intune.change_tenant", "intune.view_tenant")
         name = get_random_string(12)
@@ -222,17 +210,17 @@ class IntuneViewsTestCase(TestCase):
     # Delete Tenant
 
     def test_delete_tenant_redirect(self):
-        tenant = self._force_tenant()
+        tenant = force_tenant(self.bu)
         self._login_redirect(reverse("intune:delete_tenant", args=(tenant.pk,)))
 
     def test_delete_tenant_permission_denied(self):
-        tenant = self._force_tenant()
+        tenant = force_tenant(self.bu)
         self._login()
         response = self.client.get(reverse("intune:delete_tenant", args=(tenant.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_tenant_get(self):
-        tenant = self._force_tenant()
+        tenant = force_tenant(self.bu)
         self._login("intune.delete_tenant")
         response = self.client.get(reverse("intune:delete_tenant", args=(tenant.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -240,7 +228,7 @@ class IntuneViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_tenant_post(self, post_event):
-        tenant = self._force_tenant()
+        tenant = force_tenant(self.bu)
         prev_value = tenant.serialize_for_event()
         self._login("intune.delete_tenant", "intune.view_tenant")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:

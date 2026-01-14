@@ -333,6 +333,10 @@ LOGGING = {
             'handlers': ['console'],
         },
         # dependencies
+        'azure': {
+            'level': 'ERROR',
+            'handlers': ['console'],
+        },
         'elasticsearch': {
             'level': 'ERROR',
             'handlers': ['console'],

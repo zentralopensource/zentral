@@ -33,7 +33,7 @@ class Client:
         # to avoid the RuntimeError('Event loop is closed')
         http_client = GraphClientFactory.create_with_default_middleware(client=httpx.AsyncClient())
         request_adapter = GraphRequestAdapter(self.auth_provider, http_client)
-        return GraphServiceClient(request_adapter)
+        return GraphServiceClient(request_adapter=request_adapter)
 
     @classmethod
     def from_tenant(cls, tenant):
