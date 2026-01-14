@@ -2667,16 +2667,11 @@ class BlueprintArtifactTag(FilteredBlueprintItemTag):
 
 class ArtifactVersionManager(models.Manager):
     def can_be_deleted(self):
-        return self.annotate(
-            da_count=Count("deviceartifact"),
-            ua_count=Count("userartifact"),
-            dc_count=Count("devicecommand"),
-            uc_count=Count("usercommand"),
-        ).filter(
-            da_count=0,
-            ua_count=0,
-            dc_count=0,
-            uc_count=0,
+        return self.filter(
+            ~Exists(DeviceArtifact.objects.filter(artifact_version=OuterRef("pk"))),
+            ~Exists(UserArtifact.objects.filter(artifact_version=OuterRef("pk"))),
+            ~Exists(DeviceCommand.objects.filter(artifact_version=OuterRef("pk"))),
+            ~Exists(UserCommand.objects.filter(artifact_version=OuterRef("pk"))),
         )
 
 
