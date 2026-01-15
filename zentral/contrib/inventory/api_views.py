@@ -65,7 +65,7 @@ class UpdateMachineTags(APIView):
             if kind == "SET":
                 if names:
                     self.tags_to_set.setdefault(taxonomy, []).extend(
-                        Tag.objects.get_or_create(taxonomy=taxonomy, name=name)[0]
+                        Tag.objects.get_or_create(name=name, defaults={"taxonomy": taxonomy})[0]
                         for name in names
                     )
                 else:

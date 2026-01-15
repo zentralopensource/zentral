@@ -221,6 +221,21 @@ class InventoryAPITests(TestCase):
             {'machines': {'found': 1}, 'tags': {'added': 1, 'removed': 0}}
         )
 
+    def test_post_set_existing_taxonomy_tag_with_taxonomy(self):
+        self._set_required_permission()
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        tag = Tag.objects.create(name=get_random_string(12))
+        response = self._post_json_data({
+            "operations": [{"kind": "SET",
+                            "taxonomy": taxonomy.name,
+                            "names": [tag.name]}],  # With taxonomy but existing tag doesn't have one
+            "serial_numbers": [get_random_string(12)],
+        })
+        self.assertEqual(
+            response.json(),
+            {'machines': {'found': 1}, 'tags': {'added': 1, 'removed': 0}}
+        )
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_set_add_one_tag(self, post_event):
         self._set_required_permission()
