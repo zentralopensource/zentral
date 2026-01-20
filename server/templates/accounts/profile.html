@@ -38,20 +38,9 @@
         <td>{{ user.is_remote|yesno }}</td>
         </tr>
         <tr>
-        <th>API Token?</th>
+        <th>API Token{{ tokens|length|pluralize }}</th>
         <td>
-            {% if user.api_token %}
-            yes
-            {% url 'accounts:delete_user_api_token' user.pk as url %}
-            {% button 'DELETE' url "Delete API Token" %}
-            {% else %}
-            <form method="post" action="{% url 'accounts:create_user_api_token' user.pk %}">{% csrf_token %}
-            no
-            <button class="btn btn-link" type="submit">
-                <span class="bi bi-plus-circle" aria-hidden="true"></span>
-            </button>
-            </form>
-            {% endif %}
+            {% include "accounts/tokens/_list.html" %}
         </td>
         </tr>
         {% if not user.is_remote %}

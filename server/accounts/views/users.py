@@ -6,9 +6,9 @@ from django.db import transaction
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
-from django.views.generic import DetailView, TemplateView, View
+from django.views.generic import DetailView, TemplateView, CreateView
 from accounts.events import post_group_membership_updates
-from accounts.forms import InviteUserForm, ServiceAccountForm, UpdateUserForm
+from accounts.forms import InviteUserForm, ServiceAccountForm, UpdateUserForm, APITokenForm
 from accounts.models import APIToken, User
 from zentral.core.events.base import AuditEvent
 from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit
@@ -43,22 +43,9 @@ class InviteUserView(PermissionRequiredMixin, CreateViewWithAudit):
 
 
 class CreateServiceAccountView(PermissionRequiredMixin, CreateViewWithAudit):
-    permission_required = ('accounts.add_user', 'accounts.add_apitoken')
+    permission_required = ('accounts.add_user',)
     template_name = "accounts/user_form.html"
     form_class = ServiceAccountForm
-    success_url = reverse_lazy("accounts:users")
-
-    def form_valid(self, form):
-        super().form_valid(form)
-        user = self.object
-        _, api_key = APIToken.objects.update_or_create_for_user(user)
-        return render(
-            self.request,
-            "accounts/user_api_token.html",
-            {"api_key": api_key,
-             "object": user,
-             "title": "Service account API token"}
-        )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -78,6 +65,7 @@ class UserView(PermissionRequiredMixin, DetailView):
         ctx["title"] = "{} {}".format(self.object.get_type_display().title(), self.object)
         groups = self.object.groups.all().order_by(Lower("name"))
         ctx["groups"] = groups
+        ctx["tokens"] = self.object.api_token.all()
         ctx["group_count"] = groups.count()
         ctx["can_delete_token"] = (
             self.object == self.request.user or self.request.user.has_perm("accounts.delete_apitoken")
@@ -90,60 +78,74 @@ class UserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class CreateUserAPITokenView(LoginRequiredMixin, View): 
-    def post(self, request, *args, **kwargs):
-        user = get_object_or_404(User, pk=kwargs["pk"])
+class CreateUserAPITokenView(PermissionRequiredMixin, CreateView):
+    permission_required = ('accounts.add_apitoken')
+    template_name = "accounts/token_form.html"
+    form_class = APITokenForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.user = User.objects.get(pk=kwargs['user_pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.user
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['user'] = self.user
+        context["title"] = "Create API token"
+        context["breadcrumb_title"] = "API token"
+        return context
+
+    def form_valid(self, form):
         if (
-            user != self.request.user
-            and (not user.is_service_account or not self.request.user.has_perms(("accounts.view_user",
-                                                                                 "accounts.add_apitoken")))
+            self.user != self.request.user
+            and (not self.user.is_service_account or not self.request.user.has_perms(("accounts.add_apitoken",)))
         ):
             raise PermissionDenied("Not allowed")
-        if APIToken.objects.filter(user=user).exists():
-            messages.warning(request, "User already has an API token")
-            return redirect(user)
-        api_token, api_key = APIToken.objects.update_or_create_for_user(user)
+        api_token, api_key = APIToken.objects.create_for_user(self.user,
+                                                              expiry=form.cleaned_data['expiry'],
+                                                              name=form.cleaned_data['name'])
 
         def on_commit_callback():
             event = AuditEvent.build_from_request_and_instance(
-                request, api_token,
+                self.request, api_token,
                 action=AuditEvent.Action.CREATED,
             )
             event.post()
-
         transaction.on_commit(on_commit_callback)
-
         return render(
-            request,
+            self.request,
             "accounts/user_api_token.html",
             {"api_key": api_key,
-             "object": user,
+             "api_token": api_token,
+             "object": self.user,
              "title": "User API token"}
         )
 
 
-class DeleteUserAPITokenView(LoginRequiredMixin, TemplateView): 
+class DeleteUserAPITokenView(LoginRequiredMixin, TemplateView):
     template_name = "accounts/api_token_confirm_delete.html"
 
     def dispatch(self, request, *args, **kwargs):
-        self.user = get_object_or_404(User, pk=kwargs["pk"])
+        self.user = get_object_or_404(User, pk=kwargs["user_pk"])
         if (
-            self.user != self.request.user and not self.request.user.has_perms(("accounts.view_user",
-                                                                                "accounts.delete_apitoken"))
+            self.user != self.request.user and not self.request.user.has_perms(("accounts.delete_apitoken",))
         ):
             raise PermissionDenied("Not allowed")
-        if not APIToken.objects.filter(user=self.user).count():
-            messages.warning(request, "User has no API token")
-            return redirect(self.user)
+        self.token = get_object_or_404(APIToken, user=self.user, id=kwargs["pk"])
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["token_user"] = self.user
+        ctx["token"] = self.token
         return ctx
 
     def post(self, request, *args, **kwargs):
-        tokens = APIToken.objects.filter(user=self.user)
+        tokens = APIToken.objects.filter(user=self.user, id=kwargs["pk"])
         events = [AuditEvent.build_from_request_and_instance(
                 request, token,
                 action=AuditEvent.Action.DELETED,

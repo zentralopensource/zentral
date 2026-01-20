@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:user' user.pk %}">{{ user.get_type_display|title }} {{ user }}</a></li>
+  <li class="breadcrumb-item active">{{ breadcrumb_title }}</li>
+ 
+</ol>
+
+<h3>{{ title }}</h3>
+
+<form class="update-form" method="POST">{% csrf_token %}
+  {{ form }}
+  <p>
+    <a href="{% url 'accounts:users' %}" class="btn btn-outline-secondary">Cancel</a>
+    <button type="submit" class="btn btn-primary">Save</button>
+  </p>
+</form>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+  function getNowHoursOffset(offset) {
+    var d = new Date();
+    if (offset > 0) {
+        d.setUTCHours(d.getUTCHours() + offset);
+    }
+    return d;
+  }
+
+  function pad(number) {
+    var r = String(number);
+    if ( r.length === 1 ) {
+      r = '0' + r;
+    }
+    return r;
+  }
+
+  function setTime($input, t) {
+    var ts = t.getUTCFullYear()
+      + "-" + pad(t.getUTCMonth() + 1)
+      + "-" + pad(t.getUTCDate())
+      + " " + pad(t.getUTCHours())
+      + ":" + pad(t.getUTCMinutes())
+      + ":" + pad(t.getUTCSeconds());
+    $input.val(ts);
+  }
+
+  function addTimeShortcuts() {
+    $input = $("#id_expiry");
+    $.each([{label: "clear", offset:0}, {label: "now + 1h", offset:1}, {label: "now + 4h", offset:4}, {label: "now + 1d", offset:24}, {label: "now + 7d", offset:168}, {label: "now + 31d", offset:744}], function( index, labelDef ) {
+      var style = labelDef.offset ? "secondary" : "danger";
+      $('<a style="display:inline-block;margin:0 5px 5px 0;cursor:pointer;text-decoration:none"><span class="badge text-bg-' + style + '">' + labelDef.label + '</span></a>')
+        .click(function(event) {event.preventDefault(); if(labelDef.offset ==  0) { $input.val(""); } else { setTime($input, getNowHoursOffset(labelDef.offset))}})
+        .insertBefore($input);
+    });
+  }
+
+  $(document).ready(function () {
+    addTimeShortcuts();
+  });
+</script>
+{% endblock %}
+

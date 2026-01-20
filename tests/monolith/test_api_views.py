@@ -49,7 +49,7 @@ class MonolithAPIViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
         cls.user.groups.set([cls.group])
-        _, cls.api_key = APIToken.objects.update_or_create_for_user(user=cls.service_account)
+        _, cls.api_key = APIToken.objects.create_for_user(user=cls.service_account)
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()

@@ -37,7 +37,7 @@ class BackendBaseView(View):
             return HttpResponse('Unauthorized', status=401)
         err_msg = None
         try:
-            token = APIToken.objects.get_with_key(password.decode("utf-8"))
+            token = APIToken.objects.get_active_with_key(password.decode("utf-8"))
             assert token.user.username == username.decode("utf-8")
         except APIToken.DoesNotExist:
             err_msg = 'Bad credentials'

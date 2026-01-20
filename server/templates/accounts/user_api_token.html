@@ -7,7 +7,7 @@
   <li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Settings</a></li>
   {% else %}
   <li class="breadcrumb-item"><a href="{% url 'accounts:users' %}">Users</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'accounts:user' object.pk %}">{{ object.get_type_display|title }} {{ object }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:user' object.pk %}">{{ object.get_type_display|title }} {{ object }}</a></li>
   {% endif %}
   <li class="breadcrumb-item active">API token</li>
 </ol>
@@ -23,7 +23,7 @@
     data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="View Token">
     <span class="bi bi-eye" aria-hidden="true"></span>
   </a>
-  <input style="font-family:monospace" hidden id="auth-token" value="{{ api_key }}" size="{{ api_key|length }}">
+  <input style="font-family:monospace" hidden id="auth-token" value="{{ api_key }}" size="{{ api_key|length }}">
 </p>
 
 <p><span class="text-danger">This token cannot be retrieved later on.</span> However, you can create a new one at any time.</p>

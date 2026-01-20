@@ -31,7 +31,7 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
         cls.user.groups.set([cls.group])
-        _, cls.api_key = APIToken.objects.update_or_create_for_user(cls.service_account)
+        _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
 
     # utility methods
 

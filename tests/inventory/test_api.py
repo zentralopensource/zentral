@@ -27,7 +27,7 @@ class InventoryAPITests(APITestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
-        _, cls.api_key = APIToken.objects.update_or_create_for_user(user=cls.user)
+        _, cls.api_key = APIToken.objects.create_for_user(user=cls.user)
 
     def setUp(self):
         super().setUp()

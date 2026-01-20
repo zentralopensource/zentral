@@ -1,0 +1,45 @@
+{% load ui_extras %}
+{% if can_add_token %}
+           
+        <div  class="d-flex flex-row-reverse">
+            <a class="btn btn-link" href="{% url 'accounts:create_user_api_token' user.pk %}"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Token">
+                <span class="bi bi-plus-circle" aria-hidden="true"></span>
+            </a>
+        </div>
+
+{% endif %}
+        
+{% if tokens %}
+    <table class="table table-condensed">
+        <tr>
+            <th>Token name</th>
+            <th>Creation date</th>
+            <th>Expiration date</th>
+            <th>Is Active?</th>
+            <th></th>
+        </tr>
+        {% for token in tokens %}
+        <tr>
+            <td>{{ token.name | default:"-"}}</td>
+            <td>{{ token.created_at | default:"-"}}</td>
+            <td>{{ token.expiry | default:"-"}}</td>
+            <td>
+                {% if token.is_active %}
+                    <span class="badge text-bg-primary text-white">Active</span>
+                {% else %}
+                    <span class="badge text-bg-danger">Expired</span>
+                {% endif %}
+            </td>
+            <td class="text-center">
+                {% if can_delete_token %}
+                    {% url 'accounts:delete_user_api_token' user.pk token.id as url %}
+                    {% button 'DELETE' url "Delete API Token" %}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+{% else %}
+    -
+{% endif %}
