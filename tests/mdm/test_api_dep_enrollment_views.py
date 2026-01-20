@@ -13,14 +13,14 @@ from django.urls import reverse
 from accounts.models import User, APIToken
 from realms.models import Realm
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.models import (DEPEnrollment, DEPEnrollmentSession,
-                                        EnrollmentCustomView, DEPEnrollmentCustomView)
+from zentral.contrib.mdm.models import (DEPEnrollment, DEPEnrollmentCustomView, DEPEnrollmentSession,
+                                        DEPVirtualServer, EnrollmentCustomView)
 from .utils import (force_dep_enrollment, force_push_certificate, force_acme_issuer,
                     force_scep_issuer, force_dep_virtual_server, force_realm, force_enrollment_custom_view)
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.core.events.base import AuditEvent
 from zentral.contrib.inventory.models import Tag
-from datetime import timedelta, datetime
+from datetime import timedelta
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -110,6 +110,24 @@ class ApiViewsTestCase(TestCase):
             if i == 1:
                 entity = e
         return entity
+
+    def _virtual_server_to_dict(self, virtual_server: DEPVirtualServer):
+        return {
+            'id': virtual_server.id,
+            'name': virtual_server.name,
+            'uuid': str(virtual_server.uuid),
+            'created_at': virtual_server.created_at.isoformat(),
+            'updated_at': virtual_server.updated_at.isoformat()
+        }
+
+    def _virtual_server_to_list(
+            self, virtual_server: DEPVirtualServer = None, count: int = 0, next: str = None, previous: str = None):
+        return {
+            'count': count,
+            'next': next,
+            'previous': previous,
+            'results': [] if virtual_server is None else [self._virtual_server_to_dict(virtual_server)]
+        }
 
     def _dep_enrollment_to_dict(self, enrollment: DEPEnrollment):
         return {
@@ -219,7 +237,8 @@ class ApiViewsTestCase(TestCase):
                                        admin_full_name: str = None,
                                        admin_short_name: str = None,
                                        await_device_configured: bool = True,
-                                       skip_setup_item: str = None):
+                                       skip_setup_item: str = None,
+                                       language: str = ""):
         return {
             'display_name': get_random_string(12),
             'name': get_random_string(12),
@@ -228,7 +247,6 @@ class ApiViewsTestCase(TestCase):
             'scep_issuer': str(force_scep_issuer().id),
             'virtual_server': force_dep_virtual_server().id,
             'enrollment_secret': {
-                'secret': get_random_string(24),
                 'meta_business_unit': self.mbu.id,
                 'tags': [tag.id] if tag else [],
                 'serial_numbers': [get_random_string(12)],
@@ -247,7 +265,8 @@ class ApiViewsTestCase(TestCase):
             'macos_min_version': macos_min_version,
             'admin_full_name': admin_full_name,
             'admin_short_name': admin_short_name,
-            'await_device_configured': await_device_configured
+            'await_device_configured': await_device_configured,
+            'language': language
         }
 
     def _create_enrollment_custom_view_request(self):
@@ -317,6 +336,89 @@ class ApiViewsTestCase(TestCase):
 
     def _assert_no_profil_added(self, add_profile):
         self.assertEqual(len(add_profile.call_args_list), 0)
+
+    # List DEP virtual servers
+
+    def test_list_dep_virtual_server_unauthorized(self):
+        response = self.get(reverse("mdm_api:dep_virtual_servers"), include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_dep_virtual_server_permission_denied(self):
+        response = self.get(reverse("mdm_api:dep_virtual_servers"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_list_dep_virtual_server(self):
+        self.set_permissions("mdm.view_depvirtualserver")
+        virtual_server = force_dep_virtual_server()
+        response = self.get(reverse("mdm_api:dep_virtual_servers"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            self._virtual_server_to_list(virtual_server, 1))
+
+    def test_list_dep_virtual_server_by_name_no_results(self):
+        self.set_permissions("mdm.view_depvirtualserver")
+        response = self.get(reverse("mdm_api:dep_virtual_servers") + f"?name={get_random_string(12)}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), self._virtual_server_to_list())
+
+    def test_list_dep_virtual_server_by_name(self):
+        self.set_permissions("mdm.view_depvirtualserver")
+        virtual_server = force_dep_virtual_server()
+        response = self.get(reverse("mdm_api:dep_virtual_servers") + f"?name={virtual_server.name}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            self._virtual_server_to_list(virtual_server, 1))
+
+    def test_list_dep_virtual_server_ordering(self):
+        self.set_permissions("mdm.view_depvirtualserver")
+
+        virtual_server = self._given_ordered_entity_list(lambda: force_dep_virtual_server())
+
+        response = self.get(reverse("mdm_api:dep_virtual_servers")
+                            + "?" + urlencode({"ordering": "-created_at",
+                                               "limit": 1,
+                                               "offset": 1}))
+        self.assertEqual(DEPVirtualServer.objects.count(), 3)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            self._virtual_server_to_list(
+                virtual_server=virtual_server,
+                count=3,
+                next='http://testserver/api/mdm/dep/virtual_servers/?limit=1&offset=2&ordering=-created_at',
+                previous='http://testserver/api/mdm/dep/virtual_servers/?limit=1&ordering=-created_at')
+        )
+
+    # Get DEP virtual server
+
+    def test_get_dep_virtual_server_unauthorized(self):
+        virtual_server = force_dep_virtual_server()
+
+        response = self.get(
+            reverse("mdm_api:dep_virtual_server", args=(virtual_server.id, )),
+            include_token=False
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_get_dep_virtual_server_permission_denied(self):
+        virtual_server = force_dep_virtual_server()
+        response = self.get(
+            reverse("mdm_api:dep_virtual_server", args=(virtual_server.id, ))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_dep_virtual_server(self):
+        self.set_permissions("mdm.view_depvirtualserver")
+        virtual_server = force_dep_virtual_server()
+
+        response = self.get(reverse("mdm_api:dep_virtual_server", args=(virtual_server.id, )))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            self._virtual_server_to_dict(virtual_server)
+        )
 
     # List DEP Enrollments
 
@@ -390,7 +492,7 @@ class ApiViewsTestCase(TestCase):
 
     def test_get_dep_enrollment(self):
         self.set_permissions("mdm.view_depenrollment")
-        enrollment = force_dep_enrollment(self.mbu)
+        enrollment = force_dep_enrollment(self.mbu, language="en")
 
         response = self.get(reverse("mdm_api:dep_enrollment", args=(enrollment.id, )))
         self.assertEqual(response.status_code, 200)
@@ -751,16 +853,18 @@ class ApiViewsTestCase(TestCase):
             "profile_uuid": str(profile_uuid)
         }
         tag = self._given_tag()
+        language = "en"
 
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(
                 reverse("mdm_api:dep_enrollment", args=(enrollment.id,)),
-                self._create_dep_enrollment_request(tag=tag)
+                self._create_dep_enrollment_request(tag=tag, language=language)
             )
 
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.uuid, profile_uuid)
         self.assertIsNotNone(enrollment.enrollment_secret.tags.get(id=tag.id))
+        self.assertEqual(enrollment.language, language)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
