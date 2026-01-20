@@ -20,9 +20,9 @@ urlpatterns = [
          name="update_user"),
     path('users/<int:pk>/delete/', views.DeleteUserView.as_view(),
          name="delete_user"),
-    path('users/<int:pk>/api_token/create/', views.CreateUserAPITokenView.as_view(),
+    path('users/<int:user_pk>/api_tokens/create/', views.CreateUserAPITokenView.as_view(),
          name="create_user_api_token"),
-    path('users/<int:pk>/api_token/delete/', views.DeleteUserAPITokenView.as_view(),
+    path('users/<int:user_pk>/api_tokens/<str:pk>/delete/', views.DeleteUserAPITokenView.as_view(),
          name="delete_user_api_token"),
 
     path('tasks/', views.TasksView.as_view(),

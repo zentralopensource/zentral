@@ -41,7 +41,7 @@ class DeleteZentralUserTestCase(TestCase):
                  "prev_value": user.serialize_for_event()
               }
         }
-        APIToken.objects.update_or_create_for_user(user),
+        APIToken.objects.create_for_user(user),
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             stdout, stderr = self.call_command("yolo")
         self.assertEqual(stdout, "1 user deleted\n")

@@ -15,6 +15,28 @@
 <h3>Delete {% if token_user == request.user %}my{% else %}{{ token_user.get_type_display }} {{ token_user }}{% endif %} API token</h3>
 
 <p>Please confirm you want to delete {% if token_user == request.user %}your API token{% else %}the {{ token_user.get_type_display }} API token of {{ token_user }}{% endif %}.</p>
+{% if token %}
+<div class="row">
+  <div class="col-4">
+    <table class="table table-bordered table-primary table-condensed">
+        <tr>
+          <td width="40%">Token name</td>
+          <td>{{ token.name | default:"--"}}</td>
+        </tr>
+        <tr>
+          <td>Creation date</td>
+          <td>{{ token.created_at | default:""}}</td>
+        </tr>
+      {% if token.expiry %}
+        <tr>
+          <td>Expiration date</td>
+          <td>{{ token.expiry | default:""}}</td>
+        </tr>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endif %}
 <form class="form" method="POST">{% csrf_token %}
   <p>
     {% if token_user == request.user %}

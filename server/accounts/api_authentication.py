@@ -11,7 +11,7 @@ class APITokenAuthentication(TokenAuthentication):
         if '_' in key and not verify_ztl_token(key, [USER_API_TOKEN, SERVICE_ACCOUNT_API_TOKEN]):
             raise exceptions.AuthenticationFailed(_('Invalid ztl token.'))
         try:
-            token = APIToken.objects.get_with_key(key)
+            token = APIToken.objects.get_active_with_key(key)
         except APIToken.DoesNotExist:
             raise exceptions.AuthenticationFailed(_('Invalid token.'))
 

@@ -1,5 +1,7 @@
 import json
 import sys
+from dateutil import parser
+from dateutil.parser import ParserError
 from django.core.management.base import BaseCommand
 from django.core.validators import EmailValidator, ValidationError
 from django.db import transaction
@@ -22,6 +24,10 @@ class Command(BaseCommand):
         parser.add_argument('--skip-if-existing', action='store_true')
         parser.add_argument('--with-api-token', action='store_true',
                             help="Generate an API token for the user")
+        parser.add_argument('--api-token-name', type=str,
+                            help="Set an API token name")
+        parser.add_argument('--api-token-expiry', type=str,
+                            help="Set an API token expiration date")
         parser.add_argument('--json', action='store_true',
                             help="Set output mode to 'json'")
         parser.add_argument('--send-reset', action='store_true',
@@ -46,6 +52,13 @@ class Command(BaseCommand):
             elif self.send_reset:
                 self.exit_with_error("A service account cannot receive a password reset", 6)
             self.with_api_token = True
+            if self.api_token_name is None:
+                self.api_token_name = 'Initial Service Account API Token'
+        if self.api_token_expiry:
+            try:
+                parser.parse(self.api_token_expiry)
+            except ParserError:
+                self.exit_with_error("Parameter api_token_expiry must be a valid date format", 7)
 
     def check_username(self, username):
         username = username.strip()
@@ -144,7 +157,9 @@ class Command(BaseCommand):
             if APIToken.objects.filter(user=self.user).exists():
                 self.print("Existing API token")
             else:
-                token, api_key = APIToken.objects.update_or_create_for_user(self.user)
+                token, api_key = APIToken.objects.create_for_user(self.user,
+                                                                  expiry=self.api_token_expiry,
+                                                                  name=self.api_token_name)
 
                 def on_commit_callback():
                     event = AuditEvent.build(
@@ -185,6 +200,8 @@ class Command(BaseCommand):
             self.superuser = kwargs.get("superuser", False)
             self.skip_if_existing = kwargs.get("skip_if_existing", False)
             self.with_api_token = kwargs.get("with_api_token", False)
+            self.api_token_name = kwargs.get("api_token_name", '')
+            self.api_token_expiry = kwargs.get("api_token_expiry", '')
             self.send_reset = kwargs.get("send_reset", False)
             self.context = {
                 "service_account": self.service_account,

@@ -6,8 +6,10 @@ from django.conf import settings as django_settings
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm as DjangoPasswordResetForm,  UsernameField
 from django.contrib.auth.models import Group
 from django.core import signing, validators
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.utils.crypto import get_random_string
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 import pyotp
 from webauthn import generate_authentication_options, options_to_json, verify_authentication_response
@@ -16,7 +18,7 @@ from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 from zentral.conf import settings as zentral_settings
 from zentral.conf.config import ConfigList
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
-from .models import User, UserTOTP, UserWebAuthn
+from .models import User, UserTOTP, UserWebAuthn, APIToken
 from .password_reset import handler as password_reset_handler
 from .utils import all_permissions_queryset
 
@@ -151,6 +153,33 @@ class UpdateProfileForm(forms.Form):
         self.user.items_per_page = self.cleaned_data["items_per_page"]
         self.user.save()
         return self.user
+
+
+class APITokenForm(forms.ModelForm):
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+
+    class Meta:
+        model = APIToken
+        fields = ["name", "expiry"]
+        labels = {
+            "name": _("Token name"),
+        }
+        widgets = {
+            "name": forms.Textarea(attrs={"cols": 40, "rows": 1}),
+        }
+        help_texts = {
+            "name": _("Give your API token a descriptive name."),
+            "expiry": _("Define a date when the token will expire.")
+        }
+
+    def clean_expiry(self):
+        date = self.cleaned_data["expiry"]
+        if date is not None and date < timezone.now():
+            raise ValidationError("The expiration date must be in the future.")
+        return date
 
 
 class AddTOTPForm(forms.Form):

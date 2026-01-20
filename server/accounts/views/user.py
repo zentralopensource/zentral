@@ -22,6 +22,13 @@ logger = logging.getLogger("zentral.accounts.views.user")
 class ProfileView(LoginRequiredMixin, TemplateView):
     template_name = "accounts/profile.html"
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["tokens"] = self.request.user.api_token.all()
+        ctx["can_delete_token"] = self.request.user.has_perm("accounts.delete_apitoken")
+        ctx["can_add_token"] = self.request.user.has_perm("accounts.add_apitoken")
+        return ctx
+
 
 class UpdateProfileView(LoginRequiredMixin, FormView):
     template_name = "accounts/profile_form.html"

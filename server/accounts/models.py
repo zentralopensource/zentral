@@ -1,10 +1,13 @@
 import enum
+import uuid
 from hashlib import blake2b
 from itertools import chain
 from django.contrib.auth.models import AbstractUser, Group, UserManager as DjangoUserManager
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.urls import reverse
+from django.db.models import Q
+from django.db.models.functions import Now
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
@@ -231,40 +234,61 @@ class APITokenManager(models.Manager):
     use_in_migrations = True
 
     @staticmethod
-    def _hash_key(key):
+    def _hash_key(key: str) -> str:
         h = blake2b(digest_size=32)
         h.update(key.encode("utf-8"))
         return h.hexdigest()
 
-    def update_or_create_for_user(self, user):
+    def create_for_user(self, user, expiry=None, name=None):
         token_prefix = SERVICE_ACCOUNT_API_TOKEN if user.is_service_account else USER_API_TOKEN
         key = generate_ztl_token(token_prefix)
         hashed_key = self._hash_key(key)
-        token, _ = self.update_or_create(user=user, defaults={"hashed_key": hashed_key})
+        defaults = {"hashed_key": hashed_key}
+        if expiry is not None:
+            defaults.update({"expiry": expiry})
+        if name is not None:
+            defaults.update({"name": name})
+        token, _ = self.update_or_create(user=user, hashed_key=hashed_key,
+                                         defaults=defaults)
         return token, key
 
-    def get_with_key(self, key):
+    def is_active(self):
+        return self.filter(Q(expiry__gt=Now()) | Q(expiry=None))
+
+    def is_expired(self):
+        return self.filter(expiry__lt=Now())
+
+    def get_active_with_key(self, key):
         hashed_key = self._hash_key(key)
-        return self.select_related("user").get(hashed_key=hashed_key)
+        return self.is_active().select_related("user").get(hashed_key=hashed_key)
 
 
 class APIToken(models.Model):
-    hashed_key = models.CharField(max_length=64, primary_key=True)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="api_token")
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hashed_key = models.CharField(max_length=64)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="api_token")
     created_at = models.DateTimeField(auto_now_add=True)
+    expiry = models.DateTimeField(blank=True, null=True)
+    name = models.TextField(blank=True, default="")
 
     objects = APITokenManager()
 
+    def is_active(self):
+        return APIToken.objects.is_active().filter(pk=self.pk).exists()
+
+    def is_expired(self):
+        return APIToken.objects.is_expired().filter(pk=self.pk).exists()
+
     def serialize_for_event(self, keys_only=False):
-        d = {"pk": self.pk, "username": self.user.username, "email": self.user.email} 
+        d = {"pk": self.pk, "name": self.name}
         if keys_only:
             return d
 
         d.update({
-            "is_remote": self.user.is_remote,
-            "is_service_account": self.user.is_service_account,
-            "is_superuser": self.user.is_superuser,
-            "roles":  [{"pk": group.pk, "name": group.name} for group in self.user.groups.all()]
+            "user": self.user.serialize_for_event(),
+            "expiry": self.expiry,
+            "created_at": self.created_at,
+            "hashed_key": self.hashed_key
         })
         return d
 

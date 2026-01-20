@@ -1,14 +1,15 @@
 from io import StringIO
 import json
+from datetime import timedelta, date
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase
 from accounts.models import APIToken, User
-from zentral.core.events.base import AuditEvent
 from unittest.mock import patch
+from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
 
 
-class CreateZentralUserTestCase(TestCase):
+class CreateZentralUserTestCase(TestCase, EventAssertions):
 
     def _create_expected_user_updated_event_serialization(self, prev_user, changed_user):
         return {"action": "updated",
@@ -36,41 +37,31 @@ class CreateZentralUserTestCase(TestCase):
             "roles":  [{"pk": group.pk, "name": group.name} for group in user.groups.all()]
         }
 
+    def _create_token_event_serialization(self, user, token):
+        return {
+            "pk": token.pk,
+            "name": token.name,
+            "user": user.serialize_for_event(),
+            "expiry": token.expiry,
+            "created_at": token.created_at,
+            "hashed_key": token.hashed_key
+        }
+
     def _create_expected_api_token_created_event_serialization(self, user):
         return {
             "action": "created",
             "object": {
                  "model": "accounts.apitoken",
-                 "pk": user.api_token.pk,
-                 "new_value": self._create_user_event_serialization(user, user.api_token.pk)
+                 "pk": str(user.api_token.first().pk),
+                 "new_value": self._create_token_event_serialization(user, user.api_token.first())
               }
         }
-
-    def _assertNoEventPublished(self, callbacks, post_event):
-        self._assertEventsPublished(0, callbacks, post_event)
-
-    def _assertEventsPublished(self, expected_number_of_events, callbacks, post_event):
-        self.assertEqual(len(callbacks), expected_number_of_events)
-        self.assertEqual(len(post_event.call_args_list), expected_number_of_events)
-
-    def _assertIsAuditEvent(self, expected_payload, expected_metadata_objects, post_event, expected_order=0):
-        event = post_event.call_args_list[expected_order].args[0]
-        self.assertIsInstance(event, AuditEvent)
-
-        self.assertEqual(
-            event.payload,
-            expected_payload
-        )
-
-        metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], expected_metadata_objects)
-        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     def _user_metadata_object(self, user):
         return {"accounts_user": [str(user.pk)]}
 
     def _api_token_metadata_object(self, user):
-        return {"accounts_api_token": [user.api_token.pk]}
+        return {"accounts_api_token": [str(user.api_token.first().pk)]}
 
     def call_command(self, *args, **kwargs):
         out = StringIO()
@@ -268,13 +259,27 @@ class CreateZentralUserTestCase(TestCase):
             expected_order=1
         )
 
+    def test_create_user_with_api_token_expiry_format(self):
+
+        with self.assertRaises(SystemExit) as cm:
+            result = self.call_command("yolo", "fomo_expiry@example.com",
+                                       "--with-api-token", "--api-token-expiry", "Morgen schon abgelaufen")
+
+        self.assertEqual(cm.exception.code, 7)
+
+        expiry_date = date.today() + timedelta(days=1)
+        result = self.call_command("yolo", "fomo_expiry@example.com",
+                                   "--with-api-token", "--api-token-expiry", expiry_date)
+        user = User.objects.get(email="fomo_expiry@example.com")
+        self.assertIn(str(user.email), result)
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_user_with_api_token_json(self, post_event):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             result = json.loads(self.call_command("yolo", "fomo@example.com", "--json", "--with-api-token"))
         self.assertEqual(
             APIToken.objects._hash_key(result["api_token"]),
-            User.objects.select_related("api_token").get(email="fomo@example.com").api_token.hashed_key
+            User.objects.get(email="fomo@example.com").api_token.first().hashed_key
         )
         self.assertTrue(result["api_token_created"])
 
@@ -345,7 +350,7 @@ class CreateZentralUserTestCase(TestCase):
         user = User.objects.get(email='fomo@example.com')
         self.assertEqual(
             APIToken.objects._hash_key(api_token),
-            user.api_token.hashed_key
+            user.api_token.first().hashed_key
         )
         self.assertFalse(user.has_usable_password())
         self.assertTrue(user.is_service_account)

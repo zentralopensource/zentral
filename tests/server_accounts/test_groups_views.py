@@ -1,14 +1,12 @@
-from functools import reduce
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from accounts.models import ProvisionedRole, User
+from tests.zentral_test_utils.login_case import LoginCase
 
 
-class AccountUsersViewsTestCase(TestCase):
+class AccountUsersViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         # ui user
@@ -26,29 +24,11 @@ class AccountUsersViewsTestCase(TestCase):
 
     # auth utils
 
-    def login_redirect(self, url_name, *args):
-        url = reverse("accounts:{}".format(url_name), args=args)
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _getUser(self):
+        return self.ui_user
 
-    def permission_denied(self, url_name, *args):
-        url = reverse("accounts:{}".format(url_name), args=args)
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 403)
-
-    def login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.ui_group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.ui_group.permissions.clear()
-        self.client.force_login(self.ui_user)
+    def _getGroup(self):
+        return self.ui_group
 
     # permissions denied
 
