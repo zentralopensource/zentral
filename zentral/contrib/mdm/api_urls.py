@@ -74,7 +74,7 @@ urlpatterns = [
     path('store_apps/<uuid:artifact_version_pk>/', StoreAppDetail.as_view(), name="store_app"),
 
     path('dep/virtual_servers/', DEPVirtualServerList.as_view(), name="dep_virtual_servers"),
-    path('dep/virtual_servers/<int:pk>', DEPVirtualServerDetail.as_view(), name="dep_virtual_server"),
+    path('dep/virtual_servers/<int:pk>/', DEPVirtualServerDetail.as_view(), name="dep_virtual_server"),
     path('dep/virtual_servers/<int:pk>/sync_devices/',
          DEPVirtualServerSyncDevicesView.as_view(), name="dep_virtual_server_sync_devices"),
     path('dep/devices/', DEPDeviceList.as_view(), name="dep_devices"),
@@ -101,11 +101,11 @@ urlpatterns = [
          SyncSoftwareUpdatesView.as_view(), name="sync_software_updates"),
     path('dep_enrollments/', DEPEnrollmentList.as_view(), name="dep_enrollments"),
     path('dep_enrollments/<int:pk>/', DEPEnrollmentDetail.as_view(), name="dep_enrollment"),
-    path('enrollment_custom_views', EnrollmentCustomViewList.as_view(),
+    path('enrollment_custom_views/', EnrollmentCustomViewList.as_view(),
          name="enrollment_custom_views"),
     path('enrollment_custom_views/<uuid:pk>/', EnrollmentCustomViewDetail.as_view(),
          name="enrollment_custom_view"),
-    path('dep_enrollment_custom_views', DEPEnrollmentCustomViewList.as_view(),
+    path('dep_enrollment_custom_views/', DEPEnrollmentCustomViewList.as_view(),
          name="dep_enrollment_custom_views"),
     path('dep_enrollment_custom_views/<uuid:pk>/', DEPEnrollmentCustomViewDetail.as_view(),
          name="dep_enrollment_custom_view")

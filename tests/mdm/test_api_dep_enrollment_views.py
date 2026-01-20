@@ -966,8 +966,8 @@ class ApiViewsTestCase(TestCase):
             self._enrollment_custom_view_to_list(
                 view=view,
                 count=3,
-                next='http://testserver/api/mdm/enrollment_custom_views?limit=1&offset=2&ordering=-created_at',
-                previous='http://testserver/api/mdm/enrollment_custom_views?limit=1&ordering=-created_at')
+                next='http://testserver/api/mdm/enrollment_custom_views/?limit=1&offset=2&ordering=-created_at',
+                previous='http://testserver/api/mdm/enrollment_custom_views/?limit=1&ordering=-created_at')
         )
 
     def test_list_enrollment_custom_view_by_name(self):
@@ -1169,8 +1169,8 @@ class ApiViewsTestCase(TestCase):
             self._dep_enrollment_custom_view_to_list(
                 view=view,
                 count=3,
-                next='http://testserver/api/mdm/dep_enrollment_custom_views?limit=1&offset=2&ordering=-created_at',
-                previous='http://testserver/api/mdm/dep_enrollment_custom_views?limit=1&ordering=-created_at')
+                next='http://testserver/api/mdm/dep_enrollment_custom_views/?limit=1&offset=2&ordering=-created_at',
+                previous='http://testserver/api/mdm/dep_enrollment_custom_views/?limit=1&ordering=-created_at')
         )
 
     # Get DEP enrollment custom view
