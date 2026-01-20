@@ -322,7 +322,13 @@ def force_dep_device(
 # enrollments
 
 
-def force_dep_enrollment(mbu, push_certificate=None, display_name=None, tags=None, acme_issuer=False):
+def force_dep_enrollment(
+        mbu,
+        push_certificate=None,
+        display_name=None,
+        tags=None,
+        acme_issuer=False,
+        language: str = ""):
     if push_certificate is None:
         push_certificate = force_push_certificate()
     enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=mbu)
@@ -338,6 +344,7 @@ def force_dep_enrollment(mbu, push_certificate=None, display_name=None, tags=Non
         virtual_server=force_dep_virtual_server(),
         enrollment_secret=enrollment_secret,
         skip_setup_items=[k for k, _ in skippable_setup_panes],
+        language=language,
     )
 
 

@@ -1,11 +1,31 @@
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
+from rest_framework.generics import ListAPIView, RetrieveAPIView
 from django_filters.rest_framework import DjangoFilterBackend
 from zentral.utils.drf import (ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit,
                                MaxLimitOffsetPagination)
-from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentCustomView, EnrollmentCustomView
-from zentral.contrib.mdm.serializers import (DEPEnrollmentSerializer, DEPEnrollmentDetailSerializer,
-                                             EnrollmentCustomViewSerializer, DEPEnrollmentCustomViewSerializer)
+from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentCustomView, DEPVirtualServer, EnrollmentCustomView
+from zentral.contrib.mdm.serializers import (EnrollmentCustomViewSerializer, DEPEnrollmentCustomViewSerializer,
+                                             DEPEnrollmentDetailSerializer, DEPEnrollmentSerializer,
+                                             DEPVirtualServerSerializer)
+from zentral.utils.drf import DefaultDjangoModelPermissions
+
+
+class DEPVirtualServerList(ListAPIView):
+    permission_classes = [DefaultDjangoModelPermissions]
+    queryset = DEPVirtualServer.objects.all()
+    serializer_class = DEPVirtualServerSerializer
+    filterset_fields = ('name', )
+    ordering_fields = ('created_at',)
+    ordering = ['-created_at']
+    filter_backends = (DjangoFilterBackend, OrderingFilter)
+    pagination_class = MaxLimitOffsetPagination
+
+
+class DEPVirtualServerDetail(RetrieveAPIView):
+    permission_classes = [DefaultDjangoModelPermissions]
+    queryset = DEPVirtualServer.objects.all()
+    serializer_class = DEPVirtualServerSerializer
 
 
 class DEPEnrollmentList(ListCreateAPIViewWithAudit):

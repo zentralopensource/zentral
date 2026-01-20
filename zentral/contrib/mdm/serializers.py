@@ -28,7 +28,7 @@ from .events import post_admin_password_viewed_event
 from .models import (ACMEIssuer,
                      Artifact, ArtifactVersion, ArtifactVersionTag,
                      Blueprint, BlueprintArtifact, BlueprintArtifactTag,
-                     DEPDevice, DEPEnrollment,
+                     DEPDevice, DEPEnrollment, DEPVirtualServer,
                      CertAsset, DataAsset,
                      Declaration, DeclarationRef,
                      DeviceCommand,
@@ -1234,6 +1234,19 @@ class StoreAppSerializer(ArtifactVersionSerializer):
             for blueprint in instance.artifact_version.artifact.blueprints():
                 update_blueprint_serialized_artifacts(blueprint)
         return instance
+
+
+class DEPVirtualServerSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = DEPVirtualServer
+        fields = [
+            'id',
+            'name',
+            'uuid',
+            'created_at',
+            'updated_at'
+        ]
 
 
 class DEPEnrollmentSerializer(serializers.ModelSerializer):

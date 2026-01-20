@@ -5,6 +5,10 @@ from .api_views import (ACMEIssuerDetail, ACMEIssuerList,
                         BlueprintDetail, BlueprintList,
                         BlueprintArtifactDetail, BlueprintArtifactList,
                         DEPDeviceDetail, DEPDeviceList, DisownDEPDevice,
+                        DEPEnrollmentCustomViewDetail, DEPEnrollmentCustomViewList,
+                        DEPEnrollmentDetail, DEPEnrollmentList,
+                        DEPVirtualServerDetail, DEPVirtualServerList,
+                        EnrollmentCustomViewDetail, EnrollmentCustomViewList,
                         CertAssetDetail, CertAssetList,
                         DataAssetDetail, DataAssetList,
                         DeclarationDetail, DeclarationList,
@@ -25,10 +29,7 @@ from .api_views import (ACMEIssuerDetail, ACMEIssuerList,
                         EnrolledDeviceCommand, EnrolledDeviceCommandList,
                         EnrolledUserCommand, EnrolledUserCommandList,
                         StoreAppList, StoreAppDetail,
-                        SyncSoftwareUpdatesView,
-                        DEPEnrollmentList, DEPEnrollmentDetail,
-                        EnrollmentCustomViewList, EnrollmentCustomViewDetail,
-                        DEPEnrollmentCustomViewList, DEPEnrollmentCustomViewDetail)
+                        SyncSoftwareUpdatesView)
 
 
 app_name = "mdm_api"
@@ -72,6 +73,8 @@ urlpatterns = [
     path('store_apps/', StoreAppList.as_view(), name="store_apps"),
     path('store_apps/<uuid:artifact_version_pk>/', StoreAppDetail.as_view(), name="store_app"),
 
+    path('dep/virtual_servers/', DEPVirtualServerList.as_view(), name="dep_virtual_servers"),
+    path('dep/virtual_servers/<int:pk>', DEPVirtualServerDetail.as_view(), name="dep_virtual_server"),
     path('dep/virtual_servers/<int:pk>/sync_devices/',
          DEPVirtualServerSyncDevicesView.as_view(), name="dep_virtual_server_sync_devices"),
     path('dep/devices/', DEPDeviceList.as_view(), name="dep_devices"),
