@@ -13,6 +13,7 @@ django>=5.2.9,<6
 djangorestframework
 djangorestframework-yaml
 django-filter                   # API
+drf-spectacular                 # OpenAPI/Swagger schema generation
 django-redis
 whitenoise                      # To serve the static files
 elasticsearch<9
