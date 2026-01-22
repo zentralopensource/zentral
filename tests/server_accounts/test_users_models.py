@@ -1,7 +1,8 @@
+from datetime import date, timedelta
+
+from accounts.models import APIToken, User
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from accounts.models import APIToken, User
-from datetime import timedelta, date
 
 
 class UsersModelsTestCase(TestCase):

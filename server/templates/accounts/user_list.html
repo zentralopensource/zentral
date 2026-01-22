@@ -47,7 +47,7 @@
         <td>{{ managed_user.email }}</td>
         <td>{% if managed_user.is_remote %}yes{% endif %}</td>
         {% if perms.accounts.view_apitoken %}
-        <td>{% if managed_user.api_token %}yes{% endif %}</td>
+        <td>{{ managed_user.apitoken_set.exists|yesno }}</td>
         {% endif %}
         <td class="text-end py-0">
             {% if perms.accounts.change_user and managed_user.editable %}
@@ -93,7 +93,7 @@
             <a href="{% url 'accounts:user' service_account.pk %}">{{ service_account.username }}</a>
         </td>
         {% if perms.accounts.view_apitoken %}
-        <td>{% if service_account.api_token %}yes{% endif %}</td>
+        <td>{{ service_account.apitoken_set.exists|yesno }}</td>
         {% endif %}
         <td class="text-end py-0">
             {% if perms.accounts.change_user and service_account.editable %}

@@ -1,18 +1,24 @@
 import logging
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models.functions import Lower
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect, render, reverse
 from django.urls import reverse_lazy
-from django.views.generic import DetailView, TemplateView, CreateView
+from django.views.generic import CreateView, DetailView, TemplateView
+
 from accounts.events import post_group_membership_updates
-from accounts.forms import InviteUserForm, ServiceAccountForm, UpdateUserForm, APITokenForm
+from accounts.forms import (
+    APITokenForm,
+    InviteUserForm,
+    ServiceAccountForm,
+    UpdateUserForm,
+)
 from accounts.models import APIToken, User
 from zentral.core.events.base import AuditEvent
 from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit
-
 
 logger = logging.getLogger("zentral.accounts.views.users")
 
@@ -65,10 +71,14 @@ class UserView(PermissionRequiredMixin, DetailView):
         ctx["title"] = "{} {}".format(self.object.get_type_display().title(), self.object)
         groups = self.object.groups.all().order_by(Lower("name"))
         ctx["groups"] = groups
-        ctx["tokens"] = self.object.api_token.all()
+        ctx["tokens"] = self.object.apitoken_set.all()
         ctx["group_count"] = groups.count()
         ctx["can_delete_token"] = (
             self.object == self.request.user or self.request.user.has_perm("accounts.delete_apitoken")
+        )
+        ctx["can_change_token"] = (
+            self.object == self.request.user
+            or (self.object.is_service_account and self.request.user.has_perm("accounts.change_apitoken"))
         )
         ctx["can_add_token"] = (
             self.object == self.request.user
@@ -78,13 +88,18 @@ class UserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class CreateUserAPITokenView(PermissionRequiredMixin, CreateView):
-    permission_required = ('accounts.add_apitoken')
+class CreateUserAPITokenView(LoginRequiredMixin, CreateView):
     template_name = "accounts/token_form.html"
     form_class = APITokenForm
 
     def dispatch(self, request, *args, **kwargs):
         self.user = User.objects.get(pk=kwargs['user_pk'])
+        if (
+            self.user != self.request.user
+            and (not self.user.is_service_account or not self.request.user.has_perms(("accounts.add_apitoken",)))
+        ):
+            raise PermissionDenied("Not allowed")
+
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -100,11 +115,7 @@ class CreateUserAPITokenView(PermissionRequiredMixin, CreateView):
         return context
 
     def form_valid(self, form):
-        if (
-            self.user != self.request.user
-            and (not self.user.is_service_account or not self.request.user.has_perms(("accounts.add_apitoken",)))
-        ):
-            raise PermissionDenied("Not allowed")
+
         api_token, api_key = APIToken.objects.create_for_user(self.user,
                                                               expiry=form.cleaned_data['expiry'],
                                                               name=form.cleaned_data['name'])
@@ -126,6 +137,34 @@ class CreateUserAPITokenView(PermissionRequiredMixin, CreateView):
         )
 
 
+class UpdateUserAPITokenView(LoginRequiredMixin, UpdateViewWithAudit):
+    template_name = "accounts/token_form.html"
+    model = APIToken
+    form_class = APITokenForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.user = User.objects.get(pk=kwargs['user_pk'])
+        if (
+            self.user != self.request.user
+            and (not self.user.is_service_account or not self.request.user.has_perms(("accounts.change_apitoken",)))
+        ):
+            raise PermissionDenied("Not allowed")
+        self.token = get_object_or_404(APIToken, user=self.user, id=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['user'] = self.user
+        ctx['token'] = self.token
+        return ctx
+
+    def get_success_url(self):
+        if self.user == self.request.user:
+            return reverse("accounts:profile") + f"#apitoken-{self.token.pk}"
+        else:
+            return reverse("accounts:user", args=(self.user.pk,)) + f"#apitoken-{self.token.pk}"
+
+
 class DeleteUserAPITokenView(LoginRequiredMixin, TemplateView):
     template_name = "accounts/api_token_confirm_delete.html"
 
@@ -145,17 +184,16 @@ class DeleteUserAPITokenView(LoginRequiredMixin, TemplateView):
         return ctx
 
     def post(self, request, *args, **kwargs):
-        tokens = APIToken.objects.filter(user=self.user, id=kwargs["pk"])
-        events = [AuditEvent.build_from_request_and_instance(
+        token = self.token
+        event = AuditEvent.build_from_request_and_instance(
                 request, token,
                 action=AuditEvent.Action.DELETED,
                 prev_value=token.serialize_for_event()
-            ) for token in tokens.all()]
-        deleted_token_count, _ = tokens.delete()
+            )
+        deleted_token_count, _ = token.delete()
 
         def on_commit_callback():
-            for event in events:
-                event.post()
+            event.post()
 
         transaction.on_commit(on_commit_callback)
 

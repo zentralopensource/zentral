@@ -1,21 +1,21 @@
 import base64
 import json
-import uuid
-from datetime import timedelta, datetime
+from unittest.mock import patch
+
+import pyotp
+from accounts.models import User, UserTOTP, UserWebAuthn
+from accounts.password_validation import PasswordNotAlreadyUsedValidator
 from django.contrib.auth.models import Group
 from django.core import mail
-from django.core.exceptions import ValidationError, PermissionDenied
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-import pyotp
-from accounts.models import APIToken, User, UserTOTP, UserWebAuthn
-from accounts.password_validation import PasswordNotAlreadyUsedValidator
+
+from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.conf import ConfigDict, settings
 from zentral.core.events.base import AuditEvent
-from unittest.mock import patch
-from tests.zentral_test_utils.login_case import LoginCase
-from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
 
 
 class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
@@ -400,14 +400,14 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.permission_denied("create_service_account")
 
     def test_create_service_account_form(self):
-        self.login("accounts.add_user", "accounts.view_user", "accounts.add_apitoken")
+        self.login("accounts.add_user", "accounts.view_user")
         response = self.client.get(reverse("accounts:create_service_account"), follow=True)
         self.assertTemplateUsed(response, "accounts/user_form.html")
         self.assertEqual(response.context['title'], 'Create service account')
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_service_account(self, post_event):
-        self.login("accounts.add_user", "accounts.view_user", "accounts.add_apitoken")
+        self.login("accounts.add_user", "accounts.view_user")
         username = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("accounts:create_service_account"),
@@ -433,7 +433,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     def test_create_service_account_username_exists(self):
-        self.login("accounts.add_user", "accounts.view_user", "accounts.add_apitoken")
+        self.login("accounts.add_user", "accounts.view_user")
         existing_username = 'yoloservice'
         User.objects.create_user(existing_username, is_service_account=True)
         response = self.client.post(reverse("accounts:create_service_account"), {"username": existing_username},
@@ -442,7 +442,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertContains(response, 'A service account with this name already exists.')
 
     def test_create_user_username_exists(self):
-        self.login("accounts.add_user", "accounts.view_user", "accounts.add_apitoken")
+        self.login("accounts.add_user", "accounts.view_user")
         existing_username = 'yoloaccount'
         User.objects.create_user(existing_username, "{}@zentral.io".format(get_random_string(12)),
                                  get_random_string(12), is_service_account=False)
@@ -684,251 +684,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
         self.assertContains(response, "Service account {} deleted".format(service_account))
         self.assertTemplateUsed(response, "accounts/user_list.html")
-
-    # create API token
-
-    def test_create_api_token_login_redirect(self):
-        self.login_redirect("create_user_api_token", self.user.id)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_create_api_token_not_self(self, post_event):
-        self.login()
-        # ui_user != user → 403
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:create_user_api_token", args=(self.user.id,)), follow=True)
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(len(callbacks), 0)
-        self.assertEqual(len(post_event.call_args_list), 0)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_create_api_token_no_perms(self, post_event):
-        service_account = User.objects.create_user(get_random_string(19),
-                                                   "{}@zentral.io".format(get_random_string(12)),
-                                                   get_random_string(12),
-                                                   is_service_account=True)
-        self.login()
-        # service account OK, but without the required permissions
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:create_user_api_token", args=(service_account.id,)), follow=True)
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(len(callbacks), 0)
-        self.assertEqual(len(post_event.call_args_list), 0)
-
-    def test_create_api_token_not_allowed(self):
-        other_user = User.objects.create_user(get_random_string(19), "{}@zentral.io".format(get_random_string(12)),
-                                              get_random_string(12), is_service_account=False)
-        self.login("accounts.view_user", "accounts.add_apitoken")
-        # user is not allowed to create token for other user
-        response = self.client.post(
-                reverse("accounts:create_user_api_token", args=(other_user.id,)), follow=True)
-        self.assertEqual(response.status_code, 403)
-        self.assertRaises(PermissionDenied, msg="Not allowed")
-
-    def test_create_api_token_form(self):
-        service_account = User.objects.create_user(get_random_string(19),
-                                                   "{}@zentral.io".format(get_random_string(12)),
-                                                   get_random_string(12),
-                                                   is_service_account=True)
-        self.login("accounts.view_user", "accounts.add_apitoken")
-
-        response = self.client.get(
-                reverse("accounts:create_user_api_token", args=(service_account.id,)), follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Create API token")
-        self.assertContains(response, "Give your API token a descriptive name.")
-        self.assertEqual(response.context['title'], 'Create API token')
-        self.assertEqual(response.context['breadcrumb_title'], 'API token')
-        self.assertEqual(response.context['user'], service_account)
-
-        expired_date = datetime.today() - timedelta(days=1)
-        token_name = "totoken"
-        response = self.client.post(reverse("accounts:create_user_api_token", args=(service_account.id,)),
-                                    {"name": token_name, "expiry": expired_date}, follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "The expiration date must be in the future.")
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_self_create_api_token(self, post_event):
-        self.login("accounts.view_user", "accounts.add_apitoken")
-        expiry_date = datetime.today() + timedelta(days=1)
-        token_name = "totoken"
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(reverse("accounts:create_user_api_token", args=(self.ui_user.id,)),
-                                        {"name": token_name, "expiry": expiry_date}, follow=True)
-        user = response.context["object"]
-        api_key = response.context["api_key"]
-        api_token = user.api_token.first()
-
-        self.assertTemplateUsed(response, "accounts/user_api_token.html")
-        self.assertEqual(user, self.ui_user)
-        self.assertContains(response, "Settings")
-        self.assertContains(response, "Users")
-        self.assertContains(response, api_key)
-        self.assertEqual(APIToken.objects._hash_key(api_key), api_token.hashed_key)
-
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
-            {"action": "created",
-             "object": {
-                 "model": "accounts.apitoken",
-                 "pk": str(api_token.pk),
-                 "new_value": {
-                     "pk": api_token.pk,
-                     "name": token_name,
-                     "user": self.ui_user.serialize_for_event(),
-                     "expiry": expiry_date,
-                     "created_at": api_token.created_at,
-                     "hashed_key": api_token.hashed_key
-                 }
-              }},
-            {"accounts_api_token": [str(api_token.pk)]},
-            post_event)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_server_account_create_api_token(self, post_event):
-        service_account = User.objects.create_user(get_random_string(19),
-                                                   "{}@zentral.io".format(get_random_string(12)),
-                                                   get_random_string(12),
-                                                   is_service_account=True)
-        self.login("accounts.view_user", "accounts.add_apitoken")
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:create_user_api_token", args=(service_account.id,)), follow=True)
-        user = response.context["object"]
-        api_key = response.context["api_key"]
-        api_token = user.api_token.first()
-
-        self.assertEqual(user, service_account)
-        self.assertTemplateUsed(response, "accounts/user_api_token.html")
-        self.assertNotContains(response, "Settings")
-        self.assertContains(response, "Users")
-        self.assertEqual(APIToken.objects._hash_key(api_key), service_account.api_token.first().hashed_key)
-
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
-            {"action": "created",
-             "object": {
-                 "model": "accounts.apitoken",
-                 "pk": str(api_token.pk),
-                 "new_value": {
-                     "pk": api_token.pk,
-                     "name": api_token.name,
-                     "user": user.serialize_for_event(),
-                     "expiry": api_token.expiry,
-                     "created_at": api_token.created_at,
-                     "hashed_key": api_token.hashed_key
-                 }
-              }},
-            {"accounts_api_token": [str(api_token.pk)]},
-            post_event)
-
-    # delete API token
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_delete_api_token_not_self(self, post_event):
-        self.login()
-        # ui_user != user → 403
-        token, _ = APIToken.objects.create_for_user(self.user)
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(reverse("accounts:delete_user_api_token", args=(self.user.id, token.id)),
-                                        follow=True)
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(len(callbacks), 0)
-        self.assertEqual(len(post_event.call_args_list), 0)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_delete_api_token_no_perms(self, post_event):
-        service_account = User.objects.create_user(get_random_string(19),
-                                                   "{}@zentral.io".format(get_random_string(12)),
-                                                   get_random_string(12),
-                                                   is_service_account=True)
-        self.login()
-        token, _ = APIToken.objects.create_for_user(service_account)
-        # service account OK, but without the required permissions
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:delete_user_api_token", args=(service_account.id,
-                                                                token.id)), follow=True)
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(len(callbacks), 0)
-        self.assertEqual(len(post_event.call_args_list), 0)
-
-    def test_delete_api_token_get(self):
-        self.login("accounts.view_user", "accounts.delete_apitoken")
-        token, _ = APIToken.objects.create_for_user(self.ui_user)
-        response = self.client.get(
-            reverse("accounts:delete_user_api_token", args=(self.ui_user.id, token.id)), follow=True)
-        self.assertTemplateUsed(response, "accounts/api_token_confirm_delete.html")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context['token'], token)
-        self.assertEqual(response.context['token_user'], self.ui_user)
-
-    def test_delete_api_token_get_404(self):
-        self.login("accounts.view_user", "accounts.delete_apitoken")
-        token, _ = APIToken.objects.create_for_user(self.ui_user)
-        response = self.client.get(
-            reverse("accounts:delete_user_api_token", args=(666, token.id)), follow=True)
-        self.assertEqual(response.status_code, 404)
-        response = self.client.get(
-            reverse("accounts:delete_user_api_token", args=(self.ui_user.id, str(uuid.uuid4()))), follow=True)
-        self.assertEqual(response.status_code, 404)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_delete_api_token_self(self, post_event):
-        self.login()
-        token, _ = APIToken.objects.create_for_user(self.ui_user)
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:delete_user_api_token", args=(self.ui_user.id, token.id)), follow=True)
-        self.assertTemplateUsed(response, "accounts/profile.html")
-        self.assertEqual(APIToken.objects.filter(user=self.ui_user).count(), 0)
-        self.assertEqual(len(callbacks), 1)
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, AuditEvent)
-        self.assertEqual(
-            event.payload,
-            {"action": "deleted",
-             "object": {
-                 "model": "accounts.apitoken",
-                 "pk": str(token.id),
-                 "prev_value": token.serialize_for_event()
-              }}
-        )
-        metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"accounts_api_token": [str(token.pk)]})
-        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_delete_service_account_api_token(self, post_event):
-        service_account = User.objects.create_user(get_random_string(19),
-                                                   "{}@zentral.io".format(get_random_string(12)),
-                                                   get_random_string(12),
-                                                   is_service_account=True)
-        token, _ = APIToken.objects.create_for_user(service_account)
-        self.login("accounts.view_user", "accounts.delete_apitoken")
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:delete_user_api_token", args=(service_account.id, token.id)), follow=True)
-        self.assertTemplateUsed(response, "accounts/user_detail.html")
-        self.assertEqual(response.context["object"], service_account)
-        self.assertEqual(APIToken.objects.filter(user=service_account).count(), 0)
-        self.assertEqual(len(callbacks), 1)
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, AuditEvent)
-        self.assertEqual(
-            event.payload,
-            {"action": "deleted",
-             "object": {
-                 "model": "accounts.apitoken",
-                 "pk": str(token.pk),
-                 "prev_value": token.serialize_for_event()
-              }}
-        )
-        metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"accounts_api_token": [str(token.pk)]})
-        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     # verification devices list
 
