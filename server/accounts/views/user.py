@@ -1,20 +1,30 @@
-from base64 import urlsafe_b64encode
 import json
 import logging
+from base64 import urlsafe_b64encode
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import DetailView, FormView, TemplateView
-from webauthn import generate_registration_options, options_to_json, verify_registration_response
+from webauthn import (
+    generate_registration_options,
+    options_to_json,
+    verify_registration_response,
+)
 from webauthn.helpers import parse_registration_credential_json
 from webauthn.helpers.structs import PublicKeyCredentialDescriptor
+
 from accounts.events import post_verification_device_event
-from accounts.forms import AddTOTPForm, CheckPasswordForm, RegisterWebAuthnDeviceForm, UpdateProfileForm
+from accounts.forms import (
+    AddTOTPForm,
+    CheckPasswordForm,
+    RegisterWebAuthnDeviceForm,
+    UpdateProfileForm,
+)
 from accounts.models import UserTOTP, UserWebAuthn
 from zentral.conf import settings as zentral_settings
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
-
 
 logger = logging.getLogger("zentral.accounts.views.user")
 
@@ -24,9 +34,10 @@ class ProfileView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["tokens"] = self.request.user.api_token.all()
-        ctx["can_delete_token"] = self.request.user.has_perm("accounts.delete_apitoken")
-        ctx["can_add_token"] = self.request.user.has_perm("accounts.add_apitoken")
+        ctx["tokens"] = self.request.user.apitoken_set.all()
+        ctx["can_delete_token"] = True
+        ctx["can_change_token"] = True
+        ctx["can_add_token"] = True
         return ctx
 
 

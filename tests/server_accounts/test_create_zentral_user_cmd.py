@@ -1,11 +1,13 @@
-from io import StringIO
 import json
-from datetime import timedelta, date
+from datetime import date, timedelta
+from io import StringIO
+from unittest.mock import patch
+
+from accounts.models import APIToken, User
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase
-from accounts.models import APIToken, User
-from unittest.mock import patch
+
 from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
 
 
@@ -52,8 +54,8 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             "action": "created",
             "object": {
                  "model": "accounts.apitoken",
-                 "pk": str(user.api_token.first().pk),
-                 "new_value": self._create_token_event_serialization(user, user.api_token.first())
+                 "pk": str(user.apitoken_set.first().pk),
+                 "new_value": self._create_token_event_serialization(user, user.apitoken_set.first())
               }
         }
 
@@ -61,7 +63,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         return {"accounts_user": [str(user.pk)]}
 
     def _api_token_metadata_object(self, user):
-        return {"accounts_api_token": [str(user.api_token.first().pk)]}
+        return {"accounts_api_token": [str(user.apitoken_set.first().pk)]}
 
     def call_command(self, *args, **kwargs):
         out = StringIO()
@@ -279,7 +281,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             result = json.loads(self.call_command("yolo", "fomo@example.com", "--json", "--with-api-token"))
         self.assertEqual(
             APIToken.objects._hash_key(result["api_token"]),
-            User.objects.get(email="fomo@example.com").api_token.first().hashed_key
+            User.objects.get(email="fomo@example.com").apitoken_set.first().hashed_key
         )
         self.assertTrue(result["api_token_created"])
 
@@ -350,7 +352,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         user = User.objects.get(email='fomo@example.com')
         self.assertEqual(
             APIToken.objects._hash_key(api_token),
-            user.api_token.first().hashed_key
+            user.apitoken_set.first().hashed_key
         )
         self.assertFalse(user.has_usable_password())
         self.assertTrue(user.is_service_account)

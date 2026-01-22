@@ -2,19 +2,26 @@ import enum
 import uuid
 from hashlib import blake2b
 from itertools import chain
-from django.contrib.auth.models import AbstractUser, Group, UserManager as DjangoUserManager
+
+import pyotp
+from django.contrib.auth.models import AbstractUser, Group
+from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
-from django.urls import reverse
 from django.db.models import Q
 from django.db.models.functions import Now
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from django_celery_results.models import TaskResult
-import pyotp
+
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
-from zentral.utils.token import generate_ztl_token, USER_API_TOKEN, SERVICE_ACCOUNT_API_TOKEN
+from zentral.utils.token import (
+    SERVICE_ACCOUNT_API_TOKEN,
+    USER_API_TOKEN,
+    generate_ztl_token,
+)
 
 
 class UserManager(DjangoUserManager):
@@ -266,12 +273,15 @@ class APITokenManager(models.Manager):
 class APIToken(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     hashed_key = models.CharField(max_length=64)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="api_token")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     expiry = models.DateTimeField(blank=True, null=True)
     name = models.TextField(blank=True, default="")
 
     objects = APITokenManager()
+
+    class Meta:
+        ordering = ['created_at']
 
     def is_active(self):
         return APIToken.objects.is_active().filter(pk=self.pk).exists()
