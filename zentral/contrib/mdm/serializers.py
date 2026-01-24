@@ -1312,6 +1312,8 @@ class DEPEnrollmentSerializer(serializers.ModelSerializer):
         return enrollment
 
     def update(self, instance, validated_data):
+        if validated_data["virtual_server"] != instance.virtual_server:
+            raise serializers.ValidationError({"virtual_server": ["Cannot be changed"]})
         prev_dep_profile = serialize_dep_profile(instance)
         enrollment_secret = validated_data.pop('enrollment_secret')
         enrollment_secret = self.fields["enrollment_secret"].update(instance.enrollment_secret, enrollment_secret)
@@ -1323,14 +1325,6 @@ class DEPEnrollmentSerializer(serializers.ModelSerializer):
             define_dep_profile(enrollment)
 
         return enrollment
-
-
-class DEPEnrollmentDetailSerializer(DEPEnrollmentSerializer):
-
-    class Meta:
-        model = DEPEnrollment
-        fields = DEPEnrollmentSerializer.Meta.fields
-        read_only_fields = ('virtual_server', )
 
 
 class EnrollmentCustomViewSerializer(serializers.ModelSerializer):

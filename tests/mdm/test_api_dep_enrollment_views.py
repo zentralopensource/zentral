@@ -238,14 +238,15 @@ class ApiViewsTestCase(TestCase):
                                        admin_short_name: str = None,
                                        await_device_configured: bool = True,
                                        skip_setup_item: str = None,
-                                       language: str = ""):
+                                       language: str = "",
+                                       virtual_server: DEPVirtualServer | None = None):
         return {
             'display_name': get_random_string(12),
             'name': get_random_string(12),
             'push_certificate': str(force_push_certificate().id),
             'acme_issuer': str(force_acme_issuer().id),
             'scep_issuer': str(force_scep_issuer().id),
-            'virtual_server': force_dep_virtual_server().id,
+            'virtual_server': virtual_server.id if virtual_server else force_dep_virtual_server().id,
             'enrollment_secret': {
                 'meta_business_unit': self.mbu.id,
                 'tags': [tag.id] if tag else [],
@@ -280,7 +281,7 @@ class ApiViewsTestCase(TestCase):
     def _create_dep_enrollment_custom_view_request(
             self,
             weight: int = 0,
-            custom_view: EnrollmentCustomView = None, 
+            custom_view: EnrollmentCustomView = None,
             dep_enrollment: DEPEnrollment = None):
         if not custom_view:
             custom_view = force_enrollment_custom_view()
@@ -821,7 +822,7 @@ class ApiViewsTestCase(TestCase):
 
     @patch("zentral.contrib.mdm.dep_client.DEPClient.add_profile")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_update_dep_enrollment_cannot_be_updated(self, post_event, add_profile):
+    def test_update_dep_enrollment_validation_error(self, post_event, add_profile):
         self.set_permissions("mdm.change_depenrollment")
         enrollment = force_dep_enrollment(self.mbu)
         add_profile.side_effect = Exception()
@@ -836,6 +837,31 @@ class ApiViewsTestCase(TestCase):
         self.assertEqual(
             response.json(),
             {'is_mdm_removable': ["Can only be set to False if 'Is supervised' is set to True"]}
+        )
+
+        self._assert_no_profil_added(add_profile)
+        self._assert_audit_event_not_send(post_event, callbacks)
+
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.add_profile")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_dep_enrollment_virtual_server_cannot_be_changed(self, post_event, add_profile):
+        self.set_permissions("mdm.change_depenrollment")
+        enrollment = force_dep_enrollment(self.mbu)
+        add_profile.side_effect = Exception()
+
+        dep_enrollment_request = self._create_dep_enrollment_request()
+        self.assertTrue(dep_enrollment_request["virtual_server"] != enrollment.virtual_server)
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(
+                reverse("mdm_api:dep_enrollment", args=(enrollment.id,)),
+                dep_enrollment_request,
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'virtual_server': ["Cannot be changed"]}
         )
 
         self._assert_no_profil_added(add_profile)
@@ -858,7 +884,10 @@ class ApiViewsTestCase(TestCase):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(
                 reverse("mdm_api:dep_enrollment", args=(enrollment.id,)),
-                self._create_dep_enrollment_request(tag=tag, language=language)
+                self._create_dep_enrollment_request(
+                    tag=tag, language=language,
+                    virtual_server=enrollment.virtual_server
+                )
             )
 
         enrollment.refresh_from_db()

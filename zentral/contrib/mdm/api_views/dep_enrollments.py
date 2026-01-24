@@ -6,8 +6,7 @@ from zentral.utils.drf import (ListCreateAPIViewWithAudit, RetrieveUpdateDestroy
                                MaxLimitOffsetPagination)
 from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentCustomView, DEPVirtualServer, EnrollmentCustomView
 from zentral.contrib.mdm.serializers import (EnrollmentCustomViewSerializer, DEPEnrollmentCustomViewSerializer,
-                                             DEPEnrollmentDetailSerializer, DEPEnrollmentSerializer,
-                                             DEPVirtualServerSerializer)
+                                             DEPEnrollmentSerializer, DEPVirtualServerSerializer)
 from zentral.utils.drf import DefaultDjangoModelPermissions
 
 
@@ -40,7 +39,7 @@ class DEPEnrollmentList(ListCreateAPIViewWithAudit):
 
 class DEPEnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = DEPEnrollment.objects.all()
-    serializer_class = DEPEnrollmentDetailSerializer
+    serializer_class = DEPEnrollmentSerializer
 
     def perform_destroy(self, instance):
         if not instance.can_be_deleted():
