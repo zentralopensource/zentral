@@ -604,7 +604,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                                          "de-scep_issuer": enrollment.scep_issuer.pk,
                                          "de-push_certificate": enrollment.push_certificate.pk,
                                          "de-virtual_server": enrollment.virtual_server.pk,
-                                         "de-is_multi_user": "on",
+                                         "de-allow_pairing": "on",
                                          "de-is_supervised": "on",
                                          "de-is_mandatory": "on",
                                          "de-admin_full_name": "yolo2",

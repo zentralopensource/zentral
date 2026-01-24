@@ -1906,16 +1906,41 @@ class DEPEnrollment(MDMEnrollment):
 
     # https://developer.apple.com/documentation/devicemanagement/profile
     name = models.CharField(max_length=125, unique=True)  # see CONFIG_NAME_INVALID error
-    allow_pairing = models.BooleanField(default=False)  # deprecated in iOS 13
-    auto_advance_setup = models.BooleanField(default=False)
-    await_device_configured = models.BooleanField(default=False)
+    allow_pairing = models.BooleanField(
+        default=True,
+        help_text="Allow the device to connect to other computers. In iOS 13, this property was deprecated."
+    )
+    auto_advance_setup = models.BooleanField(
+        default=False,
+        help_text="If set to true, the device will tell Setup Assistant to automatically advance though its screens."
+    )
+    await_device_configured = models.BooleanField(
+        default=False,
+        help_text="If true, the device will not continue in Setup Assistant "
+                  "until the MDM server sends a command that states the device is configured. "
+                  "Required when using the authenticated user details or for the extra admin."
+    )
     # configuration_web_url is automatically set for authentication or direct MDM payload download
     department = models.CharField(max_length=125, blank=True)  # see DEPARTMENT_INVALID error
     # devices see DEPDevice
-    is_mandatory = models.BooleanField(default=True)
-    is_mdm_removable = models.BooleanField(default=False)  # can be set to False only if is_supervised is True
-    is_multi_user = models.BooleanField(default=True)
-    is_supervised = models.BooleanField(default=True)  # deprecated
+    is_mandatory = models.BooleanField(
+        default=True,
+        help_text="If true, the user may not skip applying the profile returned by the MDM server."
+    )
+    is_mdm_removable = models.BooleanField(
+        default=False,
+        help_text="If false, the MDM payload delivered by the configuration URL "
+                  "cannot be removed by the user via the user interface on the device.",
+    )  # can be set to False only if is_supervised is True
+    is_multi_user = models.BooleanField(
+        default=False,
+        help_text="If true, tells the device to configure for Shared iPad."
+    )
+    is_supervised = models.BooleanField(
+        default=True,
+        help_text="If true, the device must be supervised. "
+                  "In iOS 13, all DEP devices are supervised and the OS will ignore this."
+    )
     language = models.CharField(max_length=3, choices=ISO_639_1_CHOICES, blank=True)
     org_magic = models.CharField(max_length=256, blank=True)  # see MAGIC_INVALID error
     region = models.CharField(max_length=2, choices=ISO_3166_1_ALPHA_2_CHOICES, blank=True)
@@ -1925,7 +1950,13 @@ class DEPEnrollment(MDMEnrollment):
     support_phone_number = models.CharField(max_length=50, blank=True)  # see SUPPORT_PHONE_INVALID error
     # url is automatically set using the enrollment secret
     # Auto populate anchor_certs using the fullchain when building the profile payload?
-    include_tls_certificates = models.BooleanField(default=False)
+    include_tls_certificates = models.BooleanField(
+        default=False,
+        verbose_name="Include anchor certs",
+        help_text="If true, only the configured TLS certificates for the Zentral instance will be used "
+                  "by the device when evaluating the trust of the connection to the MDM server URL. "
+                  "Otherwise, the device uses the built-in root certificates."
+    )
 
     # To require a software update before the enrollment
     ios_max_version = models.CharField(verbose_name="max. required iOS version", max_length=32, blank=True)
