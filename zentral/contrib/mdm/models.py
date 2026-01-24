@@ -1944,7 +1944,7 @@ class DEPEnrollment(MDMEnrollment):
     language = models.CharField(max_length=3, choices=ISO_639_1_CHOICES, blank=True)
     org_magic = models.CharField(max_length=256, blank=True)  # see MAGIC_INVALID error
     region = models.CharField(max_length=2, choices=ISO_3166_1_ALPHA_2_CHOICES, blank=True)
-    skip_setup_items = ArrayField(models.CharField(max_length=64))
+    skip_setup_items = ArrayField(models.CharField(max_length=64), blank=True)
     # TODO: supervising_host_certs
     support_email_address = models.EmailField(max_length=250, blank=True)  # see SUPPORT_EMAIL_INVALID error
     support_phone_number = models.CharField(max_length=50, blank=True)  # see SUPPORT_PHONE_INVALID error
