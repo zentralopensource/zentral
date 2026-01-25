@@ -2,15 +2,43 @@
 
 ### Features
 
-Add S3 Parquet event store (write only).
+#### Core
 
-Add `distribute_tls_chain` option (defaults to `true`) in the MDM app config to control the inclusion of the configured TLS chain in the MDM enrollment payloads.
+New API token format with fixed prefix `ztlX_` and checksum.
+
+API tokens can have a name and an expiry now. Multiple API tokens can be created for a given user or service account.
+
+New S3 Parquet event store (write only).
+
+Better batch processing for AWS queues.
+
+#### MDM
+
+New `distribute_tls_chain` option (defaults to `true`) in the MDM app config to control the inclusion of the configured TLS chain in the MDM enrollment payloads.
+
+New API endpoints to manage the MDM DEP enrollments and the custom pages.
+
+Schema updates based on the v26.2 apple device management release.
+
+#### Monolith
+
+More Audit Events for the monolith module resources.
+
+#### Google Workspace
+
+New authentication via GCP service accounts for the Google Workspace module. Easier to configure when Zentral is deployed in private GCP accounts.
 
 ### Bug fixes
 
-Fix DEP device sync issues when same device is moved between two DEP virtual servers.
+Fixed DEP device sync issues when same device is moved between two DEP virtual servers.
 
-Add lock to avoid concurrent DEP device syncs.
+New lock to avoid concurrent DEP device syncs.
+
+Configuration Profile reported without Payload UUID can now be saved in the inventory.
+
+MDM Artifact detail pages are not slow anymore when multiple versions are deployed to 10000s of devices.
+
+Fixed mass-tagging API error in `SET` operations.
 
 ## 2025.12
 
