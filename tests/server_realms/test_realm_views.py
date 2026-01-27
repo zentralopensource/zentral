@@ -1,19 +1,34 @@
+import html
+import operator
 from functools import reduce
 from io import BytesIO
-import operator
-from ldap import LDAPError
 from unittest.mock import Mock, patch
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import User
+from ldap import LDAPError
 from realms.backends.registry import backend_classes
-from realms.models import Realm, RealmAuthenticationSession, RealmGroupMapping, RoleMapping
-from .utils import (force_group, force_realm, force_realm_authentication_session,
-                    force_realm_group, force_realm_group_mapping, force_role_mapping,
-                    force_realm_user, force_user)
+from realms.models import (
+    Realm,
+    RealmAuthenticationSession,
+    RealmGroupMapping,
+    RoleMapping,
+)
+
+from .utils import (
+    force_group,
+    force_realm,
+    force_realm_authentication_session,
+    force_realm_group,
+    force_realm_group_mapping,
+    force_realm_user,
+    force_role_mapping,
+    force_user,
+)
 
 
 class RealmViewsTestCase(TestCase):
@@ -220,6 +235,7 @@ class RealmViewsTestCase(TestCase):
             "username_claim": get_random_string(12),
             "login_session_expiry": 1200,
             "metadata_file": metadata_file,
+            "enabled_for_login": "on",
             "allow_idp_initiated_login": "on"
         }
         self.login("realms.add_realm", "realms.view_realm")
@@ -239,6 +255,7 @@ class RealmViewsTestCase(TestCase):
             "username_claim": get_random_string(12),
             "login_session_expiry": 1200,
             "metadata_file": metadata_file,
+            "enabled_for_login": "on",
             "allow_idp_initiated_login": "on"
         }
         self.login("realms.add_realm", "realms.view_realm")
@@ -251,6 +268,27 @@ class RealmViewsTestCase(TestCase):
         self.assertEqual(realm.username_claim, payload["username_claim"])
         self.assertEqual(realm.config["idp_metadata"], "yolo")
         self.assertEqual(realm.config["allow_idp_initiated_login"], True)
+
+    @patch("realms.backends.saml.forms.Saml2Client.prepare_for_authenticate")
+    @patch("realms.backends.saml.forms.Saml2Config.load")
+    def test_create_saml_realm_post_with_error(self, load, prepare_for_authenticate):
+        self.login("realms.change_realm", "realms.view_realm")
+        metadata_file = BytesIO(b"yolo")
+        metadata_file.name = "yolo.metadata"
+        payload = {
+            "name": get_random_string(12),
+            "username_claim": get_random_string(12),
+            "login_session_expiry": 1200,
+            "allow_idp_initiated_login": "on"
+        }
+        self.login("realms.add_realm", "realms.view_realm")
+        response = self.client.post(reverse("realms:create", args=("saml",)), payload, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_form.html")
+        self.assertContains(
+            response,
+            html.escape("'Allow IDP initiated login' only available if 'Enable for login' or 'User portal' is set")
+        )
 
     # view realm
 
