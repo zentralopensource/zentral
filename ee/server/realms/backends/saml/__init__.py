@@ -26,9 +26,9 @@ class SAMLRealmBackend(BaseBackend):
 
     @property
     def default_relay_state(self):
-        return self.instance.enabled_for_login and self.instance.config.get(
-            "default_relay_state"
-        )
+        return (
+            self.instance.enabled_for_login or self.instance.user_portal
+        ) and self.instance.config.get("default_relay_state")
 
     def acs_url(self):
         "Assertion Consumer Service URL"
