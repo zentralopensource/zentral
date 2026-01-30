@@ -172,24 +172,6 @@ class ApiViewsTestCase(TestCase):
 
     # SyncTagsView
 
-    def test_group_tag_mappings_task_unauthorized(self):
-        connection = self._given_connection()
-        response = self.post(reverse("google_workspace_api:sync_tags", args=(connection.pk,)),
-                             include_token=False)
-        self.assertEqual(response.status_code, 401)
-
-    def test_group_tag_mappings_task_devices_permission_denied(self):
-        connection = self._given_connection()
-        response = self.post(reverse("google_workspace_api:sync_tags", args=(connection.pk,)))
-        self.assertEqual(response.status_code, 403)
-
-    def test_group_tag_mappings_task(self):
-        connection = self._given_connection()
-        self.set_permissions("google_workspace.view_connection")
-        response = self.post(reverse("google_workspace_api:sync_tags", args=(connection.pk,)))
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(sorted(response.json().keys()), ['task_id', 'task_result_url'])
-
     def test_user_group_tag_mappings_task_unauthorized(self):
         connection = self._given_connection()
         response = self.post(reverse("google_workspace_api:sync_tags", args=(connection.pk,)), include_token=False)
