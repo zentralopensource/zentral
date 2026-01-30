@@ -16,6 +16,7 @@ from zentral.core.probes.conf import all_probes_dict
 from zentral.core.queues import queues
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.text import decode_args, encode_args
+from accounts.models import APIToken
 from .template_loader import TemplateLoader
 from . import register_event_type
 
@@ -92,6 +93,14 @@ class EventRequestUser(object):
             if token_authenticated:
                 session_d["is_remote"] = False
                 session_d["mfa_authenticated"] = False
+                token = getattr(request, "auth", None)
+                if isinstance(token, APIToken):
+                    token_dict = {"pk": str(token.pk)}
+                    if token.name:
+                        token_dict["name"] = token.name
+                    if token.expiry:
+                        token_dict["expiry"] = token.expiry
+                    session_d["token"] = token_dict
             else:
                 # session
                 session = request.session

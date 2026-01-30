@@ -42,7 +42,7 @@ class ApiViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
-        _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
+        cls.api_token, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
 
     # utils
     def set_permissions(self, *permissions):
@@ -330,6 +330,8 @@ class ApiViewsTestCase(TestCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {objects: [str(instance.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
+        token = metadata['request']['user']['session']['token']
+        self.assertEqual(token['pk'], str(self.api_token.pk))
 
     def _assert_audit_event_not_send(self, post_event, callbacks):
         self.assertEqual(len(callbacks), 0)

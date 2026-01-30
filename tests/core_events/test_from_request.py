@@ -1,5 +1,9 @@
+from datetime import datetime
 from unittest.mock import Mock
 from django.test import RequestFactory, TestCase
+from django.utils.crypto import get_random_string
+from accounts.api_authentication import APITokenAuthentication
+from accounts.models import APIToken
 from accounts.models import User
 from zentral.core.events.base import EventRequest, EventRequestGeo
 
@@ -93,5 +97,36 @@ class EventFromRequestTestCase(TestCase):
                                   'is_remote': False,
                                   'mfa_authenticated': True,
                                   'token_authenticated': False},
+                      'username': 'godzilla'}}
+        )
+
+    def test_request_from_request_api_token(self):
+        request = self.factory.get(
+            '/',
+        )
+        request.user = self.user
+        request.successful_authenticator = APITokenAuthentication()
+        token = APIToken(
+            name=get_random_string(12),
+            expiry=datetime.now()
+            )
+        request.auth = token
+        event_req = EventRequest.build_from_request(request)
+        self.assertEqual(
+            event_req.serialize(),
+            {'ip': '127.0.0.1',
+             'method': 'GET',
+             'path': '/',
+             'user': {'email': 'godzilla@zentral.io',
+                      'id': self.user.pk,
+                      'is_remote': False,
+                      'is_service_account': False,
+                      'is_superuser': False,
+                      'session': {'is_remote': False,
+                                  'mfa_authenticated': False,
+                                  'token': {'expiry': token.expiry,
+                                            'name': token.name,
+                                            'pk': str(token.pk)},
+                                  'token_authenticated': True},
                       'username': 'godzilla'}}
         )
