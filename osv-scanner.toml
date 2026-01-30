@@ -1,0 +1,6 @@
+# osv-scanner.toml
+
+[[IgnoredVulns]]
+id = "GHSA-7gcm-g887-7qv7"  # protobuf affected by a JSON recursion depth bypass        
+ignoreUntil = 2026-02-15    # optional to force recheck
+reason = "No fix yet; temporarily ignored until dependency update."
