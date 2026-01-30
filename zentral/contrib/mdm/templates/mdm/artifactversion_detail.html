@@ -26,6 +26,10 @@
                 {% url 'mdm:download_profile' object.pk as url %}
                 {% button 'DOWNLOAD' url "Download Profile" %}
             {% endif %}
+            {% if artifact.type == "Provisioning Profile" %}
+                {% url 'mdm:download_provisioning_profile' object.pk as url %}
+                {% button 'DOWNLOAD' url "Download Provisioning Profile" %}
+            {% endif %}
             {% if artifact.type == "Enterprise App" %}
                 {% url 'mdm:download_enterprise_app' object.pk as url %}
                 {% button 'DOWNLOAD' url "Download Enterprise App" %}
@@ -61,6 +65,9 @@
         {% endif %}
         {% if profile %}
         {% include "mdm/_profile_detail.html" %}
+        {% endif %}
+        {% if provisioning_profile %}
+        {% include "mdm/_provisioning_profile_detail.html" %}
         {% endif %}
         {% if store_app %}
         {% include "mdm/_store_app_detail.html" %}

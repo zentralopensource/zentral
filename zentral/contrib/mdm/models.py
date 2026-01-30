@@ -2454,6 +2454,7 @@ class Artifact(models.Model):
         ENTERPRISE_APP = "Enterprise App"
         MANUAL_CONFIGURATION = "Configuration (manual)"
         PROFILE = "Profile"
+        PROVISIONING_PROFILE = "Provisioning Profile"
         STORE_APP = "Store App"
 
         @property
@@ -2486,11 +2487,11 @@ class Artifact(models.Model):
 
         @property
         def can_be_installed(self):
-            return self.value in (self.ENTERPRISE_APP, self.PROFILE, self.STORE_APP)
+            return self.value in (self.ENTERPRISE_APP, self.PROFILE, self.PROVISIONING_PROFILE, self.STORE_APP)
 
         @property
         def can_be_removed(self):
-            return self.value in (self.PROFILE, self.STORE_APP)
+            return self.value in (self.PROFILE, self.PROVISIONING_PROFILE, self.STORE_APP)
 
     class ReinstallOnOSUpdate(models.TextChoices):
         NO = "No"
@@ -2940,6 +2941,36 @@ class Profile(models.Model):
     def get_export_filename(self):
         slug = slugify(self.artifact_version.artifact.name)
         return f"{slug}_{self.pk}_v{self.artifact_version.version}.mobileconfig"
+
+
+class ProvisioningProfile(models.Model):
+    artifact_version = models.OneToOneField(
+        ArtifactVersion, related_name="provisioning_profile", on_delete=models.CASCADE
+    )
+    source = models.BinaryField()
+    name = models.TextField()
+    uuid = models.UUIDField()
+    content = models.BinaryField()
+
+    def serialize_for_event(self):
+        d = self.artifact_version.serialize_for_event()
+        d.update({
+            "source": hashlib.sha1(self.source).hexdigest(),
+            "name": self.name,
+            "uuid": str(self.uuid),
+        })
+        return d
+
+    def delete(self, *args, **kwargs):
+        self.artifact_version.delete(*args, **kwargs)
+        super().delete(*args, **kwargs)
+
+    def get_content(self):
+        return plistlib.loads(self.content)
+
+    def get_export_filename(self):
+        slug = slugify(self.artifact_version.artifact.name)
+        return f"{slug}_{self.pk}_v{self.artifact_version.version}.provisionprofile"
 
 
 def enterprise_application_package_path(instance, filename):

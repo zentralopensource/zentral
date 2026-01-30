@@ -1,5 +1,8 @@
 import logging
+import plistlib
+import uuid
 from zentral.contrib.inventory.conf import macos_version_from_build
+from .crypto import verify_signed_payload
 from .models import Platform
 
 
@@ -52,3 +55,19 @@ def platform_and_os_from_machine_info(machine_info):
                     comparable_os_version = (os_version["major"], os_version["minor"], os_version["patch"])
 
     return platform, comparable_os_version
+
+
+def get_provisioning_profile_info(data):
+    try:
+        _, payload = verify_signed_payload(data)
+    except Exception:
+        raise ValueError("Could not verify signature")
+    try:
+        info = plistlib.loads(payload)
+    except Exception:
+        raise ValueError("Invalid signed data")
+    try:
+        pp_uuid = uuid.UUID(info["UUID"])
+    except Exception:
+        raise ValueError("Could not read provisioning profile UUID")
+    return info.get("Name") or "", pp_uuid, plistlib.dumps(info, fmt=plistlib.FMT_BINARY)

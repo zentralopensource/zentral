@@ -29,6 +29,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "location",
         "locationasset",
         "profile",
+        "provisioningprofile",
         "pushcertificate",
         "otaenrollment",
         "realmgrouptagmapping",

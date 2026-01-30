@@ -28,7 +28,8 @@ from zentral.contrib.mdm.models import (ACMEIssuer, Artifact, ArtifactVersion, A
                                         DEPVirtualServer, EnrolledDevice, EnrolledUser,
                                         EnterpriseApp, FileVaultConfig, Location, LocationAsset,
                                         OTAEnrollment, OTAEnrollmentSession,
-                                        Profile, PushCertificate, RecoveryPasswordConfig, SCEPIssuer,
+                                        ProvisioningProfile, Profile,
+                                        PushCertificate, RecoveryPasswordConfig, SCEPIssuer,
                                         RealmGroupTagMapping,
                                         SoftwareUpdate, SoftwareUpdateDeviceID, SoftwareUpdateEnforcement,
                                         StoreApp,
@@ -564,6 +565,37 @@ def build_mobileconfig_data(
     return data
 
 
+# provisioning profiles
+
+
+def build_provisioning_profile_content(name=None, pp_uuid=None):
+    return {
+        "Name": name or get_random_string(12),
+        "UUID": str(pp_uuid or uuid.uuid4()),
+        "AppIDName": "com.example.yolo",
+        "CreationDate": datetime.utcnow().replace(microsecond=0)  # not supported in the plist
+    }
+
+
+def build_provisioning_profile(raw_content=None, content=None, signed=True):
+    if raw_content is None:
+        if content is None:
+            content = build_provisioning_profile_content()
+        data = plistlib.dumps(content)
+    else:
+        data = raw_content
+    if signed:
+        # signed by us, but in the real world, signed by Apple
+        data = sign_payload(data)
+    return data
+
+
+def build_provisioning_profile_file(raw_content=None, content=None, signed=True):
+    filelike = io.BytesIO(build_provisioning_profile(raw_content, content, signed))
+    filelike.name = get_random_string(12) + ".provisionprofile"
+    return filelike
+
+
 # artifacts
 
 
@@ -789,6 +821,17 @@ def force_artifact(
                 payload_uuid=payload_uuid,
                 payload_display_name=payload_display_name,
                 payload_description=payload_description
+            )
+        elif artifact_type == Artifact.Type.PROVISIONING_PROFILE:
+            pp_uuid = uuid.uuid4()
+            content = build_provisioning_profile_content(name=artifact.name, pp_uuid=pp_uuid)
+            source = build_provisioning_profile(content=content)
+            ProvisioningProfile.objects.create(
+                artifact_version=artifact_version,
+                source=source,
+                name=artifact.name,
+                uuid=pp_uuid,
+                content=plistlib.dumps(content, fmt=plistlib.FMT_BINARY),
             )
         elif artifact_type == Artifact.Type.ENTERPRISE_APP:
             filename = "{}.pkg".format(get_random_string(17))

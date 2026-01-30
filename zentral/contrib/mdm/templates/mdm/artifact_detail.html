@@ -127,6 +127,12 @@
         {% endwith %}
         {% endif %}
 
+        {% if provisioningprofile_list %}
+        {% with provisioningprofile_list|first as provisioning_profile %}
+        {% include "mdm/_provisioning_profile_detail.html" %}
+        {% endwith %}
+        {% endif %}
+
         {% if storeapp_list %}
         {% with storeapp_list|first as store_app %}
         {% include "mdm/_store_app_detail.html" %}

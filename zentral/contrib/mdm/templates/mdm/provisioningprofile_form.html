@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
+  <li class="breadcrumb-item active">Upload provisioning profile</li>
+</ol>
+
+<h3>Upload provisioning profile</h3>
+
+<form method="POST" enctype="multipart/form-data" class="update-form">{% csrf_token %}
+  {{ form }}
+  <p>
+    <a href="{% url 'mdm:artifacts' %}" class="btn btn-outline-secondary">Cancel</a>
+    <button class="btn btn-primary">Upload</button>
+  </p>
+</form>
+{% endblock %}

@@ -16,11 +16,13 @@ from .device_information import DeviceInformation
 from .install_application import InstallApplication
 from .install_enterprise_application import InstallEnterpriseApplication
 from .install_profile import InstallProfile
+from .install_provisioning_profile import InstallProvisioningProfile
 from .installed_application_list import InstalledApplicationList
 from .profile_list import ProfileList
 from .reenroll import Reenroll
 from .remove_application import RemoveApplication
 from .remove_profile import RemoveProfile
+from .remove_provisioning_profile import RemoveProvisioningProfile
 from .rotate_filevault_key import RotateFileVaultKey
 from .security_info import SecurityInfo
 from .set_firmware_password import SetFirmwarePassword
@@ -185,6 +187,8 @@ def _install_artifacts(target, enrollment_session, status):
             command_class = InstallEnterpriseApplication
         elif artifact_version.artifact.type == Artifact.Type.STORE_APP:
             command_class = InstallApplication
+        elif artifact_version.artifact.type == Artifact.Type.PROVISIONING_PROFILE:
+            command_class = InstallProvisioningProfile
         if command_class:
             return command_class.create_for_target(target, artifact_version)
 
@@ -201,6 +205,8 @@ def _remove_artifacts(target, enrollment_session, status):
             command_class = RemoveProfile
         elif artifact_version.artifact.type == Artifact.Type.STORE_APP:
             command_class = RemoveApplication
+        elif artifact_version.artifact.type == Artifact.Type.PROVISIONING_PROFILE:
+            command_class = RemoveProvisioningProfile
         else:
             # should never happen
             raise ValueError(f"Cannot remove artifact type {artifact_version.artifact.type}")

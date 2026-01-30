@@ -28,11 +28,12 @@ from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
                      EnrolledDevice, EnterpriseApp, Platform,
                      FileVaultConfig, RecoveryPasswordConfig,
                      OTAEnrollment, UserEnrollment, PushCertificate,
-                     Profile, Location, LocationAsset, StoreApp,
+                     Profile, ProvisioningProfile, Location, LocationAsset, StoreApp,
                      SoftwareUpdateEnforcement,
                      DeviceArtifact, TargetArtifact)
 from .serializers import CertAssetSANSerializer, RDNSerializer
 from .skip_keys import skippable_setup_panes
+from .utils import get_provisioning_profile_info
 from .validators import DEPEnrollmentValidator
 
 
@@ -1016,6 +1017,76 @@ class UpgradeProfileForm(BaseProfileForm):
             if self.instance.source.tobytes() == self.cleaned_data["source"]:
                 self.add_error("source_file",
                                "This profile is not different from the latest one.")
+
+    def save(self, artifact_version):
+        self.instance.id = None  # force insert
+        self.instance.source = self.cleaned_data["source"]
+        self.instance.artifact_version = artifact_version
+        return super().save()
+
+
+class BaseProvisioningProfileForm(forms.ModelForm):
+    source_file = forms.FileField(required=True,
+                                  help_text="provisioning profile file (.provisionprofile)")
+
+    class Meta:
+        model = ProvisioningProfile
+        fields = []
+
+    def clean(self):
+        super().clean()
+        source_file = self.cleaned_data.pop("source_file", None)
+        if not source_file:
+            return
+        data = source_file.read()
+        try:
+            name, pp_uuid, content = get_provisioning_profile_info(data)
+        except ValueError as e:
+            self.add_error("source_file", str(e))
+        else:
+            self.cleaned_data["source"] = data
+            self.instance.uuid = pp_uuid
+            self.instance.name = name
+            self.instance.content = content
+
+
+class UploadProvisioningProfileForm(BaseProvisioningProfileForm):
+    def save(self):
+        name = self.instance.name or str(self.instance.uuid)
+        for i in range(100):
+            try:
+                with transaction.atomic():
+                    artifact = Artifact.objects.create(name=name,
+                                                       type=Artifact.Type.PROVISIONING_PROFILE,
+                                                       channel=Channel.DEVICE,
+                                                       platforms=Platform.values)
+            except IntegrityError:
+                name = f"{name} ({i + 1})"
+            else:
+                break
+        else:
+            raise RuntimeError("Could not find unique name for artifact")
+        self.instance.artifact_version = ArtifactVersion.objects.create(
+            artifact=artifact,
+            version=1,
+            **{platform.lower(): True for platform in Platform.values}
+        )
+        self.instance.source = self.cleaned_data["source"]
+        super().save()
+        return artifact
+
+
+class UpgradeProvisioningProfileForm(BaseProvisioningProfileForm):
+    def __init__(self, *args, **kwargs):
+        self.artifact = kwargs.pop("artifact")
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if self.cleaned_data:
+            if self.instance.source.tobytes() == self.cleaned_data["source"]:
+                self.add_error("source_file",
+                               "This provisioning profile is not different from the latest one.")
 
     def save(self, artifact_version):
         self.instance.id = None  # force insert

@@ -30,8 +30,10 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        UpdateArtifactForm,
                                        UserEnrollmentForm,
                                        UpgradeCertAssetForm, UpgradeDataAssetForm, UpgradeEnterpriseAppForm,
-                                       UpgradeDeclarationForm, UpgradeProfileForm, UpgradeStoreAppForm,
-                                       UploadDataAssetForm, UploadEnterpriseAppForm, UploadProfileForm)
+                                       UpgradeDeclarationForm,
+                                       UpgradeProfileForm, UpgradeProvisioningProfileForm, UpgradeStoreAppForm,
+                                       UploadDataAssetForm, UploadEnterpriseAppForm,
+                                       UploadProfileForm, UploadProvisioningProfileForm)
 from zentral.contrib.mdm.inventory import update_realm_tags
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Asset, Blueprint, BlueprintArtifact,
@@ -49,7 +51,7 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         RecoveryPasswordConfig,
                                         SoftwareUpdateEnforcement,
                                         UserEnrollment,
-                                        Profile, StoreApp)
+                                        Profile, ProvisioningProfile, StoreApp)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_profile_service_configuration_profile)
 from zentral.contrib.mdm.software_updates import best_available_software_updates
@@ -510,6 +512,11 @@ class UploadProfileView(BaseCreateArtifactView):
     template_name = "mdm/profile_form.html"
 
 
+class UploadProvisioningProfileView(BaseCreateArtifactView):
+    form_class = UploadProvisioningProfileForm
+    template_name = "mdm/provisioningprofile_form.html"
+
+
 class ArtifactView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_artifact"
     model = Artifact
@@ -534,6 +541,9 @@ class ArtifactView(PermissionRequiredMixin, DetailView):
         elif artifact_type == Artifact.Type.PROFILE:
             model_class = Profile
             upgrade_view = "upgrade_profile"
+        elif artifact_type == Artifact.Type.PROVISIONING_PROFILE:
+            model_class = ProvisioningProfile
+            upgrade_view = "upgrade_provisioning_profile"
         elif artifact_type == Artifact.Type.STORE_APP:
             model_class = StoreApp
             upgrade_view = "upgrade_store_app"
@@ -549,7 +559,7 @@ class ArtifactView(PermissionRequiredMixin, DetailView):
         version_qs = (
             ArtifactVersion.objects.select_related("artifact",
                                                    "cert_asset", "data_asset", "declaration",
-                                                   "enterprise_app", "profile", "store_app")
+                                                   "enterprise_app", "profile", "provisioning_profile", "store_app")
                                    .filter(artifact=self.object)
                                    .order_by("-version")
         )
@@ -716,6 +726,8 @@ class ArtifactVersionView(PermissionRequiredMixin, DetailView):
             ctx["enterprise_app"] = self.object.enterprise_app
         elif artifact_type == Artifact.Type.PROFILE:
             ctx["profile"] = self.object.profile
+        elif artifact_type == Artifact.Type.PROVISIONING_PROFILE:
+            ctx["provisioning_profile"] = self.object.provisioning_profile
         elif artifact_type == Artifact.Type.STORE_APP:
             ctx["store_app"] = self.object.store_app
         return ctx
@@ -853,6 +865,12 @@ class UpgradeProfileView(BaseUpgradeArtifactVersionView):
     model_display = "Profile"
 
 
+class UpgradeProvisioningProfileView(BaseUpgradeArtifactVersionView):
+    form = UpgradeProvisioningProfileForm
+    model = "provisioning_profile"
+    model_display = "Provisioning Profile"
+
+
 class UpgradeStoreAppView(BaseUpgradeArtifactVersionView):
     form = UpgradeStoreAppForm
     model = "store_app"
@@ -937,6 +955,19 @@ class DownloadProfileView(PermissionRequiredMixin, View):
             content_type="application/x-plist",
             as_attachment=True,
             filename=profile.filename or f"profile_{profile.artifact_version.pk}.mobileconfig"
+        )
+
+
+class DownloadProvisioningProfileView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_artifactversion"
+
+    def get(self, request, **kwargs):
+        profile = get_object_or_404(ProvisioningProfile, artifact_version__pk=kwargs["artifact_version_pk"])
+        return FileResponse(
+            io.BytesIO(profile.source),
+            content_type="application/octet-stream",
+            as_attachment=True,
+            filename=profile.get_export_filename(),
         )
 
 

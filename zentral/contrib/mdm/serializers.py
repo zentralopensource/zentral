@@ -36,7 +36,7 @@ from .models import (ACMEIssuer,
                      EnterpriseApp, FileVaultConfig,
                      Location, LocationAsset,
                      OTAEnrollment,
-                     Platform, Profile, PushCertificate,
+                     Platform, Profile, ProvisioningProfile, PushCertificate,
                      RecoveryPasswordConfig,
                      SCEPIssuer,
                      SoftwareUpdateEnforcement,
@@ -44,6 +44,7 @@ from .models import (ACMEIssuer,
                      UserCommand,
                      EnrollmentCustomView, DEPEnrollmentCustomView)
 from .payloads import get_configuration_profile_info
+from .utils import get_provisioning_profile_info
 from .validators import DEPEnrollmentValidator
 from zentral.contrib.mdm.dep import define_dep_profile, serialize_dep_profile
 
@@ -1021,6 +1022,45 @@ class ProfileSerializer(ArtifactVersionSerializer):
         with transaction.atomic(durable=True):
             super().update(instance, validated_data)
             for attr, value in validated_data["profile"].items():
+                setattr(instance, attr, value)
+            instance.save()
+        with transaction.atomic(durable=True):
+            for blueprint in instance.artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
+        return instance
+
+
+class ProvisioningProfileSerializer(ArtifactVersionSerializer):
+    source = B64EncodedBinaryField()
+
+    def validate(self, data):
+        data = super().validate(data)
+        source = data.pop("source", None)
+        try:
+            name, pp_uuid, content = get_provisioning_profile_info(source)
+        except ValueError as e:
+            raise serializers.ValidationError({"source": str(e)})
+        data["provisioning_profile"] = {"name": name, "uuid": pp_uuid}
+        data["provisioning_profile"]["source"] = source
+        data["provisioning_profile"]["content"] = content
+        return data
+
+    def create(self, validated_data):
+        with transaction.atomic(durable=True):
+            artifact_version = super().create(validated_data)
+            instance = ProvisioningProfile.objects.create(
+                artifact_version=artifact_version,
+                **validated_data["provisioning_profile"]
+            )
+        with transaction.atomic(durable=True):
+            for blueprint in artifact_version.artifact.blueprints():
+                update_blueprint_serialized_artifacts(blueprint)
+        return instance
+
+    def update(self, instance, validated_data):
+        with transaction.atomic(durable=True):
+            super().update(instance, validated_data)
+            for attr, value in validated_data["provisioning_profile"].items():
                 setattr(instance, attr, value)
             instance.save()
         with transaction.atomic(durable=True):

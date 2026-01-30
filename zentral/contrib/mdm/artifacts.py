@@ -469,7 +469,7 @@ class Target:
     def all_to_install(self, included_types=None, only_first=False):
         artifact_version_to_install_pks = self._all_to_install_pks(included_types, only_first)
         qs = ArtifactVersion.objects.select_related(
-            "artifact", "declaration", "enterprise_app", "profile", "store_app"
+            "artifact", "declaration", "enterprise_app", "profile", "provisioning_profile", "store_app"
         )
         if artifact_version_to_install_pks:
             return qs.filter(pk__in=(t[1] for t in artifact_version_to_install_pks))
@@ -529,7 +529,7 @@ class Target:
             artifact_version_pk = target_artifact["present_artifact_version_pk"]
             if artifact_version_pk:
                 return ArtifactVersion.objects.select_related(
-                    "artifact", "enterprise_app", "profile", "store_app"
+                    "artifact", "enterprise_app", "profile", "provisioning_profile", "store_app"
                 ).get(pk=artifact_version_pk)
 
     def get_db_command_model_and_kwargs(self):

@@ -1,0 +1,30 @@
+<tr>
+  <th colspan="2"><h4>Provisioning Profile</h4></td>
+</tr>
+<tr>
+  <th>UUID</th>
+  <td><code>{{ provisioning_profile.uuid }}</code></th>
+</tr>
+<tr>
+  <th>Name</th>
+  <td>{{ provisioning_profile.name|default:"-" }}</td>
+</tr>
+<tr>
+  <th>Content</th>
+  <td>
+    {% with provisioning_profile.get_content as content %}
+    <table class="table table-condensed">
+      <tbody>
+        <tr>
+          <td>App ID</td>
+          <td>{{ content.AppIDName|default:"-" }}</td>
+        </tr>
+        <tr>
+          <td>Creation Date</td>
+          <td>{{ content.CreationDate|date:"SHORT_DATETIME_FORMAT" }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% endwith %}
+  </td>
+</tr>

@@ -10,11 +10,13 @@ from .install_application import InstallApplication  # NOQA
 from .install_enterprise_application import InstallEnterpriseApplication  # NOQA
 from .installed_application_list import InstalledApplicationList  # NOQA
 from .install_profile import InstallProfile  # NOQA
+from .install_provisioning_profile import InstallProvisioningProfile  # NOQA
 from .managed_application_list import ManagedApplicationList  # NOQA
 from .profile_list import ProfileList  # NOQA
 from .reenroll import Reenroll  # NOQA
 from .remove_application import RemoveApplication  # NOQA
 from .remove_profile import RemoveProfile  # NOQA
+from .remove_provisioning_profile import RemoveProvisioningProfile  # NOQA
 from .restart_device import RestartDevice  # NOQA
 from .rotate_filevault_key import RotateFileVaultKey  # NOQA
 from .security_info import SecurityInfo  # NOQA
