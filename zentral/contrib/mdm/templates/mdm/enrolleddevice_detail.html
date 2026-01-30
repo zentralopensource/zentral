@@ -282,8 +282,9 @@
           <th>Password</th>
           <td>
             {% if object.admin_password and perms.mdm.view_admin_password %}
+            <span class="copy-ed-secret bi bi-clipboard-plus" aria-hidden="true" data-secret-id="admin-password-secret" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;display:none;"></span>
             <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_admin_password' object.pk %}" data-key="admin_password" style="cursor:pointer"></span>
-            <span class="ed-secret"></span>
+            <span class="ed-secret" id="admin-password-secret"></span>
             {% else %}
             {{ object.admin_password_escrowed|yesno }}
             {% endif %}
@@ -586,6 +587,8 @@
       success: function ( data ) {
         $btn.next().text(data[key]).show();
         $btn.removeClass("bi-eye").addClass("bi-eye-slash");
+        // Show the copy button (it's the previous sibling)
+        $btn.prev(".copy-ed-secret").show();
       }
     });
   }
@@ -593,6 +596,8 @@
   function hideEDSecret($btn) {
     $btn.next().text("").hide();
     $btn.removeClass("bi-eye-slash").addClass("bi-eye");
+    // Hide the copy button
+    $btn.prev(".copy-ed-secret").hide();
   }
 
   function toggleEDSecret($btn) {
@@ -604,9 +609,27 @@
       }
   }
 
+  function copyEDSecret($btn) {
+    var secretId = $btn.data("secret-id");
+    var $secret = $("#" + secretId);
+
+    if ($secret.length && $secret.text()) {
+      // Create a temporary textarea to copy the text
+      var $temp = $("<textarea>");
+      $("body").append($temp);
+      $temp.val($secret.text()).select();
+      document.execCommand("copy");
+      $temp.remove();
+    }
+  }
+
   $(document).ready(function () {
     $(".show-ed-secret").click(function() {
       toggleEDSecret($(this));
+    });
+
+    $(".copy-ed-secret").click(function() {
+      copyEDSecret($(this));
     });
   });
 </script>
