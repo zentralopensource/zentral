@@ -27,7 +27,7 @@ class InventoryAPITests(APITestCase):
         )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
-        _, cls.api_key = APIToken.objects.create_for_user(user=cls.user)
+        cls.api_token, cls.api_key = APIToken.objects.create_for_user(user=cls.user)
 
     def setUp(self):
         super().setUp()
@@ -457,6 +457,7 @@ class InventoryAPITests(APITestCase):
                                   'is_superuser': False,
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
+                                              'token': {'pk': str(self.api_token.pk)},
                                               'token_authenticated': True},
                                   'username': self.user.username},
                          'view': 'inventory_api:meta_business_units'},
@@ -571,6 +572,7 @@ class InventoryAPITests(APITestCase):
                                   'is_superuser': False,
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
+                                              'token': {'pk': str(self.api_token.pk)},
                                               'token_authenticated': True},
                                   'username': self.user.username},
                          'view': 'inventory_api:meta_business_unit'},
@@ -659,6 +661,7 @@ class InventoryAPITests(APITestCase):
                                   'is_superuser': False,
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
+                                              'token': {'pk': str(self.api_token.pk)},
                                               'token_authenticated': True},
                                   'username': self.user.username},
                          'view': 'inventory_api:meta_business_unit'},
@@ -752,6 +755,7 @@ class InventoryAPITests(APITestCase):
                                   'is_superuser': False,
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
+                                              'token': {'pk': str(self.api_token.pk)},
                                               'token_authenticated': True},
                                   'username': self.user.username},
                          'view': 'inventory_api:tags'},
@@ -846,6 +850,7 @@ class InventoryAPITests(APITestCase):
                                   'is_superuser': False,
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
+                                              'token': {'pk': str(self.api_token.pk)},
                                               'token_authenticated': True},
                                   'username': self.user.username},
                          'view': 'inventory_api:tag'},
@@ -916,6 +921,7 @@ class InventoryAPITests(APITestCase):
                                   'is_superuser': False,
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
+                                              'token': {'pk': str(self.api_token.pk)},
                                               'token_authenticated': True},
                                   'username': self.user.username},
                          'view': 'inventory_api:tag'},
@@ -1015,6 +1021,7 @@ class InventoryAPITests(APITestCase):
                                   'is_superuser': False,
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
+                                              'token': {'pk': str(self.api_token.pk)},
                                               'token_authenticated': True},
                                   'username': self.user.username},
                          'view': 'inventory_api:taxonomies'},
@@ -1107,6 +1114,7 @@ class InventoryAPITests(APITestCase):
                                   'is_superuser': False,
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
+                                              'token': {'pk': str(self.api_token.pk)},
                                               'token_authenticated': True},
                                   'username': self.user.username},
                          'view': 'inventory_api:taxonomy'},
@@ -1177,6 +1185,7 @@ class InventoryAPITests(APITestCase):
                                   'is_superuser': False,
                                   'session': {'is_remote': False,
                                               'mfa_authenticated': False,
+                                              'token': {'pk': str(self.api_token.pk)},
                                               'token_authenticated': True},
                                   'username': self.user.username},
                          'view': 'inventory_api:taxonomy'},
