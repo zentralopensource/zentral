@@ -1,40 +1,63 @@
 {% extends 'base.html' %}
-
 {% block content %}
-<ol class="breadcrumb">
-  <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'realms:index' %}">SSO</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
-  {% if object %}
-  <li class="breadcrumb-item"><a href="{% url 'realms:view' object.pk %}">{{ object }}</a></li>
-  <li class="breadcrumb-item active">Update</li>
-  {% else %}
-  <li class="breadcrumb-item active">Create</li>
-  {% endif %}
-</ol>
-
-<h2>{% if object %}Update{% else %}Create{% endif %} realm</h2>
-
-<form method="post" enctype="multipart/form-data" class="update-form">{% csrf_token %}
-  
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item">
+      <a href="/">Home</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'realms:index' %}">SSO</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'realms:list' %}">Realms</a>
+    </li>
+    {% if object %}
+      <li class="breadcrumb-item">
+        <a href="{% url 'realms:view' object.pk %}">{{ object }}</a>
+      </li>
+      <li class="breadcrumb-item active">Update</li>
+    {% else %}
+      <li class="breadcrumb-item active">Create</li>
+    {% endif %}
+  </ol>
+  <h2>
+    {% if object %}
+      Update
+    {% else %}
+      Create
+    {% endif %}
+    realm
+  </h2>
+  <form method="post" enctype="multipart/form-data" class="update-form">
+    {% csrf_token %}
     {{ form }}
-  
     <p>
-        <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'realms:list' %}{% endif %}">
-        Cancel
-        </a>
-        <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-outline-secondary"
+         href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'realms:list' %}{% endif %}">Cancel</a>
+      <button class="btn btn-primary" type="submit">Save</button>
     </p>
-</form>
+  </form>
 {% endblock %}
-
 {% block extrajs %}
-<script nonce="{{ request.csp_nonce }}">
+  <script nonce="{{ request.csp_nonce }}">
   var checkBoxLogin = document.querySelector("#id_enabled_for_login"),
-      sessionExpiryGroup = document.querySelector("#id_login_session_expiry").parentElement;
+      checkBoxUserPortal = document.querySelector("#id_user_portal"),
+      sessionExpiryGroup = document.querySelector("#id_login_session_expiry").parentElement,
+      allowIdpInitiatedLoginGroup = document.querySelector("#id_allow_idp_initiated_login").parentElement;
   sessionExpiryGroup.toggleAttribute("hidden", !checkBoxLogin.checked);
+  allowIdpInitiatedLoginGroup.toggleAttribute("hidden", (!checkBoxLogin.checked && !checkBoxUserPortal.checked));
   checkBoxLogin.addEventListener("click", function(event) {
     sessionExpiryGroup.toggleAttribute("hidden", !event.target.checked);
+    allowIdpInitiatedLoginGroup.toggleAttribute("hidden", (!checkBoxLogin.checked && !checkBoxUserPortal.checked));
+    disableIdpLogin();
   });
-</script>
+  checkBoxUserPortal.addEventListener("click", function(event) {
+    allowIdpInitiatedLoginGroup.toggleAttribute("hidden", (!checkBoxLogin.checked && !checkBoxUserPortal.checked));
+    disableIdpLogin();
+  });
+  function disableIdpLogin() {
+    if((!checkBoxLogin.checked && !checkBoxUserPortal.checked)) {
+        document.querySelector("#id_allow_idp_initiated_login").checked = false;
+    }
+  }
+  </script>
 {% endblock %}

@@ -1,19 +1,22 @@
 import uuid
+
 from django import forms
+from realms.forms import RealmForm
 from saml2 import BINDING_HTTP_POST
 from saml2.client import Saml2Client
 from saml2.config import Config as Saml2Config
 from saml2.saml import NAMEID_FORMAT_EMAILADDRESS
-from realms.forms import RealmForm
 
 
 class SAMLRealmForm(RealmForm):
     login_session_expiry = forms.IntegerField(
-        required=False, min_value=0, max_value=1296000,
+        required=False,
+        min_value=0,
+        max_value=1296000,
         help_text="Session expiry in seconds. If value is 0, the user’s session"
-                  " cookie will expire when the user’s Web browser is closed. "
-                  "Leave blank, and the session reverts to using the "
-                  "NotOnOrAfter value provided by the IDP in the SAML response."
+        " cookie will expire when the user’s Web browser is closed. "
+        "Leave blank, and the session reverts to using the "
+        "NotOnOrAfter value provided by the IDP in the SAML response.",
     )
     metadata_file = forms.FileField()
     allow_idp_initiated_login = forms.BooleanField(required=False)
@@ -22,18 +25,38 @@ class SAMLRealmForm(RealmForm):
         super().__init__(*args, **kwargs)
         self.fields["metadata_file"].required = self.instance is None
         if self.instance:
-            self.fields["allow_idp_initiated_login"].initial = self.instance.config.get("allow_idp_initiated_login")
+            self.fields["allow_idp_initiated_login"].initial = self.instance.config.get(
+                "allow_idp_initiated_login"
+            )
 
     def clean(self):
         super().clean()
         cleaned_data = self.cleaned_data
+
+        allow_idp_initiated_login = cleaned_data.get("allow_idp_initiated_login")
+
+        if allow_idp_initiated_login and (
+            not cleaned_data.get("enabled_for_login")
+            and not cleaned_data.get("user_portal")
+        ):
+            self.add_error(
+                None,
+                forms.ValidationError(
+                    "'Allow IDP initiated login' only available if 'Enable for login' or 'User portal' is set"
+                ),
+            )
+            return
+
         metadata_file = cleaned_data.get("metadata_file")
         if not metadata_file:
             return
         try:
             idp_metadata = metadata_file.read().decode("utf-8")
         except Exception:
-            self.add_error("metadata_file", forms.ValidationError("Could not read SAML metadata file"))
+            self.add_error(
+                "metadata_file",
+                forms.ValidationError("Could not read SAML metadata file"),
+            )
             return
 
         # try to load the settings with fake entityid and acs url
@@ -63,7 +86,9 @@ class SAMLRealmForm(RealmForm):
         try:
             sp_config.load(settings)
         except Exception:
-            self.add_error("metadata_file", forms.ValidationError("Invalid SAML metadata file"))
+            self.add_error(
+                "metadata_file", forms.ValidationError("Invalid SAML metadata file")
+            )
 
         # try to prepare a request
         # to catch errors like:
@@ -73,7 +98,10 @@ class SAMLRealmForm(RealmForm):
             client = Saml2Client(config=sp_config)
             client.prepare_for_authenticate(relay_state=str(uuid.uuid4()))
         except Exception as e:
-            self.add_error("metadata_file", forms.ValidationError("{}: {}".format(e.__class__.__name__, str(e))))
+            self.add_error(
+                "metadata_file",
+                forms.ValidationError("{}: {}".format(e.__class__.__name__, str(e))),
+            )
         else:
             cleaned_data["idp_metadata"] = idp_metadata
 

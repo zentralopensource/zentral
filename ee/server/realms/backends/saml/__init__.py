@@ -1,15 +1,16 @@
 import logging
 from xml.etree import ElementTree
+
 from django.urls import reverse
-from saml2 import BINDING_HTTP_POST, md, saml, samlp, xmlenc, xmldsig
+from realms.backends.base import BaseBackend
+from realms.exceptions import RealmUserError
+from saml2 import BINDING_HTTP_POST, md, saml, samlp, xmldsig, xmlenc
 from saml2.client import Saml2Client
 from saml2.config import Config as Saml2Config
 from saml2.saml import NAMEID_FORMAT_EMAILADDRESS
+
 from zentral.conf import settings
 from zentral.utils.json import remove_null_character
-from realms.backends.base import BaseBackend
-from realms.exceptions import RealmUserError
-
 
 logger = logging.getLogger("zentral.realms.backends.saml")
 
@@ -19,11 +20,15 @@ class SAMLRealmBackend(BaseBackend):
 
     @property
     def allow_idp_initiated_login(self):
-        return self.instance.enabled_for_login and (self.instance.config.get("allow_idp_initiated_login") or False)
+        return (self.instance.enabled_for_login or self.instance.user_portal) and (
+            self.instance.config.get("allow_idp_initiated_login") or False
+        )
 
     @property
     def default_relay_state(self):
-        return self.instance.enabled_for_login and self.instance.config.get("default_relay_state")
+        return (
+            self.instance.enabled_for_login or self.instance.user_portal
+        ) and self.instance.config.get("default_relay_state")
 
     def acs_url(self):
         "Assertion Consumer Service URL"
@@ -59,7 +64,6 @@ class SAMLRealmBackend(BaseBackend):
                     # skip built-in pysaml2 cache
                     # https://github.com/IdentityPython/pysaml2/blob/9e5c9ab426ce8e602ca769c7fc259a2fb1325877/example/sp-wsgi/sp.py#L353  # NOQA
                     "allow_unsolicited": True,
-
                     "authn_requests_signed": False,
                     "logout_requests_signed": True,
                     "want_assertions_signed": True,
@@ -86,7 +90,11 @@ class SAMLRealmBackend(BaseBackend):
         attributes = [
             ("Entity ID", self.entity_id(), False),
             ("Assertion Consumer Service URL", self.acs_url(), False),
-            ("Allow IdP-initiated login", "yes" if self.allow_idp_initiated_login else "no", False),
+            (
+                "Allow IdP-initiated login",
+                "yes" if self.allow_idp_initiated_login else "no",
+                False,
+            ),
         ]
         if self.default_relay_state:
             attributes.append(("Default relay state", self.default_relay_state, True))
@@ -100,10 +108,11 @@ class SAMLRealmBackend(BaseBackend):
 
     def initialize_session(self, request, callback, **callback_kwargs):
         from realms.models import RealmAuthenticationSession
+
         ras = RealmAuthenticationSession(
             realm=self.instance,
             callback=callback,
-            callback_kwargs=remove_null_character(callback_kwargs)
+            callback_kwargs=remove_null_character(callback_kwargs),
         )
         ras.save()
 
@@ -112,7 +121,9 @@ class SAMLRealmBackend(BaseBackend):
         # like saml2.s_utils.UnsupportedBinding: urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
         # if the IdP configuration and thus the metadata is wrong, but these should be caught at creation time
         # in the realm form.
-        request_id, request_info = saml2_client.prepare_for_authenticate(relay_state=str(ras.pk))
+        request_id, request_info = saml2_client.prepare_for_authenticate(
+            relay_state=str(ras.pk)
+        )
 
         # save request ID in auth session
         ras.backend_state = {"request_id": request_id}
@@ -123,17 +134,20 @@ class SAMLRealmBackend(BaseBackend):
     def update_or_create_realm_user(self, session_info):
         # cleanup name id
         name_id = None
-        if 'name_id' in session_info:
-            name_id = session_info.pop('name_id').text
-            session_info['name_id'] = name_id
+        if "name_id" in session_info:
+            name_id = session_info.pop("name_id").text
+            session_info["name_id"] = name_id
 
         # default realm user attributes for update or create
         realm_user_defaults = {"claims": session_info}
 
         # try to get the configured claims
-        ava = session_info.get('ava')
+        ava = session_info.get("ava")
         if ava:
-            for user_claim, user_claim_source in self.instance.iter_user_claim_mappings():
+            for (
+                user_claim,
+                user_claim_source,
+            ) in self.instance.iter_user_claim_mappings():
                 value = ava.get(user_claim_source)
                 if value:
                     # TODO: only the first value at the moment
@@ -150,13 +164,14 @@ class SAMLRealmBackend(BaseBackend):
             username = name_id
 
         if not username:
-            raise RealmUserError("No username found in SAML session info", realm_user_defaults)
+            raise RealmUserError(
+                "No username found in SAML session info", realm_user_defaults
+            )
         else:
             from realms.models import RealmUser
+
             realm_user, _ = RealmUser.objects.update_or_create(
-                realm=self.instance,
-                username=username,
-                defaults=realm_user_defaults
+                realm=self.instance, username=username, defaults=realm_user_defaults
             )
             return realm_user
 
@@ -166,6 +181,7 @@ class SAMLRealmBackend(BaseBackend):
         # backends loaded from models
         # but backend form loads models…
         from .forms import SAMLRealmForm
+
         return SAMLRealmForm
 
 
@@ -173,11 +189,13 @@ class SAMLRealmBackend(BaseBackend):
 
 
 def register_namespace_prefixes():
-    prefixes = (('saml', saml.NAMESPACE),
-                ('samlp', samlp.NAMESPACE),
-                ('md', md.NAMESPACE),
-                ('ds', xmldsig.NAMESPACE),
-                ('xenc', xmlenc.NAMESPACE))
+    prefixes = (
+        ("saml", saml.NAMESPACE),
+        ("samlp", samlp.NAMESPACE),
+        ("md", md.NAMESPACE),
+        ("ds", xmldsig.NAMESPACE),
+        ("xenc", xmlenc.NAMESPACE),
+    )
     for prefix, namespace in prefixes:
         ElementTree.register_namespace(prefix, namespace)
 

@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
+
 from dateutil import parser
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, HttpResponseRedirect
@@ -9,15 +10,14 @@ from django.utils.decorators import method_decorator
 from django.utils.timezone import is_aware, make_naive
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
+from realms.backends.views import finalize_session, ras_finalization_error
+from realms.exceptions import RealmUserError
+from realms.models import Realm, RealmAuthenticationSession
 from saml2 import BINDING_HTTP_POST
 from saml2.metadata import entity_descriptor
 from saml2.response import AuthnResponse, VerificationError
 from saml2.sigver import SignatureError
 from saml2.validate import ResponseLifetimeExceed
-from realms.backends.views import finalize_session, ras_finalization_error
-from realms.exceptions import RealmUserError
-from realms.models import Realm, RealmAuthenticationSession
-
 
 # adapted from https://github.com/jpf/okta-pysaml2-example/blob/master/app.py
 
