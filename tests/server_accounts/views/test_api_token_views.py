@@ -40,13 +40,16 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
                                                        get_random_string(12),
                                                        is_service_account=True)
 
-    # auth utils
+    # LoginCase implementation
 
-    def _getUser(self):
+    def _get_user(self):
         return self.ui_user
 
-    def _getGroup(self):
+    def _get_group(self):
         return self.ui_group
+
+    def _get_url_namespace(self):
+        return "accounts"
 
     # create API token
 

@@ -55,16 +55,17 @@ class ConnectionViewsTestCase(TestCase):
         self.client.force_login(self.user)
 
     def _given_connection(
-            self,
-            user_info: str = json.dumps({
-                "refresh_token": get_random_string(12),
-                "client_id": get_random_string(12),
-                "client_secret": get_random_string(12)
-            }),
-            type: Connection.Type = Connection.Type.OAUTH_ADMIN_SDK,
-            customer_id: str = None):
+        self,
+        user_info: str = json.dumps({
+            "refresh_token": get_random_string(12),
+            "client_id": get_random_string(12),
+            "client_secret": get_random_string(12)
+        }),
+        type: Connection.Type = Connection.Type.OAUTH_ADMIN_SDK,
+        customer_id: str = None
+    ):
         name = get_random_string(12)
-        
+
         connection = Connection.objects.create(name=name, type=type)
 
         match type:

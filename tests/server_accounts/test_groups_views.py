@@ -22,13 +22,16 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
         cls.provisioned_group = Group.objects.create(name=get_random_string(12))
         ProvisionedRole.objects.create(group=cls.provisioned_group, provisioning_uid=get_random_string(12))
 
-    # auth utils
+    # LoginCase implementation
 
-    def _getUser(self):
+    def _get_user(self):
         return self.ui_user
 
-    def _getGroup(self):
+    def _get_group(self):
         return self.ui_group
+
+    def _get_url_namespace(self):
+        return "accounts"
 
     # permissions denied
 

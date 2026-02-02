@@ -78,11 +78,14 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     # auth utils
 
-    def _getUser(self):
+    def _get_user(self):
         return self.ui_user
 
-    def _getGroup(self):
+    def _get_group(self):
         return self.ui_group
+
+    def _get_url_namespace(self):
+        return "accounts"
 
     # simple login
 

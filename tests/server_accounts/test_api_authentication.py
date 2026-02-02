@@ -5,7 +5,6 @@ from tests.zentral_test_utils.zentral_api_test_case import ZentralAPITestCase
 
 
 class ApiAuthenticationTestCase(ZentralAPITestCase):
-
     def test_api_authentication(self):
         self.set_permissions("monolith.view_manifest")
         response = self.get(reverse("monolith_api:manifests"))
