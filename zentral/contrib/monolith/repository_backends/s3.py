@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import logging
 import os.path
 import boto3
+import plistlib
 from botocore.client import Config
 from botocore.signers import CloudFrontSigner
 from cryptography.hazmat.primitives import hashes
@@ -204,7 +205,45 @@ class S3Repository(BaseRepository):
             raise RepositoryError(str(e))
 
     def get_all_catalog_content(self):
-        return self._get_resource("catalogs/all")
+        catalog = self._get_resource("catalogs/all", missing_ok=True)
+        if catalog is not None:
+            return catalog
+        logger.warning("catalogs/all missing in repository %s. Falling back to pkgsinfo/**/*.plist .", self.repository)
+        pkg_infos = []
+        for key, content in self._iter_pkgsinfos():
+            try:
+                pkg_info_data = plistlib.loads(content)
+
+                # sanatize data
+                pkg_info_data.pop('notes', None)
+                for k in list(pkg_info_data.keys()):
+                    if k.startswith('_'):
+                        pkg_info_data.pop(k)
+
+                if pkg_info_data not in pkg_infos:
+                    pkg_infos.append(pkg_info_data)
+            except Exception as e:
+                logger.exception("Could not parse pkgsinfo plist %s in repository %s", key, self.repository)
+                raise RepositoryError(str(e))
+        if not pkg_infos:
+            raise RepositoryError("catalogs/all is missing and no pkgsinfo/*.plist files were found")
+
+        return plistlib.dumps(pkg_infos, fmt=plistlib.FMT_XML)
+
+    def _iter_pkgsinfos(self):
+        prefix = os.path.join(self.prefix, "pkgsinfo/")
+        try:
+            paginator = self._client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    if key.endswith("/") or not key.endswith(".plist"):
+                        continue
+                    content = self._get_resource(key)
+                    yield key, content
+        except Exception as e:
+            logger.exception("Could not list pkgsinfo keys in repository %s", self.repository)
+            raise RepositoryError(str(e))
 
     def get_icon_hashes_content(self):
         return self._get_resource("icons/_icon_hashes.plist", missing_ok=True)
