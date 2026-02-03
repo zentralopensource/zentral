@@ -14,17 +14,15 @@
 
 <h3>{% if object == request.user %}My{% else %}{{ object.get_type_display|title }} {{ object }}{% endif %} API token</h3>
 
-<p>
-  <button class="copy-secret btn btn-link" data-secret-id="auth-token"
-    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard">
-    <span class="bi bi-clipboard-plus" aria-hidden="true"></span>
-  </button>
-  <a href="#" class="secret-toggle btn btn-link" data-secret-id="auth-token"
+<div class="clearfix">
+  <a href="#" class="secret-toggle bi bi-eye btn btn-link float-start mt-2 mb-4 me-2" data-secret-id="auth-token"
     data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="View Token">
-    <span class="bi bi-eye" aria-hidden="true"></span>
   </a>
-  <input style="font-family:monospace" hidden id="auth-token" value="{{ api_key }}" size="{{ api_key|length }}">
-</p>
+  <div class="input-group mt-1 input-group-sm invisible w-50 alert alert-primary mt-1 p-2" style="display: none">
+    <input style="font-family:monospace" id="auth-token" class="secret form-control" disabled="true" value="{{ api_key }}" size="{{ api_key|length }}" data-bs-toggle="manual" data-bs-placement="bottom" data-bs-title="Copied!" />
+    <span class="copy-secret bi bi-clipboard-plus input-group-text" aria-hidden="true" data-secret-id="auth-token" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;"></span>
+  </div>
+</div>
 
 <p><span class="text-danger">This token cannot be retrieved later on.</span> However, you can create a new one at any time.</p>
 
@@ -43,18 +41,10 @@
   secretToggles.forEach(function(secretToggle) {
     secretToggle.addEventListener("click", function(event) {
       event.preventDefault();
-      var secretId = secretToggle.dataset.secretId;
-      var secretElm = document.getElementById(secretId);
-      var eyeSpan = secretToggle.firstElementChild;
-      if (secretElm.hidden) {
-        secretElm.hidden = false;
-        eyeSpan.classList.remove("bi-eye");
-        eyeSpan.classList.add("bi-eye-slash");
-      } else {
-        secretElm.hidden = true;
-        eyeSpan.classList.remove("bi-eye-slash");
-        eyeSpan.classList.add("bi-eye");
-      }
+      var $secretSwitch = $(secretToggle);
+      var $input_parent = $secretSwitch.next('.input-group');
+      $input_parent.toggleClass('invisible').toggle();
+      $secretSwitch.toggleClass("bi-eye-slash").toggleClass("bi-eye");
     });
   });
 
@@ -62,18 +52,17 @@
   copySecretButtons.forEach(function(copySecretButton) {
     copySecretButton.addEventListener("click", function(event) {
       event.preventDefault();
-      var secretId = copySecretButton.dataset.secretId;
-      var secretElm = document.getElementById(secretId);
-      var secretElmWasHidden = secretElm.hidden;
-      // sorry
-      if (secretElmWasHidden) {
-        secretElm.hidden = false;
-      }
-      secretElm.select();
-      document.execCommand("copy");
-      if (secretElmWasHidden) {
-        secretElm.hidden = true;
-      }
+      var $secret = $('#' + copySecretButton.dataset.secretId);
+      var clipText = $secret.val();
+      navigator.clipboard.writeText(clipText).then(
+      () => {
+        $(copySecretButton).toggleClass("bi-clipboard-plus").toggleClass("bi-check-lg");
+        $secret.tooltip('toggle');
+        setTimeout(() => {
+          $secret.tooltip('toggle');
+          $(copySecretButton).toggleClass("bi-clipboard-plus").toggleClass("bi-check-lg");
+        }, 3000);
+      });
     });
   });
 </script>
