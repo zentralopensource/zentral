@@ -33,7 +33,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.dep_enrollment_session, _, _ = force_dep_enrollment_session(
-            cls.mbu, authenticated=True, completed=True
+            cls.mbu, authenticated=True, completed=True, realm_user=True, realm_user_email=cls.user.email
         )
         cls.enrolled_device = cls.dep_enrollment_session.enrolled_device
         cls.enrolled_user = force_enrolled_user(cls.enrolled_device)
@@ -53,6 +53,65 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def _get_api_key(self):
         return self.api_key
+
+    # Assertions
+
+    def _assert_found_enrolled_device(self, response, last_ip=None, last_seen_at=None):
+        if last_seen_at:
+            last_seen_at = last_seen_at.isoformat()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [{'activation_lock_manageable': None,
+                          'admin_guid': None,
+                          'admin_password_escrowed': False,
+                          'admin_shortname': None,
+                          'apple_silicon': None,
+                          'awaiting_configuration': None,
+                          'blocked_at': None,
+                          'blueprint': None,
+                          'bootstrap_token_escrowed': False,
+                          'build_version': '',
+                          'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
+                          'cert_att_serial_number': None,
+                          'cert_att_udid': None,
+                          'checkout_at': None,
+                          'created_at': self.enrolled_device.created_at.isoformat(),
+                          'declarative_management': False,
+                          'dep_enrollment': None,
+                          'filevault_enabled': None,
+                          'filevault_prk_escrowed': False,
+                          'id': self.enrolled_device.id,
+                          'last_notified_at': None,
+                          'last_ip': last_ip,
+                          'last_seen_at': last_seen_at,
+                          'model': None,
+                          'name': None,
+                          'os_version': '',
+                          'platform': 'macOS',
+                          'recovery_password_escrowed': False,
+                          'serial_number': self.enrolled_device.serial_number,
+                          'supervised': None,
+                          'udid': self.enrolled_device.udid,
+                          'updated_at': self.enrolled_device.updated_at.isoformat(),
+                          'user_approved_enrollment': None,
+                          'user_enrollment': None,
+                          'users': [{
+                              'id': self.enrolled_user.id,
+                              'enrollment_id': None,
+                              'user_id': self.enrolled_user.user_id,
+                              'long_name': self.enrolled_user.long_name,
+                              'short_name': self.enrolled_user.short_name,
+                              'declarative_management': False,
+                              'last_ip': last_ip,
+                              'last_seen_at': last_seen_at,
+                              'created_at': self.enrolled_user.created_at.isoformat(),
+                              'updated_at': self.enrolled_user.updated_at.isoformat(),
+                          }]}]}
+        )
 
     # enrolled devices
 
@@ -139,59 +198,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             reverse("mdm_api:enrolled_devices")
             + f"?serial_number={self.enrolled_device.serial_number}"
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {'count': 1,
-             'next': None,
-             'previous': None,
-             'results': [{'activation_lock_manageable': None,
-                          'admin_guid': None,
-                          'admin_password_escrowed': False,
-                          'admin_shortname': None,
-                          'apple_silicon': None,
-                          'awaiting_configuration': None,
-                          'blocked_at': None,
-                          'blueprint': None,
-                          'bootstrap_token_escrowed': False,
-                          'build_version': '',
-                          'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
-                          'cert_att_serial_number': None,
-                          'cert_att_udid': None,
-                          'checkout_at': None,
-                          'created_at': self.enrolled_device.created_at.isoformat(),
-                          'declarative_management': False,
-                          'dep_enrollment': None,
-                          'filevault_enabled': None,
-                          'filevault_prk_escrowed': False,
-                          'id': self.enrolled_device.id,
-                          'last_notified_at': None,
-                          'last_ip': "54d0:a11d:dee1:88bf:a120:8ff2:da43:aaad",
-                          'last_seen_at': "2025-09-25T00:00:00",
-                          'model': None,
-                          'name': None,
-                          'os_version': '',
-                          'platform': 'macOS',
-                          'recovery_password_escrowed': False,
-                          'serial_number': self.enrolled_device.serial_number,
-                          'supervised': None,
-                          'udid': self.enrolled_device.udid,
-                          'updated_at': self.enrolled_device.updated_at.isoformat(),
-                          'user_approved_enrollment': None,
-                          'user_enrollment': None,
-                          'users': [{
-                              'id': self.enrolled_user.id,
-                              'enrollment_id': None,
-                              'user_id': self.enrolled_user.user_id,
-                              'long_name': self.enrolled_user.long_name,
-                              'short_name': self.enrolled_user.short_name,
-                              'declarative_management': False,
-                              'last_ip': "54d0:a11d:dee1:88bf:a120:8ff2:da43:aaad",
-                              'last_seen_at': "2025-09-25T00:00:00",
-                              'created_at': self.enrolled_user.created_at.isoformat(),
-                              'updated_at': self.enrolled_user.updated_at.isoformat(),
-                          }]}]}
-        )
+        self._assert_found_enrolled_device(response, self.enrolled_user.last_ip, self.enrolled_user.last_seen_at)
 
     def test_enrolled_devices_by_serial_number_no_result(self):
         self.set_permissions("mdm.view_enrolleddevice")
@@ -208,59 +215,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             reverse("mdm_api:enrolled_devices")
             + f"?udid={self.enrolled_device.udid}"
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {'count': 1,
-             'next': None,
-             'previous': None,
-             'results': [{'activation_lock_manageable': None,
-                          'admin_guid': None,
-                          'admin_password_escrowed': False,
-                          'admin_shortname': None,
-                          'apple_silicon': None,
-                          'awaiting_configuration': None,
-                          'blocked_at': None,
-                          'blueprint': None,
-                          'bootstrap_token_escrowed': False,
-                          'build_version': '',
-                          'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
-                          'cert_att_serial_number': None,
-                          'cert_att_udid': None,
-                          'checkout_at': None,
-                          'created_at': self.enrolled_device.created_at.isoformat(),
-                          'declarative_management': False,
-                          'dep_enrollment': None,
-                          'filevault_enabled': None,
-                          'filevault_prk_escrowed': False,
-                          'id': self.enrolled_device.id,
-                          'last_notified_at': None,
-                          'last_ip': None,
-                          'last_seen_at': None,
-                          'model': None,
-                          'name': None,
-                          'os_version': '',
-                          'platform': 'macOS',
-                          'recovery_password_escrowed': False,
-                          'serial_number': self.enrolled_device.serial_number,
-                          'supervised': None,
-                          'udid': self.enrolled_device.udid,
-                          'updated_at': self.enrolled_device.updated_at.isoformat(),
-                          'user_approved_enrollment': None,
-                          'user_enrollment': None,
-                          'users': [{
-                              'id': self.enrolled_user.id,
-                              'enrollment_id': None,
-                              'user_id': self.enrolled_user.user_id,
-                              'long_name': self.enrolled_user.long_name,
-                              'short_name': self.enrolled_user.short_name,
-                              'declarative_management': False,
-                              'last_ip': None,
-                              'last_seen_at': None,
-                              'created_at': self.enrolled_user.created_at.isoformat(),
-                              'updated_at': self.enrolled_user.updated_at.isoformat(),
-                          }]}]}
-        )
+        self._assert_found_enrolled_device(response)
 
     def test_enrolled_devices_by_udid_no_result(self):
         self.set_permissions("mdm.view_enrolleddevice")
@@ -374,59 +329,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             reverse("mdm_api:enrolled_devices")
             + f"?tags={t.pk}&tags={t2.pk}&excluded_tags={et.pk}"
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {'count': 1,
-             'next': None,
-             'previous': None,
-             'results': [{'activation_lock_manageable': None,
-                          'admin_guid': None,
-                          'admin_password_escrowed': False,
-                          'admin_shortname': None,
-                          'apple_silicon': None,
-                          'awaiting_configuration': None,
-                          'blocked_at': None,
-                          'blueprint': None,
-                          'bootstrap_token_escrowed': False,
-                          'build_version': '',
-                          'cert_not_valid_after': self.enrolled_device.cert_not_valid_after.isoformat(),
-                          'cert_att_serial_number': None,
-                          'cert_att_udid': None,
-                          'checkout_at': None,
-                          'created_at': self.enrolled_device.created_at.isoformat(),
-                          'declarative_management': False,
-                          'dep_enrollment': None,
-                          'filevault_enabled': None,
-                          'filevault_prk_escrowed': False,
-                          'id': self.enrolled_device.id,
-                          'last_notified_at': None,
-                          'last_ip': None,
-                          'last_seen_at': None,
-                          'model': None,
-                          'name': None,
-                          'os_version': '',
-                          'platform': 'macOS',
-                          'recovery_password_escrowed': False,
-                          'serial_number': self.enrolled_device.serial_number,
-                          'supervised': None,
-                          'udid': self.enrolled_device.udid,
-                          'updated_at': self.enrolled_device.updated_at.isoformat(),
-                          'user_approved_enrollment': None,
-                          'user_enrollment': None,
-                          'users': [{
-                              'id': self.enrolled_user.id,
-                              'enrollment_id': None,
-                              'user_id': self.enrolled_user.user_id,
-                              'long_name': self.enrolled_user.long_name,
-                              'short_name': self.enrolled_user.short_name,
-                              'declarative_management': False,
-                              'last_ip': None,
-                              'last_seen_at': None,
-                              'created_at': self.enrolled_user.created_at.isoformat(),
-                              'updated_at': self.enrolled_user.updated_at.isoformat(),
-                          }]}]}
-        )
+        self._assert_found_enrolled_device(response, self.enrolled_user.last_ip, self.enrolled_user.last_seen_at)
 
     def test_enrolled_devices_excluded_tag_filter_no_results(self):
         t = Tag.objects.create(name=get_random_string(12))
@@ -439,6 +342,82 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(
             reverse("mdm_api:enrolled_devices")
             + f"?tags={t.pk}&tags={t2.pk}&excluded_tags={et.pk}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
+
+    def test_enrolled_devices_by_short_name(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + f"?short_name={self.enrolled_user.short_name}"
+        )
+        self._assert_found_enrolled_device(response, self.enrolled_user.last_ip, self.enrolled_user.last_seen_at)
+
+    def test_enrolled_devices_by_short_name_empty_value(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + "?short_name="
+        )
+        self._assert_found_enrolled_device(response, self.enrolled_user.last_ip, self.enrolled_user.last_seen_at)
+
+    def test_enrolled_devices_by_short_name_no_result(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + "?short_name=johndoe"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
+
+    def test_enrolled_devices_by_user_email(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + f"?email={self.user.email}"
+        )
+        self._assert_found_enrolled_device(response, self.enrolled_user.last_ip, self.enrolled_user.last_seen_at)
+
+        new_user_email = f"new_{get_random_string(12)}@zentral.com"
+        session, _, _ = force_dep_enrollment_session(
+            self.mbu,
+            realm_user=True,
+            realm_user_email=new_user_email,
+            serial_number=self.enrolled_device.serial_number,
+            device_udid=str(self.enrolled_device.udid),
+            authenticated=False,
+            completed=False,
+        )
+        session.set_authenticated_status(self.enrolled_device)
+        session.set_completed_status(self.enrolled_device)
+
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + f"?email={self.user.email}"
+        )
+        self.assertEqual(response.json()["count"], 0)
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + f"?email={new_user_email}"
+        )
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["serial_number"], self.enrolled_device.serial_number)
+
+    def test_enrolled_devices_by_user_email_empty_value(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + "?email="
+        )
+        self._assert_found_enrolled_device(response, self.enrolled_user.last_ip, self.enrolled_user.last_seen_at)
+
+    def test_enrolled_devices_by_user_email_no_result(self):
+        self.set_permissions("mdm.view_enrolleddevice")
+        response = self.get(
+            reverse("mdm_api:enrolled_devices")
+            + "?email=no-reply@zentral.com"
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})

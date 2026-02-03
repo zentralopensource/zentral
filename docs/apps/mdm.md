@@ -595,10 +595,15 @@ Response:
      * `udid`
      * `tags`
      * `excluded_tags`
+     * `short_name`
+     * `email`
 
 Use this endpoint to list the MDM enrolled devices.
 
-`tags` and `excluded_tags` can be repeated to specify multiple machine tags. The `ID` of the tags must be used.
+`tags` and `excluded_tags` can be repeated to specify multiple machine tags. The `ID` of the tags must be used.  
+`short_name` is the username of the MDM managed device user account.   
+`email` is the email of the realm user who authenticated during the MDM enrollment.
+sessions.
 
 Example:
 

@@ -6,9 +6,12 @@
 
 Add Provisioning Profile artifacts
 
-#### Monolith
-
 HTML templates of enrollment custom view can now be downloaded in the detail view of the enrollment custom view.
+
+MDM enrolled devices can now be filtered by the short name of the referenced user in the api 
+and the email of the realm user used in the responding enrollment session.
+
+### Monolith
 
 New fallback catalog aggregation if no catalog is provided in S3 bucket.
 

@@ -1,5 +1,6 @@
 from uuid import uuid4
 from django.db.models import Exists, OuterRef
+from django.db.models.expressions import RawSQL
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import status
@@ -31,6 +32,14 @@ class EnrolledDeviceFilter(filters.FilterSet):
         queryset=Tag.objects.all(),
         method="filter_excluded_tags",
     )
+    short_name = filters.CharFilter(
+        field_name="users__short_name",
+        lookup_expr="icontains",
+        method="filter_short_name",
+    )
+    email = filters.CharFilter(
+        method="filter_email",
+    )
 
     def filter_tags(self, queryset, name, value):
         if not value:
@@ -56,9 +65,58 @@ class EnrolledDeviceFilter(filters.FilterSet):
             )
         )
 
+    def filter_short_name(self, queryset, _, value):
+        if not value:
+            return queryset
+        return queryset.filter(users__short_name__exact=value)
+
+    def filter_email(self, queryset, name, value):
+        if not value:
+            return queryset
+        sql = """
+        WITH enrollment_sessions AS (
+        SELECT enrolled_device_id, realm_user_id, created_at
+        FROM mdm_depenrollmentsession
+        WHERE realm_user_id IS NOT NULL
+
+        UNION ALL
+        SELECT enrolled_device_id, realm_user_id, created_at
+        FROM mdm_otaenrollmentsession
+        WHERE realm_user_id IS NOT NULL
+
+        UNION ALL
+        SELECT enrolled_device_id, realm_user_id, created_at
+        FROM mdm_reenrollmentsession
+        WHERE realm_user_id IS NOT NULL
+
+        UNION ALL
+        SELECT enrolled_device_id, realm_user_id, created_at
+        FROM mdm_userenrollmentsession
+        WHERE realm_user_id IS NOT NULL
+        ),
+        ranked_enrollment_sessions AS (
+        SELECT
+            enrolled_device_id,
+            realm_user_id,
+            created_at,
+            ROW_NUMBER() OVER (
+            PARTITION BY enrolled_device_id
+            ORDER BY created_at DESC
+            ) AS rn
+        FROM enrollment_sessions
+        )
+        SELECT r.enrolled_device_id
+        FROM ranked_enrollment_sessions r
+        JOIN realms_realmuser u ON u.uuid = r.realm_user_id
+        WHERE r.rn = 1
+        AND u.email = %s
+        """
+
+        return queryset.filter(id__in=RawSQL(sql, (value,)))
+
     class Meta:
         model = EnrolledDevice
-        fields = ["udid", "serial_number", "tags", "excluded_tags"]
+        fields = ["udid", "serial_number", "tags", "excluded_tags", "short_name", "email"]
 
 
 class EnrolledDeviceList(ListAPIView):
