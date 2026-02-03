@@ -85,31 +85,35 @@ class MDMProvisioningProfilesAPIViewsTestCase(TestCase):
         response = self.get(reverse("mdm_api:provisioning_profiles"))
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        for obj in data:
-            obj.pop("source")
         self.assertEqual(
             data,
-            [{'id': str(av.pk),
-              'artifact': str(artifact.pk),
-              'default_shard': 100,
-              'excluded_tags': [],
-              'ios': False,
-              'ios_max_version': '',
-              'ios_min_version': '',
-              'ipados': False,
-              'ipados_max_version': '',
-              'ipados_min_version': '',
-              'macos': True,
-              'macos_max_version': '',
-              'macos_min_version': '',
-              'shard_modulo': 100,
-              'tag_shards': [],
-              'tvos': False,
-              'tvos_max_version': '',
-              'tvos_min_version': '',
-              'version': av.version,
-              'created_at': av.created_at.isoformat(),
-              'updated_at': av.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': str(av.pk),
+                  'artifact': str(artifact.pk),
+                  'default_shard': 100,
+                  'excluded_tags': [],
+                  'ios': False,
+                  'ios_max_version': '',
+                  'ios_min_version': '',
+                  'ipados': False,
+                  'ipados_max_version': '',
+                  'ipados_min_version': '',
+                  'macos': True,
+                  'macos_max_version': '',
+                  'macos_min_version': '',
+                  'shard_modulo': 100,
+                  'source': base64.b64encode(av.provisioning_profile.source).decode("ascii"),
+                  'tag_shards': [],
+                  'tvos': False,
+                  'tvos_max_version': '',
+                  'tvos_min_version': '',
+                  'version': av.version,
+                  'created_at': av.created_at.isoformat(),
+                  'updated_at': av.updated_at.isoformat()}
+              ]}
         )
 
     # create provisioning profile

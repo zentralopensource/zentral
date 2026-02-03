@@ -62,14 +62,6 @@ class MDMCertAssetsAPIViewsTestCase(TestCase):
         else:
             self.group.permissions.clear()
 
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
     def _make_request(self, method, url, data=None, include_token=True):
         kwargs = {}
         if data is not None:
@@ -109,41 +101,42 @@ class MDMCertAssetsAPIViewsTestCase(TestCase):
         data = response.json()
         self.assertEqual(
             data,
-            [
-                {
-                    "accessible": "Default",
-                    "acme_issuer": str(ea_av.cert_asset.acme_issuer.pk),
-                    "artifact": str(artifact.pk),
-                    "created_at": ea_av.created_at.isoformat(),
-                    "default_shard": 100,
-                    "excluded_tags": [],
-                    "id": str(ea_av.pk),
-                    "ios": False,
-                    "ios_max_version": "",
-                    "ios_min_version": "",
-                    "ipados": False,
-                    "ipados_max_version": "",
-                    "ipados_min_version": "",
-                    "macos": True,
-                    "macos_max_version": "",
-                    "macos_min_version": "",
-                    "scep_issuer": str(ea_av.cert_asset.scep_issuer.pk),
-                    "shard_modulo": 100,
-                    "subject": [{"type": "CN", "value": "YOLO"}],
-                    "subject_alt_name": {
-                        "dNSName": "yolo.example.com",
-                        "ntPrincipalName": "yolo@example.com",
-                        "rfc822Name": "yolo@example.com",
-                        "uniformResourceIdentifier": "https://example.com/yolo",
-                    },
-                    "tag_shards": [],
-                    "tvos": False,
-                    "tvos_max_version": "",
-                    "tvos_min_version": "",
-                    "updated_at": ea_av.updated_at.isoformat(),
-                    "version": 1,
-                }
-            ],
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {"accessible": "Default",
+                  "acme_issuer": str(ea_av.cert_asset.acme_issuer.pk),
+                  "artifact": str(artifact.pk),
+                  "created_at": ea_av.created_at.isoformat(),
+                  "default_shard": 100,
+                  "excluded_tags": [],
+                  "id": str(ea_av.pk),
+                  "ios": False,
+                  "ios_max_version": "",
+                  "ios_min_version": "",
+                  "ipados": False,
+                  "ipados_max_version": "",
+                  "ipados_min_version": "",
+                  "macos": True,
+                  "macos_max_version": "",
+                  "macos_min_version": "",
+                  "scep_issuer": str(ea_av.cert_asset.scep_issuer.pk),
+                  "shard_modulo": 100,
+                  "subject": [{"type": "CN", "value": "YOLO"}],
+                  "subject_alt_name": {
+                      "dNSName": "yolo.example.com",
+                      "ntPrincipalName": "yolo@example.com",
+                      "rfc822Name": "yolo@example.com",
+                      "uniformResourceIdentifier": "https://example.com/yolo",
+                  },
+                  "tag_shards": [],
+                  "tvos": False,
+                  "tvos_max_version": "",
+                  "tvos_min_version": "",
+                  "updated_at": ea_av.updated_at.isoformat(),
+                  "version": 1}
+              ]}
         )
 
     # create cert asset

@@ -1,10 +1,20 @@
 ## 2026.2
 
-## Features
+### Features
 
-### Monolith
+#### MDM
+
+Add Provisioning Profile artifacts
+
+#### Monolith
 
 New fallback catalog aggregation if no catalog is provided in S3 bucket.
+
+### Backward incompatibilities
+
+#### 🧨 MDM artifacts API endpoints pagination
+
+The API endpoints for the MDM artifacts are paginated now.
 
 ## 2026.1
 

@@ -1,6 +1,8 @@
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
-from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.drf import (ListCreateAPIViewWithAudit,
+                               MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.models import (Artifact,
                                         CertAsset, DataAsset, Declaration,
@@ -21,6 +23,8 @@ class ArtifactList(ListCreateAPIViewWithAudit):
     queryset = Artifact.objects.all()
     serializer_class = ArtifactSerializer
     filterset_fields = ('name',)
+    ordering = ['-created_at']
+    pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
     def dispatch(self, request, *args, **kwargs):
@@ -60,6 +64,8 @@ class CertAssetList(ListCreateAPIViewWithAudit):
                                            "artifact_version__item_tags__tag__meta_business_unit",
                                            "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = CertAssetSerializer
+    ordering = ['-created_at']
+    pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
     def dispatch(self, request, *args, **kwargs):
@@ -108,6 +114,8 @@ class DataAssetList(ListCreateAPIViewWithAudit):
                                            "artifact_version__item_tags__tag__meta_business_unit",
                                            "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = DataAssetSerializer
+    ordering = ['-created_at']
+    pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
     def dispatch(self, request, *args, **kwargs):
@@ -155,6 +163,8 @@ class DeclarationList(ListCreateAPIViewWithAudit):
                                              "artifact_version__item_tags__tag__meta_business_unit",
                                              "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = DeclarationSerializer
+    ordering = ['-created_at']
+    pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
     def dispatch(self, request, *args, **kwargs):
@@ -202,6 +212,8 @@ class ProfileList(ListCreateAPIViewWithAudit):
                                          "artifact_version__item_tags__tag__meta_business_unit",
                                          "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = ProfileSerializer
+    ordering = ['-created_at']
+    pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
     def dispatch(self, request, *args, **kwargs):
@@ -249,6 +261,8 @@ class ProvisioningProfileList(ListCreateAPIViewWithAudit):
                                                      "artifact_version__item_tags__tag__meta_business_unit",
                                                      "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = ProvisioningProfileSerializer
+    ordering = ['-created_at']
+    pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
     def dispatch(self, request, *args, **kwargs):
@@ -296,6 +310,8 @@ class EnterpriseAppList(ListCreateAPIViewWithAudit):
                                                "artifact_version__item_tags__tag__meta_business_unit",
                                                "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = EnterpriseAppSerializer
+    ordering = ['-created_at']
+    pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
     def dispatch(self, request, *args, **kwargs):
@@ -342,6 +358,8 @@ class StoreAppList(ListCreateAPIViewWithAudit):
                                           "artifact_version__item_tags__tag__meta_business_unit",
                                           "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = StoreAppSerializer
+    ordering = ['-created_at']
+    pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
     def dispatch(self, request, *args, **kwargs):

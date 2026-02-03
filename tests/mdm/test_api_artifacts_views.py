@@ -43,14 +43,6 @@ class MDMArtifactsAPIViewsTestCase(TestCase):
         else:
             self.group.permissions.clear()
 
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
     def _make_request(self, method, url, data=None, include_token=True):
         kwargs = {}
         if data is not None:
@@ -89,18 +81,23 @@ class MDMArtifactsAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': str(artifact.pk),
-              'name': artifact.name,
-              'type': 'Profile',
-              'channel': 'Device',
-              'platforms': ['macOS'],
-              'install_during_setup_assistant': False,
-              'auto_update': True,
-              'reinstall_interval': 0,
-              'reinstall_on_os_update': 'No',
-              'requires': [],
-              'created_at': artifact.created_at.isoformat(),
-              'updated_at': artifact.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': str(artifact.pk),
+                  'name': artifact.name,
+                  'type': 'Profile',
+                  'channel': 'Device',
+                  'platforms': ['macOS'],
+                  'install_during_setup_assistant': False,
+                  'auto_update': True,
+                  'reinstall_interval': 0,
+                  'reinstall_on_os_update': 'No',
+                  'requires': [],
+                  'created_at': artifact.created_at.isoformat(),
+                  'updated_at': artifact.updated_at.isoformat()}
+             ]}
         )
 
     def test_list_artifacts_name_filter(self):
@@ -111,18 +108,23 @@ class MDMArtifactsAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': str(artifact.pk),
-              'name': artifact.name,
-              'type': 'Profile',
-              'channel': 'Device',
-              'platforms': ['macOS'],
-              'install_during_setup_assistant': False,
-              'auto_update': True,
-              'reinstall_interval': 0,
-              'reinstall_on_os_update': 'No',
-              'requires': [],
-              'created_at': artifact.created_at.isoformat(),
-              'updated_at': artifact.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': str(artifact.pk),
+                  'name': artifact.name,
+                  'type': 'Profile',
+                  'channel': 'Device',
+                  'platforms': ['macOS'],
+                  'install_during_setup_assistant': False,
+                  'auto_update': True,
+                  'reinstall_interval': 0,
+                  'reinstall_on_os_update': 'No',
+                  'requires': [],
+                  'created_at': artifact.created_at.isoformat(),
+                  'updated_at': artifact.updated_at.isoformat()}
+             ]}
         )
 
     # get artifact

@@ -44,14 +44,6 @@ class MDMStoreAppsAPIViewsTestCase(TestCase):
         else:
             self.group.permissions.clear()
 
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
     def _make_request(self, method, url, data=None, include_token=True):
         kwargs = {}
         if data is not None:
@@ -91,37 +83,42 @@ class MDMStoreAppsAPIViewsTestCase(TestCase):
         data = response.json()
         self.assertEqual(
             data,
-            [{'id': str(sa_av.pk),
-              'artifact': str(artifact.pk),
-              'default_shard': 100,
-              'excluded_tags': [],
-              'ios': False,
-              'ios_max_version': '',
-              'ios_min_version': '',
-              'ipados': False,
-              'ipados_max_version': '',
-              'ipados_min_version': '',
-              'macos': True,
-              'macos_max_version': '',
-              'macos_min_version': '',
-              'shard_modulo': 100,
-              'tag_shards': [],
-              'tvos': False,
-              'tvos_max_version': '',
-              'tvos_min_version': '',
-              'version': sa_av.version,
-              'location_asset': sa_av.store_app.location_asset.pk,
-              'associated_domains': [],
-              'associated_domains_enable_direct_downloads': False,
-              'prevent_backup': False,
-              'removable': False,
-              'configuration': None,
-              'remove_on_unenroll': True,
-              'content_filter_uuid': None,
-              'dns_proxy_uuid': None,
-              'vpn_uuid': None,
-              'created_at': sa_av.created_at.isoformat(),
-              'updated_at': sa_av.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': str(sa_av.pk),
+                  'artifact': str(artifact.pk),
+                  'default_shard': 100,
+                  'excluded_tags': [],
+                  'ios': False,
+                  'ios_max_version': '',
+                  'ios_min_version': '',
+                  'ipados': False,
+                  'ipados_max_version': '',
+                  'ipados_min_version': '',
+                  'macos': True,
+                  'macos_max_version': '',
+                  'macos_min_version': '',
+                  'shard_modulo': 100,
+                  'tag_shards': [],
+                  'tvos': False,
+                  'tvos_max_version': '',
+                  'tvos_min_version': '',
+                  'version': sa_av.version,
+                  'location_asset': sa_av.store_app.location_asset.pk,
+                  'associated_domains': [],
+                  'associated_domains_enable_direct_downloads': False,
+                  'prevent_backup': False,
+                  'removable': False,
+                  'configuration': None,
+                  'remove_on_unenroll': True,
+                  'content_filter_uuid': None,
+                  'dns_proxy_uuid': None,
+                  'vpn_uuid': None,
+                  'created_at': sa_av.created_at.isoformat(),
+                  'updated_at': sa_av.updated_at.isoformat()}
+              ]}
         )
 
     # create store app

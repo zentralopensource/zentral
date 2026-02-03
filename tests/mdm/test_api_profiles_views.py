@@ -46,14 +46,6 @@ class MDMProfilesAPIViewsTestCase(TestCase):
         else:
             self.group.permissions.clear()
 
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
     def _make_request(self, method, url, data=None, include_token=True):
         kwargs = {}
         if data is not None:
@@ -91,31 +83,35 @@ class MDMProfilesAPIViewsTestCase(TestCase):
         response = self.get(reverse("mdm_api:profiles"))
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        for obj in data:
-            obj.pop("source")
         self.assertEqual(
             data,
-            [{'id': str(profile_av.pk),
-              'artifact': str(artifact.pk),
-              'default_shard': 100,
-              'excluded_tags': [],
-              'ios': False,
-              'ios_max_version': '',
-              'ios_min_version': '',
-              'ipados': False,
-              'ipados_max_version': '',
-              'ipados_min_version': '',
-              'macos': True,
-              'macos_max_version': '',
-              'macos_min_version': '',
-              'shard_modulo': 100,
-              'tag_shards': [],
-              'tvos': False,
-              'tvos_max_version': '',
-              'tvos_min_version': '',
-              'version': profile_av.version,
-              'created_at': profile_av.created_at.isoformat(),
-              'updated_at': profile_av.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': str(profile_av.pk),
+                  'artifact': str(artifact.pk),
+                  'default_shard': 100,
+                  'excluded_tags': [],
+                  'ios': False,
+                  'ios_max_version': '',
+                  'ios_min_version': '',
+                  'ipados': False,
+                  'ipados_max_version': '',
+                  'ipados_min_version': '',
+                  'macos': True,
+                  'macos_max_version': '',
+                  'macos_min_version': '',
+                  'shard_modulo': 100,
+                  'source': base64.b64encode(profile_av.profile.source).decode("ascii"),
+                  'tag_shards': [],
+                  'tvos': False,
+                  'tvos_max_version': '',
+                  'tvos_min_version': '',
+                  'version': profile_av.version,
+                  'created_at': profile_av.created_at.isoformat(),
+                  'updated_at': profile_av.updated_at.isoformat()}
+              ]}
         )
 
     # create profile
