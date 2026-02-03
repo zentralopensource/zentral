@@ -21,7 +21,7 @@
     <tbody>
         <tr>
         <th style="width:220px">UDID</th>
-        <td><code>{{ object.udid|privacywrapper }}</code></th>
+        <td><code>{{ object.udid|privacywrapper }}</code></td>
         </tr>
         <tr>
         <th>Serial number</th>
@@ -282,9 +282,11 @@
           <th>Password</th>
           <td>
             {% if object.admin_password and perms.mdm.view_admin_password %}
-            <span class="copy-ed-secret bi bi-clipboard-plus" aria-hidden="true" data-secret-id="admin-password-secret" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;display:none;"></span>
-            <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_admin_password' object.pk %}" data-key="admin_password" style="cursor:pointer"></span>
-            <span class="ed-secret" id="admin-password-secret"></span>
+            <a href="#" class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3 me-2" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_admin_password' object.pk %}" data-key="admin_password" style="cursor:pointer"></a>
+            <div class="input-group input-group-sm invisible w-50 alert alert-primary p-2 mt-1" style="display: none">
+              <input style="font-family:monospace; display: none;" class="ed-secret form-control" disabled="true" id="admin-password-secret" data-bs-toggle="manual" data-bs-placement="bottom" data-bs-title="Copied!" />
+              <span class="copy-ed-secret bi bi-clipboard-plus input-group-text" aria-hidden="true" data-secret-id="admin-password-secret" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;"></span>
+            </div>
             {% else %}
             {{ object.admin_password_escrowed|yesno }}
             {% endif %}
@@ -310,8 +312,11 @@
         <th>Personal recovery key</th>
         <td>
             {% if object.filevault_prk and perms.mdm.view_filevault_prk %}
-            <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" data-key="filevault_prk" style="cursor:pointer"></span>
-            <span class="ed-secret"></span>
+            <span class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3 me-2" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" data-key="filevault_prk" style="cursor:pointer"></span>
+            <div class="input-group input-group-sm invisible w-50 alert alert-primary mt-1 p-2" style="display: none">
+              <input style="font-family:monospace; display: none;" class="ed-secret form-control" disabled="true"  id="filevault_prk-secret" data-bs-toggle="manual" data-bs-placement="bottom" data-bs-title="Copied!" />
+              <span class="copy-ed-secret bi bi-clipboard-plus input-group-text" aria-hidden="true" data-secret-id="filevault_prk-secret" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;"></span>
+            </div>
             {% else %}
             {{ security_info.FDE_HasPersonalRecoveryKey|yesno }}
             {% endif %}
@@ -332,8 +337,11 @@
         <td>
             {% if object.recovery_password %}
             {% if perms.mdm.view_recovery_password %}
-            <span class="show-ed-secret bi bi-eye" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}" data-key="recovery_password" style="cursor:pointer"></span>
-            <span class="ed-secret"></span>
+            <span class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3  me-2" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}" data-key="recovery_password" style="cursor:pointer"></span>
+            <div class="input-group input-group-sm invisible w-50 alert alert-primary mt-1 p-2" style="display: none">
+              <input style="font-family:monospace; display: none;" class="ed-secret form-control" disabled="true"  id="recovery_password-secret" data-bs-toggle="manual" data-bs-placement="bottom" data-bs-title="Copied!" />
+              <span class="copy-ed-secret bi bi-clipboard-plus input-group-text" aria-hidden="true" data-secret-id="recovery_password-secret" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;"></span>
+            </div>
             {% else %}
             Yes
             {% endif %}
@@ -585,23 +593,26 @@
       dataType: "json",
       url: $btn.data("url"),
       success: function ( data ) {
-        $btn.next().text(data[key]).show();
+        var $input_parent = $btn.next('.input-group');
+        var $input_el = $input_parent.find('.ed-secret');
+        $input_parent.toggleClass('invisible').toggle();
+        $input_el.val(data[key]).toggle();
         $btn.removeClass("bi-eye").addClass("bi-eye-slash");
-        // Show the copy button (it's the previous sibling)
         $btn.prev(".copy-ed-secret").show();
       }
     });
   }
 
   function hideEDSecret($btn) {
-    $btn.next().text("").hide();
+    var $input_parent = $btn.next('.input-group');
+    var $input_el = $input_parent.find('.ed-secret');
+    $input_parent.toggleClass('invisible').toggle();
+    $input_el.val('').toggle();
     $btn.removeClass("bi-eye-slash").addClass("bi-eye");
-    // Hide the copy button
     $btn.prev(".copy-ed-secret").hide();
   }
 
   function toggleEDSecret($btn) {
-      console.log($btn.data("url"));
       if ($btn.hasClass("bi-eye")) {
         showEDSecret($btn);
       } else {
@@ -613,13 +624,18 @@
     var secretId = $btn.data("secret-id");
     var $secret = $("#" + secretId);
 
-    if ($secret.length && $secret.text()) {
-      // Create a temporary textarea to copy the text
-      var $temp = $("<textarea>");
-      $("body").append($temp);
-      $temp.val($secret.text()).select();
-      document.execCommand("copy");
-      $temp.remove();
+    if ($secret.length) {
+      $secret.select();
+      var clipText = $secret.val();
+      navigator.clipboard.writeText(clipText).then(
+      () => {
+        $btn.toggleClass("bi-clipboard-plus").toggleClass("bi-check-lg");
+        $secret.tooltip('toggle');
+        setTimeout(() => {
+          $secret.tooltip('toggle');
+          $btn.toggleClass("bi-clipboard-plus").toggleClass("bi-check-lg");
+        }, 3000);
+      });
     }
   }
 
