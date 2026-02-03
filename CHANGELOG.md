@@ -1,3 +1,11 @@
+## 2026.2
+
+## Features
+
+### Monolith
+
+New fallback catalog aggregation if no catalog is provided in S3 bucket.
+
 ## 2026.1
 
 ### Features
