@@ -73,8 +73,8 @@ class RemoveExpiredAPITokenCmdTestCase(TestCase, EventAssertions):
         self.assertEqual(stderr, "")
         self.assertFalse(APIToken.objects.filter(id=token.id).exists())
 
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             expected_event_payload, {"accounts_api_token": [str(token.pk)]}, post_event
         )
 

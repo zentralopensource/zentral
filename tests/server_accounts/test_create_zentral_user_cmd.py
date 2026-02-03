@@ -82,7 +82,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             with self.assertRaises(SystemExit) as cm:
                 self.call_command("yolo", "fomo@example.com", "--service-account", "--superuser")
         self.assertEqual(cm.exception.code, 5)
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_service_account_send_reset(self, post_event):
@@ -90,7 +90,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             with self.assertRaises(SystemExit) as cm:
                 self.call_command("yolo", "fomo@example.com", "--service-account", "--send-reset")
         self.assertEqual(cm.exception.code, 6)
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_user_invalid_username(self, post_event):
@@ -98,7 +98,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             with self.assertRaises(SystemExit) as cm:
                 self.call_command(" ", "fomo@example.com")
         self.assertEqual(cm.exception.code, 11)
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_user_invalid_email(self, post_event):
@@ -106,7 +106,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             with self.assertRaises(SystemExit) as cm:
                 self.call_command("yolo", "fomo")
         self.assertEqual(cm.exception.code, 12)
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_user_different_email(self, post_event):
@@ -115,7 +115,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             with self.assertRaises(SystemExit) as cm:
                 self.call_command("yolo", "fomo@example.com")
         self.assertEqual(cm.exception.code, 13)
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_different_user_same_email(self, post_event):
@@ -124,7 +124,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             with self.assertRaises(SystemExit) as cm:
                 self.call_command("yolo", "fomo@example.com")
         self.assertEqual(cm.exception.code, 14)
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_user(self, post_event):
@@ -134,8 +134,8 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         self.assertIn("Password reset: https://", result)
 
         user = User.objects.get(email="fomo@example.com")
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             self._create_expected_user_created_event_serialization(user),
             self._user_metadata_object(user),
             post_event
@@ -156,8 +156,8 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         self.assertTrue(result["password_reset_url"].startswith("https://"))
 
         user = User.objects.get(email="fomo@example.com")
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             self._create_expected_user_created_event_serialization(user),
             self._user_metadata_object(user),
             post_event
@@ -171,8 +171,8 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         self.assertIn("Password reset: https://", result)
 
         user = User.objects.get(email="fomo@example.com")
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             self._create_expected_user_created_event_serialization(user),
             self._user_metadata_object(user),
             post_event
@@ -185,7 +185,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             with self.assertRaises(SystemExit) as cm:
                 self.call_command("yolo", "fomo@example.com", "--skip-if-existing")
         self.assertEqual(cm.exception.code, 0)
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_promote_existing_user(self, post_event):
@@ -199,8 +199,8 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         self.assertTrue(result.startswith("Existing user yolo fomo@example.com promoted to superuser"))
         self.assertTrue(super_user.is_superuser)
 
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             self._create_expected_user_updated_event_serialization(user, super_user),
             self._user_metadata_object(user),
             post_event
@@ -218,8 +218,8 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         self.assertTrue(result.startswith("Existing superuser yolo fomo@example.com demoted"))
         self.assertFalse(user.is_superuser)
 
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             self._create_expected_user_updated_event_serialization(super_user, user),
             self._user_metadata_object(user),
             post_event
@@ -231,7 +231,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             result = self.call_command("yolo", "fomo@example.com")
         self.assertTrue(result.startswith("User yolo fomo@example.com already exists"))
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_existing_superuser(self, post_event):
@@ -239,7 +239,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             result = self.call_command("yolo", "fomo@example.com", "--superuser")
         self.assertTrue(result.startswith("Superuser yolo fomo@example.com already exists"))
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_user_with_api_token(self, post_event):
@@ -248,13 +248,13 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         self.assertIn("Created API token", result)
 
         user = User.objects.get(email="fomo@example.com")
-        self._assertEventsPublished(2, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(2, callbacks, post_event)
+        self.assert_is_audit_event(
             self._create_expected_user_created_event_serialization(user),
             self._user_metadata_object(user),
             post_event
         )
-        self._assertIsAuditEvent(
+        self.assert_is_audit_event(
             self._create_expected_api_token_created_event_serialization(user),
             self._api_token_metadata_object(user),
             post_event,
@@ -286,13 +286,13 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         self.assertTrue(result["api_token_created"])
 
         user = User.objects.get(email="fomo@example.com")
-        self._assertEventsPublished(2, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(2, callbacks, post_event)
+        self.assert_is_audit_event(
             self._create_expected_user_created_event_serialization(user),
             self._user_metadata_object(user),
             post_event
         )
-        self._assertIsAuditEvent(
+        self.assert_is_audit_event(
             self._create_expected_api_token_created_event_serialization(user),
             self._api_token_metadata_object(user),
             post_event,
@@ -305,7 +305,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             result = self.call_command("yolo", "fomo@example.com", "--with-api-token")
         self.assertIn("Existing API token", result)
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_user_existing_api_token_json(self, post_event):
@@ -314,7 +314,7 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
             result = json.loads(self.call_command("yolo", "fomo@example.com", "--json", "--with-api-token"))
         self.assertNotIn("api_token", result)
         self.assertFalse(result["api_token_created"])
-        self._assertNoEventPublished(callbacks, post_event)
+        self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_user_send_email(self, post_event):
@@ -325,8 +325,8 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         self.assertIn("Your username: yolo", mail.outbox[0].body)
 
         user = User.objects.get(email="fomo@example.com")
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             self._create_expected_user_created_event_serialization(user),
             self._user_metadata_object(user),
             post_event
@@ -356,13 +356,13 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         )
         self.assertFalse(user.has_usable_password())
         self.assertTrue(user.is_service_account)
-        self._assertEventsPublished(2, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(2, callbacks, post_event)
+        self.assert_is_audit_event(
             self._create_expected_user_created_event_serialization(user),
             self._user_metadata_object(user),
             post_event
         )
-        self._assertIsAuditEvent(
+        self.assert_is_audit_event(
             self._create_expected_api_token_created_event_serialization(user),
             self._api_token_metadata_object(user),
             post_event,

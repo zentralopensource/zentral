@@ -138,8 +138,8 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertContains(response, api_key)
         self.assertEqual(APIToken.objects._hash_key(api_key), api_token.hashed_key)
 
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             {"action": "created",
              "object": {
                  "model": "accounts.apitoken",
@@ -174,8 +174,8 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertContains(response, "Users")
         self.assertEqual(APIToken.objects._hash_key(api_key), self.service_account.apitoken_set.first().hashed_key)
 
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             {"action": "created",
              "object": {
                  "model": "accounts.apitoken",
@@ -246,8 +246,8 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         api_token = APIToken.objects.get(id=token.id)
         self.assertEqual(api_token.name, new_token_name)
 
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             {"action": "updated",
              "object": {
                  "model": "accounts.apitoken",
@@ -287,8 +287,8 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         api_token = APIToken.objects.get(id=token.id)
         self.assertEqual(api_token.name, new_token_name)
 
-        self._assertEventsPublished(1, callbacks, post_event)
-        self._assertIsAuditEvent(
+        self.assert_events_published(1, callbacks, post_event)
+        self.assert_is_audit_event(
             {"action": "updated",
              "object": {
                  "model": "accounts.apitoken",
