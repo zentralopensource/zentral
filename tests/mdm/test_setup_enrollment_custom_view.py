@@ -7,7 +7,6 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.core.events.base import AuditEvent
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from .utils import force_dep_enrollment, force_dep_enrollment_custom_view, force_enrollment_custom_view
 
@@ -153,6 +152,7 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrollmentcustomview_detail.html")
         self.assertContains(response, ecv.name)
+        self.assertContains(response, reverse("mdm:download_enrollment_custom_view", args=(ecv.pk,)))
         self.assertContains(response, reverse("mdm:delete_enrollment_custom_view", args=(ecv.pk,)))
         self.assertNotContains(response, reverse("mdm:update_enrollment_custom_view", args=(ecv.pk,)))
 
@@ -176,6 +176,27 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
         self.assertContains(response, ecv.name)
         self.assertNotContains(response, reverse("mdm:delete_enrollment_custom_view", args=(ecv.pk,)))
         self.assertNotContains(response, reverse("mdm:update_enrollment_custom_view", args=(ecv.pk,)))
+
+    # download enrollment custom view
+
+    def test_download_enrollment_custom_view_redirect(self):
+        ecv = force_enrollment_custom_view()
+        self.login_redirect("download_enrollment_custom_view", ecv.pk)
+
+    def test_download_enrollment_custom_view_permission_denied(self):
+        ecv = force_enrollment_custom_view()
+        self.login()
+        self.permission_denied("download_enrollment_custom_view", ecv.pk)
+
+    def test_download_enrollment_custom_view_get(self):
+        ecv = force_enrollment_custom_view()
+        self.login("mdm.view_enrollmentcustomview")
+        response = self.client.get(reverse("mdm:download_enrollment_custom_view", args=(ecv.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, ecv.html.encode("utf-8"))
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn(f"enrollment_custom_view_{ecv.pk}.html", response["Content-Disposition"])
+        self.assertTrue(response["Content-Type"].startswith("text/html"))
 
     # update FileVault configuration
 

@@ -8,6 +8,8 @@ Add Provisioning Profile artifacts
 
 #### Monolith
 
+HTML templates of enrollment custom view can now be downloaded in the detail view of the enrollment custom view.
+
 New fallback catalog aggregation if no catalog is provided in S3 bucket.
 
 ### Backward incompatibilities

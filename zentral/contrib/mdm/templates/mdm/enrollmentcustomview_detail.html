@@ -16,6 +16,8 @@
   <div class="d-flex align-items-center mb-3">
     <h3 class="m-0 fs-5 text-secondary">Enrollment custom view</h3>
     <div class="ms-auto">
+      {% url 'mdm:download_enrollment_custom_view' object.pk as url %}
+      {% button 'DOWNLOAD' url "Download enrollment custom view" %}
       {% if perms.mdm.change_enrollmentcustomview %}
         {% url 'mdm:update_enrollment_custom_view' object.pk as url %}
         {% button 'UPDATE' url "Edit enrollment custom view" %}

@@ -1,5 +1,7 @@
 import logging
+from io import BytesIO
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.http import FileResponse
 from django.urls import reverse_lazy
 from django.views.generic import DetailView
 from zentral.contrib.mdm.models import EnrollmentCustomView
@@ -26,6 +28,23 @@ class CreateEnrollmentCustomViewView(PermissionRequiredMixin, CreateViewWithAudi
 class EnrollmentCustomViewView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_enrollmentcustomview"
     model = EnrollmentCustomView
+
+
+class EnrollmentCustomViewDownloadView(PermissionRequiredMixin, DetailView):
+    permission_required = "mdm.view_enrollmentcustomview"
+    model = EnrollmentCustomView
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        html = self.object.html.encode("utf-8")
+        buffer = BytesIO(html)
+        file_name = f"enrollment_custom_view_{self.object.pk}.html"
+        return FileResponse(
+            buffer,
+            as_attachment=True,
+            filename=file_name,
+            content_type="text/html; charset=utf-8",
+        )
 
 
 class UpdateEnrollmentCustomViewView(PermissionRequiredMixin, UpdateViewWithAudit):
