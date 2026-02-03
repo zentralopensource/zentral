@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
 from zentral.core.probes.models import ProbeSource
+from zentral.utils.provisioning import provision
 from accounts.models import User
 from .utils import force_action
 
@@ -13,6 +14,8 @@ from .utils import force_action
 class ProbeViewsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # provision the stores
+        provision()
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
