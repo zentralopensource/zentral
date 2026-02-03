@@ -17,6 +17,7 @@ class RequestCase(ABC):
         if include_token:
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self._get_api_key()}"
         if method == "POST":
+            kwargs["content_type"] = "application/json"
             return self.client.post(url, **kwargs)
         else:
             return self.client.get(url, **kwargs)
