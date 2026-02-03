@@ -7,7 +7,7 @@ class RequestCase(ABC):
         super().__init__()
 
     @abstractmethod
-    def _getAPIKey(self) -> str:
+    def _get_api_key(self) -> str:
         pass
 
     def make_request(self, url, data=None, include_token=True, method="GET"):
@@ -15,7 +15,7 @@ class RequestCase(ABC):
         if data is not None:
             kwargs["data"] = data
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self._getAPIKey()}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self._get_api_key()}"
         if method == "POST":
             return self.client.post(url, **kwargs)
         else:
@@ -30,19 +30,19 @@ class RequestCase(ABC):
     def delete(self, url, include_token=True):
         kwargs = {}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self._getAPIKey()}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self._get_api_key()}"
         return self.client.delete(url, **kwargs)
 
     def post_json_data(self, url, data, include_token=True):
         kwargs = {'content_type': 'application/json',
                   'data': data}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self._getAPIKey()}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self._get_api_key()}"
         return self.client.post(url, **kwargs)
 
     def put_json_data(self, url, data, include_token=True):
         kwargs = {'content_type': 'application/json',
                   'data': data}
         if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self._getAPIKey()}"
+            kwargs["HTTP_AUTHORIZATION"] = f"Token {self._get_api_key()}"
         return self.client.put(url, **kwargs)

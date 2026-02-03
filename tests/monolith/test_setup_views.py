@@ -2338,7 +2338,7 @@ class MonolithSetupViewsTestCase(TestCase):
                     "updated_at": smpi.updated_at,
                 },
                 "prev_value": prev_value
-            }}
+             }}
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {
@@ -2706,7 +2706,7 @@ class MonolithSetupViewsTestCase(TestCase):
         manifest_catalog = force_manifest_catalog()
         response = self.client.get(reverse("monolith:edit_manifest_catalog",
                                            args=(manifest_catalog.manifest.pk, manifest_catalog.catalog.pk,)),
-                                    follow=True)
+                                   follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest_catalog_form.html")
         self.assertEqual(response.context["title"], f"Edit {manifest_catalog.catalog} catalog tags")
@@ -2752,7 +2752,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_delete_manifestcatalog_redirect(self):
         manifest_catalog = force_manifest_catalog()
-        self._login_redirect(reverse("monolith:delete_manifest_catalog", 
+        self._login_redirect(reverse("monolith:delete_manifest_catalog",
                                      args=(manifest_catalog.manifest.pk, manifest_catalog.catalog.pk,)))
 
     def test_delete_manifestcatalog_permission_denied(self):

@@ -2991,7 +2991,7 @@ class MonolithAPIViewsTestCase(TestCase):
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         self.assertEqual(
-            event.payload, 
+            event.payload,
             {"action": "created",
              "object": {
                  "model": "monolith.submanifestpkginfo",
@@ -3160,7 +3160,7 @@ class MonolithAPIViewsTestCase(TestCase):
             }
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], 
+        self.assertEqual(metadata["objects"],
                          {"monolith_sub_manifest_pkg_info": [str(sub_manifest_pkg_info.pk)],
                           "monolith_sub_manifest": [str(sub_manifest.pk)],
                           "monolith_pkg_info_name": [str(sub_manifest_pkg_info.pkg_info_name.pk)]})

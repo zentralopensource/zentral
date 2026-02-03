@@ -51,12 +51,14 @@ class InventoryManagementCommandsTest(TestCase):
         with mock.patch('requests.get') as mock_requests:
             side_effects = [
                 ["Registry,Assignment,Organization Name,Organization Address",
-                 'MA-L,286FB9,"Nokia Shanghai Bell Co., Ltd.","No.388 Ning Qiao Road,Jin Qiao Pudong Shanghai Shanghai   CN 201206 "'],
+                 'MA-L,286FB9,"Nokia Shanghai Bell Co., Ltd.",'
+                 '"No.388 Ning Qiao Road,Jin Qiao Pudong Shanghai Shanghai   CN 201206 "'],
                 ["Registry,Assignment,Organization Name,Organization Address",
-                 'MA-M,C85CE27,SYNERGY SYSTEMS AND SOLUTIONS,"A1526, GREEN FIELDS COLONY Faridabad HARYANA IN 121001 "'],
+                 'MA-M,C85CE27,SYNERGY SYSTEMS AND SOLUTIONS,'
+                 '"A1526, GREEN FIELDS COLONY Faridabad HARYANA IN 121001 "'],
                 ["Registry,Assignment,Organization Name,Organization Address",
                  'MA-S,8C1F64AFA,"DATA ELECTRONIC DEVICES, INC",32 NORTHWESTERN DR SALEM NH US 03079']
-                 ]
+            ]
             mock_resp = MagicMock()
             mock_resp.text.splitlines.side_effect = side_effects
             mock_requests.return_value = mock_resp

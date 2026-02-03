@@ -24,11 +24,18 @@ class ZentralAPITestCase(TestCase, LoginCase, RequestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.bu = cls.mbu.create_enrollment_business_unit()
 
-    def _getUser(self):
+    # LoginCase implementation
+
+    def _get_user(self):
         return self.user
 
-    def _getGroup(self):
+    def _get_group(self):
         return self.group
 
-    def _getAPIKey(self):
+    def _get_url_namespace(self):
+        return "accounts"
+
+    # RequestCase implementation
+
+    def _get_api_key(self):
         return self.api_key

@@ -1,12 +1,8 @@
-from datetime import datetime
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import EnrollmentSecret, Tag
+from zentral.contrib.inventory.models import Tag
 from zentral.contrib.inventory.terraform import TagResource
-from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment,
-                                             Manifest, ManifestCatalog, ManifestSubManifest,
-                                             PkgInfoName,
-                                             SubManifest, SubManifestPkgInfo)
+from zentral.contrib.monolith.models import PkgInfoName, SubManifest, SubManifestPkgInfo
 from zentral.contrib.monolith.terraform import SubManifestPkgInfoResource, SubManifestResource
 
 
