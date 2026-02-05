@@ -21,11 +21,15 @@ urlpatterns = [
             views.UpdateFilterView.as_view(), name='update_filter'),
     re_path(r'^(?P<pk>\d+)/filters/(?P<section>(inventory|metadata|payload))/(?P<filter_id>\d+)/delete/$',
             views.DeleteFilterView.as_view(), name='delete_filter'),
+    path('actions/', views.ActionList.as_view(), name="actions"),
+    path('actions/<uuid:pk>/', views.ActionDetail.as_view(), name="action"),
+
 ]
 
 pinned_menu_cfg = {
     'weight': 1,
     'items': (
         ('index', 'all probes', False, ('probes.view_probesource',)),
+        ('actions', 'all actions', False, ('probes.view_probesource',)),
     )
 }
