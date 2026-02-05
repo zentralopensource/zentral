@@ -1,6 +1,9 @@
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
+
 from django.test import TestCase
+
 from zentral.core.events.base import BaseEvent, EventMetadata
+
 from .utils import force_action
 
 
@@ -56,5 +59,25 @@ class HTTPPostActionTests(TestCase):
         session_post.assert_called_once_with(
             "https://www.example.com/post",
             json=event.serialize(),
+        )
+        response.raise_for_status.assert_called_once()
+
+    @patch("zentral.core.probes.action_backends.http.requests.Session.post")
+    def test_cel_trigger(self, session_post):
+        probe = Mock()
+        response = Mock()
+        session_post.return_value = response
+        action_backend = self._create_action(
+            {"url": "https://www.example.com/post",
+             "cel_transformation": '{"serial_number": metadata.machine_serial_number, '
+                                   '"not_after": metadata.created_at}'}
+        )
+        meta = EventMetadata(machine_serial_number="012345678910")
+        event = BaseEvent(meta, {"yolo": "fomo"})
+        action_backend.trigger(event, probe)
+        session_post.assert_called_once_with(
+            "https://www.example.com/post",
+            json={"serial_number": "012345678910",
+                  "not_after": meta.created_at.isoformat()},
         )
         response.raise_for_status.assert_called_once()
