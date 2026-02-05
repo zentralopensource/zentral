@@ -1,14 +1,17 @@
-from functools import reduce
 import operator
+from functools import reduce
 from unittest.mock import patch
+
+from accounts.models import APIToken, User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
-from accounts.models import APIToken, User
+
 from zentral.core.events.base import AuditEvent
 from zentral.core.probes.models import Action, ActionBackend, ProbeSource
+
 from .utils import force_action
 
 
@@ -362,6 +365,118 @@ class ProbeActionAPIViewsTestCase(TestCase):
         self.assertEqual(metadata["objects"], {"probes_action": [str(action.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["probes", "zentral"])
         send_notification.assert_called_once_with("probes.change")
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_http_post_action_cel(self, post_event, send_notification):
+        self.set_permissions("probes.add_action")
+        name = get_random_string(12)
+        description = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(
+                reverse("probes_api:actions"),
+                {"name": name,
+                 "description": description,
+                 "backend": "HTTP_POST",
+                 "http_post_kwargs": {
+                     "url": "https://www.example.com/post",
+                     "username": "yolo",
+                     "password": "fomo",
+                     "headers": [
+                         {"name": "Authorization",
+                          "value": "Bearer yolofomo"},
+                     ],
+                     "cel_transformation":
+                         '{"serial_number": metadata.machine_serial_number}'
+                 }},
+            )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
+        action = Action.objects.get(name=name)
+        self.assertEqual(response.json(), {
+            'id': str(action.pk),
+            'name': name,
+            'description': description,
+            'backend': 'HTTP_POST',
+            'http_post_kwargs': {
+                 "url": "https://www.example.com/post",
+                 "username": "yolo",
+                 "password": "fomo",
+                 "headers": [
+                     {"name": "Authorization",
+                      "value": "Bearer yolofomo"},
+                 ],
+                 "cel_transformation": '{"serial_number": metadata.machine_serial_number}'
+            },
+            'slack_incoming_webhook_kwargs': None,
+            'created_at': action.created_at.isoformat(),
+            'updated_at': action.updated_at.isoformat(),
+        })
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                  "model": "probes.action",
+                  "pk": str(action.pk),
+                  "new_value": {
+                    "pk": str(action.pk),
+                    "name": name,
+                    "description": description,
+                    "backend": "HTTP_POST",
+                    "backend_kwargs": {
+                        "url": "https://www.example.com/post",
+                        "username": "yolo",
+                        "password_hash": "48ffcddb8b19a5f98d4b1b8c08b4024b12b6f24affeb50b1265aed528a2dd671",
+                        "headers": [
+                            {"name": "Authorization",
+                             "value_hash": "8f6c811daa3b5698210b6cfd2d015061375a4b7c1cfc97eb6a44da34bdd4843f"},
+                        ],
+                        "cel_transformation":
+                            '{"serial_number": metadata.machine_serial_number}'
+                    },
+                    "created_at": action.created_at,
+                    "updated_at": action.updated_at,
+                  }
+             }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"probes_action": [str(action.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["probes", "zentral"])
+        send_notification.assert_called_once_with("probes.change")
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_http_post_action_cel_error(self, post_event, send_notification):
+        self.set_permissions("probes.add_action")
+        name = get_random_string(12)
+        description = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(
+                reverse("probes_api:actions"),
+                {"name": name,
+                 "description": description,
+                 "backend": "HTTP_POST",
+                 "http_post_kwargs": {
+                     "url": "https://www.example.com/post",
+                     "username": "yolo",
+                     "password": "fomo",
+                     "headers": [
+                         {"name": "Authorization",
+                          "value": "Bearer yolofomo"},
+                     ],
+                     "cel_transformation":
+                         '{"serial_number": "no_cel_syntax'
+                 }},
+            )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'http_post_kwargs': {"cel_transformation": ["Could not load CEL source code"]}},
+        )
+        self.assertEqual(len(callbacks), 0)
 
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
