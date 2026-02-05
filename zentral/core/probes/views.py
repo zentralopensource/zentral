@@ -1,21 +1,50 @@
 import logging
 from urllib.parse import urlencode
+
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
-from django.views.generic import DeleteView, DetailView, FormView, TemplateView, UpdateView
+from django.views.generic import (
+    DeleteView,
+    DetailView,
+    FormView,
+    TemplateView,
+    UpdateView,
+)
+
 from zentral.core.stores.conf import stores
-from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
+from zentral.core.stores.views import (
+    EventsStoreRedirectView,
+    EventsView,
+    FetchEventsView,
+)
 from zentral.utils.views import UserPaginationListView
-from .forms import (CreateProbeForm, ProbeSearchForm,
-                    InventoryFilterForm, MetadataFilterForm, PayloadFilterFormSet,
-                    CloneProbeForm, UpdateProbeForm)
-from .models import ProbeSource
+
+from .forms import (
+    CloneProbeForm,
+    CreateProbeForm,
+    InventoryFilterForm,
+    MetadataFilterForm,
+    PayloadFilterFormSet,
+    ProbeSearchForm,
+    UpdateProbeForm,
+)
+from .models import Action, ProbeSource
 from .probe import Probe
 
-
 logger = logging.getLogger("zentral.core.probes.views")
+
+
+class ActionDetail(PermissionRequiredMixin, DetailView):
+    permission_required = "probes.view_probesource"
+    model = Action
+
+
+class ActionList(PermissionRequiredMixin, UserPaginationListView):
+    permission_required = "probes.view_probesource"
+    model = Action
+    template_name = "probes/actions_list.html"
 
 
 class IndexView(PermissionRequiredMixin, UserPaginationListView):

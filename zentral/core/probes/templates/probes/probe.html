@@ -4,7 +4,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'probes:index' %}">Probes</a>
+  <li class="breadcrumb-item"><a href="{% url 'probes:index' %}">Probes</a></li>
   <li class="breadcrumb-item active">{{ probe.name }}</li>
 </ol>
 
@@ -48,7 +48,7 @@
         -
         {% endif %}
       </td>
-    <tr>
+    </tr>
   </table>
   <div class="card-footer">
     <div class="btn-group" role="group">
@@ -91,7 +91,7 @@
 
 {% if perms.probes.change_probesource %}
 <div class="dropdown">
-  <button id="addFilter" class="btn btn-secondary dropdown-toggle" 
+  <button id="addFilter" class="btn btn-secondary dropdown-toggle"
     type="button" data-bs-toggle="dropdown" aria-expanded="false">
     Add filter
     <span class="caret"></span>
