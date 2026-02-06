@@ -1,12 +1,15 @@
 import datetime
+import uuid
 from io import StringIO
 from unittest.mock import call, patch
-import uuid
+
 from django.core.management import call_command
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.mdm.models import ACMEIssuer, Location, SCEPIssuer
+
 from zentral.contrib.mdm.dep_client import DEPClientError
+from zentral.contrib.mdm.models import ACMEIssuer, Location, SCEPIssuer
+
 from .utils import force_dep_virtual_server
 
 
