@@ -1176,7 +1176,22 @@ class SantaSetupViewsTestCase(TestCase):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/rule_form.html")
-        self.assertFormError(response.context["form"], "custom_msg", "Can only be set on BLOCKLIST rules")
+        self.assertFormError(response.context["form"], "custom_msg", "Cannot be set for this rule policy")
+
+    def test_create_configuration_custom_url_not_on_blocklist_rule_error(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
+        configuration = force_configuration()
+        # create
+        self._login("santa.add_rule", "santa.view_rule")
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.Type.BINARY,
+                                     "target_identifier": get_random_string(12),
+                                     "policy": Rule.Policy.ALLOWLIST,
+                                     "custom_url": "https://zentral.com"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "custom_url", "Cannot be set for this rule policy")
 
     def test_create_configuration_cel_expr_not_on_cel_rule_error(self):
         self._login("santa.add_configuration", "santa.view_configuration")
@@ -1233,6 +1248,38 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(rule.policy, Rule.Policy.CEL)
         self.assertEqual(rule.cel_expr, cel_expr)
         self.assertEqual(rule.custom_msg, "")
+        self.assertEqual(rule.custom_url, "")
+        self.assertEqual(rule.description, "description")
+        self.assertEqual(rule.serial_numbers, [])
+        self.assertEqual(rule.primary_users, [])
+
+    def test_create_configuration_custom_msg_rule(self):
+        self._login("santa.add_configuration", "santa.view_configuration")
+        configuration = force_configuration()
+        # create
+        self._login("santa.add_rule", "santa.view_rule")
+        team_id = new_team_id()
+        custom_message = get_random_string(12)
+        custom_url = f"https://{get_random_string(5)}.zentral.com"
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.Type.TEAM_ID,
+                                     "target_identifier": team_id,
+                                     "policy": Rule.Policy.BLOCKLIST,
+                                     "custom_msg": custom_message,
+                                     "custom_url": custom_url,
+                                     "description": "description",
+                                     },
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, team_id)
+        rule = response.context["object_list"][0]
+        self.assertEqual(rule.configuration, configuration)
+        self.assertEqual(rule.target.identifier, team_id)
+        self.assertEqual(rule.target.type, Target.Type.TEAM_ID)
+        self.assertEqual(rule.policy, Rule.Policy.BLOCKLIST)
+        self.assertEqual(rule.custom_msg, custom_message)
+        self.assertEqual(rule.custom_url, custom_url)
         self.assertEqual(rule.description, "description")
         self.assertEqual(rule.serial_numbers, [])
         self.assertEqual(rule.primary_users, [])
@@ -1492,12 +1539,14 @@ class SantaSetupViewsTestCase(TestCase):
         rule = response.context["object_list"][0]
         # update
         custom_message = get_random_string(12)
+        custom_url = f"https://{get_random_string(5)}.zentral.com"
         description = get_random_string(12)
         response = self.client.post(reverse("santa:update_configuration_rule", args=(configuration.pk, rule.pk)),
                                     {"target_type": Target.Type.BINARY,
                                      "target_identifier": binary_hash,
                                      "policy": Rule.Policy.BLOCKLIST,
                                      "custom_msg": custom_message,
+                                     "custom_url": custom_url,
                                      "description": description,
                                      "excluded_tags": [t.pk for t in excluded_tags[1:]],
                                      "tags": [t.pk for t in tags[1:]],
@@ -1513,6 +1562,7 @@ class SantaSetupViewsTestCase(TestCase):
                                      "target_identifier": binary_hash,
                                      "policy": Rule.Policy.BLOCKLIST,
                                      "custom_msg": custom_message,
+                                     "custom_url": custom_url,
                                      "description": description,
                                      "excluded_tags": [t.pk for t in excluded_tags[1:]],
                                      "tags": [t.pk for t in tags[1:]],
@@ -1528,6 +1578,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(rule.target.type, Target.Type.BINARY)
         self.assertEqual(rule.policy, Rule.Policy.BLOCKLIST)
         self.assertEqual(rule.custom_msg, custom_message)
+        self.assertEqual(rule.custom_url, custom_url)
         self.assertEqual(rule.description, description)
         self.assertEqual(sorted(rule.excluded_tags.all(), key=lambda t: t.pk),
                          sorted(excluded_tags[1:], key=lambda t: t.pk))
@@ -1590,6 +1641,22 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertTemplateUsed(response, "santa/rule_form.html")
         self.assertFormError(response.context["form"], "custom_msg", "Cannot be set for this rule policy")
 
+    def test_update_configuration_rule_custom_url_on_allowlist_rule_error(self):
+        self._login("santa.change_rule")
+        rule = force_rule()
+        response = self.client.post(
+            reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)),
+            {"target_type": rule.target.type,
+             "target_identifier": rule.target.identifier,
+             "policy": Rule.Policy.ALLOWLIST,
+             "custom_url": "zentral.com",
+             },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "custom_url", "Cannot be set for this rule policy")
+
     def test_update_configuration_rule_cel_expr_missing_error(self):
         self._login("santa.change_rule")
         rule = force_rule()
@@ -1647,6 +1714,34 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(rule.policy, Rule.Policy.CEL)
         self.assertEqual(rule.cel_expr, "target.signing_time >= timestamp('2025-05-31T00:00:00Z')")
         self.assertEqual(rule.description, "description")
+        self.assertEqual(rule.version, 2)
+
+    def test_update_configuration_rule_custom_msg(self):
+        self._login("santa.view_configuration",
+                    "santa.change_rule",
+                    "santa.view_rule")
+        rule = force_rule()
+        self.assertEqual(rule.version, 1)
+        self.assertEqual(rule.custom_msg, "")
+        self.assertEqual(rule.custom_url, "")
+        custom_message = get_random_string(12)
+        custom_url = f"https://{get_random_string(5)}.zentral.com"
+        response = self.client.post(
+            reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)),
+            {"target_type": rule.target.type,
+             "target_identifier": rule.target.identifier,
+             "policy": Rule.Policy.BLOCKLIST,
+             "custom_msg": custom_message,
+             "custom_url": custom_url
+             },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+
+        rule.refresh_from_db()
+        self.assertEqual(rule.custom_msg, custom_message)
+        self.assertEqual(rule.custom_url, custom_url)
         self.assertEqual(rule.version, 2)
 
     def test_update_configuration_cel_rule_to_allowlist_rule(self):
