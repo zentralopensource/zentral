@@ -2,13 +2,19 @@
 
 ### Features
 
+#### Core
+
+Add optional CEL transformation to the HTTP Post action backend.
+
+Better copy-to-clipboard handling for secrets.
+
 #### MDM
 
 Add Provisioning Profile artifacts
 
 HTML templates of enrollment custom view can now be downloaded in the detail view of the enrollment custom view.
 
-MDM enrolled devices can now be filtered by the short name of the referenced user in the api 
+MDM enrolled devices can now be filtered by the short name of the referenced user in the api
 and the email of the realm user used in the responding enrollment session.
 
 ### Monolith
