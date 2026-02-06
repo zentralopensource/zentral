@@ -21,6 +21,10 @@ and the email of the realm user used in the responding enrollment session.
 
 New fallback catalog aggregation if no catalog is provided in S3 bucket.
 
+### Santa
+
+Support for the [custom_url](https://northpole.dev/features/binary-authorization/#rule-dictionary-format).
+
 ### Backward incompatibilities
 
 #### 🧨 MDM artifacts API endpoints pagination

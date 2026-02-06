@@ -583,6 +583,32 @@ class SantaAPIViewsTestCase(TestCase):
               "policy": "BLOCKLIST",
               "custom_msg": rule.custom_msg}]
         )
+        # updated rule, rule
+        rule.custom_url = "https://zentral.com"
+        rule.version = F("version") + 1
+        rule.save()
+        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
+        json_response = response.json()
+        self.assertEqual(
+            json_response["rules"],
+            [{"rule_type": Target.Type.BINARY,
+              "identifier": target.identifier,
+              "policy": "BLOCKLIST",
+              "custom_msg": rule.custom_msg,
+              "custom_url": rule.custom_url}]
+        )
+        # updated rule not acknowleged, same updated rule
+        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(
+            json_response["rules"],
+            [{"rule_type": Target.Type.BINARY,
+              "identifier": target.identifier,
+              "policy": "BLOCKLIST",
+              "custom_msg": rule.custom_msg,
+              "custom_url": rule.custom_url}]
+        )
         # updated rule acknowleged, no rules
         response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid,
                                      {"cursor": json_response["cursor"]})
@@ -641,7 +667,8 @@ class SantaAPIViewsTestCase(TestCase):
             [{"rule_type": Target.Type.BINARY,
               "identifier": target.identifier,
               "policy": "BLOCKLIST",
-              "custom_msg": rule.custom_msg}]
+              "custom_msg": rule.custom_msg,
+              "custom_url": rule.custom_url}]
         )
         # rule again in scope acknowleged, no rules
         response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid,

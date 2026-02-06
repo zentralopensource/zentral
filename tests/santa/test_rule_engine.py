@@ -63,6 +63,7 @@ class SantaRuleEngineTestCase(TestCase):
             "rule_type": target.type,
             "identifier": target.identifier,
             "custom_msg": "",
+            "custom_url": "",
             "version": rule.version,
         }
         return target, rule, result
@@ -247,6 +248,7 @@ class SantaRuleEngineTestCase(TestCase):
         result3["policy"] = 4  # REMOVE
         result3.pop("cel_expr", None)
         result3.pop("custom_msg", None)
+        result3.pop("custom_url", None)
         result3["version"] = 1
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result3])
         # sync rule

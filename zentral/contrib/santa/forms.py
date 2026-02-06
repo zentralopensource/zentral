@@ -16,6 +16,10 @@ from .models import Configuration, Enrollment, Rule, RuleSet, Target, TargetStat
 logger = logging.getLogger("zentral.contrib.santa.forms")
 
 
+def _policy_allows_custom(k):
+    return Rule.Policy(int(k)).compatible_with_custom_msg_and_url
+
+
 class TargetTypesWidget(forms.CheckboxSelectMultiple):
     def __init__(self, attrs=None, choices=()):
         super().__init__(attrs, choices=Target.Type.choices)
@@ -314,6 +318,8 @@ class RuleForm(RuleFormMixin, forms.Form):
                                widget=forms.Textarea(attrs={"cols": "40", "rows": "5"}))
     custom_msg = forms.CharField(label="Custom message", required=False,
                                  widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
+    custom_url = forms.URLField(label="Custom URL", required=False,
+                                widget=forms.URLInput(attrs={"size": 40}),)
     description = forms.CharField(required=False, widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
     serial_numbers = SimpleArrayField(forms.CharField(), required=False)
     excluded_serial_numbers = SimpleArrayField(forms.CharField(), required=False)
@@ -339,8 +345,9 @@ class RuleForm(RuleFormMixin, forms.Form):
         ):
             del self.fields["target_type"]
             del self.fields["target_identifier"]
-        if not any(k == Rule.Policy.BLOCKLIST for k, _ in self.fields["policy"].choices):
-            del self.fields["custom_msg"]
+        if not any(_policy_allows_custom(k) for k, _ in self.fields["policy"].choices):
+            self.fields.pop("custom_msg", None)
+            self.fields.pop("custom_url", None)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -386,11 +393,18 @@ class RuleForm(RuleFormMixin, forms.Form):
             pass
 
         if policy:
-            # custom message only on blocklist rules
-            if policy != Rule.Policy.BLOCKLIST:
+            # custom message/url only on blocklist or CEL rules
+            if not Rule.Policy(policy).compatible_with_custom_msg_and_url:
+                error_field = None
                 custom_msg = cleaned_data.get("custom_msg")
                 if custom_msg:
-                    self.add_error("custom_msg", "Can only be set on BLOCKLIST rules")
+                    error_field = "custom_msg"
+                custom_url = cleaned_data.get("custom_url")
+                if custom_url:
+                    error_field = "custom_url"
+                if error_field:
+                    self.add_error(error_field, "Cannot be set for this rule policy")
+
             # CEL expression only on CEL rules
             cel_expr = cleaned_data.get("cel_expr")
             if policy == Rule.Policy.CEL:
@@ -413,6 +427,7 @@ class RuleForm(RuleFormMixin, forms.Form):
                                    policy=self.cleaned_data["policy"],
                                    cel_expr=self.cleaned_data["cel_expr"],
                                    custom_msg=self.cleaned_data.get("custom_msg", ""),
+                                   custom_url=self.cleaned_data.get("custom_url", ""),
                                    description=self.cleaned_data.get("description", ""),
                                    serial_numbers=self.cleaned_data.get("serial_numbers") or [],
                                    excluded_serial_numbers=self.cleaned_data.get("excluded_serial_numbers") or [],
@@ -430,8 +445,8 @@ class RuleForm(RuleFormMixin, forms.Form):
 class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
     class Meta:
         model = Rule
-        fields = ("policy", "cel_expr", "custom_msg", "description",
-                  "serial_numbers", "excluded_serial_numbers",
+        fields = ("policy", "cel_expr", "custom_msg", "custom_url",
+                  "description", "serial_numbers", "excluded_serial_numbers",
                   "primary_users", "excluded_primary_users",
                   "tags", "excluded_tags")
         widgets = {
@@ -448,10 +463,16 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
             pass
         else:
             # custom message only on some rules
-            if not policy.compatible_with_custom_msg:
+            if not policy.compatible_with_custom_msg_and_url:
                 custom_msg = cleaned_data.get("custom_msg")
+                error_field = None
                 if custom_msg:
-                    self.add_error("custom_msg", "Cannot be set for this rule policy")
+                    error_field = "custom_msg"
+                custom_url = cleaned_data.get("custom_url")
+                if custom_url:
+                    error_field = "custom_url"
+                if error_field:
+                    self.add_error(error_field, "Cannot be set for this rule policy")
             # CEL expression only on CEL rules
             cel_expr = cleaned_data.get("cel_expr")
             if policy == Rule.Policy.CEL:
@@ -495,6 +516,16 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
             updated = True
             if self.instance.custom_msg:
                 updates.setdefault("added", {})["custom_msg"] = self.instance.custom_msg
+        # custom_url
+        custom_url = self.cleaned_data["custom_url"]
+        if self.instance.custom_url != custom_url:
+            if self.instance.custom_url:
+                updates.setdefault("removed", {})["custom_url"] = self.instance.custom_url
+            self.instance.custom_url = custom_url
+            self.instance.version = F("version") + 1  # bump version to trigger rule distribution
+            updated = True
+            if self.instance.custom_url:
+                updates.setdefault("added", {})["custom_url"] = self.instance.custom_url
         # description
         description = self.cleaned_data["description"]
         if self.instance.description != description:

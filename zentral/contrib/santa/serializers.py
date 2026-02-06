@@ -120,9 +120,13 @@ class RuleSerializer(serializers.ModelSerializer):
 
         # policy
         policy = Rule.Policy(data.get("policy"))
-        if not policy.compatible_with_custom_msg:
-            if data.get("custom_msg"):
-                raise serializers.ValidationError({"custom_msg": "Cannot be set for this rule policy"})
+        if not policy.compatible_with_custom_msg_and_url:
+            errors = {}
+            for field in ["custom_msg", "custom_url"]:
+                if data.get(field):
+                    errors[field] = "Cannot be set for this rule policy"
+            if errors:
+                raise serializers.ValidationError(errors)
         if policy is Rule.Policy.CEL:
             if not data.get("cel_expr"):
                 raise serializers.ValidationError({"cel_expr": "This field is required for CEL rules"})
@@ -185,7 +189,7 @@ class RuleSerializer(serializers.ModelSerializer):
                 else:
                     added_items = added
                     removed_items = removed
-                    if attr in ("cel_expr", "custom_msg"):
+                    if attr in ("cel_expr", "custom_msg", "custom_url"):
                         bump_version = True
 
             if removed_items:
@@ -214,6 +218,7 @@ class RuleUpdateSerializer(serializers.Serializer):
     sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z', required=False)  # Legacy field  TODO remove eventually
     identifier = serializers.CharField(required=False)
     custom_msg = serializers.CharField(required=False)
+    custom_url = serializers.CharField(required=False)
     description = serializers.CharField(required=False)
     serial_numbers = serializers.ListField(
         child=serializers.CharField(min_length=1),
@@ -265,10 +270,12 @@ class RuleUpdateSerializer(serializers.Serializer):
             if not identifier:
                 raise serializers.ValidationError({"identifier": f"Invalid {rule_type} identifier"})
             data["identifier"] = identifier
-        # custom message only with blocklist rule
-        if not data["policy"].compatible_with_custom_msg and "custom_msg" in data:
-            if data["custom_msg"]:
+        # custom message only with blocklist / CEL rule
+        if not data["policy"].compatible_with_custom_msg_and_url:
+            if data.get("custom_msg"):
                 raise serializers.ValidationError("Custom message cannot be set for this rule policy")
+            if data.get("custom_url"):
+                raise serializers.ValidationError("Custom URL cannot be set for this rule policy")
         # scope conflicts
         for attr in ("serial_numbers", "primary_users", "tags"):
             if set(data.get(attr, [])).intersection(set(data.get(f"excluded_{attr}", []))):

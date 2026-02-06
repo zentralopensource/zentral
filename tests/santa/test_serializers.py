@@ -112,6 +112,16 @@ class SantaSerializersTestCase(TestCase):
         ed = serializer.errors["non_field_errors"][0]
         self.assertEqual(str(ed), "Custom message cannot be set for this rule policy")
 
+    def test_rule_custom_url_allowlist(self):
+        data = {"rule_type": "BINARY",
+                "identifier": get_random_string(64, "0123456789abcdef"),
+                "custom_url": "https://zentral.com",
+                "policy": "ALLOWLIST"}
+        serializer = RuleUpdateSerializer(data=data)
+        self.assertFalse(serializer.is_valid())
+        ed = serializer.errors["non_field_errors"][0]
+        self.assertEqual(str(ed), "Custom URL cannot be set for this rule policy")
+
     def test_rule_tags_conflict(self):
         data = {"rule_type": "BINARY",
                 "identifier": get_random_string(64, "0123456789abcdef"),

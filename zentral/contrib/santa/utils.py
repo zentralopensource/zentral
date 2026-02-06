@@ -505,18 +505,18 @@ def update_voting_rules(configurations):
         '  ("target_id", "configuration_id", "policy", "cel_expr",'
         '   "primary_users", "excluded_primary_users",'
         '   "serial_numbers", "excluded_serial_numbers",'
-        '   "custom_msg", "description", "is_voting_rule",'
+        '   "custom_msg", "custom_url", "description", "is_voting_rule",'
         '   "version", "created_at", "updated_at")'
         "  select target_id, configuration_id, policy, '' cel_expr,"
         "  primary_users, array[]::text[] excluded_primary_users,"
         "  array[]::text[] serial_numbers, array[]::text[] excluded_serial_numbers,"
-        "  '' custom_msg, '' description, TRUE is_voting_rule,"
+        "  '' custom_msg, '' custom_url, '' description, TRUE is_voting_rule,"
         "  1 version, transaction_timestamp() created_at, transaction_timestamp() updated_at"
         "  from rules"
         '  on conflict ("target_id", "configuration_id") do update'
         "  set policy = excluded.policy, cel_expr = excluded.cel_expr,"
         "  primary_users = excluded.primary_users, excluded_primary_users = excluded.excluded_primary_users,"
-        "  custom_msg = excluded.custom_msg, version = santa_rule.version + 1,"
+        "  custom_msg = excluded.custom_msg, custom_url = excluded.custom_msg, version = santa_rule.version + 1,"
         "  updated_at = clock_timestamp()"
         "  where santa_rule.is_voting_rule = 't' and ("
         "    excluded.policy != santa_rule.policy"
@@ -524,6 +524,7 @@ def update_voting_rules(configurations):
         "    or excluded.primary_users != santa_rule.primary_users"
         "    or excluded.excluded_primary_users != santa_rule.excluded_primary_users"
         "    or excluded.custom_msg != santa_rule.custom_msg"
+        "    or excluded.custom_url != santa_rule.custom_url"
         "  ) returning *"
         "), replaced as ("
         "  select * from santa_rule where id in (select id from inserted)"

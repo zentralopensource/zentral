@@ -980,6 +980,38 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {'custom_msg': ['Cannot be set for this rule policy']})
         self.assertEqual(Rule.objects.count(), 0)
 
+    def test_create_rule_policy_custom_url_error(self):
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": self.configuration.pk,
+            "policy": Rule.Policy.ALLOWLIST,
+            "target_type": Target.Type.BINARY,
+            "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789'),
+            "custom_url": "https://zentral.com/no_custom_url_wanted"
+        }
+        response = self.post_json_data(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {'custom_url': ['Cannot be set for this rule policy']})
+        self.assertEqual(Rule.objects.count(), 0)
+
+    def test_create_rule_policy_custom_error(self):
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": self.configuration.pk,
+            "policy": Rule.Policy.ALLOWLIST,
+            "target_type": Target.Type.BINARY,
+            "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789'),
+            "custom_msg": "This should not be here",
+            "custom_url": "https://zentral.com/no_custom_url_wanted"
+        }
+        response = self.post_json_data(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {
+            'custom_url': ['Cannot be set for this rule policy'],
+            'custom_msg': ['Cannot be set for this rule policy']
+        })
+        self.assertEqual(Rule.objects.count(), 0)
+
     def test_create_rule_policy_cel_expr_no_cel_policy_error(self):
         self.set_permissions("santa.add_rule")
         data = {
@@ -1091,6 +1123,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": data["target_identifier"],
             "description": "Description",
             "custom_msg": '',
+            "custom_url": '',
             "ruleset": None,
             "is_voting_rule": False,
             "primary_users": data["primary_users"],
@@ -1115,6 +1148,7 @@ class APIViewsTestCase(TestCase):
             "ruleset": None,
             "is_voting_rule": rule.is_voting_rule,
             "custom_msg": '',
+            "custom_url": '',
             "excluded_primary_users": rule.excluded_primary_users,
             "serial_numbers": rule.serial_numbers,
             "excluded_serial_numbers": rule.excluded_serial_numbers,
@@ -1707,6 +1741,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": "0123456789",
             "description": "new description",
             "custom_msg": "new custom block message",
+            "custom_url": "https://zentral.com",
             "serial_numbers": [get_random_string(12)],
             "excluded_serial_numbers": [get_random_string(12)],
             "primary_users": [get_random_string(12)],
@@ -1726,6 +1761,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": data["target_identifier"],
             "description": "new description",
             "custom_msg": "new custom block message",
+            "custom_url": "https://zentral.com",
             "ruleset": None,
             "is_voting_rule": False,
             "primary_users": data["primary_users"],
@@ -1753,6 +1789,7 @@ class APIViewsTestCase(TestCase):
                 },
                 'policy': 'BLOCKLIST',
                 'custom_msg': 'new custom block message',
+                "custom_url": "https://zentral.com",
                 'serial_numbers': rule.serial_numbers,
                 'excluded_serial_numbers': rule.excluded_serial_numbers,
                 'primary_users': rule.primary_users,
@@ -1780,6 +1817,7 @@ class APIViewsTestCase(TestCase):
                 'added': {
                     'policy': 'BLOCKLIST',
                     'custom_msg': 'new custom block message',
+                    "custom_url": "https://zentral.com",
                     'description': 'new description',
                     'serial_numbers': data['serial_numbers'],
                     'excluded_serial_numbers': data['excluded_serial_numbers'],
