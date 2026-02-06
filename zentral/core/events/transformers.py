@@ -77,8 +77,8 @@ class CELEventTranformer(EventTransformer):
             raise EventTransformerError("DurationType is not supported")
         elif isinstance(cel_object, celtypes.BytesType):
             raise EventTransformerError("BytesType is not supported")
-        elif isinstance(cel_object, celtypes.TypeType):
-            raise EventTransformerError("TypeType is not supported")
+        elif isinstance(cel_object, (celtypes.TypeType, type)):
+            raise EventTransformerError("TypeType / type is not supported")
         elif isinstance(cel_object, CELEvalError):
             raise EventTransformerError("CEL evaluation error")
         else:
