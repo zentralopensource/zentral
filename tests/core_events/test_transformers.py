@@ -79,7 +79,7 @@ class CELEventTranformerTestCase(TestCase):
         with self.assertRaises(EventTransformerError) as cm:
             cel_trans.to_python(cel_object=cel_context)
         self.assertEqual(cm.exception.args[0], "BytesType is not supported")
-        cel_context = celtypes.TypeType(b'Types me')
+        cel_context = celtypes.TypeType(type)
         with self.assertRaises(EventTransformerError) as cm:
             cel_trans.to_python(cel_object=cel_context)
-        self.assertEqual(cm.exception.args[0], "TypeType is not supported")
+        self.assertEqual(cm.exception.args[0], "TypeType / type is not supported")
