@@ -27,6 +27,10 @@ New fallback catalog aggregation if no catalog is provided in S3 bucket.
 
 The API endpoints for the MDM artifacts are paginated now.
 
+### Bug fixes
+
+The API token expiry in the events metadata was not serialized to and deserialized from an ISO 8601 string.
+
 ## 2026.1
 
 ### Features

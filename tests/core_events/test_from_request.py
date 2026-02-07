@@ -9,6 +9,8 @@ from zentral.core.events.base import EventRequest, EventRequestGeo
 
 
 class EventFromRequestTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", "fomo")
@@ -124,7 +126,7 @@ class EventFromRequestTestCase(TestCase):
                       'is_superuser': False,
                       'session': {'is_remote': False,
                                   'mfa_authenticated': False,
-                                  'token': {'expiry': token.expiry,
+                                  'token': {'expiry': token.expiry.isoformat(),
                                             'name': token.name,
                                             'pk': str(token.pk)},
                                   'token_authenticated': True},
