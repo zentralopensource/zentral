@@ -1,7 +1,10 @@
+from datetime import datetime
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import MachineSnapshotCommit
-from zentral.core.events.base import EventMetadata, EventRequest, BaseEvent, register_event_type
+from zentral.core.events.base import (BaseEvent,
+                                      EventMetadata, EventRequest, EventRequestGeo, EventRequestUser,
+                                      register_event_type)
 
 
 class TestEvent3(BaseEvent):
@@ -21,7 +24,8 @@ def make_event(ip=None, ua=None, with_msn=True, routing_key=None):
         request = None
     return TestEvent3(EventMetadata(machine_serial_number=msn,
                                     request=request,
-                                    routing_key=routing_key),
+                                    routing_key=routing_key,
+                                    created_at=datetime(1990, 2, 11)),
                       {"godzilla": "yo"})
 
 
@@ -109,3 +113,33 @@ class EventSerializationTestCase(TestCase):
         self.assertEqual(d["_zentral"]["routing_key"], "yolo123")
         event2 = TestEvent3.deserialize(d)
         self.assertEqual(event2.metadata.routing_key, "yolo123")
+
+    def test_event_request_deserialization(self):
+        er = EventRequest.deserialize({
+            'ip': '127.0.0.1',
+            'method': 'GET',
+            'path': '/',
+            'geo': {
+                'city_name': 'Hamburg',
+                'continent_name': 'Europe',
+                'country_iso_code': 'DE',
+                'location': {'lat': 53.551086, 'lon': 9.993682},
+                'region_name': 'Hamburg'
+            },
+            'user': {'email': 'godzilla@zentral.io',
+                     'id': 17,
+                     'is_remote': False,
+                     'is_service_account': False,
+                     'is_superuser': False,
+                     'session': {'is_remote': False,
+                                 'mfa_authenticated': False,
+                                 'token': {'expiry': '1990-02-11T00:00:00',
+                                           'name': 'token name',
+                                           'pk': '00000000-0000-0000-0000-000000000001'},
+                                 'token_authenticated': True},
+                     'username': 'godzilla'}
+        })
+        self.assertIsInstance(er.geo, EventRequestGeo)
+        self.assertIsInstance(er.user, EventRequestUser)
+        self.assertEqual(er.geo.city_name, 'Hamburg')
+        self.assertEqual(er.user.session["token"]["expiry"], datetime(1990, 2, 11))

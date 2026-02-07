@@ -136,8 +136,24 @@ class EventRequestUser(object):
         for attr in self.attr_list:
             val = getattr(self, attr)
             if val is not None:
+                if attr == "session":
+                    try:
+                        val["token"]["expiry"] = val["token"]["expiry"].isoformat()
+                    except KeyError:
+                        pass
                 d[attr] = val
         return d
+
+    @classmethod
+    def deserialize(cls, user_d):
+        try:
+            token_expiry = user_d["session"]["token"]["expiry"]
+        except KeyError:
+            pass
+        else:
+            if isinstance(token_expiry, str):
+                user_d["session"]["token"]["expiry"] = datetime.fromisoformat(token_expiry)
+        return cls(**user_d)
 
 
 class EventRequestGeo(object):
@@ -208,6 +224,10 @@ class EventRequestGeo(object):
                 d[attr] = val
         return d
 
+    @classmethod
+    def deserialize(cls, geo_d):
+        return cls(**geo_d)
+
     def short_repr(self):
         return ", ".join(s for s in (self.city_name, self.country_name) if s)
 
@@ -245,10 +265,10 @@ class EventRequest(object):
         kwargs = {k: request_d.get(k) for k in ("user_agent", "ip", "method", "path", "view")}
         geo_d = request_d.get("geo")
         if geo_d:
-            kwargs["geo"] = EventRequestGeo(**geo_d)
+            kwargs["geo"] = EventRequestGeo.deserialize(geo_d)
         user_d = request_d.get("user")
         if user_d:
-            kwargs["user"] = EventRequestUser(**user_d)
+            kwargs["user"] = EventRequestUser.deserialize(user_d)
         return cls(**kwargs)
 
     def serialize(self):

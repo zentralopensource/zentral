@@ -226,9 +226,7 @@ class TestClickHouseStore(TestCase):
               ['zentral'],
               [],
               '',
-              {'id': str(event.metadata.uuid),
-               'index': 0,
-               'namespace': 'zentral'},
+              f'{{"id": "{event.metadata.uuid}", "index": 0, "namespace": "zentral"}}',
               f'{{"user": {{"username": "{username}"}}, '
               '"dt": {"__type__": "datetime", "__value__": "1982-05-26T00:00:00"}}'))
         )
@@ -253,12 +251,10 @@ class TestClickHouseStore(TestCase):
               ['zentral'],
               ['_s:0123456789', '_o:fomo:a', '_o:yolo:un|deux', '_o:yolo:trois|quatre', f'_p:{probe.pk}'],
               '0123456789',
-              {'id': str(event.metadata.uuid),
-               'index': 0,
-               'machine_serial_number': '0123456789',
-               'namespace': 'zentral',
-               'objects': {'fomo': ['a'], 'yolo': ['un|deux', 'trois|quatre']},
-               'probes': [{'name': probe.name, 'pk': probe.pk}]},
+              f'{{"id": "{event.metadata.uuid}", "index": 0, "namespace": '
+              f'"zentral", "probes": [{{"pk": {probe.pk}, "name": "{probe.name}"}}], '
+              '"machine_serial_number": "0123456789", "objects": {"fomo": ["a"], "yolo": '
+              '["un|deux", "trois|quatre"]}}',
               f'{{"user": {{"username": "{username}"}}}}'))
         )
 
@@ -273,10 +269,33 @@ class TestClickHouseStore(TestCase):
               ['zentral'],
               [],
               '',
-              {'id': str(event.metadata.uuid),
-               'index': 0,
-               'namespace': 'zentral'},
+              f'{{"id": "{event.metadata.uuid}", "index": 0, "namespace": "zentral"}}',
               f'{{"user": {{"username": "{username}"}}}}'))
+        )
+
+    def test_dict_event_serialization_datetime(self):
+        # Serialization/deserilization of datetimes in events metadata
+        # should happen in the EventMetadata implementation.
+        # Here we test a fallback if something gets through.
+        self.assertEqual(
+            self.get_store()._serialize_event({
+                "_zentral": {
+                    "id": "id",
+                    "index": "index",
+                    "type": "test",
+                    "created_at": datetime(1990, 2, 11).isoformat(),  # this one is always serialized
+                    "bogus": datetime(1, 2, 3),  # this one is a bug
+                }
+            }),
+            (('id', 'index'),
+             ('1990-02-11T00:00:00',
+              'test',
+              [],
+              [],
+              '',
+              '{"id": "id", "index": "index",'
+              ' "bogus": {"__type__": "datetime", "__value__": "0001-02-03T00:00:00"}}',  # not ideal fallback
+              '{}'))
         )
 
     # event storage

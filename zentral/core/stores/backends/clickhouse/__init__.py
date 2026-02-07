@@ -107,10 +107,12 @@ class ClickHouseStore(BaseStore):
         tags = metadata.pop("tags", [])
         needles = serialize_needles(metadata)
         serial_number = metadata.get("machine_serial_number") or ""
+        event_key = (metadata["id"], metadata["index"])
+        metadata = json.dumps(metadata)
         payload = json.dumps(event_d)
         return (
             # event key
-            (metadata["id"], metadata["index"]),
+            event_key,
             # tuple
             (created_at,
              event_type,
