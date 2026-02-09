@@ -381,6 +381,11 @@ def macos_version_from_build(build):
 
 WINDOWS_BUILD_VERSIONS = {
     # Windows 11
+    26300: "26H2",
+    28000: "26H1",
+    26200: "25H2",
+    26100: "24H2",
+    22631: "23H2",
     22621: "22H2",
     22000: "21H2",
     # Windows 10

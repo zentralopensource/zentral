@@ -16,7 +16,8 @@ class WindowsBuildTestCase(TestCase):
     def test_from_build_ok(self):
         for build, (major, version), display in (("19044", (10, "21H2"), "Windows 10 21H2 (19044)"),
                                                  ("19043.1682", (10, "21H1"), "Windows 10 21H1 (19043.1682)"),
-                                                 ("22000.652", (11, "21H2"), "Windows 11 21H2 (22000.652)")):
+                                                 ("22000.652", (11, "21H2"), "Windows 11 21H2 (22000.652)"),
+                                                 ("26200.7701", (11, "25H2"), "Windows 11 25H2 (26200.7701)")):
             os_version_d = windows_version_from_build(build)
             self.assertEqual(os_version_d,
                              {"name": f"Windows {major}",
