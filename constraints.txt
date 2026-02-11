@@ -27,7 +27,7 @@ click-plugins==1.1.1
 click-repl==0.3.0
 clickhouse-connect==0.8.18
 coverage==7.6.4
-cryptography==44.0.1
+cryptography==46.0.5
 decorator==5.1.1
 defusedxml==0.7.1
 Django==5.2.11
