@@ -10,7 +10,7 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.models import ACMEIssuer, Location, SCEPIssuer
 
-from .utils import force_dep_virtual_server
+from ..utils import force_dep_virtual_server
 
 
 class MDMManagementCommandsTest(TestCase):
