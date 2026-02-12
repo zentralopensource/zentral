@@ -1,4 +1,5 @@
 import os
+import tempfile
 from io import StringIO
 from subprocess import CalledProcessError
 from unittest.mock import patch
@@ -6,19 +7,14 @@ from unittest.mock import patch
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
-from django.utils.crypto import get_random_string
 
 
 class MDMManagementCommandMDMCertsTest(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dir_name = get_random_string(32)
-        dir_exist = os.path.exists(cls.dir_name)
-        if not dir_exist:
-            os.mkdir(cls.dir_name)
-        else:
-            raise Exception('Directroy would be removed by test')
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            cls.dir_name = tmpdirname
 
     @classmethod
     def tearDownClass(cls):
