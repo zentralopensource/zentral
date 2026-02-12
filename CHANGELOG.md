@@ -4,6 +4,8 @@
 
 #### Core
 
+Add detail & list read-only views for probe actions.
+
 Add optional CEL transformation to the HTTP Post action backend.
 
 Better copy-to-clipboard handling for secrets.

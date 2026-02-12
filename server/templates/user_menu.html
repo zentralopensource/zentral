@@ -54,6 +54,9 @@
             {% if perms.realms.view_realmgroup %}
             <li><a class="dropdown-item" href="{% url 'realms:groups' %}">Realm Groups</a></li>
             {% endif %}
+            {% if perms.probes.view_action %}
+            <li><a class="dropdown-item" href="{% url 'probes:actions' %}">Actions</a></li>
+            {% endif %}
             {% if perms.stores.view_store %}
             <li><a class="dropdown-item" href="{% url 'stores:index' %}">Stores</a></li>
             {% endif %}
