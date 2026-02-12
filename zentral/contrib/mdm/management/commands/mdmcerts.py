@@ -2,9 +2,10 @@ import base64
 import getpass
 import os
 import plistlib
-import requests
 import string
 import subprocess
+
+import requests
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from django.core.management.base import BaseCommand

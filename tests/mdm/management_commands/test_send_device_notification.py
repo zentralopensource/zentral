@@ -4,7 +4,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from .utils import force_dep_enrollment_session, force_push_certificate
+from ..utils import force_dep_enrollment_session, force_push_certificate
 
 
 class MDMSendDeviceNotificationTestCase(TestCase):
