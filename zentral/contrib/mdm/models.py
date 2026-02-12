@@ -1038,7 +1038,7 @@ class EnrolledDevice(models.Model):
             ("view_admin_password", "Can view admin password"),
             ("view_filevault_prk", "Can view FileVault PRK"),
             ("view_recovery_password", "Can view recovery password"),
-            ("view_pin_password", "Can view recovery password"),
+            ("view_device_lock_pin", "Can view devise lock pin"),
         ]
 
     # secrets

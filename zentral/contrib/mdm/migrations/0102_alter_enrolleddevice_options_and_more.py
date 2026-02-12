@@ -4,24 +4,30 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('mdm', '0101_alter_artifact_type_provisioningprofile'),
+        ("mdm", "0101_alter_artifact_type_provisioningprofile"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='enrolleddevice',
-            options={'permissions': [('view_admin_password', 'Can view admin password'), ('view_filevault_prk', 'Can view FileVault PRK'), ('view_recovery_password', 'Can view recovery password'), ('view_pin_password', 'Can view recovery password')]},
+            name="enrolleddevice",
+            options={
+                "permissions": [
+                    ("view_admin_password", "Can view admin password"),
+                    ("view_filevault_prk", "Can view FileVault PRK"),
+                    ("view_recovery_password", "Can view recovery password"),
+                    ("view_device_lock_pin", "Can view devise lock pin"),
+                ]
+            },
         ),
         migrations.AddField(
-            model_name='enrolleddevice',
-            name='device_lock_pin',
+            model_name="enrolleddevice",
+            name="device_lock_pin",
             field=models.TextField(null=True),
         ),
         migrations.AddField(
-            model_name='enrolleddevice',
-            name='device_lock_pin_updated_at',
+            model_name="enrolleddevice",
+            name="device_lock_pin_updated_at",
             field=models.DateTimeField(null=True),
         ),
     ]
