@@ -65,26 +65,3 @@ class InventoryManagementCommandsTest(TestCase):
 
             call_command('import_mac_assignments', '--verbosity', 0, stdout=out)
             self.assertEqual(3, MACAddressBlockAssignment.objects.count())
-
-    # Debug inventory clients
-
-    def test_debug_inventory_clients_list(self):
-        out = StringIO()
-        call_command('debug_inventory_clients', '--list-clients', stdout=out)
-        result = out.getvalue()
-        self.assertIn('Configured clients:', result)
-        self.assertIn('key:', result)
-
-    def test_debug_inventory_clients_client(self):
-
-        out = StringIO()
-        call_command('debug_inventory_clients', '--client', 0, stdout=out)
-        result = out.getvalue()
-        self.assertIn('2 MACHINES', result)
-        self.assertIn('zentral.contrib.inventory.client', result)
-
-    def test_debug_inventory_clients_client_serial(self):
-        out = StringIO()
-        call_command('debug_inventory_clients', '--client', 0, '--serial-number', '0123456789', stdout=out)
-        result = out.getvalue()
-        self.assertIn("'serial_number': '0123456789',", result)

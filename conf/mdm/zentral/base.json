@@ -50,12 +50,7 @@
       }
     },
     "zentral.contrib.inventory": {
-      "metrics": true,
-      "clients": [
-        {
-          "backend": "zentral.contrib.inventory.clients.dummy"
-        }
-      ]
+      "metrics": true
     },
     "zentral.contrib.audit": {},
     "zentral.contrib.mdm": {

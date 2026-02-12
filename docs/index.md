@@ -28,8 +28,6 @@ You can deploy it on your machine with [Docker](./deployment/docker-compose).
 * Jamf
 * Puppet
 * Workspace One
-* Watchman
-* Filewave
 
 ## Event stores
 

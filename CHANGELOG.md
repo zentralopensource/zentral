@@ -33,6 +33,10 @@ Support for the [custom_url](https://northpole.dev/features/binary-authorization
 
 The API endpoints for the MDM artifacts are paginated now.
 
+#### 🧨 Legacy inventory clients removed
+
+Legacy inventory clients for Filewave, Sal, Watchman were removed.
+
 ### Bug fixes
 
 The API token expiry in the events metadata was not serialized to and deserialized from an ISO 8601 string.

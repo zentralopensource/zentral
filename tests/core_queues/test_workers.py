@@ -15,8 +15,7 @@ class QueuesWorkersTestCase(TestCase):
         worker_names = set(w.name for w in get_workers())
         self.assertEqual(
             worker_names,
-            {"inventory worker dummy",
-             "preprocess worker", "enrich worker", "process worker",
+            {"preprocess worker", "enrich worker", "process worker",
              "store worker Elasticsearch",
              "APNS worker devices", "APNS worker users"}
         )
