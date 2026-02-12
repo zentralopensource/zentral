@@ -1,12 +1,26 @@
 import logging
+from uuid import uuid4
+
 from django import forms
+from django.db import transaction
+from django.utils.crypto import get_random_string
 from rest_framework import serializers
+
+from zentral.contrib.mdm.events import post_device_lock_pin_event
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt_str, encrypt_str
-from .base import register_command, Command, CommandBaseForm, CommandBaseSerializer
 
+from .base import Command, CommandBaseForm, CommandBaseSerializer, register_command
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.device_lock")
+
+
+def generate_pin(length=6):
+    return get_random_string(length, allowed_chars="0123456789")
+
+
+def get_secret_engine_kwargs(uuid):
+    return {"model": "mdm.devicecommand", "field": "PIN", "uuid": str(uuid)}
 
 
 class DeviceLockHelperMixin:
@@ -26,7 +40,7 @@ class DeviceLockHelperMixin:
             kwargs["PhoneNumber"] = phone_number
         pin = data.get("pin")
         if pin:
-            kwargs["PIN"] = encrypt_str(pin, model="mdm.devicecommand", field="PIN", uuid=str(uuid))
+            kwargs["PIN"] = encrypt_str(pin, **get_secret_engine_kwargs(uuid))
         return kwargs
 
 
@@ -67,6 +81,17 @@ class DeviceLock(Command):
     form_class = DeviceLockForm
     serializer_class = DeviceLockSerializer
 
+    @classmethod
+    def create_for_automatic_scheduling(cls, target, pin=None):
+        if not pin:
+            pin = generate_pin()
+        uuid = uuid4()
+        return super().create_for_target(
+            target,
+            kwargs={"PIN": encrypt_str(pin, **get_secret_engine_kwargs(uuid))},
+            uuid=uuid,
+        )
+
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
         return (
@@ -77,7 +102,7 @@ class DeviceLock(Command):
     def load_pin(self):
         encrypted_pin = self.db_command.kwargs.get("PIN")
         if encrypted_pin:
-            return decrypt_str(encrypted_pin, model="mdm.devicecommand", field="PIN", uuid=str(self.uuid))
+            return decrypt_str(encrypted_pin, **get_secret_engine_kwargs(self.uuid))
 
     def build_command(self):
         payload = {}
@@ -89,6 +114,25 @@ class DeviceLock(Command):
         if pin:
             payload["PIN"] = pin
         return payload
+
+    def command_acknowledged(self):
+        current_pin = self.enrolled_device.get_device_lock_pin()
+        new_pin = self.load_pin()
+        operation = None
+        if new_pin:
+            if current_pin:
+                if current_pin != new_pin:
+                    operation = "update"
+            else:
+                operation = "set"
+        elif current_pin:
+            operation = "clear"
+        if operation:
+            self.enrolled_device.set_device_lock_pin(new_pin)
+            self.enrolled_device.save()
+            transaction.on_commit(lambda: post_device_lock_pin_event(
+                self, password_type="device_lock_pin", operation=operation
+            ))
 
 
 register_command(DeviceLock)
