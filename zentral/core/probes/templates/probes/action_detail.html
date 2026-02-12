@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load base_extras ui_extras %}
+{% block content %}
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item">
+      <a href="/">Home</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'probes:index' %}">Probes</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'probes:actions' %}">Actions</a>
+    </li>
+    <li class="breadcrumb-item active">{{ action.name }}</li>
+  </ol>
+  <h2 class="m-0">{{ object.name }}</h2>
+  <h3 class="m-0 fs-5 text-secondary mb-3">Action</h3>
+  <div class="card card-default mb-3">
+    <table class="table-probe table-object-properties">
+      <tr>
+        <td>Name</td>
+        <td>{{ object.name }}</td>
+      </tr>
+      <tr>
+        <td>Description</td>
+        <td>{{ object.description }}</td>
+      </tr>
+      <tr>
+        <td>Backend</td>
+        <td>{{ object.get_backend_display }}</td>
+      </tr>
+      <tr>
+        <td>Probes</td>
+        <td>
+          {% if object.probesource_set.count %}
+            <ul class="list-unstyled">
+              {% for probe in object.probesource_set.all %}
+                <li>
+                  {% if perms.probes.view_probesource %}
+                    <a href="{% url 'probes:probe' probe.pk %}"
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="bottom"
+                      data-bs-title="Probe details">{{ probe }}</a>
+                  {% else %}
+                    {{ probe }}
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            -
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Arguments</td>
+        <td>
+          <code>
+            <pre>{{ object.backend_kwargs| jsonprettyprint }}</pre>
+          </code>
+        </td>
+      </tr>
+    </table>
+  </div>
+  {% created_updated_at object %}
+{% endblock %}

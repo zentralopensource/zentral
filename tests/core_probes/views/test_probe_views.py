@@ -1,14 +1,16 @@
-from functools import reduce
 import operator
+from functools import reduce
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
+
+from tests.core_probes.utils import force_action
 from zentral.core.probes.models import ProbeSource
 from zentral.utils.provisioning import provision
-from accounts.models import User
-from .utils import force_action
 
 
 class ProbeViewsTestCase(TestCase):

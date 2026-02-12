@@ -1,16 +1,18 @@
 import logging
 import uuid
+
 from django.contrib.postgres.fields import ArrayField
-from django.urls import reverse
 from django.db import models, transaction
 from django.db.models import Count, F, Func
+from django.urls import reverse
 from django.utils.text import slugify
+
 from zentral.core.events import event_types
 from zentral.core.incidents.models import Severity
 from zentral.core.probes.sync import signal_probe_change
 from zentral.utils.backend_model import BackendInstance
-from .action_backends import ActionBackend, get_action_backend
 
+from .action_backends import ActionBackend, get_action_backend
 
 logger = logging.getLogger('zentral.core.probes.models')
 
