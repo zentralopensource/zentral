@@ -140,7 +140,7 @@ six==1.17.0
 sniffio==1.3.1
 snowflake-connector-python==4.2.0
 sortedcontainers==2.4.0
-sqlparse==0.5.1
+sqlparse==0.5.4
 stack-data==0.6.3
 std-uritemplate==1.0.6
 tomli==2.4.0
