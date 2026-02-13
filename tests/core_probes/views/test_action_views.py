@@ -16,7 +16,9 @@ class ActionViewsTestCase(TestCase, LoginCase):
         # provision the stores
         provision()
         # user
-        cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.user = User.objects.create_user(
+            "godzilla", "godzilla@zentral.io", get_random_string(12)
+        )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
@@ -37,7 +39,7 @@ class ActionViewsTestCase(TestCase, LoginCase):
 
     def test_detail_action_redirect(self):
         action = force_action()
-        self.login_redirect('action', str(action.pk))
+        self.login_redirect("action", str(action.pk))
 
     def test_detail_action_permission_denied(self):
         action = force_action()
@@ -46,13 +48,19 @@ class ActionViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 403)
 
     def test_detail_action_get(self):
-        action = force_action()
+        action = force_action(
+            backend_kwargs={
+                "url": "https://www.example.com/post",
+                "headers": [{"name": "Authorization", "value": "secret"}],
+            }
+        )
         self.login("probes.view_action")
         response = self.client.get(reverse("probes:action", args=(str(action.pk),)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "probes/action_detail.html")
         self.assertContains(response, "Action")
         self.assertContains(response, action.name)
+        self.assertContains(response, "value_hash")
 
     # action list
 
