@@ -639,6 +639,11 @@ Response:
                 "updated_at": "2024-02-17T20:31:35.149274"
               }
             ],
+            "realm_user": {
+              "pk": "e63e7640-d894-4121-bb2b-5e46f33322e0",
+              "email": "john.smith@zentral.com",
+              "username": "john_smith"
+            },
             "model": "Mac14,2",
             "platform": "macOS",
             "os_version": "15.6.1",

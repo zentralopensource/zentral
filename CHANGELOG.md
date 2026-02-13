@@ -19,6 +19,8 @@ HTML templates of enrollment custom view can now be downloaded in the detail vie
 MDM enrolled devices can now be filtered by the short name of the referenced user in the api
 and the email of the realm user used in the responding enrollment session.
 
+The MDM enrolled device API endpoints now include the realm user details when the latest enrollment session was authenticated.
+
 ### Monolith
 
 New fallback catalog aggregation if no catalog is provided in S3 bucket.

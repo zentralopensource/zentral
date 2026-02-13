@@ -1,5 +1,5 @@
 from uuid import uuid4
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, JSONField
 from django.db.models.expressions import RawSQL
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
@@ -70,49 +70,10 @@ class EnrolledDeviceFilter(filters.FilterSet):
             return queryset
         return queryset.filter(users__short_name__exact=value)
 
-    def filter_email(self, queryset, name, value):
+    def filter_email(self, queryset, _, value):
         if not value:
             return queryset
-        sql = """
-        WITH enrollment_sessions AS (
-        SELECT enrolled_device_id, realm_user_id, created_at
-        FROM mdm_depenrollmentsession
-        WHERE realm_user_id IS NOT NULL
-
-        UNION ALL
-        SELECT enrolled_device_id, realm_user_id, created_at
-        FROM mdm_otaenrollmentsession
-        WHERE realm_user_id IS NOT NULL
-
-        UNION ALL
-        SELECT enrolled_device_id, realm_user_id, created_at
-        FROM mdm_reenrollmentsession
-        WHERE realm_user_id IS NOT NULL
-
-        UNION ALL
-        SELECT enrolled_device_id, realm_user_id, created_at
-        FROM mdm_userenrollmentsession
-        WHERE realm_user_id IS NOT NULL
-        ),
-        ranked_enrollment_sessions AS (
-        SELECT
-            enrolled_device_id,
-            realm_user_id,
-            created_at,
-            ROW_NUMBER() OVER (
-            PARTITION BY enrolled_device_id
-            ORDER BY created_at DESC
-            ) AS rn
-        FROM enrollment_sessions
-        )
-        SELECT r.enrolled_device_id
-        FROM ranked_enrollment_sessions r
-        JOIN realms_realmuser u ON u.uuid = r.realm_user_id
-        WHERE r.rn = 1
-        AND u.email = %s
-        """
-
-        return queryset.filter(id__in=RawSQL(sql, (value,)))
+        return queryset.filter(realm_user__email=value)
 
     class Meta:
         model = EnrolledDevice
@@ -120,7 +81,43 @@ class EnrolledDeviceFilter(filters.FilterSet):
 
 
 class EnrolledDeviceList(ListAPIView):
-    queryset = EnrolledDevice.objects.prefetch_related("users").all()
+    # Using RawSQL as the simplest solution to add the realm user to the enrolled device list.
+    # Using QuerySet.union() will lead to ValuesQuerySet which do not work with the ModelSerializer of this view.
+    # Using QUerySet.subqueries will lead to the problem to decide on a non key field which enrollment to use.
+    queryset = (
+        EnrolledDevice.objects
+        .prefetch_related("users")
+        .annotate(
+            realm_user=RawSQL(
+                f"""
+                SELECT json_build_object(
+                    'pk', u.uuid,
+                    'username', u.username,
+                    'email', u.email
+                )::jsonb
+                FROM (
+                    SELECT enrolled_device_id, realm_user_id, created_at
+                    FROM mdm_depenrollmentsession WHERE realm_user_id IS NOT NULL
+                    UNION ALL
+                    SELECT enrolled_device_id, realm_user_id, created_at
+                    FROM mdm_otaenrollmentsession WHERE realm_user_id IS NOT NULL
+                    UNION ALL
+                    SELECT enrolled_device_id, realm_user_id, created_at
+                    FROM mdm_reenrollmentsession WHERE realm_user_id IS NOT NULL
+                    UNION ALL
+                    SELECT enrolled_device_id, realm_user_id, created_at
+                    FROM mdm_userenrollmentsession WHERE realm_user_id IS NOT NULL
+                ) s
+                JOIN realms_realmuser u ON u.uuid = s.realm_user_id
+                WHERE s.enrolled_device_id = {EnrolledDevice._meta.db_table}.{EnrolledDevice._meta.pk.column}
+                ORDER BY s.created_at DESC
+                LIMIT 1
+                """,
+                [],
+                output_field=JSONField(),
+            )
+        )
+    )
     serializer_class = EnrolledDeviceSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)

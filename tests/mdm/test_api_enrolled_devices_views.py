@@ -99,6 +99,11 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           'updated_at': self.enrolled_device.updated_at.isoformat(),
                           'user_approved_enrollment': None,
                           'user_enrollment': None,
+                          'realm_user': {
+                              'pk': str(self.dep_enrollment_session.realm_user.pk),
+                              'email': self.dep_enrollment_session.realm_user.email,
+                              'username': self.dep_enrollment_session.realm_user.username
+                          },
                           'users': [{
                               'id': self.enrolled_user.id,
                               'enrollment_id': None,
@@ -172,6 +177,11 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           'updated_at': self.enrolled_device.updated_at.isoformat(),
                           'user_approved_enrollment': None,
                           'user_enrollment': None,
+                          'realm_user': {
+                              'pk': str(self.dep_enrollment_session.realm_user.pk),
+                              'email': self.dep_enrollment_session.realm_user.email,
+                              'username': self.dep_enrollment_session.realm_user.username
+                          },
                           'users': [{
                               'id': self.enrolled_user.id,
                               'enrollment_id': None,
@@ -280,6 +290,11 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           'updated_at': self.enrolled_device.updated_at.isoformat(),
                           'user_approved_enrollment': None,
                           'user_enrollment': None,
+                          'realm_user': {
+                              'pk': str(self.dep_enrollment_session.realm_user.pk),
+                              'email': self.dep_enrollment_session.realm_user.email,
+                              'username': self.dep_enrollment_session.realm_user.username
+                          },
                           'users': [{
                               'id': self.enrolled_user.id,
                               'enrollment_id': None,
@@ -483,6 +498,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'updated_at': self.enrolled_device.updated_at.isoformat(),
              'user_approved_enrollment': None,
              'user_enrollment': None,
+             'realm_user': None,
              'users': [{
                  'id': self.enrolled_user.id,
                  'enrollment_id': None,
@@ -558,6 +574,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'updated_at': self.enrolled_device.updated_at.isoformat(),
              'user_approved_enrollment': None,
              'user_enrollment': None,
+             'realm_user': None,
              'users': [{
                  'id': self.enrolled_user.id,
                  'enrollment_id': None,
