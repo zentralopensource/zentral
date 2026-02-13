@@ -41,7 +41,7 @@ def post_device_lock_pin_event(mdm_command, password_type, operation):
     elif operation == "clear":
         event_class = DeviceLockPinClearedEvent
     else:
-        raise ValueError(f"Unknown recovery password operation: {operation}")
+        raise ValueError(f"Unknown device lock pin operation: {operation}")
     event = event_class(
         event_metadata,
         {"command": {"request_type": mdm_command.request_type,

@@ -1,9 +1,7 @@
 import logging
-from uuid import uuid4
 
 from django import forms
 from django.db import transaction
-from django.utils.crypto import get_random_string
 from rest_framework import serializers
 
 from zentral.contrib.mdm.events import post_device_lock_pin_event
@@ -13,10 +11,6 @@ from zentral.core.secret_engines import decrypt_str, encrypt_str
 from .base import Command, CommandBaseForm, CommandBaseSerializer, register_command
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.device_lock")
-
-
-def generate_pin(length=6):
-    return get_random_string(length, allowed_chars="0123456789")
 
 
 def get_secret_engine_kwargs(uuid):
@@ -80,17 +74,6 @@ class DeviceLock(Command):
     reschedule_notnow = True
     form_class = DeviceLockForm
     serializer_class = DeviceLockSerializer
-
-    @classmethod
-    def create_for_automatic_scheduling(cls, target, pin=None):
-        if not pin:
-            pin = generate_pin()
-        uuid = uuid4()
-        return super().create_for_target(
-            target,
-            kwargs={"PIN": encrypt_str(pin, **get_secret_engine_kwargs(uuid))},
-            uuid=uuid,
-        )
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

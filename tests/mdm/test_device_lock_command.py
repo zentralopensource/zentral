@@ -70,7 +70,23 @@ class DeviceLockCommandTestCase(TestCase):
     def test_build_command(self):
         self.enrolled_device.platform = Platform.IPADOS
         self.enrolled_device.user_enrollment = True
-        cmd = DeviceLock.create_for_device(self.enrolled_device)
+        form = DeviceLock.form_class(
+            {}, channel=Channel.DEVICE, enrolled_device=self.enrolled_device
+        )
+        uuid = uuid4()
+        cmd = DeviceLock.create_for_device(
+            self.enrolled_device,
+            kwargs=form.get_command_kwargs_with_data(
+                uuid,
+                {"pin": "123456", "message": "foobar", "phone_number": "+0049404040"},
+            ),
+            uuid=uuid,
+        )
+        command = cmd.build_command()
+        self.assertEqual(
+            command,
+            {"PIN": "123456", "Message": "foobar", "PhoneNumber": "+0049404040"},
+        )
         response = cmd.build_http_response(self.dep_enrollment_session)
         payload = plistlib.loads(response.content)["Command"]
         self.assertEqual(payload["RequestType"], "DeviceLock")
@@ -124,7 +140,6 @@ class DeviceLockCommandTestCase(TestCase):
         )
         self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "device_lock_pin"})
-
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_process_acknowledged_response_clear_device_lock(self, post_event):
