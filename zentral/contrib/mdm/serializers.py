@@ -113,12 +113,14 @@ class EnrolledDeviceSerializer(serializers.ModelSerializer):
     os_version = serializers.CharField(source="current_os_version")
     build_version = serializers.CharField(source="current_build_version")
     users = EnrolledUserSerializer(many=True)
+    realm_user = serializers.JSONField(required=False, allow_null=True)
 
     class Meta:
         model = EnrolledDevice
         fields = (
             "id",
             "users",
+            "realm_user",
             "udid",
             "serial_number",
             "name",
