@@ -25,13 +25,6 @@ class DeviceLockPinSetEvent(BaseDeviceLockPinEvent):
 register_event_type(DeviceLockPinSetEvent)
 
 
-class DeviceLockPinUpdatedEvent(BaseDeviceLockPinEvent):
-    event_type = "device_lock_pin_updated"
-
-
-register_event_type(DeviceLockPinUpdatedEvent)
-
-
 class DeviceLockPinClearedEvent(BaseDeviceLockPinEvent):
     event_type = "device_lock_pin_cleared"
 
@@ -45,8 +38,6 @@ def post_device_lock_pin_event(mdm_command, password_type, operation):
     )
     if operation == "set":
         event_class = DeviceLockPinSetEvent
-    elif operation == "update":
-        event_class = DeviceLockPinUpdatedEvent
     elif operation == "clear":
         event_class = DeviceLockPinClearedEvent
     else:

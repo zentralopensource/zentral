@@ -120,11 +120,7 @@ class DeviceLock(Command):
         new_pin = self.load_pin()
         operation = None
         if new_pin:
-            if current_pin:
-                if current_pin != new_pin:
-                    operation = "update"
-            else:
-                operation = "set"
+            operation = "set"
         elif current_pin:
             operation = "clear"
         if operation:

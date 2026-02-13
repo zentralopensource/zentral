@@ -1,16 +1,15 @@
 import plistlib
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import DeviceLock
 from zentral.contrib.mdm.events import (
     DeviceLockPinClearedEvent,
     DeviceLockPinSetEvent,
-    DeviceLockPinUpdatedEvent,
 )
 from zentral.contrib.mdm.models import Channel, Command, Platform
 
@@ -81,10 +80,15 @@ class DeviceLockCommandTestCase(TestCase):
     def test_process_acknowledged_response_set_device_lock(self, post_event):
         self.enrolled_device.platform = Platform.IPADOS
         self.enrolled_device.user_enrollment = True
-        cmd = DeviceLock.create_for_automatic_scheduling(
-            Target(self.enrolled_device), pin="123456"
+        form = DeviceLock.form_class(
+            {}, channel=Channel.DEVICE, enrolled_device=self.enrolled_device
         )
-
+        uuid = uuid4()
+        cmd = DeviceLock.create_for_device(
+            self.enrolled_device,
+            kwargs=form.get_command_kwargs_with_data(uuid, {"pin": "123456"}),
+            uuid=uuid,
+        )
         with self.captureOnCommitCallbacks(execute=True):
             cmd.process_response(
                 {
@@ -121,50 +125,6 @@ class DeviceLockCommandTestCase(TestCase):
         self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "device_lock_pin"})
 
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_process_acknowledged_response_update_device_lock(self, post_event):
-        self.enrolled_device.platform = Platform.IPADOS
-        self.enrolled_device.user_enrollment = True
-
-        self.enrolled_device.set_device_lock_pin("000000")
-        self.enrolled_device.save()
-        cmd = DeviceLock.create_for_automatic_scheduling(
-            Target(self.enrolled_device), pin="123456"
-        )
-
-        with self.captureOnCommitCallbacks(execute=True):
-            cmd.process_response(
-                {
-                    "UDID": self.enrolled_device.udid,
-                    "Status": "Acknowledged",
-                    "CommandUUID": str(cmd.uuid).upper(),
-                },
-                self.dep_enrollment_session,
-                self.mbu,
-            )
-        cmd.db_command.refresh_from_db()
-        self.assertEqual(cmd.status, Command.Status.ACKNOWLEDGED)
-        self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
-        self.enrolled_device.refresh_from_db()
-        self.assertEqual(self.enrolled_device.get_device_lock_pin(), "123456")
-        # event
-        events = list(call_args.args[0] for call_args in post_event.call_args_list)
-        self.assertEqual(len(events), 1)
-        event = events[0]
-        self.assertIsInstance(event, DeviceLockPinUpdatedEvent)
-        self.assertEqual(
-            event.payload,
-            {
-                "command": {"request_type": "DeviceLock", "uuid": str(cmd.uuid)},
-                "password_type": "device_lock_pin",
-            },
-        )
-        metadata = event.metadata.serialize()
-        self.assertEqual(
-            metadata["machine_serial_number"], self.enrolled_device.serial_number
-        )
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
-        self.assertEqual(set(metadata["tags"]), {"mdm", "device_lock_pin"})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_process_acknowledged_response_clear_device_lock(self, post_event):
@@ -174,7 +134,7 @@ class DeviceLockCommandTestCase(TestCase):
 
         self.enrolled_device.set_device_lock_pin("000000")
         self.enrolled_device.save()
-        cmd = DeviceLock.create_for_target(Target(self.enrolled_device))
+        cmd = DeviceLock.create_for_device(self.enrolled_device)
 
         with self.captureOnCommitCallbacks(execute=True):
             cmd.process_response(
@@ -209,31 +169,3 @@ class DeviceLockCommandTestCase(TestCase):
         )
         self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "device_lock_pin"})
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_process_acknowledged_response_device_lock_noop(self, post_event):
-        self.enrolled_device.platform = Platform.IPADOS
-        self.enrolled_device.user_enrollment = True
-
-        self.enrolled_device.set_device_lock_pin("123456")
-        self.enrolled_device.save()
-        cmd = DeviceLock.create_for_automatic_scheduling(
-            Target(self.enrolled_device), pin="123456"
-        )
-
-        with self.captureOnCommitCallbacks(execute=True):
-            cmd.process_response(
-                {
-                    "UDID": self.enrolled_device.udid,
-                    "Status": "Acknowledged",
-                    "CommandUUID": str(cmd.uuid).upper(),
-                },
-                self.dep_enrollment_session,
-                self.mbu,
-            )
-        cmd.db_command.refresh_from_db()
-        self.assertEqual(cmd.status, Command.Status.ACKNOWLEDGED)
-        self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
-        self.enrolled_device.refresh_from_db()
-        self.assertEqual(self.enrolled_device.get_device_lock_pin(), "123456")
-        post_event.assert_not_called()
