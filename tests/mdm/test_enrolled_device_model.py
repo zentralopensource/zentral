@@ -9,7 +9,7 @@ from zentral.contrib.mdm.models import EnrolledDevice
 from .utils import force_push_certificate
 
 
-class TestMDMModels(TestCase):
+class TestMDMEnrolledDeviceModel(TestCase):
     def test_enrolled_device_set_bootstrap_token_none(self):
         enrolled_device = EnrolledDevice.objects.create(
             udid=uuid.uuid4(),

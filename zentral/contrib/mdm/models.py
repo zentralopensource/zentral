@@ -275,7 +275,8 @@ class RecoveryPasswordConfig(models.Model):
         self.static_password = encrypt_str(static_password, **self._get_secret_engine_kwargs("static_password"))
 
     def rewrap_secrets(self):
-        self.server_token = rewrap(self.static_password, **self._get_secret_engine_kwargs("static_password"))
+        if self.static_password:
+            self.static_password = rewrap(self.static_password, **self._get_secret_engine_kwargs("static_password"))
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "name": self.name}
