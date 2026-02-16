@@ -89,7 +89,7 @@ class BaseRepository:
 
     def rewrap_kwargs(self):
         self.repository.backend_kwargs = {
-            k: rewrap(v, **self._secret_engine_kwargs(k)) if k in self.encrypted_kwargs_keys else v
+            k: rewrap(v, **self._get_secret_engine_kwargs(k)) if k in self.encrypted_kwargs_keys else v
             for k, v in self.repository.backend_kwargs.items()
         }
 

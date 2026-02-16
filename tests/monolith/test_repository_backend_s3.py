@@ -5,10 +5,51 @@ from types import SimpleNamespace
 from typing import Dict, Iterable
 from unittest.mock import Mock
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+from django.utils.crypto import get_random_string
 
 from zentral.contrib.monolith.exceptions import RepositoryError
+from zentral.contrib.monolith.models import Repository, RepositoryBackend
 from zentral.contrib.monolith.repository_backends.s3 import S3Repository
+
+
+class S3RepositoryModelTests(TestCase):
+    maxDiff = None
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.repository = Repository.objects.create(
+            name=get_random_string(12),
+            backend=RepositoryBackend.S3,
+            backend_kwargs={},
+        )
+        cls.backend_kwargs = {
+            "bucket": "bucket",
+            "region_name": "eu-central-1",
+            "prefix": "prefix",
+            "access_key_id": "0123456",
+            "secret_access_key": "6543210"
+        }
+        cls.repository.set_backend_kwargs(cls.backend_kwargs)
+        cls.repository.save()
+        cls.repository.refresh_from_db()
+
+    def test_get_kwargs(self):
+        self.assertEqual(self.repository.get_backend_kwargs(), self.backend_kwargs)
+
+    def test_get_backend_kwargs_for_event(self):
+        backend_kwargs_for_event = self.backend_kwargs.copy()
+        backend_kwargs_for_event.pop("secret_access_key")
+        backend_kwargs_for_event["secret_access_key_hash"] = (
+            "d80a33333f2b696325762a3478b0497b8dc08edb8e3d56848aa0f8f2cd439826"
+        )
+        self.assertEqual(self.repository.get_backend_kwargs_for_event(), backend_kwargs_for_event)
+
+    def test_rewrap_secrets(self):
+        self.repository.rewrap_secrets()
+        self.repository.save()
+        self.repository.refresh_from_db()
+        self.assertEqual(self.repository.get_backend_kwargs(), self.backend_kwargs)
 
 
 class NoSuchKey(Exception):
