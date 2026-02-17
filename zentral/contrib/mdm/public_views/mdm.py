@@ -3,41 +3,68 @@ import json
 import logging
 import plistlib
 from urllib.parse import unquote
+
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 from django.core import signing
 from django.core.exceptions import SuspiciousOperation
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponse,
+    HttpResponseRedirect,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404
 from django.utils.functional import cached_property
 from django.views.generic import View
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import add_machine_tags
-from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.apps_books import ensure_target_asset_assignments
-from zentral.contrib.mdm.cert_issuer_backends import get_cached_cert_issuer_backend, test_acme_payload
-from zentral.contrib.mdm.commands.install_profile import build_payload
+from zentral.contrib.mdm.artifacts import Target
+from zentral.contrib.mdm.cert_issuer_backends import (
+    get_cached_cert_issuer_backend,
+    test_acme_payload,
+)
 from zentral.contrib.mdm.commands.base import get_command
+from zentral.contrib.mdm.commands.install_profile import build_payload
 from zentral.contrib.mdm.commands.scheduling import get_next_command_response
-from zentral.contrib.mdm.crypto import build_enrolled_device_cert_defaults, verify_signed_payload
-from zentral.contrib.mdm.declarations import (build_declaration_response,
-                                              load_cert_asset_token,
-                                              load_data_asset_token,
-                                              load_legacy_profile_token,
-                                              DeclarationError)
+from zentral.contrib.mdm.crypto import (
+    build_enrolled_device_cert_defaults,
+    verify_signed_payload,
+)
+from zentral.contrib.mdm.declarations import (
+    DeclarationError,
+    build_declaration_response,
+    load_cert_asset_token,
+    load_data_asset_token,
+    load_legacy_profile_token,
+)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.inventory import ms_tree_from_payload, update_realm_user_machine_tags
-from zentral.contrib.mdm.models import (ArtifactVersion,
-                                        Channel, RequestStatus, DeviceCommand, EnrolledDevice, EnrolledUser,
-                                        DEPEnrollmentSession, OTAEnrollmentSession,
-                                        Platform,
-                                        ReEnrollmentSession, UserEnrollmentSession,
-                                        PushCertificate)
+from zentral.contrib.mdm.inventory import (
+    ms_tree_from_payload,
+    update_realm_user_machine_tags,
+)
+from zentral.contrib.mdm.models import (
+    ArtifactVersion,
+    Channel,
+    DEPEnrollmentSession,
+    DeviceCommand,
+    EnrolledDevice,
+    EnrolledUser,
+    OTAEnrollmentSession,
+    Platform,
+    PushCertificate,
+    ReEnrollmentSession,
+    RequestStatus,
+    UserEnrollmentSession,
+)
 from zentral.contrib.mdm.payloads import substitute_variables
 from zentral.utils.certificates import parse_dn
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
-from .base import PostEventMixin
 
+from .base import PostEventMixin
 
 logger = logging.getLogger('zentral.contrib.mdm.public_views.mdm')
 
@@ -448,6 +475,8 @@ class ConnectView(MDMView):
             command = get_command(self.channel, command_uuid)
             if command:
                 command.process_response(self.payload, self.enrollment_session, self.meta_business_unit)
+        else:
+            self.target.unlock_device_pin(self.request)
 
         # update last ip & last seen at
         self.target.update_last_info(self.request)

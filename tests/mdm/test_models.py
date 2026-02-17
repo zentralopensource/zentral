@@ -1,8 +1,11 @@
-from datetime import datetime
 import uuid
+from datetime import datetime
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.mdm.models import EnrolledDevice
+
 from .utils import force_push_certificate
 
 
@@ -88,6 +91,8 @@ class TestMDMModels(TestCase):
         enrolled_device.set_pending_firmware_password(pending_firmware_password)
         admin_password = get_random_string(12)
         enrolled_device.set_admin_password(admin_password)
+        device_lock_pin = get_random_string(6, "0123456789")
+        enrolled_device.set_device_lock_pin(device_lock_pin)
         enrolled_device.rewrap_secrets()
         self.assertEqual(enrolled_device.get_bootstrap_token(), bootstrap_token)
         self.assertEqual(enrolled_device.get_unlock_token(), unlock_token)
@@ -96,6 +101,7 @@ class TestMDMModels(TestCase):
         self.assertEqual(enrolled_device.get_recovery_password(), recovery_password)
         self.assertEqual(enrolled_device.get_pending_firmware_password(), pending_firmware_password)
         self.assertEqual(enrolled_device.get_admin_password(), admin_password)
+        self.assertEqual(enrolled_device.get_device_lock_pin(), device_lock_pin)
 
     # urlsafe serial number
 

@@ -5,8 +5,13 @@ import mimetypes
 import os.path
 import plistlib
 import uuid
+
 from django.contrib.postgres.fields import ArrayField, DateRangeField
-from django.core.validators import MinLengthValidator, MinValueValidator, MaxValueValidator
+from django.core.validators import (
+    MaxValueValidator,
+    MinLengthValidator,
+    MinValueValidator,
+)
 from django.db import connection, models
 from django.db.models import Count, Exists, F, OuterRef, Q
 from django.db.models.signals import post_delete
@@ -19,20 +24,32 @@ from django.utils.text import slugify
 from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmGroup, RealmUser
+
 from zentral.conf import settings
-from zentral.contrib.inventory.models import EnrollmentSecret, EnrollmentSecretRequest, MetaMachine, Tag
+from zentral.contrib.inventory.models import (
+    EnrollmentSecret,
+    EnrollmentSecretRequest,
+    MetaMachine,
+    Tag,
+)
 from zentral.core.incidents.models import Severity
-from zentral.core.secret_engines import decrypt, decrypt_str, encrypt, encrypt_str, rewrap
+from zentral.core.secret_engines import (
+    decrypt,
+    decrypt_str,
+    encrypt,
+    encrypt_str,
+    rewrap,
+)
 from zentral.utils.backend_model import BackendInstance
-from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
 from zentral.utils.iso_639_1 import ISO_639_1_CHOICES
+from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.payloads import get_payload_identifier
 from zentral.utils.storage import select_dist_storage
 from zentral.utils.time import naive_truncated_isoformat
-from .exceptions import EnrollmentSessionStatusError
-from .cert_issuer_backends import CertIssuerBackend, get_cert_issuer_backend
 
+from .cert_issuer_backends import CertIssuerBackend, get_cert_issuer_backend
+from .exceptions import EnrollmentSessionStatusError
 
 logger = logging.getLogger("zentral.contrib.mdm.models")
 
@@ -998,6 +1015,10 @@ class EnrolledDevice(models.Model):
     admin_password = models.TextField(null=True)
     admin_password_updated_at = models.DateTimeField(null=True)
 
+    # Lock pin
+    device_lock_pin = models.TextField(null=True)
+    device_lock_pin_updated_at = models.DateTimeField(null=True)
+
     # timestamps
     checkout_at = models.DateTimeField(blank=True, null=True)
     blocked_at = models.DateTimeField(blank=True, null=True)
@@ -1017,6 +1038,7 @@ class EnrolledDevice(models.Model):
             ("view_admin_password", "Can view admin password"),
             ("view_filevault_prk", "Can view FileVault PRK"),
             ("view_recovery_password", "Can view recovery password"),
+            ("view_device_lock_pin", "Can view device lock pin"),
         ]
 
     # secrets
@@ -1114,6 +1136,19 @@ class EnrolledDevice(models.Model):
         self.admin_password = encrypt_str(admin_password, **self._get_secret_engine_kwargs("admin_password"))
         self.admin_password_updated_at = datetime.datetime.utcnow()
 
+    def get_device_lock_pin(self):
+        if not self.device_lock_pin:
+            return
+        return decrypt_str(self.device_lock_pin, **self._get_secret_engine_kwargs("device_lock_pin"))
+
+    def set_device_lock_pin(self, device_lock_pin):
+        if not device_lock_pin:
+            self.device_lock_pin = None
+            self.device_lock_pin_updated_at = None
+            return
+        self.device_lock_pin = encrypt_str(device_lock_pin, **self._get_secret_engine_kwargs("device_lock_pin"))
+        self.device_lock_pin_updated_at = datetime.datetime.utcnow()
+
     def rewrap_secrets(self):
         if self.bootstrap_token:
             self.bootstrap_token = rewrap(self.bootstrap_token, **self._get_secret_engine_kwargs("bootstrap_token"))
@@ -1132,6 +1167,8 @@ class EnrolledDevice(models.Model):
                                                     **self._get_secret_engine_kwargs("pending_firmware_password"))
         if self.admin_password:
             self.admin_password = rewrap(self.admin_password, **self._get_secret_engine_kwargs("admin_password"))
+        if self.device_lock_pin:
+            self.device_lock_pin = rewrap(self.device_lock_pin, **self._get_secret_engine_kwargs("device_lock_pin"))
 
     def get_urlsafe_serial_number(self):
         if self.serial_number:
@@ -1164,6 +1201,8 @@ class EnrolledDevice(models.Model):
         self.supervised = None
         self.filevault_escrow_key = None
         self.filevault_config_uuid = None
+        self.device_lock_pin = None
+        self.device_lock_pin_updated_at = None
         if full:
             self.checkout_at = None
             self.blocked_at = None
