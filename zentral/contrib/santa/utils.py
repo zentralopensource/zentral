@@ -516,7 +516,7 @@ def update_voting_rules(configurations):
         '  on conflict ("target_id", "configuration_id") do update'
         "  set policy = excluded.policy, cel_expr = excluded.cel_expr,"
         "  primary_users = excluded.primary_users, excluded_primary_users = excluded.excluded_primary_users,"
-        "  custom_msg = excluded.custom_msg, custom_url = excluded.custom_msg, version = santa_rule.version + 1,"
+        "  custom_msg = excluded.custom_msg, custom_url = excluded.custom_url, version = santa_rule.version + 1,"
         "  updated_at = clock_timestamp()"
         "  where santa_rule.is_voting_rule = 't' and ("
         "    excluded.policy != santa_rule.policy"
