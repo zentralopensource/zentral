@@ -1,36 +1,47 @@
 import copy
-from datetime import datetime, timedelta
-from functools import cached_property, lru_cache
 import hashlib
-from itertools import chain
 import json
 import logging
+import uuid
+from datetime import datetime, timedelta
+from functools import cached_property, lru_cache
 from graphlib import TopologicalSorter
+from itertools import chain
+
+import psycopg2.extras
 from django.db import connection, transaction
 from psycopg2 import sql
-import psycopg2.extras
-import uuid
+
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.text import shard as compute_shard
-from .apns import send_enrolled_device_notification, send_enrolled_user_notification
-from .declarations import (build_specific_software_update_enforcement,
-                           build_target_management_status_subscriptions,
-                           get_blueprint_declaration_identifier,
-                           get_artifact_identifier,
-                           get_artifact_version_server_token,
-                           get_software_update_enforcement_specific_identifier,
-                           get_status_report_target_artifacts_info)
-from .events import post_target_artifact_update_events
-from .models import (Artifact, ArtifactVersion,
-                     Blueprint, BlueprintArtifact,
-                     Channel,
-                     DeclarationRef,
-                     DeviceArtifact, DeviceAssignment, DeviceCommand,
-                     TargetArtifact,
-                     UserArtifact, UserCommand)
 
+from .apns import send_enrolled_device_notification, send_enrolled_user_notification
+from .declarations import (
+    build_specific_software_update_enforcement,
+    build_target_management_status_subscriptions,
+    get_artifact_identifier,
+    get_artifact_version_server_token,
+    get_blueprint_declaration_identifier,
+    get_software_update_enforcement_specific_identifier,
+    get_status_report_target_artifacts_info,
+)
+from .events import post_device_lock_pin_clear_event, post_target_artifact_update_events
+from .models import (
+    Artifact,
+    ArtifactVersion,
+    Blueprint,
+    BlueprintArtifact,
+    Channel,
+    DeclarationRef,
+    DeviceArtifact,
+    DeviceAssignment,
+    DeviceCommand,
+    TargetArtifact,
+    UserArtifact,
+    UserCommand,
+)
 
 logger = logging.getLogger("zentral.contrib.mdm.artifacts")
 
@@ -241,6 +252,13 @@ class Target:
         self.target.last_ip = ip or None
         self.target.last_seen_at = datetime.utcnow()
         self.target.save(update_fields=["last_ip", "last_seen_at", "updated_at"])
+
+    def unlock_device_pin(self, request):
+        if not self.enrolled_device.device_lock_pin:
+            return
+        self.enrolled_device.set_device_lock_pin(None)
+        transaction.on_commit(lambda: post_device_lock_pin_clear_event(self, request))
+        self.enrolled_device.save(update_fields=["device_lock_pin", "device_lock_pin_updated_at"])
 
     # blueprint filtering method
 

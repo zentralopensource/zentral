@@ -1,17 +1,27 @@
-from datetime import datetime, timedelta
 import plistlib
+from datetime import datetime, timedelta
 from unittest.mock import patch
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import SetRecoveryLock
 from zentral.contrib.mdm.commands.scheduling import _manage_recovery_password
-from zentral.contrib.mdm.events import (RecoveryPasswordClearedEvent,
-                                        RecoveryPasswordSetEvent,
-                                        RecoveryPasswordUpdatedEvent)
+from zentral.contrib.mdm.events import (
+    RecoveryPasswordClearedEvent,
+    RecoveryPasswordSetEvent,
+    RecoveryPasswordUpdatedEvent,
+)
 from zentral.contrib.mdm.models import Channel, Command, Platform, RequestStatus
-from .utils import force_blueprint, force_dep_enrollment_session, force_enrolled_user, force_recovery_password_config
+
+from .utils import (
+    force_blueprint,
+    force_dep_enrollment_session,
+    force_enrolled_user,
+    force_recovery_password_config,
+)
 
 
 class SetRecoveryLockCommandTestCase(TestCase):

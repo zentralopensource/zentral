@@ -1,12 +1,20 @@
 import logging
+
 from django import forms
+from django.db import transaction
 from rest_framework import serializers
+
+from zentral.contrib.mdm.events import post_device_lock_pin_set_event
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt_str, encrypt_str
-from .base import register_command, Command, CommandBaseForm, CommandBaseSerializer
 
+from .base import Command, CommandBaseForm, CommandBaseSerializer, register_command
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.device_lock")
+
+
+def get_secret_engine_kwargs(uuid):
+    return {"model": "mdm.devicecommand", "field": "PIN", "uuid": str(uuid)}
 
 
 class DeviceLockHelperMixin:
@@ -26,18 +34,31 @@ class DeviceLockHelperMixin:
             kwargs["PhoneNumber"] = phone_number
         pin = data.get("pin")
         if pin:
-            kwargs["PIN"] = encrypt_str(pin, model="mdm.devicecommand", field="PIN", uuid=str(uuid))
+            kwargs["PIN"] = encrypt_str(pin, **get_secret_engine_kwargs(uuid))
         return kwargs
 
 
 class DeviceLockForm(DeviceLockHelperMixin, CommandBaseForm):
-    message = forms.CharField(label="Message", max_length=255, required=False,
-                              help_text="The message to display on the Lock screen of the device.")
-    phone_number = forms.CharField(label="Phone number", max_length=15, required=False,
-                                   help_text="The phone number to display on the Lock screen of the device.")
-    pin = forms.RegexField(label="PIN", min_length=6, max_length=6,
-                           strip=True, regex=DeviceLockHelperMixin.pin_regex,
-                           help_text="6 numeric digits PIN.")
+    message = forms.CharField(
+        label="Message",
+        max_length=255,
+        required=False,
+        help_text="The message to display on the Lock screen of the device.",
+    )
+    phone_number = forms.CharField(
+        label="Phone number",
+        max_length=15,
+        required=False,
+        help_text="The phone number to display on the Lock screen of the device.",
+    )
+    pin = forms.RegexField(
+        label="PIN",
+        min_length=6,
+        max_length=6,
+        strip=True,
+        regex=DeviceLockHelperMixin.pin_regex,
+        help_text="6 numeric digits PIN.",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -69,15 +90,15 @@ class DeviceLock(Command):
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
-        return (
-            channel == Channel.DEVICE
-            and (not enrolled_device.user_enrollment or enrolled_device.platform in (Platform.IOS, Platform.IPADOS))
+        return channel == Channel.DEVICE and (
+            not enrolled_device.user_enrollment
+            or enrolled_device.platform in (Platform.IOS, Platform.IPADOS)
         )
 
     def load_pin(self):
         encrypted_pin = self.db_command.kwargs.get("PIN")
         if encrypted_pin:
-            return decrypt_str(encrypted_pin, model="mdm.devicecommand", field="PIN", uuid=str(self.uuid))
+            return decrypt_str(encrypted_pin, **get_secret_engine_kwargs(self.uuid))
 
     def build_command(self):
         payload = {}
@@ -89,6 +110,15 @@ class DeviceLock(Command):
         if pin:
             payload["PIN"] = pin
         return payload
+
+    def command_acknowledged(self):
+        new_pin = self.load_pin()
+        if new_pin:
+            self.enrolled_device.set_device_lock_pin(new_pin)
+            self.enrolled_device.save()
+            transaction.on_commit(
+                lambda: post_device_lock_pin_set_event(mdm_command=self)
+            )
 
 
 register_command(DeviceLock)

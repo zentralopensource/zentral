@@ -1,12 +1,14 @@
 import base64
-from datetime import date, datetime, time, timedelta
 import io
 import json
 import plistlib
-from unittest.mock import patch, Mock
-from urllib.parse import quote
 import uuid
 import zipfile
+from datetime import date, datetime, time, timedelta
+from unittest.mock import Mock, patch
+from urllib.parse import quote
+from uuid import uuid4
+
 import asn1crypto.cms
 import asn1crypto.util
 from cryptography import x509
@@ -18,20 +20,29 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from realms.models import RealmGroup, RealmUserGroupMembership
+
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.apps_books import get_otf_association_cache_key
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
-from zentral.contrib.mdm.commands import CustomCommand, InstallEnterpriseApplication
+from zentral.contrib.mdm.commands import (
+    CustomCommand,
+    DeviceLock,
+    InstallEnterpriseApplication,
+)
+from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.declarations import (
     dump_cert_asset_token,
-    load_cert_asset_token,
     dump_data_asset_token,
-    load_data_asset_token,
     dump_legacy_profile_token,
+    load_cert_asset_token,
+    load_data_asset_token,
     load_legacy_profile_token,
 )
-from zentral.contrib.mdm.events import MDMRequestEvent
+from zentral.contrib.mdm.events import (
+    DeviceLockPinClearedEvent,
+    MDMRequestEvent,
+)
 from zentral.contrib.mdm.models import (
     Artifact,
     ArtifactVersion,
@@ -45,13 +56,15 @@ from zentral.contrib.mdm.models import (
     EnrolledDevice,
     OTAEnrollmentSession,
     Platform,
-    RealmGroupTagMapping,
     Profile,
-    UserEnrollmentSession,
+    RealmGroupTagMapping,
     ReEnrollmentSession,
     TargetArtifact,
+    UserEnrollmentSession,
 )
+
 from .utils import (
+    MACOS_14_CLIENT_CAPABILITIES,
     build_status_report,
     force_artifact,
     force_blueprint_artifact,
@@ -62,7 +75,6 @@ from .utils import (
     force_software_update,
     force_software_update_enforcement,
     force_user_enrollment_session,
-    MACOS_14_CLIENT_CAPABILITIES,
 )
 
 
@@ -2439,6 +2451,62 @@ class MDMViewsTestCase(TestCase):
         payload = {"UDID": udid, "Status": "Idle"}
         response = self._put(reverse("mdm_public:connect"), payload, session)
         self.assertEqual(response.status_code, 401)
+
+    def test_process_set_device_lock_and_clear(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        enrolled_device = EnrolledDevice.objects.get(udid=udid)
+        enrolled_device.platform = Platform.MACOS
+
+        form = DeviceLock.form_class(
+            {}, channel=Channel.DEVICE, enrolled_device=enrolled_device
+        )
+
+        uuid = uuid4()
+        cmd = DeviceLock.create_for_device(
+            enrolled_device,
+            kwargs=form.get_command_kwargs_with_data(uuid, {"pin": "123456"}),
+            uuid=uuid,
+        )
+        response_ack = self._put(
+            reverse("mdm_public:connect"),
+            payload={
+                "UDID": enrolled_device.udid,
+                "Status": "Acknowledged",
+                "CommandUUID": str(cmd.uuid).upper(),
+            },
+            session=session,
+        )
+
+        self.assertEqual(response_ack.status_code, 200)
+        cmd.db_command.refresh_from_db()
+        cmd = load_command(cmd.db_command)
+        self.assertEqual(cmd.status, Command.Status.ACKNOWLEDGED)
+
+        enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.get_device_lock_pin(), "123456")
+
+        # reset devise lock pin by calling the connect endpoint
+        payload = {"UDID": udid, "Status": "Idle"}
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self._put(reverse("mdm_public:connect"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        enrolled_device.refresh_from_db()
+        self.assertIsNone(enrolled_device.get_device_lock_pin())
+        self.assertIsNone(enrolled_device.device_lock_pin_updated_at)
+
+        # event
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 3)
+        event = events[2]
+        self.assertIsInstance(event, DeviceLockPinClearedEvent)
+        self.assertEqual(event.payload, {})
+        metadata = event.metadata.serialize()
+        self.assertEqual(
+            metadata["machine_serial_number"], enrolled_device.serial_number
+        )
+        self.assertEqual(set(metadata["tags"]), {"mdm", "device_lock_pin"})
 
     # acme credential download view
 
