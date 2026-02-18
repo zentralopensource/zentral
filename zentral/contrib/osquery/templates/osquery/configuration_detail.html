@@ -89,11 +89,12 @@
     <pre>{% for flag in configuration.get_serialized_flags %}
     {{ flag }}{% endfor %}</pre>
             </td>
+        </tr>
         </tbody>
         </table>
 
         {% created_updated_at object %}
-        
+
     </div>
 </div>
 
@@ -154,7 +155,6 @@
     </table>
 </div>
 {% endif %}
-
 
 {% if perms.osquery.view_enrollment %}
 <div class="d-flex justify-content-between mb-3">

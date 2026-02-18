@@ -5,7 +5,7 @@
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'inventory:compliance_checks' %}">Compliance checks</a></li>
   {% if object %}
-  <li class="breadcrumb-item"><a href="{% url 'inventory:compliance_check' object.pk %}">{{ object.compliance_check.name }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:compliance_check' object.pk %}">{{ object.compliance_check.name }}</a></li>
   <li class="breadcrumb-item active">Update</li>
   {% else %}
   <li class="breadcrumb-item active">Create</li>
@@ -20,11 +20,13 @@
   <p>
     {% if object %}
     <a class="btn btn-outline-secondary" href="{% url 'inventory:compliance_check' object.pk %}">
-    {% else %}
-    <a class="btn btn-outline-secondary" href="{% url 'inventory:compliance_checks' %}">
-    {% endif %}
       Cancel
     </a>
+    {% else %}
+    <a class="btn btn-outline-secondary" href="{% url 'inventory:compliance_checks' %}">
+      Cancel
+    </a>
+    {% endif %}
     <button class="btn btn-primary" type="submit">Save</button>
   </p>
 </form>

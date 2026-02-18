@@ -21,11 +21,13 @@
   <p>
     {% if object %}
     <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">
-    {% else %}
-    <a class="btn btn-outline-secondary" href="{% url 'realms:groups' %}">
-    {% endif %}
       Cancel
     </a>
+    {% else %}
+    <a class="btn btn-outline-secondary" href="{% url 'realms:groups' %}">
+      Cancel
+    </a>
+    {% endif %}
     <button class="btn btn-primary" type="submit">Save</button>
   </p>
 </form>

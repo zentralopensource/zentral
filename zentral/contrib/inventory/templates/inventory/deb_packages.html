@@ -6,7 +6,7 @@
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
   {% else %}
   <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
@@ -19,7 +19,7 @@
 
 <div class="d-flex flex-wrap align-items-center mb-1">
     <form method="GET" class="search-form">
-        
+
         {{ search_form }}
 
         <button type="submit" class="btn btn-link mb-2">
@@ -30,16 +30,15 @@
             <i class="bi bi-download"></i>
         </button>
         <ul class="dropdown-menu" aria-labelledby="downloadTargets">
-            <li><a class="dropdown-item task" href="{% url 'inventory_api:deb_packages_export' %}" data-format="csv" class="task">CSV</a></li>
-            <li><a class="dropdown-item task" href="{% url 'inventory_api:deb_packages_export' %}" data-format="xlsx" class="task">XLSX</a></li>
+            <li><a class="dropdown-item task" href="{% url 'inventory_api:deb_packages_export' %}" data-format="csv">CSV</a></li>
+            <li><a class="dropdown-item task" href="{% url 'inventory_api:deb_packages_export' %}" data-format="xlsx">XLSX</a></li>
         </ul>
-    </form>        
+    </form>
 </div>
 
-    
     {% if object_list %}
         <h3>Result{{ total_objects|pluralize }} ({{ total_objects }})</h3>
-    
+
         {% pagination next_url previous_url %}
 
         <table class="table table-striped align-top table-hover">
@@ -74,7 +73,7 @@
             {% endfor %}
             </tbody>
         </table>
-        
+
         {% pagination next_url previous_url %}
     {% elif search_form.is_bound %}
         {% url 'inventory:deb_packages' as empty_results_url %}
@@ -82,7 +81,6 @@
     {% endif %}
 
 {% endblock %}
-
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">

@@ -8,7 +8,6 @@
   <li class="breadcrumb-item active">Configurations</li>
 </ol>
 
-
 <div class="d-flex justify-content-between mb-3">
     <h2 class="m-0">Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h2>
     <div class="ms-auto">
@@ -31,6 +30,7 @@
         <th>Rules</th>
         <th>Enrollments</th>
         <th>Machines</th>
+        </tr>
     </thead>
     <tbody>
         {% for configuration in configurations %}

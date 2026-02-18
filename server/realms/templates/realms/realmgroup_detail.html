@@ -14,7 +14,7 @@
     <h2 class="m-0">{{ object }}</h2>
   </div>
   <div class="d-flex align-items-center mb-3">
-    <h3 class="m-0 fs-5 text-secondary">Group</i></h3>
+    <h3 class="m-0 fs-5 text-secondary">Group</h3>
     <div class="ms-auto">
       {% if perms.realms.change_realmgroup and object.can_be_updated %}
         {% url 'realms:update_group' object.pk as url %}
@@ -87,6 +87,7 @@
       </tr>
     </tbody>
   </table>
+  </div>
   {% created_updated_at object %}
 </div>
 

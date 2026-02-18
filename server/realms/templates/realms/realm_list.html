@@ -6,12 +6,12 @@
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="/">Home</a></li>
         <li class="breadcrumb-item"><a href="{% url 'realms:index' %}">SSO</a></li>
-        <li class="breadcrumb-item active">{{ configurations_count }} Realm{{ realms_count|pluralize }}</li>
+        <li class="breadcrumb-item active">{{ configurations_count }} Realm{{ realms_count|pluralize }}</li>
     </ol>
 </nav>
 
 <div class="d-flex align-items-center mb-1">
-    <h3 class="mb-3">Realm{{ realms_count|pluralize }} ({{ realms_count }})</h3>
+    <h3 class="mb-3">Realm{{ realms_count|pluralize }} ({{ realms_count }})</h3>
     <div class="ms-auto">
         {% if create_links %}
         <div class="dropdown mb-2">
@@ -21,7 +21,7 @@
             </button>
             <ul class="dropdown-menu" aria-labelledby="createRealm">
                 {% for link in create_links %}
-                <li><a href="{{ link.url }}" class="dropdown-item">{{ link.anchor_text }} realm</a></li>
+                <li><a href="{{ link.url }}" class="dropdown-item">{{ link.anchor_text }} realm</a></li>
                 {% endfor %}
             </ul>
         </div>
@@ -48,7 +48,7 @@
             {% endif %}
         </td>
         <td>
-            {{ realm.backend }}
+            {{ realm.backend }}
         </td>
         <td class="text-end py-0">
             {% if not request.realm_authentication_session.is_remote and perms.realms.change_realm %}
@@ -59,6 +59,5 @@
         </tr>
         {% endfor %}
     </tbody>
-    </table>
-</div>
+</table>
 {% endblock %}

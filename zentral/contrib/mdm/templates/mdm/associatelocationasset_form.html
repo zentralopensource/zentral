@@ -13,11 +13,10 @@
 
 <h3>Associate {{ location_asset }}</h3>
 
-
 <form class="update-form" method="POST">{% csrf_token %}
    {{ form }}
    <p>
-     <a href="{{ location_asset.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+     <a href="{{ location_asset.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
      <button type="submit" class="btn btn-primary">Associate</button>
    </p>
 </form>

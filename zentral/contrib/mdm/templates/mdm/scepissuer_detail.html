@@ -27,11 +27,11 @@
     </tr>
     <tr>
       <th>Description</th>
-      <td>{{ object.description|default:"-" }}</th>
+      <td>{{ object.description|default:"-" }}</td>
     </tr>
     <tr>
       <th>URL</th>
-      <td>{{ object.url }}</th>
+      <td>{{ object.url }}</td>
     </tr>
     <tr>
       <th>Key size</th>
@@ -43,7 +43,7 @@
     </tr>
     {% if not object.provisioning_uid %}
     <tr>
-      <th>Backend
+      <th>Backend</th>
       <td>
         <dl class="row">
           <dt class="col-sm-3 text-md-end">Type</dt>
@@ -59,7 +59,7 @@
           <dt class="col-sm-3 text-md-end">NDES mscep_admin/ endpoint</dt>
           <dd class="col-sm-9">{{ kwargs.url }}</dd>
           <dt class="col-sm-3 text-md-end">mscep admin user</dt>
-          <dd class="col-sm-9">{{ kwargs.username }}</dt>
+          <dd class="col-sm-9">{{ kwargs.username }}</dd>
           <dt class="col-sm-3 text-md-end">mscep admin password</dt>
           <dd class="col-sm-9">
             <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>
@@ -71,7 +71,7 @@
           <dt class="col-sm-3 text-md-end">Challenge URL</dt>
           <dd class="col-sm-9">{{ kwargs.url }}</dd>
           <dt class="col-sm-3 text-md-end">Username</dt>
-          <dd class="col-sm-9">{{ kwargs.username }}</dt>
+          <dd class="col-sm-9">{{ kwargs.username }}</dd>
           <dt class="col-sm-3 text-md-end">Password</dt>
           <dd class="col-sm-9">
             <span class="bi bi-eye" aria-hidden="true" style="cursor:pointer"></span>

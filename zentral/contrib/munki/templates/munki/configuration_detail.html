@@ -84,11 +84,10 @@
 
 </div>
 
-
 {% if perms.munki.view_enrollment %}
 <div class="d-flex justify-content-between mb-3">
     <h3>Enrollment{{ enrollment_count|pluralize }} ({{ enrollment_count }})</h3>
-    <div class="ms-auto">            
+    <div class="ms-auto">
         {% if perms.munki.add_enrollment %}
             {% url 'munki:create_enrollment' object.id as url %}
             {% button 'CREATE' url "Create new Enrollment" %}

@@ -1,4 +1,3 @@
-{% load base_extras %}
 <tr>
   <th colspan="2"><h4>Enterprise app</h4></th>
 </tr>
@@ -39,7 +38,7 @@
         <tr>
           <td>{{ bundle.id }}</td>
           <td>{{ bundle.version_str }}{% if bundle.version != bundle.version_str %} / {{ bundle.version }}{% endif %}</td>
-          <td>{{ bundle.path|default:"-" }}
+          <td>{{ bundle.path|default:"-" }}</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -87,6 +87,7 @@
             {% else %}
             -
             {% endif %}
+            </td>
         </tr>
         <tr>
             <th>Recovery password configuration</th>
@@ -102,6 +103,7 @@
             {% else %}
             -
             {% endif %}
+            </td>
         </tr>
         <tr>
           <th>Software update enforcement{{ sue_list|pluralize }} ({{ sue_list|length }})</th>
@@ -122,10 +124,11 @@
             -
             {% endif %}
           </td>
+        </tr>
         </tbody>
         </table>
 
-        {% created_updated_at object %}    
+        {% created_updated_at object %}
     </div>
     </div>
 </div>

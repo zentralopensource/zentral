@@ -225,6 +225,7 @@
           <td>{{ tag.value }}</td>
         </tr>
         {% endfor %}
+        </tbody>
       </table>
       {% endif %}
 
@@ -239,7 +240,7 @@
           <th>Path</th>
           <th>FileVault</th>
           {% endif %}
-        <thead>
+        </thead>
         <tbody>
           {% for disk in ms.disks.all %}
           <tr>
@@ -249,6 +250,7 @@
             <td>{{ disk.path|default:"-" }}</td>
             <td>{{ disk.filevault_status|default:"-" }}</td>
             {% endif %}
+          </tr>
           {% endfor %}
         </tbody>
       </table>
@@ -265,7 +267,7 @@
           <th>IP</th>
           <th>Mask</th>
           <th>Broadcast</th>
-        <thead>
+        </thead>
         <tbody>
           {% for ni in ms.network_interfaces.all %}
           {% with ni.get_mac_organization as org %}
@@ -445,7 +447,7 @@
       {% endwith %}
 
       {% if ms.extra_facts %}
-      <h3>Extra facts</h4>
+      <h3>Extra facts</h3>
       <dl class="row">
         {{ ms.extra_facts|extra_facts }}
       </dl>

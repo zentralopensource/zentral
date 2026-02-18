@@ -18,10 +18,9 @@
     <dt class="col-sm-3 text-md-end">Type</dt>
     <dd class="col-sm-9">{{ target_type_display }}</dd>
     <dt class="col-sm-3 text-md-end">Identifier</dt>
-    <dd class="col-sm-9">{{ target_identifier }}</dt>
+    <dd class="col-sm-9">{{ target_identifier }}</dd>
   </dl>
   {% endif %}
-  </dl>
   {% for file in files %}
   <dl class="row">
     <dt class="col-sm-3 text-md-end">name</dt>
@@ -29,7 +28,7 @@
     <dt class="col-sm-3 text-md-end">path</dt>
     <dd class="col-sm-9">{{ file.path }}</dd>
     {% if file.bundle %}
-    <dt class="col-sm-3 text-md-end">bundle id</dd>
+    <dt class="col-sm-3 text-md-end">bundle id</dt>
     <dd class="col-sm-9">{{ file.bundle.bundle_id }}</dd>
     <dt class="col-sm-3 text-md-end">bundle name</dt>
     <dd class="col-sm-9">{{ file.bundle.bundle_name }}</dd>
@@ -44,7 +43,7 @@
   {% endfor %}
   {% if bundle %}
   <dl class="row">
-    <dt class="col-sm-3 text-md-end">id</dd>
+    <dt class="col-sm-3 text-md-end">id</dt>
     <dd class="col-sm-9">{{ bundle.bundle_id }}</dd>
     <dt class="col-sm-3 text-md-end">name</dt>
     <dd class="col-sm-9">{{ bundle.name }}</dd>

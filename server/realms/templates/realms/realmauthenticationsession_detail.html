@@ -7,17 +7,17 @@
   <li class="breadcrumb-item"><a href="{% url 'realms:index' %}">SSO</a></li>
   <li class="breadcrumb-item"><a href="{% url 'realms:list' %}">Realms</a></li>
   <li class="breadcrumb-item"><a href="{% url 'realms:view' object.realm.pk %}">{{ object.realm }}</a></li>
-  <li class="breadcrumb-item active">{{ realm_user }}</li>
+  <li class="breadcrumb-item active">{{ realm_user }}</li>
 </ol>
 
 <h3>Realm user <i>{{ realm_user }}</i></h3>
 
 {% if realm_user.realm.enabled_for_login %}
-<h4 class="mt-4 mb-2">Login session expiry</h3>
+<h4 class="mt-4 mb-2">Login session expiry</h4>
 
 <dl>
   <dt>IdP</dt>
-  <dd>{{ object.expires_at|default:"-" }}{% if idp_expiry_age %} — ~{{ idp_expiry_age }} seconds{% endif %}</dd>
+  <dd>{{ object.expires_at|default:"-" }}{% if idp_expiry_age %} — ~{{ idp_expiry_age }} seconds{% endif %}</dd>
   <dt>User’s session cookie</dt>
   <dd>
     {% if login_session_expire_at_browser_close %}
@@ -33,14 +33,14 @@
 </dl>
 {% endif %}
 
-<h4 class="mt-4 mb-2">IdP claims</h3>
+<h4 class="mt-4 mb-2">IdP claims</h4>
 
-{{ realm_user.claims|pythonprettyprint }}
+{{ realm_user.claims|pythonprettyprint }}
 
-<h4 class="mt-4 mb-2">Mapped claims</h3>
+<h4 class="mt-4 mb-2">Mapped claims</h4>
 
 {% if error %}
-<p class="text-danger">{{ error }}</p>
+<p class="text-danger">{{ error }}</p>
 {% endif %}
 
 <dl>
@@ -49,9 +49,9 @@
   <dt>Email</dt>
   <dd>{{ realm_user.email|default:"-" }}</dd>
   <dt>First name</dt>
-  <dd>{{ realm_user.first_name|default:"-" }}</dd>
+  <dd>{{ realm_user.first_name|default:"-" }}</dd>
   <dt>Last name</dt>
-  <dd>{{ realm_user.last_name|default:"-" }}</dd>
+  <dd>{{ realm_user.last_name|default:"-" }}</dd>
   <dt>Full name</dt>
   <dd>{{ realm_user.full_name|default:"-" }}</dd>
   <dt>Custom attr. 1</dt>
@@ -60,7 +60,7 @@
   <dd>{{ realm_user.custom_attr_2|default:"-" }}</dd>
 </dl>
 
-<h4 class="mt-4 mb-2">{{ mapped_realm_group_count }} Mapped group{{mapped_realm_group_count|pluralize }}</h3>
+<h4 class="mt-4 mb-2">{{ mapped_realm_group_count }} Mapped group{{mapped_realm_group_count|pluralize }}</h4>
 
 {% if mapped_realm_group_count %}
 <ul>
@@ -77,12 +77,12 @@
 {% endif %}
 
 {% if perms.auth.view_group %}
-<h4 class="mt-4 mb-2">{{ mapped_group_count }} Mapped role{{ mapped_group_count|pluralize }}</h3>
+<h4 class="mt-4 mb-2">{{ mapped_group_count }} Mapped role{{ mapped_group_count|pluralize }}</h4>
 
 {% if mapped_group_count %}
 <ul>
   {% for group in mapped_groups %}
-  <li><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></li>
+  <li><a href="{% url 'accounts:group' group.pk %}">{{ group }}</a></li>
   {% endfor %}
 </ul>
 {% endif %}
