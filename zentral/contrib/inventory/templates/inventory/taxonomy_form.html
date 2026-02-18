@@ -3,9 +3,9 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'inventory:tags' %}">Inventory tags</a>
+  <li class="breadcrumb-item"><a href="{% url 'inventory:tags' %}">Inventory tags</a></li>
   {% if object %}
-  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
   <li class="breadcrumb-item active">Update</li>
   {% else %}
   <li class="breadcrumb-item active">Create</li>
@@ -14,14 +14,12 @@
 
 <h2>{% if object %}Update{% else %}Create{% endif %} Taxonomy</h2>
 <form method="post" class="update-form">{% csrf_token %}
-  
+
     {{ form }}
-  
+
     <p>
     <a href="{% url 'inventory:tags' %}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-primary">{% if object %}Update{% else %}Create{% endif %}</button>
-        <form>
     </p>
-    </form>
-</div>
+</form>
 {% endblock %}

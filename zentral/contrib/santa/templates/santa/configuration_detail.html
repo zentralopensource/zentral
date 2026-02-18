@@ -61,11 +61,13 @@
                 <td>
                     {% if object.is_monitor_mode %}
                         <span class="badge text-bg-success">
-                    {% else %}
-                        <span class="badge text-bg-danger">
-                    {% endif %}
                             {{ object.get_client_mode_display }}
                         </span>
+                    {% else %}
+                        <span class="badge text-bg-danger">
+                            {{ object.get_client_mode_display }}
+                        </span>
+                    {% endif %}
                 </td>
             </tr>
             <tr>

@@ -49,7 +49,7 @@
 <div class="d-flex justify-content-between">
     <div class="d-flex w-100 me-auto flex-shrink-0">
         <form class="d-flex w-75 me-auto flex-shrink-0" method="GET">
-            
+
             {{ form }}
 
             <button type="submit" class="btn btn-link mb-2">
@@ -58,7 +58,6 @@
         </form>
     </div>
 </div>
-
 
 {% if page_obj %}
 
@@ -117,7 +116,7 @@
             </dl>
             {% if file.bundle %}
             <dl class="row">
-                <dt class="col-2 text-md-end">bundle id</dd>
+                <dt class="col-2 text-md-end">bundle id</dt>
                 <dd class="col-6">{{ file.bundle.bundle_id }}</dd>
             </dl>
             <dl class="row">
@@ -135,12 +134,12 @@
             </dl>
             {% endif %}
             {% endif %}
-            </dl>
+
             {% endfor %}
             {% if target.type == "BUNDLE" %}
             {% with target.bundle as bundle %}
             <dl class="row">
-                <dt class="col-2 text-md-end">id</dd>
+                <dt class="col-2 text-md-end">id</dt>
                 <dd class="col-6">{{ bundle.bundle_id }}</dd>
             </dl>
             <dl class="row">
@@ -240,6 +239,7 @@
             <li>{{ primary_user }}</li>
             {% endfor %}
             </ul>
+        </td>
         </tr>
         {% endif %}
         {% if rule.excluded_primary_users %}
@@ -251,6 +251,7 @@
             <li>{{ primary_user }}</li>
             {% endfor %}
             </ul>
+        </td>
         </tr>
         {% endif %}
         {% with rule.tags.count as tag_count %}

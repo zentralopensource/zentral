@@ -134,7 +134,7 @@
     <table class="table-object-properties">
     <tbody>
         <tr>
-        <th style="width:160px">Request count</td>
+        <th style="width:160px">Request count</th>
         <td class="{% if secret.is_used_up %}text-danger{% else %}text-success{% endif %}">
             {{ secret.request_count }}{% if secret.quota %}/{{ secret.quota }}{% endif %}
         </td>

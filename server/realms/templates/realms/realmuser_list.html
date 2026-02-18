@@ -50,9 +50,9 @@
         {% endif %}
       </td>
       <td><a href="{{ obj.get_absolute_url }}">{{ obj.username }}</a></td>
-      <td>{{ obj.email|default:"-" }}</a></td>
-      <td>{{ obj.first_name|default:"-" }}</a></td>
-      <td>{{ obj.last_name|default:"-" }}</a></td>
+      <td>{{ obj.email|default:"-" }}</td>
+      <td>{{ obj.first_name|default:"-" }}</td>
+      <td>{{ obj.last_name|default:"-" }}</td>
     </tr>
     {% endfor %}
   </tbody>

@@ -3,8 +3,8 @@
 {% block content %}
 <ol class="breadcrumb">
   <li><a href="/">Home</a></li>
-  <li><a href="{% url 'inventory:mbu' %}">Inventory business units</a>
-  <li><a href="{{ mbu.get_absolute_url }}">{{ mbu }}</a>
+  <li><a href="{% url 'inventory:mbu' %}">Inventory business units</a></li>
+  <li><a href="{{ mbu.get_absolute_url }}">{{ mbu }}</a></li>
   <li class="active">Detach {{ bu }}</li>
 </ol>
 

@@ -5,14 +5,14 @@
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'mdm:artifact' object.pk %}">{{ object }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifact' object.pk %}">{{ object }}</a></li>
   <li class="breadcrumb-item active">Update</li>
 </ol>
 
 <h3>Update {{ object }}</h3>
 
-<form class="form" method="post" class="update-form">{% csrf_token %}
-  {{ form }}
+<form class="form update-form" method="post">{% csrf_token %}
+  {{ form }}
   <p>
     <a href="{% url 'mdm:artifact' object.pk %}" class="btn btn-outline-secondary">Cancel</a>
     <button type="submit" class="btn btn-primary">Save</button>

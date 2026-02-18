@@ -7,7 +7,7 @@
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
   {% else %}
   <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
@@ -70,7 +70,7 @@
                     {% else %}
                     {{ mbu.name }}
                     {% endif %}
-                </td>    
+                </td>
                 <td>
                 {% for tag in mbu.tags %}
                     {% inventory_tag tag %}
@@ -114,7 +114,7 @@
             {% endfor %}
         </table>
     </form>
-</div>    
+</div>
 
 {% pagination next_url previous_url %}
 

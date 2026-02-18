@@ -26,9 +26,9 @@
     {{ enrollment_secret_form }}
   <p>
     {% if object %}
-    <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a></li>
+    <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
     {% else %}
-    <a href="{% url 'mdm:enrollments' %}" class="btn btn-outline-secondary">Cancel</a></li>
+    <a href="{% url 'mdm:enrollments' %}" class="btn btn-outline-secondary">Cancel</a>
     {% endif %}
     <button type="submit" class="btn btn-primary">Save</button>
   </p>

@@ -19,7 +19,7 @@
 
 <h2>{% if object %}Update{% else %}Upload{% endif %} package</h2>
 
-<form class="update-form", method="POST" enctype="multipart/form-data">{% csrf_token %}
+<form class="update-form" method="POST" enctype="multipart/form-data">{% csrf_token %}
   {% if object %}
   <div class="form-group">
     <label class="control-label">File</label>

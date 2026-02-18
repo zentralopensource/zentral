@@ -5,7 +5,7 @@
   <li class="breadcrumb-item"><a href="/">Home</a></li>
   {% for url, anchor_text in breadcrumbs %}
   {% if url %}
-  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a>
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
   {% else %}
   <li class="breadcrumb-item active">{{ anchor_text }}</li>
   {% endif %}
@@ -18,7 +18,7 @@
 
 <div class="d-flex flex-wrap align-items-center mb-1">
     <form method="GET" class="search-form">
-        
+
         {{ search_form }}
 
         <button type="submit" class="btn btn-link mb-2">
