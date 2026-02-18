@@ -5,4 +5,4 @@ class ZentralAccountsAppConfig(ZentralAppConfig):
     name = "accounts"
     default = True
     verbose_name = "Zentral accounts app"
-    permission_models = ("apitoken", "user")
+    permission_models = ("apitoken", "user", "oidcapitokenissuer")

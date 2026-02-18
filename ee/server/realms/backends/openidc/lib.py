@@ -1,14 +1,15 @@
+import logging
 import base64
 import hashlib
-import json
 import random
-import time
 from urllib.parse import urlencode
 from django.core.exceptions import SuspiciousOperation
 import requests
-from josepy.jwk import JWK
-from josepy.jws import JWS, Header
 
+from jwt import PyJWKClient
+import jwt
+
+logger = logging.getLogger("server.realms.backends.openidc.lib")
 
 try:
     random = random.SystemRandom()
@@ -68,67 +69,71 @@ def build_authorization_code_flow_url(discovery_url, client_id, redirect_uri, ex
     return "{}?{}".format(openid_configuration["authorization_endpoint"], urlencode(data))
 
 
-def verify_jws(token, client_id, openid_configuration):
-    jws = JWS.from_compact(token.encode("ascii"))
-    json_header = jws.signature.protected
-    header = Header.json_loads(json_header)
-
-    # alg
-    alg = jws.signature.combined.alg.name.upper()
-    if "NONE" in alg:
-        raise SuspiciousOperation("ID token is not signed")
-    if alg not in (alg.upper() for alg in openid_configuration["id_token_signing_alg_values_supported"]):
+def verify_jws(token, audience, openid_configuration):
+    issuer = openid_configuration["issuer"]
+    try:
+        return _verify_jws(
+            token=token,
+            audience=audience,
+            issuer=issuer,
+            oid_config=openid_configuration)
+    except jwt.ExpiredSignatureError:
+        raise SuspiciousOperation("ID token has expired")
+    except jwt.ImmatureSignatureError:
+        raise SuspiciousOperation("ID token not valid yet")
+    except jwt.InvalidIssuerError:
+        raise SuspiciousOperation("Invalid ID token 'iss'")
+    except jwt.InvalidAudienceError:
+        raise SuspiciousOperation("Invalid ID token 'aud'")
+    except jwt.MissingRequiredClaimError as e:
+        if e.claim == "iss":
+            raise SuspiciousOperation("Invalid ID token 'iss'")
+        if e.claim == "aud":
+            raise SuspiciousOperation("Invalid ID token 'aud'")
+        raise SuspiciousOperation("Invalid ID token signature")
+    except jwt.InvalidAlgorithmError:
         raise SuspiciousOperation("Unexpected ID token signature algorithm")
-
-    # retrieve signature key
-    # TODO cache
-    jwks_response = requests.get(openid_configuration["jwks_uri"], headers={"Accept": "application/json"})
-    jwks_response.raise_for_status()
-    jwk = None
-    for jwk_json in jwks_response.json()["keys"]:
-        if jwk_json["kid"] == header.kid:
-            jwk = JWK.from_json(jwk_json)
-            break
-    if not jwk:
-        raise SuspiciousOperation("Could not find ID token signing key")
-
-    # verify signature
-    if not jws.verify(jwk):
+    except (jwt.InvalidSignatureError, jwt.DecodeError, jwt.PyJWTError):
         raise SuspiciousOperation("Invalid ID token signature")
 
-    payload = json.loads(jws.payload.decode('utf-8'))
 
-    # iss
-    if payload.get("iss") != openid_configuration["issuer"]:
-        raise SuspiciousOperation("Invalid ID token 'iss'")
+def verify_jws_with_discovery(token: str, audience: str, issuer_uri: str) -> dict:
+    oid_config = _get_openid_configuration(issuer_uri.rstrip("/") + "/.well-known/openid-configuration")
 
-    # aud
-    if payload.get("aud") != client_id:
-        raise SuspiciousOperation("Invalid ID token 'aud'")
+    return _verify_jws(
+        token=token,
+        audience=audience,
+        issuer=issuer_uri,
+        oid_config=oid_config
+    )
 
-    timestamp = int(time.time())
 
-    # nbf
-    nbf = payload.get("nbf")
-    if nbf is not None:
-        try:
-            nbf = int(nbf)
-        except (TypeError, ValueError):
-            raise SuspiciousOperation("Invalid ID token 'nbf'")
-        if timestamp < nbf - TIMESTAMP_LEEWAY:
-            raise SuspiciousOperation("ID token not valid yet")
+def _verify_jws(token: str, audience: str, issuer: str, oid_config: dict):
+    header = jwt.get_unverified_header(token)
+    algorithm = header.get("alg")
+    if algorithm and "NONE" == algorithm.upper():
+        raise SuspiciousOperation("ID token is not signed")
+    supported_algorithms = [a for a in oid_config["id_token_signing_alg_values_supported"] if a.upper() != "NONE"]
 
-    # exp
-    exp = payload.get("exp")
-    if exp is not None:
-        try:
-            exp = int(exp)
-        except (TypeError, ValueError):
-            raise SuspiciousOperation("Invalid ID token 'exp'")
-        if timestamp > exp + TIMESTAMP_LEEWAY:
-            raise SuspiciousOperation("ID token has expired")
+    try:
+        jwk_client = PyJWKClient(oid_config["jwks_uri"])
+        signing_key = jwk_client.get_signing_key_from_jwt(token).key
+    except Exception:
+        msg = "Could not find ID token signing key"
+        logger.exception(msg)
+        raise SuspiciousOperation(msg)
 
-    return payload
+    return jwt.decode(
+        token,
+        key=signing_key,
+        algorithms=supported_algorithms,
+        audience=audience,
+        issuer=issuer,
+        leeway=TIMESTAMP_LEEWAY,
+        options={
+            "require": ["iss", "aud"],
+        },
+    )
 
 
 def get_claims(discovery_url, client_id, redirect_uri, authorization_code, client_secret, code_verifier):

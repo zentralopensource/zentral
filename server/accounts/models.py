@@ -1,12 +1,17 @@
 import enum
 import uuid
+from datetime import timedelta
 from hashlib import blake2b
 from itertools import chain
+from urllib.parse import urlparse
 
 import pyotp
+
 from django.contrib.auth.models import AbstractUser, Group
 from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Now
@@ -14,6 +19,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
+
 from django_celery_results.models import TaskResult
 
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
@@ -301,6 +307,26 @@ class APIToken(models.Model):
             "hashed_key": self.hashed_key
         })
         return d
+
+
+class OIDCAPITokenIssuer(models.Model):
+
+    def _issuer_uri_validator(value: str):
+        URLValidator()(value)
+        if urlparse(value).scheme != "https":
+            raise ValidationError("URL must use https://")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=256, unique=True)
+    description = models.TextField(blank=True)
+    issuer_uri = models.URLField(validators=[_issuer_uri_validator], null=False)
+    audience = models.TextField(blank=False)
+    cel_condition = models.TextField(blank=True)
+    max_duration = models.DurationField(default=timedelta(hours=1))
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 class UserTask(models.Model):

@@ -40,7 +40,7 @@ snowflake-connector-python
 sqlparse                        # SQL syntax highlighting
 tqdm
 XlsxWriter
-josepy                          # Auth / OpenID Connect
+PyJWT<3                         # Auth / OpenID Connect
 python-ldap                     # Auth / LDAP
 webauthn                        # Auth / WebAuthn
 google-api-python-client
