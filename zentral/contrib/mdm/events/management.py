@@ -1,7 +1,7 @@
 import logging
+
 from zentral.core.events import register_event_type
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
-
 
 logger = logging.getLogger('zentral.contrib.mdm.events.management')
 
@@ -63,6 +63,26 @@ def post_recovery_password_viewed_event(request, enrolled_device):
         request=EventRequest.build_from_request(request),
     )
     event = RecoveryPasswordViewedEvent(event_metadata, {})
+    event.post()
+
+
+# Device lock pin
+
+
+class DeviceLockPinViewedEvent(BaseEvent):
+    event_type = "device_lock_pin_viewed"
+    tags = ["mdm"]
+
+
+register_event_type(DeviceLockPinViewedEvent)
+
+
+def post_device_lock_pin_viewed_event(request, enrolled_device):
+    event_metadata = EventMetadata(
+        machine_serial_number=enrolled_device.serial_number,
+        request=EventRequest.build_from_request(request),
+    )
+    event = DeviceLockPinViewedEvent(event_metadata, {})
     event.post()
 
 

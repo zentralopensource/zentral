@@ -49,7 +49,7 @@ To be able to send notifications to the devices, Zentral requires a push certifi
 
 ### Configure Apple Push Notification Service (APNS)
 
-To configure the Apple Push Notification Service (APNS) for Zentral Cloud, follow these steps. 
+To configure the Apple Push Notification Service (APNS) for Zentral Cloud, follow these steps.
 
 * From the sidebar or three-line menu in the top-right corner, navigate to the Zentral *MDM > Overview > Push certificates* section.
 * Click the `Zentral Cloud` link under the Name column to go to the certificate detail page.
@@ -59,12 +59,12 @@ To configure the Apple Push Notification Service (APNS) for Zentral Cloud, follo
 * Click the checkbox to the left of the "I have read and agree to these terms and conditions." text and click the Accept button
 * On the "Create a Push Certificate" page, optionally enter a note, click the "Choose File" button and navigate to the `push_certificate_1_signed_csr.b64` signed certificate request file, and then click the "Upload" button.
 * On the "Confirmation" page, click the "Download" button.
-* Return to the Zentral *MDM > Overview > Push certificates > Zentral Cloud* certificate detail page. 
+* Return to the Zentral *MDM > Overview > Push certificates > Zentral Cloud* certificate detail page.
 * From the top right corner, click the "Upload Push Certificate" "up-arrow" button to go to the upload page
 * Click the "Choose File" button and navigate to the "MDM_ Zentral Pro Services GmbH & Co. KG_Certificate.pem" certificate and click the Open button in the filepicker.
 • Click the green Save button.
 
-As you can now see the certificate details filled in above, this configuration is now ready for Zentral MDM push capabilities. To renew an existing push certificate, repeat those steps. 
+As you can now see the certificate details filled in above, this configuration is now ready for Zentral MDM push capabilities. To renew an existing push certificate, repeat those steps.
 
 **IMPORTANT** do not let the push/APNS certificates expire! Set a reminder and renew it before the "Not after" date listed, or at a regular interval more frequent than the lifetime of the certificate.
 
@@ -142,7 +142,7 @@ To set up Automated Device Enrollment (ADE) to work with Zentral, follow these s
 * Log into your ABM/ASM account and select *Preferences* under your user in the bottom-left corner (assuming your user has the appropriate permissions) and look for the *Device Management Services* section in the middle column, under "API".
 * Add a new MDM Server by clicking the "plus-circle" with 'Add' below it at the top of that section, setting a Service Name as you'd prefer. (You may also choose, now or after the entry has been created, to allow Zentral to release devices on your behalf, in which case you'd click that associated radio button as well.)
 * Upload the <your_zentral_domain_name>.zentral.cloud_public_key_<number>_<datetimestamp>.pem public key as directed in the 'well' section on the right pane, and click the Save button.
-* Once the page refreshes, click the `Download Token` button at the top of the right-pane window. A warning will appear indicating this would reset any pre-existing token, but as this the first time you're interacting with this entry it's safe to confirm by clicking the Download Token button. 
+* Once the page refreshes, click the `Download Token` button at the top of the right-pane window. A warning will appear indicating this would reset any pre-existing token, but as this the first time you're interacting with this entry it's safe to confirm by clicking the Download Token button.
 * Return to Zentral and click the "Choose File" button to upload the MDM server token in the *MDM > Overview > DEP Virtual Servers* section.
 * Once an *Enrollment* profile has been created (see the section below), you can assign it as the default enrollment for this token.
 
@@ -172,7 +172,7 @@ Device syncing occurs at scheduled intervals. If the device assignments from ABM
 
 Blueprints in Zentral are templates that group MDM settings and configurations. They determine which profiles, settings, and apps are applied to managed devices, enabling consistent and standardized management through simple assignment.
 
-### How MDM Blueprints Work 
+### How MDM Blueprints Work
 
 Blueprints include essential settings for inventory collection and its interval, as well as configurations for `FileVault`, `Recovery password`, which are applied in a 1:1 relationship. For `Software Update Enforcement` one or more configurations can be used within a Blueprint, and by applying tags in a multiple-configuration scenario, different enforcement levels can be scoped to tagged device cohorts, enabling fine-grained update strategies across device groups.
 
@@ -278,7 +278,7 @@ Content in ASM/ABM *Apps and Books > "AppName" > Manage Licenses* that is assign
 
 ## Software Update Enforcement Configuration
 
-Zentral uses Declarative Device Management (DDM) to configure policies for enforcing software updates across Apple platforms (macOS, iOS, iPadOS, tvOS). These policies ensure that devices update to a specific OS version by a defined target date and time, while allowing users to install the update at a time convenient for them (prior to the enforcement date). 
+Zentral uses Declarative Device Management (DDM) to configure policies for enforcing software updates across Apple platforms (macOS, iOS, iPadOS, tvOS). These policies ensure that devices update to a specific OS version by a defined target date and time, while allowing users to install the update at a time convenient for them (prior to the enforcement date).
 
 The configuration allows an optional *Details URL* setting, which is displayed in update messages on the device. This can provide a link to additional information (e.g., internal or public documentation) for end users.
 
@@ -292,7 +292,7 @@ Zentral offers two variants for setting up a Software Update Enforcement configu
 - **Latest**
 
   This type automatically enforces the latest available OS version up to a **Maximum target OS version**. Zentral will use the *device identifier* and match information from the *Apple Software Lookup Service* to return the latest OS version (e.g., `16` to install all macOS 15 updates on your fleet, but to stop before installing 16). Set the **Delay in days** following the software release and a **Target local time** to configure the enforcement time (e.g.`7` for 7 days and `09:30:00` for 9:30 a.m.).
-  
+
 In both types, if a user does not install the update by the specified deadline, it is automatically enforced. Enforcement times are based on the device's local time zone, allowing a single configuration to work seamlessly across different regions.
 
 To read more about Apple's logic for enforcing software updates, refer to the [Apple Platform Deployment Guide](https://support.apple.com/en-gb/guide/deployment/depd30715cbb/1/web/1.0).
@@ -309,7 +309,7 @@ To create and manage software update enforcement settings in Zentral, follow the
    - *Details URL*: (Optional) A URL link, to provide info for end users.
    - *Platforms*: Select the platforms to which the enforcement applies (iOS, iPadOS, macOS, tvOS).
    - *Tags*: Add tags to specify which devices or groups the configuration will apply to.
-   - *Type*: Choose the direction of how the enforcement schedule is set (as outlined above): 
+   - *Type*: Choose the direction of how the enforcement schedule is set (as outlined above):
         - **One-Time**: Set the *Target OS version*, *Target build version* (optional), and *Target local date and time*.
         - **Latest**: Set the *Maximum target OS version*, *Delay in days*, and *Target local time*.
 4. Click *Save* to store the configuration.
@@ -353,15 +353,15 @@ There are two types of passwords, static passwords, which set the same password 
 
 ### Configuring a Recovery Password
 
-1. Navigate to *MDM > Recovery Password Configurations*.  
-2. Click the *Add* button to create a new configuration.  
-3. Complete the following options:  
-   - **Name**: Enter a display name for the configuration.  
-   - **Dynamic Password**: Enable to generate unique passwords for each device.  
-   - **Static Password**: Provide a static password for all devices *(only available when Dynamic Password is disabled)*.  
-   - **Rotation Interval (days)**: Set the interval for automatic password rotation. Enter `0` to disable rotation.  
-   - **Rotate Firmware Password**: Enable firmware password rotation *(only for Intel-based Macs; a reboot is required to apply the new password)*.  
-4. Click *Save* to apply the configuration.  
+1. Navigate to *MDM > Recovery Password Configurations*.
+2. Click the *Add* button to create a new configuration.
+3. Complete the following options:
+   - **Name**: Enter a display name for the configuration.
+   - **Dynamic Password**: Enable to generate unique passwords for each device.
+   - **Static Password**: Provide a static password for all devices *(only available when Dynamic Password is disabled)*.
+   - **Rotation Interval (days)**: Set the interval for automatic password rotation. Enter `0` to disable rotation.
+   - **Rotate Firmware Password**: Enable firmware password rotation *(only for Intel-based Macs; a reboot is required to apply the new password)*.
+4. Click *Save* to apply the configuration.
 
 ### Linking a Recovery Password Configuration to a Blueprint
 
@@ -376,19 +376,19 @@ A recovery password configuration can be applied to multiple blueprints.
 
 To update an existing configuration:
 
-1. Navigate to *MDM > Overview > Recovery Password Configurations*.  
-2. Locate the desired configuration and click the *Edit* button next to it.  
-3. Adjust the settings as needed (refer to the configuration steps for guidance).  
-4. Click *Save* to apply the changes.  
+1. Navigate to *MDM > Overview > Recovery Password Configurations*.
+2. Locate the desired configuration and click the *Edit* button next to it.
+3. Adjust the settings as needed (refer to the configuration steps for guidance).
+4. Click *Save* to apply the changes.
 
 ### Remove a Recovery Password Configuration
 
 A Recovery Password Configuration can only be deleted if it is not linked to any Blueprint. If the *Delete* button is unavailable, check associated Blueprints and ensure the configuration is no longer in use.
 
-1. Navigate to *MDM > Overview > Recovery Password Configurations*.  
-2. Review the configuration by clicking its name.  
-3. Use the *Delete* button in the list view or on the configuration details page.  
-4. Confirm the deletion when prompted.  
+1. Navigate to *MDM > Overview > Recovery Password Configurations*.
+2. Review the configuration by clicking its name.
+3. Use the *Delete* button in the list view or on the configuration details page.
+4. Confirm the deletion when prompted.
 
 ## HTTP API
 
@@ -600,8 +600,8 @@ Response:
 
 Use this endpoint to list the MDM enrolled devices.
 
-`tags` and `excluded_tags` can be repeated to specify multiple machine tags. The `ID` of the tags must be used.  
-`short_name` is the username of the MDM managed device user account.   
+`tags` and `excluded_tags` can be repeated to specify multiple machine tags. The `ID` of the tags must be used.
+`short_name` is the username of the MDM managed device user account.
 `email` is the email of the realm user who authenticated during the MDM enrollment.
 sessions.
 
@@ -910,6 +910,31 @@ Response:
   "id": 27,
   "serial_number": "012345678910",
   "filevault_prk": "0000-0000-0000-0000-0000-0000"
+}
+```
+
+### `/api/mdm/devices/<int:pk>/device_lock_pin/`
+
+ * method: `GET`
+ * required permission: `mdm.view_device_lock_pin`
+
+Returns the device lock pin for an MDM enrolled device.
+
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/devices/27/device_lock_pin/
+```
+
+Response:
+
+```json
+{
+  "id": 27,
+  "serial_number": "012345678910",
+  "device_lock_pin": "123456"
 }
 ```
 

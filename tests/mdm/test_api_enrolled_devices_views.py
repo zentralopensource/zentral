@@ -1,18 +1,26 @@
-from datetime import datetime
 import plistlib
+from datetime import datetime
 from unittest.mock import patch
+
+from accounts.models import APIToken, User
 from django.contrib.auth.models import Group
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
-from accounts.models import APIToken, User
-from zentral.contrib.inventory.models import MetaBusinessUnit, MachineTag, Tag
+
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
+from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.commands import SetAutoAdminPassword
 from zentral.contrib.mdm.commands.base import load_command
-from zentral.contrib.mdm.events import AdminPasswordViewedEvent, FileVaultPRKViewedEvent, RecoveryPasswordViewedEvent
+from zentral.contrib.mdm.events import (
+    AdminPasswordViewedEvent,
+    DeviceLockPinViewedEvent,
+    FileVaultPRKViewedEvent,
+    RecoveryPasswordViewedEvent,
+)
 from zentral.contrib.mdm.models import Platform
-from zentral_test_utils.login_case import LoginCase
-from zentral_test_utils.request_case import RequestCase
+
 from .utils import force_dep_enrollment_session, force_enrolled_user
 
 
@@ -1187,3 +1195,69 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
         command_qs = self.enrolled_device.commands.all()
         self.assertEqual(command_qs.count(), 0)
+
+    # enrolled device device log pin
+
+    def test_enrolled_device_device_lock_pin_unauthorized(self):
+        response = self.get(reverse("mdm_api:enrolled_device_device_lock_pin", args=(self.enrolled_device.pk,)),
+                            include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_enrolled_device_device_lock_pin_permission_denied(self):
+        response = self.get(reverse("mdm_api:enrolled_device_device_lock_pin", args=(self.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrolled_device_device_lock_pin_login_permission_denied(self):
+        self.login()
+        response = self.get(reverse("mdm_api:enrolled_device_device_lock_pin", args=(self.enrolled_device.pk,)),
+                            include_token=False)
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_device_lock_pin_null(self, post_event):
+        self.set_permissions("mdm.view_device_lock_pin")
+        response = self.get(reverse("mdm_api:enrolled_device_device_lock_pin", args=(self.enrolled_device.pk,)))
+        self.assertEqual(
+            response.json(),
+            {"id": self.enrolled_device.pk,
+             "serial_number": self.enrolled_device.serial_number,
+             "device_lock_pin": None}
+        )
+        post_event.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_device_lock_pin(self, post_event):
+        self.enrolled_device.platform = Platform.MACOS
+        self.enrolled_device.set_device_lock_pin("123456")
+        self.enrolled_device.save()
+        self.set_permissions("mdm.view_device_lock_pin")
+        response = self.get(reverse("mdm_api:enrolled_device_device_lock_pin", args=(self.enrolled_device.pk,)))
+        self.assertEqual(
+            response.json(),
+            {"id": self.enrolled_device.pk,
+             "serial_number": self.enrolled_device.serial_number,
+             "device_lock_pin": "123456"}
+        )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, DeviceLockPinViewedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_device_lock_pin_login(self, post_event):
+        self.enrolled_device.platform = Platform.MACOS
+        self.enrolled_device.set_device_lock_pin("123456")
+        self.enrolled_device.save()
+        self.login("mdm.view_device_lock_pin")
+        response = self.get(reverse("mdm_api:enrolled_device_device_lock_pin", args=(self.enrolled_device.pk,)),
+                            include_token=False)
+        self.assertEqual(
+            response.json(),
+            {"id": self.enrolled_device.pk,
+             "serial_number": self.enrolled_device.serial_number,
+             "device_lock_pin": "123456"}
+        )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, DeviceLockPinViewedEvent)
+        self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)

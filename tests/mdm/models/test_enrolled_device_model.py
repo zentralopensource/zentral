@@ -4,12 +4,33 @@ from datetime import datetime
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
+from tests.mdm.utils import force_push_certificate
 from zentral.contrib.mdm.models import EnrolledDevice
-
-from .utils import force_push_certificate
 
 
 class TestMDMEnrolledDeviceModel(TestCase):
+
+    def test_enrolled_device_get_secret_engine_kwargs(self):
+        uid = uuid.uuid4()
+        enrolled_device = EnrolledDevice.objects.create(
+            udid=uid,
+            serial_number="0123456789",
+            push_certificate=force_push_certificate(),
+        )
+        self.assertEqual(
+            {"field": "serial_number", "model": "mdm.enrolleddevice", "udid": uid},
+            enrolled_device._get_secret_engine_kwargs("serial_number"),
+        )
+
+    def test_enrolled_device_get_secret_engine_kwargs_raise(self):
+        enrolled_device = EnrolledDevice.objects.create(
+            serial_number="0123456789",
+            push_certificate=force_push_certificate(),
+        )
+        with self.assertRaises(ValueError) as e:
+            enrolled_device._get_secret_engine_kwargs("serial_number")
+        self.assertEqual(e.exception.args[0], "EnrolledDevice must have a UDID")
+
     def test_enrolled_device_set_bootstrap_token_none(self):
         enrolled_device = EnrolledDevice.objects.create(
             udid=uuid.uuid4(),

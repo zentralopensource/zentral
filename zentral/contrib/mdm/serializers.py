@@ -5,14 +5,18 @@ import plistlib
 import re
 import uuid
 import zipfile
+
 from django.core.files import File
 from django.db import transaction
 from rest_framework import serializers
+
 from zentral.contrib.inventory.models import EnrollmentSecret, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.contrib.mdm.dep import define_dep_profile, serialize_dep_profile
 from zentral.utils.external_resources import download_external_resource
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.ssl import ensure_bytes
+
 from .app_manifest import read_package_info, validate_configuration
 from .artifacts import Target, update_blueprint_serialized_artifacts
 from .cert_issuer_backends import CertIssuerBackend
@@ -23,31 +27,46 @@ from .cert_issuer_backends.okta_ca import OktaCASerializer
 from .cert_issuer_backends.static_challenge import StaticChallengeSerializer
 from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
 from .declarations import verify_declaration_source
-from .dep import assign_dep_device_profile, DEPClientError
-from .events import post_admin_password_viewed_event
-from .models import (ACMEIssuer,
-                     Artifact, ArtifactVersion, ArtifactVersionTag,
-                     Blueprint, BlueprintArtifact, BlueprintArtifactTag,
-                     DEPDevice, DEPEnrollment, DEPVirtualServer,
-                     CertAsset, DataAsset,
-                     Declaration, DeclarationRef,
-                     DeviceCommand,
-                     EnrolledDevice, EnrolledUser,
-                     EnterpriseApp, FileVaultConfig,
-                     Location, LocationAsset,
-                     OTAEnrollment,
-                     Platform, Profile, ProvisioningProfile, PushCertificate,
-                     RecoveryPasswordConfig,
-                     SCEPIssuer,
-                     SoftwareUpdateEnforcement,
-                     StoreApp,
-                     UserCommand,
-                     EnrollmentCustomView, DEPEnrollmentCustomView)
+from .dep import DEPClientError, assign_dep_device_profile
+from .events import post_admin_password_viewed_event, post_device_lock_pin_viewed_event
+from .models import (
+    ACMEIssuer,
+    Artifact,
+    ArtifactVersion,
+    ArtifactVersionTag,
+    Blueprint,
+    BlueprintArtifact,
+    BlueprintArtifactTag,
+    CertAsset,
+    DataAsset,
+    Declaration,
+    DeclarationRef,
+    DEPDevice,
+    DEPEnrollment,
+    DEPEnrollmentCustomView,
+    DEPVirtualServer,
+    DeviceCommand,
+    EnrolledDevice,
+    EnrolledUser,
+    EnrollmentCustomView,
+    EnterpriseApp,
+    FileVaultConfig,
+    Location,
+    LocationAsset,
+    OTAEnrollment,
+    Platform,
+    Profile,
+    ProvisioningProfile,
+    PushCertificate,
+    RecoveryPasswordConfig,
+    SCEPIssuer,
+    SoftwareUpdateEnforcement,
+    StoreApp,
+    UserCommand,
+)
 from .payloads import get_configuration_profile_info
 from .utils import get_provisioning_profile_info
 from .validators import DEPEnrollmentValidator
-from zentral.contrib.mdm.dep import define_dep_profile, serialize_dep_profile
-
 
 logger = logging.getLogger("zentral.contrib.mdm.serializers")
 
@@ -179,6 +198,21 @@ class EnrolledDeviceAdminPasswordSerializer(serializers.ModelSerializer):
                     Target(instance),
                     instance.current_enrollment.admin_password_rotation_delay
                 )
+        return r
+
+
+class EnrolledDeviceDeviceLockPinSerializer(serializers.ModelSerializer):
+    device_lock_pin = serializers.CharField(source="get_device_lock_pin")
+
+    class Meta:
+        model = EnrolledDevice
+        fields = ("id", "serial_number", "device_lock_pin")
+        read_only_fields = ("id", "serial_number", "device_lock_pin")
+
+    def to_representation(self, instance):
+        r = super().to_representation(instance)
+        if r.get("device_lock_pin"):
+            post_device_lock_pin_viewed_event(self.context['request'], instance)
         return r
 
 
