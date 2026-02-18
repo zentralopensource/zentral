@@ -1,591 +1,716 @@
 {% extends 'base.html' %}
+{% load i18n %}
 {% load base_extras ui_extras %}
-
 {% block content %}
-<ol class="breadcrumb">
-  <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
-  <li class="breadcrumb-item active">{{ object.udid|privacywrapper }}</li>
-</ol>
-
-<div class="object-details">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item">
+      <a href="/">Home</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'mdm:index' %}">MDM</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'mdm:enrolled_devices' %}">Devices</a>
+    </li>
+    <li class="breadcrumb-item active">{{ object.udid|privacywrapper }}</li>
+  </ol>
+  <div class="object-details">
     <div class="d-flex align-items-center mb-1">
-        <h2 class="m-0">{{ object.udid|privacywrapper }}</h2>
+      <h2 class="m-0">{{ object.udid|privacywrapper }}</h2>
     </div>
     <div class="d-flex align-items-center mb-3">
-        <h3 class="m-0 fs-5 text-secondary">Device</h3>
+      <h3 class="m-0 fs-5 text-secondary">Device</h3>
     </div>
-
-    <table class="table-object-properties">
-    <tbody>
+    <table class="table-object-properties mb-5">
+      <tbody>
         <tr>
-        <th style="width:220px">UDID</th>
-        <td><code>{{ object.udid|privacywrapper }}</code></td>
+          <th style="width:300px">UDID</th>
+          <td>
+            <code>{{ object.udid|privacywrapper  }}</code>
+          </td>
         </tr>
         <tr>
-        <th>Serial number</th>
-        <td>
+          <th>Serial number</th>
+          <td>
             {% with object.get_urlsafe_serial_number as urlsafe_serial_number %}
-            {% if urlsafe_serial_number %}
-            {% if perms.inventory.view_machinesnapshot %}
-            <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number|privacywrapper }}</a>
-            {% else %}
-            {{ object.serial_number|privacywrapper }}
-            {% endif %}
-            {% else %}
-            -
-            {% endif %}
+              {% if urlsafe_serial_number %}
+                {% if perms.inventory.view_machinesnapshot %}
+                  <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ object.serial_number|privacywrapper }}</a>
+                {% else %}
+                  {{ object.serial_number|privacywrapper }}
+                {% endif %}
+              {% else %}
+                -
+              {% endif %}
             {% endwith %}
-        </td>
+          </td>
         </tr>
         <tr>
-        <th>Model</th>
-        <td>{{ object.model|default:"-" }}</td>
+          <th>Model</th>
+          <td>{{ object.model|default:"-" }}</td>
         </tr>
         <tr>
-        <th>Name</th>
-        <td>{{ object.name|default:"-" }}</td>
+          <th>Name</th>
+          <td>{{ object.name|default:"-" }}</td>
         </tr>
         <tr>
-        <th>Platform</th>
-        <td>
+          <th>Platform</th>
+          <td>
             {% with object.get_architecture_for_display as architecture %}
-            {% with object.full_os_version as full_os_version %}
-            {{ object.get_platform_display }}
-            {% if full_os_version %} - {{ full_os_version }}{% endif %}
-            {% if architecture %} - {{ architecture }}{% endif %}
+              {% with object.full_os_version as full_os_version %}
+                {{ object.get_platform_display }}
+                {% if full_os_version %}- {{ full_os_version }}{% endif %}
+                {% if architecture %}- {{ architecture }}{% endif %}
+              {% endwith %}
             {% endwith %}
-            {% endwith %}
-        </td>
+          </td>
         </tr>
         <tr>
-        <th>Available update{{ available_software_updates|length|pluralize }}</th>
-        <td>{% if available_software_updates %}{{ available_software_updates|join:", " }}{% else %}-{% endif %}</td>
+          <th>Available update{{ available_software_updates|length|pluralize }}</th>
+          <td>
+            {% if available_software_updates %}
+              {{ available_software_updates|join:", " }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
         </tr>
         {% with object.users.count as users_count %}
-        <tr>
-        <th>MDM user{{ users_count|pluralize }}</th>
-        <td>
-            {% if users_count %}
-            <ul class="list-unstyled">
-            {% for user in object.users.all %}
-            <li>
-                {% if perms.mdm.view_enrolleduser %}
-                <a href="{{ user.get_absolute_url }}">{{ user.long_name }}</a>
-                {% else %}
-                {{ user.long_name }}
-                {% endif %}
-            </li>
-            {% endfor %}
-            </ul>
-            {% else %}
-            -
-            {% endif %}
-        </td>
-        </tr>
+          <tr>
+            <th>MDM user{{ users_count|pluralize }}</th>
+            <td>
+              {% if users_count %}
+                <ul class="list-unstyled">
+                  {% for user in object.users.all %}
+                    <li>
+                      {% if perms.mdm.view_enrolleduser %}
+                        <a href="{{ user.get_absolute_url }}">{{ user.long_name }}</a>
+                      {% else %}
+                        {{ user.long_name }}
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
         {% endwith %}
+      </tbody>
+    </table>
+    <h4>Management status</h4>
+    <table class="table-object-properties mb-5">
+      <tbody>
         <tr>
-        <td colspan="2"><h4>Management status</h4></td>
-        </tr>
-        <tr>
-        <th>Push certificate</th>
-        <td>
+          <th width="300px">Push certificate</th>
+          <td>
             {% if perms.mdm.view_pushcertificate %}
-            <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
+              <a href="{{ object.push_certificate.get_absolute_url }}">{{ object.push_certificate }}</a>
             {% else %}
-            {{ object.push_certificate }}
+              {{ object.push_certificate }}
             {% endif %}
-        </td>
+          </td>
         </tr>
         <tr>
-        <th>Blueprint</th>
-        <td>
+          <th>Blueprint</th>
+          <td>
             {% if object.blueprint %}
-            {% if perms.mdm.view_blueprint %}
-            <a href="{{ object.blueprint.get_absolute_url }}">{{ object.blueprint }}</a>
+              {% if perms.mdm.view_blueprint %}
+                <a href="{{ object.blueprint.get_absolute_url }}">{{ object.blueprint }}</a>
+              {% else %}
+                {{ object.blueprint }}
+              {% endif %}
             {% else %}
-            {{ object.blueprint }}
-            {% endif %}
-            {% else %}
-            no blueprint
+              no blueprint
             {% endif %}
             {% if perms.mdm.change_enrolleddevice %}
-            <a href="{% url 'mdm:change_enrolled_device_blueprint' object.pk %}" class="btn btn-primary btn-xs" style="margin-left:10px">
-            Change
-            </a>
+              <a href="{% url 'mdm:change_enrolled_device_blueprint' object.pk %}"
+                 class="btn btn-primary btn-xs"
+                 style="margin-left:10px">Change</a>
             {% endif %}
-        </td>
+          </td>
         </tr>
         <tr>
-        <th>Declarative management</th>
-        <td>{{ object.declarative_management|yesno }}</td>
+          <th>Declarative management</th>
+          <td>{{ object.declarative_management|yesno }}</td>
         </tr>
         <tr>
-        <th>DEP device{{ dep_device_count|pluralize }}</th>
-        <td>
-          {% if dep_device_count %}
-          <table class="table table-condensed">
-            <tr>
-              <th>Virtual server</th>
-              <th>Enrollment</th>
-              <th>Last OP</th>
-              <th>Last OP date</th>
-            </tr>
-            {% for dep_device in dep_devices %}
-            <tr>
-              <td>
-                {% if perms.mdm.view_depvirtualserver %}
-                <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
-                {% else %}
-                {{ dep_device.virtual_server }}
-                {% endif %}
-              </td>
-              <td>
-                {% if dep_device.enrollment %}
-                {% if perms.mdm.view_depenrollment %}
-                <a href="{{ dep_device.enrollment.get_absolute_url }}">{{ dep_device.enrollment }}</a>
-                {% else %}
-                {{ dep_device.enrollment }}
-                {% endif %}
-                {% else %}
-                -
-                {% endif %}
-              </td>
-              <td>
-                {{ dep_device.get_last_op_type_display|default:"-" }}
-              </td>
-              <td>
-                {{ dep_device.last_op_date|date:'SHORT_DATETIME_FORMAT'|default:"-" }}
-              </td>
-            </tr>
-            {% endfor %}
-          </table>
-          {% else %}
-          -
-          {% endif %}
-        </td>
+          <th>DEP device{{ dep_device_count|pluralize }}</th>
+          <td>
+            {% if dep_device_count %}
+              <table class="table table-condensed">
+                <tr>
+                  <th>Virtual server</th>
+                  <th>Enrollment</th>
+                  <th>Last OP</th>
+                  <th>Last OP date</th>
+                </tr>
+                {% for dep_device in dep_devices %}
+                  <tr>
+                    <td>
+                      {% if perms.mdm.view_depvirtualserver %}
+                        <a href="{{ dep_device.get_absolute_url }}">{{ dep_device.virtual_server }}</a>
+                      {% else %}
+                        {{ dep_device.virtual_server }}
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if dep_device.enrollment %}
+                        {% if perms.mdm.view_depenrollment %}
+                          <a href="{{ dep_device.enrollment.get_absolute_url }}">{{ dep_device.enrollment }}</a>
+                        {% else %}
+                          {{ dep_device.enrollment }}
+                        {% endif %}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td>{{ dep_device.get_last_op_type_display|default:"-" }}</td>
+                    <td>{{ dep_device.last_op_date|date:'SHORT_DATETIME_FORMAT'|default:"-" }}</td>
+                  </tr>
+                {% endfor %}
+              </table>
+            {% else %}
+              -
+            {% endif %}
+          </td>
         </tr>
         <tr>
-        <th>Certificate fingerprint</th>
-        <td><code>{{ object.cert_fingerprint.hex }}</code></td>
+          <th>Certificate fingerprint</th>
+          <td>
+            <code>{{ object.cert_fingerprint.hex  }}</code>
+          </td>
         </tr>
         <tr>
-        <th>Certificate expiry</th>
-        <td>{{ object.cert_not_valid_after|date:"SHORT_DATETIME_FORMAT" }}</td>
+          <th>Certificate expiry</th>
+          <td>{{ object.cert_not_valid_after|date:"SHORT_DATETIME_FORMAT" }}</td>
         </tr>
         <tr>
-        <th>Certificate att. serial number</th>
-        <td>{{ object.cert_att_serial_number|default:"-" }}</td>
+          <th>Certificate att. serial number</th>
+          <td>{{ object.cert_att_serial_number|default:"-" }}</td>
         </tr>
         <tr>
-        <th>Certificate att. UDID</th>
-        <td>{{ object.cert_att_udid|default:"-" }}</td>
+          <th>Certificate att. UDID</th>
+          <td>{{ object.cert_att_udid|default:"-" }}</td>
         </tr>
         <tr>
-        <th>DEP enrollment?</th>
-        <td>{{ object.dep_enrollment|yesno }}</td>
+          <th>DEP enrollment?</th>
+          <td>{{ object.dep_enrollment|yesno }}</td>
         </tr>
         <tr>
-        <th>User enrollment?</th>
-        <td>{{ object.user_enrollment|yesno }}</td>
+          <th>User enrollment?</th>
+          <td>{{ object.user_enrollment|yesno }}</td>
         </tr>
         <tr>
-        <th>User approved?</th>
-        <td>{{ object.user_approved_enrollment|yesno }}</td>
+          <th>User approved?</th>
+          <td>{{ object.user_approved_enrollment|yesno }}</td>
         </tr>
         <tr>
-        <th>Activation lock manageable?</th>
-        <td>{{ object.activation_lock_manageable|yesno }}</td>
+          <th>Activation lock manageable?</th>
+          <td>{{ object.activation_lock_manageable|yesno }}</td>
         </tr>
         <tr>
-        <th>Supervised?</th>
-        <td>{{ object.supervised|yesno }}</td>
+          <th>Supervised?</th>
+          <td>{{ object.supervised|yesno }}</td>
         </tr>
         <tr>
-        <th>Checkout</th>
-        <td>{{ object.checkout_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+          <th>Checkout</th>
+          <td>{{ object.checkout_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
         </tr>
         <tr>
-        <th>Blocked?</th>
-        <td>
+          <th>Blocked?</th>
+          <td>
             {{ object.blocked_at|date:"SHORT_DATETIME_FORMAT"|default:"No" }}
             {% if perms.mdm.change_enrolleddevice %}
-            {% if object.blocked_at %}
-            <a href="{% url 'mdm:unblock_enrolled_device' object.pk %}" class="btn btn-success btn-xs" style="margin-left:10px">
-            Unblock
-            </a>
-            {% else %}
-            <a href="{% url 'mdm:block_enrolled_device' object.pk %}" class="btn btn-danger btn-xs" style="margin-left:10px">
-            Block
-            </a>
-            {% endif %}
-            {% endif %}
-        </td>
-        </tr>
-        {% if object.platform == "macOS" %}
-        <tr>
-        <td colspan="2"><h4>Bootstrap token</h4></td>
-        </tr>
-        <tr>
-        <th>Set?</th>
-        <td>{{ object.bootstrap_token|yesno }}</td>
-        </tr>
-        <tr>
-        <th>Allowed for authentication?</th>
-        <td>
-            {% if object.bootstrap_token_allowed_for_authentication is None %}
-            ?
-            {% else %}
-            {{ object.bootstrap_token_allowed_for_authentication|yesno }}
-            {% endif %}
-        </td>
-        </tr>
-        <tr>
-        <th>Required for software update?</th>
-        <td>
-            {% if object.bootstrap_token_required_for_software_update is None %}
-            ?
-            {% else %}
-            {{ object.bootstrap_token_required_for_software_update|yesno }}
-            {% endif %}
-        </td>
-        </tr>
-        <tr>
-        <th>Required for kext approval?</th>
-        <td>
-            {% if object.bootstrap_token_required_for_kext_approval is None %}
-            ?
-            {% else %}
-            {{ object.bootstrap_token_required_for_kext_approval|yesno }}
-            {% endif %}
-        </td>
-        </tr>
-        <tr>
-          <td colspan="2"><h4>Auto admin</h4></td>
-        </tr>
-        <tr>
-          <th>GUID</th>
-          <td>
-            {% if object.admin_guid %}
-            <code>{{ object.admin_guid }}</code>
-            {% else %}
-            -
+              {% if object.blocked_at %}
+                <a href="{% url 'mdm:unblock_enrolled_device' object.pk %}"
+                   class="btn btn-success btn-xs"
+                   style="margin-left:10px">Unblock</a>
+              {% else %}
+                <a href="{% url 'mdm:block_enrolled_device' object.pk %}"
+                   class="btn btn-danger btn-xs"
+                   style="margin-left:10px">Block</a>
+              {% endif %}
             {% endif %}
           </td>
         </tr>
-        <tr>
-          <th>Short name</th>
-          <td>{{ object.admin_shortname|default:"-" }}</td>
-        </tr>
-        <tr>
-          <th>Password</th>
-          <td>
-            {% if object.admin_password and perms.mdm.view_admin_password %}
-            <a href="#" class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3 me-2" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_admin_password' object.pk %}" data-key="admin_password" style="cursor:pointer"></a>
-            <div class="input-group input-group-sm invisible w-50 alert alert-primary p-2 mt-1" style="display: none">
-              <input style="font-family:monospace; display: none;" class="ed-secret form-control" disabled="true" id="admin-password-secret" data-bs-toggle="manual" data-bs-placement="bottom" data-bs-title="Copied!" />
-              <span class="copy-ed-secret bi bi-clipboard-plus input-group-text" aria-hidden="true" data-secret-id="admin-password-secret" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;"></span>
-            </div>
-            {% else %}
-            {{ object.admin_password_escrowed|yesno }}
-            {% endif %}
-          </td>
-        </tr>
-        {% with object.security_info as security_info %}
-        {% if security_info %}
-        <tr>
-        <td colspan="2"><h4>SIP</h4></td>
-        </tr>
-        <tr>
-        <th>Enabled?</th>
-        <td>{{ security_info.SystemIntegrityProtectionEnabled|yesno }}</td>
-        </tr>
-        <tr>
-        <td colspan="2"><h4>FDE</h4></td>
-        </tr>
-        <tr>
-        <th>Enabled?</th>
-        <td>{{ security_info.FDE_Enabled|yesno }}</td>
-        </tr>
-        <tr>
-        <th>Personal recovery key</th>
-        <td>
-            {% if object.filevault_prk and perms.mdm.view_filevault_prk %}
-            <span class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3 me-2" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}" data-key="filevault_prk" style="cursor:pointer"></span>
-            <div class="input-group input-group-sm invisible w-50 alert alert-primary mt-1 p-2" style="display: none">
-              <input style="font-family:monospace; display: none;" class="ed-secret form-control" disabled="true"  id="filevault_prk-secret" data-bs-toggle="manual" data-bs-placement="bottom" data-bs-title="Copied!" />
-              <span class="copy-ed-secret bi bi-clipboard-plus input-group-text" aria-hidden="true" data-secret-id="filevault_prk-secret" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;"></span>
-            </div>
-            {% else %}
-            {{ security_info.FDE_HasPersonalRecoveryKey|yesno }}
-            {% endif %}
-        </td>
-        </tr>
-        <tr>
-        <th>Institutional recovery key?</th>
-        <td>{{ security_info.FDE_HasInstitutionalRecoveryKey|yesno }}</td>
-        </tr>
-        {% endif %}
-        {% endwith %}
-        {% if object.platform == "macOS" %}
-        <tr>
-        <td colspan="2"><h4>Recovery OS</h4></td>
-        </tr>
-        <tr>
-        <th>{% if object.apple_silicon %}Recovery lock{% else %}Firmware password{% endif %}</th>
-        <td>
-            {% if object.recovery_password %}
-            {% if perms.mdm.view_recovery_password %}
-            <span class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3  me-2" aria-hidden="true" data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}" data-key="recovery_password" style="cursor:pointer"></span>
-            <div class="input-group input-group-sm invisible w-50 alert alert-primary mt-1 p-2" style="display: none">
-              <input style="font-family:monospace; display: none;" class="ed-secret form-control" disabled="true"  id="recovery_password-secret" data-bs-toggle="manual" data-bs-placement="bottom" data-bs-title="Copied!" />
-              <span class="copy-ed-secret bi bi-clipboard-plus input-group-text" aria-hidden="true" data-secret-id="recovery_password-secret" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;"></span>
-            </div>
-            {% else %}
-            Yes
-            {% endif %}
-            {% else %}
-            No
-            {% endif %}
-            {% if  object.pending_firmware_password_created_at %}
-            <br>
-            Pending change, {{ object.pending_firmware_password_created_at }}
-            {% endif %}
-        </td>
-        </tr>
-        {% endif %}
-        {% with object.security_info.SecureBoot as secure_boot %}
-        {% if secure_boot %}
-        <tr>
-        <td colspan="2"><h4>Secure boot</h4></td>
-        </tr>
-        <tr>
-        <th>Level</th>
-        <td>{{ secure_boot.SecureBootLevel }}</td>
-        </tr>
-        <tr>
-        <th>Windows boot level</th>
-        <td>{{ secure_boot.WindowsBootLevel }}</td>
-        </tr>
-        <tr>
-        <th>External boot level</th>
-        <td>{{ secure_boot.ExternalBootLevel }}</td>
-        </tr>
-        {% endif %}
-        {% endwith %}
-        {% endif %}
-    </tbody>
+      </tbody>
     </table>
-</div>
-
-<h3>Artifact{{ target_artifacts_count|pluralize }} ({{ target_artifacts_count }})</h3>
-
-{% if target_artifacts_count %}
-<table class="table table-striped align-middle">
-  <thead>
-    <tr>
-      <th>Type</th>
-      <th>Artifact</th>
-      <th>Version</th>
-      <th>Status</th>
-      <th>Last updated</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for target_artifact in target_artifacts %}
-    {% with target_artifact.artifact_version as artifact_version %}
-    {% with artifact_version.artifact as artifact %}
-    <tr>
-      <td>{{ artifact.get_type_display }}</td>
-      <td>
-        {% if perms.mdm.view_artifact %}
-        <a href="{{ artifact.get_absolute_url }}">{{ artifact }}</a>
-        {% else %}
-        {{ artifact }}
+    {% if object.platform == "macOS" %}
+      <h4>Bootstrap token</h4>
+      <table class="table-object-properties mb-5">
+        <tbody>
+          <tr>
+            <th width="300px">Set?</th>
+            <td>{{ object.bootstrap_token|yesno }}</td>
+          </tr>
+          <tr>
+            <th>Allowed for authentication?</th>
+            <td>
+              {% if object.bootstrap_token_allowed_for_authentication is None %}
+                ?
+              {% else %}
+                {{ object.bootstrap_token_allowed_for_authentication|yesno }}
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th>Required for software update?</th>
+            <td>
+              {% if object.bootstrap_token_required_for_software_update is None %}
+                ?
+              {% else %}
+                {{ object.bootstrap_token_required_for_software_update|yesno }}
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th>Required for kext approval?</th>
+            <td>
+              {% if object.bootstrap_token_required_for_kext_approval is None %}
+                ?
+              {% else %}
+                {{ object.bootstrap_token_required_for_kext_approval|yesno }}
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <h4>Auto admin</h4>
+      <table class="table-object-properties mb-5">
+        <tbody>
+          <tr>
+            <th width="300px">GUID</th>
+            <td>
+              {% if object.admin_guid %}
+                <code>{{ object.admin_guid }}</code>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th>Short name</th>
+            <td>{{ object.admin_shortname|default:"-" }}</td>
+          </tr>
+          <tr>
+            <th>Password</th>
+            <td>
+              {% if object.admin_password and perms.mdm.view_admin_password %}
+                <a href="#"
+                   class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3 me-2"
+                   aria-hidden="true"
+                   data-url="{% url 'mdm_api:enrolled_device_admin_password' object.pk %}"
+                   data-key="admin_password"
+                   style="cursor:pointer"></a>
+                <div class="input-group input-group-sm invisible w-50 alert alert-primary p-2 mt-1"
+                     style="display: none">
+                  <input style="font-family:monospace;
+                                display: none"
+                         class="ed-secret form-control"
+                         disabled="true"
+                         id="admin-password-secret"
+                         data-bs-toggle="manual"
+                         data-bs-placement="bottom"
+                         data-bs-title="Copied!" />
+                  <span class="copy-ed-secret bi bi-clipboard-plus input-group-text"
+                        aria-hidden="true"
+                        data-secret-id="admin-password-secret"
+                        data-bs-toggle="tooltip"
+                        data-bs-placement="bottom"
+                        data-bs-title="Copy to clipboard"
+                        style="cursor:pointer"></span>
+                </div>
+              {% else %}
+                {{ object.admin_password_escrowed|yesno }}
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {% with object.security_info as security_info %}
+        {% if security_info %}
+          <h4>SIP</h4>
+          <table class="table-object-properties mb-5">
+            <tbody>
+              <tr>
+                <th width="300px">Enabled?</th>
+                <td>{{ security_info.SystemIntegrityProtectionEnabled|yesno }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <h4>FDE</h4>
+          <table class="table-object-properties mb-5">
+            <tbody>
+              <tr>
+                <th width="300px">Enabled?</th>
+                <td>{{ security_info.FDE_Enabled|yesno }}</td>
+              </tr>
+              <tr>
+                <th>Personal recovery key</th>
+                <td>
+                  {% if object.filevault_prk and perms.mdm.view_filevault_prk %}
+                    <span class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3 me-2"
+                          aria-hidden="true"
+                          data-url="{% url 'mdm_api:enrolled_device_filevault_prk' object.pk %}"
+                          data-key="filevault_prk"
+                          style="cursor:pointer"></span>
+                    <div class="input-group input-group-sm invisible w-50 alert alert-primary mt-1 p-2"
+                         style="display: none">
+                      <input style="font-family:monospace;
+                                    display: none"
+                             class="ed-secret form-control"
+                             disabled="true"
+                             id="filevault_prk-secret"
+                             data-bs-toggle="manual"
+                             data-bs-placement="bottom"
+                             data-bs-title="Copied!" />
+                      <span class="copy-ed-secret bi bi-clipboard-plus input-group-text"
+                            aria-hidden="true"
+                            data-secret-id="filevault_prk-secret"
+                            data-bs-toggle="tooltip"
+                            data-bs-placement="bottom"
+                            data-bs-title="Copy to clipboard"
+                            style="cursor:pointer"></span>
+                    </div>
+                  {% else %}
+                    {{ security_info.FDE_HasPersonalRecoveryKey|yesno }}
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th>Institutional recovery key?</th>
+                <td>{{ security_info.FDE_HasInstitutionalRecoveryKey|yesno }}</td>
+              </tr>
+            </tbody>
+          </table>
         {% endif %}
-      </td>
-      <td>
-        {% if perms.mdm.view_artifact %}
-        <a href="{{ artifact_version.get_absolute_url }}">{{ artifact_version.version }}</a>
-        {% else %}
-        {{ artifact_version.version }}
+      {% endwith %}
+      {% if object.platform == "macOS" %}
+        <h4>Recovery OS</h4>
+        <table class="table-object-properties mb-5">
+          <tbody>
+            <tr>
+              <th width="300px">
+                {% if object.apple_silicon %}
+                  Recovery lock
+                {% else %}
+                  Firmware password
+                {% endif %}
+              </th>
+              <td>
+                {% if object.recovery_password %}
+                  {% if perms.mdm.view_recovery_password %}
+                    <span class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3  me-2"
+                          aria-hidden="true"
+                          data-url="{% url 'mdm_api:enrolled_device_recovery_password' object.pk %}"
+                          data-key="recovery_password"
+                          style="cursor:pointer"></span>
+                    <div class="input-group input-group-sm invisible w-50 alert alert-primary mt-1 p-2"
+                         style="display: none">
+                      <input style="font-family:monospace;
+                                    display: none"
+                             class="ed-secret form-control"
+                             disabled="true"
+                             id="recovery_password-secret"
+                             data-bs-toggle="manual"
+                             data-bs-placement="bottom"
+                             data-bs-title="Copied!" />
+                      <span class="copy-ed-secret bi bi-clipboard-plus input-group-text"
+                            aria-hidden="true"
+                            data-secret-id="recovery_password-secret"
+                            data-bs-toggle="tooltip"
+                            data-bs-placement="bottom"
+                            data-bs-title="Copy to clipboard"
+                            style="cursor:pointer"></span>
+                    </div>
+                  {% else %}
+                    Yes
+                  {% endif %}
+                {% else %}
+                  {% translate "No" %}
+                {% endif %}
+                {% if  object.pending_firmware_password_created_at %}
+                  <br>
+                  Pending change, {{ object.pending_firmware_password_created_at }}
+                {% endif %}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      {% endif %}
+      {% with object.security_info.SecureBoot as secure_boot %}
+        {% if secure_boot %}
+          <h4>Secure boot</h4>
+          <table class="table-object-properties mb-5">
+            <tbody>
+              <tr>
+                <th width="300px">Level</th>
+                <td>{{ secure_boot.SecureBootLevel }}</td>
+              </tr>
+              <tr>
+                <th>Windows boot level</th>
+                <td>{{ secure_boot.WindowsBootLevel }}</td>
+              </tr>
+              <tr>
+                <th>External boot level</th>
+                <td>{{ secure_boot.ExternalBootLevel }}</td>
+              </tr>
+            </tbody>
+          </table>
         {% endif %}
-      </td>
-      <td>
-        {{ target_artifact.get_status_display }}
-        {% if target_artifact.extra_info.reasons %}
-        <a data-bs-toggle="collapse" href="#mi-{{ target_artifact.pk }}">more info</a>
-        <div  class="collapse" id="mi-{{ target_artifact.pk }}">
-          {% for reason in target_artifact.extra_info.reasons %}
-          {{ reason|pythonprettyprint }}
-          {% endfor %}
-        </div>
-        {% endif %}
-      </td>
-      <td>
-        {{ target_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}
-      </td>
-    </tr>
-    {% endwith %}
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-
-<h3>Device assignment{{ device_assignments_count|pluralize }} ({{ device_assignments_count }})</h3>
-
-{% if device_assignments_count %}
-<table class="table table-striped align-middle">
-  <thead>
-    <tr>
-      <th></th>
-      <th>Location</th>
-      <th>Name</th>
-      <th>Bundle ID</th>
-      <th>Platform</th>
-      <th>Assign time</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for device_assignment in device_assignments %}
-    {% with device_assignment.location_asset as location_asset %}
-    {% with location_asset.asset as asset %}
-    <tr>
-      <td>
-        {% if asset.icon_url %}
-        {% if asset.store_url %}
-        <a href="{{ asset.store_url }}">
-            <img style="max-width:32px;max-height:32px" src="{{ asset.icon_url }}">
-        </a>
-        {% else %}
-        <img style="max-width:32px;max-height:32px" src="{{ asset.icon_url }}">
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-      </td>
-      <td>
-        {% if perms.mdm.view_location %}
-        <a href="{{ location_asset.location.get_absolute_url }}">{{ location_asset.location }}</a>
-        {% else %}
-        {{ location_asset.location }}
-        {% endif %}
-      </td>
-      <td>
-        {% if perms.mdm.view_asset %}
-        <a href="{{ location_asset.get_absolute_url }}">{{ asset.name }}</a>
-        {% else %}
-        {{ asset.name }}
-        {% endif %}
-      </td>
-      <td>{{ asset.bundle_id }}</td>
-      <td>{{ asset.supported_platforms|join:", " }}</td>
-      <td>{{ device_assignment.created_at }}</td>
-    </tr>
-    {% endwith %}
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-
-<div class="d-flex align-items-center mb-1">
+      {% endwith %}
+      {% if perms.mdm.view_devicelock %}
+        <h4>Device Lock</h4>
+        <table class="table-object-properties mb-5">
+          <tbody>
+            <tr>
+              <th width="300px">Device lock</th>
+              <td>
+                {% if object.device_lock_pin %}
+                  <span class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3  me-2"
+                        aria-hidden="true"
+                        data-url="{% url 'mdm_api:enrolled_device_device_lock_pin' object.pk %}"
+                        data-key="device_lock_pin"
+                        style="cursor:pointer"></span>
+                  <div class="input-group input-group-sm invisible w-50 alert alert-primary mt-1 p-2"
+                       style="display: none">
+                    <input style="font-family:monospace;
+                                  display: none"
+                           class="ed-secret form-control"
+                           disabled="true"
+                           id="device_lock_pin-secret"
+                           data-bs-toggle="manual"
+                           data-bs-placement="bottom"
+                           data-bs-title="Copied!" />
+                    <span class="copy-ed-secret bi bi-clipboard-plus input-group-text"
+                          aria-hidden="true"
+                          data-secret-id="device_lock_pin-secret"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="bottom"
+                          data-bs-title="Copy to clipboard"
+                          style="cursor:pointer"></span>
+                  </div>
+                {% else %}
+                  {% translate "No" %}
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <th>Device lock updated at</th>
+              <td>{{ object.device_lock_pin_updated_at | date:"SHORT_DATETIME_FORMAT" | default:"-" }}</td>
+            </tr>
+          </tbody>
+        </table>
+      {% endif %}
+    {% endif %}
+  </div>
+  <h3>Artifact{{ target_artifacts_count|pluralize }} ({{ target_artifacts_count }})</h3>
+  {% if target_artifacts_count %}
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Artifact</th>
+          <th>Version</th>
+          <th>Status</th>
+          <th>Last updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for target_artifact in target_artifacts %}
+          {% with target_artifact.artifact_version as artifact_version %}
+            {% with artifact_version.artifact as artifact %}
+              <tr>
+                <td>{{ artifact.get_type_display }}</td>
+                <td>
+                  {% if perms.mdm.view_artifact %}
+                    <a href="{{ artifact.get_absolute_url }}">{{ artifact  }}</a>
+                  {% else %}
+                    {{ artifact }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if perms.mdm.view_artifact %}
+                    <a href="{{ artifact_version.get_absolute_url }}">{{ artifact_version.version  }}</a>
+                  {% else %}
+                    {{ artifact_version.version }}
+                  {% endif %}
+                </td>
+                <td>
+                  {{ target_artifact.get_status_display }}
+                  {% if target_artifact.extra_info.reasons %}
+                    <a data-bs-toggle="collapse" href="#mi-{{ target_artifact.pk }}">more info</a>
+                    <div class="collapse" id="mi-{{ target_artifact.pk }}">
+                      {% for reason in target_artifact.extra_info.reasons %}{{ reason|pythonprettyprint }}{% endfor %}
+                    </div>
+                  {% endif %}
+                </td>
+                <td>{{ target_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+              </tr>
+            {% endwith %}
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+  <h3>Device assignment{{ device_assignments_count|pluralize }} ({{ device_assignments_count }})</h3>
+  {% if device_assignments_count %}
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Location</th>
+          <th>Name</th>
+          <th>Bundle ID</th>
+          <th>Platform</th>
+          <th>Assign time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for device_assignment in device_assignments %}
+          {% with device_assignment.location_asset as location_asset %}
+            {% with location_asset.asset as asset %}
+              <tr>
+                <td>
+                  {% if asset.icon_url %}
+                    {% if asset.store_url %}
+                      <a href="{{ asset.store_url }}">
+                        <img style="max-width:32px;max-height:32px" src="{{ asset.icon_url }}">
+                      </a>
+                    {% else %}
+                      <img style="max-width:32px;max-height:32px" src="{{ asset.icon_url }}">
+                    {% endif %}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {% if perms.mdm.view_location %}
+                    <a href="{{ location_asset.location.get_absolute_url }}">{{ location_asset.location }}</a>
+                  {% else %}
+                    {{ location_asset.location }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if perms.mdm.view_asset %}
+                    <a href="{{ location_asset.get_absolute_url }}">{{ asset.name }}</a>
+                  {% else %}
+                    {{ asset.name }}
+                  {% endif %}
+                </td>
+                <td>{{ asset.bundle_id }}</td>
+                <td>{{ asset.supported_platforms|join:", "  }}</td>
+                <td>{{ device_assignment.created_at  }}</td>
+              </tr>
+            {% endwith %}
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+  <div class="d-flex align-items-center mb-1">
     <h3 class="m-0">Last commands</h3>
     <div class="ms-auto">
-        {% if perms.mdm.change_enrolleddevice %}
-        <form style="display:inline-block" method="POST" action="{% url 'mdm:poke_enrolled_device' object.pk %}">{% csrf_token %}
-            <button type="submit" class="btn btn-success" {% if not object.can_be_poked %}disabled="disabled"{% endif %}
-                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Poke!">
-                <i class="bi bi-hand-index"></i>
-            </button>
+      {% if perms.mdm.change_enrolleddevice %}
+        <form style="display:inline-block"
+              method="POST"
+              action="{% url 'mdm:poke_enrolled_device' object.pk %}">
+          {% csrf_token %}
+          <button type="submit"
+                  class="btn btn-success"
+                  {% if not object.can_be_poked %}disabled="disabled"{% endif %}
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="bottom"
+                  data-bs-title="Poke!">
+            <i class="bi bi-hand-index"></i>
+          </button>
         </form>
-        {% endif %}
-        {% if perms.mdm.add_devicecommand and create_command_links %}
+      {% endif %}
+      {% if perms.mdm.add_devicecommand and create_command_links %}
         <div class="btn-group">
-            <button class="btn btn-link dropdown-toggle" type="button" id="createCommand"
-                    data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-                <i class="bi bi-plus-circle"></i>
-            </button>
-            <ul class="dropdown-menu" aria-labelledby="createCommand">
+          <button class="btn btn-link dropdown-toggle"
+                  type="button"
+                  id="createCommand"
+                  data-bs-toggle="dropdown"
+                  aria-haspopup="true"
+                  aria-expanded="true">
+            <i class="bi bi-plus-circle"></i>
+          </button>
+          <ul class="dropdown-menu" aria-labelledby="createCommand">
             {% for cc_url, cc_display_name in create_command_links %}
-            <li><a class="dropdown-item" href="{{ cc_url }}">{{ cc_display_name }}</a></li>
+              <li>
+                <a class="dropdown-item" href="{{ cc_url }}">{{ cc_display_name }}</a>
+              </li>
             {% endfor %}
-            </ul>
+          </ul>
         </div>
-        {% endif %}
+      {% endif %}
     </div>
-</div>
-
-{% if commands_count %}
-<table class="table table-striped align-middle ">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Artifact</th>
-      <th>Time</th>
-      <th>Result time</th>
-      <th>Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for loaded_command in loaded_commands %}
-    {% with loaded_command.db_command as command %}
-    <tr>
-      <td>
-        {{ command.name }}{% if command.name != loaded_command.request_type %} ({{ loaded_command.request_type }}){% endif %}
-      </td>
-      <td>
-        {% if command.artifact_version %}
-        {% if perms.mdm.view_artifactversion %}
-        <a href="{{ command.artifact_version.get_absolute_url }}">{{ command.artifact_version }}</a>
-        {% else %}
-        {{ command.artifact_version }}
-        {% endif %}
-        {% else %}
-        -
-        {% endif %}
-      </td>
-      <td>
-        {% if command.time %}
-        {{ command.time|date:"SHORT_DATETIME_FORMAT" }}
-        {% else %}
-        Queued since {{ command.created_at|date:"SHORT_DATETIME_FORMAT" }}
-        {% endif %}
-      </td>
-      <td>
-        {{ command.result_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}
-      </td>
-      <td>
-        {{ command.get_status_display|default:"-" }}
-        {% if command.result %}
-            {% url 'mdm:download_enrolled_device_command_result' command.uuid as url %}
-            {% button 'DOWNLOAD' url "Download Result" %}
-        {% endif %}
-      </td>
-    </tr>
-    {% endwith %}
-    {% endfor %}
-  </tbody>
-</table>
-
-{% if commands_count > 1 %}
-<p><a href="{% url 'mdm:enrolled_device_commands' object.pk %}">See all commands</a></p>
-{% endif %}
-
-{% endif %}
-
-{% if enrollment_session_info_count %}
-<h3>Enrollment session{{ enrollment_session_info_count|pluralize }} ({{ enrollment_session_info_count }})</h3>
-
-{% include "mdm/_enrollment_session_info_list.html" %}
-{% endif %}
-
+  </div>
+  {% if commands_count %}
+    <table class="table table-striped align-middle ">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Artifact</th>
+          <th>Time</th>
+          <th>Result time</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for loaded_command in loaded_commands %}
+          {% with loaded_command.db_command as command %}
+            <tr>
+              <td>
+                {{ command.name }} {% if command.name != loaded_command.request_type %}({{ loaded_command.request_type }}){% endif %}
+              </td>
+              <td>
+                {% if command.artifact_version %}
+                  {% if perms.mdm.view_artifactversion %}
+                    <a href="{{ command.artifact_version.get_absolute_url }}">{{ command.artifact_version }}</a>
+                  {% else %}
+                    {{ command.artifact_version }}
+                  {% endif %}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                {% if command.time %}
+                  {{ command.time|date:"SHORT_DATETIME_FORMAT" }}
+                {% else %}
+                  Queued since {{ command.created_at|date:"SHORT_DATETIME_FORMAT" }}
+                {% endif %}
+              </td>
+              <td>{{ command.result_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+              <td>
+                {{ command.get_status_display|default:"-" }}
+                {% if command.result %}
+                  {% url 'mdm:download_enrolled_device_command_result' command.uuid as url %}
+                  {% button 'DOWNLOAD' url "Download Result" %}
+                {% endif %}
+              </td>
+            </tr>
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if commands_count > 1 %}
+      <p>
+        <a href="{% url 'mdm:enrolled_device_commands' object.pk %}">See all commands</a>
+      </p>
+    {% endif %}
+  {% endif %}
+  {% if enrollment_session_info_count %}
+    <h3>Enrollment session{{ enrollment_session_info_count|pluralize }} ({{ enrollment_session_info_count }})</h3>
+    {% include "mdm/_enrollment_session_info_list.html" %}
+  {% endif %}
 {% endblock %}
-
 {% block extrajs %}
-<script nonce="{{ request.csp_nonce }}">
+  <script nonce="{{ request.csp_nonce }}">
   function showEDSecret($btn) {
     var url = $btn.data("url");
     var key = $btn.data("key");
@@ -596,9 +721,14 @@
         var $input_parent = $btn.next('.input-group');
         var $input_el = $input_parent.find('.ed-secret');
         $input_parent.toggleClass('invisible').toggle();
-        $input_el.val(data[key]).toggle();
         $btn.removeClass("bi-eye").addClass("bi-eye-slash");
-        $btn.prev(".copy-ed-secret").show();
+        if (data[key]) {
+          $input_el.val(data[key]).toggle();
+          $btn.prev(".copy-ed-secret").show();
+        } else {
+          $input_parent.text('There is no data available. Please reload the page.')
+          $input_parent.removeClass('alert-primary').addClass('alert-danger')
+        }
       }
     });
   }
@@ -648,5 +778,5 @@
       copyEDSecret($(this));
     });
   });
-</script>
+  </script>
 {% endblock %}

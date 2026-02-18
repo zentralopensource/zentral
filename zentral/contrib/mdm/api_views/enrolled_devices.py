@@ -1,22 +1,35 @@
 from uuid import uuid4
-from django.db.models import Exists, OuterRef, JSONField
+
+from accounts.api_authentication import APITokenAuthentication
+from django.db.models import Exists, JSONField, OuterRef
 from django.db.models.expressions import RawSQL
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.generics import ListAPIView, RetrieveAPIView
-from rest_framework.views import APIView
 from rest_framework.response import Response
-from accounts.api_authentication import APITokenAuthentication
+from rest_framework.views import APIView
+
 from zentral.contrib.inventory.models import MachineTag, Tag
 from zentral.contrib.mdm.artifacts import Target
-from zentral.contrib.mdm.commands import CustomCommand, EraseDevice, DeviceLock
-from zentral.contrib.mdm.events import post_filevault_prk_viewed_event, post_recovery_password_viewed_event
+from zentral.contrib.mdm.commands import CustomCommand, DeviceLock, EraseDevice
+from zentral.contrib.mdm.events import (
+    post_filevault_prk_viewed_event,
+    post_recovery_password_viewed_event,
+)
 from zentral.contrib.mdm.models import Channel, EnrolledDevice
-from zentral.contrib.mdm.serializers import (DeviceCommandSerializer,
-                                             EnrolledDeviceSerializer, EnrolledDeviceAdminPasswordSerializer)
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired, MaxLimitOffsetPagination
+from zentral.contrib.mdm.serializers import (
+    DeviceCommandSerializer,
+    EnrolledDeviceAdminPasswordSerializer,
+    EnrolledDeviceDeviceLockPinSerializer,
+    EnrolledDeviceSerializer,
+)
+from zentral.utils.drf import (
+    DefaultDjangoModelPermissions,
+    DjangoPermissionRequired,
+    MaxLimitOffsetPagination,
+)
 
 
 class EnrolledDeviceFilter(filters.FilterSet):
@@ -197,6 +210,14 @@ class EnrolledDeviceAdminPassword(RetrieveAPIView):
     permission_required = "mdm.view_admin_password"
     permission_classes = [DjangoPermissionRequired]
     serializer_class = EnrolledDeviceAdminPasswordSerializer
+    queryset = EnrolledDevice.objects.all()
+
+
+class EnrolledDeviceDeviceLockPin(RetrieveAPIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
+    permission_required = "mdm.view_device_lock_pin"
+    permission_classes = [DjangoPermissionRequired]
+    serializer_class = EnrolledDeviceDeviceLockPinSerializer
     queryset = EnrolledDevice.objects.all()
 
 

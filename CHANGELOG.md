@@ -12,6 +12,8 @@ Better copy-to-clipboard handling for secrets.
 
 #### MDM
 
+The current device lock PIN for the MDM enrolled devices is now stored and can be retrieved in the UI.
+
 Add Provisioning Profile artifacts
 
 HTML templates of enrollment custom view can now be downloaded in the detail view of the enrollment custom view.
