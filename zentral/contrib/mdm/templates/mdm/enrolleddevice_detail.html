@@ -221,7 +221,7 @@
         <tr>
           <th>Blocked?</th>
           <td>
-            {{ object.blocked_at|date:"SHORT_DATETIME_FORMAT"|default:"No" }}
+            {{ object.blocked_at|date:"SHORT_DATETIME_FORMAT"|default:"no" }}
             {% if perms.mdm.change_enrolleddevice %}
               {% if object.blocked_at %}
                 <a href="{% url 'mdm:unblock_enrolled_device' object.pk %}"
@@ -426,10 +426,10 @@
                             style="cursor:pointer"></span>
                     </div>
                   {% else %}
-                    Yes
+                    {% translate "yes" %}
                   {% endif %}
                 {% else %}
-                  {% translate "No" %}
+                  {% translate "no" %}
                 {% endif %}
                 {% if  object.pending_firmware_password_created_at %}
                   <br>
@@ -461,14 +461,15 @@
           </table>
         {% endif %}
       {% endwith %}
-      {% if perms.mdm.view_devicelock %}
-        <h4>Device Lock</h4>
-        <table class="table-object-properties mb-5">
-          <tbody>
-            <tr>
-              <th width="300px">Device lock</th>
-              <td>
-                {% if object.device_lock_pin %}
+
+      <h4>Device lock</h4>
+      <table class="table-object-properties mb-5">
+        <tbody>
+          <tr>
+            <th width="300px">Device lock</th>
+            <td>
+              {% if object.device_lock_pin %}
+                {% if perms.mdm.view_device_lock_pin %}
                   <span class="show-ed-secret bi bi-eye btn btn-link float-start mt-2 mb-3  me-2"
                         aria-hidden="true"
                         data-url="{% url 'mdm_api:enrolled_device_device_lock_pin' object.pk %}"
@@ -493,17 +494,20 @@
                           style="cursor:pointer"></span>
                   </div>
                 {% else %}
-                  {% translate "No" %}
+                  {% translate "yes" %}
                 {% endif %}
-              </td>
-            </tr>
-            <tr>
-              <th>Device lock updated at</th>
-              <td>{{ object.device_lock_pin_updated_at | date:"SHORT_DATETIME_FORMAT" | default:"-" }}</td>
-            </tr>
-          </tbody>
-        </table>
-      {% endif %}
+              {% else %}
+                {% translate "no" %}
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th>Device lock updated at</th>
+            <td>{{ object.device_lock_pin_updated_at | date:"SHORT_DATETIME_FORMAT" | default:"-" }}</td>
+          </tr>
+        </tbody>
+      </table>
+
     {% endif %}
   </div>
   <h3>Artifact{{ target_artifacts_count|pluralize }} ({{ target_artifacts_count }})</h3>
@@ -714,12 +718,12 @@
   function showEDSecret($btn) {
     var url = $btn.data("url");
     var key = $btn.data("key");
+    var $input_parent = $btn.next('.input-group');
+    var $input_el = $input_parent.find('.ed-secret');
     $.ajax({
       dataType: "json",
       url: $btn.data("url"),
       success: function ( data ) {
-        var $input_parent = $btn.next('.input-group');
-        var $input_el = $input_parent.find('.ed-secret');
         $input_parent.toggleClass('invisible').toggle();
         $btn.removeClass("bi-eye").addClass("bi-eye-slash");
         if (data[key]) {
@@ -729,6 +733,11 @@
           $input_parent.text('There is no data available. Please reload the page.')
           $input_parent.removeClass('alert-primary').addClass('alert-danger')
         }
+      },
+      error: function(xhr, status, error) {
+        $input_parent.toggleClass('invisible').toggle();
+        $input_parent.text('There is no data available. Please contact your administrator.')
+        $input_parent.removeClass('alert-primary').addClass('alert-danger')
       }
     });
   }
