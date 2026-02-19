@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
+from uuid import uuid4
 
 from django.urls import reverse
 from django.utils import timezone
@@ -31,14 +32,14 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
             user=user,
             name=get_random_string(12),
             description="",
-            issuer_uri=f"https://issuer_{get_random_string(5)}.zentral.com",
+            issuer_uri="https://issuer.zentral.com",
             audience=f"aud-{get_random_string(10)}",
             cel_condition=cel_condition,
             max_duration=timedelta(seconds=60),
         )
 
-    def post(self, url, data=None):
-        return super().post(url=url, data=data, include_token=False)
+    def post(self, url, data=None, include_token=False):
+        return super().post(url=url, data=data, include_token=include_token)
 
     # OIDCAPITokenExchangeView
 
@@ -181,3 +182,158 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.data["detail"], "Invalid CEL policy")
+
+    # OIDCAPITokenIssuerViewList
+
+    def test_list_token_issuers_unauthorized(self):
+        response = self.get(reverse("accounts_api:oidc_api_token_issuers"), include_token=False)
+        self.assertEqual(response.status_code, 401, response.data)
+
+    def test_list_token_issuers_forbidden(self):
+        response = self.get(reverse("accounts_api:oidc_api_token_issuers"))
+        self.assertEqual(response.status_code, 403, response.data)
+
+    def test_list_token_issuers(self):
+        self.set_permissions("accounts.view_oidcapitokenissuer")
+        response = self.get(url=reverse("accounts_api:oidc_api_token_issuers"))
+        self.assertEqual(response.status_code, 200, response.data)
+        issuers_page = response.json()
+        self.assertEqual(1, issuers_page["count"])
+        self.assertEqual(str(self.issuer.id), issuers_page["results"][0]["id"])
+
+    def test_create_issuer_success_admin_sets_user(self):
+        self.set_permissions("accounts.add_oidcapitokenissuer")
+        payload = {
+            "user": self.service_account.pk,
+            "name": get_random_string(12),
+            "description": "",
+            "issuer_uri": "https://issuer.zentral.com",
+            "audience": f"aud-{get_random_string(10)}",
+            "cel_condition": "",
+            "max_duration": "00:01:00"
+        }
+
+        response = self.post(
+            url=reverse("accounts_api:oidc_api_token_issuers"), 
+            data=payload,
+            include_token=True)
+        self.assertEqual(response.status_code, 201)
+
+        created_id = response.data["id"]
+        issuer = OIDCAPITokenIssuer.objects.get(pk=created_id)
+        self.assertEqual(issuer.name, payload["name"])
+
+    def test_create_issuer_with_valid_cel_condition(self):
+        self.set_permissions("accounts.add_oidcapitokenissuer")
+        payload = {
+            "user": self.service_account.pk,
+            "name": get_random_string(12),
+            "description": "",
+            "issuer_uri": "https://issuer.zentral.com",
+            "audience": f"aud-{get_random_string(10)}",
+            "cel_condition": "claims.sub == 'abc'",
+            "max_duration": "00:01:00"
+        }
+
+        response = self.post(
+            url=reverse("accounts_api:oidc_api_token_issuers"), 
+            data=payload,
+            include_token=True)
+
+        self.assertIn(response.status_code, (200, 201), response.data)
+        self.assertEqual(response.data.get("cel_condition"), "claims.sub == 'abc'")
+
+    def test_create_triggers_https_url_validator(self):
+        self.set_permissions("accounts.add_oidcapitokenissuer")
+        payload = {
+            "user": self.service_account.pk,
+            "name": get_random_string(12),
+            "description": "",
+            "issuer_uri": "http://issuer.example.com",
+            "audience": f"aud-{get_random_string(10)}",
+            "cel_condition": "",
+            "max_duration": "00:01:00",
+        }
+
+        response = self.post(
+            url=reverse("accounts_api:oidc_api_token_issuers"),
+            data=payload,
+            include_token=True)
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("issuer_uri", response.data)
+
+    def test_update_triggers_https_cel_validator(self):
+        self.set_permissions("accounts.add_oidcapitokenissuer")
+        payload = {
+            "user": self.service_account.pk,
+            "name": get_random_string(12),
+            "description": "",
+            "issuer_uri": "https://issuer.example.com",
+            "audience": f"aud-{get_random_string(10)}",
+            "cel_condition": "claims.sub ==",
+            "max_duration": "00:01:00",
+        }
+
+        response = self.post(
+            url=reverse("accounts_api:oidc_api_token_issuers"),
+            data=payload,
+            include_token=True)
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("cel_condition", response.data)
+
+    # OIDCAPITokenIssuerViewDetail
+
+    def test_token_issuer_unauthorized(self):
+        response = self.get(reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)), include_token=False)
+        self.assertEqual(response.status_code, 401, response.data)
+
+    def test_token_issuer_forbidden(self):
+        response = self.get(reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)))
+        self.assertEqual(response.status_code, 403, response.data)
+
+    def test_token_issuer(self):
+        self.set_permissions("accounts.view_oidcapitokenissuer")
+        response = self.get(reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)))
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["id"], str(self.issuer.pk))
+
+    def test_token_issuer_update_unauthorized(self):
+        response = self.put(reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)),
+                            {},
+                            include_token=False)
+        self.assertEqual(response.status_code, 401, response.data)
+
+    def test_token_issuer_update_forbidden(self):
+        response = self.put(reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)), {})
+        self.assertEqual(response.status_code, 403, response.data)
+
+    def test_token_issuer_update(self):
+        self.set_permissions("accounts.change_oidcapitokenissuer")
+        payload = {
+            "user": self.service_account.pk,
+            "name": self.issuer.name,
+            "issuer_uri": self.issuer.issuer_uri,
+            "audience": self.issuer.audience,
+            "description": "updated desc"
+        }
+        response = self.put(reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)), payload)
+        self.assertEqual(response.status_code, 200, response.data)
+
+        self.issuer.refresh_from_db()
+        self.assertEqual(self.issuer.description, "updated desc")
+
+    def test_token_issuer_delete_unauthorized(self):
+        response = self.delete(reverse("accounts_api:oidc_api_token_issuer", args=(uuid4(),)), include_token=False)
+        self.assertEqual(response.status_code, 401, response.data)
+
+    def test_token_issuer_delete_forbidden(self):
+        response = self.delete(reverse("accounts_api:oidc_api_token_issuer", args=(uuid4(),)))
+        self.assertEqual(response.status_code, 403, response.data)
+
+    def test_delete_issuer(self):
+        self.set_permissions("accounts.delete_oidcapitokenissuer")
+        issuer = self._create_token_issuer(self.service_account)
+
+        response = self.delete(reverse("accounts_api:oidc_api_token_issuer", args=(issuer.pk,)))
+        self.assertEqual(response.status_code, 204, response.data)
+        self.assertFalse(OIDCAPITokenIssuer.objects.filter(pk=issuer.pk).exists())

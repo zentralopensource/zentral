@@ -1,13 +1,19 @@
 from datetime import timedelta
 import functools
 import operator
+import logging
 
 from django.contrib.auth.models import Permission
 from django.db.models import Q
 
 from rest_framework import serializers
 
-from .models import Group, ProvisionedRole, User
+from .models import Group, ProvisionedRole, User, OIDCAPITokenIssuer
+
+import celpy
+from celpy import celtypes
+
+logger = logging.getLogger("server.accounts.serializer")
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -43,6 +49,32 @@ class RoleSerializer(serializers.ModelSerializer):
         if provisioning_uid:
             ProvisionedRole.objects.create(group=role, provisioning_uid=provisioning_uid)
         return role
+
+
+class OIDCAPITokenIssuerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OIDCAPITokenIssuer
+        fields = "__all__"
+
+    def validate_user(self, user):
+        if user and not user.is_service_account:
+            raise serializers.ValidationError("User must be a service account.")
+        return user
+
+    def validate_cel_condition(self, value: str):
+        if not value:
+            return value
+
+        try:
+            env = celpy.Environment(annotations={"claims": celtypes.MapType})
+            ast = env.compile(value)
+            env.program(ast)
+        except Exception:
+            msg = "Invalid CEL expression."
+            logger.exception(msg)
+            raise serializers.ValidationError(msg)
+
+        return value
 
 
 class OIDCAPITokenExchangeInputSerializer(serializers.Serializer):

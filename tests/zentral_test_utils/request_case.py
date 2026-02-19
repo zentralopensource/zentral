@@ -19,6 +19,9 @@ class RequestCase(ABC):
         if method == "POST":
             kwargs["content_type"] = "application/json"
             return self.client.post(url, **kwargs)
+        elif method == "PUT":
+            kwargs["content_type"] = "application/json"
+            return self.client.put(url, **kwargs)
         else:
             return self.client.get(url, **kwargs)
 
@@ -27,6 +30,9 @@ class RequestCase(ABC):
 
     def post(self, url, data=None, include_token=True):
         return self.make_request(url, data, include_token, method="POST")
+
+    def put(self, url, data=None, include_token=True):
+        return self.make_request(url, data, include_token, method="PUT")
 
     def delete(self, url, include_token=True):
         kwargs = {}

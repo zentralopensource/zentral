@@ -316,17 +316,43 @@ class OIDCAPITokenIssuer(models.Model):
         if urlparse(value).scheme != "https":
             raise ValidationError("URL must use https://")
 
+    def clean(self):
+        super().clean()
+        if self.user_id and not self.user.is_service_account:
+            raise ValidationError({"user": "Only service accounts can have OIDC API token issuers."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=256, unique=True)
     description = models.TextField(blank=True)
-    issuer_uri = models.URLField(validators=[_issuer_uri_validator], null=False)
-    audience = models.TextField(blank=False)
+    issuer_uri = models.URLField(validators=[_issuer_uri_validator])
+    audience = models.TextField()
     cel_condition = models.TextField(blank=True)
     max_duration = models.DurationField(default=timedelta(hours=1))
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+
+        d.update({
+            "user": self.user.serialize_for_event(),
+            "issuer_uri": self.issuer_uri,
+            "description": self.description,
+            "audience": self.audience,
+            "cel_condition": self.cel_condition,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "max_duration": self.max_duration
+        })
+        return d
 
 
 class UserTask(models.Model):

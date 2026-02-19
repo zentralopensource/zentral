@@ -6,10 +6,12 @@ from celpy import celtypes
 import logging
 
 from django.db import transaction
+from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from rest_framework import status
+from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,19 +19,23 @@ from rest_framework.views import APIView
 from ee.server.realms.backends.openidc.lib import verify_jws_with_discovery
 
 from zentral.core.events.base import AuditEvent
+from zentral.utils.drf import (ListCreateAPIViewWithAudit,
+                               RetrieveUpdateDestroyAPIViewWithAudit,
+                               MaxLimitOffsetPagination)
 
 from accounts.models import APIToken, OIDCAPITokenIssuer, User
 from accounts.serializers import (
+    OIDCAPITokenIssuerSerializer,
     OIDCAPITokenExchangeInputSerializer,
     OIDCAPITokenExchangeResponseSerializer,
 )
 
-logger = logging.getLogger("server.accounts.views.oidc_token_issuer")
+logger = logging.getLogger("server.accounts.api_views")
 
 
 class OIDCAPITokenExchangeView(APIView):
     authentication_classes = []
-    permission_classes = [AllowAny] 
+    permission_classes = [AllowAny]
 
     def post(self, request, issuer_id):
         issuer = get_object_or_404(OIDCAPITokenIssuer, id=issuer_id)
@@ -120,3 +126,18 @@ class OIDCAPITokenExchangeView(APIView):
         result = prg.evaluate(activation)
 
         return bool(result)
+
+
+class OIDCAPITokenIssuerViewList(ListCreateAPIViewWithAudit):
+    queryset = OIDCAPITokenIssuer.objects.all()
+    serializer_class = OIDCAPITokenIssuerSerializer
+    ordering_fields = ('created_at',)
+    ordering = ['-created_at']
+    filter_backends = (DjangoFilterBackend, OrderingFilter)
+    filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
+
+
+class OIDCAPITokenIssuerViewDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+    queryset = OIDCAPITokenIssuer.objects.all()
+    serializer_class = OIDCAPITokenIssuerSerializer
