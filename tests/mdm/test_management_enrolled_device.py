@@ -1,19 +1,33 @@
-from functools import reduce
 import operator
 import plistlib
+from functools import reduce
 from unittest.mock import patch
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import User
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import CustomCommand
 from zentral.contrib.mdm.commands.base import load_command
-from zentral.contrib.mdm.models import Blueprint, DeviceArtifact, Platform, TargetArtifact
-from .utils import (force_artifact, force_blueprint, force_blueprint_artifact,
-                    force_dep_enrollment_session, force_ota_enrollment_session, force_user_enrollment_session)
+from zentral.contrib.mdm.models import (
+    Blueprint,
+    DeviceArtifact,
+    Platform,
+    TargetArtifact,
+)
+
+from .utils import (
+    force_artifact,
+    force_blueprint,
+    force_blueprint_artifact,
+    force_dep_enrollment_session,
+    force_ota_enrollment_session,
+    force_user_enrollment_session,
+)
 
 
 class EnrolledDeviceManagementViewsTestCase(TestCase):
@@ -405,6 +419,28 @@ class EnrolledDeviceManagementViewsTestCase(TestCase):
         self.assertContains(response, error)
         self.assertContains(response, "Configuration cannot be applied")
         self.assertContains(response, "Error.ConfigurationCannotBeApplied")
+
+    # test enrolled device device lock pin
+
+    def test_enrolled_device_device_lock_pin(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.platform = Platform.MACOS
+        session.enrolled_device.set_device_lock_pin("123456")
+        session.enrolled_device.save()
+        mdm_api_url = reverse("mdm_api:enrolled_device_device_lock_pin", args=(session.enrolled_device.pk,))
+
+        self._login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "<h4>Device lock</h4>")
+        self.assertNotContains(response, f"data-url=\"{mdm_api_url}")
+
+        self._login("mdm.view_enrolleddevice", "mdm.view_device_lock_pin")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<h4>Device lock</h4>")
+        self.assertContains(response, f"data-url=\"{mdm_api_url}")
 
     # test enrolled device commands
 
