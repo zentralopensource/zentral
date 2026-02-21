@@ -1,10 +1,11 @@
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin
 
-from django_celery_results.models import TaskResult
-from django.views.generic import DetailView
-from zentral.utils.views import UserPaginationListView
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404
+from django.views.generic import DetailView
+from django_celery_results.models import TaskResult
+
+from zentral.utils.views import UserPaginationListView
 
 logger = logging.getLogger("zentral.accounts.views.tasks")
 

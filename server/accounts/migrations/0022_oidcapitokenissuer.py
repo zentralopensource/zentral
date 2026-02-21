@@ -20,18 +20,21 @@ class Migration(migrations.Migration):
                 ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ("name", models.CharField(max_length=256, unique=True)),
                 ("description", models.TextField(blank=True)),
-                ("issuer_uri", models.URLField(validators=[django.core.validators.URLValidator(schemes=["https"])])),
+                ("issuer_uri", models.URLField(
+                    validators=[django.core.validators.URLValidator(schemes=["https"])],
+                    verbose_name='Issuer URI')),
                 ("audience", models.TextField()),
-                ("cel_condition", models.TextField(blank=True)),
+                ("cel_condition", models.TextField(blank=True, verbose_name="CEL condition")),
                 (
                     "max_validity",
                     models.IntegerField(
                         default=3600,
-                        help_text="Max validity in seconds",
+                        help_text="In seconds",
                         validators=[
                             django.core.validators.MinValueValidator(30),
                             django.core.validators.MaxValueValidator(604800),
                         ],
+                        verbose_name="Max API token validity",
                     ),
                 ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),

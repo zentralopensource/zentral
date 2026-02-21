@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.user.get_absolute_url }}">{{ object.user.get_type_display|title }} {{ object.user }}</a></li>
+  <li class="breadcrumb-item active">OIDC API token issuer {{ object }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">OIDC API token issuer</h3>
+        <div class="ms-auto">
+            {% if perms.accounts.change_oidcapitokenissuer %}
+                {% url 'accounts:update_oidc_api_token_issuer' object.user.pk object.pk as url %}
+                {% button 'UPDATE' url "Update OIDC API token issuer" %}
+            {% endif %}
+            {% if perms.accounts.delete_oidcapitokenissuer %}
+                {% url 'accounts:delete_oidc_api_token_issuer' object.user.pk object.pk as url %}
+                {% button 'DELETE' url "Delete OIDC API token issuer" %}
+            {% endif %}
+        </div>
+    </div>
+    <div class="table-responsive mb-3">
+      <table class="table-object-properties">
+      <tbody>
+          <tr>
+            <th style="with:200px">Description</th>
+            <td>{{ object.description|default:"-" }}</td>
+          </tr>
+          <tr>
+            <th style="width:200px">Service Account</th>
+            <td>
+              {% if perms.accounts.view_user %}
+              <a href="{{ object.user.get_absolute_url }}">{{ object.user }}</a>
+              {% else %}
+              {{ object.user }}
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th>Issuer</th>
+            <td><a target="blank" href="{{ object.get_discovery_uri }}">{{ object.issuer_uri }}</a></td>
+          </tr>
+          <tr>
+            <th>Audience</th>
+            <td><code>{{ object.audience }}</code></td>
+          </tr>
+          <tr>
+            <th>CEL condition</th>
+            <td>{% if object.cel_condition %}<code>{{ object.cel_condition }}</code>{% else %}-{% endif %}</td>
+          </tr>
+      </tbody>
+      </table>
+    </div>
+    {% created_updated_at object %}
+</div>
+{% endblock %}

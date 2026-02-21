@@ -1,6 +1,8 @@
 import json
 import logging
 from urllib.parse import urlparse
+import celpy
+from celpy import celtypes
 from django import forms
 from django.conf import settings as django_settings
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm as DjangoPasswordResetForm,  UsernameField
@@ -18,7 +20,8 @@ from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 from zentral.conf import settings as zentral_settings
 from zentral.conf.config import ConfigList
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
-from .models import User, UserTOTP, UserWebAuthn, APIToken
+from zentral.utils.oidc import get_openid_configuration_from_issuer_uri
+from .models import APIToken, OIDCAPITokenIssuer, User, UserTOTP, UserWebAuthn
 from .password_reset import handler as password_reset_handler
 from .utils import all_permissions_queryset
 
@@ -382,3 +385,60 @@ class PasswordResetForm(DjangoPasswordResetForm):
         email = self.cleaned_data["email"]
         for user in self.get_users(email):
             password_reset_handler.send_password_reset(user, invitation=False)
+
+
+# OIDC API token issuer
+
+
+def make_oidc_api_token_issuer_cel_condition_validator(exception_class):
+    def validate_cel_condition(cel_condition):
+        try:
+            env = celpy.Environment(annotations={"claims": celtypes.MapType})
+            ast = env.compile(cel_condition)
+            env.program(ast)
+        except Exception:
+            msg = "Invalid CEL expression."
+            logger.exception(msg)
+            raise exception_class(msg)
+    return validate_cel_condition
+
+
+def make_oidc_api_token_issuer_issuer_uri_validator(exception_class):
+    def validate_issuer_uri(issuer_uri):
+        if not issuer_uri.startswith("https://"):
+            raise exception_class("Must have https as scheme.")
+        try:
+            get_openid_configuration_from_issuer_uri(issuer_uri)
+        except Exception:
+            msg = "Could not find valid OpenID configuration"
+            logger.exception(msg)
+            raise exception_class(msg)
+        return issuer_uri
+    return validate_issuer_uri
+
+
+def make_oidc_api_token_issuer_user_validator(exception_class):
+    def validate_user(user):
+        if user and not user.is_service_account:
+            raise exception_class("User must be a service account.")
+        return user
+    return validate_user
+
+
+class OIDCAPITokenIssuerForm(forms.ModelForm):
+    class Meta:
+        model = OIDCAPITokenIssuer
+        fields = ("name", "description", "issuer_uri", "audience", "cel_condition", "max_validity")
+
+    def __init__(self, *args, **kwargs):
+        self.service_account = kwargs.pop("service_account")
+        super().__init__(*args, **kwargs)
+        for attr, validator_constructor in (
+            ("cel_condition", make_oidc_api_token_issuer_cel_condition_validator),
+            ("issuer_uri", make_oidc_api_token_issuer_issuer_uri_validator),
+        ):
+            self.fields[attr].validators.append(validator_constructor(forms.ValidationError))
+
+    def save(self, *args, **kwargs):
+        self.instance.user = self.service_account
+        return super().save(*args, **kwargs)

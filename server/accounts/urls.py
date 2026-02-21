@@ -20,13 +20,30 @@ urlpatterns = [
          name="update_user"),
     path('users/<int:pk>/delete/', views.DeleteUserView.as_view(),
          name="delete_user"),
+
+    # manage users API tokens
     path('users/<int:user_pk>/api_tokens/create/', views.CreateUserAPITokenView.as_view(),
          name="create_user_api_token"),
-    path('users/<int:user_pk>/api_tokens/<str:pk>/update/', views.UpdateUserAPITokenView.as_view(),
+    path('users/<int:user_pk>/api_tokens/<uuid:pk>/update/', views.UpdateUserAPITokenView.as_view(),
          name="update_user_api_token"),
-    path('users/<int:user_pk>/api_tokens/<str:pk>/delete/', views.DeleteUserAPITokenView.as_view(),
+    path('users/<int:user_pk>/api_tokens/<uuid:pk>/delete/', views.DeleteUserAPITokenView.as_view(),
          name="delete_user_api_token"),
 
+    # manage users OIDC API token issuers
+    path('users/<int:user_pk>/api_token_issuers/oidc/create/',
+         views.CreateOIDCAPITokenIssuerView.as_view(),
+         name="create_oidc_api_token_issuer"),
+    path('users/<int:user_pk>/api_token_issuers/oidc/<uuid:pk>/',
+         views.OIDCAPITokenIssuerView.as_view(),
+         name="oidc_api_token_issuer"),
+    path('users/<int:user_pk>/api_token_issuers/oidc/<uuid:pk>/update/',
+         views.UpdateOIDCAPITokenIssuerView.as_view(),
+         name="update_oidc_api_token_issuer"),
+    path('users/<int:user_pk>/api_token_issuers/oidc/<uuid:pk>/delete/',
+         views.DeleteOIDCAPITokenIssuerView.as_view(),
+         name="delete_oidc_api_token_issuer"),
+
+    # manage tasks
     path('tasks/', views.TasksView.as_view(),
          name="tasks"),
     path('tasks/<uuid:task_id>/', views.TaskView.as_view(),

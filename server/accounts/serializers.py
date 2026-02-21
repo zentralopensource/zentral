@@ -4,16 +4,20 @@ import operator
 from datetime import timedelta
 
 import celpy
-from celpy import celtypes
 from django.contrib.auth.models import Permission
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
-from ee.server.realms.backends.openidc.lib import verify_jws_with_discovery
 from zentral.core.events.base import AuditEvent
+from zentral.utils.oidc import verify_jws_with_discovery
 
+from .forms import (
+    make_oidc_api_token_issuer_cel_condition_validator,
+    make_oidc_api_token_issuer_issuer_uri_validator,
+    make_oidc_api_token_issuer_user_validator,
+)
 from .models import APIToken, Group, OIDCAPITokenIssuer, ProvisionedRole, User
 
 logger = logging.getLogger("server.accounts.serializer")
@@ -59,27 +63,14 @@ class OIDCAPITokenIssuerSerializer(serializers.ModelSerializer):
         model = OIDCAPITokenIssuer
         fields = "__all__"
 
-    def validate_issuer_uri(self, issuer_uri):
-        if not issuer_uri.startswith("https://"):
-            raise serializers.ValidationError("Must have https as scheme.")
-        return issuer_uri
-
-    def validate_user(self, user):
-        if user and not user.is_service_account:
-            raise serializers.ValidationError("User must be a service account.")
-        return user
-
-    def validate_cel_condition(self, value: str):
-        if value:
-            try:
-                env = celpy.Environment(annotations={"claims": celtypes.MapType})
-                ast = env.compile(value)
-                env.program(ast)
-            except Exception:
-                msg = "Invalid CEL expression."
-                logger.exception(msg)
-                raise serializers.ValidationError(msg)
-        return value
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for attr, validator_constructor in (
+            ("cel_condition", make_oidc_api_token_issuer_cel_condition_validator),
+            ("issuer_uri", make_oidc_api_token_issuer_issuer_uri_validator),
+            ("user", make_oidc_api_token_issuer_user_validator),
+        ):
+            self.fields[attr].validators.append(validator_constructor(serializers.ValidationError))
 
 
 class OIDCAPITokenIssuerAuthSerializer(serializers.Serializer):
@@ -92,16 +83,12 @@ class OIDCAPITokenIssuerAuthSerializer(serializers.Serializer):
         super().__init__(*args, **kwargs)
 
     def validate_jwt(self, value):
-        try:
-            claims = verify_jws_with_discovery(
-                token=value,
-                audience=self.issuer.audience,
-                issuer_uri=self.issuer.issuer_uri
-            )
-        except Exception:
-            msg = "Invalid token"
-            logger.exception(msg)
-            raise serializers.ValidationError(msg)
+        claims = verify_jws_with_discovery(
+            token=value,
+            issuer_uri=self.issuer.issuer_uri,
+            audience=self.issuer.audience,
+            exception_class=serializers.ValidationError,
+        )
 
         if not self.issuer.cel_condition:
             return value
@@ -112,12 +99,15 @@ class OIDCAPITokenIssuerAuthSerializer(serializers.Serializer):
             ast = env.compile(self.issuer.cel_condition)
             prg = env.program(ast)
             ok = prg.evaluate({"claims": celpy.json_to_cel(claims)})
-            assert isinstance(ok, celpy.celtypes.BoolType)
         except Exception:
             msg = "Unexpected error during CEL condition evaluation"
             logger.exception(msg)
             raise serializers.ValidationError(msg)
         else:
+            if not isinstance(ok, (bool, celpy.celtypes.BoolType)):
+                msg = "CEL condition evaluation didn't produce a boolean"
+                logger.error(msg)
+                raise serializers.ValidationError(msg)
             if not ok:
                 raise serializers.ValidationError("Invalid token claims")
         return value

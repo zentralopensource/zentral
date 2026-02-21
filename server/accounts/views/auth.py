@@ -1,7 +1,9 @@
 import logging
 import uuid
+
 from django.conf import settings
-from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
+from django.contrib.auth import REDIRECT_FIELD_NAME
+from django.contrib.auth import login as auth_login
 from django.core import signing
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, HttpResponseRedirect
@@ -12,12 +14,12 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic import FormView, View
+from realms.models import Realm
+
 from accounts.events import post_failed_verification_event
 from accounts.forms import VerifyTOTPForm, VerifyWebAuthnForm, ZentralAuthenticationForm
-from realms.models import Realm
 from zentral.conf import settings as zentral_settings
 from zentral.utils.http import user_agent_and_ip_address_from_request
-
 
 logger = logging.getLogger("zentral.accounts.views.auth")
 

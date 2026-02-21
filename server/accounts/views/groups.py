@@ -1,5 +1,6 @@
-from collections import OrderedDict
 import logging
+from collections import OrderedDict
+
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.contrib.auth.models import Group
 from django.core.exceptions import ObjectDoesNotExist
@@ -7,9 +8,9 @@ from django.db.models import Exists, OuterRef
 from django.db.models.functions import Lower
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+
 from accounts.forms import GroupForm
 from accounts.models import ProvisionedRole
-
 
 logger = logging.getLogger("zentral.accounts.views.groups")
 

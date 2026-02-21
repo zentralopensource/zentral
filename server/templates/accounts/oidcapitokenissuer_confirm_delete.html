@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li class="breadcrumb-item"><a href="{{ service_account.get_absolute_url }}">{{ service_account.get_type_display|title }} {{ service_account }}</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">OIDC API token issuer {{ object }}</a></li>
+  <li class="breadcrumb-item active">Delete</a>
+</ol>
+
+<h2>Delete OIDC API token issuer</h2>
+
+<form method="POST" class="update-form">{% csrf_token %}
+  <p>Do you really want to delete this OIDC API token issuer?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">
+      Cancel
+    </a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endblock %}

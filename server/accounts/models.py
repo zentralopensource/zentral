@@ -18,6 +18,7 @@ from django.utils.translation import gettext_lazy as _
 from django_celery_results.models import TaskResult
 
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
+from zentral.utils.oidc import get_discovery_uri_from_issuer_uri
 from zentral.utils.token import (
     SERVICE_ACCOUNT_API_TOKEN,
     USER_API_TOKEN,
@@ -310,21 +311,32 @@ class OIDCAPITokenIssuer(models.Model):
     name = models.CharField(max_length=256, unique=True)
     description = models.TextField(blank=True)
     issuer_uri = models.URLField(
-        validators=[URLValidator(schemes=["https"])]
+        verbose_name="Issuer URI",
+        validators=[URLValidator(schemes=["https"])],
     )
     audience = models.TextField()
-    cel_condition = models.TextField(blank=True)
+    cel_condition = models.TextField(
+        verbose_name="CEL condition",
+        blank=True
+    )
     max_validity = models.IntegerField(
         default=3600,
+        verbose_name="Max API token validity",
         validators=[
             MinValueValidator(30),
             MaxValueValidator(604800)  # 7 days
         ],
-        help_text="Max validity in seconds"
+        help_text="In seconds"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("accounts:oidc_api_token_issuer", args=(self.user.pk, self.pk))
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": str(self.pk), "name": self.name}
@@ -343,6 +355,13 @@ class OIDCAPITokenIssuer(models.Model):
         if self.description:
             d["description"] = self.description
         return d
+
+    def linked_objects_keys_for_event(self):
+        # to override the default key
+        return {"accounts_oidc_api_token_issuer": ((str(self.pk),),)}
+
+    def get_discovery_uri(self):
+        return get_discovery_uri_from_issuer_uri(self.issuer_uri)
 
 
 class UserTask(models.Model):

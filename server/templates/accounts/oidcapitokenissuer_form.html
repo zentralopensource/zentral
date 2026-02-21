@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'accounts:users' %}">Users</a></li>
+  <li class="breadcrumb-item"><a href="{{ service_account.get_absolute_url }}">{{ service_account.get_type_display|title }} {{ service_account }}</a></li>
+  {% if object %}
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">OIDC API token issuer {{ object }}</a></li>
+  <li class="breadcrumb-item active">Update</a>
+  {% else %}
+  <li class="breadcrumb-item active">Create OIDC API token issuer</li>
+  {% endif %}
+</ol>
+
+<h2>{% if object %}Update{% else %}Create{% endif %} OIDC API token issuer</h2>
+
+<form method="POST" class="update-form">{% csrf_token %}
+  {{ form }}
+  <p>
+    <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{{ service_account.get_absolute_url }}{% endif %}">
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+{% endblock %}

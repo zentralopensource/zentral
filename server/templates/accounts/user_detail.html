@@ -26,7 +26,7 @@
     <tbody>
         {% if object.is_service_account %}
         <tr>
-        <th style="width:15%">Name</th>
+        <th style="width:200px">Name</th>
         <td>{{ object.username }}</td>
         </tr>
         <tr>
@@ -35,7 +35,7 @@
         </tr>
         {% else %}
         <tr>
-        <th style="width:15%">Username</th>
+        <th style="width:200px">Username</th>
         <td>{{ object.username }}</td>
         </tr>
         <tr>
@@ -52,9 +52,9 @@
         </tr>
         {% if not object.is_remote %}
         <tr>
-        <th>Verification device{{ verification_devices|length|pluralize }}</th>
+        <th>Verification device{{ verification_device_count|pluralize }} ({{ verification_device_count }})</th>
         <td>
-            {% if verification_devices %}
+            {% if verification_device_count %}
             <dl class="row">
             {% for verification_device in verification_devices %}
             <dt class="col-sm-3 text-md-end">{{ verification_device.get_type_for_display }}</dt>
@@ -67,11 +67,19 @@
         </td>
         {% endif %}
         {% endif %}
+        {% if object.is_service_account and perms.accounts.view_oidcapitokenissuer %}
+        <tr>
+        <th>OIDC API token issuer{{ oidc_api_token_issuer_count|pluralize }} ({{ oidc_api_token_issuer_count }})</th>
+        <td>
+            {% include "accounts/_user_oidc_api_token_issuer_list.html" with user=object %}
+        </td>
+        </tr>
+        {% endif %}
         {% if object == request.user or perms.accounts.view_apitoken %}
         <tr>
-        <th>API Token{{ tokens|length|pluralize }}</th>
+        <th>API Token{{ token_count|pluralize }} ({{ token_count }})</th>
         <td>
-            {% include "accounts/tokens/_list.html" with user=object %}
+            {% include "accounts/_user_api_token_list.html" with user=object %}
         </td>
         </tr>
         {% endif %}

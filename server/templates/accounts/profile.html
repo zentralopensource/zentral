@@ -40,7 +40,7 @@
         <tr>
         <th>API Token{{ tokens|length|pluralize }}</th>
         <td>
-            {% include "accounts/tokens/_list.html" %}
+            {% include "accounts/_user_api_token_list.html" %}
         </td>
         </tr>
         {% if not user.is_remote %}

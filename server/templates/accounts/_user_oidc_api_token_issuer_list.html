@@ -1,0 +1,37 @@
+{% load ui_extras %}
+{% if perms.accounts.add_oidcapitokenissuer %}
+    <div class="d-flex flex-row-reverse">
+        <a class="btn btn-link"
+           href="{% url 'accounts:create_oidc_api_token_issuer' user.pk %}"
+           data-bs-toggle="tooltip"
+           data-bs-placement="bottom"
+           data-bs-title="Add OIDC API token issuer">
+            <span class="bi bi-plus-circle" aria-hidden="true"></span>
+        </a>
+    </div>
+{% endif %}
+{% if oidc_api_token_issuers %}
+    <table class="table table-condensed">
+        <tr>
+            <th>Name</th>
+            <th>Issuer URI</th>
+            <th></th>
+        </tr>
+        {% for issuer in oidc_api_token_issuers %}
+            <tr id="oidcapitokenissuer-{{ issuer.pk }}">
+                <td><a href="{{ issuer.get_absolute_url }}">{{ issuer.name }}</a></td>
+                <td>{{ issuer.issuer_uri }}</td>
+                <td class="text-center">
+                    {% if perms.accounts.change_oidcapitokenissuer %}
+                        {% url 'accounts:update_oidc_api_token_issuer' user.pk issuer.id as url %}
+                        {% button 'UPDATE' url "Update OIDC API token issuer" %}
+                    {% endif %}
+                    {% if perms.accounts.delete_oidcapitokenissuer %}
+                        {% url 'accounts:delete_oidc_api_token_issuer' user.pk issuer.id as url %}
+                        {% button 'DELETE' url "Delete OIDC API token issuer" %}
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+{% endif %}

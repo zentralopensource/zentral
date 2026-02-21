@@ -5,6 +5,7 @@ from uuid import uuid4
 from accounts.models import APIToken, OIDCAPITokenIssuer, User
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from rest_framework import serializers
 
 from tests.zentral_test_utils.zentral_api_test_case import ZentralAPITestCase
 from zentral.core.events.base import AuditEvent
@@ -31,7 +32,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
             user=user,
             name=get_random_string(12),
             description=description,
-            issuer_uri="https://issuer.zentral.com",
+            issuer_uri="https://accounts.google.com",  # TODO mock instead of making a real HTTP request?
             audience=f"aud-{get_random_string(10)}",
             cel_condition=cel_condition,
             max_validity=max_validity,
@@ -94,7 +95,8 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         verify_jws_with_discovery.assert_called_with(
             token="header.payload.sig",
             issuer_uri=self.issuer.issuer_uri,
-            audience=self.issuer.audience
+            audience=self.issuer.audience,
+            exception_class=serializers.ValidationError,
         )
 
         self.assertEqual(len(callbacks), 1)
@@ -226,6 +228,31 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'jwt': ['Unexpected error during CEL condition evaluation']})
 
+    @patch("accounts.serializers.verify_jws_with_discovery")
+    @patch("accounts.serializers.timezone.now")
+    def test_auth_cel_condition_evaluation_not_a_boolean(self, tznow, verify_jws_with_discovery):
+        now = datetime(2026, 2, 17, 12, 0, 0)
+        tznow.return_value = now
+
+        verify_jws_with_discovery.return_value = {
+            "sub": "abc",
+            "iss": self.issuer.issuer_uri,
+            "aud": self.issuer.audience,
+        }
+
+        issuer = self._create_token_issuer(
+            user=self.service_account,
+            cel_condition="'hello'",  # not a bool
+            max_validity=3600,
+        )
+        response = self.post(
+            url=reverse("accounts_api:oidc_api_token_issuer_exchange", args=(issuer.pk,)),
+            data={"jwt": "header.payload.sig"},
+            include_token=False,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'jwt': ["CEL condition evaluation didn't produce a boolean"]})
+
     # list OIDC API token issuers
 
     def test_list_token_issuers_unauthorized(self):
@@ -289,7 +316,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
             "user": self.service_account.pk,
             "name": name,
             "description": "description",
-            "issuer_uri": "https://issuer.zentral.com",
+            "issuer_uri": "https://accounts.google.com",
             "audience": "audience",
             "cel_condition": "claims.sub == 'abc'",
             "max_validity": 60,
@@ -300,8 +327,8 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
                 url=reverse("accounts_api:oidc_api_token_issuers"),
                 data=payload,
             )
-        issuer = OIDCAPITokenIssuer.objects.get(name=name)
         self.assertEqual(response.status_code, 201)
+        issuer = OIDCAPITokenIssuer.objects.get(name=name)
         self.assertEqual(
             response.json(),
             {'audience': 'audience',
@@ -309,7 +336,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
              'created_at': issuer.created_at.isoformat(),
              'description': 'description',
              'id': str(issuer.pk),
-             'issuer_uri': 'https://issuer.zentral.com',
+             'issuer_uri': 'https://accounts.google.com',
              'max_validity': 60,
              'name': name,
              'updated_at': issuer.updated_at.isoformat(),
@@ -327,7 +354,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
                         'new_value': issuer.serialize_for_event()}}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"accounts_oidcapi_token_issuer": [str(issuer.pk)]})
+        self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     # get OIDC API token issuer
@@ -387,7 +414,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
                         'new_value': self.issuer.serialize_for_event()}}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"accounts_oidcapi_token_issuer": [str(self.issuer.pk)]})
+        self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(self.issuer.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     # delete OIDC API token issuer
@@ -425,7 +452,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
                                        'cel_condition': "claims.sub == 'abc'",
                                        'created_at': issuer.created_at.isoformat(),
                                        'description': 'description',
-                                       'issuer_uri': 'https://issuer.zentral.com',
+                                       'issuer_uri': 'https://accounts.google.com',
                                        'max_validity': 60,
                                        'name': issuer.name,
                                        'pk': str(issuer.pk),
@@ -435,5 +462,5 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
                                                 'username': self.service_account.username}}}}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"accounts_oidcapi_token_issuer": [str(issuer.pk)]})
+        self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
