@@ -1,17 +1,13 @@
 import enum
 import uuid
-from datetime import timedelta
 from hashlib import blake2b
 from itertools import chain
-from urllib.parse import urlparse
 
 import pyotp
-
 from django.contrib.auth.models import AbstractUser, Group
 from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.contrib.postgres.fields import ArrayField
-from django.core.exceptions import ValidationError
-from django.core.validators import URLValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, URLValidator
 from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Now
@@ -19,7 +15,6 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
-
 from django_celery_results.models import TaskResult
 
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
@@ -310,48 +305,43 @@ class APIToken(models.Model):
 
 
 class OIDCAPITokenIssuer(models.Model):
-
-    def _issuer_uri_validator(value: str):
-        URLValidator()(value)
-        if urlparse(value).scheme != "https":
-            raise ValidationError("URL must use https://")
-
-    def clean(self):
-        super().clean()
-        if self.user_id and not self.user.is_service_account:
-            raise ValidationError({"user": "Only service accounts can have OIDC API token issuers."})
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        return super().save(*args, **kwargs)
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=256, unique=True)
     description = models.TextField(blank=True)
-    issuer_uri = models.URLField(validators=[_issuer_uri_validator])
+    issuer_uri = models.URLField(
+        validators=[URLValidator(schemes=["https"])]
+    )
     audience = models.TextField()
     cel_condition = models.TextField(blank=True)
-    max_duration = models.DurationField(default=timedelta(hours=1))
+    max_validity = models.IntegerField(
+        default=3600,
+        validators=[
+            MinValueValidator(30),
+            MaxValueValidator(604800)  # 7 days
+        ],
+        help_text="Max validity in seconds"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def serialize_for_event(self, keys_only=False):
-        d = {"pk": self.pk, "name": self.name}
+        d = {"pk": str(self.pk), "name": self.name}
         if keys_only:
             return d
-
         d.update({
-            "user": self.user.serialize_for_event(),
+            "user": self.user.serialize_for_event(keys_only=True),
             "issuer_uri": self.issuer_uri,
-            "description": self.description,
             "audience": self.audience,
-            "cel_condition": self.cel_condition,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-            "max_duration": self.max_duration
+            "max_validity": self.max_validity,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
+        if self.cel_condition:
+            d["cel_condition"] = self.cel_condition
+        if self.description:
+            d["description"] = self.description
         return d
 
 

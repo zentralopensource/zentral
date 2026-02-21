@@ -50,3 +50,37 @@ curl -H "Authorization: Token $ZTL_API_TOKEN" \
      -L -o inventory_export_2025-03-12_10-21-12.xlsx \
      https://$ZTL_FQDN/api/task_result/d40e9320-8c0c-459b-bfdb-001a9f73619f/download/
 ```
+
+### `/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/`
+
+* method: POST
+* required permission: none
+
+Use this endpoint to exchange an OIDC identity token (Signed JWT) for a short-lived API token.
+
+Example:
+
+```bash
+curl -X POST \
+     -H 'Content-Type: application/json' \
+     -d '{"jwt": "eyJ…", "name": "CI/CD job", "validity": 60}' \
+     https://$ZTL_FQDN/api/accounts/token_issuers/oidc/d40e9320-8c0c-459b-bfdb-001a9f73619f/auth/ \
+     | python -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": "8422fe32-3185-4958-a8ca-ae1c4bb52198",
+    "expiry": "2026-02-21T13:35:45.925816",
+    "name": "CI/CD job",
+    "secret": "ztls_0xtePqPLfggHUaAi6NkDVuakz4jtQZ2ObLY3",
+    "user": {
+        "id": 2,
+        "username": "test",
+        "email": "test@example.com",
+        "is_service_account": true
+    }
+}
+```
