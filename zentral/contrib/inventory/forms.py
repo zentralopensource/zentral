@@ -159,7 +159,7 @@ class AddTagForm(forms.Form):
                                           queryset=Tag.objects.none(),
                                           required=False,
                                           empty_label='...')
-    new_tag_name = forms.CharField(label="New tag name", max_length=50, required=False)
+    new_tag_name = forms.CharField(label="New tag name", required=False)
     new_tag_color = forms.CharField(label="Color", max_length=6, required=False)
 
     def clean(self):

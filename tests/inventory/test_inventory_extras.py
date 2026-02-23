@@ -6,15 +6,18 @@ from zentral.contrib.inventory.templatetags.inventory_extras import (base_invent
 
 class InventoryExtrasTestCase(SimpleTestCase):
     def test_base_inventory_tag(self):
+        cs = ";overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:25vw"
         for display_name, color, result in (
             ('yolo', '000',
-             '<span class="badge" style="background-color:#000;color:#FFF">yolo</span>'),
+             f'<span class="badge" style="background-color:#000;color:#FFF{cs}">yolo</span>'),
             ('<a', 'FFFFFF',
-             '<span class="badge" style="background-color:#FFFFFF;color:#000;border:1px solid grey">&lt;a</span>'),
+             f'<span class="badge" style="background-color:#FFFFFF;color:#000{cs};border:1px solid grey">'
+             '&lt;a</span>'),
             ('<a', 'abc',
-             '<span class="badge" style="background-color:#abc;color:#000">&lt;a</span>'),
+             f'<span class="badge" style="background-color:#abc;color:#000{cs}">&lt;a</span>'),
             ('Z', '<script></script>',
-             '<span class="badge" style="background-color:#FFFFFF;color:#000;border:1px solid grey">Z</span>'),
+             f'<span class="badge" style="background-color:#FFFFFF;color:#000{cs};border:1px solid grey">'
+             'Z</span>'),
         ):
             self.assertEqual(base_inventory_tag(display_name, color), result)
 

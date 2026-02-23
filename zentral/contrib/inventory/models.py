@@ -864,8 +864,8 @@ def validate_color(value):
 class Tag(models.Model):
     taxonomy = models.ForeignKey(Taxonomy, on_delete=models.CASCADE, blank=True, null=True)
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.CASCADE, blank=True, null=True)
-    name = models.CharField(max_length=50, unique=True)
-    slug = models.SlugField(unique=True, editable=False)
+    name = models.CharField(unique=True)
+    slug = models.CharField(unique=True, editable=False)
     color = models.CharField(max_length=6,
                              default="0079bf",  # blue from UpdateTagView
                              validators=[validate_color])

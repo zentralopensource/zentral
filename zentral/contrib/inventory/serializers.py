@@ -28,7 +28,7 @@ class MachineTagsUpdatePrincipalUsers(serializers.Serializer):
 class MachineTagOperation(serializers.Serializer):
     kind = serializers.ChoiceField(choices=(("SET", "Set"), ("ADD", "Add"), ("REMOVE", "Remove")), required=True)
     taxonomy = serializers.CharField(max_length=256, allow_blank=False, allow_null=True, required=False)
-    names = serializers.ListField(child=serializers.CharField(max_length=50),
+    names = serializers.ListField(child=serializers.CharField(),
                                   allow_empty=True, required=True)
 
     def validate(self, data):

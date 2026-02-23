@@ -12,6 +12,10 @@ Better copy-to-clipboard handling for secrets.
 
 Add OIDC API token issuer to exchange signed JWTs for short-lived API tokens.
 
+#### Inventory
+
+Remove tag name length constraint.
+
 #### MDM
 
 The current device lock PIN for the MDM enrolled devices is now stored and can be retrieved in the UI.

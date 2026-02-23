@@ -17,7 +17,11 @@ def base_inventory_tag(display_name, color):
     if not re.match(r'^[0-9a-fA-F]{3,6}$', color):
         color = "FFFFFF"
     style = {'background-color': "#%s" % color,
-             'color': "#%s" % text_color_for_background_color(color)}
+             'color': "#%s" % text_color_for_background_color(color),
+             'overflow': 'hidden',
+             'text-overflow': 'ellipsis',
+             'white-space': 'nowrap',
+             'max-width': '25vw'}
     if color.upper() in ["FFFFFF", "FFF"]:
         style['border'] = '1px solid grey'
     style_str = ";".join(["%s:%s" % (key, val) for key, val in style.items()])
