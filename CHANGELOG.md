@@ -29,11 +29,11 @@ and the email of the realm user used in the responding enrollment session.
 
 The MDM enrolled device API endpoints now include the realm user details when the latest enrollment session was authenticated.
 
-### Monolith
+#### Monolith
 
 New fallback catalog aggregation if no catalog is provided in S3 bucket.
 
-### Santa
+#### Santa
 
 Support for the [custom_url](https://northpole.dev/features/binary-authorization/#rule-dictionary-format).
 
