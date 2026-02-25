@@ -2487,7 +2487,7 @@ class MDMViewsTestCase(TestCase):
         enrolled_device.refresh_from_db()
         self.assertEqual(enrolled_device.get_device_lock_pin(), "123456")
 
-        # reset devise lock pin by calling the connect endpoint
+        # reset device lock pin by calling the connect endpoint
         payload = {"UDID": udid, "Status": "Idle"}
         with self.captureOnCommitCallbacks(execute=True):
             response = self._put(reverse("mdm_public:connect"), payload, session)
