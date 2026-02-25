@@ -1,17 +1,27 @@
 import json
 import logging
 import re
+
 from dateutil import parser
 from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
 from django.db import connection, transaction
 from django.db.models import Count, F
-from django.urls import reverse, NoReverseMatch
+from django.urls import NoReverseMatch, reverse
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import Tag
-from .events import post_santa_rule_update_event
-from .models import Configuration, Enrollment, Rule, RuleSet, Target, TargetState, VotingGroup
 
+from .events import post_santa_rule_update_event
+from .models import (
+    Configuration,
+    Enrollment,
+    Rule,
+    RuleSet,
+    Target,
+    TargetState,
+    VotingGroup,
+)
 
 logger = logging.getLogger("zentral.contrib.santa.forms")
 
@@ -318,7 +328,7 @@ class RuleForm(RuleFormMixin, forms.Form):
                                widget=forms.Textarea(attrs={"cols": "40", "rows": "5"}))
     custom_msg = forms.CharField(label="Custom message", required=False,
                                  widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
-    custom_url = forms.URLField(label="Custom URL", required=False,
+    custom_url = forms.URLField(label="Custom URL", required=False, max_length=800,
                                 widget=forms.URLInput(attrs={"size": 40}),)
     description = forms.CharField(required=False, widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
     serial_numbers = SimpleArrayField(forms.CharField(), required=False)
