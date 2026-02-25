@@ -1,10 +1,11 @@
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.santa.models import Configuration, Enrollment
-from zentral.contrib.santa.serializers import RuleUpdateSerializer, EnrollmentSerializer
+from zentral.contrib.santa.serializers import EnrollmentSerializer, RuleUpdateSerializer
 
 
 class SantaSerializersTestCase(TestCase):
@@ -111,6 +112,24 @@ class SantaSerializersTestCase(TestCase):
         self.assertFalse(serializer.is_valid())
         ed = serializer.errors["non_field_errors"][0]
         self.assertEqual(str(ed), "Custom message cannot be set for this rule policy")
+
+    def test_rule_custom_url_length(self):
+        custom_url = f"https://zentral.com/{get_random_string(240)}"
+        data = {"rule_type": "BINARY",
+                "identifier": get_random_string(64, "0123456789abcdef"),
+                "custom_url": custom_url,
+                "policy": "BLOCKLIST"}
+        serializer = RuleUpdateSerializer(data=data)
+        self.assertTrue(serializer.is_valid())
+        custom_url = f"https://zentral.com/{get_random_string(840)}"
+        data = {"rule_type": "BINARY",
+                "identifier": get_random_string(64, "0123456789abcdef"),
+                "custom_url": custom_url,
+                "policy": "BLOCKLIST"}
+        serializer = RuleUpdateSerializer(data=data)
+        self.assertFalse(serializer.is_valid())
+        ed = serializer.errors["custom_url"][0]
+        self.assertEqual(str(ed), "Ensure this field has no more than 800 characters.")
 
     def test_rule_custom_url_allowlist(self):
         data = {"rule_type": "BINARY",

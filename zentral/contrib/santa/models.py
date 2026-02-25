@@ -1,8 +1,13 @@
-from collections import namedtuple
 import logging
 import uuid
-from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator
+from collections import namedtuple
+
 from django.contrib.postgres.fields import ArrayField
+from django.core.validators import (
+    MaxValueValidator,
+    MinLengthValidator,
+    MinValueValidator,
+)
 from django.db import connection, models
 from django.db.models import Count, Q
 from django.urls import reverse
@@ -10,10 +15,10 @@ from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmGroup, RealmUser
-from zentral.core.incidents.models import Severity
-from zentral.contrib.inventory.models import BaseEnrollment, Certificate, File, Tag
-from zentral.utils.text import shard
 
+from zentral.contrib.inventory.models import BaseEnrollment, Certificate, File, Tag
+from zentral.core.incidents.models import Severity
+from zentral.utils.text import shard
 
 logger = logging.getLogger("zentral.contrib.santa.models")
 
@@ -987,7 +992,7 @@ class Rule(models.Model):
     policy = models.PositiveSmallIntegerField(choices=Policy.rule_choices())
     cel_expr = models.TextField(blank=True)
     custom_msg = models.TextField(blank=True)
-    custom_url = models.URLField(blank=True)
+    custom_url = models.URLField(blank=True, max_length=800)
     description = models.TextField(blank=True)
     version = models.PositiveIntegerField(default=1)
     is_voting_rule = models.BooleanField(default=False, editable=False)

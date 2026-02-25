@@ -1,19 +1,20 @@
-from datetime import datetime
-from itertools import chain
 import logging
 import os.path
+from datetime import datetime
+from itertools import chain
 
 from django.db import transaction
 from django.db.models import F
 from django.urls import reverse
 from rest_framework import serializers
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
-from .events import post_santa_rule_update_event
-from .models import Configuration, Rule, Target, Enrollment
-from .forms import cleanup_target_identifier
 
+from .events import post_santa_rule_update_event
+from .forms import cleanup_target_identifier
+from .models import Configuration, Enrollment, Rule, Target
 
 logger = logging.getLogger("zentral.contrib.santa.serializers")
 
@@ -218,7 +219,7 @@ class RuleUpdateSerializer(serializers.Serializer):
     sha256 = serializers.RegexField(r'^[a-f0-9]{64}\Z', required=False)  # Legacy field  TODO remove eventually
     identifier = serializers.CharField(required=False)
     custom_msg = serializers.CharField(required=False)
-    custom_url = serializers.CharField(required=False)
+    custom_url = serializers.URLField(required=False, max_length=800)
     description = serializers.CharField(required=False)
     serial_numbers = serializers.ListField(
         child=serializers.CharField(min_length=1),
