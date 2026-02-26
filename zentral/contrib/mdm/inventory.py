@@ -195,9 +195,8 @@ def update_realm_tags(realm, request):
       "), inserted_tags AS ("
       "  INSERT INTO inventory_machinetag(serial_number, tag_id)"
       "  SELECT tags.serial_number, tags.tag_pk FROM tags"
-      "  WHERE NOT EXISTS ("
-      "    SELECT 1 FROM inventory_machinetag WHERE serial_number=tags.serial_number AND tag_id=tags.tag_pk"
-      "  ) RETURNING serial_number, tag_id, 'added' action"
+      "  ON CONFLICT DO NOTHING"
+      "  RETURNING serial_number, tag_id, 'added' action"
       # and delete the other managed tags for the machines linked to a realm user
       "), deleted_tags AS ("
       "  DELETE FROM inventory_machinetag mt"
