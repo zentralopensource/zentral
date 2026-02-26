@@ -1,3 +1,9 @@
+## 2026.3
+
+### Bug fixes
+
+Fixed potential SCIM machine tagging conflict.
+
 ## 2026.2
 
 ### Features
