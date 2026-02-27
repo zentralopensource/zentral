@@ -187,11 +187,12 @@ class S3Repository(BaseRepository):
         return self._session.client("s3", region_name=self.region_name, endpoint_url=self.endpoint_url,
                                     config=Config(signature_version=self.signature_version))
 
-    def _get_resource(self, key, missing_ok=False):
+    def _get_resource(self, path, missing_ok=False):
+        key = os.path.join(self.prefix, path)
         try:
             return self._client.get_object(
                 Bucket=self.bucket,
-                Key=os.path.join(self.prefix, key)
+                Key=key,
             )['Body'].read()
         except self._client.exceptions.NoSuchKey:
             logging_args = ("Could not find key %s in repository %s", key, self.repository)
@@ -208,9 +209,9 @@ class S3Repository(BaseRepository):
         catalog = self._get_resource("catalogs/all", missing_ok=True)
         if catalog is not None:
             return catalog
-        logger.warning("catalogs/all missing in repository %s. Falling back to pkgsinfo/**/*.plist .", self.repository)
+        logger.warning("catalogs/all missing in repository %s. Falling back to pkgsinfo/**/*.plist", self.repository)
         pkg_infos = []
-        for key, content in self._iter_pkgsinfos():
+        for resource_path, content in self._iter_pkgsinfos():
             try:
                 pkg_info_data = plistlib.loads(content)
 
@@ -223,10 +224,10 @@ class S3Repository(BaseRepository):
                 if pkg_info_data not in pkg_infos:
                     pkg_infos.append(pkg_info_data)
             except Exception as e:
-                logger.exception("Could not parse pkgsinfo plist %s in repository %s", key, self.repository)
+                logger.exception("Could not parse pkginfo plist %s in repository %s", resource_path, self.repository)
                 raise RepositoryError(str(e))
         if not pkg_infos:
-            raise RepositoryError("catalogs/all is missing and no pkgsinfo/*.plist files were found")
+            raise RepositoryError("catalogs/all is missing and no pkgsinfo/**/*.plist files were found")
 
         return plistlib.dumps(pkg_infos, fmt=plistlib.FMT_XML)
 
@@ -239,8 +240,9 @@ class S3Repository(BaseRepository):
                     key = obj["Key"]
                     if key.endswith("/") or not key.endswith(".plist"):
                         continue
-                    content = self._get_resource(key)
-                    yield key, content
+                    resource_path = key.removeprefix(self.prefix).removeprefix("/")
+                    content = self._get_resource(resource_path)
+                    yield resource_path, content
         except Exception as e:
             logger.exception("Could not list pkgsinfo keys in repository %s", self.repository)
             raise RepositoryError(str(e))

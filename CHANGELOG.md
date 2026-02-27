@@ -4,6 +4,8 @@
 
 Fixed potential SCIM machine tagging conflict.
 
+Fixed S3 Munki repository PkgsInfo iteration when using a prefix. This only affected repositories without catalogs.
+
 ## 2026.2
 
 ### Features
