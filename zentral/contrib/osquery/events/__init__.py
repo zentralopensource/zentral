@@ -222,10 +222,24 @@ def _post_events(msn, user_agent, ip, event_cls, records):
     )
 
 
-def post_status_logs(msn, user_agent, ip, logs):
+def _filter_status_logs(logs, min_severity):
+    for log in logs:
+        try:
+            severity = int(log["severity"])
+        except Exception:
+            logger.exception("Could not get status log severity")
+            yield log
+        else:
+            if severity >= min_severity:
+                yield log
+
+
+def post_status_logs(msn, user_agent, ip, logs, min_severity=1):
+    # See https://github.com/osquery/osquery/blob/fe9e6249c12fa87ea31f298b7e831d97c760013b/osquery/core/plugins/logger.h#L40  # NOQA
+    # 0 = INFO, by default min = 1 = WARNING
     OsqueryStatusEvent.post_machine_request_payloads(
         msn, user_agent, ip,
-        _iter_cleaned_up_records(logs),
+        _iter_cleaned_up_records(_filter_status_logs(logs, min_severity)),
         _get_record_created_at
     )
 

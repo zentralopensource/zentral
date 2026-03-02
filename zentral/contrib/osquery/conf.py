@@ -24,8 +24,9 @@ INVENTORY_QUERIES = (
      "select 'network_interface' as table_name, "
      "id.interface, id.mac, "
      "ia.address, ia.mask, ia.broadcast "
-     "from interface_details as id, interface_addresses as ia "
-     "where ia.interface = id.interface and ia.broadcast > '';"),
+     "from interface_addresses as ia, interface_details as id "
+     "where ia.interface = id.interface "
+     "and (ia.broadcast > '' or ia.type not in ('unknown', 'auto'));"),
 )
 
 

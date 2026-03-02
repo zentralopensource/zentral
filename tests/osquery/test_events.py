@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
-from zentral.contrib.osquery.events import OsqueryRequestEvent
+from zentral.contrib.osquery.events import _filter_status_logs, OsqueryRequestEvent
 from zentral.contrib.osquery.models import Configuration, EnrolledMachine, Enrollment
 
 
@@ -47,3 +47,16 @@ class OsqueryEventsTestCase(TestCase):
         configuration = self.force_configuration(options={"config_refresh": "7200", "distributed_interval": "1234"})
         enrolled_machine = self.force_enrolled_machine(configuration=configuration)
         self.assertEqual(OsqueryRequestEvent.get_machine_heartbeat_timeout(enrolled_machine.serial_number), 14400)
+
+    # OsqueryStatusEvent
+
+    def test_filter_status_logs(self):
+        logs = list(_filter_status_logs([
+            {"message": "No severity… Should not happen!"},
+            {"severity": 1, "message": "Warning included"},
+            {"severity": "0", "message": "Info not included"},
+        ], 1))
+        self.assertEqual(logs, [
+            {"message": "No severity… Should not happen!"},
+            {"severity": 1, "message": "Warning included"},
+        ])

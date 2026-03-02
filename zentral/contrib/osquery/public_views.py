@@ -498,7 +498,6 @@ class LogView(BaseNodeView):
                 post_machine_snapshot_raw_event(tree)
             post_results(self.machine.serial_number, results, self.request)
         elif log_type == "status":
-            # TODO: configuration option to filter some of those (severity) or maybe simply ignore them
             post_status_logs(self.machine.serial_number, self.user_agent, self.ip, records)
         else:
             logger.error("Unknown log type %s", log_type)

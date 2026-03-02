@@ -1,10 +1,18 @@
 ## 2026.3
 
+### Features
+
+#### Osquery
+
+Filter out status logs with INFO severity level.
+
 ### Bug fixes
 
 Fixed potential SCIM machine tagging conflict.
 
 Fixed S3 Munki repository PkgsInfo iteration when using a prefix. This only affected repositories without catalogs.
+
+Fixed Windows network interface info collection via osquery.
 
 ## 2026.2
 
