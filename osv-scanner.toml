@@ -1,0 +1,4 @@
+[[IgnoredVulns]]
+id = "GHSA-5c6j-r48x-rmvq"
+ignoreUntil = 2026-03-09
+reason = "Still required by current dependencies; temporarily ignored until dependency update."
