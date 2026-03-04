@@ -26,6 +26,7 @@ INVENTORY_QUERIES = (
      "ia.address, ia.mask, ia.broadcast "
      "from interface_addresses as ia, interface_details as id "
      "where ia.interface = id.interface "
+     "and id.mac > '' "
      "and (ia.broadcast > '' or ia.type not in ('unknown', 'auto'));"),
 )
 
