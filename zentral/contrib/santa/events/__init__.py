@@ -50,45 +50,38 @@ class SantaPreflightEvent(BaseEvent):
 register_event_type(SantaPreflightEvent)
 
 
-class SantaEventEvent(BaseEvent):
-    event_type = "santa_event"
-    tags = ["santa"]
-
-    def get_notification_context(self, probe):
-        ctx = super().get_notification_context(probe)
-        if 'decision' in self.payload:
-            ctx['decision'] = self.payload['decision']
-        if 'file_name' in self.payload:
-            ctx['file_name'] = self.payload['file_name']
-        if 'file_path' in self.payload:
-            ctx['file_path'] = self.payload['file_path']
-        return ctx
-
+class BaseSantaEvent(BaseEvent):
     def iter_signing_chain(self):
-        signing_chain = self.payload.get("signing_chain")
+        process_info = self.get_process_info()
+        if not process_info:
+            return
+        signing_chain = process_info.get("signing_chain")
         if isinstance(signing_chain, list):
             yield from signing_chain
             return
         for i in range(3):
-            cert = self.payload.get(f"signing_cert_{i}")
+            cert = process_info.get(f"signing_cert_{i}")
             if isinstance(cert, dict):
                 yield cert
 
     def get_linked_objects_keys(self):
         keys = {}
         file_args = []
-        file_sha256 = self.payload.get("file_sha256")
+        process_info = self.get_process_info()
+        if not process_info:
+            return keys
+        file_sha256 = process_info.get("file_sha256")
         if file_sha256:
             file_args.append(("sha256", file_sha256))
-        cdhash = self.payload.get("cdhash")
+        cdhash = process_info.get("cdhash")
         if cdhash:
             file_args.append(("cdhash", cdhash))
-        signing_id = self.payload.get("signing_id")
+        signing_id = process_info.get("signing_id")
         if signing_id:
             file_args.append(("apple_signing_id", signing_id))
         if file_args:
             keys['file'] = file_args
-        team_id = self.payload.get("team_id")
+        team_id = process_info.get("team_id")
         cert_sha256_list = []
         signing_chain = list(self.iter_signing_chain())
         for cert_idx, cert in enumerate(signing_chain):
@@ -115,7 +108,39 @@ class SantaEventEvent(BaseEvent):
         return keys
 
 
+class SantaEventEvent(BaseSantaEvent):
+    event_type = "santa_event"
+    tags = ["santa"]
+
+    def get_notification_context(self, probe):
+        ctx = super().get_notification_context(probe)
+        if 'decision' in self.payload:
+            ctx['decision'] = self.payload['decision']
+        if 'file_name' in self.payload:
+            ctx['file_name'] = self.payload['file_name']
+        if 'file_path' in self.payload:
+            ctx['file_path'] = self.payload['file_path']
+        return ctx
+
+    def get_process_info(self):
+        return self.payload
+
+
 register_event_type(SantaEventEvent)
+
+
+class SantaFileAccessEvent(BaseSantaEvent):
+    event_type = "santa_file_access_event"
+    tags = ["santa"]
+
+    def get_process_info(self):
+        try:
+            return self.payload["process_chain"][0]
+        except (KeyError, IndexError):
+            return
+
+
+register_event_type(SantaFileAccessEvent)
 
 
 class SantaLogEvent(BaseEvent):
@@ -478,16 +503,19 @@ def _commit_files(events):
 flatten_events_signing_chain = settings["apps"]["zentral.contrib.santa"].get("flatten_events_signing_chain", True)
 
 
-def _prepare_santa_event(event_d):
+def _flatten_process_signing_chain(process_d):
     if flatten_events_signing_chain:
-        for i, cert in enumerate(event_d.pop("signing_chain", [])):
-            event_d[f"signing_cert_{i}"] = cert
-    return event_d
+        for i, cert in enumerate(process_d.pop("signing_chain", [])):
+            process_d[f"signing_cert_{i}"] = cert
 
 
 def _post_santa_events(enrolled_machine, user_agent, ip, events):
     def get_created_at(payload):
         return datetime.utcfromtimestamp(payload['execution_time'])
+
+    def prepare_santa_event(payload):
+        _flatten_process_signing_chain(payload)
+        return payload
 
     allow_unknown_shard = enrolled_machine.enrollment.configuration.allow_unknown_shard
     if allow_unknown_shard == 100:
@@ -501,7 +529,7 @@ def _post_santa_events(enrolled_machine, user_agent, ip, events):
         ) <= allow_unknown_shard
 
     event_iterator = (
-        _prepare_santa_event(event_d)
+        prepare_santa_event(event_d)
         for event_d in events
         if not _is_bundle_binary_pseudo_event(event_d) and (
             include_allow_unknown or not _is_allow_unknown_event(event_d)
@@ -514,8 +542,31 @@ def _post_santa_events(enrolled_machine, user_agent, ip, events):
     )
 
 
+def _post_santa_file_access_events(enrolled_machine, user_agent, ip, events):
+    def get_created_at(payload):
+        return datetime.utcfromtimestamp(payload["access_time"])
+
+    def prepare_santa_file_access_event(payload):
+        for process_d in payload.get("process_chain", []):
+            _flatten_process_signing_chain(process_d)
+        return payload
+
+    event_iterator = (
+        prepare_santa_file_access_event(event_d)
+        for event_d in events
+    )
+
+    SantaFileAccessEvent.post_machine_request_payloads(
+        enrolled_machine.serial_number, user_agent, ip,
+        event_iterator, get_created_at
+    )
+
+
 def process_events(enrolled_machine, user_agent, ip, data):
-    events = data.get("events", [])
+    file_access_events = data.get("file_access_events")
+    if file_access_events:
+        _post_santa_file_access_events(enrolled_machine, user_agent, ip, file_access_events)
+    events = data.get("events")
     if not events:
         return []
     targets = _update_targets(enrolled_machine.enrollment.configuration, events)

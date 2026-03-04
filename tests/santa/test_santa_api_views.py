@@ -18,6 +18,8 @@ from .utils import new_cdhash, new_sha256, new_signing_id_identifier, new_team_i
 
 
 class SantaAPIViewsTestCase(TestCase):
+    maxDiff = None
+
     @classmethod
     def setUpTestData(cls):
         cls.configuration = Configuration.objects.create(name=get_random_string(256))
@@ -1041,6 +1043,132 @@ class SantaAPIViewsTestCase(TestCase):
                                              collected_count=c_count,
                                              executed_count=e_count).exists()
             )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_eventupload_file_access(self, post_event):
+        event_d = {
+            "access_time": 1772523396.823121,
+            "decision": "FILE_ACCESS_DECISION_AUDIT_ONLY",
+            "process_chain": [
+                {
+                    "cdhash": "7009fd13a7a15a3395878f19a10d524ee7bb59a2",
+                    "file_path": "/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd",
+                    "file_sha256": "2cd76aed19a9fb0da18ee11f36272b9632c0dde71509b746f7142b31a703e9f5",
+                    "pid": 77605,
+                    "signing_chain": [
+                        {
+                            "cn": "Developer "
+                            "ID "
+                            "Application: "
+                            "OSQUERY "
+                            "A Series "
+                            "of LF "
+                            "Projects, "
+                            "LLC "
+                            "(3522FA9PXF)",
+                            "org": "OSQUERY "
+                            "A "
+                            "Series "
+                            "of LF "
+                            "Projects, "
+                            "LLC",
+                            "ou": "3522FA9PXF",
+                            "sha256": "7c9faa9d607c98bee9de8a9ed8d30f51e4ec32acf8751a9992016eb6a769254d",
+                            "valid_from": 1612234641,
+                            "valid_until": 1770087441,
+                        },
+                        {
+                            "cn": "Developer " "ID " "Certification " "Authority",
+                            "org": "Apple " "Inc.",
+                            "ou": "Apple " "Certification " "Authority",
+                            "sha256": "7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f",
+                            "valid_from": 1328134335,
+                            "valid_until": 1801519935,
+                        },
+                        {
+                            "cn": "Apple " "Root CA",
+                            "org": "Apple " "Inc.",
+                            "ou": "Apple " "Certification " "Authority",
+                            "sha256": "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024",
+                            "valid_from": 1146001236,
+                            "valid_until": 2054670036,
+                        },
+                    ],
+                    "signing_id": "3522FA9PXF:io.osquery.agent",
+                    "team_id": "3522FA9PXF",
+                },
+                {
+                    "file_path": "/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd",
+                    "pid": 531,
+                },
+            ],
+            "rule_name": "Keychains",
+            "rule_version": "v1",
+            "target": "/Library/Keychains/System.keychain",
+        }
+        response = self.post_as_json(
+            "eventupload", self.enrolled_machine.hardware_uuid,
+            {"file_access_events": [event_d]}
+        )
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response, {})
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(
+            events[0].payload,
+            {'access_time': 1772523396.823121,
+             'decision': 'FILE_ACCESS_DECISION_AUDIT_ONLY',
+             'process_chain': [
+                 {'cdhash': '7009fd13a7a15a3395878f19a10d524ee7bb59a2',
+                  'file_path': '/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd',
+                  'file_sha256': '2cd76aed19a9fb0da18ee11f36272b9632c0dde71509b746f7142b31a703e9f5',
+                  'pid': 77605,
+                  'signing_cert_0': {'cn': 'Developer ID Application: '
+                                           'OSQUERY A Series of LF Projects, '
+                                     'LLC (3522FA9PXF)',
+                                     'org': 'OSQUERY A Series of LF '
+                                            'Projects, LLC',
+                                     'ou': '3522FA9PXF',
+                                     'sha256': '7c9faa9d607c98bee9de8a9ed8d30f51e4ec32acf8751a9992016eb6a769254d',
+                                     'valid_from': 1612234641,
+                                     'valid_until': 1770087441},
+                  'signing_cert_1': {'cn': 'Developer ID Certification '
+                                           'Authority',
+                                     'org': 'Apple Inc.',
+                                     'ou': 'Apple Certification Authority',
+                                     'sha256': '7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f',
+                                     'valid_from': 1328134335,
+                                     'valid_until': 1801519935},
+                  'signing_cert_2': {'cn': 'Apple Root CA',
+                                     'org': 'Apple Inc.',
+                                     'ou': 'Apple Certification Authority',
+                                     'sha256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                                     'valid_from': 1146001236,
+                                     'valid_until': 2054670036},
+                  'signing_id': '3522FA9PXF:io.osquery.agent',
+                  'team_id': '3522FA9PXF'},
+                 {'file_path': '/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd',
+                  'pid': 531}
+             ],
+             'rule_name': 'Keychains',
+             'rule_version': 'v1',
+             'target': '/Library/Keychains/System.keychain'}
+        )
+        metadata = events[0].metadata.serialize()
+        self.assertEqual(
+            metadata["objects"],
+            {'apple_team_id': ['3522FA9PXF'],
+             'certificate': ['sha256|7c9faa9d607c98bee9de8a9ed8d30f51e4ec32acf8751a9992016eb6a769254d',
+                             'sha256|7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f',
+                             'sha256|b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024'],
+             'file': ['sha256|2cd76aed19a9fb0da18ee11f36272b9632c0dde71509b746f7142b31a703e9f5',
+                      'cdhash|7009fd13a7a15a3395878f19a10d524ee7bb59a2',
+                      'apple_signing_id|3522FA9PXF:io.osquery.agent']}
+        )
+        self.assertEqual(metadata["created_at"], "2026-03-03T07:36:36.823121")
+        self.assertEqual(metadata["tags"], ["santa"])
+        self.assertEqual(metadata["type"], "santa_file_access_event")
 
     # postflight
 

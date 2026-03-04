@@ -6,6 +6,10 @@
 
 Filter out status logs with INFO severity level.
 
+#### Santa
+
+Added support for the file access events.
+
 ### Bug fixes
 
 Fixed potential SCIM machine tagging conflict.

@@ -1,5 +1,5 @@
 import datetime
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.santa.events import (_build_file_tree_from_santa_event,
@@ -7,7 +7,7 @@ from zentral.contrib.santa.events import (_build_file_tree_from_santa_event,
                                           _create_missing_bundles,
                                           _update_targets,
                                           EventMetadata,
-                                          SantaEnrollmentEvent, SantaEventEvent,
+                                          SantaEnrollmentEvent, SantaEventEvent, SantaFileAccessEvent,
                                           SantaRuleSetUpdateEvent, SantaRuleUpdateEvent)
 from zentral.contrib.santa.models import Bundle, Configuration, Target
 from .utils import new_sha256
@@ -374,6 +374,14 @@ class SantaEventTestCase(TestCase):
              "apple_team_id": [("43AQ936H96",)]}
         )
 
+    def test_std_event_notification_context(self):
+        event = self.get_event_with_linked_objects(mas_signed=False, flat=True)
+        probe = Mock()
+        ctx = event.get_notification_context(probe)
+        self.assertEqual(ctx["decision"], "ALLOW_UNKNOWN")
+        self.assertEqual(ctx["file_name"], "firefox")
+        self.assertEqual(ctx["file_path"], "/Applications/Firefox.app/Contents/MacOS")
+
     def test_mas_event_without_team_id_linked_objects(self):
         event = self.get_event_with_linked_objects(
             mas_signed=True,
@@ -435,6 +443,11 @@ class SantaEventTestCase(TestCase):
                              ("sha256", "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024")],
              "apple_team_id": [("43AQ936H96",)]}
         )
+
+    def test_fa_event_without_process_chain(self):
+        event = SantaFileAccessEvent(EventMetadata(), {})
+        self.assertEqual(event.get_linked_objects_keys(), {})
+        self.assertEqual(list(event.iter_signing_chain()), [])
 
     def test_binary_rule_update_linked_objects(self):
         event_d = {
