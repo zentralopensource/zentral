@@ -29,13 +29,6 @@ register_event_type(MunkiRequestEvent)
 class BaseMunkiEvent(BaseEvent):
     tags = ["munki"]
     namespace = "munki_event"
-    payload_aggregations = [
-        ("munki_version", {"type": "terms", "bucket_number": 10, "label": "Munki versions"}),
-        ("run_type", {"type": "terms", "bucket_number": 10, "label": "Run types"}),
-        ("name", {"type": "table", "bucket_number": 50, "label": "Bundles",
-                  "columns": [("name", "Name"),
-                              ("version", "Version str.")]}),
-    ]
 
     def get_linked_objects_keys(self):
         keys = {}

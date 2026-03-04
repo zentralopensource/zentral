@@ -69,11 +69,6 @@ for jamf_event, (event_subtype, is_heartbeat, timeout_attr) in JAMF_EVENTS.items
 class JAMFChangeManagementEvent(BaseEvent):
     event_type = "jamf_change_management"
     tags = ["jamf", "jamf_beat"]
-    payload_aggregations = [
-        ("jamf_instance.host", {"type": "terms", "bucket_number": 10, "label": "Hosts"}),
-        ("action", {"type": "terms", "bucket_number": 10, "label": "Actions"}),
-        ("object.type", {"type": "terms", "bucket_number": 10, "label": "Object types"}),
-    ]
 
 
 register_event_type(JAMFChangeManagementEvent)
@@ -82,11 +77,6 @@ register_event_type(JAMFChangeManagementEvent)
 class JAMFSoftwareServerEvent(BaseEvent):
     event_type = "jamf_software_server"
     tags = ["jamf", "jamf_beat"]
-    payload_aggregations = [
-        ("log_level", {"type": "terms", "bucket_number": 10, "label": "Log levels"}),
-        ("component", {"type": "terms", "bucket_number": 10, "label": "Components"}),
-        ("jamf_instance.host", {"type": "terms", "bucket_number": 10, "label": "Hosts"}),
-    ]
 
 
 register_event_type(JAMFSoftwareServerEvent)
@@ -95,10 +85,6 @@ register_event_type(JAMFSoftwareServerEvent)
 class JAMFAccessEvent(BaseEvent):
     event_type = "jamf_access"
     tags = ["jamf", "jamf_beat"]
-    payload_aggregations = [
-        ("status", {"type": "terms", "bucket_number": 10, "label": "Statuses"}),
-        ("entry_point", {"type": "terms", "bucket_number": 10, "label": "Entry points"}),
-    ]
 
 
 register_event_type(JAMFAccessEvent)

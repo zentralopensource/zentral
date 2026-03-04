@@ -430,7 +430,6 @@ class BaseEvent(object):
     namespace = None
     tags = []
     heartbeat_timeout = None
-    payload_aggregations = []
 
     @classmethod
     def build_from_machine_request_payloads(cls, msn, ua, ip, payloads, get_created_at=None, observer=None):
@@ -522,15 +521,6 @@ class BaseEvent(object):
         ctx = self.get_notification_context(probe)
         return render_notification_part(ctx, self.event_type, 'body')
 
-    # aggregations
-
-    @classmethod
-    def get_payload_aggregations(cls):
-        for _, val in cls.payload_aggregations:
-            if "event_type" not in val:
-                val["event_type"] = cls.event_type
-        return cls.payload_aggregations
-
     # heartbeats
 
     @classmethod
@@ -608,10 +598,6 @@ register_event_type(AuditEvent)
 class MachineConflictEvent(BaseEvent):
     event_type = "zentral_machine_conflict"
     tags = ["zentral"]
-    payload_aggregations = [
-        ("module", {"type": "terms", "bucket_number": 10, "label": "Modules"}),
-        ("enrollment_serial_number", {"type": "terms", "bucket_number": 10, "label": "Duplicated serial numbers"}),
-    ]
 
 
 register_event_type(MachineConflictEvent)
