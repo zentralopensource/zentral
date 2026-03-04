@@ -8,18 +8,18 @@ First you need to configure an [OKTA realm](../okta_saml/), with the `SCIM enabl
 
 ## Provision a Zentral service account
 
-The SCIM synchronization is part of the Zentral API. To let Okta authenticate with Zentral, you need to setup a Zentral group and a Zentral service account.
+The SCIM synchronization is part of the Zentral API. To let Okta authenticate with Zentral, you need to setup a Zentral role and a Zentral service account.
 
-### Group
+### Role
 
-In Zentral, groups are used to give permissions to the users or service accounts. Create a group with the following permissions:
+In Zentral, roles are used to give permissions to the users or service accounts. Create a role with the following permissions:
 
 * `realms.realmgroup` add, change, delete, view
 * `realms.realmuser` add, change, delete, view
 
 ### Service account
 
-A Zentral service account is a Zentral user that cannot log into the admin console. Create a user for your SCIM integration. Pick a name, a description, and add it to the group you have just created. Do not forget to note the API token. You will need it later to configure the Okta application.
+A Zentral service account is a Zentral user that cannot log into the admin console. Create a service account for your SCIM integration. Pick a name, a description, and add it to the role you have just created. Do not forget to note the API token. You will need it later to configure the Okta application.
 
 ## Update the Okta Application
 
@@ -37,7 +37,7 @@ Under `Supported provisioning actions`, choose `Push New Users`, `Push Profile U
 
 Select the `HTTP Header` authentication, and use the API token of the service account you have just created as bearer token.
 
-After you have saved the form, open the `To App` sub tab. Make sure that the `Create Users`, `Update User Attributes` and `Deactivate Users` options are enabled. The `Sync Password` option must be disabled.
+After you have saved the form, open the `To App` sub tab. Make sure that the `Create Users`, `Update User Attributes` and `Deactivate Users` options are enabled. The `Sync Password` option must be disabled. In the `Attribute Mappings` section, make sure that you have the following required mappings: `userName`, `email`, and `emailType`.
 
 ### Configure the groups to be pushed
 
