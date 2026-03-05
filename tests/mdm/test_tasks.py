@@ -1,7 +1,18 @@
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+
 from django.test import TestCase
-from zentral.contrib.mdm.tasks import bulk_assign_location_asset_task
-from .utils import force_dep_virtual_server, force_location_asset
+from django.utils.crypto import get_random_string
+
+from zentral.contrib.mdm.dep_client import CursorIterator
+from zentral.contrib.mdm.tasks import (
+    bulk_assign_location_asset_task,
+    sync_dep_virtual_server_devices_task,
+)
+
+from .utils import (
+    force_dep_virtual_server,
+    force_location_asset,
+)
 
 
 class MDMTasksTestCase(TestCase):
@@ -25,3 +36,66 @@ class MDMTasksTestCase(TestCase):
              'total_assignments': 42}
         )
         bulk_assign_location_asset.asset_called_once_with(location_asset, [dep_virtual_server])
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_task(self, from_dep_token):
+        client = Mock()
+
+        serial_number = get_random_string(10).upper()
+        client.fetch_devices.return_value = CursorIterator(
+            [
+                {
+                    "device_assigned_date": "2023-01-10T19:09:22Z",
+                    "serial_number": serial_number,
+                }
+            ]
+        )
+        from_dep_token.return_value = client
+        dep_virtual_server = force_dep_virtual_server()
+
+        result = sync_dep_virtual_server_devices_task(dep_virtual_server.pk)
+        self.assertEqual(
+            result,
+            {
+                "dep_virtual_server": {
+                    "name": dep_virtual_server.name,
+                    "pk": dep_virtual_server.pk,
+                },
+                "operations": {
+                    "created": 1,
+                    "updated": 0,
+                },
+                "requested_sync_type": "delta_sync",
+                "effective_sync_type": "delta_sync"
+            },
+        )
+        serial_number2 = get_random_string(10).upper()
+        client.fetch_devices.return_value = CursorIterator(
+            [
+                {
+                    "device_assigned_date": "2023-01-10T19:09:22Z",
+                    "serial_number": serial_number,
+                },
+                {
+                    "device_assigned_date": "2023-01-10T19:09:22Z",
+                    "serial_number": serial_number2,
+                }
+            ]
+        )
+
+        result_full = sync_dep_virtual_server_devices_task(dep_virtual_server.pk, force_full_sync=True)
+        self.assertEqual(
+            result_full,
+            {
+                "dep_virtual_server": {
+                    "name": dep_virtual_server.name,
+                    "pk": dep_virtual_server.pk,
+                },
+                "operations": {
+                    "created": 1,
+                    "updated": 1,
+                },
+                "requested_sync_type": "full_sync",
+                "effective_sync_type": "full_sync"
+            },
+        )
