@@ -1,10 +1,11 @@
 import logging
+
 from celery import shared_task
+
 from .apps_books import bulk_assign_location_asset
-from .dep import define_dep_profile, sync_dep_virtual_server_devices, DEPClientError
+from .dep import DEPClientError, define_dep_profile, sync_dep_virtual_server_devices
 from .models import DEPEnrollment, DEPVirtualServer, LocationAsset
 from .software_updates import sync_software_updates
-
 
 logger = logging.getLogger("zentral.contrib.mdm.tasks")
 
@@ -13,12 +14,14 @@ logger = logging.getLogger("zentral.contrib.mdm.tasks")
 
 
 @shared_task
-def sync_dep_virtual_server_devices_task(dep_virtual_server_pk):
+def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=False):
     server = DEPVirtualServer.objects.get(pk=dep_virtual_server_pk)
     result = {"dep_virtual_server": {"pk": server.pk,
                                      "name": server.name},
               "operations": {"created": 0,
-                             "updated": 0}}
+                             "updated": 0},
+              "requested_sync_type": "full_sync" if force_full_sync else "delta_sync",
+              "effective_sync_type": "full_sync" if force_full_sync else "delta_sync"}
 
     def update_counters(created):
         if created:
@@ -27,11 +30,12 @@ def sync_dep_virtual_server_devices_task(dep_virtual_server_pk):
             result["operations"]["updated"] += 1
 
     try:
-        for _, created in sync_dep_virtual_server_devices(server):
+        for _, created in sync_dep_virtual_server_devices(server, force_fetch=force_full_sync):
             update_counters(created)
     except DEPClientError as e:
         if e.error_code == "EXPIRED_CURSOR":
             # full sync
+            result["effective_sync_type"] = "full_sync"
             for _, created in sync_dep_virtual_server_devices(server, force_fetch=True):
                 update_counters(created)
         else:
