@@ -1,32 +1,48 @@
+from accounts.api_authentication import APITokenAuthentication
+from base.serializers import TaskSerializer
 from django.shortcuts import get_object_or_404
-from django.urls import reverse
 from django_filters import rest_framework as filters
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.filters import OrderingFilter
-from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
-from rest_framework.views import APIView
+from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveUpdateAPIView
 from rest_framework.response import Response
-from accounts.api_authentication import APITokenAuthentication
+from rest_framework.views import APIView
+
 from zentral.contrib.mdm.dep import disown_dep_device
 from zentral.contrib.mdm.events import post_dep_device_disowned_event
 from zentral.contrib.mdm.models import DEPDevice, DEPVirtualServer
+from zentral.contrib.mdm.serializers import (
+    DEPDeviceSerializer,
+)
 from zentral.contrib.mdm.tasks import sync_dep_virtual_server_devices_task
-from zentral.contrib.mdm.serializers import DEPDeviceSerializer
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired, MaxLimitOffsetPagination
+from zentral.utils.drf import (
+    DefaultDjangoModelPermissions,
+    DjangoPermissionRequired,
+    MaxLimitOffsetPagination,
+)
 
 
-class DEPVirtualServerSyncDevicesView(APIView):
+class DEPVirtualServerSyncDevicesView(GenericAPIView):
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "mdm.view_depvirtualserver"
     permission_classes = [DjangoPermissionRequired]
+    serializer_class = TaskSerializer
 
     def post(self, request, *args, **kwargs):
         server = get_object_or_404(DEPVirtualServer, pk=kwargs["pk"])
-        result = sync_dep_virtual_server_devices_task.apply_async((server.pk,))
-        return Response({"task_id": result.id,
-                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
-                        status=status.HTTP_201_CREATED)
+        full_sync = False
+        qp = request.query_params.get("full_sync")
+        if isinstance(qp, str):
+            full_sync = qp.lower() in ('', 'yes', 'y', 't', 'true')
+        task = sync_dep_virtual_server_devices_task.apply_async(
+            (server.pk,), force_full_sync=full_sync
+        )
+        serializer = self.serializer_class.from_task(task=task)
+        return Response(
+            serializer.initial_data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class DEPDeviceList(ListAPIView):
