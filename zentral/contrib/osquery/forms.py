@@ -108,6 +108,7 @@ class DistributedQueryForm(forms.ModelForm):
         self.query = kwargs.pop("query", None)
         super().__init__(*args, **kwargs)
         self.fields["valid_from"].initial = datetime.utcnow()
+        self.fields["halt_current_runs"].label = ""
         if not self.instance.pk:
             self.fields["valid_until"].initial = datetime.utcnow() + timedelta(hours=1)
             current_runs = self.query.distributedquery_set.active().count()
