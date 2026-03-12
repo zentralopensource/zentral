@@ -1,19 +1,31 @@
 from datetime import datetime, timedelta
+
 from django import forms
 from django.db.models import Count, F, Q
 from django.utils.text import slugify
 from rest_framework.parsers import JSONParser
 from rest_framework_yaml.parsers import YAMLParser
+
 from .compliance_checks import sync_query_compliance_check
-from .models import (AutomaticTableConstruction, Configuration, ConfigurationPack,
-                     DistributedQuery, DistributedQueryMachine, Enrollment, FileCategory,
-                     Pack, PackQuery, Platform, Query)
+from .models import (
+    AutomaticTableConstruction,
+    Configuration,
+    ConfigurationPack,
+    DistributedQuery,
+    DistributedQueryMachine,
+    Enrollment,
+    FileCategory,
+    Pack,
+    PackQuery,
+    Platform,
+    Query,
+)
 from .packs import OsqueryConfigParser, update_or_create_pack
 from .releases import get_osquery_versions
 from .serializers import OsqueryPackSerializer
 
-
 # common
+
 
 class PlatformsWidget(forms.CheckboxSelectMultiple):
     def __init__(self, attrs=None, choices=()):
@@ -96,6 +108,7 @@ class DistributedQueryForm(forms.ModelForm):
         self.query = kwargs.pop("query", None)
         super().__init__(*args, **kwargs)
         self.fields["valid_from"].initial = datetime.utcnow()
+        self.fields["halt_current_runs"].label = ""
         if not self.instance.pk:
             self.fields["valid_until"].initial = datetime.utcnow() + timedelta(hours=1)
             current_runs = self.query.distributedquery_set.active().count()
@@ -338,7 +351,10 @@ class PackQueryForm(forms.ModelForm):
 # Query
 
 class QueryForm(forms.ModelForm):
-    compliance_check = forms.BooleanField(required=False)
+    compliance_check = forms.BooleanField(
+        required=False,
+        help_text="The compliance checks are a way to check the status of the field 'ztl_status' in your osqueries.",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -351,6 +367,9 @@ class QueryForm(forms.ModelForm):
         widgets = {"platforms": PlatformsWidget,
                    "description": forms.Textarea(attrs={"rows": 2}),
                    "value": forms.Textarea(attrs={"rows": 2})}
+        labels = {
+            "tag": "Managed tags",
+        }
 
     def clean_sql(self):
         sql = self.cleaned_data.get("sql")
