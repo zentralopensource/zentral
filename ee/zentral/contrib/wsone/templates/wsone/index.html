@@ -43,53 +43,8 @@
             {% endfor %}
         </tbody>
         </table>
-    {% endif %}    
+    {% endif %}
     {% endif %}
   </div>
 </div>
-{% endblock %}
-
-{% block extrajs %}
-<script nonce="{{ request.csp_nonce }}">
-  function get_data_and_make_chart(url, charts) {
-    $.getJSON(url, function(data) {
-      for (var dataset in data.datasets) {
-        if (data.datasets.hasOwnProperty(dataset)) {
-          var canvas = charts[data.app][dataset];
-          var chart = new Chart(canvas, {
-            type: 'bar',
-            data: {labels: data.labels,
-                   datasets: [data.datasets[dataset]]},
-            options: {
-                scales: {
-                    x: {gridLines: { color: "darkgray", zeroLineColor: "darkgray" }},
-                    y: {gridLines: { color: "darkgray", zeroLineColor: "darkgray" }}
-                }
-            }
-          });
-        }
-      }
-    });
-  }
-
-  $(document).ready(function(){
-    var charts = {};
-    var urls = Array();
-    $(".chart").each(function(index, canvas) {
-      canvas = $(canvas);
-      var app = canvas.data('app');
-      var dataset = canvas.data('dataset');
-      if(! charts.hasOwnProperty(app)) {
-        charts[app] = {};
-        urls.push('/app/' + app + '/hist_data/day/14/');
-      }
-      charts[app][dataset] = canvas;
-    });
-    for (var idx in urls) {
-      if (urls.hasOwnProperty(idx)) {
-        get_data_and_make_chart(urls[idx], charts);
-      }
-    }
-  });
-</script>
 {% endblock %}
