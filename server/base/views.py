@@ -1,11 +1,12 @@
 import logging
+
 from django.apps import apps
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse, JsonResponse
 from django.views.generic import TemplateView, View
-from zentral.core.stores.conf import stores
 
+from zentral.core.stores.conf import stores
 
 logger = logging.getLogger("server.base.views")
 
@@ -71,12 +72,12 @@ class AppHistogramDataView(LoginRequiredMixin, View):
             event_count_data.append(event_count)
             unique_msn_data.append(unique_msn)
         datasets = {"event_count": {
-                        "label": "{} events".format(app),
+                        "label": "events",
                         "backgroundColor": "rgb(122, 199, 189, 0.7)",
                         "data": event_count_data
                     },
                     "unique_msn": {
-                        "label": "{} machines".format(app),
+                        "label": "machines",
                         "backgroundColor": "rgb(234, 81, 101, 0.7)",
                         "data": unique_msn_data
                     }}
