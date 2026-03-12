@@ -568,6 +568,8 @@ Response:
 
 Use this endpoint to trigger a DEP virtual server devices sync.
 
+To force a full sync for all devices, use `?full_sync` or `?full_sync=true` as query string.
+
 Example:
 
 ```bash

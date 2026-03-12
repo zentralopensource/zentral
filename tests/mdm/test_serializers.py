@@ -1,10 +1,16 @@
 import base64
 import plistlib
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.mdm.models import ArtifactVersionTag
-from zentral.contrib.mdm.serializers import BlueprintArtifactSerializer, ProfileSerializer
+from zentral.contrib.mdm.serializers import (
+    BlueprintArtifactSerializer,
+    ProfileSerializer,
+)
+
 from .utils import build_mobileconfig_data, force_artifact, force_blueprint
 
 

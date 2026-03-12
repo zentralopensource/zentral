@@ -1,16 +1,19 @@
-from functools import reduce
 import operator
+from functools import reduce
 from unittest.mock import patch
 from urllib.parse import urlencode
+
+from accounts.models import APIToken, User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
-from accounts.models import APIToken, User
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.events import DEPDeviceDisownedEvent
+
 from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
 
 
@@ -110,6 +113,18 @@ class APIViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm_api:dep_virtual_server_sync_devices", args=(dep_server.pk,)))
         self.assertEqual(response.status_code, 201)
         self.assertEqual(sorted(response.json().keys()), ['task_id', 'task_result_url'])
+        result = response.json()
+        self.assertEqual(result['task_result_url'], reverse("base_api:task_result", args=(result['task_id'],)))
+
+    def test_user_dep_virtual_server_sync_devices_full(self):
+        dep_server = force_dep_virtual_server()
+        self.login("mdm.view_depvirtualserver")
+        response = self.client.post(reverse("mdm_api:dep_virtual_server_sync_devices",
+                                            args=(dep_server.pk,)), query_params={'full_sync': 'True'})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(sorted(response.json().keys()), ['task_id', 'task_result_url'])
+        result = response.json()
+        self.assertEqual(result['task_result_url'], reverse("base_api:task_result", args=(result['task_id'],)))
 
     # list dep devices
 
