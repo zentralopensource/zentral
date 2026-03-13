@@ -4,7 +4,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'incidents:index' %}">Incidents</a>
+  <li class="breadcrumb-item"><a href="{% url 'incidents:index' %}">Incidents</a></li>
   {% if reset_link %}
   <li class="breadcrumb-item"><a href="{{ reset_link }}">{{ object.name }}</a></li>
   {% else %}
@@ -14,7 +14,6 @@
   <li class="breadcrumb-item active">page {{ page.number }} of {{ paginator.num_pages }}</li>
   {% endif %}
 </ol>
-
 
 <div class="object-details">
     <div class="d-flex align-items-center mb-1">
@@ -74,7 +73,6 @@
     {% created_updated_at object %}
 
 </div>
-
 
 {% if perms.incidents.view_machineincident and paginator.count %}
 <h3>Machine incident{{ paginator.count|pluralize }} ({{ paginator.count }})</h3>

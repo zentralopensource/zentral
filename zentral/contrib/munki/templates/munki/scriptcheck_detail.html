@@ -1,7 +1,6 @@
 {% extends 'base.html' %}
 {% load inventory_extras ui_extras %}
 
-
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
@@ -9,7 +8,6 @@
   <li class="breadcrumb-item"><a href="{% url 'munki:script_checks' %}">Script checks</a></li>
   <li class="breadcrumb-item active">{{ object }}</li>
 </ol>
-
 
 <div class="object-details">
     <div class="d-flex align-items-center mb-1">
@@ -34,7 +32,7 @@
             {% if perms.munki.delete_scriptcheck %}
                 {% url 'munki:delete_script_check' object.pk as url %}
                 {% button 'DELETE' url "Delete Script Check" %}
-            {% endif %}        
+            {% endif %}
         </div>
     </div>
 

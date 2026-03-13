@@ -3,9 +3,9 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"<a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
   <li class="breadcrumb-item"><a href="{% url 'mdm:artifacts' %}">Artifacts</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:artifact' artifact.pk %}">{{ artifact }}</a></li>
   <li class="breadcrumb-item active">Remove from blueprint</li>
 </ol>
 

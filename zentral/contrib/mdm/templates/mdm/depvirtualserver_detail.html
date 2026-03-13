@@ -40,12 +40,12 @@
   </div>
   {% with object.organization as org %}
   <div class="col-md-6">
-    <h4>DEP organization</h3>
+    <h4>DEP organization</h4>
     <dl class="row">
       <dt class="col-sm-3 text-md-end">name</dt>
       <dd class="col-sm-9">{{ org.name }}</dd>
       <dt class="col-sm-3 text-md-end">admin</dt>
-      <dd class="col-sm-9"{{ org.admin_id }}</dd>
+      <dd class="col-sm-9">{{ org.admin_id }}</dd>
       <dt class="col-sm-3 text-md-end">email</dt>
       <dd class="col-sm-9">{{ org.email }}</dd>
       <dt class="col-sm-3 text-md-end">phone</dt>
@@ -61,7 +61,7 @@
   {% endwith %}
   {% with object.token as token %}
   <div class="col-md-6">
-    <h4>DEP Token</h3>
+    <h4>DEP Token</h4>
     {% if perms.mdm.change_depvirtualserver and token %}
     <a href="{% url 'mdm:renew_dep_token' token.id %}" class="btn btn-secondary">Renew</a>
     {% endif %}

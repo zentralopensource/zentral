@@ -34,7 +34,7 @@
           <dt class="col-sm-3 text-md-end">path</dt>
           <dd class="col-sm-9">{{ file.path }}</dd>
           {% if file.bundle %}
-          <dt class="col-sm-3 text-md-end">bundle id</dd>
+          <dt class="col-sm-3 text-md-end">bundle id</dt>
           <dd class="col-sm-9">{{ file.bundle.bundle_id }}</dd>
           <dt class="col-sm-3 text-md-end">bundle name</dt>
           <dd class="col-sm-9">{{ file.bundle.bundle_name }}</dd>
@@ -50,7 +50,7 @@
         {% if target.type == "BUNDLE" %}
         {% with target.bundle as bundle %}
         <dl class="row">
-          <dt class="col-sm-3 text-md-end">id</dd>
+          <dt class="col-sm-3 text-md-end">id</dt>
           <dd class="col-sm-9">{{ bundle.bundle_id }}</dd>
           <dt class="col-sm-3 text-md-end">name</dt>
           <dd class="col-sm-9">{{ bundle.name }}</dd>
@@ -116,6 +116,7 @@
           <li>{{ primary_user }}</li>
           {% endfor %}
         </ul>
+      </td>
     </tr>
     {% endif %}
     {% if rule.excluded_primary_users %}
@@ -127,6 +128,7 @@
           <li>{{ primary_user }}</li>
           {% endfor %}
         </ul>
+      </td>
     </tr>
     {% endif %}
     {% with rule.tags.count as tag_count %}

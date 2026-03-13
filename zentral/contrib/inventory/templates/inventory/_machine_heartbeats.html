@@ -1,4 +1,4 @@
-<h3>Heartbeat{{ heartbeats|length|pluralize }} ({{ heartbeats|length }})</h2>
+<h3>Heartbeat{{ heartbeats|length|pluralize }} ({{ heartbeats|length }})</h3>
 {% if heartbeats %}
 <table class="table table-striped align-middle table-hover">
   <thead>
@@ -12,11 +12,11 @@
     <tr>
       <td>
         {% if forloop.counter == 1 %}
-        {{ event_class_display }}{% if inventory_source_name %} - {{ inventory_source_name }}{% endif %}
+        {{ event_class_display }}{% if inventory_source_name %} - {{ inventory_source_name }}{% endif %}
         {% endif %}
       </td>
       <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua_max_date }}</td>
-      <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua|default:"-" }}</td>
+      <td {% if cell_class %}class="{{ cell_class }}"{% endif %}>{{ ua|default:"-" }}</td>
     </tr>
     {% endfor %}
     {% endfor %}

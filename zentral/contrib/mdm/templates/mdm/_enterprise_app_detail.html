@@ -39,7 +39,7 @@
         <tr>
           <td>{{ bundle.id }}</td>
           <td>{{ bundle.version_str }}{% if bundle.version != bundle.version_str %} / {{ bundle.version }}{% endif %}</td>
-          <td>{{ bundle.path|default:"-" }}
+          <td>{{ bundle.path|default:"-" }}</td>
         </tr>
         {% endfor %}
       </tbody>

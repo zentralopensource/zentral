@@ -8,7 +8,7 @@
   <li class="breadcrumb-item"><a href="{{ service_account.get_absolute_url }}">{{ service_account.get_type_display|title }} {{ service_account }}</a></li>
   {% if object %}
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">OIDC API token issuer {{ object }}</a></li>
-  <li class="breadcrumb-item active">Update</a>
+  <li class="breadcrumb-item active">Update</li>
   {% else %}
   <li class="breadcrumb-item active">Create OIDC API token issuer</li>
   {% endif %}

@@ -14,7 +14,7 @@
         {% if perms.mdm.add_blueprint %}
             {% url 'mdm:create_blueprint' as url %}
             {% button 'CREATE' url "Create new Blueprint" %}
-        {% endif %}  
+        {% endif %}
     </div>
 </div>
 
@@ -51,6 +51,5 @@
         {% no_entities 'Blueprints' %}
     {% endif %}
 {% endif %}
-
 
 {% endblock %}

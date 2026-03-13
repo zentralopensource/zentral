@@ -42,7 +42,7 @@
 {% for configuration, target_state in states %}
 <dl>
   <dt>Configuration</dt>
-  <dd>{{ configuration }}{% if configuration == current_configuration %}*{% endif %}<dd>
+  <dd>{{ configuration }}{% if configuration == current_configuration %}*{% endif %}</dd>
   <dt>Status</dt>
   <dd>
     {{ target_state.get_state_display }}

@@ -4,7 +4,7 @@
 {% block content %}
 <ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'incidents:index' %}">Incidents</a>
+  <li class="breadcrumb-item"><a href="{% url 'incidents:index' %}">Incidents</a></li>
   <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ incident.name }}</a></li>
   <li class="breadcrumb-item active">{{ object.serial_number|privacywrapper }}</li>
   <li class="breadcrumb-item active">update</li>
@@ -25,9 +25,9 @@
 </dl>
 
 <form method="post" class="update-form">{% csrf_token %}
-  
+
     {{ form }}
-  
+
     <p>
         <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">
         Cancel

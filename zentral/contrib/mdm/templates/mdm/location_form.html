@@ -11,17 +11,19 @@
 <h3>{% if object %}Update{% else %}Create{% endif %} location</h3>
 
 <form class="update-form" method="post" enctype="multipart/form-data">{% csrf_token %}
-  
+
     {{ form }}
-  
+
     <p>
     {% if object %}
     <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">
-    {% else %}
-    <a href="{% url "mdm:locations" %}" class="btn btn-outline-secondary">
-    {% endif %}
       Cancel
     </a>
+    {% else %}
+    <a href="{% url 'mdm:locations' %}" class="btn btn-outline-secondary">
+      Cancel
+    </a>
+    {% endif %}
     <button type="submit" class="btn btn-primary">
       Save
     </button>
