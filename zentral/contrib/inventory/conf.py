@@ -290,7 +290,7 @@ def macos_version_from_build(build):
                          "22G90", "22G313", "22H221",
                          "23B81", "23B2082", "23C71", "23D60", "23G93", "23H222", "23J30",
                          "24A348", "24B91", "24D70", "24E263", "24G90", "24G231",
-                         "25A362", "25D2128"):
+                         "25A362", "25D2128", "25D771280a"):
                 patch = 1
             elif build in ("21G309", "21G320", "21G1974",
                            "22G91", "22G320", "22H313",
@@ -371,7 +371,7 @@ def macos_version_from_build(build):
             "build": build
         }
         # RSR
-        if build in ("22E772610a", "22F770820b"):
+        if build in ("22E772610a", "22F770820b", "25D771280a"):
             os_version["version"] = "(a)"
         elif build == "22F770820d":
             os_version["version"] = "(c)"
