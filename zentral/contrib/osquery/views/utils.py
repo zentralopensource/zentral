@@ -27,7 +27,7 @@ def clean_dict(d, keys_to_keep=None):
 
 
 def update_os_version(tree, t):
-    os_version = clean_dict(t, {"name", "major", "minor", "patch", "build"})
+    os_version = clean_dict(t, {"name", "major", "minor", "patch", "build", "extra"})
     for key in ("major", "minor", "patch"):
         value = os_version.get(key)
         if value and isinstance(value, str):
@@ -49,6 +49,9 @@ def update_os_version(tree, t):
         elif "macos" in name:
             if "patch" not in os_version:
                 os_version["patch"] = 0
+            extra = os_version.pop("extra", None)
+            if extra:
+                os_version["version"] = extra
         elif "windows" in name:
             os_version = cleanup_windows_os_version(os_version)
     if os_version.get("major"):

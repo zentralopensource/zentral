@@ -8,11 +8,7 @@ logger = logging.getLogger('zentral.contrib.osquery.conf')
 
 INVENTORY_QUERY_NAME = "ztl-inv"
 
-
 INVENTORY_QUERIES = (
-    ("os_version",
-     "select 'os_version' as table_name, name, major, minor, "
-     "patch, build from os_version;"),
     ("system_info",
      "select 'system_info' as table_name, "
      "computer_name, hostname, hardware_model, hardware_serial, "
@@ -128,8 +124,17 @@ DECORATORS = {
 }
 
 
+def _get_os_version_query(platform):
+    fields = ", ".join(
+        f for f in ("name", "major", "minor", "patch", "build", "extra")
+        if platform == MACOS or f != "extra"
+    )
+    return f"select 'os_version' as table_name, {fields} from os_version;"
+
+
 def _get_inventory_queries_for_machine(machine, include_apps=False, include_ec2=False):
     yield from INVENTORY_QUERIES
+    yield "os_version", _get_os_version_query(machine.platform)
     if include_apps:
         if machine.platform == MACOS:
             yield "apps", OSX_APP_INSTANCE_QUERY

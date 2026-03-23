@@ -236,6 +236,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         unknown_windows_build=False,
         macos_os_version_name=None,
         macos_os_version_empty_patch=False,
+        macos_os_version_extra=None,
     ):
         if platform == "macos":
             qs = [d.copy() for d in INVENTORY_QUERY_SNAPSHOT]
@@ -243,6 +244,8 @@ class OsqueryAPIViewsTestCase(TestCase):
                 qs[0]["name"] = macos_os_version_name
             if macos_os_version_empty_patch:
                 qs[0]["patch"] = ""
+            if macos_os_version_extra:
+                qs[0]["extra"] = macos_os_version_extra
         elif platform == "windows":
             qs = [d.copy() for d in WIN_INVENTORY_QUERY_SNAPSHOT]
             if no_windows_build_data:
@@ -668,7 +671,20 @@ class OsqueryAPIViewsTestCase(TestCase):
             {'build': '19H1824', 'major': 10, 'minor': 15, 'name': 'macOS', 'patch': 0}
         )
 
-    def test_osx_app_instance_schedule(self):
+    def test_os_version_version(self):
+        tree = {}
+        snapshot = self.get_default_inventory_query_snapshot(
+            "macos",
+            macos_os_version_name="macOS",
+            macos_os_version_extra="(a)",
+        )
+        update_tree_with_inventory_query_snapshot(tree, snapshot)
+        self.assertEqual(
+            tree["os_version"],
+            {'build': '19H1824', 'major': 10, 'minor': 15, 'name': 'macOS', 'patch': 7, 'version': '(a)'}
+        )
+
+    def test_osx_apps_and_os_version_schedule(self):
         em = self.force_enrolled_machine()
         self.post_default_inventory_query_snapshot(em.node_key, platform="macos")
         response = self.post_as_json("config", {"node_key": em.node_key})
@@ -687,8 +703,10 @@ class OsqueryAPIViewsTestCase(TestCase):
         schedule = json_response["schedule"]
         self.assertIn(INVENTORY_QUERY_NAME, schedule)
         self.assertIn(" 'apps' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        # extra OS version field
+        self.assertIn(" extra from os_version;", schedule[INVENTORY_QUERY_NAME]["query"])
 
-    def test_win_program_instance_schedule(self):
+    def test_win_program_instance_and_os_version_schedule(self):
         em = self.force_enrolled_machine()
         self.post_default_inventory_query_snapshot(em.node_key, platform="windows")
         response = self.post_as_json("config", {"node_key": em.node_key})
@@ -707,6 +725,8 @@ class OsqueryAPIViewsTestCase(TestCase):
         schedule = json_response["schedule"]
         self.assertIn(INVENTORY_QUERY_NAME, schedule)
         self.assertIn(" 'programs' ", schedule[INVENTORY_QUERY_NAME]["query"])
+        # no extra OS version field
+        self.assertIn(" build from os_version;", schedule[INVENTORY_QUERY_NAME]["query"])
 
     def test_deb_packages_schedule(self):
         em = self.force_enrolled_machine()
