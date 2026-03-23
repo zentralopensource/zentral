@@ -113,7 +113,7 @@
       }
     ]
   },
-  "PublicRapidSecurityResponses": {
+  "PublicBackgroundSecurityImprovements": {
     "macOS": [
       {
         "ProductVersion": "13.3.1",

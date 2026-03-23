@@ -1584,6 +1584,60 @@ class MDMViewsTestCase(TestCase):
             },
         )
 
+    def test_declarative_management_softwareupdate_enforcement_specific_latest_build_extra(
+        self, post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        device_id = get_random_string(8)
+        session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        session.enrolled_device.device_information = {
+            "SoftwareUpdateDeviceID": device_id
+        }
+        session.enrolled_device.os_version = "26.3.1"
+        session.enrolled_device.build_version = "25D2128"
+        session.enrolled_device.save()
+        force_software_update(
+            device_id=device_id,
+            version="26.3.1",
+            version_extra="(a)",
+            build="25D771280a",
+            prerequisite_build="25D2128",
+            posting_date=date(2026, 3, 18),
+        )
+        sue = force_software_update_enforcement(
+            details_url="https://www.example.com",
+            max_os_version="27",
+            local_time=time(9, 30),
+            delay_days=7,
+        )
+        blueprint = self._add_blueprint(session)
+        blueprint.software_update_enforcements.add(sue)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": f"declaration/configuration/zentral.blueprint.{blueprint.pk}."
+            "softwareupdate-enforcement-specific",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "Identifier": f"zentral.blueprint.{blueprint.pk}.softwareupdate-enforcement-specific",
+                "Payload": {
+                    "DetailsURL": "https://www.example.com",
+                    "TargetOSVersion": "26.3.1",
+                    "TargetBuildVersion": "25D771280a",
+                    "TargetLocalDateTime": "2026-03-25T09:30:00",
+                },
+                "ServerToken": "a0ca3b9ea35e2bed4d8a213c3705c67b743d1544",
+                "Type": "com.apple.configuration.softwareupdate.enforcement.specific",
+            },
+        )
+
     def test_declarative_management_softwareupdate_enforcement_specific_latest_same(
         self, post_event
     ):

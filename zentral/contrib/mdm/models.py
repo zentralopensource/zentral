@@ -3300,17 +3300,16 @@ class SoftwareUpdate(models.Model):
         return tuple(e for e in (self.major, self.minor, self.patch, self.extra) if e != "")
 
     def target_os_version(self):
-        s = ".".join(
+        return ".".join(
             str(i)
             for a, i in ((a, getattr(self, a)) for a in ("major", "minor", "patch"))
             if i or a != "patch"
         )
-        if self.extra:
-            s = f"{s} {self.extra}"
-        return s
 
     def __str__(self):
         s = self.target_os_version()
+        if self.extra:
+            s = f"{s} {self.extra}"
         if self.build:
             s = f"{s} ({self.build})"
         return s

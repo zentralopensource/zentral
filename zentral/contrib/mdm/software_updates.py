@@ -25,7 +25,11 @@ def _parse_date(date):
 
 
 def _iter_software_updates(response):
-    for attr, public in (("PublicAssetSets", True), ("AssetSets", False), ("PublicRapidSecurityResponses", True)):
+    for attr, public in (
+        ("PublicAssetSets", True),
+        ("AssetSets", False),
+        ("PublicBackgroundSecurityImprovements", True),
+    ):
         products = response.get(attr)
         if not products:
             continue
@@ -47,7 +51,7 @@ def _iter_software_updates(response):
                 if kwargs.get("patch") is None:
                     kwargs["patch"] = 0
                 kwargs["build"] = product_info.get("Build") or ""
-                if attr == "PublicRapidSecurityResponses":
+                if attr == "PublicBackgroundSecurityImprovements":
                     kwargs["extra"] = product_info["ProductVersionExtra"]
                     kwargs["prerequisite_build"] = product_info["PrerequisiteBuild"]
                 else:
