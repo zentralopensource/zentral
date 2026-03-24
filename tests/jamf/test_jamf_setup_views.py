@@ -122,12 +122,13 @@ class JamfSetupViewsTestCase(TestCase):
 
     def test_create_jamf_instance_post(self):
         self._login("jamf.add_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        password = get_random_string(12)
         response = self.client.post(reverse("jamf:create_jamf_instance"),
                                     {"host": "yo.example.com",
                                      "port": 8443,
                                      "path": "/JSSResource",
                                      "user": "godzilla",
-                                     "password": "pwd",
+                                     "password": password,
                                      "inventory_apps_shard": 86,
                                      "inventory_extension_attributes": "un, deux trois",
                                      "principal_user_uid_extension_attribute": "UIDUIDUID",
@@ -140,7 +141,7 @@ class JamfSetupViewsTestCase(TestCase):
         self.assertContains(response, "Tag configs (0)")
         jamf_instance = response.context["object"]
         self.assertEqual(jamf_instance.version, 0)
-        self.assertEqual(jamf_instance.get_password(), "pwd")
+        self.assertEqual(jamf_instance.get_password(), password)
         self.assertEqual(sorted(jamf_instance.inventory_extension_attributes), ["deux trois", "un"])
         self.assertEqual(jamf_instance.principal_user_uid_extension_attribute, "UIDUIDUID")
         self.assertEqual(jamf_instance.principal_user_pn_extension_attribute, "PNPNPN")
@@ -150,7 +151,7 @@ class JamfSetupViewsTestCase(TestCase):
         self.assertContains(response, "UIDUIDUID")
         self.assertContains(response, "PNPNPN")
         self.assertContains(response, "DNDNDN")
-        self.assertNotContains(response, "pwd")
+        self.assertNotContains(response, password)
 
     def test_create_jamf_instance_pu_missing_uid_pn(self):
         self._login("jamf.add_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
