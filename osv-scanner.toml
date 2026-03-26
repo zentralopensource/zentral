@@ -1,0 +1,4 @@
+[[IgnoredVulns]]
+id = "GHSA-5239-wwwm-4pmq"
+ignoreUntil = 2026-04-10
+reason = "This vulnerability severity is low, and no patch for it is available."
