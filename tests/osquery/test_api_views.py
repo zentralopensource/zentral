@@ -1,18 +1,16 @@
-import json
-import operator
 from datetime import datetime
-from functools import reduce
 from unittest.mock import patch
 
 from accounts.models import APIToken, User
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.http import http_date
 from django.utils.text import slugify
 
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
@@ -32,7 +30,7 @@ from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.utils.time import naive_utcnow
 
 
-class APIViewsTestCase(TestCase):
+class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     maxDiff = None
 
     @classmethod
@@ -49,6 +47,22 @@ class APIViewsTestCase(TestCase):
         _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
+
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "osquery"
+
+    # RequestCase implementation
+
+    def _get_api_key(self):
+        return self.api_key
 
     # utility methods
 
@@ -158,19 +172,6 @@ class APIViewsTestCase(TestCase):
             compliance_check=compliance_check
         ).packquery
 
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-
     def set_pack_endpoint_put_permissions(self):
         self.set_permissions(
             "osquery.add_pack",
@@ -186,52 +187,6 @@ class APIViewsTestCase(TestCase):
             "osquery.delete_pack",
             "osquery.delete_packquery",
         )
-
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def get(self, url, data=None, include_token=True):
-        kwargs = {}
-        if data is not None:
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.get(url, **kwargs)
-
-    def post(self, url, include_token=True):
-        kwargs = {}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.post(url, **kwargs)
-
-    def post_json_data(self, url, data, include_token=True):
-        kwargs = {'content_type': 'application/json',
-                  'data': data}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.post(url, **kwargs)
-
-    def put_data(self, url, data, content_type, include_token=True):
-        kwargs = {"content_type": content_type}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.put(url, data, **kwargs)
-
-    def delete(self, url, include_token=True):
-        kwargs = {}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.delete(url, **kwargs)
-
-    def put_json_data(self, url, data, include_token=True):
-        content_type = "application/json"
-        data = json.dumps(data)
-        return self.put_data(url, data, content_type, include_token)
 
     # list atcs
 
@@ -356,11 +311,11 @@ class APIViewsTestCase(TestCase):
     # update atc
 
     def test_update_atc_unauthorized(self):
-        response = self.put_json_data(reverse("osquery_api:atc", args=[1]), {}, include_token=False)
+        response = self.put(reverse("osquery_api:atc", args=[1]), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_atc_permission_denied(self):
-        response = self.put_json_data(reverse("osquery_api:atc", args=[1]), {})
+        response = self.put(reverse("osquery_api:atc", args=[1]), {})
         self.assertEqual(response.status_code, 403)
 
     def test_update_atc_name_conflict(self):
@@ -376,7 +331,7 @@ class APIViewsTestCase(TestCase):
             "columns": ["un", "deux", "trois"],
             "platforms": ["darwin"]
         }
-        response = self.put_json_data(reverse("osquery_api:atc", args=[atc2.id]), data)
+        response = self.put(reverse("osquery_api:atc", args=[atc2.id]), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["automatic table construction with this name already exists."]
@@ -393,7 +348,7 @@ class APIViewsTestCase(TestCase):
             "columns": [],
             "platforms": []
         }
-        response = self.put_json_data(reverse("osquery_api:atc", args=[atc.id]), data)
+        response = self.put(reverse("osquery_api:atc", args=[atc.id]), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["This field may not be blank."],
@@ -405,7 +360,7 @@ class APIViewsTestCase(TestCase):
 
     def test_update_atc_not_found(self):
         self.set_permissions("osquery.change_automatictableconstruction")
-        response = self.put_json_data(reverse("osquery_api:atc", args=[9999]), {})
+        response = self.put(reverse("osquery_api:atc", args=[9999]), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
             "detail": "No AutomaticTableConstruction matches the given query."
@@ -423,7 +378,7 @@ class APIViewsTestCase(TestCase):
             "columns": ["un", "deux", "trois"],
             "platforms": ["darwin"]
         }
-        response = self.put_json_data(reverse("osquery_api:atc", args=[atc.id]), data)
+        response = self.put(reverse("osquery_api:atc", args=[atc.id]), data)
         self.assertEqual(response.status_code, 200)
         atc.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -458,7 +413,7 @@ class APIViewsTestCase(TestCase):
     def test_create_atc_name_conflict(self):
         atc = self.force_atc()
         self.set_permissions("osquery.add_automatictableconstruction")
-        response = self.post_json_data(reverse("osquery_api:atcs"), {
+        response = self.post(reverse("osquery_api:atcs"), {
             "name": atc.name,
             "description": "yolo",
             "table_name": "yolo",
@@ -482,7 +437,7 @@ class APIViewsTestCase(TestCase):
             "columns": [],
             "platforms": []
         }
-        response = self.post_json_data(reverse("osquery_api:atcs"), data)
+        response = self.post(reverse("osquery_api:atcs"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["This field may not be blank."],
@@ -494,7 +449,7 @@ class APIViewsTestCase(TestCase):
 
     def test_create_atc(self):
         self.set_permissions("osquery.add_automatictableconstruction")
-        response = self.post_json_data(reverse("osquery_api:atcs"), {
+        response = self.post(reverse("osquery_api:atcs"), {
             "name": "yolo",
             "description": "yolo",
             "table_name": "yolo",
@@ -672,11 +627,11 @@ class APIViewsTestCase(TestCase):
     # update file category
 
     def test_update_file_category_unauthorized(self):
-        response = self.put_json_data(reverse("osquery_api:file_category", args=[1]), {}, include_token=False)
+        response = self.put(reverse("osquery_api:file_category", args=[1]), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_file_category_permission_denied(self):
-        response = self.put_json_data(reverse("osquery_api:file_category", args=[1]), {})
+        response = self.put(reverse("osquery_api:file_category", args=[1]), {})
         self.assertEqual(response.status_code, 403)
 
     def test_update_file_category_slug_conflict(self):
@@ -684,7 +639,7 @@ class APIViewsTestCase(TestCase):
         file_category2 = self.force_file_category()
         self.set_permissions("osquery.change_filecategory")
         data = {"name": file_category.name.upper()}
-        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category2.id]), data=data)
+        response = self.put(reverse("osquery_api:file_category", args=[file_category2.id]), data=data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": [f"file category with this slug {file_category.slug} already exists."]
@@ -695,7 +650,7 @@ class APIViewsTestCase(TestCase):
         file_category2 = self.force_file_category()
         self.set_permissions("osquery.change_filecategory")
         data = {"name": file_category.name}
-        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category2.id]), data=data)
+        response = self.put(reverse("osquery_api:file_category", args=[file_category2.id]), data=data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["file category with this name already exists."]
@@ -712,7 +667,7 @@ class APIViewsTestCase(TestCase):
             "file_paths_queries": [],
             "access_monitoring": None,
         }
-        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
+        response = self.put(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["This field may not be blank."],
@@ -721,7 +676,7 @@ class APIViewsTestCase(TestCase):
 
     def test_update_file_category_not_found(self):
         self.set_permissions("osquery.change_filecategory")
-        response = self.put_json_data(reverse("osquery_api:file_category", args=[9999]), {})
+        response = self.put(reverse("osquery_api:file_category", args=[9999]), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
             "detail": "No FileCategory matches the given query."
@@ -738,7 +693,7 @@ class APIViewsTestCase(TestCase):
             "file_paths_queries": [],
             "access_monitoring": True
         }
-        response = self.put_json_data(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
+        response = self.put(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
         self.assertEqual(response.status_code, 200)
         file_category.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -775,7 +730,7 @@ class APIViewsTestCase(TestCase):
         file_category = self.force_file_category()
         self.set_permissions("osquery.add_filecategory")
         data = {"name": file_category.name.upper()}
-        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        response = self.post(reverse("osquery_api:file_categories"), data=data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": [f"file category with this slug {file_category.slug} already exists."]
@@ -785,7 +740,7 @@ class APIViewsTestCase(TestCase):
         file_category = self.force_file_category()
         self.set_permissions("osquery.add_filecategory")
         data = {"name": file_category.name}
-        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        response = self.post(reverse("osquery_api:file_categories"), data=data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["file category with this name already exists."]
@@ -801,7 +756,7 @@ class APIViewsTestCase(TestCase):
             "file_paths_queries": [],
             "access_monitoring": None,
         }
-        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        response = self.post(reverse("osquery_api:file_categories"), data=data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["This field may not be blank."],
@@ -817,7 +772,7 @@ class APIViewsTestCase(TestCase):
             "description": "description of the example file category",
             "file_paths_queries": ['select * from file_paths where path like "/home/yo/*.bin";'],
         }
-        response = self.post_json_data(reverse("osquery_api:file_categories"), data=data)
+        response = self.post(reverse("osquery_api:file_categories"), data=data)
         file_category = FileCategory.objects.first()
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json(), {
@@ -968,17 +923,17 @@ class APIViewsTestCase(TestCase):
     # create configuration
 
     def test_create_configuration_unauthorized(self):
-        response = self.post_json_data(reverse('osquery_api:configurations'), {}, include_token=False)
+        response = self.post(reverse('osquery_api:configurations'), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_configuration_permission_denied(self):
-        response = self.post_json_data(reverse('osquery_api:configurations'), {})
+        response = self.post(reverse('osquery_api:configurations'), {})
         self.assertEqual(response.status_code, 403)
 
     def test_create_configuration_name_conflict(self):
         configuration = self.force_configuration()
         self.set_permissions("osquery.add_configuration")
-        response = self.post_json_data(reverse('osquery_api:configurations'), {'name': configuration.name})
+        response = self.post(reverse('osquery_api:configurations'), {'name': configuration.name})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["configuration with this name already exists."]
@@ -986,7 +941,7 @@ class APIViewsTestCase(TestCase):
 
     def test_create_configuration_fields_empty(self):
         self.set_permissions("osquery.add_configuration")
-        response = self.post_json_data(reverse('osquery_api:configurations'), {})
+        response = self.post(reverse('osquery_api:configurations'), {})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["This field is required."]
@@ -994,7 +949,7 @@ class APIViewsTestCase(TestCase):
 
     def test_create_configuration_atc_not_found(self):
         self.set_permissions("osquery.add_configuration")
-        response = self.post_json_data(reverse('osquery_api:configurations'), {
+        response = self.post(reverse('osquery_api:configurations'), {
             'name': 'Configuration0',
             'automatic_table_constructions': [9999]
         })
@@ -1005,7 +960,7 @@ class APIViewsTestCase(TestCase):
 
     def test_create_configuration_file_category_not_found(self):
         self.set_permissions("osquery.add_configuration")
-        response = self.post_json_data(reverse('osquery_api:configurations'), {
+        response = self.post(reverse('osquery_api:configurations'), {
             'name': 'Configuration0',
             'file_categories': [9999]
         })
@@ -1031,7 +986,7 @@ class APIViewsTestCase(TestCase):
                 'foo': 'bar'
             }
         }
-        response = self.post_json_data(reverse('osquery_api:configurations'), data)
+        response = self.post(reverse('osquery_api:configurations'), data)
         self.assertEqual(response.status_code, 201)
         configuration = Configuration.objects.get(name="Configuration0")
         self.assertEqual(response.json(), {
@@ -1063,11 +1018,11 @@ class APIViewsTestCase(TestCase):
     # update configuration
 
     def test_update_configuration_unauthorized(self):
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(1,)), {}, include_token=False)
+        response = self.put(reverse('osquery_api:configuration', args=(1,)), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_configuration_permission_denied(self):
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(1,)), {})
+        response = self.put(reverse('osquery_api:configuration', args=(1,)), {})
         self.assertEqual(response.status_code, 403)
 
     def test_update_configuration_name_conflict(self):
@@ -1075,7 +1030,7 @@ class APIViewsTestCase(TestCase):
         configuration2 = self.force_configuration()
         data = {'name': configuration.name}
         self.set_permissions("osquery.change_configuration")
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration2.pk,)), data)
+        response = self.put(reverse('osquery_api:configuration', args=(configuration2.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["configuration with this name already exists."]
@@ -1084,7 +1039,7 @@ class APIViewsTestCase(TestCase):
     def test_update_configuration_fields_empty(self):
         configuration = self.force_configuration()
         self.set_permissions("osquery.change_configuration")
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.pk,)), {})
+        response = self.put(reverse('osquery_api:configuration', args=(configuration.pk,)), {})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["This field is required."]
@@ -1092,7 +1047,7 @@ class APIViewsTestCase(TestCase):
 
     def test_update_configuration_not_found(self):
         self.set_permissions("osquery.change_configuration")
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(9999,)), {})
+        response = self.put(reverse('osquery_api:configuration', args=(9999,)), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
             "detail": "No Configuration matches the given query."
@@ -1105,7 +1060,7 @@ class APIViewsTestCase(TestCase):
             'name': configuration.name,
             'automatic_table_constructions': [9999]
         }
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        response = self.put(reverse('osquery_api:configuration', args=(configuration.id,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "automatic_table_constructions": ['Invalid pk "9999" - object does not exist.']
@@ -1118,7 +1073,7 @@ class APIViewsTestCase(TestCase):
             'name': configuration.name,
             'file_categories': [9999]
         }
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        response = self.put(reverse('osquery_api:configuration', args=(configuration.id,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "file_categories": ['Invalid pk "9999" - object does not exist.']
@@ -1132,7 +1087,7 @@ class APIViewsTestCase(TestCase):
             'name': configuration.name,
             'automatic_table_constructions': [atc.pk]
         }
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        response = self.put(reverse('osquery_api:configuration', args=(configuration.id,)), data)
         self.assertEqual(response.status_code, 200)
         configuration.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -1159,7 +1114,7 @@ class APIViewsTestCase(TestCase):
             'name': configuration.name,
             'file_categories': [file_category.pk]
         }
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.id,)), data)
+        response = self.put(reverse('osquery_api:configuration', args=(configuration.id,)), data)
         self.assertEqual(response.status_code, 200)
         configuration.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -1197,7 +1152,7 @@ class APIViewsTestCase(TestCase):
             }
         }
         self.set_permissions("osquery.change_configuration")
-        response = self.put_json_data(reverse('osquery_api:configuration', args=(configuration.pk,)), data)
+        response = self.put(reverse('osquery_api:configuration', args=(configuration.pk,)), data)
         self.assertEqual(response.status_code, 200)
         configuration.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -1531,7 +1486,7 @@ class APIViewsTestCase(TestCase):
         config = self.force_configuration()
         self.set_permissions("osquery.add_enrollment")
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
-        response = self.post_json_data(
+        response = self.post(
             reverse('osquery_api:enrollments'),
             {'configuration': config.pk,
              'secret': {"meta_business_unit": self.mbu.pk,
@@ -1568,7 +1523,7 @@ class APIViewsTestCase(TestCase):
                 "osquery_release": new_osquery_release,
                 "secret": secret_data}
         self.set_permissions("osquery.change_enrollment")
-        response = self.put_json_data(reverse('osquery_api:enrollment', args=(enrollment.pk,)), data)
+        response = self.put(reverse('osquery_api:enrollment', args=(enrollment.pk,)), data)
         self.assertEqual(response.status_code, 200)
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.osquery_release, new_osquery_release)
@@ -1733,16 +1688,16 @@ class APIViewsTestCase(TestCase):
     # update pack <int:pk>
 
     def test_update_pack_unauthorized(self):
-        response = self.put_json_data(reverse("osquery_api:pack", args=(1,)), {}, include_token=False)
+        response = self.put(reverse("osquery_api:pack", args=(1,)), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_pack_permission_denied(self):
-        response = self.put_json_data(reverse("osquery_api:pack", args=(1,)), {})
+        response = self.put(reverse("osquery_api:pack", args=(1,)), {})
         self.assertEqual(response.status_code, 403)
 
     def test_update_pack_not_found(self):
         self.set_permissions("osquery.change_pack")
-        response = self.put_json_data(reverse("osquery_api:pack", args=(9999,)), {})
+        response = self.put(reverse("osquery_api:pack", args=(9999,)), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
             "detail": "No Pack matches the given query."
@@ -1753,7 +1708,7 @@ class APIViewsTestCase(TestCase):
         pack2 = self.force_pack()
         self.set_permissions("osquery.change_pack")
         data = {"name": pack.name.upper()}
-        response = self.put_json_data(reverse("osquery_api:pack", args=(pack2.pk,)), data)
+        response = self.put(reverse("osquery_api:pack", args=(pack2.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": [f"Pack with this slug {pack.slug} already exists"]
@@ -1768,7 +1723,7 @@ class APIViewsTestCase(TestCase):
             "name": pack_name,
             "slug": new_slug
         }
-        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        response = self.put(reverse("osquery_api:pack", args=(pack.pk,)), data)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["slug"], 'packed')
 
@@ -1777,7 +1732,7 @@ class APIViewsTestCase(TestCase):
         pack2 = self.force_pack()
         self.set_permissions("osquery.change_pack")
         data = {"name": pack.name}
-        response = self.put_json_data(reverse("osquery_api:pack", args=(pack2.pk,)), data)
+        response = self.put(reverse("osquery_api:pack", args=(pack2.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["pack with this name already exists."]
@@ -1787,7 +1742,7 @@ class APIViewsTestCase(TestCase):
         pack = self.force_pack()
         self.set_permissions("osquery.change_pack")
         data = {"name": ""}
-        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        response = self.put(reverse("osquery_api:pack", args=(pack.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["This field may not be blank."]
@@ -1800,7 +1755,7 @@ class APIViewsTestCase(TestCase):
             "name": pack.name,
             "shard": 101
         }
-        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        response = self.put(reverse("osquery_api:pack", args=(pack.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "shard": ["Ensure this value is less than or equal to 100."]
@@ -1816,7 +1771,7 @@ class APIViewsTestCase(TestCase):
             "shard": 1,
             "event_routing_key": "pack_updated"
         }
-        response = self.put_json_data(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        response = self.put(reverse("osquery_api:pack", args=(pack.pk,)), data)
         self.assertEqual(response.status_code, 200)
         pack.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -1840,17 +1795,17 @@ class APIViewsTestCase(TestCase):
     # create pack
 
     def test_create_pack_unauthorized(self):
-        response = self.post_json_data(reverse("osquery_api:packs"), {}, include_token=False)
+        response = self.post(reverse("osquery_api:packs"), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_pack_permission_denied(self):
-        response = self.post_json_data(reverse("osquery_api:packs"), {})
+        response = self.post(reverse("osquery_api:packs"), {})
         self.assertEqual(response.status_code, 403)
 
     def test_create_pack_fields_empty(self):
         self.set_permissions("osquery.add_pack")
         data = {"name": ""}
-        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        response = self.post(reverse("osquery_api:packs"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["This field may not be blank."]
@@ -1860,7 +1815,7 @@ class APIViewsTestCase(TestCase):
         pack = self.force_pack()
         self.set_permissions("osquery.add_pack")
         data = {"name": pack.name}
-        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        response = self.post(reverse("osquery_api:packs"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": ["pack with this name already exists."]
@@ -1870,7 +1825,7 @@ class APIViewsTestCase(TestCase):
         pack = self.force_pack()
         self.set_permissions("osquery.add_pack")
         data = {"name": pack.name.upper()}
-        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        response = self.post(reverse("osquery_api:packs"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "name": [f"Pack with this slug {pack.slug} already exists"]
@@ -1879,14 +1834,14 @@ class APIViewsTestCase(TestCase):
     def test_create_pack_slug_not_editable(self):
         self.set_permissions("osquery.add_pack")
         data = {"name": "pack created", "slug": "slug-created"}
-        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        response = self.post(reverse("osquery_api:packs"), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["slug"], "pack-created")
 
     def test_create_pack_shard_invalid(self):
         self.set_permissions("osquery.add_pack")
         data = {"name": "pack created", "shard": 101}
-        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        response = self.post(reverse("osquery_api:packs"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "shard": ["Ensure this value is less than or equal to 100."]
@@ -1901,7 +1856,7 @@ class APIViewsTestCase(TestCase):
             "shard": 1,
             "event_routing_key": "pack_created"
         }
-        response = self.post_json_data(reverse("osquery_api:packs"), data)
+        response = self.post(reverse("osquery_api:packs"), data)
         self.assertEqual(response.status_code, 201)
         pack = Pack.objects.first()
         self.assertEqual(response.json(), {
@@ -1948,12 +1903,12 @@ class APIViewsTestCase(TestCase):
 
     def test_put_pack_unauthorized(self):
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(url, {}, include_token=False)
+        response = self.put(url, {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_put_pack_permission_denied(self):
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(url, {}, include_token=True)
+        response = self.put(url, {}, include_token=True)
         self.assertEqual(response.status_code, 403)
 
     # delete pack <slug:slug>
@@ -1971,7 +1926,7 @@ class APIViewsTestCase(TestCase):
     def test_put_no_queries(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(url, {})
+        response = self.put(url, {})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -1981,7 +1936,7 @@ class APIViewsTestCase(TestCase):
     def test_put_malformed_query(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(url, {"queries": {"first_query": {"query": ""}}})
+        response = self.put(url, {"queries": {"first_query": {"query": ""}}})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -1992,7 +1947,7 @@ class APIViewsTestCase(TestCase):
     def test_put_removed_and_snapshot_query(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(
+        response = self.put(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
                                          "interval": 10,
@@ -2013,7 +1968,7 @@ class APIViewsTestCase(TestCase):
     def test_put_diff_query_with_compliance_check(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(
+        response = self.put(
             url,
             {"queries": {"first_query": {"query": "select 'OK' as ztl_status",
                                          "interval": 10,
@@ -2035,7 +1990,7 @@ class APIViewsTestCase(TestCase):
     def test_put_query_with_compliance_check_without_ztl_status(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(
+        response = self.put(
             url,
             {"queries": {"first_query": {"query": "select * from users",
                                          "interval": 10,
@@ -2056,7 +2011,7 @@ class APIViewsTestCase(TestCase):
     def test_put_invalid_version_query(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(
+        response = self.put(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
                                          "interval": 10,
@@ -2071,7 +2026,7 @@ class APIViewsTestCase(TestCase):
     def test_put_invalid_platform_query(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(
+        response = self.put(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
                                          "interval": 10,
@@ -2086,7 +2041,7 @@ class APIViewsTestCase(TestCase):
     def test_put_invalid_interval_query(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(
+        response = self.put(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
                                          "interval": 10920092820982}}},
@@ -2100,7 +2055,7 @@ class APIViewsTestCase(TestCase):
     def test_put_invalid_shard_query(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(
+        response = self.put(
             url,
             {"queries": {"first_query": {"query": "select * from users;",
                                          "interval": 10,
@@ -2116,7 +2071,7 @@ class APIViewsTestCase(TestCase):
         self.set_pack_endpoint_put_permissions()
         Pack.objects.create(slug=get_random_string(12), name="Yolo")
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(
+        response = self.put(
             url,
             {"name": "Yolo",
              "queries": {"first_query": {"query": "select 1 from users;",
@@ -2131,7 +2086,7 @@ class APIViewsTestCase(TestCase):
     def test_put_empty_query_name(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
-        response = self.put_json_data(
+        response = self.put(
             url,
             {"name": "Yolo",
              "queries": {"": {"query": "select 1 from users;",
@@ -2188,7 +2143,7 @@ class APIViewsTestCase(TestCase):
                 }
             }
         }
-        response = self.put_json_data(url, pack)
+        response = self.put(url, pack)
         self.assertEqual(response.status_code, 200)
         p = Pack.objects.get(slug=slug)
         self.assertEqual(
@@ -2218,7 +2173,7 @@ class APIViewsTestCase(TestCase):
 
         # update pack
         pack["name"] = "YOLO"
-        response = self.put_json_data(url, pack)
+        response = self.put(url, pack)
         self.assertEqual(response.status_code, 200)
         p.refresh_from_db()
         self.assertEqual(p.name, "YOLO")
@@ -2235,7 +2190,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(pack_query.interval, 7200)
         self.assertEqual(pack_query.query.version, 1)
         pack["queries"]["Snapshot1"]["interval"] = 6789
-        response = self.put_json_data(url, pack)
+        response = self.put(url, pack)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -2250,7 +2205,7 @@ class APIViewsTestCase(TestCase):
 
         # update query
         pack["queries"]["Snapshot1"]["query"] = "select 'FAILED' as ztl_status;"
-        response = self.put_json_data(url, pack)
+        response = self.put(url, pack)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -2265,7 +2220,7 @@ class APIViewsTestCase(TestCase):
 
         # delete pack query
         snapshot_1 = pack["queries"].pop("Snapshot1")
-        response = self.put_json_data(url, pack)
+        response = self.put(url, pack)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -2281,7 +2236,7 @@ class APIViewsTestCase(TestCase):
         # re-add pack query with updated query
         snapshot_1["query"] = "select 'OK' as ztl_status"
         pack["queries"]["Snapshot1"] = snapshot_1
-        response = self.put_json_data(url, pack)
+        response = self.put(url, pack)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -2305,7 +2260,7 @@ class APIViewsTestCase(TestCase):
           // Do not use this query in production!!!
         """
 
-        response = self.put_data(url, pack.encode("utf-8"), "application/x-osquery-conf", include_token=True)
+        response = self.put(url, pack.encode("utf-8"), content_type="application/x-osquery-conf")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'detail': 'Osquery config parse error'})
 
@@ -2332,7 +2287,7 @@ class APIViewsTestCase(TestCase):
         }
         """
 
-        response = self.put_data(url, pack.encode("utf-8"), "application/x-osquery-conf", include_token=True)
+        response = self.put(url, pack.encode("utf-8"), content_type="application/x-osquery-conf")
         self.assertEqual(response.status_code, 200)
         p = Pack.objects.get(slug=slug)
         self.assertEqual(
@@ -2368,7 +2323,7 @@ class APIViewsTestCase(TestCase):
             "    value: Artifact used by this malware - 🔥\n"
         )
 
-        response = self.put_data(url, pack.encode("utf-8"), "application/yaml", include_token=True)
+        response = self.put(url, pack.encode("utf-8"), content_type="application/yaml")
         self.assertEqual(response.status_code, 200)
         p = Pack.objects.get(slug=slug)
         self.assertEqual(
@@ -2437,7 +2392,7 @@ class APIViewsTestCase(TestCase):
             }
         }
         self.set_pack_endpoint_put_permissions()
-        self.put_json_data(url, pack)
+        self.put(url, pack)
         p = Pack.objects.get(slug=slug)
 
         # delete pack
@@ -2599,7 +2554,7 @@ class APIViewsTestCase(TestCase):
             "compliance_check_enabled": False
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'name': ['query with this name already exists.']})
 
@@ -2610,7 +2565,7 @@ class APIViewsTestCase(TestCase):
             "compliance_check_enabled": False
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
         query = Query.objects.get(name='test_query01')
@@ -2643,7 +2598,7 @@ class APIViewsTestCase(TestCase):
             }
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 201)
         query = Query.objects.get(name=name)
         self.assertEqual(response.json(),
@@ -2676,7 +2631,7 @@ class APIViewsTestCase(TestCase):
             "compliance_check_enabled": True
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
         query = Query.objects.get(name='test_query01')
@@ -2704,7 +2659,7 @@ class APIViewsTestCase(TestCase):
             "tag": tag.pk,
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
         query = Query.objects.get(name='test_query01')
@@ -2739,7 +2694,7 @@ class APIViewsTestCase(TestCase):
             }
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 201)
         pack_query = PackQuery.objects.get(pack=pack, query__name=name)
         self.assertEqual(pack_query.slug, "{}-{}".format(name.lower(), pack_query.query.pk))
@@ -2751,7 +2706,7 @@ class APIViewsTestCase(TestCase):
             "compliance_check_enabled": True
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'compliance_check_enabled': ['ztl_status not in sql']})
 
@@ -2764,7 +2719,7 @@ class APIViewsTestCase(TestCase):
             "tag": tag.pk,
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -2780,7 +2735,7 @@ class APIViewsTestCase(TestCase):
             "compliance_check_enabled": True
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         query = Query.objects.get(name=query_name)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
@@ -2800,7 +2755,7 @@ class APIViewsTestCase(TestCase):
             }
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(),
                          {'scheduling': {
@@ -2821,7 +2776,7 @@ class APIViewsTestCase(TestCase):
             }
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(),
                          {'scheduling': {
@@ -2842,7 +2797,7 @@ class APIViewsTestCase(TestCase):
             }
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -2856,7 +2811,7 @@ class APIViewsTestCase(TestCase):
             "name": "test_query01",
             "sql": "select * from osquery_info;"
         }
-        response = self.post_json_data(reverse("osquery_api:queries"), data, include_token=False)
+        response = self.post(reverse("osquery_api:queries"), data, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_query_permission_denied(self):
@@ -2864,7 +2819,7 @@ class APIViewsTestCase(TestCase):
             "name": "test_query01",
             "sql": "select * from osquery_info;"
         }
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 403)
 
     def test_create_query_with_platforms(self):
@@ -2878,7 +2833,7 @@ class APIViewsTestCase(TestCase):
             ]
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["platforms"], ["darwin", "linux"])
         query = Query.objects.get(name=name)
@@ -2893,7 +2848,7 @@ class APIViewsTestCase(TestCase):
             "platforms": ["haiku"]
         }
         self.set_permissions("osquery.add_query")
-        response = self.post_json_data(reverse("osquery_api:queries"), data)
+        response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'platforms': {'0': ['"haiku" is not a valid choice.']}})
         with self.assertRaises(Query.DoesNotExist):
@@ -2954,7 +2909,7 @@ class APIViewsTestCase(TestCase):
         query = self.force_query()
         data = {"name": query0.name, "sql": query.sql}
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'name': ['query with this name already exists.']})
 
@@ -2963,7 +2918,7 @@ class APIViewsTestCase(TestCase):
         new_name = get_random_string(12)
         data = {"name": new_name, "sql": query.sql}
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 200)
         query.refresh_from_db()
         self.assertEqual(Query.objects.filter(name=new_name).count(), 1)
@@ -2985,7 +2940,7 @@ class APIViewsTestCase(TestCase):
             },
         }
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         query.refresh_from_db()
         self.assertEqual(query.version, 1)  # no sql change
         self.assertEqual(
@@ -3041,7 +2996,7 @@ class APIViewsTestCase(TestCase):
             },
         }
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         query.refresh_from_db()
         self.assertEqual(query.version, 1)  # no sql change
         self.assertEqual(
@@ -3091,7 +3046,7 @@ class APIViewsTestCase(TestCase):
             "scheduling": None,
         }
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         query.refresh_from_db()
         self.assertEqual(query.version, 1)  # no sql change
         self.assertEqual(
@@ -3128,7 +3083,7 @@ class APIViewsTestCase(TestCase):
             },
         }
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query2.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query2.pk,)), data)
         self.assertEqual(response.status_code, 200)
         self.assertFalse(PackQuery.objects.filter(pack=pack2, query=query2).exists())
         pack_query = PackQuery.objects.get(pack=pack1, query=query2)
@@ -3138,21 +3093,21 @@ class APIViewsTestCase(TestCase):
         query = self.force_query()
         new_name = get_random_string(12)
         data = {"name": new_name, "sql": query.sql}
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data, include_token=False)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_query_permission_denied(self):
         query = self.force_query()
         new_name = get_random_string(12)
         data = {"name": new_name, "sql": query.sql}
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 403)
 
     def test_update_query_ztl_status_validate_error(self):
         query = self.force_query()
         data = {"name": query.name, "sql": query.sql, "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'compliance_check_enabled': ['ztl_status not in sql']})
 
@@ -3160,7 +3115,7 @@ class APIViewsTestCase(TestCase):
         query = self.force_query()
         data = {"name": query.name, "sql": "ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         query.refresh_from_db()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
@@ -3173,7 +3128,7 @@ class APIViewsTestCase(TestCase):
         new_sql = "changed sql line;"
         data = {"name": query.name, "sql": new_sql}
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["version"], 2)
         query.refresh_from_db()
@@ -3184,7 +3139,7 @@ class APIViewsTestCase(TestCase):
         query = self.force_query(pack_query_mode="snapshot", compliance_check=False)
         data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         query.refresh_from_db()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
@@ -3196,7 +3151,7 @@ class APIViewsTestCase(TestCase):
         pack_query = PackQuery.objects.get(slug=slugify(query.name))
         data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -3208,7 +3163,7 @@ class APIViewsTestCase(TestCase):
         tag = Tag.objects.create(name=get_random_string(12))
         data = {"name": query.name, "sql": query.sql, "tag": tag.pk}
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -3228,7 +3183,7 @@ class APIViewsTestCase(TestCase):
             ]
         }
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 200)
         query.refresh_from_db()
         self.assertEqual(query.platforms, ["darwin", "freebsd", "linux", "posix", "windows"])
@@ -3242,7 +3197,7 @@ class APIViewsTestCase(TestCase):
             "platforms": ["beOS"]
         }
         self.set_permissions("osquery.change_query")
-        response = self.put_json_data(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'platforms': {'0': ['"beOS" is not a valid choice.']}})
         query.refresh_from_db()
@@ -3377,16 +3332,16 @@ class APIViewsTestCase(TestCase):
     # update configuration pack
 
     def test_update_configuration_pack_unauthorized(self):
-        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {}, include_token=False)
+        response = self.put(reverse("osquery_api:configuration_pack", args=(9999,)), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_configuration_pack_permission_denied(self):
-        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {})
+        response = self.put(reverse("osquery_api:configuration_pack", args=(9999,)), {})
         self.assertEqual(response.status_code, 403)
 
     def test_update_configuration_pack_not_found(self):
         self.set_permissions("osquery.change_configurationpack")
-        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(9999,)), {})
+        response = self.put(reverse("osquery_api:configuration_pack", args=(9999,)), {})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {
             "detail": "No ConfigurationPack matches the given query."
@@ -3395,7 +3350,7 @@ class APIViewsTestCase(TestCase):
     def test_update_configuration_pack_configuration_fields_empty(self):
         self.set_permissions("osquery.change_configurationpack")
         configuration_pack = self.force_configuration_pack()
-        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), {})
+        response = self.put(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), {})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "configuration": ["This field is required."],
@@ -3410,7 +3365,7 @@ class APIViewsTestCase(TestCase):
             "configuration": configuration_pack2.configuration.pk,
             "pack": configuration_pack2.pack.pk
         }
-        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
+        response = self.put(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "non_field_errors": ["The fields configuration, pack must make a unique set."]
@@ -3426,7 +3381,7 @@ class APIViewsTestCase(TestCase):
             "tags": [tag.id],
             "excluded_tags": [tag.id],
         }
-        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
+        response = self.put(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "non_field_errors": [f"'{tag.name}' cannot be both included and excluded"]
@@ -3444,7 +3399,7 @@ class APIViewsTestCase(TestCase):
             "tags": [new_tag.id],
             "excluded_tags": [new_excluded_tag.id]
         }
-        response = self.put_json_data(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
+        response = self.put(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
         self.assertEqual(response.status_code, 200)
         configuration_pack.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -3462,16 +3417,16 @@ class APIViewsTestCase(TestCase):
     # create configuration pack
 
     def test_create_configuration_pack_unauthorized(self):
-        response = self.post_json_data(reverse("osquery_api:configuration_packs"), {}, include_token=False)
+        response = self.post(reverse("osquery_api:configuration_packs"), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_configuration_pack_permission_denied(self):
-        response = self.post_json_data(reverse("osquery_api:configuration_packs"), {})
+        response = self.post(reverse("osquery_api:configuration_packs"), {})
         self.assertEqual(response.status_code, 403)
 
     def test_create_configuration_pack_fields_empty(self):
         self.set_permissions("osquery.add_configurationpack")
-        response = self.post_json_data(reverse("osquery_api:configuration_packs"), {})
+        response = self.post(reverse("osquery_api:configuration_packs"), {})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "configuration": ["This field is required."],
@@ -3485,7 +3440,7 @@ class APIViewsTestCase(TestCase):
             "configuration": configuration_pack.configuration.pk,
             "pack": configuration_pack.pack.pk,
         }
-        response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
+        response = self.post(reverse("osquery_api:configuration_packs"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             "non_field_errors": ["The fields configuration, pack must make a unique set."]
@@ -3500,7 +3455,7 @@ class APIViewsTestCase(TestCase):
                 "configuration": configuration.pk,
                 "pack": pack
             }
-            response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
+            response = self.post(reverse("osquery_api:configuration_packs"), data)
             self.assertEqual(response.status_code, 201)
             configuration_pack = ConfigurationPack.objects.filter(
                 configuration_id=configuration.pk,
@@ -3526,7 +3481,7 @@ class APIViewsTestCase(TestCase):
             "configuration": configuration.pk,
             "pack": existing_configuration_pack.pack.pk,
         }
-        response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
+        response = self.post(reverse("osquery_api:configuration_packs"), data)
         self.assertEqual(response.status_code, 201)
         configuration_pack = ConfigurationPack.objects.get(pk=response.json()["id"])
         self.assertEqual(response.json(), {
@@ -3549,7 +3504,7 @@ class APIViewsTestCase(TestCase):
             "tags": [tag.id],
             "excluded_tags":  [excluded_tag.id],
         }
-        response = self.post_json_data(reverse("osquery_api:configuration_packs"), data)
+        response = self.post(reverse("osquery_api:configuration_packs"), data)
         self.assertEqual(response.status_code, 201)
         configuration_pack = ConfigurationPack.objects.first()
         self.assertEqual(response.json(), {
@@ -3589,7 +3544,7 @@ class APIViewsTestCase(TestCase):
     # terraform export
 
     def test_terraform_export_redirect(self):
-        self.login_redirect(reverse("osquery:terraform_export"))
+        self.login_redirect("terraform_export")
 
     def test_terraform_export_permission_denied(self):
         self.login("osquery.view_configuration")

@@ -1,17 +1,16 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.events.base import AuditEvent
 from .utils import force_blueprint, force_recovery_password_config
 
 
-class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
+class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -20,39 +19,30 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # recovery password configurations
 
     def test_recovery_password_configurations_redirect(self):
-        self._login_redirect(reverse("mdm:recovery_password_configs"))
+        self.login_redirect("recovery_password_configs")
 
     def test_recovery_password_configurations_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:recovery_password_configs"))
         self.assertEqual(response.status_code, 403)
 
     def test_recovery_password_configurations_no_links(self):
         rp_config = force_recovery_password_config()
-        self._login("mdm.view_recoverypasswordconfig")
+        self.login("mdm.view_recoverypasswordconfig")
         response = self.client.get(reverse("mdm:recovery_password_configs"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_list.html")
@@ -64,9 +54,9 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
         rp_config1 = force_recovery_password_config()
         force_blueprint(recovery_password_config=rp_config1)
         rp_config2 = force_recovery_password_config()
-        self._login("mdm.view_recoverypasswordconfig",
-                    "mdm.change_recoverypasswordconfig",
-                    "mdm.delete_recoverypasswordconfig")
+        self.login("mdm.view_recoverypasswordconfig",
+                   "mdm.change_recoverypasswordconfig",
+                   "mdm.delete_recoverypasswordconfig")
         response = self.client.get(reverse("mdm:recovery_password_configs"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_list.html")
@@ -80,22 +70,22 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
     # create recovery password configuration
 
     def test_create_recovery_password_configuration_redirect(self):
-        self._login_redirect(reverse("mdm:create_recovery_password_config"))
+        self.login_redirect("create_recovery_password_config")
 
     def test_create_recovery_password_configuration_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:create_recovery_password_config"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_recovery_password_configuration_get(self):
-        self._login("mdm.add_recoverypasswordconfig")
+        self.login("mdm.add_recoverypasswordconfig")
         response = self.client.get(reverse("mdm:create_recovery_password_config"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_form.html")
         self.assertContains(response, "Create recovery password configuration")
 
     def test_create_recovery_password_configuration_static_password_required_error(self):
-        self._login("mdm.add_recoverypasswordconfig")
+        self.login("mdm.add_recoverypasswordconfig")
         response = self.client.post(reverse("mdm:create_recovery_password_config"),
                                     {"name": get_random_string(12),
                                      "dynamic_password": False,
@@ -108,7 +98,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
                              'This field is required when not using dynamic passwords.')
 
     def test_create_recovery_password_configuration_static_password_too_short_error(self):
-        self._login("mdm.add_recoverypasswordconfig")
+        self.login("mdm.add_recoverypasswordconfig")
         response = self.client.post(reverse("mdm:create_recovery_password_config"),
                                     {"name": get_random_string(12),
                                      "dynamic_password": False,
@@ -122,7 +112,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
                              'The password must be at least 8 characters long.')
 
     def test_create_recovery_password_configuration_static_password_too_long_error(self):
-        self._login("mdm.add_recoverypasswordconfig")
+        self.login("mdm.add_recoverypasswordconfig")
         response = self.client.post(reverse("mdm:create_recovery_password_config"),
                                     {"name": get_random_string(12),
                                      "dynamic_password": False,
@@ -136,7 +126,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
                              'The password must be at most 32 characters long.')
 
     def test_create_recovery_password_configuration_static_password_non_ascii(self):
-        self._login("mdm.add_recoverypasswordconfig")
+        self.login("mdm.add_recoverypasswordconfig")
         response = self.client.post(reverse("mdm:create_recovery_password_config"),
                                     {"name": get_random_string(12),
                                      "dynamic_password": False,
@@ -154,7 +144,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
         )
 
     def test_create_recovery_password_configuration_static_firmware_rotation_error(self):
-        self._login("mdm.add_recoverypasswordconfig")
+        self.login("mdm.add_recoverypasswordconfig")
         response = self.client.post(reverse("mdm:create_recovery_password_config"),
                                     {"name": get_random_string(12),
                                      "dynamic_password": True,
@@ -169,7 +159,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_recovery_password_configuration_post(self, post_event):
-        self._login("mdm.add_recoverypasswordconfig", "mdm.view_recoverypasswordconfig")
+        self.login("mdm.add_recoverypasswordconfig", "mdm.view_recoverypasswordconfig")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:create_recovery_password_config"),
@@ -214,17 +204,17 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
 
     def test_recovery_password_configuration_redirect(self):
         rp_config = force_recovery_password_config()
-        self._login_redirect(reverse("mdm:recovery_password_config", args=(rp_config.pk,)))
+        self.login_redirect("recovery_password_config", rp_config.pk)
 
     def test_recovery_password_configuration_permission_denied(self):
         rp_config = force_recovery_password_config()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:recovery_password_config", args=(rp_config.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_recovery_password_configuration_get(self):
         rp_config = force_recovery_password_config()
-        self._login("mdm.view_recoverypasswordconfig", "mdm.delete_recoverypasswordconfig")
+        self.login("mdm.view_recoverypasswordconfig", "mdm.delete_recoverypasswordconfig")
         response = self.client.get(reverse("mdm:recovery_password_config", args=(rp_config.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_detail.html")
@@ -233,7 +223,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
 
     def test_recovery_password_configuration_get_no_perm_no_delete_link(self):
         rp_config = force_recovery_password_config()
-        self._login("mdm.view_recoverypasswordconfig")
+        self.login("mdm.view_recoverypasswordconfig")
         response = self.client.get(reverse("mdm:recovery_password_config", args=(rp_config.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_detail.html")
@@ -243,7 +233,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
     def test_recovery_password_configuration_get_cannot_be_deleted_no_delete_link(self):
         rp_config = force_recovery_password_config()
         force_blueprint(recovery_password_config=rp_config)
-        self._login("mdm.view_recoverypasswordconfig", "mdm.delete_recoverypasswordconfig")
+        self.login("mdm.view_recoverypasswordconfig", "mdm.delete_recoverypasswordconfig")
         response = self.client.get(reverse("mdm:recovery_password_config", args=(rp_config.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_detail.html")
@@ -254,17 +244,17 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
 
     def test_update_recovery_password_configuration_redirect(self):
         rp_config = force_recovery_password_config()
-        self._login_redirect(reverse("mdm:update_recovery_password_config", args=(rp_config.pk,)))
+        self.login_redirect("update_recovery_password_config", rp_config.pk)
 
     def test_update_recovery_password_configuration_permission_denied(self):
         rp_config = force_recovery_password_config()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:update_recovery_password_config", args=(rp_config.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_recovery_password_configuration_get(self):
         rp_config = force_recovery_password_config()
-        self._login("mdm.change_recoverypasswordconfig")
+        self.login("mdm.change_recoverypasswordconfig")
         response = self.client.get(reverse("mdm:update_recovery_password_config", args=(rp_config.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_form.html")
@@ -279,7 +269,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
         self.assertIsNone(rp_config.static_password)
         self.assertEqual(rp_config.rotation_interval_days, 0)
         self.assertFalse(rp_config.rotate_firmware_password)
-        self._login("mdm.change_recoverypasswordconfig", "mdm.view_recoverypasswordconfig")
+        self.login("mdm.change_recoverypasswordconfig", "mdm.view_recoverypasswordconfig")
         new_name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:update_recovery_password_config", args=(rp_config.pk,)),
@@ -327,24 +317,24 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
 
     def test_delete_recovery_password_configuration_redirect(self):
         rp_config = force_recovery_password_config()
-        self._login_redirect(reverse("mdm:delete_recovery_password_config", args=(rp_config.pk,)))
+        self.login_redirect("delete_recovery_password_config", rp_config.pk)
 
     def test_delete_recovery_password_configuration_permission_denied(self):
         rp_config = force_recovery_password_config()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:delete_recovery_password_config", args=(rp_config.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_recovery_password_configuration_404(self):
         rp_config = force_recovery_password_config()
         force_blueprint(recovery_password_config=rp_config)
-        self._login("mdm.delete_recoverypasswordconfig")
+        self.login("mdm.delete_recoverypasswordconfig")
         response = self.client.get(reverse("mdm:delete_recovery_password_config", args=(rp_config.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_delete_recovery_password_configuration_get(self):
         rp_config = force_recovery_password_config()
-        self._login("mdm.delete_recoverypasswordconfig")
+        self.login("mdm.delete_recoverypasswordconfig")
         response = self.client.get(reverse("mdm:delete_recovery_password_config", args=(rp_config.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_confirm_delete.html")
@@ -355,7 +345,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase):
     def test_delete_recovery_password_configuration_post(self, post_event):
         rp_config = force_recovery_password_config()
         prev_value = rp_config.serialize_for_event()
-        self._login("mdm.delete_recoverypasswordconfig", "mdm.view_recoverypasswordconfig")
+        self.login("mdm.delete_recoverypasswordconfig", "mdm.view_recoverypasswordconfig")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:delete_recovery_password_config", args=(rp_config.pk,)),
                                         follow=True)

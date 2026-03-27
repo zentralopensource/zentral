@@ -7,7 +7,7 @@ class ZentralInventoryAppConfig(ZentralAppConfig):
     verbose_name = "Zentral inventory contrib app"
     permission_models = (
         "androidapp",
-        "bunsinessunit",
+        "businessunit",
         "debpackage",
         "file",
         "iosapp",

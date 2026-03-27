@@ -25,6 +25,5 @@ class StateView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["fqdn"] = settings["api"]["fqdn"]
-        if self.request.user.has_perm("terraform.view_stateversion"):
-            ctx["state_versions"] = list(self.object.stateversion_set.select_related("created_by").order_by("-pk"))
+        ctx["state_versions"] = list(self.object.stateversion_set.select_related("created_by").order_by("-pk"))
         return ctx

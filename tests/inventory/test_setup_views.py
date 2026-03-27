@@ -1,17 +1,16 @@
-from functools import reduce
-import operator
-from accounts.models import User
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
+from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag, Taxonomy
 from zentral.core.events.base import AuditEvent
 
 
-class InventorySetupViewsTestCase(TestCase):
+class InventorySetupViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -23,38 +22,29 @@ class InventorySetupViewsTestCase(TestCase):
         # mbu
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
 
-    # utility methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "inventory"
 
     # meta business units
 
     def test_meta_business_units_redirect(self):
-        self._login_redirect(reverse("inventory:mbu"))
+        self.login_redirect("mbu")
 
     def test_meta_business_units_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:mbu"))
         self.assertEqual(response.status_code, 403)
 
     def test_meta_business_units(self):
-        self._login("inventory.view_metabusinessunit")
+        self.login("inventory.view_metabusinessunit")
         response = self.client.get(reverse("inventory:mbu"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/mbu_list.html")
@@ -63,16 +53,16 @@ class InventorySetupViewsTestCase(TestCase):
     # create meta business unit
 
     def test_create_meta_business_unit_redirect(self):
-        self._login_redirect(reverse("inventory:create_mbu"))
+        self.login_redirect("create_mbu")
 
     def test_create_meta_business_unit_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:create_mbu"))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_meta_business_unit(self, post_event):
-        self._login(
+        self.login(
             "inventory.add_metabusinessunit",
             "inventory.view_machinesnapshot",
             "inventory.view_metabusinessunit",
@@ -139,17 +129,17 @@ class InventorySetupViewsTestCase(TestCase):
 
     def test_update_meta_business_unit_redirect(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self._login_redirect(reverse("inventory:update_mbu", args=(meta_business_unit.pk,)))
+        self.login_redirect("update_mbu", meta_business_unit.pk)
 
     def test_update_meta_business_unit_permission_denied(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:update_mbu", args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_meta_business_unit(self, post_event):
-        self._login(
+        self.login(
             "inventory.change_metabusinessunit",
             "inventory.view_machinesnapshot",
             "inventory.view_metabusinessunit",
@@ -223,7 +213,7 @@ class InventorySetupViewsTestCase(TestCase):
         )
 
     def test_update_meta_business_unit_api_enrollment_update(self):
-        self._login(
+        self.login(
             "inventory.change_metabusinessunit",
             "inventory.view_machinesnapshot",
             "inventory.view_metabusinessunit",
@@ -252,11 +242,11 @@ class InventorySetupViewsTestCase(TestCase):
 
     def test_delete_meta_business_unit_redirect(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self._login_redirect(reverse("inventory:delete_mbu", args=(meta_business_unit.pk,)))
+        self.login_redirect("delete_mbu", meta_business_unit.pk)
 
     def test_delete_meta_business_unit_permission_denied(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:delete_mbu", args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -264,7 +254,7 @@ class InventorySetupViewsTestCase(TestCase):
     def test_delete_meta_business_unit(self, post_event):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         prev_pk = meta_business_unit.pk
-        self._login("inventory.delete_metabusinessunit", "inventory.view_metabusinessunit")
+        self.login("inventory.delete_metabusinessunit", "inventory.view_metabusinessunit")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("inventory:delete_mbu", args=(meta_business_unit.pk,)),
                                         follow=True)
@@ -320,16 +310,16 @@ class InventorySetupViewsTestCase(TestCase):
     # list tags
 
     def test_tags_redirect(self):
-        self._login_redirect(reverse("inventory:tags"))
+        self.login_redirect("tags")
 
     def test_tags_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:tags"))
         self.assertEqual(response.status_code, 403)
 
     def test_tags(self):
         tag = Tag.objects.create(name=get_random_string(12))
-        self._login("inventory.view_tag")
+        self.login("inventory.view_tag")
         response = self.client.get(reverse("inventory:tags"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/tag_index.html")
@@ -338,16 +328,16 @@ class InventorySetupViewsTestCase(TestCase):
     # create tag
 
     def test_create_tag_redirect(self):
-        self._login_redirect(reverse("inventory:create_tag"))
+        self.login_redirect("create_tag")
 
     def test_create_tag_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:create_tag"))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_tag(self, post_event):
-        self._login(
+        self.login(
             "inventory.add_tag",
             "inventory.view_tag",
         )
@@ -412,17 +402,17 @@ class InventorySetupViewsTestCase(TestCase):
 
     def test_update_tag_redirect(self):
         tag = Tag.objects.create(name=get_random_string(12))
-        self._login_redirect(reverse("inventory:update_tag", args=(tag.pk,)))
+        self.login_redirect("update_tag", tag.pk)
 
     def test_update_tag_permission_denied(self):
         tag = Tag.objects.create(name=get_random_string(12))
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:update_tag", args=(tag.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_tag(self, post_event):
-        self._login(
+        self.login(
             "inventory.change_tag",
             "inventory.view_tag",
         )
@@ -496,17 +486,17 @@ class InventorySetupViewsTestCase(TestCase):
 
     def test_delete_tag_redirect(self):
         tag = Tag.objects.create(name=get_random_string(12))
-        self._login_redirect(reverse("inventory:delete_tag", args=(tag.pk,)))
+        self.login_redirect("delete_tag", tag.pk)
 
     def test_delete_tag_permission_denied(self):
         tag = Tag.objects.create(name=get_random_string(12))
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:delete_tag", args=(tag.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_tag(self, post_event):
-        self._login(
+        self.login(
             "inventory.delete_tag",
             "inventory.view_tag",
         )
@@ -568,16 +558,16 @@ class InventorySetupViewsTestCase(TestCase):
     # create taxonomy
 
     def test_create_taxonomy_redirect(self):
-        self._login_redirect(reverse("inventory:create_taxonomy"))
+        self.login_redirect("create_taxonomy")
 
     def test_create_taxonomy_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:create_taxonomy"))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_taxonomy(self, post_event):
-        self._login(
+        self.login(
             "inventory.add_taxonomy",
             "inventory.view_tag",
             "inventory.view_taxonomy",
@@ -643,17 +633,17 @@ class InventorySetupViewsTestCase(TestCase):
 
     def test_update_taxonomy_redirect(self):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        self._login_redirect(reverse("inventory:update_taxonomy", args=(taxonomy.pk,)))
+        self.login_redirect("update_taxonomy", taxonomy.pk)
 
     def test_update_taxonomy_permission_denied(self):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:update_taxonomy", args=(taxonomy.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_taxonomy(self, post_event):
-        self._login(
+        self.login(
             "inventory.change_taxonomy",
             "inventory.view_tag",
             "inventory.view_taxonomy",
@@ -728,17 +718,17 @@ class InventorySetupViewsTestCase(TestCase):
 
     def test_delete_taxonomy_redirect(self):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        self._login_redirect(reverse("inventory:delete_taxonomy", args=(taxonomy.pk,)))
+        self.login_redirect("delete_taxonomy", taxonomy.pk)
 
     def test_delete_taxonomy_permission_denied(self):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:delete_taxonomy", args=(taxonomy.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_taxonomy(self, post_event):
-        self._login(
+        self.login(
             "inventory.delete_taxonomy",
             "inventory.view_tag",
         )

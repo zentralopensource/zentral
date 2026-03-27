@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item">
+      <a href="/">Home</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'accounts:policies' %}">Policies</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ object.get_absolute_url }}">{{ object }}</a>
+    </li>
+    <li class="breadcrumb-item active">Delete</li>
+  </ol>
+
+  <h3 class="mb-3">Delete {{ object }}</h3>
+
+  <form method="post">
+    {% csrf_token %}
+    <p>Do you really want to delete this policy?</p>
+    <p>
+      <a class="btn btn-outline-secondary"
+         href="{{ object.get_absolute_url }}">Cancel</a>
+      <button class="btn btn-danger">Delete</button>
+    </p>
+  </form>
+{% endblock %}

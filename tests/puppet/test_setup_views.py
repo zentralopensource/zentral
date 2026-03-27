@@ -1,12 +1,11 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase, override_settings
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.puppet.models import Instance, test_report_processor_token
 from zentral.core.stores.conf import stores
@@ -17,7 +16,7 @@ from .utils import build_self_signed_cert
 @override_settings(
     CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
 )
-class PuppetSetupViewsTestCase(TestCase):
+class PuppetSetupViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         # provision the stores
@@ -31,25 +30,18 @@ class PuppetSetupViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.bu = cls.mbu.create_enrollment_business_unit()
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "puppet"
+
     # utility methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _force_instance(self, rbac_auth=True):
         ca_chain, _ = build_self_signed_cert("Test-CA")
@@ -71,16 +63,16 @@ class PuppetSetupViewsTestCase(TestCase):
     # instances
 
     def test_instances_redirect(self):
-        self._login_redirect(reverse("puppet:instances"))
+        self.login_redirect("instances")
 
     def test_instances_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("puppet:instances"))
         self.assertEqual(response.status_code, 403)
 
     def test_instances(self):
         instance = self._force_instance()
-        self._login("puppet.view_instance")
+        self.login("puppet.view_instance")
         response = self.client.get(reverse("puppet:instances"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, instance.hostname)
@@ -93,11 +85,11 @@ class PuppetSetupViewsTestCase(TestCase):
 
     def test_instance_events_redirect(self):
         instance = self._force_instance()
-        self._login_redirect(reverse("puppet:instance_events", args=(instance.pk,)))
+        self.login_redirect("instance_events", instance.pk)
 
     def test_instance_events_permission_denied(self):
         instance = self._force_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("puppet:instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -105,18 +97,18 @@ class PuppetSetupViewsTestCase(TestCase):
     def test_instance_events_ok(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         instance = self._force_instance()
-        self._login("puppet.view_instance")
+        self.login("puppet.view_instance")
         response = self.client.get(reverse("puppet:instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "puppet/instance_events.html")
 
     def test_fetch_instance_events_redirect(self):
         instance = self._force_instance()
-        self._login_redirect(reverse("puppet:fetch_instance_events", args=(instance.pk,)))
+        self.login_redirect("fetch_instance_events", instance.pk)
 
     def test_fetch_instance_events_permission_denied(self):
         instance = self._force_instance()
-        self._login("puppet.change_instance")
+        self.login("puppet.change_instance")
         response = self.client.get(reverse("puppet:fetch_instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -124,7 +116,7 @@ class PuppetSetupViewsTestCase(TestCase):
     def test_fetch_instance_events_ok(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         instance = self._force_instance()
-        self._login("puppet.view_instance")
+        self.login("puppet.view_instance")
         response = self.client.get(reverse("puppet:fetch_instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
@@ -132,21 +124,21 @@ class PuppetSetupViewsTestCase(TestCase):
     # create instance
 
     def test_create_instance_redirect(self):
-        self._login_redirect(reverse("puppet:create_instance"))
+        self.login_redirect("create_instance")
 
     def test_create_instance_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("puppet:create_instance"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_instance_get(self):
-        self._login("puppet.add_instance")
+        self.login("puppet.add_instance")
         response = self.client.get(reverse("puppet:create_instance"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "puppet/instance_form.html")
 
     def test_create_instance_post(self):
-        self._login("puppet.add_instance", "puppet.view_instance")
+        self.login("puppet.add_instance", "puppet.view_instance")
         url = "https://{}.example.com".format(get_random_string(8))
         ca_chain, _ = build_self_signed_cert("CA")
         name = get_random_string(12)
@@ -184,24 +176,24 @@ class PuppetSetupViewsTestCase(TestCase):
 
     def test_update_instance_redirect(self):
         instance = self._force_instance()
-        self._login_redirect(reverse("puppet:update_instance", args=(instance.pk,)))
+        self.login_redirect("update_instance", instance.pk)
 
     def test_update_instance_permission_denied(self):
         instance = self._force_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("puppet:update_instance", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_instance_get(self):
         instance = self._force_instance()
-        self._login("puppet.change_instance")
+        self.login("puppet.change_instance")
         response = self.client.get(reverse("puppet:update_instance", args=(instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "puppet/instance_form.html")
 
     def test_update_rbac_token_instance_post(self):
         instance = self._force_instance(rbac_auth=False)  # instance with cert & key
-        self._login("puppet.change_instance", "puppet.view_instance")
+        self.login("puppet.change_instance", "puppet.view_instance")
         rbac_token = get_random_string(12)
         response = self.client.post(reverse("puppet:update_instance", args=(instance.pk,)),
                                     {"business_unit": instance.business_unit.pk,
@@ -236,17 +228,17 @@ class PuppetSetupViewsTestCase(TestCase):
 
     def test_delete_instance_redirect(self):
         instance = self._force_instance()
-        self._login_redirect(reverse("puppet:delete_instance", args=(instance.pk,)))
+        self.login_redirect("delete_instance", instance.pk)
 
     def test_delete_instance_permission_denied(self):
         instance = self._force_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("puppet:delete_instance", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_instance_get(self):
         instance = self._force_instance()
-        self._login("puppet.delete_instance")
+        self.login("puppet.delete_instance")
         response = self.client.get(reverse("puppet:delete_instance", args=(instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "puppet/instance_confirm_delete.html")
@@ -258,7 +250,7 @@ class PuppetSetupViewsTestCase(TestCase):
         version, observer_dict = test_report_processor_token(pk, token)
         self.assertEqual(version, instance.version)
         self.assertEqual(observer_dict, instance.observer_dict())
-        self._login("puppet.delete_instance", "puppet.view_instance")
+        self.login("puppet.delete_instance", "puppet.view_instance")
         response = self.client.post(reverse("puppet:delete_instance", args=(instance.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "puppet/instance_list.html")

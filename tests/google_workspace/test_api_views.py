@@ -1,21 +1,21 @@
-from functools import reduce
-import operator
 import uuid
 import json
 from unittest.mock import patch, Mock
 from django.test import TestCase
 from django.urls import reverse
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.utils.crypto import get_random_string
 from googleapiclient.errors import HttpError
+
 from accounts.models import User, APIToken
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.google_workspace.models import Connection, GroupTagMapping
 from zentral.contrib.inventory.models import Tag
 from zentral.core.events.base import AuditEvent
 
 
-class ApiViewsTestCase(TestCase):
+class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
 
     @classmethod
     def setUpTestData(cls):
@@ -32,48 +32,23 @@ class ApiViewsTestCase(TestCase):
 
         _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "googleworkspace_api"
+
+    # RequestCase implementation
+
+    def _get_api_key(self):
+        return self.api_key
+
     # utils
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _make_request(self, method, url, data=None, include_token=True):
-        kwargs = {}
-        if data is not None:
-            kwargs["content_type"] = "application/json"
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return method(url, **kwargs)
-
-    def delete(self, *args, **kwargs):
-        return self._make_request(self.client.delete, *args, **kwargs)
-
-    def post(self, url, data=None, include_token=True, *args, **kwargs):
-        return self._make_request(self.client.post, url, data, include_token=include_token, *args, **kwargs)
-
-    def put(self, *args, **kwargs):
-        return self._make_request(self.client.put, *args, **kwargs)
-
-    def get(self, *args, **kwargs):
-        return self._make_request(self.client.get, *args, **kwargs)
 
     def _given_email(self):
         return f"{get_random_string(12)}@zentral.com"

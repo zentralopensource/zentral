@@ -1,5 +1,18 @@
-from accounts.models import APIToken, Group, ProvisionedRole, User
+from cedarpy import format_policies
 from django.utils.crypto import get_random_string
+
+from accounts.models import APIToken, Group, Policy, ProvisionedRole, User
+
+
+def force_policy(provisioning_uid=None):
+    return Policy.objects.create(
+        provisioning_uid=provisioning_uid,
+        name=get_random_string(12),
+        description=get_random_string(12),
+        source=format_policies(
+            'permit (principal in Role::"0", action, resource);'
+        )
+    )
 
 
 def force_role(name=None, provisioning_uid=None):

@@ -1,18 +1,18 @@
-from functools import reduce
-import operator
-import urllib.parse
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, Tag
+from zentral.utils.provisioning import provision
 
 
-class InventorySearchViewsTestCase(TestCase):
+class InventorySearchViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
+        provision()  # stores
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
@@ -60,47 +60,34 @@ class InventorySearchViewsTestCase(TestCase):
         MachineTag.objects.create(tag=cls.tag1, serial_number=cls.ms.serial_number)
         cls.tag2 = Tag.objects.create(name="tag2")
 
-    # utility methods
+    # LoginCase implementation
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_user(self):
+        return self.user
 
-    def _login_redirect(self, url_name, *args, query=None):
-        url = reverse("inventory:{}".format(url_name), args=args)
-        if query:
-            url = "{u}?{q}".format(u=url, q=query)
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?{q}".format(u=reverse("login"),
-                                                        q=urllib.parse.urlencode({"next": url}, safe="/")))
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "inventory"
 
     # index
 
     def test_index_login_redirect(self):
-        self._login_redirect("index", query="sf=mbu-t-tp-hm-pf-osv")
+        self.login_redirect("index", query_params={"sf": "mbu-t-tp-hm-pf-osv"})
 
     def test_index_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:index"))
         self.assertEqual(response.status_code, 403)
 
     def test_index_redirect(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.get(reverse("inventory:index"), follow=True)
         self.assertRedirects(response, '?ls=7d&sf=mbu-t-mis-tp-pf-hm-osv')
 
     def test_index_default(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.get(reverse("inventory:index"), {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv"})
         self.assertTemplateUsed(response, "inventory/machine_list.html")
         self.assertContains(response, "Machine (1)")
@@ -108,7 +95,7 @@ class InventorySearchViewsTestCase(TestCase):
     # computer name
 
     def test_computer_name_search(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.get(
             reverse("inventory:index"),
             {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv", "cn": "Computer name Yol"}
@@ -116,7 +103,7 @@ class InventorySearchViewsTestCase(TestCase):
         self.assertRedirects(response, reverse("inventory:machine", args=("0123456789",)))
 
     def test_computer_name_search_special_char_no_result(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.get(
             reverse("inventory:index"),
             {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv", "cn": "Computer\\"}
@@ -127,7 +114,7 @@ class InventorySearchViewsTestCase(TestCase):
     # principal user
 
     def test_principal_user_principal_name_search(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.get(
             reverse("inventory:index"),
             {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv", "pu": "principal name"}
@@ -135,7 +122,7 @@ class InventorySearchViewsTestCase(TestCase):
         self.assertRedirects(response, reverse("inventory:machine", args=("0123456789",)))
 
     def test_principal_user_display_name_search(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.get(
             reverse("inventory:index"),
             {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv", "pu": "display name"}
@@ -143,7 +130,7 @@ class InventorySearchViewsTestCase(TestCase):
         self.assertRedirects(response, reverse("inventory:machine", args=("0123456789",)))
 
     def test_principal_user_search_special_char_no_result(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.get(
             reverse("inventory:index"),
             {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv", "pu": "Display Name\\"}
@@ -154,7 +141,7 @@ class InventorySearchViewsTestCase(TestCase):
     # MAC address
 
     def test_index_mac_address_no_result(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.get(
             reverse("inventory:index"),
             {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv", "ma": get_random_string(12)}
@@ -163,7 +150,7 @@ class InventorySearchViewsTestCase(TestCase):
         self.assertContains(response, "Machines (0)")
 
     def test_index_mac_address_redirect(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.get(
             reverse("inventory:index"),
             {"ls": "7d", "sf": "mbu-t-mis-tp-pf-hm-osv", "ma": "b6:21:01:a1:10:a0"},
@@ -175,7 +162,7 @@ class InventorySearchViewsTestCase(TestCase):
     # bundle filter
 
     def test_index_add_bundle_filter(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.post(
             "/inventory/?ls=7d&sf=mbu-t-mis-tp-pf-hm-osv",
             {"filter_key": "bundle_filter_form",
@@ -187,7 +174,7 @@ class InventorySearchViewsTestCase(TestCase):
         self.assertContains(response, "org.mozilla.firefoxdeveloperedition")
 
     def test_index_add_bundle_filter_error(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         response = self.client.post(
             "/inventory/?ls=7d&sf=mbu-t-mis-tp-pf-hm-osv",
             {"filter_key": "bundle_filter_form"},

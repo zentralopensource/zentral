@@ -19,7 +19,6 @@ from .models import (
     JMESPathCheck,
     MetaBusinessUnit,
     MetaBusinessUnitTag,
-    MetaMachine,
     Source,
     Tag,
 )
@@ -32,7 +31,6 @@ from .utils import (
     MSQuery,
     ProgramFilter,
     SourceFilter,
-    add_machine_tags,
 )
 
 
@@ -220,27 +218,6 @@ class AddMBUTagForm(AddTagForm):
     def save(self):
         return MetaBusinessUnitTag.objects.get_or_create(meta_business_unit=self.mbu,
                                                          tag=self._get_tag())
-
-
-class AddMachineTagForm(AddTagForm):
-    new_tag_mbu = forms.ModelChoiceField(label="Restricted to business unit",
-                                         queryset=MetaBusinessUnit.objects.none(),
-                                         required=False, empty_label='...')
-
-    def __init__(self, *args, **kwargs):
-        self.machine = MetaMachine(kwargs.pop('machine_serial_number'))
-        self.request = kwargs.pop('request')
-        super(AddMachineTagForm, self).__init__(*args, **kwargs)
-        self.fields['existing_tag'].queryset = Tag.objects.filter(id__in=[t.id for t in self.machine.available_tags()])
-        self.fields['new_tag_mbu'].queryset = MetaBusinessUnit.objects.filter(
-            id__in=self.machine.meta_business_unit_id_set
-        )
-
-    def _get_mbu(self):
-        return self.cleaned_data.get('new_tag_mbu')
-
-    def save(self, *args, **kwargs):
-        add_machine_tags(self.machine.serial_number, [self._get_tag()], self.request)
 
 
 class BaseAppSearchForm(forms.Form):

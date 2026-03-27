@@ -1,19 +1,18 @@
 from datetime import datetime, time
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Tag
 from zentral.core.events.base import AuditEvent
 from .utils import force_blueprint, force_software_update_enforcement
 
 
-class SoftwareUpdateEnforcementViewsTestCase(TestCase):
+class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -22,39 +21,30 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # SUE list
 
     def test_software_update_enforcements_redirect(self):
-        self._login_redirect(reverse("mdm:software_update_enforcements"))
+        self.login_redirect("software_update_enforcements")
 
     def test_software_update_enforcements_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:software_update_enforcements"))
         self.assertEqual(response.status_code, 403)
 
     def test_software_update_enforcements_no_links(self):
         sue = force_software_update_enforcement()
-        self._login("mdm.view_softwareupdateenforcement")
+        self.login("mdm.view_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:software_update_enforcements"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_list.html")
@@ -66,7 +56,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         sue1 = force_software_update_enforcement()
         force_blueprint(software_update_enforcement=sue1)
         sue2 = force_software_update_enforcement()
-        self._login(
+        self.login(
             "mdm.view_softwareupdateenforcement",
             "mdm.change_softwareupdateenforcement",
             "mdm.delete_softwareupdateenforcement"
@@ -84,22 +74,22 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
     # create SUE
 
     def test_create_software_update_enforcement_redirect(self):
-        self._login_redirect(reverse("mdm:create_software_update_enforcement"))
+        self.login_redirect("create_software_update_enforcement")
 
     def test_create_software_update_enforcement_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:create_software_update_enforcement"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_software_update_enforcement_get(self):
-        self._login("mdm.add_softwareupdateenforcement")
+        self.login("mdm.add_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:create_software_update_enforcement"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_form.html")
         self.assertContains(response, "Create software update enforcement")
 
     def test_create_software_update_enforcement_post_latest_delay_days_too_high(self):
-        self._login("mdm.add_softwareupdateenforcement")
+        self.login("mdm.add_softwareupdateenforcement")
         response = self.client.post(reverse("mdm:create_software_update_enforcement"),
                                     {"name": get_random_string(12),
                                      "enforcement_type": "LATEST",
@@ -113,7 +103,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
                              'Ensure this value is less than or equal to 120.')
 
     def test_create_software_update_enforcement_post_latest_missing_required_field(self):
-        self._login("mdm.add_softwareupdateenforcement")
+        self.login("mdm.add_softwareupdateenforcement")
         response = self.client.post(reverse("mdm:create_software_update_enforcement"),
                                     {"name": get_random_string(12),
                                      "enforcement_type": "LATEST",
@@ -125,7 +115,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "max_os_version", "This field is required")
 
     def test_create_software_update_enforcement_post_latest_bad_max_os_version(self):
-        self._login("mdm.add_softwareupdateenforcement")
+        self.login("mdm.add_softwareupdateenforcement")
         response = self.client.post(reverse("mdm:create_software_update_enforcement"),
                                     {"name": get_random_string(12),
                                      "enforcement_type": "LATEST",
@@ -138,7 +128,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "max_os_version", "Not a valid OS version")
 
     def test_create_software_update_enforcement_post_one_time_missing_required_field(self):
-        self._login("mdm.add_softwareupdateenforcement")
+        self.login("mdm.add_softwareupdateenforcement")
         response = self.client.post(reverse("mdm:create_software_update_enforcement"),
                                     {"name": get_random_string(12),
                                      "enforcement_type": "ONE_TIME",
@@ -149,7 +139,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "local_datetime", "This field is required")
 
     def test_create_software_update_enforcement_post_one_time_bad_os_version(self):
-        self._login("mdm.add_softwareupdateenforcement")
+        self.login("mdm.add_softwareupdateenforcement")
         response = self.client.post(reverse("mdm:create_software_update_enforcement"),
                                     {"name": get_random_string(12),
                                      "enforcement_type": "ONE_TIME",
@@ -162,7 +152,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_software_update_enforcement_post_latest(self, post_event):
-        self._login("mdm.add_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
+        self.login("mdm.add_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:create_software_update_enforcement"),
@@ -216,7 +206,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_software_update_enforcement_one_time(self, post_event):
-        self._login("mdm.add_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
+        self.login("mdm.add_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
         tags = sorted([Tag.objects.create(name=get_random_string(12)) for _ in range(2)], key=lambda t: t.pk)
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -274,17 +264,17 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
 
     def test_software_update_enforcement_redirect(self):
         sue = force_software_update_enforcement()
-        self._login_redirect(reverse("mdm:software_update_enforcement", args=(sue.pk,)))
+        self.login_redirect("software_update_enforcement", sue.pk)
 
     def test_software_update_enforcement_permission_denied(self):
         sue = force_software_update_enforcement()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:software_update_enforcement", args=(sue.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_software_update_enforcement_get(self):
         sue = force_software_update_enforcement()
-        self._login("mdm.view_softwareupdateenforcement", "mdm.delete_softwareupdateenforcement")
+        self.login("mdm.view_softwareupdateenforcement", "mdm.delete_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:software_update_enforcement", args=(sue.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_detail.html")
@@ -293,7 +283,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
 
     def test_software_update_enforcement_get_no_perm_no_delete_link(self):
         sue = force_software_update_enforcement()
-        self._login("mdm.view_softwareupdateenforcement")
+        self.login("mdm.view_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:software_update_enforcement", args=(sue.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_detail.html")
@@ -303,7 +293,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
     def test_software_update_enforcement_get_cannot_be_deleted_no_delete_link(self):
         sue = force_software_update_enforcement()
         force_blueprint(software_update_enforcement=sue)
-        self._login("mdm.view_softwareupdateenforcement", "mdm.delete_softwareupdateenforcement")
+        self.login("mdm.view_softwareupdateenforcement", "mdm.delete_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:software_update_enforcement", args=(sue.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_detail.html")
@@ -314,17 +304,17 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
 
     def test_update_software_update_enforcement_redirect(self):
         sue = force_software_update_enforcement()
-        self._login_redirect(reverse("mdm:update_software_update_enforcement", args=(sue.pk,)))
+        self.login_redirect("update_software_update_enforcement", sue.pk)
 
     def test_update_software_update_enforcement_permission_denied(self):
         sue = force_software_update_enforcement()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:update_software_update_enforcement", args=(sue.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_software_update_enforcement_get(self):
         sue = force_software_update_enforcement()
-        self._login("mdm.change_softwareupdateenforcement")
+        self.login("mdm.change_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:update_software_update_enforcement", args=(sue.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_form.html")
@@ -340,7 +330,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
         self.assertEqual(sue.os_version, "")
         self.assertEqual(sue.build_version, "")
         self.assertIsNone(sue.local_datetime)
-        self._login("mdm.change_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
+        self.login("mdm.change_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
         new_name = get_random_string(12)
         tags = sorted([Tag.objects.create(name=get_random_string(12)) for _ in range(2)], key=lambda t: t.pk)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -399,24 +389,24 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
 
     def test_delete_software_update_enforcement_redirect(self):
         sue = force_software_update_enforcement()
-        self._login_redirect(reverse("mdm:delete_software_update_enforcement", args=(sue.pk,)))
+        self.login_redirect("delete_software_update_enforcement", sue.pk)
 
     def test_delete_software_update_enforcement_permission_denied(self):
         sue = force_software_update_enforcement()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:delete_software_update_enforcement", args=(sue.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_software_update_enforcement_404(self):
         sue = force_software_update_enforcement()
         force_blueprint(software_update_enforcement=sue)
-        self._login("mdm.delete_softwareupdateenforcement")
+        self.login("mdm.delete_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:delete_software_update_enforcement", args=(sue.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_delete_software_update_enforcement_get(self):
         sue = force_software_update_enforcement()
-        self._login("mdm.delete_softwareupdateenforcement")
+        self.login("mdm.delete_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:delete_software_update_enforcement", args=(sue.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_confirm_delete.html")
@@ -427,7 +417,7 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase):
     def test_delete_software_update_enforcement_post(self, post_event):
         sue = force_software_update_enforcement()
         prev_value = sue.serialize_for_event()
-        self._login("mdm.delete_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
+        self.login("mdm.delete_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:delete_software_update_enforcement", args=(sue.pk,)),
                                         follow=True)

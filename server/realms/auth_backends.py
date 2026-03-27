@@ -1,7 +1,7 @@
 import logging
-from django.contrib.auth.backends import ModelBackend
 from django.db import transaction, IntegrityError
 from django.db.models import Q
+from accounts.auth_backends import ZentralBaseBackend
 from accounts.models import User
 from .models import RealmUser
 
@@ -9,7 +9,7 @@ from .models import RealmUser
 logger = logging.getLogger("server.accounts.auth_backends")
 
 
-class RealmBackend(ModelBackend):
+class RealmBackend(ZentralBaseBackend):
     @staticmethod
     def update_user(user, realm_user):
         # Update user if necessary

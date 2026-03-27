@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+{% block content %}
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item">
+        <a href="/">Home</a>
+      </li>
+      {% for url, anchor_text in breadcrumbs %}
+        {% if url %}
+          <li class="breadcrumb-item">
+            <a href="{{ url }}">{{ anchor_text }}</a>
+          </li>
+        {% else %}
+          <li class="breadcrumb-item active">{{ anchor_text }}</li>
+        {% endif %}
+      {% endfor %}
+    </ol>
+  </nav>
+
+  <div class="d-flex align-items-center mb-1">
+    <h3>Polic{{ page_obj.paginator.count|length|pluralize:"y,ies" }} ({{ page_obj.paginator.count }})</h3>
+    <div class="ms-auto">
+      {% if perms.accounts.add_policy %}
+        {% url 'accounts:create_policy' as url %}
+        {% button 'CREATE' url "Create a new policy" %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% pagination next_url previous_url %}
+
+  <div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+      <thead>
+        <th>Policy</th>
+        <th>Description</th>
+        <th>Active?</th>
+        <th style="width:15%"></th>
+      </thead>
+      <tbody>
+        {% for policy in object_list %}
+          <tr class="data-row">
+            <td>
+              <a href="{{ policy.get_absolute_url }}">{{ policy }}</a>
+            </td>
+            <td>{{ policy.description|default:"-" }}</td>
+            <td>{{ policy.is_active|yesno }}</td>
+            <td class="text-end py-0">
+              {% if policy.can_be_updated and perms.accounts.change_policy %}
+                {% url 'accounts:update_policy' policy.pk as url %}
+                {% button 'UPDATE' url "Edit policy" %}
+              {% endif %}
+              {% if policy.can_be_deleted and perms.accounts.delete_policy %}
+                {% url 'accounts:delete_policy' policy.pk as url %}
+                {% button 'DELETE' url "Delete policy" %}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% pagination next_url previous_url %}
+{% endblock %}

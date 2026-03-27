@@ -1,19 +1,19 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.wsone.models import Instance
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
 
 
-class WSOneSetupViewsTestCase(TestCase):
+class WSOneSetupViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         # provision the stores
@@ -27,25 +27,18 @@ class WSOneSetupViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.bu = cls.mbu.create_enrollment_business_unit()
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "wsone"
+
     # utility methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _force_instance(self):
         instance = Instance.objects.create(
@@ -64,16 +57,16 @@ class WSOneSetupViewsTestCase(TestCase):
     # instances
 
     def test_instances_redirect(self):
-        self._login_redirect(reverse("wsone:instances"))
+        self.login_redirect("instances")
 
     def test_instances_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("wsone:instances"))
         self.assertEqual(response.status_code, 403)
 
     def test_instances(self):
         instance = self._force_instance()
-        self._login("wsone.view_instance")
+        self.login("wsone.view_instance")
         response = self.client.get(reverse("wsone:instances"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, instance.hostname)
@@ -86,11 +79,11 @@ class WSOneSetupViewsTestCase(TestCase):
 
     def test_instance_events_redirect(self):
         instance = self._force_instance()
-        self._login_redirect(reverse("wsone:instance_events", args=(instance.pk,)))
+        self.login_redirect("instance_events", instance.pk)
 
     def test_instance_events_permission_denied(self):
         instance = self._force_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("wsone:instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -98,18 +91,18 @@ class WSOneSetupViewsTestCase(TestCase):
     def test_instance_events_ok(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         instance = self._force_instance()
-        self._login("wsone.view_instance")
+        self.login("wsone.view_instance")
         response = self.client.get(reverse("wsone:instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "wsone/instance_events.html")
 
     def test_fetch_instance_events_redirect(self):
         instance = self._force_instance()
-        self._login_redirect(reverse("wsone:fetch_instance_events", args=(instance.pk,)))
+        self.login_redirect("fetch_instance_events", instance.pk)
 
     def test_fetch_instance_events_permission_denied(self):
         instance = self._force_instance()
-        self._login("wsone.change_instance")
+        self.login("wsone.change_instance")
         response = self.client.get(reverse("wsone:fetch_instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -117,7 +110,7 @@ class WSOneSetupViewsTestCase(TestCase):
     def test_fetch_instance_events_ok(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         instance = self._force_instance()
-        self._login("wsone.view_instance")
+        self.login("wsone.view_instance")
         response = self.client.get(reverse("wsone:fetch_instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
@@ -125,21 +118,21 @@ class WSOneSetupViewsTestCase(TestCase):
     # create instance
 
     def test_create_instance_redirect(self):
-        self._login_redirect(reverse("wsone:create_instance"))
+        self.login_redirect("create_instance")
 
     def test_create_instance_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("wsone:create_instance"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_instance_get(self):
-        self._login("wsone.add_instance")
+        self.login("wsone.add_instance")
         response = self.client.get(reverse("wsone:create_instance"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "wsone/instance_form.html")
 
     def test_create_instance_post(self):
-        self._login("wsone.add_instance", "wsone.view_instance")
+        self.login("wsone.add_instance", "wsone.view_instance")
         server_url = "https://{}.example.com".format(get_random_string(8))
         api_key = get_random_string(12)
         client_secret = get_random_string(12)
@@ -169,24 +162,24 @@ class WSOneSetupViewsTestCase(TestCase):
 
     def test_update_instance_redirect(self):
         instance = self._force_instance()
-        self._login_redirect(reverse("wsone:update_instance", args=(instance.pk,)))
+        self.login_redirect("update_instance", instance.pk)
 
     def test_update_instance_permission_denied(self):
         instance = self._force_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("wsone:update_instance", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_instance_get(self):
         instance = self._force_instance()
-        self._login("wsone.change_instance")
+        self.login("wsone.change_instance")
         response = self.client.get(reverse("wsone:update_instance", args=(instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "wsone/instance_form.html")
 
     def test_update_instance_post(self):
         instance = self._force_instance()
-        self._login("wsone.change_instance", "wsone.view_instance")
+        self.login("wsone.change_instance", "wsone.view_instance")
         api_key = get_random_string(12)
         client_secret = get_random_string(12)
         password = get_random_string(12)
@@ -215,24 +208,24 @@ class WSOneSetupViewsTestCase(TestCase):
 
     def test_delete_instance_redirect(self):
         instance = self._force_instance()
-        self._login_redirect(reverse("wsone:delete_instance", args=(instance.pk,)))
+        self.login_redirect("delete_instance", instance.pk)
 
     def test_delete_instance_permission_denied(self):
         instance = self._force_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("wsone:delete_instance", args=(instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_instance_get(self):
         instance = self._force_instance()
-        self._login("wsone.delete_instance")
+        self.login("wsone.delete_instance")
         response = self.client.get(reverse("wsone:delete_instance", args=(instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "wsone/instance_confirm_delete.html")
 
     def test_delete_instance_post(self):
         instance = self._force_instance()
-        self._login("wsone.delete_instance", "wsone.view_instance")
+        self.login("wsone.delete_instance", "wsone.view_instance")
         response = self.client.post(reverse("wsone:delete_instance", args=(instance.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "wsone/instance_list.html")

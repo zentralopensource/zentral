@@ -1,16 +1,14 @@
 import html
-import operator
-from functools import reduce
 from io import BytesIO
 from unittest.mock import Mock, patch
 
-from accounts.models import User
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from ldap import LDAPError
+
+from accounts.models import User
 from realms.backends.registry import backend_classes
 from realms.models import (
     Realm,
@@ -18,7 +16,7 @@ from realms.models import (
     RealmGroupMapping,
     RoleMapping,
 )
-
+from tests.zentral_test_utils.login_case import LoginCase
 from .utils import (
     force_group,
     force_realm,
@@ -31,7 +29,7 @@ from .utils import (
 )
 
 
-class RealmViewsTestCase(TestCase):
+class RealmViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -45,31 +43,16 @@ class RealmViewsTestCase(TestCase):
         cls.ui_group = Group.objects.create(name=get_random_string(12))
         cls.ui_user.groups.set([cls.ui_group])
 
-    # auth utils
+    # LoginCase implementation
 
-    def login_redirect(self, url_name, *args):
-        url = reverse("realms:{}".format(url_name), args=args)
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.ui_user
 
-    def permission_denied(self, url_name, *args):
-        url = reverse("accounts:{}".format(url_name), args=args)
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 403)
+    def _get_group(self):
+        return self.ui_group
 
-    def login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.ui_group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.ui_group.permissions.clear()
-        self.client.force_login(self.ui_user)
+    def _get_url_namespace(self):
+        return "realms"
 
     # index
 

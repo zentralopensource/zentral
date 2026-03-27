@@ -1,16 +1,16 @@
-from functools import reduce
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.wsone.models import Instance
 
 
-class APIViewsTestCase(TestCase):
+class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     @classmethod
     def setUpTestData(cls):
         cls.service_account = User.objects.create(
@@ -25,6 +25,24 @@ class APIViewsTestCase(TestCase):
         _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.bu = cls.mbu.create_enrollment_business_unit()
+
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "wsone"
+
+    # RequestCase implementation
+
+    def _get_api_key(self):
+        return self.api_key
+
+    # utils
 
     def force_instance(self, excluded_groups_count=0):
         instance = Instance.objects.create(
@@ -41,40 +59,6 @@ class APIViewsTestCase(TestCase):
         instance.save()
         instance.refresh_from_db()
         return instance
-
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def make_request(self, url, data=None, include_token=True, method="GET"):
-        kwargs = {}
-        if data is not None:
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        if method == "POST":
-            return self.client.post(url, **kwargs)
-        else:
-            return self.client.get(url, **kwargs)
-
-    def get(self, url, data=None, include_token=True):
-        return self.make_request(url, data, include_token, method="GET")
-
-    def post(self, url, data=None, include_token=True):
-        return self.make_request(url, data, include_token, method="POST")
 
     # list instances
 

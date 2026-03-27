@@ -1,12 +1,11 @@
-from functools import reduce
 import json
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.models import Artifact, Channel, Platform
 from .utils import (
@@ -17,7 +16,7 @@ from .utils import (
 )
 
 
-class MDMCertAssetManagementViewsTestCase(TestCase):
+class MDMCertAssetManagementViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(
@@ -26,33 +25,16 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url, data=None):
-        if data:
-            func = self.client.post
-        else:
-            func = self.client.get
-        response = func(url, data=data)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(
-                operator.or_,
-                (
-                    Q(content_type__app_label=app_label, codename=codename)
-                    for app_label, codename in (
-                        permission.split(".") for permission in permissions
-                    )
-                ),
-            )
-            self.group.permissions.set(
-                list(Permission.objects.filter(permission_filter))
-            )
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # model
 
@@ -122,15 +104,15 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
     # create cert asset GET
 
     def test_create_cert_asset_get_redirect(self):
-        self._login_redirect(reverse("mdm:create_cert_asset"))
+        self.login_redirect("create_cert_asset")
 
     def test_create_cert_asset_get_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:create_cert_asset"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_cert_asset_get(self):
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         response = self.client.get(reverse("mdm:create_cert_asset"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/certasset_form.html")
@@ -139,9 +121,9 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
 
     def test_create_cert_asset_post_redirect(self):
         acme_issuer = force_acme_issuer()
-        self._login_redirect(
-            reverse("mdm:create_cert_asset"),
-            {
+        self.login_redirect(
+            "create_cert_asset",
+            data={
                 "name": get_random_string(12),
                 "channel": "DEVICE",
                 "platforms": [str(Platform.MACOS)],
@@ -154,7 +136,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
 
     def test_create_cert_asset_post_permission_denied(self):
         acme_issuer = force_acme_issuer()
-        self._login()
+        self.login()
         response = self.client.post(
             reverse("mdm:create_cert_asset"),
             {
@@ -172,7 +154,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
     def test_create_cert_asset_post_name_error(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CERT_ASSET)
         acme_issuer = force_acme_issuer()
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         response = self.client.post(
             reverse("mdm:create_cert_asset"),
             {
@@ -194,7 +176,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
         )
 
     def test_create_cert_asset_post_missing_fields(self):
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:create_cert_asset"), {})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/certasset_form.html")
@@ -220,7 +202,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
 
     def test_create_cert_asset_post_subject_or_san_required(self):
         acme_issuer = force_acme_issuer()
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(
             reverse("mdm:create_cert_asset"),
             {
@@ -241,7 +223,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
 
     def test_create_cert_asset_post_invalid_rdn(self):
         acme_issuer = force_acme_issuer()
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(
             reverse("mdm:create_cert_asset"),
             {
@@ -261,7 +243,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
     def test_create_cert_asset_post(self):
         acme_issuer = force_acme_issuer()
         name = get_random_string(12)
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(
             reverse("mdm:create_cert_asset"),
             {
@@ -303,7 +285,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
     def test_create_cert_asset_post_2(self):
         scep_issuer = force_scep_issuer()
         name = get_random_string(12)
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(
             reverse("mdm:create_cert_asset"),
             {
@@ -348,11 +330,11 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
 
     def test_upgrade_cert_asset_get_redirect(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CERT_ASSET)
-        self._login_redirect(reverse("mdm:upgrade_cert_asset", args=(artifact.pk,)))
+        self.login_redirect("upgrade_cert_asset", artifact.pk)
 
     def test_upgrade_cert_asset_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CERT_ASSET)
-        self._login(
+        self.login(
             "mdm.change_artifactversion"
         )  # upgrade is creation of a new version
         response = self.client.get(
@@ -362,7 +344,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
 
     def test_upgrade_cert_asset_get(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CERT_ASSET)
-        self._login("mdm.add_artifactversion")
+        self.login("mdm.add_artifactversion")
         response = self.client.get(
             reverse("mdm:upgrade_cert_asset", args=(artifact.pk,))
         )
@@ -397,7 +379,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase):
             ),
             {str(artifact_version.pk)},
         )
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         cert_asset = artifact_version.cert_asset
         acme_issuer = cert_asset.acme_issuer
         scep_issuer = cert_asset.scep_issuer
