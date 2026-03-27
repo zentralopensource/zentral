@@ -2,6 +2,7 @@ from importlib import import_module
 import logging
 import os.path
 from django.apps import AppConfig
+from accounts.pbac.engine import engine
 
 
 logger = logging.getLogger('zentral.utils.apps')
@@ -26,6 +27,7 @@ class ZentralAppConfig(AppConfig):
         self.import_events()
         self.import_incidents()
         self.import_provisioning()
+        self.register_legacy_perms()
 
     def _import_submodule(self, submodule_name):
         try:
@@ -51,3 +53,6 @@ class ZentralAppConfig(AppConfig):
 
     def import_provisioning(self):
         self._import_submodule("provisioning")
+
+    def register_legacy_perms(self):
+        engine.register_app_legacy_perms(self)

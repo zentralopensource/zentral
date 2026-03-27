@@ -48,13 +48,7 @@ class ManageTags(MachineAction):
     title = "Manage tags"
     description = "Manage the machine tags"
     url_name = "inventory:machine_tags"
-    permission_required = (
-        "inventory.view_machinetag",
-        "inventory.add_machinetag",
-        "inventory.change_machinetag",
-        "inventory.delete_machinetag",
-        "inventory.add_tag",
-    )
+    permission_required = "inventory.view_machinetag"
 
 
 class ArchiveMachine(MachineAction):

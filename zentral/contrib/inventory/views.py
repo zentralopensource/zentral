@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
+from accounts.pbac.engine import engine
 from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
@@ -23,13 +24,14 @@ from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
 from zentral.utils.terraform import build_config_response
-from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit,
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, PBACViewMixin,
+                                 UpdateViewWithAudit,
                                  UserPaginationListView, UserPaginationMixin)
 from .compliance_checks import InventoryJMESPathCheck
 from .events import JMESPathCheckCreated, JMESPathCheckUpdated, JMESPathCheckDeleted
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm,
-                    MergeMBUForm, AddMBUTagForm, AddMachineTagForm,
+                    MergeMBUForm, AddMBUTagForm,
                     CreateTagForm, UpdateTagForm,
                     AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm,
                     MacOSAppSearchForm, ProgramsSearchForm,
@@ -39,6 +41,7 @@ from .models import (BusinessUnit,
                      MetaMachine,
                      MetaBusinessUnitTag, Tag, Taxonomy,
                      JMESPathCheck)
+from .pbac import CreateMachineTagRequest, DeleteMachineTagRequest
 from .terraform import iter_compliance_check_resources
 from .utils import (AndroidAppFilter, AndroidAppFilterForm,
                     BundleFilter, BundleFilterForm,
@@ -49,7 +52,7 @@ from .utils import (AndroidAppFilter, AndroidAppFilterForm,
                     ProgramFilter, ProgramFilterForm,
                     SourceFilter,
                     MSQuery,
-                    remove_machine_tags)
+                    add_machine_tags, remove_machine_tags)
 
 
 logger = logging.getLogger("zentral.contrib.inventory.views")
@@ -860,50 +863,80 @@ class MachineIncidentsView(PermissionRequiredMixin, TemplateView):
         return context
 
 
-class MachineTagsView(PermissionRequiredMixin, FormView):
-    permission_required = (
-        "inventory.view_machinetag",
-        "inventory.add_machinetag",
-        "inventory.change_machinetag",
-        "inventory.delete_machinetag",
-        "inventory.add_tag",
-    )
+class MachineTagsView(PermissionRequiredMixin, TemplateView):
+    permission_required = "inventory.view_machinetag"
     template_name = "inventory/machine_tags.html"
-    form_class = AddMachineTagForm
 
     def dispatch(self, request, *args, **kwargs):
         self.machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
-        self.msn = self.machine.serial_number
-        return super(MachineTagsView, self).dispatch(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        context = super(MachineTagsView, self).get_context_data(**kwargs)
+        context = super().get_context_data(**kwargs)
         context['machine'] = self.machine
-        context['color_presets'] = TAG_COLOR_PRESETS
+        pbac_requests = []
+        context['current_tags'] = []
+        for tag_type, tag in self.machine.tags_with_types:
+            pbac_request = DeleteMachineTagRequest(self.request.user, self.machine, tag)
+            pbac_requests.append(pbac_request)
+            context['current_tags'].append((tag_type, tag, pbac_request))
+        context['current_tag_count'] = len(context['current_tags'])
+        extra_tags = []
+        for extra_tag in (
+            Tag.objects.select_related("meta_business_unit", "taxonomy")
+                       .filter(id__in=[t.id for t in self.machine.available_tags()])
+                       .order_by("taxonomy__name", "name")
+        ):
+            pbac_request = CreateMachineTagRequest(self.request.user, self.machine, extra_tag)
+            pbac_requests.append(pbac_request)
+            extra_tags.append((extra_tag, pbac_request))
+        engine.authorize_requests(pbac_requests)
+        context["extra_tags"] = [t for t, pbac_req in extra_tags if pbac_req.is_authorized]
         return context
 
-    def get_form_kwargs(self, *args, **kwargs):
-        kwargs = super(MachineTagsView, self).get_form_kwargs(*args, **kwargs)
-        kwargs['machine_serial_number'] = self.msn
-        kwargs['request'] = self.request
-        return kwargs
 
-    def form_valid(self, form):
-        form.save()
-        return super(MachineTagsView, self).form_valid(form)
+class CreateMachineTagView(PBACViewMixin, View):
+    pbac_request_class = CreateMachineTagRequest
 
-    def get_success_url(self):
-        return reverse('inventory:machine_tags', args=(self.machine.get_urlsafe_serial_number(),))
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
 
-
-class RemoveMachineTagView(PermissionRequiredMixin, View):
-    permission_required = "inventory.delete_machinetag"
+    def get_pbac_request_kwargs(self):
+        return {
+            "machine": self.machine,
+            "tag": self.tag,
+        }
 
     def post(self, request, *args, **kwargs):
-        tag = get_object_or_404(Tag, pk=kwargs['tag_id'])
-        machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
-        remove_machine_tags(machine.serial_number, [tag], request)
-        return HttpResponseRedirect(reverse('inventory:machine_tags', args=(machine.get_urlsafe_serial_number(),)))
+        self.tag = get_object_or_404(Tag, pk=kwargs['tag_id'])
+        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
+        self.check_pbac_request()
+        add_machine_tags(self.machine.serial_number, [self.tag], request)
+        return HttpResponseRedirect(
+            reverse('inventory:machine_tags', args=(self.machine.get_urlsafe_serial_number(),))
+        )
+
+
+class DeleteMachineTagView(PBACViewMixin, View):
+    pbac_request_class = DeleteMachineTagRequest
+
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_pbac_request_kwargs(self):
+        return {
+            "machine": self.machine,
+            "tag": self.tag,
+        }
+
+    def post(self, request, *args, **kwargs):
+        self.tag = get_object_or_404(Tag, pk=kwargs['tag_id'])
+        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
+        self.check_pbac_request()
+        remove_machine_tags(self.machine.serial_number, [self.tag], request)
+        return HttpResponseRedirect(
+            reverse('inventory:machine_tags', args=(self.machine.get_urlsafe_serial_number(),))
+        )
 
 
 # compliance checks
