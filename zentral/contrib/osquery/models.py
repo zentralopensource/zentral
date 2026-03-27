@@ -1,19 +1,21 @@
 import enum
 import logging
 import os.path
+
 from django.contrib.postgres.fields import ArrayField
-from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
-from django.db import models, connection
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
+from django.db import connection, models
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import BaseEnrollment, Tag
-from zentral.utils.sql import tables_in_query, format_sql
+from zentral.utils.sql import format_sql, tables_in_query
 from zentral.utils.text import shard
-from .specs import cli_only_flags
 
+from .specs import cli_only_flags
 
 logger = logging.getLogger("zentral.contrib.osquery.models")
 
@@ -97,7 +99,8 @@ class Query(models.Model):
         on_delete=models.SET_NULL,
         related_name="+",
         blank=True,
-        null=True
+        null=True,
+        help_text="These tags will be set on the device if the query succeed."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
