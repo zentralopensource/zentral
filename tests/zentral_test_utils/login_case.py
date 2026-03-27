@@ -1,8 +1,8 @@
-from functools import reduce
-import operator
 from abc import ABC, abstractmethod
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from accounts.models import Policy
+from accounts.pbac.engine import engine
+from accounts.pbac.entities import Principal
+from django.contrib.auth.models import Group
 from django.http import QueryDict
 from django.urls import reverse
 from accounts.models import User
@@ -23,16 +23,29 @@ class LoginCase(ABC):
 
     def set_permissions(self, *permissions):
         if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self._get_group().permissions.set(list(Permission.objects.filter(permission_filter)))
+            principal = str(Principal.from_user(self._get_user()))
+            actions = [
+                engine.legacy_perm_actions[permission]
+                for permission in permissions
+            ]
+            actions.extend(
+                engine.module_legacy_perm_actions[app_label]
+                for app_label in set(p.split(".")[0] for p in permissions)
+            )
+            serialized_actions = ", ".join(str(a) for a in actions)
+            policy = (
+                'permit (\n'
+                f'  principal == {principal},\n'
+                f'  action in [{serialized_actions}],\n'
+                '  resource\n'
+                ');'
+            )
+            Policy.objects.update_or_create(
+                name="Tests",
+                defaults={"source": policy}
+            )
         else:
-            self._get_group().permissions.clear()
+            Policy.objects.all().delete()
 
     def build_url(self, url_name, *args):
         url_namespace = self._get_url_namespace()

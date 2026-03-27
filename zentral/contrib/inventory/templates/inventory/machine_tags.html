@@ -9,23 +9,23 @@
   <li class="breadcrumb-item active">Tags</li>
 </ol>
 
-<h2>Tag{{ tags|length|pluralize }} ({{ tags|length }})</h2>
+<h2>Tag{{ current_tag_count|length|pluralize }} ({{ current_tag_count }})</h2>
 <div class="table-responsive">
   <table class="table table-striped align-middle">
     <thead>
-      <th>Tag ID</th>
+      <th style="width: 150px">Tag ID</th>
       <th>Tag</th>
       <th></th>
     </thead>
     <tbody>
-      {% for type, tag in machine.tags_with_types %}
+      {% for type, tag, pbac_req in current_tags %}
       <tr class="data-row">
         <td>{{ tag.id }}</td>
         <td>{% inventory_tag tag %}</td>
         <td class="text-end py-0">
-          {% if type == "machine" %}
-          <form action="{% url 'inventory:remove_machine_tag' machine.get_urlsafe_serial_number tag.id %}" method="POST">{% csrf_token %}
-            <button class="btn btn-outline-secondary">
+          {% if type == "machine" and pbac_req.is_authorized %}
+          <form action="{% url 'inventory:delete_machine_tag' machine.get_urlsafe_serial_number tag.id %}" method="POST">{% csrf_token %}
+            <button class="btn">
                 <span class="bi bi-trash" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Tag"></span>
             </button>
           </form>
@@ -37,51 +37,31 @@
   </table>
 </div>
 
-<h3>Add tag (or create a new one)</h3>
-<form method="POST" class="update-form" action="{% url 'inventory:machine_tags' machine.get_urlsafe_serial_number %}">{% csrf_token %}
-
-  {{ form }}
-
-    <div class="form-group mb-3">
-        <label for="id_color">Color presets:</label>
-        <div>
-            {% for color_name, color_code in color_presets.items %}
-                <span class="label color-preset" data-color="{{ color_code }}" style="background-color:#{{ color_code }};padding: 0 10px;margin:0 0 5px 0;">&nbsp;</span>
-            {% endfor %}
-        </div>
-    </div>
-  
-    <a href="{{ machine.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
-    <button type="submit" class="btn btn-primary">Add tag</button>
-</form>
-{% endblock %}
-
-{% block extrajs %}
-<script nonce="{{ request.csp_nonce }}">
-  function toggle_form($exiting_tag_sel) {
-    if ($exiting_tag_sel.val() > "") {
-      $('#new-tag').hide();
-    } else {
-      $('#new-tag').show();
-    }
-  }
-
-  function apply_color_preset(preset_elm) {
-    var color = preset_elm.data("color");
-    $('#id_new_tag_color').val(color);
-  }
-
-  $(document).ready(function(){
-    toggle_form($("#id_existing_tag"));
-
-    $(".color-preset").click(function(event){
-      event.preventDefault();
-      apply_color_preset($(this));
-    });
-
-    $("#id_existing_tag").change(function(event){
-      toggle_form($(this));
-    });
-  });
-</script>
+{% if extra_tags %}
+<h2>Add an extra tag</h2>
+<div class="table-responsive">
+  <table class="table table-striped align-middle">
+    <thead>
+      <th style="width: 150px">Tag ID</th>
+      <th>Tag</th>
+      <th></th>
+    </thead>
+    <tbody>
+      {% for tag in extra_tags %}
+      <tr class="data-row">
+        <td>{{ tag.id }}</td>
+        <td>{% inventory_tag tag %}</td>
+        <td class="text-end py-0">
+          <form action="{% url 'inventory:create_machine_tag' machine.get_urlsafe_serial_number tag.id %}" method="POST">{% csrf_token %}
+            <button class="btn">
+                <span class="bi bi-plus" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Add Tag"></span>
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 {% endblock %}

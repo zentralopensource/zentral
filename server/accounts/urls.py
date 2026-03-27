@@ -49,12 +49,24 @@ urlpatterns = [
     path('tasks/<uuid:task_id>/', views.TaskView.as_view(),
          name="task"),
 
-    # manage groups
+    # manage roles
     path('roles/', views.GroupsView.as_view(), name="groups"),
     path('roles/create/', views.CreateGroupView.as_view(), name="create_group"),
     path('roles/<int:pk>/', views.GroupView.as_view(), name="group"),
     path('roles/<int:pk>/update/', views.UpdateGroupView.as_view(), name="update_group"),
     path('roles/<int:pk>/delete/', views.DeleteGroupView.as_view(), name="delete_group"),
+
+    # manage policies
+    path('policies/', views.PoliciesView.as_view(),
+         name='policies'),
+    path('policies/create/', views.CreatePolicyView.as_view(),
+         name='create_policy'),
+    path('policies/<uuid:pk>/', views.PolicyView.as_view(),
+         name='policy'),
+    path('policies/<uuid:pk>/update/', views.UpdatePolicyView.as_view(),
+         name='update_policy'),
+    path('policies/<uuid:pk>/delete/', views.DeletePolicyView.as_view(),
+         name='delete_policy'),
 
     # user views
     path('settings/profile/', views.ProfileView.as_view(), name="profile"),
