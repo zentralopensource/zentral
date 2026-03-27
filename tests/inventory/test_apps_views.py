@@ -1,17 +1,16 @@
 from datetime import datetime
-from functools import reduce
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.http import urlencode
 from django.test import TestCase
-from zentral.contrib.inventory.models import MachineSnapshotCommit
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.inventory.models import MachineSnapshotCommit
 
 
-class AppsViewsTestCase(TestCase):
+class AppsViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         # user
@@ -102,43 +101,34 @@ class AppsViewsTestCase(TestCase):
         cls.osx_app_instance = cls.ms.osx_app_instances.all()[0]
         cls.osx_app = cls.osx_app_instance.app
 
-    # utility methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "inventory"
 
     # Android apps
 
     def test_android_apps_redirect(self):
-        self._login_redirect(reverse("inventory:android_apps"))
+        self.login_redirect("android_apps")
 
     def test_android_apps_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:android_apps"))
         self.assertEqual(response.status_code, 403)
 
     def test_android_apps(self):
-        self._login("inventory.view_androidapp")
+        self.login("inventory.view_androidapp")
         response = self.client.get(reverse("inventory:android_apps"))
         self.assertContains(response, "Android apps", status_code=200)
 
     def test_all_android_apps(self):
-        self._login("inventory.view_androidapp")
+        self.login("inventory.view_androidapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:android_apps"),
             urlencode({"action": "search"})
@@ -146,7 +136,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Results (2)")
 
     def test_android_apps_bundle_name(self):
-        self._login("inventory.view_androidapp")
+        self.login("inventory.view_androidapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:android_apps"),
             urlencode({"display_name": "AndroidApp1",
@@ -162,7 +152,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "We didn't find any item related to your search")
 
     def test_android_apps_bundle_name_and_source_search(self):
-        self._login("inventory.view_androidapp")
+        self.login("inventory.view_androidapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:android_apps"),
             urlencode({"display_name": "AndroidApp1",
@@ -173,7 +163,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, ">AndroidApp1</a>")
 
     def test_android_apps_bundle_name_and_source_search_special_char_no_error(self):
-        self._login("inventory.view_androidapp")
+        self.login("inventory.view_androidapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:android_apps"),
             urlencode({"display_name": "AndroidApp1\\",
@@ -185,20 +175,20 @@ class AppsViewsTestCase(TestCase):
     # Debian packages
 
     def test_deb_packages_redirect(self):
-        self._login_redirect(reverse("inventory:deb_packages"))
+        self.login_redirect("deb_packages")
 
     def test_deb_packages_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:deb_packages"))
         self.assertEqual(response.status_code, 403)
 
     def test_deb_packages(self):
-        self._login("inventory.view_debpackage")
+        self.login("inventory.view_debpackage")
         response = self.client.get(reverse("inventory:deb_packages"))
         self.assertContains(response, "Debian packages", status_code=200)
 
     def test_all_deb_packages(self):
-        self._login("inventory.view_debpackage")
+        self.login("inventory.view_debpackage")
         response = self.client.get("{}?{}".format(
             reverse("inventory:deb_packages"),
             urlencode({"action": "search"})
@@ -206,7 +196,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Results (2)")
 
     def test_deb_packages_name(self):
-        self._login("inventory.view_debpackage")
+        self.login("inventory.view_debpackage")
         response = self.client.get("{}?{}".format(
             reverse("inventory:deb_packages"),
             urlencode({"name": "deb_package_1",
@@ -221,7 +211,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "We didn't find any item related to your search")
 
     def test_deb_packages_name_and_source_search(self):
-        self._login("inventory.view_debpackage")
+        self.login("inventory.view_debpackage")
         response = self.client.get("{}?{}".format(
             reverse("inventory:deb_packages"),
             urlencode({"name": "deb_package_1",
@@ -231,7 +221,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Result (1)")
 
     def test_deb_packages_name_and_source_search_special_char_no_error(self):
-        self._login("inventory.view_debpackage")
+        self.login("inventory.view_debpackage")
         response = self.client.get("{}?{}".format(
             reverse("inventory:deb_packages"),
             urlencode({"name": "deb_package_1\\",
@@ -243,20 +233,20 @@ class AppsViewsTestCase(TestCase):
     # iOS apps
 
     def test_ios_apps_redirect(self):
-        self._login_redirect(reverse("inventory:ios_apps"))
+        self.login_redirect("ios_apps")
 
     def test_ios_apps_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:ios_apps"))
         self.assertEqual(response.status_code, 403)
 
     def test_ios_apps(self):
-        self._login("inventory.view_iosapp")
+        self.login("inventory.view_iosapp")
         response = self.client.get(reverse("inventory:ios_apps"))
         self.assertContains(response, "iOS apps", status_code=200)
 
     def test_all_ios_apps(self):
-        self._login("inventory.view_iosapp")
+        self.login("inventory.view_iosapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:ios_apps"),
             urlencode({"action": "search"})
@@ -264,7 +254,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Results (2)")
 
     def test_ios_apps_name(self):
-        self._login("inventory.view_iosapp")
+        self.login("inventory.view_iosapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:ios_apps"),
             urlencode({"name": "2Password",
@@ -279,7 +269,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "We didn't find any item related to your search")
 
     def test_ios_apps_name_and_source_search(self):
-        self._login("inventory.view_iosapp")
+        self.login("inventory.view_iosapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:ios_apps"),
             urlencode({"name": "2Password",
@@ -289,7 +279,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Result (1)")
 
     def test_ios_apps_name_and_source_search_special_char_no_error(self):
-        self._login("inventory.view_iosapp")
+        self.login("inventory.view_iosapp")
         response = self.client.get("{}?{}".format(
             reverse("inventory:ios_apps"),
             urlencode({"name": "2Password\\",
@@ -301,20 +291,20 @@ class AppsViewsTestCase(TestCase):
     # macOS apps
 
     def test_macos_apps_redirect(self):
-        self._login_redirect(reverse("inventory:macos_apps"))
+        self.login_redirect("macos_apps")
 
     def test_macos_apps_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:macos_apps"))
         self.assertEqual(response.status_code, 403)
 
     def test_macos_apps(self):
-        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
+        self.login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get(reverse("inventory:macos_apps"))
         self.assertContains(response, "macOS apps", status_code=200)
 
     def test_all_macos_apps(self):
-        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
+        self.login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
             urlencode({"action": "search"})
@@ -322,7 +312,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Results (2)")
 
     def test_macos_apps_bundle_name(self):
-        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
+        self.login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
             urlencode({"bundle": "baller",
@@ -337,7 +327,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "We didn't find any item related to your search")
 
     def test_macos_apps_bundle_id_and_source_search(self):
-        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
+        self.login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
             urlencode({"bundle": "io.zentral.baller",
@@ -347,7 +337,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Result (1)")
 
     def test_macos_apps_bundle_id_and_source_search_special_char_no_error(self):
-        self._login("inventory.view_osxapp", "inventory.view_osxappinstance")
+        self.login("inventory.view_osxapp", "inventory.view_osxappinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:macos_apps"),
             urlencode({"bundle": "io.zentral.baller\\",
@@ -359,20 +349,20 @@ class AppsViewsTestCase(TestCase):
     # Programs
 
     def test_programs_redirect(self):
-        self._login_redirect(reverse("inventory:programs"))
+        self.login_redirect("programs")
 
     def test_programs_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:programs"))
         self.assertEqual(response.status_code, 403)
 
     def test_programs(self):
-        self._login("inventory.view_program", "inventory.view_programinstance")
+        self.login("inventory.view_program", "inventory.view_programinstance")
         response = self.client.get(reverse("inventory:programs"))
         self.assertContains(response, "Programs", status_code=200)
 
     def test_all_programs(self):
-        self._login("inventory.view_program", "inventory.view_programinstance")
+        self.login("inventory.view_program", "inventory.view_programinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:programs"),
             urlencode({"action": "search"})
@@ -380,7 +370,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Results (2)")
 
     def test_programs_name(self):
-        self._login("inventory.view_program", "inventory.view_programinstance")
+        self.login("inventory.view_program", "inventory.view_programinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:programs"),
             urlencode({"name": "program_1",
@@ -395,7 +385,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "We didn't find any item related to your search")
 
     def test_programs_name_and_source_search(self):
-        self._login("inventory.view_program", "inventory.view_programinstance")
+        self.login("inventory.view_program", "inventory.view_programinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:programs"),
             urlencode({"name": "program_1",
@@ -405,7 +395,7 @@ class AppsViewsTestCase(TestCase):
         self.assertContains(response, "Result (1)")
 
     def test_programs_name_and_source_search_special_char_no_error(self):
-        self._login("inventory.view_program", "inventory.view_programinstance")
+        self.login("inventory.view_program", "inventory.view_programinstance")
         response = self.client.get("{}?{}".format(
             reverse("inventory:programs"),
             urlencode({"name": "program_1\\",

@@ -1095,8 +1095,11 @@ class MetaMachine:
     def available_tags(self):
         # tags w/o mbu or w mbu where this machine is and that this machine does not have yet
         tags = set([])
-        for meta_business_unit in self.meta_business_units:
-            tags.update(Tag.objects.available_for_meta_business_unit(meta_business_unit))
+        if self.meta_business_units:
+            for meta_business_unit in self.meta_business_units:
+                tags.update(Tag.objects.available_for_meta_business_unit(meta_business_unit))
+        else:
+            tags.update(Tag.objects.filter(meta_business_unit__isnull=True))
         tags = list(tags.difference(self.tags))
         tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
         return tags

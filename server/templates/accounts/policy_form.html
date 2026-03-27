@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item">
+      <a href="/">Home</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'accounts:policies' %}">Policies</a>
+    </li>
+    {% if object %}
+      <li class="breadcrumb-item">
+        <a href="{{ object.get_absolute_url }}">{{ object }}</a>
+      </li>
+      <li class="breadcrumb-item active">Update</li>
+    {% else %}
+      <li class="breadcrumb-item active">Create</li>
+    {% endif %}
+  </ol>
+
+  <h3 class="mb-3">
+    {% if object %}Update{% else %}Create{% endif %} policy
+  </h3>
+
+  <form class="update-form" method="POST">
+    {% csrf_token %}
+    {{ form }}
+    <p>
+      {% if object %}
+        <a href="{{ object.get_absolute_url }}"
+           class="btn btn-outline-secondary">Cancel</a>
+      {% else %}
+        <a href="{% url 'accounts:policies' %}"
+           class="btn btn-outline-secondary">Cancel</a>
+      {% endif %}
+      <button type="submit" class="btn btn-primary">Save</button>
+    </p>
+  </form>
+{% endblock %}

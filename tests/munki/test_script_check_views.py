@@ -1,22 +1,21 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
+from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.munki.models import ScriptCheck
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
-from accounts.models import User
 from .utils import force_script_check
 
 
-class MunkiScriptCheckViewsTestCase(TestCase):
+class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -29,39 +28,30 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
 
-    # utility methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "munki"
 
     # list
 
     def test_script_checks_redirect(self):
-        self._login_redirect(reverse("munki:script_checks"))
+        self.login_redirect("script_checks")
 
     def test_script_checks_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("munki:script_checks"))
         self.assertEqual(response.status_code, 403)
 
     def test_script_checks_no_links(self):
         sc = force_script_check()
-        self._login("munki.view_scriptcheck")
+        self.login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
@@ -73,8 +63,8 @@ class MunkiScriptCheckViewsTestCase(TestCase):
     def test_script_checks_all_link(self):
         sc_one = force_script_check()
         sc_two = force_script_check()
-        self._login("munki.view_scriptcheck", "munki.add_scriptcheck",
-                    "munki.change_scriptcheck", "munki.delete_scriptcheck")
+        self.login("munki.view_scriptcheck", "munki.add_scriptcheck",
+                   "munki.change_scriptcheck", "munki.delete_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
@@ -86,14 +76,14 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertContains(response, reverse("munki:update_script_check", args=(sc_one.pk,)))
 
     def test_script_check_no_search_no_script_checks(self):
-        self._login("munki.view_scriptcheck")
+        self.login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
         self.assertNotContains(response, "We didn't find any item related to your search")
 
     def test_script_check_search_no_match(self):
-        self._login("munki.view_scriptcheck")
+        self.login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"), {"name": get_random_string(12)})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
@@ -108,7 +98,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         sc_b.compliance_check.name = sc_a.compliance_check.name + " " + sc_b.compliance_check.name
         sc_b.compliance_check.save()
         force_script_check()
-        self._login("munki.view_scriptcheck")
+        self.login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"), {"name": sc_a.compliance_check.name,
                                                                     "type": sc_a.type,
                                                                     "page": 2})
@@ -123,22 +113,22 @@ class MunkiScriptCheckViewsTestCase(TestCase):
     # create
 
     def test_create_script_check_redirect(self):
-        self._login_redirect(reverse("munki:create_script_check"))
+        self.login_redirect("create_script_check")
 
     def test_create_script_check_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("munki:create_script_check"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_script_check_get(self):
-        self._login("munki.add_scriptcheck")
+        self.login("munki.add_scriptcheck")
         response = self.client.get(reverse("munki:create_script_check"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_form.html")
         self.assertContains(response, "Create script check")
 
     def test_create_script_check_post_no_arch_err(self):
-        self._login("munki.add_scriptcheck")
+        self.login("munki.add_scriptcheck")
         name = get_random_string(12)
         description = get_random_string(12)
         response = self.client.post(
@@ -159,7 +149,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertFormError(response.context["script_check_form"], "arch_arm64", err_msg)
 
     def test_create_script_check_post_os_errors(self):
-        self._login("munki.add_scriptcheck")
+        self.login("munki.add_scriptcheck")
         name = get_random_string(12)
         description = get_random_string(12)
         response = self.client.post(
@@ -182,7 +172,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertFormError(response.context["script_check_form"], "max_os_version", err_msg)
 
     def test_create_script_check_post_int_err(self):
-        self._login("munki.add_scriptcheck")
+        self.login("munki.add_scriptcheck")
         name = get_random_string(12)
         description = get_random_string(12)
         response = self.client.post(
@@ -201,7 +191,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertFormError(response.context["script_check_form"], "expected_result", "Invalid integer")
 
     def test_create_script_check_post_bool_err(self):
-        self._login("munki.add_scriptcheck")
+        self.login("munki.add_scriptcheck")
         name = get_random_string(12)
         description = get_random_string(12)
         response = self.client.post(
@@ -220,7 +210,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         self.assertFormError(response.context["script_check_form"], "expected_result", "Invalid boolean")
 
     def test_create_script_check_post_tag_sets_not_disjoint_err(self):
-        self._login("munki.add_scriptcheck")
+        self.login("munki.add_scriptcheck")
         name = get_random_string(12)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(3)]
         response = self.client.post(
@@ -240,7 +230,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
                              "excluded_tags", "tags and excluded tags must be disjoint")
 
     def test_create_script_check_post_min_os_version_err(self):
-        self._login("munki.add_scriptcheck")
+        self.login("munki.add_scriptcheck")
         name = get_random_string(12)
         description = get_random_string(12)
         response = self.client.post(
@@ -263,7 +253,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_script_check_post_ok(self, post_event):
-        self._login("munki.add_scriptcheck", "munki.view_scriptcheck")
+        self.login("munki.add_scriptcheck", "munki.view_scriptcheck")
         name = get_random_string(12)
         description = get_random_string(12)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
@@ -343,17 +333,17 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     def test_view_script_check_redirect(self):
         sc = force_script_check()
-        self._login_redirect(reverse("munki:script_check", args=(sc.pk,)))
+        self.login_redirect("script_check", sc.pk)
 
     def test_view_script_check_permission_denied(self):
         sc = force_script_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("munki:script_check", args=(sc.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_view_script_check_no_links(self):
         sc = force_script_check()
-        self._login("munki.view_scriptcheck")
+        self.login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_check", args=(sc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_detail.html")
@@ -363,7 +353,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     def test_view_script_check_update_link(self):
         sc = force_script_check()
-        self._login("munki.view_scriptcheck", "munki.change_scriptcheck")
+        self.login("munki.view_scriptcheck", "munki.change_scriptcheck")
         response = self.client.get(reverse("munki:script_check", args=(sc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_detail.html")
@@ -373,7 +363,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     def test_view_script_check_delete_link(self):
         sc = force_script_check()
-        self._login("munki.view_scriptcheck", "munki.delete_scriptcheck")
+        self.login("munki.view_scriptcheck", "munki.delete_scriptcheck")
         response = self.client.get(reverse("munki:script_check", args=(sc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_detail.html")
@@ -385,17 +375,17 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     def test_update_script_check_redirect(self):
         sc = force_script_check()
-        self._login_redirect(reverse("munki:update_script_check", args=(sc.pk,)))
+        self.login_redirect("update_script_check", sc.pk)
 
     def test_update_script_check_permission_denied(self):
         sc = force_script_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("munki:update_script_check", args=(sc.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_script_check_get(self):
         sc = force_script_check()
-        self._login("munki.change_scriptcheck")
+        self.login("munki.change_scriptcheck")
         response = self.client.get(reverse("munki:update_script_check", args=(sc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_form.html")
@@ -403,7 +393,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     def test_update_script_post_arch_err(self):
         sc = force_script_check()
-        self._login("munki.change_scriptcheck")
+        self.login("munki.change_scriptcheck")
         response = self.client.post(
             reverse("munki:update_script_check", args=(sc.pk,)),
             {"ccf-name": "yolo",
@@ -423,7 +413,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
     def test_update_script_check_post_ok(self, post_event):
         sc = force_script_check()
         prev_value = sc.serialize_for_event()
-        self._login("munki.change_scriptcheck", "munki.view_scriptcheck")
+        self.login("munki.change_scriptcheck", "munki.view_scriptcheck")
         name = get_random_string(12)
         description = get_random_string(12)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
@@ -504,17 +494,17 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     def test_delete_script_check_redirect(self):
         sc = force_script_check()
-        self._login_redirect(reverse("munki:delete_script_check", args=(sc.pk,)))
+        self.login_redirect("delete_script_check", sc.pk)
 
     def test_delete_script_check_permission_denied(self):
         sc = force_script_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("munki:delete_script_check", args=(sc.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_script_check_get(self):
         sc = force_script_check()
-        self._login("munki.delete_scriptcheck")
+        self.login("munki.delete_scriptcheck")
         response = self.client.get(reverse("munki:delete_script_check", args=(sc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_confirm_delete.html")
@@ -527,7 +517,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
         prev_pk = sc.pk
         prev_name = sc.compliance_check.name
         prev_cc_pk = sc.compliance_check.pk
-        self._login("munki.delete_scriptcheck", "munki.view_scriptcheck")
+        self.login("munki.delete_scriptcheck", "munki.view_scriptcheck")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("munki:delete_script_check", args=(sc.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -556,11 +546,11 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     def test_script_check_events_redirect(self):
         sc = force_script_check()
-        self._login_redirect(reverse("munki:script_check_events", args=(sc.pk,)))
+        self.login_redirect("script_check_events", sc.pk)
 
     def test_script_check_events_permission_denied(self):
         sc = force_script_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("munki:script_check_events", args=(sc.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -568,7 +558,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
     def test_script_check_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         sc = force_script_check()
-        self._login("munki.view_scriptcheck")
+        self.login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_check_events", args=(sc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/scriptcheck_events.html")
@@ -577,11 +567,11 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     def test_script_check_fetch_events_redirect(self):
         sc = force_script_check()
-        self._login_redirect(reverse("munki:fetch_script_check_events", args=(sc.pk,)))
+        self.login_redirect("fetch_script_check_events", sc.pk)
 
     def test_script_check_fetch_events_permission_denied(self):
         sc = force_script_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("munki:fetch_script_check_events", args=(sc.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -589,7 +579,7 @@ class MunkiScriptCheckViewsTestCase(TestCase):
     def test_script_check_fetch_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         sc = force_script_check()
-        self._login("munki.view_scriptcheck")
+        self.login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:fetch_script_check_events", args=(sc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
@@ -598,17 +588,17 @@ class MunkiScriptCheckViewsTestCase(TestCase):
 
     def test_script_check_events_store_redirect_redirect(self):
         sc = force_script_check()
-        self._login_redirect(reverse("munki:script_check_events_store_redirect", args=(sc.pk,)))
+        self.login_redirect("script_check_events_store_redirect", sc.pk)
 
     def test_script_check_events_store_redirect_permission_denied(self):
         sc = force_script_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("munki:script_check_events_store_redirect", args=(sc.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_script_check_events_store_redirect(self):
         sc = force_script_check()
-        self._login("munki.view_scriptcheck")
+        self.login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_check_events_store_redirect", args=(sc.pk,)))
         # dev store cannot redirect
         self.assertRedirects(response, reverse("munki:script_check_events", args=(sc.pk,)))

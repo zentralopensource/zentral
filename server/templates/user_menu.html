@@ -48,6 +48,9 @@
             {% if perms.accounts.view_group %}
             <li><a class="dropdown-item" href="{% url 'accounts:groups' %}">Roles</a></li>
             {% endif %}
+            {% if perms.accounts.view_policy %}
+            <li><a class="dropdown-item" href="{% url 'accounts:policies' %}">Policies</a></li>
+            {% endif %}
             {% if perms.realms.view_realm %}
             <li><a class="dropdown-item" href="{% url 'realms:list' %}">Realms</a></li>
             {% endif %}

@@ -1,14 +1,13 @@
-from functools import reduce
 from io import BytesIO
-import operator
 import plistlib
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
@@ -16,36 +15,25 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
 from .utils import build_mobileconfig_data, build_payload
 
 
-class ProfileManagementViewsTestCase(TestCase):
+class ProfileManagementViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
+
     # utiliy methods
-
-    def _login_redirect(self, url, data=None):
-        if data:
-            func = self.client.post
-        else:
-            func = self.client.get
-        response = func(url, data=data)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _build_mobileconfig(
         self,
@@ -103,15 +91,15 @@ class ProfileManagementViewsTestCase(TestCase):
     # upload profile GET
 
     def test_upload_profile_get_redirect(self):
-        self._login_redirect(reverse("mdm:upload_profile"))
+        self.login_redirect("upload_profile")
 
     def test_upload_profile_get_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:upload_profile"))
         self.assertEqual(response.status_code, 403)
 
     def test_upload_profile_get(self):
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         response = self.client.get(reverse("mdm:upload_profile"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/profile_form.html")
@@ -120,12 +108,11 @@ class ProfileManagementViewsTestCase(TestCase):
 
     def test_upload_profile_post_redirect(self):
         mobileconfig = self._build_mobileconfig()
-        self._login_redirect(reverse("mdm:upload_profile"),
-                             {"source_file": mobileconfig})
+        self.login_redirect("upload_profile", data={"source_file": mobileconfig})
 
     def test_upload_profile_post_permission_denied(self):
         mobileconfig = self._build_mobileconfig()
-        self._login()
+        self.login()
         response = self.client.post(reverse("mdm:upload_profile"),
                                     {"source_file": mobileconfig})
         self.assertEqual(response.status_code, 403)
@@ -133,7 +120,7 @@ class ProfileManagementViewsTestCase(TestCase):
     def test_upload_profile_post_not_a_plist(self):
         notaplist = BytesIO(b"-")
         notaplist.name = "test.mobileconfig"
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_profile"),
                                     {"source_file": notaplist},
                                     follow=True)
@@ -143,7 +130,7 @@ class ProfileManagementViewsTestCase(TestCase):
 
     def test_upload_profile_post_missing_payload_identifier(self):
         mobileconfig = self._build_mobileconfig(missing_payload_id=True)
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_profile"),
                                     {"source_file": mobileconfig},
                                     follow=True)
@@ -153,7 +140,7 @@ class ProfileManagementViewsTestCase(TestCase):
 
     def test_upload_profile_post_missing_payload_uuid(self):
         mobileconfig = self._build_mobileconfig(missing_payload_uuid=True)
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_profile"),
                                     {"source_file": mobileconfig},
                                     follow=True)
@@ -163,7 +150,7 @@ class ProfileManagementViewsTestCase(TestCase):
 
     def test_upload_profile_post_unknown_payload_scope(self):
         mobileconfig = self._build_mobileconfig(payload_scope="HAHA")
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_profile"),
                                     {"source_file": mobileconfig},
                                     follow=True)
@@ -173,7 +160,7 @@ class ProfileManagementViewsTestCase(TestCase):
 
     def test_upload_profile_post(self):
         mobileconfig = self._build_mobileconfig()
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_profile"),
                                     {"source_file": mobileconfig},
                                     follow=True)
@@ -199,7 +186,7 @@ class ProfileManagementViewsTestCase(TestCase):
 
     def test_upload_profile_post_signed(self):
         mobileconfig = self._build_mobileconfig(signed=True)
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_profile"),
                                     {"source_file": mobileconfig},
                                     follow=True)
@@ -211,7 +198,7 @@ class ProfileManagementViewsTestCase(TestCase):
     def test_upload_profile_post_existing_profile(self):
         self._force_profile()
         mobileconfig = self._build_mobileconfig()
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_profile"),
                                     {"source_file": mobileconfig},
                                     follow=True)
@@ -225,17 +212,17 @@ class ProfileManagementViewsTestCase(TestCase):
 
     def test_upgrade_profile_get_login_redirect(self):
         _, artifact, _ = self._force_profile()
-        self._login_redirect(reverse("mdm:upgrade_profile", args=(artifact.pk,)))
+        self.login_redirect("upgrade_profile", artifact.pk)
 
     def test_upgrade_profile_get_permission_denied(self):
         _, artifact, _ = self._force_profile()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:upgrade_profile", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_upgrade_profile_get(self):
         _, artifact, _ = self._force_profile()
-        self._login("mdm.add_artifactversion")
+        self.login("mdm.add_artifactversion")
         response = self.client.get(reverse("mdm:upgrade_profile", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
@@ -245,7 +232,7 @@ class ProfileManagementViewsTestCase(TestCase):
     def test_upgrade_profile_post_different_channel(self):
         _, artifact, _ = self._force_profile()
         mobileconfig = self._build_mobileconfig(channel=Channel.DEVICE)  # different channel
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_profile", args=(artifact.pk,)),
                                     {"source_file": mobileconfig},
                                     follow=True)
@@ -257,7 +244,7 @@ class ProfileManagementViewsTestCase(TestCase):
     def test_upgrade_profile_post_same_payload(self):
         _, artifact, _ = self._force_profile()
         mobileconfig = self._build_mobileconfig()  # same payload
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_profile", args=(artifact.pk,)),
                                     {"source_file": mobileconfig},
                                     follow=True)
@@ -270,7 +257,7 @@ class ProfileManagementViewsTestCase(TestCase):
         _, artifact, _ = self._force_profile()
         payload_uuid = str(uuid.uuid4()).upper()
         mobileconfig = self._build_mobileconfig(payload_uuid=payload_uuid)
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_profile", args=(artifact.pk,)),
                                     {"source_file": mobileconfig,
                                      "default_shard": 100,
@@ -292,7 +279,7 @@ class ProfileManagementViewsTestCase(TestCase):
         )
         payload_uuid = str(uuid.uuid4()).upper()
         mobileconfig = self._build_mobileconfig(payload_uuid=payload_uuid)
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_profile", args=(artifact_pk,)),
                                     {"source_file": mobileconfig,
                                      "default_shard": 9,
@@ -331,7 +318,7 @@ class ProfileManagementViewsTestCase(TestCase):
         )
         payload_uuid = str(uuid.uuid4()).upper()
         mobileconfig = self._build_mobileconfig(channel=Channel.DEVICE, payload_uuid=payload_uuid)
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         excluded_tag = Tag.objects.create(name=get_random_string(12))
         shard_tag = Tag.objects.create(name=get_random_string(12))
         response = self.client.post(reverse("mdm:upgrade_profile", args=(artifact_pk,)),
@@ -370,17 +357,17 @@ class ProfileManagementViewsTestCase(TestCase):
 
     def test_download_profile_login_redirect(self):
         _, _, profile = self._force_profile(channel=Channel.DEVICE)
-        self._login_redirect(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
+        self.login_redirect("download_profile", profile.artifact_version.pk)
 
     def test_download_profile_permission_denied(self):
         _, _, profile = self._force_profile(channel=Channel.DEVICE)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_download_profile(self):
         _, _, profile = self._force_profile(channel=Channel.DEVICE)
-        self._login("mdm.view_artifactversion")
+        self.login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -393,7 +380,7 @@ class ProfileManagementViewsTestCase(TestCase):
         _, _, profile = self._force_profile(channel=Channel.DEVICE)
         profile.filename = ""
         profile.save()
-        self._login("mdm.view_artifactversion")
+        self.login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:download_profile", args=(profile.artifact_version.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(

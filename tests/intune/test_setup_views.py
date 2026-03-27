@@ -1,20 +1,20 @@
-from functools import reduce
-import operator
 import hashlib
 from unittest.mock import patch
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.core.events.base import AuditEvent
 from .utils import force_tenant
 
 
-class IntuneViewsTestCase(TestCase):
+class IntuneViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -27,39 +27,30 @@ class IntuneViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.bu = cls.mbu.create_enrollment_business_unit()
 
-    # utility methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "intune"
 
     # Tenants
 
     def test_tenants_redirect(self):
-        self._login_redirect(reverse("intune:tenants"))
+        self.login_redirect("tenants")
 
     def test_tenants_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("intune:tenants"))
         self.assertEqual(response.status_code, 403)
 
     def test_tenants(self):
         tenant = force_tenant(self.bu)
-        self._login("intune.view_tenant")
+        self.login("intune.view_tenant")
         response = self.client.get(reverse("intune:tenants"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, tenant.name)
@@ -68,22 +59,22 @@ class IntuneViewsTestCase(TestCase):
     # Create Tenant
 
     def test_create_tenant_redirect(self):
-        self._login_redirect(reverse("intune:create_tenant"))
+        self.login_redirect("create_tenant")
 
     def test_create_tenant_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("intune:create_tenant"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_tenant_get(self):
-        self._login("intune.add_tenant")
+        self.login("intune.add_tenant")
         response = self.client.get(reverse("intune:create_tenant"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "intune/tenant_form.html")
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_tenant_post(self, post_event):
-        self._login("intune.add_tenant", "intune.view_tenant")
+        self.login("intune.add_tenant", "intune.view_tenant")
         name = get_random_string(12)
         description = get_random_string(12)
         tenant_id = get_random_string(12)
@@ -137,17 +128,17 @@ class IntuneViewsTestCase(TestCase):
 
     def test_update_tenant_redirect(self):
         tenant = force_tenant(self.bu)
-        self._login_redirect(reverse("intune:update_tenant", args=(tenant.pk,)))
+        self.login_redirect("update_tenant", tenant.pk)
 
     def test_update_tenant_permission_denied(self):
         tenant = force_tenant(self.bu)
-        self._login()
+        self.login()
         response = self.client.get(reverse("intune:update_tenant", args=(tenant.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_tenant_get(self):
         tenant = force_tenant(self.bu)
-        self._login("intune.change_tenant")
+        self.login("intune.change_tenant")
         response = self.client.get(reverse("intune:update_tenant", args=(tenant.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "intune/tenant_form.html")
@@ -156,7 +147,7 @@ class IntuneViewsTestCase(TestCase):
     def test_update_tenant_post(self, post_event):
         tenant = force_tenant(self.bu)
         prev_value = tenant.serialize_for_event()
-        self._login("intune.change_tenant", "intune.view_tenant")
+        self.login("intune.change_tenant", "intune.view_tenant")
         name = get_random_string(12)
         description = get_random_string(12)
         tenant_id = get_random_string(12)
@@ -211,17 +202,17 @@ class IntuneViewsTestCase(TestCase):
 
     def test_delete_tenant_redirect(self):
         tenant = force_tenant(self.bu)
-        self._login_redirect(reverse("intune:delete_tenant", args=(tenant.pk,)))
+        self.login_redirect("delete_tenant", tenant.pk)
 
     def test_delete_tenant_permission_denied(self):
         tenant = force_tenant(self.bu)
-        self._login()
+        self.login()
         response = self.client.get(reverse("intune:delete_tenant", args=(tenant.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_tenant_get(self):
         tenant = force_tenant(self.bu)
-        self._login("intune.delete_tenant")
+        self.login("intune.delete_tenant")
         response = self.client.get(reverse("intune:delete_tenant", args=(tenant.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "intune/tenant_confirm_delete.html")
@@ -230,7 +221,7 @@ class IntuneViewsTestCase(TestCase):
     def test_delete_tenant_post(self, post_event):
         tenant = force_tenant(self.bu)
         prev_value = tenant.serialize_for_event()
-        self._login("intune.delete_tenant", "intune.view_tenant")
+        self.login("intune.delete_tenant", "intune.view_tenant")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("intune:delete_tenant", args=(tenant.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)

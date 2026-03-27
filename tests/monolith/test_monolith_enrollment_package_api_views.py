@@ -1,20 +1,19 @@
-from functools import reduce
-import json
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import APIToken, User
+from tests.munki.utils import force_enrollment as force_munki_enrollment
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.monolith.models import ManifestEnrollmentPackage
 from zentral.contrib.munki.models import Enrollment as MunkiEnrollment
-from tests.munki.utils import force_enrollment as force_munki_enrollment
 from .utils import force_manifest, force_manifest_enrollment_package
 
 
-class MonolithAPIViewsTestCase(TestCase):
+class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     maxDiff = None
 
     @classmethod
@@ -35,54 +34,21 @@ class MonolithAPIViewsTestCase(TestCase):
         cls.user.groups.set([cls.group])
         _, cls.api_key = APIToken.objects.create_for_user(user=cls.service_account)
 
-    # utility methods
+    # LoginCase implementation
 
-    def _set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
+    def _get_user(self):
+        return self.user
 
-    def _post_data(self, url, data, content_type, include_token=True, ip=None):
-        kwargs = {"content_type": content_type}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        if ip:
-            kwargs["HTTP_X_REAL_IP"] = ip
-        return self.client.post(url, data, **kwargs)
+    def _get_group(self):
+        return self.group
 
-    def get(self, url, data=None, include_token=True):
-        kwargs = {}
-        if data is not None:
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.get(url, **kwargs)
+    def _get_url_namespace(self):
+        return "monolith_api"
 
-    def delete(self, url, include_token=True):
-        kwargs = {}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.delete(url, **kwargs)
+    # RequestCase implementation
 
-    def post(self, url, data, include_token=True):
-        kwargs = {"content_type": "application/json"}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.post(url, json.dumps(data), **kwargs)
-
-    def put(self, url, data, include_token=True):
-        kwargs = {"content_type": "application/json"}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.put(url, json.dumps(data), **kwargs)
+    def _get_api_key(self):
+        return self.api_key
 
     # list manifest enrollment packages
 
@@ -95,7 +61,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_manifest_enrollment_packages_filter_by_manifest_id_not_found(self):
-        self._set_permissions("monolith.view_manifestenrollmentpackage")
+        self.set_permissions("monolith.view_manifestenrollmentpackage")
         manifest = force_manifest()
         force_manifest_enrollment_package()
         response = self.get(reverse("monolith_api:manifest_enrollment_packages"), {"manifest_id": manifest.pk})
@@ -108,7 +74,7 @@ class MonolithAPIViewsTestCase(TestCase):
         mep2 = force_manifest_enrollment_package()
         manifest2 = mep2.manifest
         self.assertNotEqual(manifest1, manifest2)
-        self._set_permissions("monolith.view_manifestenrollmentpackage")
+        self.set_permissions("monolith.view_manifestenrollmentpackage")
         response = self.get(reverse("monolith_api:manifest_enrollment_packages"),
                             {"manifest_id": manifest1.id})
         self.assertEqual(response.status_code, 200)
@@ -131,7 +97,7 @@ class MonolithAPIViewsTestCase(TestCase):
         mep2 = force_manifest_enrollment_package()
         manifest2 = mep2.manifest
         self.assertNotEqual(manifest1, manifest2)
-        self._set_permissions("monolith.view_manifestenrollmentpackage")
+        self.set_permissions("monolith.view_manifestenrollmentpackage")
         response = self.get(reverse("monolith_api:manifest_enrollment_packages"),
                             {"builder": mep2.builder})
         self.assertEqual(response.status_code, 200)
@@ -148,7 +114,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_manifest_enrollment_packages(self):
         mep = force_manifest_enrollment_package()
-        self._set_permissions("monolith.view_manifestenrollmentpackage")
+        self.set_permissions("monolith.view_manifestenrollmentpackage")
         response = self.get(reverse("monolith_api:manifest_enrollment_packages"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -173,14 +139,14 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_manifest_enrollment_package_not_found(self):
-        self._set_permissions("monolith.view_manifestenrollmentpackage")
+        self.set_permissions("monolith.view_manifestenrollmentpackage")
         response = self.get(reverse("monolith_api:manifest_enrollment_package", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
     def test_get_manifest_enrollment_package(self):
         tags = [Tag.objects.create(name=get_random_string(12))]
         mep = force_manifest_enrollment_package(tags=tags)
-        self._set_permissions("monolith.view_manifestenrollmentpackage")
+        self.set_permissions("monolith.view_manifestenrollmentpackage")
         response = self.get(reverse("monolith_api:manifest_enrollment_package",
                                     args=(mep.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -207,7 +173,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_create_manifest_enrollment_package_fields_empty(self):
-        self._set_permissions("monolith.add_manifestenrollmentpackage")
+        self.set_permissions("monolith.add_manifestenrollmentpackage")
         response = self.post(reverse("monolith_api:manifest_enrollment_packages"), data={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
@@ -218,7 +184,7 @@ class MonolithAPIViewsTestCase(TestCase):
         })
 
     def test_create_manifest_enrollment_package_unknown_builder(self):
-        self._set_permissions("monolith.add_manifestenrollmentpackage")
+        self.set_permissions("monolith.add_manifestenrollmentpackage")
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         enrollment = force_munki_enrollment(meta_business_unit=manifest.meta_business_unit)
@@ -232,7 +198,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {'builder': ['Unknown builder']})
 
     def test_create_manifest_enrollment_package_unknown_enrollment(self):
-        self._set_permissions("monolith.add_manifestenrollmentpackage")
+        self.set_permissions("monolith.add_manifestenrollmentpackage")
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         enrollment = force_munki_enrollment(meta_business_unit=manifest.meta_business_unit)
@@ -246,7 +212,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {'non_field_errors': ['Unknown enrollment']})
 
     def test_create_manifest_enrollment_package_different_business_unit(self):
-        self._set_permissions("monolith.add_manifestenrollmentpackage")
+        self.set_permissions("monolith.add_manifestenrollmentpackage")
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         enrollment = force_munki_enrollment()
@@ -263,7 +229,7 @@ class MonolithAPIViewsTestCase(TestCase):
         )
 
     def test_create_manifest_enrollment_package_enrollment_with_distributor(self):
-        self._set_permissions("monolith.add_manifestenrollmentpackage")
+        self.set_permissions("monolith.add_manifestenrollmentpackage")
         mep = force_manifest_enrollment_package()
         response = self.post(reverse("monolith_api:manifest_enrollment_packages"), data={
             'manifest': mep.manifest.pk,
@@ -275,7 +241,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {'enrollment_pk': ['This enrollment already has a distributor']})
 
     def test_create_manifest_enrollment_package(self):
-        self._set_permissions("monolith.add_manifestenrollmentpackage")
+        self.set_permissions("monolith.add_manifestenrollmentpackage")
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         enrollment = force_munki_enrollment(meta_business_unit=manifest.meta_business_unit)
@@ -318,7 +284,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_update_manifest_enrollment_package_not_found(self):
-        self._set_permissions("monolith.change_manifestenrollmentpackage")
+        self.set_permissions("monolith.change_manifestenrollmentpackage")
         response = self.put(reverse("monolith_api:manifest_enrollment_package", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
@@ -330,7 +296,7 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest = mep.manifest
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
-        self._set_permissions("monolith.change_manifestenrollmentpackage")
+        self.set_permissions("monolith.change_manifestenrollmentpackage")
         response = self.put(
             reverse("monolith_api:manifest_enrollment_package", args=(mep.pk,)),
             data={
@@ -369,7 +335,7 @@ class MonolithAPIViewsTestCase(TestCase):
         old_enrollment = mep.get_enrollment()
         self.assertEqual(old_enrollment.distributor, mep)
         new_enrollment = force_munki_enrollment(meta_business_unit=manifest.meta_business_unit)
-        self._set_permissions("monolith.change_manifestenrollmentpackage")
+        self.set_permissions("monolith.change_manifestenrollmentpackage")
         response = self.put(
             reverse("monolith_api:manifest_enrollment_package", args=(mep.pk,)),
             data={
@@ -415,7 +381,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_delete_manifest_enrollment_package_not_found(self):
-        self._set_permissions("monolith.delete_manifestenrollmentpackage")
+        self.set_permissions("monolith.delete_manifestenrollmentpackage")
         response = self.delete(reverse("monolith_api:manifest_enrollment_package", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -425,7 +391,7 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest = mep.manifest
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
-        self._set_permissions("monolith.delete_manifestenrollmentpackage")
+        self.set_permissions("monolith.delete_manifestenrollmentpackage")
         response = self.delete(reverse("monolith_api:manifest_enrollment_package", args=(mep.pk,)))
         self.assertEqual(response.status_code, 204)
         manifest.refresh_from_db()

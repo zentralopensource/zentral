@@ -1,14 +1,14 @@
-from functools import reduce
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 
 
-class SoftwareUpdatesAPIViewsTestCase(TestCase):
+class SoftwareUpdatesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     @classmethod
     def setUpTestData(cls):
         cls.service_account = User.objects.create(
@@ -22,34 +22,21 @@ class SoftwareUpdatesAPIViewsTestCase(TestCase):
         cls.user.groups.set([cls.group])
         _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
 
-    # utility methods
+    # LoginCase implementation
 
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
+    def _get_user(self):
+        return self.user
 
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
 
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_url_namespace(self):
+        return "mdm_api"
 
-    def post(self, url, include_token=True):
-        kwargs = {}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.post(url, **kwargs)
+    # RequestCase implementation
+
+    def _get_api_key(self):
+        return self.api_key
 
     # sync_software_updates
 

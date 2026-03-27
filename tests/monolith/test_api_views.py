@@ -1,17 +1,15 @@
-import json
-import operator
-import plistlib
 from datetime import datetime
-from functools import reduce
+import plistlib
 from unittest.mock import patch
 
-from accounts.models import APIToken, User
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
+from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
@@ -47,7 +45,7 @@ from .utils import (
 )
 
 
-class MonolithAPIViewsTestCase(TestCase):
+class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     maxDiff = None
 
     @classmethod
@@ -71,58 +69,21 @@ class MonolithAPIViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
 
-    # utility methods
+    # LoginCase implementation
 
-    def _set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
+    def _get_user(self):
+        return self.user
 
-    def _post_data(self, url, data, content_type, include_token=True, ip=None):
-        kwargs = {"content_type": content_type}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        if ip:
-            kwargs["HTTP_X_REAL_IP"] = ip
-        return self.client.post(url, data, **kwargs)
+    def _get_group(self):
+        return self.group
 
-    def _put_data(self, url, data, content_type, include_token=True):
-        kwargs = {"content_type": content_type}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.put(url, data, **kwargs)
+    def _get_url_namespace(self):
+        return "mdm_api"
 
-    def _post_json_data(self, url, data, include_token=True, ip=None):
-        content_type = "application/json"
-        data = json.dumps(data)
-        return self._post_data(url, data, content_type, include_token, ip)
+    # RequestCase implementation
 
-    def _put_json_data(self, url, data, include_token=True):
-        content_type = "application/json"
-        data = json.dumps(data)
-        return self._put_data(url, data, content_type, include_token)
-
-    def get(self, url, data=None, include_token=True):
-        kwargs = {}
-        if data is not None:
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.get(url, **kwargs)
-
-    def delete(self, url, include_token=True):
-        kwargs = {}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.delete(url, **kwargs)
+    def _get_api_key(self):
+        return self.api_key
 
     # list repositories
 
@@ -136,7 +97,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_repositories_filter_by_name_not_found(self):
         force_repository()
-        self._set_permissions("monolith.view_repository")
+        self.set_permissions("monolith.view_repository")
         response = self.get(reverse("monolith_api:repositories"), {"name": "foo"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
@@ -144,7 +105,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_get_repositories_filter_by_name(self):
         force_repository()
         repository = force_repository(virtual=True)
-        self._set_permissions("monolith.view_repository")
+        self.set_permissions("monolith.view_repository")
         response = self.get(reverse("monolith_api:repositories"), {"name": repository.name})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -163,7 +124,7 @@ class MonolithAPIViewsTestCase(TestCase):
         }])
 
     def test_get_repositories(self):
-        self._set_permissions("monolith.view_repository")
+        self.set_permissions("monolith.view_repository")
         repository = force_repository(mbu=self.mbu)
         response = self.get(reverse("monolith_api:repositories"))
         self.assertEqual(response.status_code, 200)
@@ -183,7 +144,7 @@ class MonolithAPIViewsTestCase(TestCase):
         }])
 
     def test_get_provisioned_repositories(self):
-        self._set_permissions("monolith.view_repository")
+        self.set_permissions("monolith.view_repository")
         provisioning_uid = get_random_string(12)
         repository = force_repository(mbu=self.mbu, provisioning_uid=provisioning_uid)
         response = self.get(reverse("monolith_api:repositories"))
@@ -204,16 +165,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # create repository
 
     def test_create_repository_unauthorized(self):
-        response = self._post_json_data(reverse("monolith_api:repositories"), {}, include_token=False)
+        response = self.post(reverse("monolith_api:repositories"), {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_repository_permission_denied(self):
-        response = self._post_json_data(reverse("monolith_api:repositories"), {})
+        response = self.post(reverse("monolith_api:repositories"), {})
         self.assertEqual(response.status_code, 403)
 
     def test_create_s3_repository_missing_bucket(self):
-        self._set_permissions("monolith.add_repository")
-        response = self._post_json_data(
+        self.set_permissions("monolith.add_repository")
+        response = self.post(
             reverse("monolith_api:repositories"),
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
@@ -224,8 +185,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {'s3_kwargs': {'bucket': ['This field is required.']}})
 
     def test_create_s3_repository_invalid_privkey(self):
-        self._set_permissions("monolith.add_repository")
-        response = self._post_json_data(
+        self.set_permissions("monolith.add_repository")
+        response = self.post(
             reverse("monolith_api:repositories"),
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
@@ -237,8 +198,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {'s3_kwargs': {'cloudfront_privkey_pem': ['Invalid private key.']}})
 
     def test_create_s3_repository_missing_cloudfront_domain_key_id(self):
-        self._set_permissions("monolith.add_repository")
-        response = self._post_json_data(
+        self.set_permissions("monolith.add_repository")
+        response = self.post(
             reverse("monolith_api:repositories"),
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
@@ -256,8 +217,8 @@ class MonolithAPIViewsTestCase(TestCase):
         )
 
     def test_create_s3_repository_missing_cloudfront_key_id_privkey_pem(self):
-        self._set_permissions("monolith.add_repository")
-        response = self._post_json_data(
+        self.set_permissions("monolith.add_repository")
+        response = self.post(
             reverse("monolith_api:repositories"),
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
@@ -275,8 +236,8 @@ class MonolithAPIViewsTestCase(TestCase):
         )
 
     def test_create_virtual_repository_bad_backend(self):
-        self._set_permissions("monolith.add_repository")
-        response = self._post_json_data(
+        self.set_permissions("monolith.add_repository")
+        response = self.post(
             reverse("monolith_api:repositories"),
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
@@ -291,11 +252,11 @@ class MonolithAPIViewsTestCase(TestCase):
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_s3_repository(self, post_event, send_notification):
-        self._set_permissions("monolith.add_repository")
+        self.set_permissions("monolith.add_repository")
         name = get_random_string(12)
         bucket = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data(
+            response = self.post(
                 reverse("monolith_api:repositories"),
                 {"name": name,
                  "meta_business_unit": self.mbu.pk,
@@ -355,8 +316,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertIsNone(repository_backend.cloudfront_signer)
 
     def test_create_azure_repository_missing_info(self):
-        self._set_permissions("monolith.add_repository")
-        response = self._post_json_data(
+        self.set_permissions("monolith.add_repository")
+        response = self.post(
             reverse("monolith_api:repositories"),
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
@@ -370,12 +331,12 @@ class MonolithAPIViewsTestCase(TestCase):
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_azure_repository(self, post_event, send_notification):
-        self._set_permissions("monolith.add_repository")
+        self.set_permissions("monolith.add_repository")
         name = get_random_string(12)
         storage_account = get_random_string(12)
         container = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data(
+            response = self.post(
                 reverse("monolith_api:repositories"),
                 {"name": name,
                  "meta_business_unit": self.mbu.pk,
@@ -436,10 +397,10 @@ class MonolithAPIViewsTestCase(TestCase):
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_virtual_repository(self, post_event, send_notification):
-        self._set_permissions("monolith.add_repository")
+        self.set_permissions("monolith.add_repository")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data(
+            response = self.post(
                 reverse("monolith_api:repositories"),
                 {"name": name,
                  "backend": "VIRTUAL"},
@@ -485,11 +446,11 @@ class MonolithAPIViewsTestCase(TestCase):
         send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
 
     def test_create_s3_repository_provisining_id_read_only(self):
-        self._set_permissions("monolith.add_repository")
+        self.set_permissions("monolith.add_repository")
         name = get_random_string(12)
         provisioning_uid = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True):
-            response = self._post_json_data(
+            response = self.post(
                 reverse("monolith_api:repositories"),
                 {"name": name,
                  "provisioning_uid": provisioning_uid,
@@ -514,7 +475,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_repository(self):
-        self._set_permissions("monolith.view_repository")
+        self.set_permissions("monolith.view_repository")
         repository = force_repository(mbu=self.mbu)
         response = self.get(reverse("monolith_api:repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -537,19 +498,19 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_update_repository_unauthorized(self):
         repository = force_repository()
-        response = self._post_json_data(reverse("monolith_api:repository", args=(repository.pk,)),
-                                        {}, include_token=False)
+        response = self.post(reverse("monolith_api:repository", args=(repository.pk,)),
+                             {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_repository_permission_denied(self):
         repository = force_repository()
-        response = self._post_json_data(reverse("monolith_api:repository", args=(repository.pk,)), {})
+        response = self.post(reverse("monolith_api:repository", args=(repository.pk,)), {})
         self.assertEqual(response.status_code, 403)
 
     def test_update_provisioned_repository_cannot_be_updated(self):
         repository = force_repository(provisioning_uid=get_random_string(12))
-        self._set_permissions("monolith.change_repository")
-        response = self._put_json_data(
+        self.set_permissions("monolith.change_repository")
+        response = self.put(
             reverse("monolith_api:repository", args=(repository.pk,)),
             {"name": "yolo",
              "backend": "S3",
@@ -564,8 +525,8 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertIsNone(repository.meta_business_unit)
         self.assertNotEqual(manifest.meta_business_unit, self.mbu)
         force_catalog(repository=repository, manifest=manifest)
-        self._set_permissions("monolith.change_repository")
-        response = self._put_json_data(
+        self.set_permissions("monolith.change_repository")
+        response = self.put(
             reverse("monolith_api:repository", args=(repository.pk,)),
             {"name": get_random_string(12),
              "meta_business_unit": self.mbu.pk,
@@ -590,11 +551,11 @@ class MonolithAPIViewsTestCase(TestCase):
         force_catalog(repository=repository, manifest=manifest)
         force_catalog(repository=repository, manifest=manifest)
         prev_value = repository.serialize_for_event()
-        self._set_permissions("monolith.change_repository")
+        self.set_permissions("monolith.change_repository")
         new_name = get_random_string(12)
         new_bucket = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._put_json_data(
+            response = self.put(
                 reverse("monolith_api:repository", args=(repository.pk,)),
                 {"name": new_name,
                  "meta_business_unit": self.mbu.pk,
@@ -705,10 +666,10 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_update_s3_repository_provisioning_id_read_only(self):
         repository = force_repository()
-        self._set_permissions("monolith.change_repository")
+        self.set_permissions("monolith.change_repository")
         new_name = get_random_string(12)
         new_bucket = get_random_string(12)
-        response = self._put_json_data(
+        response = self.put(
             reverse("monolith_api:repository", args=(repository.pk,)),
             {"name": new_name,
              "provisioning_uid": get_random_string(12),
@@ -738,14 +699,14 @@ class MonolithAPIViewsTestCase(TestCase):
         repository = force_repository()
         manifest = force_manifest()
         force_catalog(repository=repository, manifest=manifest)
-        self._set_permissions("monolith.delete_repository")
+        self.set_permissions("monolith.delete_repository")
         response = self.delete(reverse("monolith_api:repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ['This repository cannot be deleted'])
 
     def test_delete_provisioned_repository_cannot_be_deleted(self):
         repository = force_repository(provisioning_uid=get_random_string(12))
-        self._set_permissions("monolith.delete_repository")
+        self.set_permissions("monolith.delete_repository")
         response = self.delete(reverse("monolith_api:repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ['This repository cannot be deleted'])
@@ -755,7 +716,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_delete_s3_repository(self, post_event, send_notification):
         repository = force_repository()
         prev_value = repository.serialize_for_event()
-        self._set_permissions("monolith.delete_repository")
+        self.set_permissions("monolith.delete_repository")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.delete(reverse("monolith_api:repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 204)
@@ -780,21 +741,21 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_sync_repository_unauthorized(self):
         repository = force_repository()
-        response = self._post_json_data(reverse("monolith_api:sync_repository", args=(repository.pk,)),
-                                        {}, include_token=False)
+        response = self.post(reverse("monolith_api:sync_repository", args=(repository.pk,)),
+                             {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_sync_repository_permission_denied(self):
         repository = force_repository()
-        response = self._post_json_data(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
+        response = self.post(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.contrib.monolith.repository_backends.s3.S3Repository.sync_catalogs")
     def test_sync_repository_internal_server_error(self, sync_catalogs):
         sync_catalogs.side_effect = Exception("yolo")
         repository = force_repository()
-        self._set_permissions("monolith.sync_repository")
-        response = self._post_json_data(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
+        self.set_permissions("monolith.sync_repository")
+        response = self.post(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json(), {"status": 1, "error": "yolo"})
 
@@ -821,9 +782,9 @@ class MonolithAPIViewsTestCase(TestCase):
              "name": pkg_info_name,
              "version": "1.0"}
         ])
-        self._set_permissions("monolith.sync_repository")
+        self.set_permissions("monolith.sync_repository")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
+            response = self.post(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response, {"status": 0})
@@ -864,24 +825,24 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_update_cache_server_unauthorized(self):
         manifest = force_manifest()
-        response = self._post_json_data(reverse("monolith_api:update_cache_server", args=(manifest.pk,)),
-                                        {}, include_token=False)
+        response = self.post(reverse("monolith_api:update_cache_server", args=(manifest.pk,)),
+                             {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_cache_server_permission_denied(self):
         manifest = force_manifest()
-        response = self._post_json_data(reverse("monolith_api:update_cache_server", args=(manifest.pk,)), {})
+        response = self.post(reverse("monolith_api:update_cache_server", args=(manifest.pk,)), {})
         self.assertEqual(response.status_code, 403)
 
     def test_update_cache_server(self):
-        self._set_permissions("monolith.change_manifest", "monolith.add_cacheserver", "monolith.change_cacheserver")
+        self.set_permissions("monolith.change_manifest", "monolith.add_cacheserver", "monolith.change_cacheserver")
         name = get_random_string(12)
         ip_address = "129.2.1.1"
         manifest = force_manifest()
-        response = self._post_json_data(reverse("monolith_api:update_cache_server", args=(manifest.pk,)),
-                                        {"name": name,
-                                         "base_url": "https://example.com"},
-                                        ip=ip_address)
+        response = self.post(reverse("monolith_api:update_cache_server", args=(manifest.pk,)),
+                             {"name": name,
+                              "base_url": "https://example.com"},
+                             ip=ip_address)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": 0})
         cache_server = CacheServer.objects.get(manifest=manifest, name=name)
@@ -898,13 +859,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_manifests_filter_by_name_not_found(self):
-        self._set_permissions("monolith.view_manifest")
+        self.set_permissions("monolith.view_manifest")
         response = self.get(reverse("monolith_api:manifests"), {"name": "foo"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
 
     def test_get_manifests_filter_by_meta_business_unit_id_not_found(self):
-        self._set_permissions("monolith.view_manifest")
+        self.set_permissions("monolith.view_manifest")
         response = self.get(reverse("monolith_api:manifests"), {"meta_business_unit_id": 9999})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
@@ -914,7 +875,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_get_manifests_filter_by_name(self):
         for _ in range(3):
             force_manifest()
-        self._set_permissions("monolith.view_manifest")
+        self.set_permissions("monolith.view_manifest")
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:manifests"), {"name": manifest.name})
         self.assertEqual(response.status_code, 200)
@@ -928,7 +889,7 @@ class MonolithAPIViewsTestCase(TestCase):
         }])
 
     def test_get_manifests_filter_by_meta_business_unit_id(self):
-        self._set_permissions("monolith.view_manifest")
+        self.set_permissions("monolith.view_manifest")
         manifest = force_manifest(mbu=self.mbu)
         response = self.get(reverse("monolith_api:manifests"),
                             {"meta_business_unit_id": self.mbu.pk})
@@ -943,7 +904,7 @@ class MonolithAPIViewsTestCase(TestCase):
         }])
 
     def test_get_manifests(self):
-        self._set_permissions("monolith.view_manifest")
+        self.set_permissions("monolith.view_manifest")
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:manifests"))
         self.assertEqual(response.status_code, 200)
@@ -967,12 +928,12 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_manifest_not_found(self):
-        self._set_permissions("monolith.view_manifest")
+        self.set_permissions("monolith.view_manifest")
         response = self.get(reverse("monolith_api:manifest", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
     def test_get_manifest(self):
-        self._set_permissions("monolith.view_manifest")
+        self.set_permissions("monolith.view_manifest")
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:manifest", args=(manifest.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -988,16 +949,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # create manifest
 
     def test_create_manifest_unauthorized(self):
-        response = self._post_json_data(reverse("monolith_api:manifests"), include_token=False, data={})
+        response = self.post(reverse("monolith_api:manifests"), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_create_manifest_permission_denied(self):
-        response = self._post_json_data(reverse("monolith_api:manifests"), data={})
+        response = self.post(reverse("monolith_api:manifests"), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_create_manifest_fields_empty(self):
-        self._set_permissions("monolith.add_manifest")
-        response = self._post_json_data(reverse("monolith_api:manifests"), data={})
+        self.set_permissions("monolith.add_manifest")
+        response = self.post(reverse("monolith_api:manifests"), data={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             'name': ['This field is required.'],
@@ -1006,10 +967,10 @@ class MonolithAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_manifest(self, post_event):
-        self._set_permissions("monolith.add_manifest")
+        self.set_permissions("monolith.add_manifest")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data(reverse("monolith_api:manifests"), data={
+            response = self.post(reverse("monolith_api:manifests"), data={
                 'name': name,
                 'meta_business_unit': self.mbu.pk
             })
@@ -1050,22 +1011,22 @@ class MonolithAPIViewsTestCase(TestCase):
     # update manifest
 
     def test_update_manifest_unauthorized(self):
-        response = self._put_json_data(reverse("monolith_api:manifest", args=(9999,)), include_token=False, data={})
+        response = self.put(reverse("monolith_api:manifest", args=(9999,)), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_update_manifest_permission_denied(self):
-        response = self._put_json_data(reverse("monolith_api:manifest", args=(9999,)), data={})
+        response = self.put(reverse("monolith_api:manifest", args=(9999,)), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_update_manifest_not_found(self):
-        self._set_permissions("monolith.change_manifest")
-        response = self._put_json_data(reverse("monolith_api:manifest", args=(9999,)), data={})
+        self.set_permissions("monolith.change_manifest")
+        response = self.put(reverse("monolith_api:manifest", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
     def test_update_manifest_fields_invalid(self):
-        self._set_permissions("monolith.change_manifest")
+        self.set_permissions("monolith.change_manifest")
         manifest = force_manifest()
-        response = self._put_json_data(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
+        response = self.put(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
             'name': '',
             'meta_business_unit': ''
         })
@@ -1077,8 +1038,8 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_update_manifest_invalid_meta_business_unit(self):
         manifest = force_manifest()
-        self._set_permissions("monolith.change_manifest")
-        response = self._put_json_data(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
+        self.set_permissions("monolith.change_manifest")
+        response = self.put(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
             'name': 'foo',
             'meta_business_unit': 9999
         })
@@ -1093,9 +1054,9 @@ class MonolithAPIViewsTestCase(TestCase):
         prev_name = manifest.name
         prev_updated_at = manifest.updated_at
         new_name = get_random_string(12)
-        self._set_permissions("monolith.change_manifest")
+        self.set_permissions("monolith.change_manifest")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._put_json_data(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
+            response = self.put(reverse("monolith_api:manifest", args=(manifest.pk,)), data={
                 'name': new_name,
                 'meta_business_unit': self.mbu.pk
             })
@@ -1154,13 +1115,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_delete_manifest_not_found(self):
-        self._set_permissions("monolith.delete_manifest")
+        self.set_permissions("monolith.delete_manifest")
         response = self.delete(reverse("monolith_api:manifest", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
     def test_delete_manifest(self):
         manifest = force_manifest()
-        self._set_permissions("monolith.delete_manifest")
+        self.set_permissions("monolith.delete_manifest")
         response = self.delete(reverse("monolith_api:manifest", args=(manifest.pk,)))
         self.assertEqual(response.status_code, 204)
 
@@ -1175,7 +1136,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_catalogs_filter_by_name_not_found(self):
-        self._set_permissions("monolith.view_catalog")
+        self.set_permissions("monolith.view_catalog")
         response = self.get(reverse("monolith_api:catalogs"), {"name": "foo"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"], [])
@@ -1184,7 +1145,7 @@ class MonolithAPIViewsTestCase(TestCase):
         repository = force_repository()
         force_catalog(name="katalog")
         catalog = force_catalog(name="katalog", repository=repository)
-        self._set_permissions("monolith.view_catalog")
+        self.set_permissions("monolith.view_catalog")
         response = self.get(reverse("monolith_api:catalogs"), {"name": catalog.name, "repository": repository.id})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -1203,7 +1164,7 @@ class MonolithAPIViewsTestCase(TestCase):
         catalog1 = force_catalog(repository=repository)
         catalog2 = force_catalog(repository=repository)
         force_catalog()  # different repository, should not appear
-        self._set_permissions("monolith.view_catalog")
+        self.set_permissions("monolith.view_catalog")
         response = self.get(reverse("monolith_api:catalogs"), {"repository": repository.id})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -1214,7 +1175,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_get_catalogs_filter_by_name(self):
         catalog = force_catalog(name="katalog")
         force_catalog()  # different name, should not appear
-        self._set_permissions("monolith.view_catalog")
+        self.set_permissions("monolith.view_catalog")
         response = self.get(reverse("monolith_api:catalogs"), {"name": "katalog"})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -1223,7 +1184,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_catalogs(self):
         catalog = force_catalog()
-        self._set_permissions("monolith.view_catalog")
+        self.set_permissions("monolith.view_catalog")
         response = self.get(reverse("monolith_api:catalogs"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"], [{
@@ -1246,13 +1207,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_catalog_not_found(self):
-        self._set_permissions("monolith.view_catalog")
+        self.set_permissions("monolith.view_catalog")
         response = self.get(reverse("monolith_api:catalog", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
     def test_get_catalog(self):
         catalog = force_catalog(archived=True)
-        self._set_permissions("monolith.view_catalog")
+        self.set_permissions("monolith.view_catalog")
         response = self.get(reverse("monolith_api:catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
@@ -1267,16 +1228,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # create catalog
 
     def test_create_catalog_unauthorized(self):
-        response = self._post_json_data(reverse("monolith_api:catalogs"), include_token=False, data={})
+        response = self.post(reverse("monolith_api:catalogs"), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_create_catalog_permission_denied(self):
-        response = self._post_json_data(reverse("monolith_api:catalogs"), data={})
+        response = self.post(reverse("monolith_api:catalogs"), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_create_catalog_fields_empty(self):
-        self._set_permissions("monolith.add_catalog")
-        response = self._post_json_data(reverse("monolith_api:catalogs"), data={})
+        self.set_permissions("monolith.add_catalog")
+        response = self.post(reverse("monolith_api:catalogs"), data={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             'repository': ['This field is required.'],
@@ -1284,10 +1245,10 @@ class MonolithAPIViewsTestCase(TestCase):
         })
 
     def test_create_catalog_not_virtual_repository(self):
-        self._set_permissions("monolith.add_catalog")
+        self.set_permissions("monolith.add_catalog")
         name = get_random_string(12)
         repository = force_repository(virtual=False)
-        response = self._post_json_data(reverse("monolith_api:catalogs"), data={
+        response = self.post(reverse("monolith_api:catalogs"), data={
             'repository': repository.pk,
             'name': name,
             'archived_at': datetime.utcnow().isoformat(),
@@ -1298,10 +1259,10 @@ class MonolithAPIViewsTestCase(TestCase):
         })
 
     def test_create_catalog(self):
-        self._set_permissions("monolith.add_catalog")
+        self.set_permissions("monolith.add_catalog")
         name = get_random_string(12)
         repository = force_repository(virtual=True)
-        response = self._post_json_data(reverse("monolith_api:catalogs"), data={
+        response = self.post(reverse("monolith_api:catalogs"), data={
             'repository': repository.pk,
             'name': name,
             'archived_at': datetime.utcnow().isoformat(),
@@ -1322,23 +1283,23 @@ class MonolithAPIViewsTestCase(TestCase):
     # update catalog
 
     def test_update_catalog_unauthorized(self):
-        response = self._put_json_data(reverse("monolith_api:catalog", args=(9999,)), include_token=False, data={})
+        response = self.put(reverse("monolith_api:catalog", args=(9999,)), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_update_catalog_permission_denied(self):
-        response = self._put_json_data(reverse("monolith_api:catalog", args=(9999,)), data={})
+        response = self.put(reverse("monolith_api:catalog", args=(9999,)), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_update_catalog_not_found(self):
-        self._set_permissions("monolith.change_catalog")
-        response = self._put_json_data(reverse("monolith_api:catalog", args=(9999,)), data={})
+        self.set_permissions("monolith.change_catalog")
+        response = self.put(reverse("monolith_api:catalog", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
     def test_update_catalog_fields_invalid(self):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
-        self._set_permissions("monolith.change_catalog")
-        response = self._put_json_data(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
+        self.set_permissions("monolith.change_catalog")
+        response = self.put(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
             'name': '',
         })
         self.assertEqual(response.status_code, 400)
@@ -1350,8 +1311,8 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_update_catalog_not_virtual_repository(self):
         repository = force_repository(virtual=False)
         catalog = force_catalog(repository=repository)
-        self._set_permissions("monolith.change_catalog")
-        response = self._put_json_data(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
+        self.set_permissions("monolith.change_catalog")
+        response = self.put(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
             'repository': catalog.repository.pk,
             'name': get_random_string(12),
         })
@@ -1367,8 +1328,8 @@ class MonolithAPIViewsTestCase(TestCase):
         catalog = force_catalog(repository=repository, manifest=manifest)
         new_repository = force_repository(mbu=MetaBusinessUnit.objects.create(name=get_random_string(12)),
                                           virtual=True)
-        self._set_permissions("monolith.change_catalog")
-        response = self._put_json_data(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
+        self.set_permissions("monolith.change_catalog")
+        response = self.put(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
             'repository': new_repository.pk,
             'name': get_random_string(12),
         })
@@ -1383,9 +1344,9 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_update_catalog(self):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
-        self._set_permissions("monolith.change_catalog")
+        self.set_permissions("monolith.change_catalog")
         new_name = get_random_string(12)
-        response = self._put_json_data(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
+        response = self.put(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
             'repository': catalog.repository.pk,
             'name': new_name,
         })
@@ -1412,7 +1373,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_delete_catalog_not_found(self):
-        self._set_permissions("monolith.delete_catalog")
+        self.set_permissions("monolith.delete_catalog")
         response = self.delete(reverse("monolith_api:catalog", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -1420,7 +1381,7 @@ class MonolithAPIViewsTestCase(TestCase):
         repository = force_repository(virtual=True)
         manifest = force_manifest()
         catalog = force_catalog(repository=repository, manifest=manifest)
-        self._set_permissions("monolith.delete_catalog")
+        self.set_permissions("monolith.delete_catalog")
         response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ['This catalog cannot be deleted'])
@@ -1428,7 +1389,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_delete_catalog(self):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
-        self._set_permissions("monolith.delete_catalog")
+        self.set_permissions("monolith.delete_catalog")
         response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 204)
 
@@ -1443,7 +1404,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_conditions_filter_by_name_not_found(self):
-        self._set_permissions("monolith.view_condition")
+        self.set_permissions("monolith.view_condition")
         response = self.get(reverse("monolith_api:conditions"), {"name": "foo"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
@@ -1451,7 +1412,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_get_conditions_filter_by_name(self):
         force_condition()
         condition = force_condition()
-        self._set_permissions("monolith.view_condition")
+        self.set_permissions("monolith.view_condition")
         response = self.get(reverse("monolith_api:conditions"), {"name": condition.name})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -1464,7 +1425,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_conditions(self):
         condition = force_condition()
-        self._set_permissions("monolith.view_condition")
+        self.set_permissions("monolith.view_condition")
         response = self.get(reverse("monolith_api:conditions"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -1486,13 +1447,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_condition_not_found(self):
-        self._set_permissions("monolith.view_condition")
+        self.set_permissions("monolith.view_condition")
         response = self.get(reverse("monolith_api:condition", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
     def test_get_condition(self):
         condition = force_condition()
-        self._set_permissions("monolith.view_condition")
+        self.set_permissions("monolith.view_condition")
         response = self.get(reverse("monolith_api:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
@@ -1506,16 +1467,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # create condition
 
     def test_create_condition_unauthorized(self):
-        response = self._post_json_data(reverse("monolith_api:conditions"), include_token=False, data={})
+        response = self.post(reverse("monolith_api:conditions"), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_create_condition_permission_denied(self):
-        response = self._post_json_data(reverse("monolith_api:conditions"), data={})
+        response = self.post(reverse("monolith_api:conditions"), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_create_condition_fields_empty(self):
-        self._set_permissions("monolith.add_condition")
-        response = self._post_json_data(reverse("monolith_api:conditions"), data={})
+        self.set_permissions("monolith.add_condition")
+        response = self.post(reverse("monolith_api:conditions"), data={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             'name': ['This field is required.'],
@@ -1523,10 +1484,10 @@ class MonolithAPIViewsTestCase(TestCase):
         })
 
     def test_create_condition(self):
-        self._set_permissions("monolith.add_condition")
+        self.set_permissions("monolith.add_condition")
         name = get_random_string(12)
         predicate = get_random_string(12)
-        response = self._post_json_data(reverse("monolith_api:conditions"), data={
+        response = self.post(reverse("monolith_api:conditions"), data={
             'name': name,
             'predicate': predicate,
         })
@@ -1543,8 +1504,8 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_create_condition_name_conflict(self):
         condition = force_condition()
-        self._set_permissions("monolith.add_condition")
-        response = self._post_json_data(reverse("monolith_api:conditions"), data={
+        self.set_permissions("monolith.add_condition")
+        response = self.post(reverse("monolith_api:conditions"), data={
             'name': condition.name,
             'predicate': get_random_string(12)
         })
@@ -1554,22 +1515,22 @@ class MonolithAPIViewsTestCase(TestCase):
     # update condition
 
     def test_update_condition_unauthorized(self):
-        response = self._put_json_data(reverse("monolith_api:condition", args=(9999,)), include_token=False, data={})
+        response = self.put(reverse("monolith_api:condition", args=(9999,)), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_update_condition_permission_denied(self):
-        response = self._put_json_data(reverse("monolith_api:condition", args=(9999,)), data={})
+        response = self.put(reverse("monolith_api:condition", args=(9999,)), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_update_condition_not_found(self):
-        self._set_permissions("monolith.change_condition")
-        response = self._put_json_data(reverse("monolith_api:condition", args=(9999,)), data={})
+        self.set_permissions("monolith.change_condition")
+        response = self.put(reverse("monolith_api:condition", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
     def test_update_condition_fields_invalid(self):
         condition = force_condition()
-        self._set_permissions("monolith.change_condition")
-        response = self._put_json_data(reverse("monolith_api:condition", args=(condition.pk,)), data={
+        self.set_permissions("monolith.change_condition")
+        response = self.put(reverse("monolith_api:condition", args=(condition.pk,)), data={
             'name': '',
             'predicate': '',
         })
@@ -1589,10 +1550,10 @@ class MonolithAPIViewsTestCase(TestCase):
             pkg_info_name=force_name(),
             condition=condition
         )
-        self._set_permissions("monolith.change_condition")
+        self.set_permissions("monolith.change_condition")
         new_name = get_random_string(12)
         new_predicate = get_random_string(12)
-        response = self._put_json_data(reverse("monolith_api:condition", args=(condition.pk,)), data={
+        response = self.put(reverse("monolith_api:condition", args=(condition.pk,)), data={
             'name': new_name,
             'predicate': new_predicate,
         })
@@ -1613,8 +1574,8 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_update_condition_name_conflict(self):
         condition1 = force_condition()
         condition2 = force_condition()
-        self._set_permissions("monolith.change_condition")
-        response = self._put_json_data(reverse("monolith_api:condition", args=(condition2.pk,)), data={
+        self.set_permissions("monolith.change_condition")
+        response = self.put(reverse("monolith_api:condition", args=(condition2.pk,)), data={
             'name': condition1.name,
             'predicate': condition2.predicate,
         })
@@ -1632,7 +1593,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_delete_condition_not_found(self):
-        self._set_permissions("monolith.delete_condition")
+        self.set_permissions("monolith.delete_condition")
         response = self.delete(reverse("monolith_api:condition", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -1643,14 +1604,14 @@ class MonolithAPIViewsTestCase(TestCase):
             pkg_info_name=force_name(),
             condition=condition
         )
-        self._set_permissions("monolith.delete_condition")
+        self.set_permissions("monolith.delete_condition")
         response = self.delete(reverse("monolith_api:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ['This condition cannot be deleted'])
 
     def test_delete_condition(self):
         condition = force_condition()
-        self._set_permissions("monolith.delete_condition")
+        self.set_permissions("monolith.delete_condition")
         response = self.delete(reverse("monolith_api:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 204)
 
@@ -1665,7 +1626,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_enrollments_filter_by_manifest_id_invalid_choice(self):
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollments"), {"manifest_id": 9999})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -1674,7 +1635,7 @@ class MonolithAPIViewsTestCase(TestCase):
         )
 
     def test_get_enrollments_filter_by_manifest_id_no_results(self):
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:enrollments"), {"manifest_id": manifest.pk})
         self.assertEqual(response.status_code, 200)
@@ -1682,7 +1643,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_enrollments_filter_by_manifest_id(self):
         enrollment, tags = force_enrollment(mbu=self.mbu, tag_count=1)
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollments"), {"manifest_id": enrollment.manifest.pk})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -1714,7 +1675,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_enrollments(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollments"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -1755,13 +1716,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_enrollment_not_found(self):
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollment", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
     def test_get_enrollment(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
@@ -1794,16 +1755,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # create enrollment
 
     def test_create_enrollment_unauthorized(self):
-        response = self._post_json_data(reverse("monolith_api:enrollments"), include_token=False, data={})
+        response = self.post(reverse("monolith_api:enrollments"), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_create_enrollment_permission_denied(self):
-        response = self._post_json_data(reverse("monolith_api:enrollments"), data={})
+        response = self.post(reverse("monolith_api:enrollments"), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_create_enrollment_fields_empty(self):
-        self._set_permissions("monolith.add_enrollment")
-        response = self._post_json_data(reverse("monolith_api:enrollments"), data={})
+        self.set_permissions("monolith.add_enrollment")
+        response = self.post(reverse("monolith_api:enrollments"), data={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             'manifest': ['This field is required.'],
@@ -1811,11 +1772,11 @@ class MonolithAPIViewsTestCase(TestCase):
         })
 
     def test_create_enrollment(self):
-        self._set_permissions("monolith.add_enrollment")
+        self.set_permissions("monolith.add_enrollment")
         manifest = force_manifest(mbu=self.mbu)
         self.assertEqual(manifest.version, 1)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
-        response = self._post_json_data(reverse("monolith_api:enrollments"), data={
+        response = self.post(reverse("monolith_api:enrollments"), data={
             'manifest': manifest.pk,
             'secret': {
                 'meta_business_unit': self.mbu.pk,
@@ -1854,10 +1815,10 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(manifest.version, 2)
 
     def test_create_enrollment_mbu_conflict(self):
-        self._set_permissions("monolith.add_enrollment")
+        self.set_permissions("monolith.add_enrollment")
         manifest = force_manifest()
         mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        response = self._post_json_data(reverse("monolith_api:enrollments"), data={
+        response = self.post(reverse("monolith_api:enrollments"), data={
             'manifest': manifest.pk,
             'secret': {'meta_business_unit': mbu.pk}
         })
@@ -1870,16 +1831,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # update enrollment
 
     def test_update_enrollment_unauthorized(self):
-        response = self._put_json_data(reverse("monolith_api:enrollment", args=(9999,)), include_token=False, data={})
+        response = self.put(reverse("monolith_api:enrollment", args=(9999,)), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_update_enrollment_permission_denied(self):
-        response = self._put_json_data(reverse("monolith_api:enrollment", args=(9999,)), data={})
+        response = self.put(reverse("monolith_api:enrollment", args=(9999,)), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_update_enrollment_not_found(self):
-        self._set_permissions("monolith.change_enrollment")
-        response = self._put_json_data(reverse("monolith_api:enrollment", args=(9999,)), data={})
+        self.set_permissions("monolith.change_enrollment")
+        response = self.put(reverse("monolith_api:enrollment", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
     def test_update_enrollment(self):
@@ -1898,8 +1859,8 @@ class MonolithAPIViewsTestCase(TestCase):
         secret_data["serial_numbers"] = serial_numbers
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
         secret_data["tags"] = [t.id for t in tags]
-        self._set_permissions("monolith.change_enrollment")
-        response = self._put_json_data(reverse("monolith_api:enrollment", args=(enrollment.pk,)), data={
+        self.set_permissions("monolith.change_enrollment")
+        response = self.put(reverse("monolith_api:enrollment", args=(enrollment.pk,)), data={
             'manifest': enrollment.manifest.pk,
             'secret': secret_data
         })
@@ -1927,7 +1888,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_delete_enrollment_not_found(self):
-        self._set_permissions("monolith.delete_enrollment")
+        self.set_permissions("monolith.delete_enrollment")
         response = self.delete(reverse("monolith_api:enrollment", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -1935,7 +1896,7 @@ class MonolithAPIViewsTestCase(TestCase):
         enrollment, _ = force_enrollment(mbu=self.mbu)
         manifest = enrollment.manifest
         self.assertEqual(manifest.version, 1)
-        self._set_permissions("monolith.delete_enrollment")
+        self.set_permissions("monolith.delete_enrollment")
         response = self.delete(reverse("monolith_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
         manifest.refresh_from_db()
@@ -1961,7 +1922,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_enrollment_plist(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/x-plist')
@@ -1983,7 +1944,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_enrollment_plist_user(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         self.client.force_login(self.user)
         response = self.client.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -2014,7 +1975,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_enrollment_configuration_profile(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
@@ -2038,7 +1999,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_enrollment_configuration_profile_user(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self._set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment")
         self.client.force_login(self.user)
         response = self.client.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -2060,7 +2021,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_manifest_catalogs_filter_by_manifest_id_not_found(self):
-        self._set_permissions("monolith.view_manifestcatalog")
+        self.set_permissions("monolith.view_manifestcatalog")
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:manifest_catalogs"), {"manifest_id": manifest.pk})
         self.assertEqual(response.status_code, 200)
@@ -2071,7 +2032,7 @@ class MonolithAPIViewsTestCase(TestCase):
         force_catalog(manifest=manifest1)
         manifest2 = force_manifest()
         catalog = force_catalog(manifest=manifest2)
-        self._set_permissions("monolith.view_manifestcatalog")
+        self.set_permissions("monolith.view_manifestcatalog")
         response = self.get(reverse("monolith_api:manifest_catalogs"),
                             {"manifest_id": manifest2.id})
         self.assertEqual(response.status_code, 200)
@@ -2086,7 +2047,7 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest = force_manifest()
         force_catalog(manifest=manifest)
         catalog = force_catalog(manifest=manifest)
-        self._set_permissions("monolith.view_manifestcatalog")
+        self.set_permissions("monolith.view_manifestcatalog")
         response = self.get(reverse("monolith_api:manifest_catalogs"),
                             {"catalog_id": catalog.id})
         self.assertEqual(response.status_code, 200)
@@ -2100,7 +2061,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_get_manifest_catalogs(self):
         manifest = force_manifest()
         catalog = force_catalog(manifest=manifest)
-        self._set_permissions("monolith.view_manifestcatalog")
+        self.set_permissions("monolith.view_manifestcatalog")
         response = self.get(reverse("monolith_api:manifest_catalogs"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -2121,7 +2082,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_manifest_catalog_not_found(self):
-        self._set_permissions("monolith.view_manifestcatalog")
+        self.set_permissions("monolith.view_manifestcatalog")
         response = self.get(reverse("monolith_api:manifest_catalog", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -2130,7 +2091,7 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest = force_manifest()
         catalog = force_catalog(manifest=manifest, tags=tags)
         manifest_catalog = manifest.manifestcatalog_set.first()
-        self._set_permissions("monolith.view_manifestcatalog")
+        self.set_permissions("monolith.view_manifestcatalog")
         response = self.get(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
@@ -2143,16 +2104,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # create manifest catalog
 
     def test_create_manifest_catalog_unauthorized(self):
-        response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), include_token=False, data={})
+        response = self.post(reverse("monolith_api:manifest_catalogs"), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_create_manifest_catalog_permission_denied(self):
-        response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), data={})
+        response = self.post(reverse("monolith_api:manifest_catalogs"), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_create_manifest_catalog_fields_empty(self):
-        self._set_permissions("monolith.add_manifestcatalog")
-        response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), data={})
+        self.set_permissions("monolith.add_manifestcatalog")
+        response = self.post(reverse("monolith_api:manifest_catalogs"), data={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             'manifest': ['This field is required.'],
@@ -2162,13 +2123,13 @@ class MonolithAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_manifest_catalog(self, post_event):
-        self._set_permissions("monolith.add_manifestcatalog")
+        self.set_permissions("monolith.add_manifestcatalog")
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         catalog = force_catalog()
         tag = Tag.objects.create(name=get_random_string(12))
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data(reverse("monolith_api:manifest_catalogs"), data={
+            response = self.post(reverse("monolith_api:manifest_catalogs"), data={
                 'manifest': manifest.pk,
                 'catalog': catalog.pk,
                 'tags': [tag.pk],
@@ -2209,17 +2170,17 @@ class MonolithAPIViewsTestCase(TestCase):
     # update manifest catalog
 
     def test_update_manifest_catalog_unauthorized(self):
-        response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(9999,)),
-                                       include_token=False, data={})
+        response = self.put(reverse("monolith_api:manifest_catalog", args=(9999,)),
+                            include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_update_manifest_catalog_permission_denied(self):
-        response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(9999,)), data={})
+        response = self.put(reverse("monolith_api:manifest_catalog", args=(9999,)), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_update_manifest_catalog_not_found(self):
-        self._set_permissions("monolith.change_manifestcatalog")
-        response = self._put_json_data(reverse("monolith_api:manifest_catalog", args=(9999,)), data={})
+        self.set_permissions("monolith.change_manifestcatalog")
+        response = self.put(reverse("monolith_api:manifest_catalog", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -2233,13 +2194,13 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         catalog = force_catalog()
-        self._set_permissions("monolith.change_manifestcatalog")
+        self.set_permissions("monolith.change_manifestcatalog")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._put_json_data(reverse("monolith_api:manifest_catalog",
-                                                   args=(manifest_catalog.pk,)), data={
-                                                       'manifest': manifest.pk,
-                                                       'catalog': catalog.pk,
-                                                       'tags': [], })
+            response = self.put(reverse("monolith_api:manifest_catalog",
+                                        args=(manifest_catalog.pk,)),
+                                data={'manifest': manifest.pk,
+                                      'catalog': catalog.pk,
+                                      'tags': []})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         test_manifest_catalog = ManifestCatalog.objects.get(manifest=manifest, catalog=catalog)
@@ -2285,7 +2246,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_delete_manifest_catalog_not_found(self):
-        self._set_permissions("monolith.delete_manifestcatalog")
+        self.set_permissions("monolith.delete_manifestcatalog")
         response = self.delete(reverse("monolith_api:manifest_catalog", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -2296,7 +2257,7 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest_catalog = manifest.manifestcatalog_set.first()
         prev_value = manifest_catalog.serialize_for_event()
         self.assertEqual(manifest.version, 1)
-        self._set_permissions("monolith.delete_manifestcatalog")
+        self.set_permissions("monolith.delete_manifestcatalog")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.delete(reverse("monolith_api:manifest_catalog", args=(manifest_catalog.pk,)))
         self.assertEqual(response.status_code, 204)
@@ -2329,7 +2290,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_manifest_sub_manifests_filter_by_manifest_id_not_found(self):
-        self._set_permissions("monolith.view_manifestsubmanifest")
+        self.set_permissions("monolith.view_manifestsubmanifest")
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:manifest_sub_manifests"), {"manifest_id": manifest.pk})
         self.assertEqual(response.status_code, 200)
@@ -2339,7 +2300,7 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest = force_manifest()
         force_sub_manifest()
         sub_manifest = force_sub_manifest(manifest=manifest)
-        self._set_permissions("monolith.view_manifestsubmanifest")
+        self.set_permissions("monolith.view_manifestsubmanifest")
         response = self.get(reverse("monolith_api:manifest_sub_manifests"),
                             {"manifest_id": manifest.id})
         self.assertEqual(response.status_code, 200)
@@ -2355,7 +2316,7 @@ class MonolithAPIViewsTestCase(TestCase):
         force_sub_manifest(manifest=manifest)
         sub_manifest = force_sub_manifest(manifest=manifest)
         manifest_sub_manifest = sub_manifest.manifestsubmanifest_set.first()
-        self._set_permissions("monolith.view_manifestsubmanifest")
+        self.set_permissions("monolith.view_manifestsubmanifest")
         response = self.get(reverse("monolith_api:manifest_sub_manifests"),
                             {"sub_manifest_id": sub_manifest.id})
         self.assertEqual(response.status_code, 200)
@@ -2370,7 +2331,7 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest = force_manifest()
         sub_manifest = force_sub_manifest(manifest=manifest)
         manifest_sub_manifest = manifest.manifestsubmanifest_set.first()
-        self._set_permissions("monolith.view_manifestsubmanifest")
+        self.set_permissions("monolith.view_manifestsubmanifest")
         response = self.get(reverse("monolith_api:manifest_sub_manifests"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -2391,7 +2352,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_manifest_sub_manifest_not_found(self):
-        self._set_permissions("monolith.view_manifestsubmanifest")
+        self.set_permissions("monolith.view_manifestsubmanifest")
         response = self.get(reverse("monolith_api:manifest_sub_manifest", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -2400,7 +2361,7 @@ class MonolithAPIViewsTestCase(TestCase):
         tags = [Tag.objects.create(name=get_random_string(12))]
         sub_manifest = force_sub_manifest(manifest=manifest, tags=tags)
         manifest_sub_manifest = sub_manifest.manifestsubmanifest_set.first()
-        self._set_permissions("monolith.view_manifestsubmanifest")
+        self.set_permissions("monolith.view_manifestsubmanifest")
         response = self.get(reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
@@ -2413,16 +2374,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # create manifest sub manifest
 
     def test_create_manifest_sub_manifest_unauthorized(self):
-        response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), include_token=False, data={})
+        response = self.post(reverse("monolith_api:manifest_sub_manifests"), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_create_manifest_sub_manifest_permission_denied(self):
-        response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), data={})
+        response = self.post(reverse("monolith_api:manifest_sub_manifests"), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_create_manifest_sub_manifest_fields_empty(self):
-        self._set_permissions("monolith.add_manifestsubmanifest")
-        response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), data={})
+        self.set_permissions("monolith.add_manifestsubmanifest")
+        response = self.post(reverse("monolith_api:manifest_sub_manifests"), data={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             'manifest': ['This field is required.'],
@@ -2432,13 +2393,13 @@ class MonolithAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_manifest_sub_manifest(self, post_event):
-        self._set_permissions("monolith.add_manifestsubmanifest")
+        self.set_permissions("monolith.add_manifestsubmanifest")
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         sub_manifest = force_sub_manifest()
         tag = Tag.objects.create(name=get_random_string(12))
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data(reverse("monolith_api:manifest_sub_manifests"), data={
+            response = self.post(reverse("monolith_api:manifest_sub_manifests"), data={
                 'manifest': manifest.pk,
                 'sub_manifest': sub_manifest.pk,
                 'tags': [tag.pk],
@@ -2479,17 +2440,17 @@ class MonolithAPIViewsTestCase(TestCase):
     # update manifest sub manifest
 
     def test_update_manifest_sub_manifest_unauthorized(self):
-        response = self._put_json_data(reverse("monolith_api:manifest_sub_manifest", args=(9999,)),
-                                       include_token=False, data={})
+        response = self.put(reverse("monolith_api:manifest_sub_manifest", args=(9999,)),
+                            include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_update_manifest_sub_manifest_permission_denied(self):
-        response = self._put_json_data(reverse("monolith_api:manifest_sub_manifest", args=(9999,)), data={})
+        response = self.put(reverse("monolith_api:manifest_sub_manifest", args=(9999,)), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_update_manifest_sub_manifest_not_found(self):
-        self._set_permissions("monolith.change_manifestsubmanifest")
-        response = self._put_json_data(reverse("monolith_api:manifest_sub_manifest", args=(9999,)), data={})
+        self.set_permissions("monolith.change_manifestsubmanifest")
+        response = self.put(reverse("monolith_api:manifest_sub_manifest", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -2503,9 +2464,9 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(list(manifest_sub_manifest.tags.all()), tags)
         manifest = force_manifest()
         sub_manifest = force_sub_manifest()
-        self._set_permissions("monolith.change_manifestsubmanifest")
+        self.set_permissions("monolith.change_manifestsubmanifest")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._put_json_data(
+            response = self.put(
                 reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)),
                 data={
                     'manifest': manifest.pk,
@@ -2558,7 +2519,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_delete_manifest_sub_manifest_not_found(self):
-        self._set_permissions("monolith.delete_manifestsubmanifest")
+        self.set_permissions("monolith.delete_manifestsubmanifest")
         response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -2569,7 +2530,7 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest_sub_manifest = manifest.manifestsubmanifest_set.first()
         prev_value = manifest_sub_manifest.serialize_for_event()
         self.assertEqual(manifest.version, 1)
-        self._set_permissions("monolith.delete_manifestsubmanifest")
+        self.set_permissions("monolith.delete_manifestsubmanifest")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.delete(reverse("monolith_api:manifest_sub_manifest", args=(manifest_sub_manifest.pk,)))
         self.assertEqual(response.status_code, 204)
@@ -2602,7 +2563,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_sub_manifests_filter_by_name_not_found(self):
-        self._set_permissions("monolith.view_submanifest")
+        self.set_permissions("monolith.view_submanifest")
         response = self.get(reverse("monolith_api:sub_manifests"), {"name": get_random_string(12)})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])
@@ -2610,7 +2571,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_get_sub_manifests_filter_by_name(self):
         force_sub_manifest()
         sub_manifest = force_sub_manifest()
-        self._set_permissions("monolith.view_submanifest")
+        self.set_permissions("monolith.view_submanifest")
         response = self.get(reverse("monolith_api:sub_manifests"),
                             {"name": sub_manifest.name})
         self.assertEqual(response.status_code, 200)
@@ -2625,7 +2586,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_sub_manifests(self):
         sub_manifest = force_sub_manifest(mbu=self.mbu)
-        self._set_permissions("monolith.view_submanifest")
+        self.set_permissions("monolith.view_submanifest")
         response = self.get(reverse("monolith_api:sub_manifests"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -2648,13 +2609,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_sub_manifest_not_found(self):
-        self._set_permissions("monolith.view_submanifest")
+        self.set_permissions("monolith.view_submanifest")
         response = self.get(reverse("monolith_api:sub_manifest", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
     def test_get_sub_manifest(self):
         sub_manifest = force_sub_manifest()
-        self._set_permissions("monolith.view_submanifest")
+        self.set_permissions("monolith.view_submanifest")
         response = self.get(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
@@ -2669,16 +2630,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # create sub manifest
 
     def test_create_sub_manifest_unauthorized(self):
-        response = self._post_json_data(reverse("monolith_api:sub_manifests"), include_token=False, data={})
+        response = self.post(reverse("monolith_api:sub_manifests"), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_create_sub_manifest_permission_denied(self):
-        response = self._post_json_data(reverse("monolith_api:sub_manifests"), data={})
+        response = self.post(reverse("monolith_api:sub_manifests"), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_create_sub_manifest_fields_empty(self):
-        self._set_permissions("monolith.add_submanifest")
-        response = self._post_json_data(reverse("monolith_api:sub_manifests"), data={})
+        self.set_permissions("monolith.add_submanifest")
+        response = self.post(reverse("monolith_api:sub_manifests"), data={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             'name': ['This field is required.'],
@@ -2686,10 +2647,10 @@ class MonolithAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_sub_manifest(self, post_event):
-        self._set_permissions("monolith.add_submanifest")
+        self.set_permissions("monolith.add_submanifest")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data(reverse("monolith_api:sub_manifests"), data={
+            response = self.post(reverse("monolith_api:sub_manifests"), data={
                 'name': name
             })
         self.assertEqual(response.status_code, 201)
@@ -2729,28 +2690,28 @@ class MonolithAPIViewsTestCase(TestCase):
     # update sub manifest
 
     def test_update_sub_manifest_unauthorized(self):
-        response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(9999,)),
-                                       include_token=False, data={})
+        response = self.put(reverse("monolith_api:sub_manifest", args=(9999,)),
+                            include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_update_sub_manifest_permission_denied(self):
-        response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(9999,)), data={})
+        response = self.put(reverse("monolith_api:sub_manifest", args=(9999,)), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_update_sub_manifest_not_found(self):
-        self._set_permissions("monolith.change_submanifest")
-        response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(9999,)), data={})
+        self.set_permissions("monolith.change_submanifest")
+        response = self.put(reverse("monolith_api:sub_manifest", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_sub_manifest(self, post_event):
         sub_manifest = force_sub_manifest()
-        self._set_permissions("monolith.change_submanifest")
+        self.set_permissions("monolith.change_submanifest")
         prev_value = sub_manifest.serialize_for_event()
         new_name = get_random_string(12)
         new_description = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._put_json_data(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)), data={
+            response = self.put(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)), data={
                 'name': new_name,
                 'description': new_description,
                 'meta_business_unit': self.mbu.pk,
@@ -2804,7 +2765,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_delete_sub_manifest_not_found(self):
-        self._set_permissions("monolith.delete_submanifest")
+        self.set_permissions("monolith.delete_submanifest")
         response = self.delete(reverse("monolith_api:sub_manifest", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -2812,7 +2773,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_delete_sub_manifest(self, post_event):
         sub_manifest = force_sub_manifest()
         prev_value = sub_manifest.serialize_for_event()
-        self._set_permissions("monolith.delete_submanifest")
+        self.set_permissions("monolith.delete_submanifest")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.delete(reverse("monolith_api:sub_manifest", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 204)
@@ -2844,7 +2805,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_sub_manifest_pkg_infos_filter_by_sub_manifest_id_not_found(self):
-        self._set_permissions("monolith.view_submanifestpkginfo")
+        self.set_permissions("monolith.view_submanifestpkginfo")
         sub_manifest = force_sub_manifest()
         response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"), {"sub_manifest_id": sub_manifest.pk})
         self.assertEqual(response.status_code, 200)
@@ -2853,7 +2814,7 @@ class MonolithAPIViewsTestCase(TestCase):
     def test_get_sub_manifest_pkg_infos_filter_by_sub_manifest_id(self):
         force_sub_manifest_pkg_info()
         sub_manifest_pkg_info = force_sub_manifest_pkg_info()
-        self._set_permissions("monolith.view_submanifestpkginfo")
+        self.set_permissions("monolith.view_submanifestpkginfo")
         response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"),
                             {"sub_manifest_id": sub_manifest_pkg_info.sub_manifest.id})
         self.assertEqual(response.status_code, 200)
@@ -2874,7 +2835,7 @@ class MonolithAPIViewsTestCase(TestCase):
 
     def test_get_sub_manifest_pkg_infos(self):
         sub_manifest_pkg_info = force_sub_manifest_pkg_info()
-        self._set_permissions("monolith.view_submanifestpkginfo")
+        self.set_permissions("monolith.view_submanifestpkginfo")
         response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -2903,13 +2864,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_sub_manifest_pkg_info_not_found(self):
-        self._set_permissions("monolith.view_submanifestpkginfo")
+        self.set_permissions("monolith.view_submanifestpkginfo")
         response = self.get(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
     def test_get_sub_manifest_pkg_info(self):
         sub_manifest_pkg_info = force_sub_manifest_pkg_info()
-        self._set_permissions("monolith.view_submanifestpkginfo")
+        self.set_permissions("monolith.view_submanifestpkginfo")
         response = self.get(reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
@@ -2930,16 +2891,16 @@ class MonolithAPIViewsTestCase(TestCase):
     # create sub manifest pkg info
 
     def test_create_sub_manifest_pkg_info_unauthorized(self):
-        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), include_token=False, data={})
+        response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_create_sub_manifest_pkg_info_permission_denied(self):
-        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={})
+        response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_create_sub_manifest_pkg_info_fields_empty(self):
-        self._set_permissions("monolith.add_submanifestpkginfo")
-        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={})
+        self.set_permissions("monolith.add_submanifestpkginfo")
+        response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), data={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
             'sub_manifest': ['This field is required.'],
@@ -2950,9 +2911,9 @@ class MonolithAPIViewsTestCase(TestCase):
         })
 
     def test_create_sub_manifest_pkg_info_unknown_pkg_info_name(self):
-        self._set_permissions("monolith.add_submanifestpkginfo")
+        self.set_permissions("monolith.add_submanifestpkginfo")
         sub_manifest = force_sub_manifest()
-        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+        response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), data={
             'sub_manifest': sub_manifest.pk,
             'pkg_info_name': get_random_string(12),
             'featured_item': True,
@@ -2964,12 +2925,12 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {'pkg_info_name': ['Unknown PkgInfo name']})
 
     def test_create_sub_manifest_pkg_info_scoping_errors(self):
-        self._set_permissions("monolith.add_submanifestpkginfo")
+        self.set_permissions("monolith.add_submanifestpkginfo")
         sub_manifest = force_sub_manifest()
         pkg_info_name = force_name()
         tag1 = Tag.objects.create(name=get_random_string(12))
         tag2 = Tag.objects.create(name=get_random_string(12))
-        response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+        response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), data={
             'sub_manifest': sub_manifest.pk,
             'pkg_info_name': pkg_info_name.name,
             'key': 'managed_installs',
@@ -2993,13 +2954,13 @@ class MonolithAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_sub_manifest_pkg_info(self, post_event):
-        self._set_permissions("monolith.add_submanifestpkginfo")
+        self.set_permissions("monolith.add_submanifestpkginfo")
         manifest = force_manifest()
         sub_manifest = force_sub_manifest(manifest=manifest)
         self.assertEqual(manifest.version, 1)
         pkg_info_name = force_name()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+            response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), data={
                 'sub_manifest': sub_manifest.pk,
                 'pkg_info_name': pkg_info_name.name,
                 'featured_item': True,
@@ -3060,24 +3021,24 @@ class MonolithAPIViewsTestCase(TestCase):
     # update sub manifest pkg info
 
     def test_update_sub_manifest_pkg_info_unauthorized(self):
-        response = self._put_json_data(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)),
-                                       include_token=False, data={})
+        response = self.put(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)),
+                            include_token=False, data={})
         self.assertEqual(response.status_code, 401)
 
     def test_update_sub_manifest_pkg_info_permission_denied(self):
-        response = self._put_json_data(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)), data={})
+        response = self.put(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)), data={})
         self.assertEqual(response.status_code, 403)
 
     def test_update_sub_manifest_pkg_info_not_found(self):
-        self._set_permissions("monolith.change_submanifestpkginfo")
-        response = self._put_json_data(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)), data={})
+        self.set_permissions("monolith.change_submanifestpkginfo")
+        response = self.put(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_sub_manifest_pkg_info(self, post_event):
         sub_manifest_pkg_info = force_sub_manifest_pkg_info()
         prev_value = sub_manifest_pkg_info.serialize_for_event()
-        self._set_permissions("monolith.change_submanifestpkginfo")
+        self.set_permissions("monolith.change_submanifestpkginfo")
         new_manifest = force_manifest()
         new_sub_manifest = force_sub_manifest(manifest=new_manifest)
         self.assertEqual(new_manifest.version, 1)
@@ -3086,7 +3047,7 @@ class MonolithAPIViewsTestCase(TestCase):
         excluded_tag = Tag.objects.create(name=get_random_string(12))
         shard_tag = Tag.objects.create(name=get_random_string(12))
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._put_json_data(
+            response = self.put(
                 reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)),
                 data={
                     'sub_manifest': new_sub_manifest.pk,
@@ -3171,7 +3132,7 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_delete_sub_manifest_pkg_info_not_found(self):
-        self._set_permissions("monolith.delete_submanifestpkginfo")
+        self.set_permissions("monolith.delete_submanifestpkginfo")
         response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
@@ -3183,7 +3144,7 @@ class MonolithAPIViewsTestCase(TestCase):
         manifest = sub_manifest.manifestsubmanifest_set.first().manifest
         self.assertEqual(manifest.version, 1)
         force_pkg_info(sub_manifest=sub_manifest)
-        self._set_permissions("monolith.delete_submanifestpkginfo")
+        self.set_permissions("monolith.delete_submanifestpkginfo")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.delete(reverse("monolith_api:sub_manifest_pkg_info", args=(sub_manifest_pkg_info.pk,)))
         self.assertEqual(response.status_code, 204)

@@ -1,25 +1,24 @@
-from functools import reduce
-import operator
 import uuid
 import json
 from unittest.mock import patch, Mock
+from django.contrib.auth.models import Group
+from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
 from django.utils.crypto import get_random_string
-from accounts.models import User
-from zentral.contrib.google_workspace.models import Connection, GroupTagMapping
-from django.core.files.uploadedfile import SimpleUploadedFile
-from oauthlib.oauth2.rfc6749.errors import InvalidGrantError
-from zentral.contrib.inventory.models import Tag
-from django.core.cache import cache
-from zentral.contrib.google_workspace.api_client import _AdminSDKClient
 from googleapiclient.errors import HttpError
+from oauthlib.oauth2.rfc6749.errors import InvalidGrantError
+
+from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.google_workspace.models import Connection, GroupTagMapping
+from zentral.contrib.inventory.models import Tag
+from zentral.contrib.google_workspace.api_client import _AdminSDKClient
 from zentral.core.events.base import AuditEvent
 
 
-class ConnectionViewsTestCase(TestCase):
+class ConnectionViewsTestCase(TestCase, LoginCase):
 
     @classmethod
     def setUpTestData(cls):
@@ -28,31 +27,18 @@ class ConnectionViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "google_workspace"
+
     # utils
-
-    def _login_redirect(self, url_name, *args):
-        url = reverse(f"google_workspace:{url_name}", args=args)
-        response = self.client.get(url)
-        self.assertRedirects(response, f"{reverse('login')}?next={url}")
-
-    def _permission_denied(self, url_name, *args):
-        url = reverse(f"google_workspace:{url_name}", args=args)
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 403)
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _given_connection(
         self,
@@ -140,21 +126,21 @@ class ConnectionViewsTestCase(TestCase):
     # IndexView
 
     def test_index_login_redirect(self):
-        self._login_redirect("index")
+        self.login_redirect("index")
 
     def test_index_permission_denied(self):
-        self._login()
-        self._permission_denied("index")
+        self.login()
+        self.permission_denied("index")
 
     def test_index(self):
-        self._login("google_workspace.view_connection")
+        self.login("google_workspace.view_connection")
 
         response = self.client.get(reverse("google_workspace:index"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Google Workspace")
 
     def test_index_post(self):
-        self._login("google_workspace.view_connection")
+        self.login("google_workspace.view_connection")
 
         response = self.client.post(reverse("google_workspace:index"), follow=True)
         self.assertEqual(response.status_code, 405)
@@ -162,14 +148,14 @@ class ConnectionViewsTestCase(TestCase):
     # ConnectionsView
 
     def test_connection_list_login_redirect(self):
-        self._login_redirect("connections")
+        self.login_redirect("connections")
 
     def test_connection_list_permission_denied(self):
-        self._login()
-        self._permission_denied("connections")
+        self.login()
+        self.permission_denied("connections")
 
     def test_connection_list(self):
-        self._login("google_workspace.view_connection")
+        self.login("google_workspace.view_connection")
         connection = self._given_connection()
 
         response = self.client.get(reverse("google_workspace:connections"))
@@ -183,9 +169,9 @@ class ConnectionViewsTestCase(TestCase):
         self.assertNotContains(response, "Delete connection")
 
     def test_connection_list_with_edit_permissions(self):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.add_connection",
-                    "google_workspace.change_connection")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.add_connection",
+                   "google_workspace.change_connection")
         connection = self._given_connection()
 
         response = self.client.get(reverse("google_workspace:connections"))
@@ -200,8 +186,8 @@ class ConnectionViewsTestCase(TestCase):
         self.assertNotContains(response, "Delete connection")
 
     def test_connection_list_with_delete_permissions(self):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.delete_connection")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.delete_connection")
         connection = self._given_connection()
 
         response = self.client.get(reverse("google_workspace:connections"))
@@ -215,8 +201,8 @@ class ConnectionViewsTestCase(TestCase):
         self.assertContains(response, "Delete connection")
 
     def test_connection_list_with_delete_permissions_can_not_delete(self):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.delete_connection")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.delete_connection")
         connection = self._given_connection()
         self._given_group_tag_mapping(connection)
 
@@ -233,14 +219,14 @@ class ConnectionViewsTestCase(TestCase):
     # CreateConnectionView
 
     def test_connection_create_login_redirect(self):
-        self._login_redirect("create_connection")
+        self.login_redirect("create_connection")
 
     def test_connection_create_permission_denied(self):
-        self._login()
-        self._permission_denied("create_connection")
+        self.login()
+        self.permission_denied("create_connection")
 
     def test_connection_create(self):
-        self._login("google_workspace.add_connection")
+        self.login("google_workspace.add_connection")
 
         response = self.client.get(reverse("google_workspace:create_connection"))
         self.assertEqual(response.status_code, 200)
@@ -249,7 +235,7 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_connection_create_redirect(self, post_event):
-        self._login("google_workspace.add_connection")
+        self.login("google_workspace.add_connection")
         connection_name = get_random_string(12)
         client_config = self._given_client_config()
 
@@ -269,7 +255,7 @@ class ConnectionViewsTestCase(TestCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_connection_create_redirect_cloud_id(self, post_event, build):
-        self._login("google_workspace.add_connection")
+        self.login("google_workspace.add_connection")
         connection_name = get_random_string(12)
         customer_id = f"C{get_random_string(5)}"
         build.return_value.groups.side_effect = HttpError(Mock(status=404), b"")
@@ -288,7 +274,7 @@ class ConnectionViewsTestCase(TestCase):
         self._assert_audit_event_send(connection, post_event, callbacks, AuditEvent.Action.CREATED)
 
     def test_connection_create_form_errors(self):
-        self._login("google_workspace.add_connection")
+        self.login("google_workspace.add_connection")
 
         response = self.client.post(reverse("google_workspace:create_connection"),
                                     {"type": Connection.Type.OAUTH_ADMIN_SDK},
@@ -302,7 +288,7 @@ class ConnectionViewsTestCase(TestCase):
         )
 
     def test_connection_create_form_errors_cloud_id(self):
-        self._login("google_workspace.add_connection")
+        self.login("google_workspace.add_connection")
 
         response = self.client.post(reverse("google_workspace:create_connection"),
                                     {"type": Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY},
@@ -316,7 +302,7 @@ class ConnectionViewsTestCase(TestCase):
         )
 
     def test_connection_create_form_errors_cloud_id_customer_id(self):
-        self._login("google_workspace.add_connection")
+        self.login("google_workspace.add_connection")
 
         response = self.client.post(reverse("google_workspace:create_connection"),
                                     {
@@ -330,7 +316,7 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection_create_form_errors_cloud_id_not_healthy(self, build):
-        self._login("google_workspace.add_connection")
+        self.login("google_workspace.add_connection")
         build.return_value.groups.side_effect = HttpError(Mock(status=400), b"")
 
         response = self.client.post(reverse("google_workspace:create_connection"),
@@ -346,17 +332,17 @@ class ConnectionViewsTestCase(TestCase):
     # ConnectionRedirectView
 
     def test_connection_redirect_login_redirect(self):
-        self._login_redirect("redirect")
+        self.login_redirect("redirect")
 
     def test_connection_redirect_permission_denied(self):
-        self._login()
-        self._permission_denied("redirect")
+        self.login()
+        self.permission_denied("redirect")
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     @patch('zentral.contrib.google_workspace.api_client.InstalledAppFlow.from_client_config')
     def test_connection_redirect(self, from_client_config, build):
-        self._login("google_workspace.add_connection",
-                    "google_workspace.view_connection")
+        self.login("google_workspace.add_connection",
+                   "google_workspace.view_connection")
         state = get_random_string(5)
         cache_key = f"{_AdminSDKClient.oauth2_state_cache_key_prefix}{state}"
         connection = self._given_connection()
@@ -375,8 +361,8 @@ class ConnectionViewsTestCase(TestCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     @patch('zentral.contrib.google_workspace.api_client.InstalledAppFlow.from_client_config')
     def test_connection_redirect_failed_authorization(self, from_client_config, build):
-        self._login("google_workspace.add_connection",
-                    "google_workspace.view_connection")
+        self.login("google_workspace.add_connection",
+                   "google_workspace.view_connection")
         state = get_random_string(5)
         cache_key = f"{_AdminSDKClient.oauth2_state_cache_key_prefix}{state}"
         connection = self._given_connection(user_info=None)
@@ -392,7 +378,7 @@ class ConnectionViewsTestCase(TestCase):
         self.assertRedirects(response, reverse("google_workspace:connection", args={connection.pk, }))
 
     def test_connection_redirect_post(self):
-        self._login("google_workspace.add_connection")
+        self.login("google_workspace.add_connection")
 
         response = self.client.post(reverse("google_workspace:redirect"), follow=True)
         self.assertEqual(response.status_code, 405)
@@ -400,15 +386,15 @@ class ConnectionViewsTestCase(TestCase):
     # AuthorizeConnectionView
 
     def test_connection_authorize_login_redirect(self):
-        self._login_redirect("authorize_connection", uuid.uuid4())
+        self.login_redirect("authorize_connection", uuid.uuid4())
 
     def test_connection_authorize_permission_denied(self):
-        self._login()
-        self._permission_denied("authorize_connection", uuid.uuid4())
+        self.login()
+        self.permission_denied("authorize_connection", uuid.uuid4())
 
     @patch("google_auth_oauthlib.flow.InstalledAppFlow.from_client_config")
     def test_connection_authorize(self, from_client_config):
-        self._login("google_workspace.view_connection")
+        self.login("google_workspace.view_connection")
         connection = self._given_connection(user_info=None)
         redirect_url = f"https://redirect.{get_random_string(5)}.zentral.com"
         from_client_config.return_value.authorization_url.return_value = {0: redirect_url}
@@ -419,7 +405,7 @@ class ConnectionViewsTestCase(TestCase):
         self.assertEqual(response.headers["Location"], redirect_url)
 
     def test_connection_authorize_post(self):
-        self._login("google_workspace.view_connection")
+        self.login("google_workspace.view_connection")
         connection = self._given_connection()
 
         response = self.client.post(reverse("google_workspace:authorize_connection", args=(connection.pk,)),
@@ -429,14 +415,14 @@ class ConnectionViewsTestCase(TestCase):
     # UpdateConnectionView
 
     def test_connection_udpate_login_redirect(self):
-        self._login_redirect("update_connection", uuid.uuid4())
+        self.login_redirect("update_connection", uuid.uuid4())
 
     def test_connection_udpate_permission_denied(self):
-        self._login()
-        self._permission_denied("update_connection", uuid.uuid4())
+        self.login()
+        self.permission_denied("update_connection", uuid.uuid4())
 
     def test_connection_udpate(self):
-        self._login("google_workspace.change_connection")
+        self.login("google_workspace.change_connection")
         connection = self._given_connection()
 
         response = self.client.get(reverse("google_workspace:update_connection", args=(connection.pk,)))
@@ -447,8 +433,8 @@ class ConnectionViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection_udpate_redirect(self, build, post_event):
-        self._login("google_workspace.change_connection",
-                    "google_workspace.view_connection")
+        self.login("google_workspace.change_connection",
+                   "google_workspace.view_connection")
         connection_name = get_random_string(12)
         connection = self._given_connection()
         prev_value = connection.serialize_for_event()
@@ -471,8 +457,8 @@ class ConnectionViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection_udpate_redirect_cloud_id(self, build, post_event):
-        self._login("google_workspace.change_connection",
-                    "google_workspace.view_connection")
+        self.login("google_workspace.change_connection",
+                   "google_workspace.view_connection")
         connection_name = get_random_string(12)
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
@@ -497,8 +483,8 @@ class ConnectionViewsTestCase(TestCase):
         self._assert_audit_event_send(connection, post_event, callbacks, AuditEvent.Action.UPDATED, prev_value)
 
     def test_connection_udpate_authenticate(self):
-        self._login("google_workspace.change_connection",
-                    "google_workspace.view_connection")
+        self.login("google_workspace.change_connection",
+                   "google_workspace.view_connection")
         connection = self._given_connection(user_info=None)
         client_config = self._given_client_config()
 
@@ -512,8 +498,8 @@ class ConnectionViewsTestCase(TestCase):
         self.assertTrue(response.headers["Location"].startswith("https://zentral.com/oauth2/auth"))
 
     def test_connection_udpate_form_errors(self):
-        self._login("google_workspace.change_connection",
-                    "google_workspace.view_connection")
+        self.login("google_workspace.change_connection",
+                   "google_workspace.view_connection")
         connection = self._given_connection()
         client_config = SimpleUploadedFile(
             "config.json",
@@ -532,8 +518,8 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection_udpate_form_errors_cloud_id(self, build):
-        self._login("google_workspace.change_connection",
-                    "google_workspace.view_connection")
+        self.login("google_workspace.change_connection",
+                   "google_workspace.view_connection")
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
             customer_id=f"C{get_random_string(5)}"
@@ -553,14 +539,14 @@ class ConnectionViewsTestCase(TestCase):
     # DeleteConnectionView
 
     def test_connection_delete_login_redirect(self):
-        self._login_redirect("delete_connection", uuid.uuid4())
+        self.login_redirect("delete_connection", uuid.uuid4())
 
     def test_connection_delete_permission_denied(self):
-        self._login()
-        self._permission_denied("delete_connection", uuid.uuid4())
+        self.login()
+        self.permission_denied("delete_connection", uuid.uuid4())
 
     def test_connection_delete(self):
-        self._login("google_workspace.delete_connection")
+        self.login("google_workspace.delete_connection")
         connection = self._given_connection()
 
         response = self.client.get(reverse("google_workspace:delete_connection", args=(connection.pk,)))
@@ -571,8 +557,8 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_connection_delete_redirect(self, post_event):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.delete_connection")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.delete_connection")
         connection = self._given_connection()
         prev_value = connection.serialize_for_event()
 
@@ -590,15 +576,15 @@ class ConnectionViewsTestCase(TestCase):
     # ConnectionView
 
     def test_connection__redirect(self):
-        self._login_redirect("connection", uuid.uuid4())
+        self.login_redirect("connection", uuid.uuid4())
 
     def test_connection_permission_denied(self):
-        self._login()
-        self._permission_denied("connection", uuid.uuid4())
+        self.login()
+        self.permission_denied("connection", uuid.uuid4())
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection(self, build):
-        self._login("google_workspace.view_connection")
+        self.login("google_workspace.view_connection")
         connection = self._given_connection()
         build.return_value = Mock()
 
@@ -618,7 +604,7 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection_cloud_id(self, build):
-        self._login("google_workspace.view_connection")
+        self.login("google_workspace.view_connection")
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
             customer_id=f"C{get_random_string(5)}",
@@ -641,7 +627,7 @@ class ConnectionViewsTestCase(TestCase):
         self.assertNotContains(response, "Create new group tag mapping")
 
     def test_connection_post(self):
-        self._login("google_workspace.view_connection")
+        self.login("google_workspace.view_connection")
         connection = self._given_connection()
 
         response = self.client.post(reverse("google_workspace:connection", args=(connection.pk,)), follow=True)
@@ -649,8 +635,8 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection_group_tag_mapping(self, build):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.add_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.add_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
         build.return_value.groups.return_value.list.return_value.execute.side_effect = HttpError(Mock(status=404), b"")
@@ -670,10 +656,10 @@ class ConnectionViewsTestCase(TestCase):
         self.assertNotContains(response, "Delete group tag mapping")
 
     def test_connection_group_tag_mapping_missing_refresh_token(self):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.add_grouptagmapping",
-                    "google_workspace.change_grouptagmapping",
-                    "google_workspace.delete_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.add_grouptagmapping",
+                   "google_workspace.change_grouptagmapping",
+                   "google_workspace.delete_grouptagmapping")
         connection = self._given_connection(f"""{{
                             "client_id": "{get_random_string(12)}",
                             "client_secret": "{get_random_string(12)}"
@@ -695,9 +681,9 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection_group_tag_mapping_with_edit_permision(self, build):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.add_grouptagmapping",
-                    "google_workspace.change_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.add_grouptagmapping",
+                   "google_workspace.change_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
         build.return_value = Mock()
@@ -718,9 +704,9 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection_group_tag_mapping_with_delete_permision(self, build):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.add_grouptagmapping",
-                    "google_workspace.delete_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.add_grouptagmapping",
+                   "google_workspace.delete_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
         build.return_value = Mock()
@@ -742,14 +728,14 @@ class ConnectionViewsTestCase(TestCase):
     # CreateGroupTagMappingView
 
     def test_group_tag_mapping_create_login_redirect(self):
-        self._login_redirect("create_group_tag_mapping", uuid.uuid4())
+        self.login_redirect("create_group_tag_mapping", uuid.uuid4())
 
     def test_group_tag_mapping_create_permission_denied(self):
-        self._login()
-        self._permission_denied("create_group_tag_mapping", uuid.uuid4())
+        self.login()
+        self.permission_denied("create_group_tag_mapping", uuid.uuid4())
 
     def test_group_tag_mapping_create(self):
-        self._login("google_workspace.add_grouptagmapping")
+        self.login("google_workspace.add_grouptagmapping")
         connection = self._given_connection()
 
         response = self.client.get(reverse("google_workspace:create_group_tag_mapping", args=(connection.pk,)))
@@ -760,8 +746,8 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_create_redirect(self, build):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.add_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.add_grouptagmapping")
         connection = self._given_connection()
         tag = self._given_tag()
         group_email = f"{connection.name}@zentral.com"
@@ -786,8 +772,8 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_create_redirect_cloud_id(self, build):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.add_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.add_grouptagmapping")
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
             customer_id=f"C{get_random_string(5)}",
@@ -815,7 +801,7 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_create_form_errors(self, build):
-        self._login("google_workspace.add_grouptagmapping")
+        self.login("google_workspace.add_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
         build.return_value.groups.return_value.list.return_value.execute.return_value = {
@@ -832,7 +818,7 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_create_form_errors_cloud_id(self, build):
-        self._login("google_workspace.add_grouptagmapping")
+        self.login("google_workspace.add_grouptagmapping")
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
             customer_id=f"C{get_random_string(5)}",
@@ -853,14 +839,14 @@ class ConnectionViewsTestCase(TestCase):
     # UpdateGroupTagMappingView
 
     def test_group_tag_mapping_update_login_redirect(self):
-        self._login_redirect("update_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
+        self.login_redirect("update_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
 
     def test_group_tag_mapping_update_permission_denied(self):
-        self._login()
-        self._permission_denied("update_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
+        self.login()
+        self.permission_denied("update_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
 
     def test_group_tag_mapping_update(self):
-        self._login("google_workspace.change_grouptagmapping")
+        self.login("google_workspace.change_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
 
@@ -873,8 +859,8 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_update_redirect(self, build):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.change_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.change_grouptagmapping")
         connection = self._given_connection()
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
@@ -895,8 +881,8 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_update_redirect_cloud_id(self, build):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.change_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.change_grouptagmapping")
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
             customer_id=f"C{get_random_string(5)}",
@@ -920,7 +906,7 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_update_form_errors(self, build):
-        self._login("google_workspace.change_grouptagmapping")
+        self.login("google_workspace.change_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
         build.return_value.groups.return_value.get.side_effect = HttpError(Mock(status=404), b"")
@@ -935,7 +921,7 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_update_form_errors_cloud_id(self, build):
-        self._login("google_workspace.change_grouptagmapping")
+        self.login("google_workspace.change_grouptagmapping")
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
             customer_id=f"C{get_random_string(5)}",
@@ -955,14 +941,14 @@ class ConnectionViewsTestCase(TestCase):
     # DeleteGroupTagMappingView
 
     def test_group_tag_mapping_delete_login_redirect(self):
-        self._login_redirect("delete_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
+        self.login_redirect("delete_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
 
     def test_group_tag_mapping_delete_permission_denied(self):
-        self._login()
-        self._permission_denied("delete_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
+        self.login()
+        self.permission_denied("delete_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
 
     def test_group_tag_mapping_delete(self):
-        self._login("google_workspace.delete_grouptagmapping")
+        self.login("google_workspace.delete_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
 
@@ -975,8 +961,8 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_delete_redirect(self, build):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.delete_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.delete_grouptagmapping")
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
 
@@ -990,8 +976,8 @@ class ConnectionViewsTestCase(TestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_delete_redirect_cloud_id(self, build):
-        self._login("google_workspace.view_connection",
-                    "google_workspace.delete_grouptagmapping")
+        self.login("google_workspace.view_connection",
+                   "google_workspace.delete_grouptagmapping")
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
             customer_id=f"C{get_random_string(5)}",

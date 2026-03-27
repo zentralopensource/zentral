@@ -1,20 +1,22 @@
 from datetime import datetime
-from functools import reduce
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaMachine
 from zentral.core.incidents.models import MachineIncident, Incident, Severity, Status
 from zentral.core.probes.models import ProbeSource
+from zentral.utils.provisioning import provision
 
 
-class InventoryIncidentsViewsTestCase(TestCase):
+class InventoryIncidentsViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
+        # stores
+        provision()
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
@@ -42,25 +44,18 @@ class InventoryIncidentsViewsTestCase(TestCase):
         cls.machine = MetaMachine(cls.serial_number)
         cls.url_msn = cls.machine.get_urlsafe_serial_number()
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "inventory"
+
     # utility methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _force_incident(self, incident_type="probe", key=None, status=Status.OPEN, severity=Severity.CRITICAL):
         return Incident.objects.create(
@@ -82,17 +77,17 @@ class InventoryIncidentsViewsTestCase(TestCase):
     # machine incidents
 
     def test_machine_incidents_redirect(self):
-        self._login_redirect(reverse("inventory:machine_incidents", args=(self.url_msn,)))
+        self.login_redirect("machine_incidents", self.url_msn)
 
     def test_machine_incidents_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:machine_incidents", args=(self.url_msn,)))
         self.assertEqual(response.status_code, 403)
 
     def test_machine_incidents_no_incident_links(self):
         incident = self._force_incident()
         self._force_machine_incident(incident)
-        self._login(
+        self.login(
             "inventory.view_machinesnapshot",
             "incidents.view_machineincident",
         )
@@ -105,7 +100,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
     def test_machine_incidents_incident_links(self):
         incident = self._force_incident()
         self._force_machine_incident(incident)
-        self._login(
+        self.login(
             "inventory.view_machinesnapshot",
             "incidents.view_incident",
             "incidents.view_machineincident",
@@ -121,7 +116,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
     def test_open_incidents_no_perms_no_open_incidents(self):
         incident = self._force_incident()
         self._force_machine_incident(incident)
-        self._login(
+        self.login(
             "inventory.view_machinesnapshot",
         )
         response = self.client.get(self.machine.get_absolute_url())
@@ -134,7 +129,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
     def test_open_incidents_one_open_incidents_no_link(self):
         incident = self._force_incident()
         self._force_machine_incident(incident)
-        self._login(
+        self.login(
             "inventory.view_machinesnapshot",
             "incidents.view_machineincident",
         )
@@ -148,7 +143,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
     def test_open_incidents_one_open_incidents_with_link(self):
         incident = self._force_incident()
         self._force_machine_incident(incident)
-        self._login(
+        self.login(
             "inventory.view_machinesnapshot",
             "incidents.view_incident",
             "incidents.view_machineincident",
@@ -165,7 +160,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
         self._force_machine_incident(incident)
         incident2 = self._force_incident()
         self._force_machine_incident(incident2)
-        self._login(
+        self.login(
             "inventory.view_machinesnapshot",
             "incidents.view_incident",
             "incidents.view_machineincident",
@@ -184,7 +179,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
         self._force_machine_incident(incident, status=Status.CLOSED)
         incident2 = self._force_incident()
         self._force_machine_incident(incident2)
-        self._login(
+        self.login(
             "inventory.view_machinesnapshot",
             "incidents.view_incident",
             "incidents.view_machineincident",

@@ -1,20 +1,19 @@
-from functools import reduce
-import operator
 from unittest.mock import Mock, patch
 from cryptography.hazmat.primitives import serialization
-from django.contrib.auth.models import Group, Permission
+from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.mdm.models import UserEnrollment
 from .utils import force_push_certificate, force_push_certificate_material, force_scep_issuer
 
 
-class MDMUserEnrollmentSetupViewsTestCase(TestCase):
+class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
@@ -23,25 +22,18 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
+
     # utiliy methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _force_user_enrollment(self):
         return UserEnrollment.objects.create(
@@ -63,22 +55,22 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     # upload push certificate
 
     def test_upload_push_certificate_redirect(self):
-        self._login_redirect(reverse("mdm:upload_push_certificate"))
+        self.login_redirect("upload_push_certificate")
 
     def test_upload_push_certificate_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:upload_push_certificate"))
         self.assertEqual(response.status_code, 403)
 
     def test_upload_push_certificate_get(self):
-        self._login("mdm.add_pushcertificate")
+        self.login("mdm.add_pushcertificate")
         response = self.client.get(reverse("mdm:upload_push_certificate"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
         self.assertContains(response, "Upload MDM push certificate and key")
 
     def test_upload_push_certificate_post(self):
-        self._login("mdm.add_pushcertificate", "mdm.view_pushcertificate")
+        self.login("mdm.add_pushcertificate", "mdm.view_pushcertificate")
         name = get_random_string(12)
         topic = get_random_string(12)
         cert_pem, privkey_pem, privkey_password = force_push_certificate_material(topic)
@@ -103,15 +95,15 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     # create push certificate
 
     def test_create_push_certificate_redirect(self):
-        self._login_redirect(reverse("mdm:create_push_certificate"))
+        self.login_redirect("create_push_certificate")
 
     def test_create_push_certificate_permission_denied(self):
-        self._login("mdm.view_pushcertificate")
+        self.login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:create_push_certificate"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_push_certificate_get(self):
-        self._login("mdm.add_pushcertificate")
+        self.login("mdm.add_pushcertificate")
         response = self.client.get(reverse("mdm:create_push_certificate"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
@@ -119,7 +111,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_create_push_certificate_name_collision(self):
         push_certificate = force_push_certificate()
-        self._login("mdm.add_pushcertificate")
+        self.login("mdm.add_pushcertificate")
         response = self.client.post(reverse("mdm:create_push_certificate"),
                                     {"name": push_certificate.name})
         self.assertEqual(response.status_code, 200)
@@ -127,7 +119,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "name", "Push certificate with this Name already exists.")
 
     def test_create_push_certificate_name_post(self):
-        self._login("mdm.add_pushcertificate", "mdm.view_pushcertificate")
+        self.login("mdm.add_pushcertificate", "mdm.view_pushcertificate")
         name = get_random_string(12)
         response = self.client.post(reverse("mdm:create_push_certificate"),
                                     {"name": name},
@@ -143,20 +135,20 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_view_push_certificate_redirect(self):
         push_certificate = force_push_certificate()
-        self._login_redirect(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
+        self.login_redirect("push_certificate", push_certificate.pk)
 
     def test_view_push_certificate_permission_denied(self):
         push_certificate = force_push_certificate()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_view_push_certificate_signer(self):
         topic = get_random_string(12)
         push_certificate = force_push_certificate(topic=topic, with_material=True)
-        self._login("mdm.view_pushcertificate",
-                    "mdm.change_pushcertificate",
-                    "mdm.delete_pushcertificate")
+        self.login("mdm.view_pushcertificate",
+                   "mdm.change_pushcertificate",
+                   "mdm.delete_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
@@ -171,9 +163,9 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def test_view_provisioned_push_certificate_signer(self):
         topic = get_random_string(12)
         push_certificate = force_push_certificate(topic=topic, with_material=True, provisioning_uid="YoLoFoMo")
-        self._login("mdm.view_pushcertificate",
-                    "mdm.change_pushcertificate",
-                    "mdm.delete_pushcertificate")
+        self.login("mdm.view_pushcertificate",
+                   "mdm.change_pushcertificate",
+                   "mdm.delete_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
@@ -189,9 +181,9 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def test_view_push_certificate_no_signer(self):
         topic = get_random_string(12)
         push_certificate = force_push_certificate(topic=topic, with_material=True)
-        self._login("mdm.view_pushcertificate",
-                    "mdm.change_pushcertificate",
-                    "mdm.delete_pushcertificate")
+        self.login("mdm.view_pushcertificate",
+                   "mdm.change_pushcertificate",
+                   "mdm.delete_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
@@ -205,9 +197,9 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def test_view_provisioned_push_certificate_no_signer(self):
         topic = get_random_string(12)
         push_certificate = force_push_certificate(topic=topic, with_material=True, provisioning_uid="YoLoFoMo")
-        self._login("mdm.view_pushcertificate",
-                    "mdm.change_pushcertificate",
-                    "mdm.delete_pushcertificate")
+        self.login("mdm.view_pushcertificate",
+                   "mdm.change_pushcertificate",
+                   "mdm.delete_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
@@ -220,7 +212,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def test_view_push_certificate_signer_no_links(self):
         topic = get_random_string(12)
         push_certificate = force_push_certificate(topic=topic, with_material=True)
-        self._login("mdm.view_pushcertificate")
+        self.login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
@@ -235,7 +227,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def test_view_push_certificate_no_signer_no_links(self):
         topic = get_random_string(12)
         push_certificate = force_push_certificate(topic=topic, with_material=True)
-        self._login("mdm.view_pushcertificate")
+        self.login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_detail.html")
@@ -248,7 +240,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_no_delete_push_certificate_link(self):
         enrollment = self._force_user_enrollment()
-        self._login("mdm.view_pushcertificate", "mdm.delete_pushcertificate")
+        self.login("mdm.view_pushcertificate", "mdm.delete_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate", args=(enrollment.push_certificate.pk,)))
         self.assertNotContains(response, reverse("mdm:delete_push_certificate",
                                                  args=(enrollment.push_certificate.pk,)))
@@ -257,17 +249,17 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_push_certificate_csr_redirect(self):
         push_certificate = force_push_certificate()
-        self._login_redirect(reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
+        self.login_redirect("push_certificate_csr", push_certificate.pk)
 
     def test_push_certificate_csr_permission_denied(self):
         push_certificate = force_push_certificate()
-        self._login("mdm.view_pushcertificate")
+        self.login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_push_certificate_csr(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login("mdm.change_pushcertificate")
+        self.login("mdm.change_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["Content-Type"], "application/pkcs10")
@@ -278,18 +270,18 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_push_certificate_signed_csr_redirect(self):
         push_certificate = force_push_certificate()
-        self._login_redirect(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
+        self.login_redirect("push_certificate_signed_csr", push_certificate.pk)
 
     def test_push_certificate_signed_csr_permission_denied(self):
         push_certificate = force_push_certificate()
-        self._login("mdm.view_pushcertificate")
+        self.login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.contrib.mdm.views.setup.push_csr_signer", False)
     def test_push_certificate_no_signer_404(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login("mdm.change_pushcertificate")
+        self.login("mdm.change_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 404)
 
@@ -301,7 +293,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         response.json.return_value = {"signed_csr": "1234"}
         requests_post.return_value = response
         push_certificate = force_push_certificate(with_material=True)
-        self._login("mdm.change_pushcertificate")
+        self.login("mdm.change_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificate_signed_csr", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(b''.join(response.streaming_content), b"1234")
@@ -314,17 +306,17 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_upload_push_certificate_certificate_redirect(self):
         push_certificate = force_push_certificate()
-        self._login_redirect(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
+        self.login_redirect("upload_push_certificate_certificate", push_certificate.pk)
 
     def test_upload_push_certificate_certificate_permission_denied(self):
         push_certificate = force_push_certificate()
-        self._login("mdm.view_pushcertificate")
+        self.login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_upload_push_certificate_certificate_get(self):
         push_certificate = force_push_certificate()
-        self._login("mdm.change_pushcertificate")
+        self.login("mdm.change_pushcertificate")
         response = self.client.get(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
@@ -338,7 +330,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         cert_pem, privkey_pem, _ = force_push_certificate_material(topic=topic, encrypt_key=False)
         push_certificate.set_private_key(privkey_pem)
         push_certificate.save()
-        self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
+        self.login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
         response = self.client.post(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)),
                                     {"name": push_certificate.name,
                                      "certificate_file": SimpleUploadedFile("cert.pem", cert_pem)},
@@ -352,7 +344,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def test_upload_push_certificate_certificate_cert_key_mismatch(self):
         push_certificate = force_push_certificate(with_material=True)
         cert_pem, _, _ = force_push_certificate_material(topic=push_certificate.topic, encrypt_key=False)
-        self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
+        self.login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
         response = self.client.post(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)),
                                     {"name": push_certificate.name,
                                      "certificate_file": SimpleUploadedFile("cert.pem", cert_pem)},
@@ -364,7 +356,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     def test_upload_push_certificate_certificate_different_topic(self):
         push_certificate = force_push_certificate(with_material=True)
         cert_pem, _, _ = force_push_certificate_material(privkey_bytes=push_certificate.get_private_key())
-        self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
+        self.login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
         response = self.client.post(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)),
                                     {"name": push_certificate.name,
                                      "certificate_file": SimpleUploadedFile("cert.pem", cert_pem)},
@@ -383,7 +375,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
             topic=push_certificate_conflict.topic,
             privkey_bytes=push_certificate.get_private_key()
         )
-        self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
+        self.login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
         response = self.client.post(reverse("mdm:upload_push_certificate_certificate", args=(push_certificate.pk,)),
                                     {"name": push_certificate.name,
                                      "certificate_file": SimpleUploadedFile("cert.pem", cert_pem)},
@@ -397,17 +389,17 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_renew_push_certificate_redirect(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login_redirect(reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
+        self.login_redirect("renew_push_certificate", push_certificate.pk)
 
     def test_renew_push_certificate_permission_denied(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_renew_push_certificate_get(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login("mdm.change_pushcertificate")
+        self.login("mdm.change_pushcertificate")
         response = self.client.get(reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_form.html")
@@ -418,7 +410,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         push_certificate = force_push_certificate(topic=topic)
         new_name = get_random_string(12)
         cert_pem, privkey_pem, privkey_password = force_push_certificate_material(topic)
-        self._login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
+        self.login("mdm.change_pushcertificate", "mdm.view_pushcertificate")
         response = self.client.post(reverse("mdm:renew_push_certificate", args=(push_certificate.pk,)),
                                     {"name": new_name,
                                      "certificate_file": SimpleUploadedFile("cert.pem", cert_pem),
@@ -436,17 +428,17 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     # list push certificates
 
     def test_list_push_certificates_redirect(self):
-        self._login_redirect(reverse("mdm:push_certificates"))
+        self.login_redirect("push_certificates")
 
     def test_list_push_certificates_permission_denied(self):
         force_push_certificate(with_material=True)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:push_certificates"))
         self.assertEqual(response.status_code, 403)
 
     def test_list_push_certificates(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login("mdm.view_pushcertificate")
+        self.login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:push_certificates"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_list.html")
@@ -457,17 +449,17 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_delete_push_certificate_redirect(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login_redirect(reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
+        self.login_redirect("delete_push_certificate", push_certificate.pk)
 
     def test_delete_push_certificate_permission_denied(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_push_certificate_get(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login("mdm.delete_pushcertificate")
+        self.login("mdm.delete_pushcertificate")
         response = self.client.get(reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_confirm_delete.html")
@@ -475,7 +467,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_delete_push_certificate_post(self):
         push_certificate = force_push_certificate(with_material=True)
-        self._login("mdm.delete_pushcertificate", "mdm.view_pushcertificate")
+        self.login("mdm.delete_pushcertificate", "mdm.view_pushcertificate")
         response = self.client.post(reverse("mdm:delete_push_certificate", args=(push_certificate.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/pushcertificate_list.html")
@@ -483,7 +475,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_delete_push_certificate_bad_request(self):
         enrollment = self._force_user_enrollment()
-        self._login("mdm.delete_pushcertificate")
+        self.login("mdm.delete_pushcertificate")
         response = self.client.post(reverse("mdm:delete_push_certificate",
                                             args=(enrollment.push_certificate.pk,)), follow=True)
         self.assertEqual(response.status_code, 400)

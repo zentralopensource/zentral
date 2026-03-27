@@ -2,7 +2,9 @@ import functools
 import logging
 import operator
 from datetime import timedelta
+import re
 
+from cedarpy import format_policies
 import celpy
 from django.contrib.auth.models import Permission
 from django.db import transaction
@@ -18,7 +20,7 @@ from .forms import (
     make_oidc_api_token_issuer_issuer_uri_validator,
     make_oidc_api_token_issuer_user_validator,
 )
-from .models import APIToken, Group, OIDCAPITokenIssuer, ProvisionedRole, User
+from .models import APIToken, Group, OIDCAPITokenIssuer, Policy, ProvisionedRole, User
 
 logger = logging.getLogger("server.accounts.serializer")
 
@@ -56,6 +58,39 @@ class RoleSerializer(serializers.ModelSerializer):
         if provisioning_uid:
             ProvisionedRole.objects.create(group=role, provisioning_uid=provisioning_uid)
         return role
+
+
+class PolicyProvisioningSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Policy
+        fields = (
+            "name",
+            "is_active",
+            "description",
+            "source",
+        )
+
+    def validate_source(self, value):
+        # The provisioning UIDs for the roles in the source are replaced by the PKs.
+        if value:
+            role_provisioning_uids = []
+            for match in re.finditer(r'Role::"(\S+)"', value):
+                role_provisioning_uid = match.group(1)
+                if role_provisioning_uid not in role_provisioning_uids:
+                    role_provisioning_uids.append(role_provisioning_uid)
+            if role_provisioning_uids:
+                for role_provisioning_uid, role_pk in Group.objects.filter(
+                    provisioned_role__provisioning_uid__in=role_provisioning_uids
+                ).values_list("provisioned_role__provisioning_uid", "pk"):
+                    value = value.replace(
+                        f'Role::"{role_provisioning_uid}"',
+                        f'Role::"{role_pk}"',
+                    )
+            try:
+                value = format_policies(value)
+            except Exception:
+                raise serializers.ValidationError("Invalid CEDAR policy")
+        return value
 
 
 class OIDCAPITokenIssuerSerializer(serializers.ModelSerializer):
