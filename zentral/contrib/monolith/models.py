@@ -1,7 +1,3 @@
-from dataclasses import dataclass
-from datetime import timedelta
-from functools import partial
-from itertools import chain
 import json
 import logging
 import os.path
@@ -9,20 +5,30 @@ import plistlib
 import re
 import unicodedata
 import urllib.parse
+from dataclasses import dataclass
+from datetime import timedelta
+from functools import partial
+from itertools import chain
+
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import models, connection
+from django.db import connection, models
 from django.db.models import Count, F, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.text import slugify
+
 from zentral.contrib.inventory.models import BaseEnrollment, MetaBusinessUnit, Tag
 from zentral.utils.storage import select_dist_storage
 from zentral.utils.text import get_version_sort_key
-from .conf import monolith_conf
-from .repository_backends import RepositoryBackend, get_repository_backend, load_repository_backend
-from .utils import build_manifest_enrollment_package
 
+from .conf import monolith_conf
+from .repository_backends import (
+    RepositoryBackend,
+    get_repository_backend,
+    load_repository_backend,
+)
+from .utils import build_manifest_enrollment_package
 
 logger = logging.getLogger("zentral.contrib.monolith.models")
 
@@ -405,6 +411,20 @@ class PkgInfoManager(models.Manager):
             current_pn['pkg_infos'].sort(key=lambda pi: pi["version_sort"], reverse=True)
             pkg_name_list.append(current_pn)
             name_c += 1
+        # rehydrate the catalogs
+        seen_catalog_pks = set()
+        for pn in pkg_name_list:
+            for pi in pn['pkg_infos']:
+                for c in pi['catalogs']:
+                    seen_catalog_pks.add(c['pk'])
+        if seen_catalog_pks:
+            catalog_map = {
+                c.pk: c
+                for c in Catalog.objects.select_related('repository').filter(pk__in=seen_catalog_pks)
+            }
+            for pn in pkg_name_list:
+                for pi in pn['pkg_infos']:
+                    pi['catalogs'] = [catalog_map[c['pk']] for c in pi['catalogs'] if c['pk'] in catalog_map]
         if seen_tag_names:
             # rehydrate the tags
             seen_tags = {
