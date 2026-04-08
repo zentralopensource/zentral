@@ -1,0 +1,102 @@
+title: Keyboard Settings
+description: The declaration to configure keyboard settings.
+payload:
+  declarationtype: com.apple.configuration.keyboard.settings
+  supportedOS:
+    iOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+      sharedipad:
+        allowed-scopes:
+        - user
+    macOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+      - user
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: n/a
+    watchOS:
+      introduced: n/a
+  apply: combined
+  content: Configures keyboard settings.
+payloadkeys:
+- key: AllowAutoCorrection
+  title: Allow Auto-Correction
+  supportedOS:
+    macOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables auto-correction.
+- key: AllowDefinitionLookup
+  title: Allow Definition Lookup
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables definition lookup.
+- key: AllowDictation
+  title: Allow Dictation
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables dictation.
+- key: AllowMathKeyboardSuggestions
+  title: Allow Math Keyboard Suggestions
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables keyboard suggestions that include math solutions.
+    This key is also supported by the math.settings configuration.
+- key: AllowPredictiveText
+  title: Allow Predictive Text
+  supportedOS:
+    macOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables predictive text.
+- key: AllowSlideToType
+  title: Allow Slide to Type
+  supportedOS:
+    macOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables slide to type.
+- key: AllowSpellCheck
+  title: Allow Spell Check
+  supportedOS:
+    macOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables spell check.
+- key: AllowTextReplacement
+  title: Allow Text Replacement
+  supportedOS:
+    macOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables text replacement.

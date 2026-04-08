@@ -1,0 +1,61 @@
+title: External Intelligence Settings
+description: The declaration to configure External Intelligence Integrations settings.
+payload:
+  declarationtype: com.apple.configuration.external-intelligence.settings
+  supportedOS:
+    iOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+      sharedipad:
+        allowed-scopes: []
+    macOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+      - user
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+    watchOS:
+      introduced: n/a
+  apply: combined
+  content: Configures External Intelligence Integrations settings.
+payloadkeys:
+- key: Enabled
+  title: Allow External Intelligence Integrations
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables external intelligence integrations.
+- key: AllowSignIn
+  title: Allow External Intelligence Integrations Sign In
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables sign-in for external intelligence integrations.
+- key: AllowedWorkspaceIDs
+  title: Allowed External Intelligence Workspace IDs
+  type: <array>
+  presence: optional
+  combinetype: set-intersection
+  content: An array of strings, but currently restricted to a single element. If present,
+    Apple Intelligence allows use of only the given external integration workspace
+    ID, and requires a sign-in to make requests. The user is required to sign in to
+    integrations that support signing in. Multiple values combine using an intersect
+    operation.
+  subkeys:
+  - key: workspaceID
+    title: Allowed Workspace ID
+    type: <string>

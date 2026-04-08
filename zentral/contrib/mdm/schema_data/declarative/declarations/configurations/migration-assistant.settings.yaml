@@ -1,0 +1,71 @@
+title: Migration Assistant Settings
+description: The declaration to configure Migration Assistant settings.
+payload:
+  declarationtype: com.apple.configuration.migration-assistant.settings
+  supportedOS:
+    iOS:
+      introduced: n/a
+    macOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: n/a
+    watchOS:
+      introduced: n/a
+  apply: combined
+  content: Configures the managed migration functions of Migration Assistant.
+payloadkeys:
+- key: ShouldDoManagedMigration
+  type: <boolean>
+  presence: required
+  combinetype: boolean-or
+  content: If `true`, the device manages Migration Assistant.
+- key: ExcludedAccounts
+  type: <array>
+  presence: optional
+  combinetype: set-union
+  content: An array of strings that represent the user account short names the system
+    excludes from migration.
+  subkeys:
+  - key: _Accounts
+    type: <string>
+- key: ExcludedPaths
+  type: <array>
+  presence: optional
+  combinetype: set-union
+  content: An array of strings that represent files and directories relative to the
+    user's home directory that the system excludes from migration. Directory paths
+    need to include a trailing "/". For example, to exclude the "Excluded" directory
+    in the "Documents" folder of a user's home directory, use "Documents/Excluded/".
+  subkeys:
+  - key: _ExcludedPaths
+    type: <string>
+- key: RequiredPaths
+  type: <array>
+  presence: optional
+  combinetype: set-union
+  content: An array of strings that represent files and directories relative to the
+    user's home directory that the system needs to migrate. Directory paths need to
+    include a trailing "/". For example, to require the "Required" directory in the
+    "Documents" folder of a user's home directory, use "Documents/Required/".
+  subkeys:
+  - key: _RequiredPaths
+    type: <string>
+- key: ShouldMigrateSecurityPrivacySettings
+  type: <boolean>
+  presence: required
+  combinetype: boolean-or
+  content: If `true`, the system migrates Security & Privacy settings.
+notes:
+- title: ''
+  content: |-
+    This declaration allows the device management service to configure Migration Assistant when it runs during Setup Assistant on a Mac. This makes it easy for users to do Mac-to-Mac migrations of enterprise devices when they setup a new Mac.
+
+    Configure the device to use the `AwaitingConfiguration` state after it enrolls with the server. The server needs to send the configuration and verify the configuration as both active and valid using the Declarative Device Management status, before it sends the `DeviceConfiguredCommand` command to exit that state.
+
+    The device reports Migration Assistant progress using the `StatusMigrationAssistantState` status item, and provides a report when migration completes using the `StatusMigrationAssistantReport` status item.

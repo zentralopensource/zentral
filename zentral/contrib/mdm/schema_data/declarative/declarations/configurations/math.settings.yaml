@@ -109,7 +109,8 @@ payloadkeys:
     type: <boolean>
     presence: required
     combinetype: boolean-and
-    content: Controls whether keyboard suggestions include math solutions.
+    content: Controls whether keyboard suggestions include math solutions. This key
+      is also supported by the keyboard.settings configuration.
   - key: MathNotes
     type: <boolean>
     presence: required

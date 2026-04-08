@@ -1,0 +1,84 @@
+title: Siri Settings
+description: The declaration to configure Siri settings.
+payload:
+  declarationtype: com.apple.configuration.siri.settings
+  supportedOS:
+    iOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+      sharedipad:
+        allowed-scopes:
+        - user
+    macOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+      - user
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+    watchOS:
+      introduced: '26.4'
+      allowed-enrollments:
+      - supervised
+      allowed-scopes:
+      - system
+  apply: combined
+  content: Configures Siri settings.
+payloadkeys:
+- key: Enabled
+  title: Enabled
+  supportedOS:
+    watchOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables Siri.
+- key: AllowUserGeneratedContent
+  title: Allow User Generated Content
+  supportedOS:
+    macOS:
+      introduced: n/a
+    visionOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables Siri user-generated content.
+- key: AllowWhileLocked
+  title: Allow While Locked
+  supportedOS:
+    macOS:
+      introduced: n/a
+    visionOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  combinetype: boolean-and
+  content: If `false`, disables Siri while locked.
+- key: ForceProfanityFilter
+  title: Force Profanity Filter
+  supportedOS:
+    visionOS:
+      introduced: n/a
+    watchOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: false
+  combinetype: boolean-or
+  content: If `true`, forces Siri profanity filter.
