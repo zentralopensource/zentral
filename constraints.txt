@@ -30,7 +30,7 @@ coverage==7.6.4
 cryptography==46.0.6
 decorator==5.1.1
 defusedxml==0.7.1
-Django==5.2.12
+Django==5.2.13
 django-filter==25.2
 django-redis==6.0.0
 django-storages==1.14.6
