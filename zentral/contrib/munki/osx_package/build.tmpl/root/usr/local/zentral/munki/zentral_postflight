@@ -18,7 +18,7 @@ MANAGED_INSTALLS_DIR = "/Library/Managed Installs"
 ARCHIVES_DIR = os.path.join(MANAGED_INSTALLS_DIR, "Archives")
 APPLICATION_INVENTORY = os.path.join(MANAGED_INSTALLS_DIR, "ApplicationInventory.plist")
 
-USER_AGENT = "Zentral/munkipostflight 0.17"
+USER_AGENT = "Zentral/munkipostflight 0.18"
 ZENTRAL_API_ENDPOINT = "https://%TLS_HOSTNAME%/public/munki/"  # set during the package build
 ZENTRAL_API_SERVER_CERTIFICATE = "%TLS_SERVER_CERTS%"  # set during the package build
 ZENTRAL_API_AUTH_TOKEN = "%TOKEN%"  # set during the enrollment in the postinstall script of the enrollment package
@@ -73,8 +73,10 @@ def get_osx_app_instances(full_info=False):
                     bundle_display_name = bundle_info.get("CFBundleDisplayName")
                     if bundle_display_name:
                         ztl_app_d["bundle_display_name"] = bundle_display_name
-            apps.append({'app': ztl_app_d,
-                         'bundle_path': app_d['path']})
+            ztl_app_instance_d = {'app': ztl_app_d,
+                                  'bundle_path': app_d['path']}
+            if ztl_app_instance_d not in apps:
+                apps.append(ztl_app_instance_d)
     return apps
 
 
