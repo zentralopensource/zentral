@@ -1,8 +1,11 @@
 import logging
+
 from django.db import connection
 from prometheus_client import Counter, Gauge
+
 from zentral.utils.prometheus import BasePrometheusMetricsView
 
+from .models import Channel
 
 logger = logging.getLogger("zentral.core.mdm.metrics_views")
 
@@ -109,7 +112,49 @@ class MetricsView(BasePrometheusMetricsView):
                 for le, val in row_d.items():
                     edg.labels(le=le, **default_labels).set(val)
 
+    def populate_installed_artifact_version(self):
+        iavg = Gauge(
+            "zentral_mdm_target_artifacts",
+            "Zentral MDM target artifacts",
+            ["name", "type", "channel", "status", "version"],
+            registry=self.registry,
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "select a.name, a.type, a.channel, av.version,"
+                " count(ua.id) as users, count(da.id) as devices, ua.status, da.status"
+                " from mdm_artifact a"
+                " join mdm_artifactversion av on (av.artifact_id = a.id)"
+                " left join mdm_deviceartifact da on (da.artifact_version_id = av.id)"
+                " left join mdm_userartifact ua on (ua.artifact_version_id = av.id)"
+                " group by a.name, a.type, a.channel, av.version, ua.status, da.status"
+            )
+            for (
+                artifact_name,
+                artifact_type,
+                channel,
+                version,
+                users,
+                devices,
+                user_status,
+                device_status,
+            ) in cursor.fetchall():
+                if channel == Channel.USER:
+                    count = users
+                    status = user_status
+                else:
+                    count = devices
+                    status = device_status
+                iavg.labels(
+                    name=artifact_name,
+                    type=artifact_type,
+                    channel=channel,
+                    status=status,
+                    version=str(version),
+                ).set(count)
+
     def populate_registry(self):
         self.populate_enrollment_sessions()
         self.populate_commands()
         self.populate_enrolled_devices()
+        self.populate_installed_artifact_version()
