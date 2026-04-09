@@ -1,11 +1,21 @@
-from unittest.mock import call, patch, Mock
-from django.urls import reverse
+from unittest.mock import Mock, call, patch
+
 from django.test import TestCase
+from django.urls import reverse
 from prometheus_client.parser import text_string_to_metric_families
-from zentral.contrib.santa.models import Rule, Target, TargetState
+
 from zentral.conf import settings
-from .utils import (force_ballot, force_configuration, force_enrolled_machine, force_realm_user, force_rule,
-                    force_target, force_target_counter, force_target_state)
+from zentral.contrib.santa.models import Rule, Target, TargetState
+
+from .utils import (
+    force_ballot,
+    force_configuration,
+    force_enrolled_machine,
+    force_realm_user,
+    force_rule,
+    force_target,
+    force_target_state,
+)
 
 
 class SantaMetricsViewsTestCase(TestCase):
@@ -57,7 +67,7 @@ class SantaMetricsViewsTestCase(TestCase):
             [(1, "yolo", 42)],  # 1st call with bad mode
             [],  # 2nd call for the enrolled machines gauge
             [],  # 3rd call for the rules gauge
-            [],  # 4th call for the targets gauge
+            [],  # 4th call for the target states gauge
             [],  # 5th call for the votes gauge
         ]
         response = self._make_authenticated_request()
@@ -105,7 +115,7 @@ class SantaMetricsViewsTestCase(TestCase):
             [],  # 1st call for the configurations info gauge
             [(1, 42, "2024.5", 1)],  # 2nd call for the enrolled machines gauge
             [],  # 3rd call for the rules gauge
-            [],  # 4th call for the targets gauge
+            [],  # 4th call for the target states gauge
             [],  # 5th call for the votes gauge
         ]
         response = self._make_authenticated_request()
@@ -178,7 +188,7 @@ class SantaMetricsViewsTestCase(TestCase):
             [],  # 1st call for the configurations info
             [],  # 2nd call for the enrolled machines gauge
             [(1, None, "BUNDLE", 42, False, True, False, False, False, 1)],  # 3rd call with unknown policy
-            [],  # 4th call for the targets gauge
+            [],  # 4th call for the target states gauge
             [],  # 5th call for the votes gauge
         ]
         response = self._make_authenticated_request()
@@ -194,91 +204,37 @@ class SantaMetricsViewsTestCase(TestCase):
         warning.assert_called_once_with("Unknown rule policy: %s", 42)
         self.assertEqual(mocked_cursor.fetchall.mock_calls, [call() for _ in range(5)])
 
-    def test_targets(self):
-        target_counters = {}
-        for target_type, blocked_count, collected_count, executed_count, is_rule, state in (
-            (Target.Type.BINARY, 11, 0, 0, True, TargetState.State.UNTRUSTED),
-            (Target.Type.BUNDLE, 11, 22, 0, False, TargetState.State.BANNED),
-            (Target.Type.CDHASH, 11, 22, 33, False, TargetState.State.SUSPECT),
-            (Target.Type.CERTIFICATE, 1, 0, 0, False, TargetState.State.PARTIALLY_ALLOWLISTED),
-            (Target.Type.METABUNDLE, 4, 5, 6, False, TargetState.State.GLOBALLY_ALLOWLISTED),
-            (Target.Type.TEAM_ID, 1, 2, 0, False, TargetState.State.GLOBALLY_ALLOWLISTED),
-            (Target.Type.SIGNING_ID, 1, 2, 3, True, TargetState.State.GLOBALLY_ALLOWLISTED),
+    def test_target_states(self):
+        configuration = force_configuration()
+        target_states = {}
+        for target_type, state, flagged in (
+            (Target.Type.BINARY, TargetState.State.GLOBALLY_ALLOWLISTED, False),
+            (Target.Type.CERTIFICATE, TargetState.State.BANNED, False),
+            (Target.Type.SIGNING_ID, TargetState.State.SUSPECT, True),
         ):
-            target_counter = force_target_counter(
-                target_type,
-                blocked_count=blocked_count,
-                collected_count=collected_count,
-                executed_count=executed_count,
-                is_rule=is_rule,
+            force_target_state(
+                configuration=configuration,
+                target=force_target(target_type),
+                state=state,
+                flagged=flagged
             )
-            force_target_state(target_counter.configuration, target_counter.target, state)
-            target_counters.setdefault(str(target_counter.configuration.pk), {})[target_counter.target.type] = {
-                "total": 1,
-                "blocked_total": blocked_count,
-                "collected_total": collected_count,
-                "executed_total": executed_count,
-                "rules_total": 1 if is_rule else 0,
-                "state": state.name,
-            }
+            target_states[(target_type, state.value, flagged)] = 1
         response = self._make_authenticated_request()
-        family_count = 0
-        total_keys = set()
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
-            if not family.name.startswith("zentral_santa_targets_"):
+            if family.name != "zentral_santa_target_states":
                 continue
-            family_count += 1
-            total_key = family.name.removeprefix("zentral_santa_targets_")
-            total_keys.add(total_key)
-            sample_count = 0
+            self.assertEqual(len(family.samples), 3)
             for sample in family.samples:
-                sample_count += 1
-                target_counter = target_counters[sample.labels["cfg_pk"]].get(sample.labels["type"], {})
-                self.assertEqual(sample.labels["state"], target_counter.get("state", TargetState.State.UNTRUSTED.name))
-                self.assertEqual(
-                    sample.value,
-                    # the expected value is stored when creating the counters.
-                    # for the missing counters, we have 1 target total and 0 other totals.
-                    target_counter.get(total_key, 1 if total_key == "total" else 0)
+                self.assertEqual(int(sample.labels["cfg_pk"]), configuration.pk)
+                key = (
+                    sample.labels["target_type"],
+                    int(sample.labels["target_state"]),
+                    sample.labels["target_flagged"] == "true",
                 )
-            self.assertEqual(sample_count, 7 * 7)  # 7 configs, 7 types
-        self.assertEqual(family_count, 5)
-        self.assertEqual(
-            total_keys,
-            {"total", "blocked_total", "collected_total", "executed_total", "rules_total"}
-        )
-
-    @patch("zentral.contrib.santa.metrics_views.connection")
-    @patch("zentral.contrib.santa.metrics_views.logger.error")
-    def test_targets_unknown_state(self, warning, connection):
-        mocked_cursor = connection.cursor.return_value.__enter__.return_value
-        mocked_cursor.description = []
-        for name in (
-            "target_type", "cfg_pk", "state",
-            "total", "blocked_total", "collected_total", "executed_total", "rules_total"
-        ):
-            col = Mock()
-            col.name = name
-            mocked_cursor.description.append(col)
-        mocked_cursor.fetchall.side_effect = [
-            [],  # 1st call for the configurations info
-            [],  # 2nd call for the enrolled machines gauge
-            [],  # 3rd call for the rules gauge
-            [("BUNDLE", 1, -2, 1, 0, 0, 0, 0, 0)],  # 4th call with unknown state
-            [],  # 5th call for the votes gauge
-        ]
-        response = self._make_authenticated_request()
-        family_count = 0
-        sample_count = 0
-        for family in text_string_to_metric_families(response.content.decode("utf-8")):
-            if not family.name.startswith("zentral_santa_targets_"):
-                continue
-            family_count += 1
-            sample_count += len(family.samples)
-        self.assertEqual(family_count, 5)
-        self.assertEqual(sample_count, 0)
-        self.assertEqual(warning.mock_calls, [call("Unknown target state: %s", -2) for _ in range(5)])
-        self.assertEqual(mocked_cursor.fetchall.mock_calls, [call() for _ in range(5)])
+                self.assertEqual(sample.value, target_states[key])
+            break
+        else:
+            raise AssertionError("could not find zentral_santa_target_states")
 
     def test_votes(self):
         target = force_target()
