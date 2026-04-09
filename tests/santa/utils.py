@@ -1,15 +1,34 @@
 import uuid
+
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmGroup, RealmUser
-from zentral.contrib.inventory.models import (EnrollmentSecret, File, MachineSnapshotCommit,
-                                              MetaBusinessUnit, PrincipalUserSource)
-from zentral.contrib.santa.events import (_commit_files, _create_bundle_binaries, _create_missing_bundles,
-                                          _update_targets)
-from zentral.contrib.santa.models import (Ballot, Configuration, EnrolledMachine, Enrollment,
-                                          Rule, Target, TargetCounter, TargetState,
-                                          Vote, VotingGroup)
-from zentral.contrib.santa.utils import update_metabundles
 
+from zentral.contrib.inventory.models import (
+    EnrollmentSecret,
+    File,
+    MachineSnapshotCommit,
+    MetaBusinessUnit,
+    PrincipalUserSource,
+)
+from zentral.contrib.santa.events import (
+    _commit_files,
+    _create_bundle_binaries,
+    _create_missing_bundles,
+    _update_targets,
+)
+from zentral.contrib.santa.models import (
+    Ballot,
+    Configuration,
+    EnrolledMachine,
+    Enrollment,
+    Rule,
+    Target,
+    TargetCounter,
+    TargetState,
+    Vote,
+    VotingGroup,
+)
+from zentral.contrib.santa.utils import update_metabundles
 
 # realm
 
@@ -209,11 +228,12 @@ def force_target_counter(target_type, blocked_count=0, collected_count=0, execut
 # target state
 
 
-def force_target_state(configuration=None, target=None, state=None):
+def force_target_state(configuration=None, target=None, state=None, flagged=False):
     return TargetState.objects.create(
         configuration=configuration or force_configuration(),
         target=target or force_target(),
         state=state or TargetState.State.UNTRUSTED,
+        flagged=flagged,
     )
 
 
