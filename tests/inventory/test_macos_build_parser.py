@@ -146,7 +146,9 @@ class MacOSBuildTestCase(TestCase):
            ("25A362", ("macOS", 26, 0, 1, None), "macOS 26.0.1 (25A362)"),
            ("25B78", ("macOS", 26, 1, 0, None), "macOS 26.1 (25B78)"),
            ("25D2128", ("macOS", 26, 3, 1, None), "macOS 26.3.1 (25D2128)"),
+           ("25D2140", ("macOS", 26, 3, 2, None), "macOS 26.3.2 (25D2140)"),
            ("25D771280a", ("macOS", 26, 3, 1, "(a)"), "macOS 26.3.1 (a) (25D771280a)"),
+           ("25E253", ("macOS", 26, 4, 1, None), "macOS 26.4.1 (25E253)"),
         ):
             expected_version_d = {
                 "name": name,
