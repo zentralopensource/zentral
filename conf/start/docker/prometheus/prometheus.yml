@@ -22,6 +22,12 @@ scrape_configs:
     static_configs:
       - targets: ['web:8000']
 
+  - job_name: 'zentral_mdm'
+    metrics_path: '/metrics/mdm/'
+    bearer_token: 'CHANGE ME!!!'
+    static_configs:
+      - targets: ['web:8000']
+
   - job_name: 'zentral_workers'
     file_sd_configs:
       - files:

@@ -1,15 +1,28 @@
 from datetime import datetime, timedelta
-from django.urls import reverse
+
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from prometheus_client.parser import text_string_to_metric_families
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import DeviceInformation, InstallProfile
-from zentral.contrib.mdm.models import Channel
-from .utils import (force_artifact, force_blueprint, force_dep_enrollment_session,
-                    force_enrolled_user, force_ota_enrollment_session)
+from zentral.contrib.mdm.models import (
+    Channel,
+    DeviceArtifact,
+    TargetArtifact,
+    UserArtifact,
+)
+
+from .utils import (
+    force_artifact,
+    force_blueprint,
+    force_dep_enrollment_session,
+    force_enrolled_user,
+    force_ota_enrollment_session,
+)
 
 
 class MDMMetricsViewsTestCase(TestCase):
@@ -139,4 +152,40 @@ class MDMMetricsViewsTestCase(TestCase):
                 ('blocked', 'true', 'blueprint', bpn, 'le', '+Inf', 'platform', 'macOS', 'supervised', 'true'): 1.0,
             }},
             only_family="zentral_mdm_devices",
+        )
+
+    def test_installed_artifact_version_metrics(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        session, _, _ = force_dep_enrollment_session(
+            mbu, authenticated=True, completed=True
+        )
+        device_artifact, (device_av,) = force_artifact()
+        DeviceArtifact.objects.create(
+            enrolled_device=session.enrolled_device, artifact_version=device_av, status=TargetArtifact.Status.INSTALLED
+        )
+        user_artifact, (user_av,) = force_artifact(channel=Channel.USER)
+        eu = force_enrolled_user(session.enrolled_device)
+        UserArtifact.objects.create(enrolled_user=eu, artifact_version=user_av)
+        response = self._make_authenticated_request()
+        self._assertSamples(
+            text_string_to_metric_families(response.content.decode("utf-8")),
+            {
+                "zentral_mdm_target_artifacts": {
+                    (
+                        "channel", Channel.DEVICE,
+                        "name", device_artifact.name,
+                        "status", TargetArtifact.Status.INSTALLED,
+                        "type", "Profile",
+                        "version", "1",
+                    ): 1.0,
+                    (
+                        "channel", Channel.USER,
+                        "name", user_artifact.name,
+                        "status", TargetArtifact.Status.ACKNOWLEDGED,
+                        "type", "Profile",
+                        "version", "1",
+                    ): 1.0,
+                }
+            },
+            only_family="zentral_mdm_target_artifacts",
         )

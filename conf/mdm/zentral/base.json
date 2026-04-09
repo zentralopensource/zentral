@@ -54,6 +54,7 @@
     },
     "zentral.contrib.audit": {},
     "zentral.contrib.mdm": {
+      "metrics": true,
       "scep_ca_fullchain": "/scep_CA/ca.pem",
       "provisioning": {
         "push_certificates": {
