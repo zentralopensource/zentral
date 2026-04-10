@@ -1,3 +1,11 @@
+## 2026.4
+
+### Features
+
+#### MDM
+
+Added `zentral_mdm_target_artifacts_bucket` metrics.
+
 ## 2026.3
 
 ### Features

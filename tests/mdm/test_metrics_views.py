@@ -154,38 +154,52 @@ class MDMMetricsViewsTestCase(TestCase):
             only_family="zentral_mdm_devices",
         )
 
-    def test_installed_artifact_version_metrics(self):
+    def test_target_artifacts_bucket_metrics(self):
         mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         session, _, _ = force_dep_enrollment_session(
             mbu, authenticated=True, completed=True
         )
+        enrolled_device = session.enrolled_device
+        enrolled_device.last_seen_at = datetime.utcnow() - timedelta(days=28)
+        enrolled_device.save()
         device_artifact, (device_av,) = force_artifact()
         DeviceArtifact.objects.create(
-            enrolled_device=session.enrolled_device, artifact_version=device_av, status=TargetArtifact.Status.INSTALLED
+            enrolled_device=enrolled_device,
+            artifact_version=device_av,
+            status=TargetArtifact.Status.INSTALLED
         )
         user_artifact, (user_av,) = force_artifact(channel=Channel.USER)
-        eu = force_enrolled_user(session.enrolled_device)
-        UserArtifact.objects.create(enrolled_user=eu, artifact_version=user_av)
+        enrolled_user = force_enrolled_user(enrolled_device)
+        enrolled_user.last_seen_at = datetime.utcnow() - timedelta(days=13)
+        enrolled_user.save()
+        UserArtifact.objects.create(
+            enrolled_user=enrolled_user,
+            artifact_version=user_av,
+            status="Kaput",  # Invalid!!! → present = _
+        )
         response = self._make_authenticated_request()
+        expected_samples = {}
+        for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
+            expected_samples[(
+                "channel", Channel.DEVICE,
+                "le", le,
+                "name", device_artifact.name,
+                "present", "true",
+                "status", TargetArtifact.Status.INSTALLED,
+                "type", "Profile",
+                "version", "1",
+            )] = 0.0 if le in ("1", "7", "14") else 1.0
+            expected_samples[(
+                "channel", Channel.USER,
+                "le", le,
+                "name", user_artifact.name,
+                "present", "_",
+                "status", "Kaput",
+                "type", "Profile",
+                "version", "1",
+            )] = 0.0 if le in ("1", "7") else 1.0
         self._assertSamples(
             text_string_to_metric_families(response.content.decode("utf-8")),
-            {
-                "zentral_mdm_target_artifacts": {
-                    (
-                        "channel", Channel.DEVICE,
-                        "name", device_artifact.name,
-                        "status", TargetArtifact.Status.INSTALLED,
-                        "type", "Profile",
-                        "version", "1",
-                    ): 1.0,
-                    (
-                        "channel", Channel.USER,
-                        "name", user_artifact.name,
-                        "status", TargetArtifact.Status.ACKNOWLEDGED,
-                        "type", "Profile",
-                        "version", "1",
-                    ): 1.0,
-                }
-            },
-            only_family="zentral_mdm_target_artifacts",
+            {"zentral_mdm_target_artifacts_bucket": expected_samples},
+            only_family="zentral_mdm_target_artifacts_bucket",
         )
