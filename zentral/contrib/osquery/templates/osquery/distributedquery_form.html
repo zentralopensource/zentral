@@ -57,7 +57,44 @@
     <div>{{ query.minimum_osquery_version|default:"-" }}</div>
   </div>
   {% endif %}
-  {{ form }}
+  <br />
+
+  {{ form.non_field_errors }}
+  <div class="mb-3">
+    {{ form.valid_from.as_field_group}}
+  </div>
+  <div class="mb-3">
+    {{ form.valid_until.as_field_group}}
+  </div>
+
+  <div class="accordion mb-5 mt-5" id="accordionScoping">
+    <div class="accordion-item">
+      <h2 class="accordion-header">
+        <span class="accordion-button collapsed fw-bold" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+          Device scoping
+        </span>
+      </h2>
+      <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#accordionScoping">
+        <div class="accordion-body">
+          <div class="mb-3">
+            {{ form.serial_numbers.as_field_group}}
+          </div>
+          <hr />
+          <div class="mb-3">
+            {{ form.tags.as_field_group }}
+          </div>
+          <div class="mb-3">
+            {{ form.shard.as_field_group}}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    {{ form.halt_current_runs.as_field_group}}
+  </div>
+
   <p>
     <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{{ query.get_absolute_url }}#runs{% endif %}">
       Cancel
