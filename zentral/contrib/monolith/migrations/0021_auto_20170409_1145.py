@@ -3,9 +3,6 @@
 from __future__ import unicode_literals
 
 from django.db import migrations
-from zentral.contrib.monolith.conf import monolith_conf
-from zentral.contrib.monolith.models import ManifestEnrollmentPackage
-from zentral.contrib.monolith.utils import build_manifest_enrollment_package
 
 
 def create_manifest_enrollment_packages(apps, schema_editor):

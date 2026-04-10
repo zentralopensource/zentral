@@ -26,7 +26,7 @@ def migrate_file_paths(apps, schema_editor):
                                      default_flow_style=False,
                                      default_style='')
             ps.save()
-        except:
+        except Exception:
             pass
 
 

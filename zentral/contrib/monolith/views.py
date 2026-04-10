@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, TemplateView, View
-from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
+from django.views.generic.edit import DeleteView, FormView
 from base.notifier import notifier
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaMachine, Tag
