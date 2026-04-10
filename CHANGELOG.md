@@ -6,6 +6,10 @@
 
 Added `zentral_mdm_target_artifacts_bucket` metrics.
 
+### Bug fixes
+
+Replaced slow Santa `zentral_santa_targets_*`  metrics with `zentral_santa_target_states` metrics.
+
 ## 2026.3
 
 ### Features
