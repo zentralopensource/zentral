@@ -1,15 +1,14 @@
-from functools import reduce
 from io import BytesIO
 import json
-import operator
 from unittest.mock import patch, Mock
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
 from zentral.contrib.mdm.dep import add_dep_token_certificate
@@ -17,7 +16,7 @@ from zentral.contrib.mdm.models import DEPToken, DEPVirtualServer
 from .utils import force_dep_enrollment, force_dep_virtual_server
 
 
-class SetupDEPVirtualServerViewsTestCase(TestCase):
+class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
@@ -26,25 +25,18 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
+
     # utiliy methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _build_mock_dep_client(self):
         server_name = get_random_string(12)
@@ -78,16 +70,16 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
     # list DEP virtual servers
 
     def test_list_dep_virtual_servers_redirect(self):
-        self._login_redirect(reverse("mdm:dep_virtual_servers"))
+        self.login_redirect("dep_virtual_servers")
 
     def test_list_dep_virtual_servers_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:dep_virtual_servers"))
         self.assertEqual(response.status_code, 403)
 
     def test_list_dep_virtual_servers(self):
         virtual_server = force_dep_virtual_server()
-        self._login("mdm.view_depvirtualserver")
+        self.login("mdm.view_depvirtualserver")
         response = self.client.get(reverse("mdm:dep_virtual_servers"))
         self.assertTemplateUsed(response, "mdm/depvirtualserver_list.html")
         self.assertContains(response, virtual_server.name)
@@ -96,11 +88,11 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
 
     def test_dep_virtual_server_redirect(self):
         virtual_server = force_dep_virtual_server()
-        self._login_redirect(virtual_server.get_absolute_url())
+        self.login_redirect("dep_virtual_server", virtual_server.pk)
 
     def test_dep_virtual_server_permission_denied(self):
         virtual_server = force_dep_virtual_server()
-        self._login()
+        self.login()
         response = self.client.get(virtual_server.get_absolute_url())
         self.assertEqual(response.status_code, 403)
 
@@ -109,7 +101,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         virtual_server = enrollment.virtual_server
         virtual_server.default_enrollment = enrollment
         virtual_server.save()
-        self._login("mdm.view_depvirtualserver")
+        self.login("mdm.view_depvirtualserver")
         response = self.client.get(virtual_server.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depvirtualserver_detail.html")
@@ -123,7 +115,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         virtual_server = enrollment.virtual_server
         virtual_server.default_enrollment = enrollment
         virtual_server.save()
-        self._login("mdm.view_depvirtualserver", "mdm.change_depvirtualserver", "mdm.view_depenrollment")
+        self.login("mdm.view_depvirtualserver", "mdm.change_depvirtualserver", "mdm.view_depenrollment")
         response = self.client.get(virtual_server.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depvirtualserver_detail.html")
@@ -136,11 +128,11 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
 
     def test_update_dep_virtual_server_redirect(self):
         virtual_server = force_dep_virtual_server()
-        self._login_redirect(reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)))
+        self.login_redirect("update_dep_virtual_server", virtual_server.pk)
 
     def test_update_dep_virtual_server_permission_denied(self):
         virtual_server = force_dep_virtual_server()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -148,7 +140,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         enrollment1 = force_dep_enrollment(self.mbu)
         virtual_server = enrollment1.virtual_server
         enrollment2 = force_dep_enrollment(self.mbu)
-        self._login("mdm.change_depvirtualserver")
+        self.login("mdm.change_depvirtualserver")
         response = self.client.get(reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depvirtualserver_form.html")
@@ -159,7 +151,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         enrollment = force_dep_enrollment(self.mbu)
         virtual_server = enrollment.virtual_server
         self.assertIsNone(virtual_server.default_enrollment)
-        self._login("mdm.change_depvirtualserver", "mdm.view_depvirtualserver")
+        self.login("mdm.change_depvirtualserver", "mdm.view_depvirtualserver")
         response = self.client.post(reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)),
                                     {"default_enrollment": enrollment.pk},
                                     follow=True)
@@ -172,20 +164,20 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
     # connect DEP virtual server
 
     def test_connect_dep_virtual_server_redirect(self):
-        self._login_redirect(reverse("mdm:connect_dep_virtual_server"))
+        self.login_redirect("connect_dep_virtual_server")
 
     def test_connect_dep_virtual_server_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:connect_dep_virtual_server"))
         self.assertEqual(response.status_code, 403)
 
     def test_connect_dep_virtual_server_get(self):
-        self._login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
         response = self.client.get(reverse("mdm:connect_dep_virtual_server"))
         self.assertRedirects(response, reverse("mdm:dep_virtual_servers"))
 
     def test_connect_dep_virtual_server_post_start_no_session_token(self):
-        self._login("mdm.add_depvirtualserver")
+        self.login("mdm.add_depvirtualserver")
         self.assertNotIn("current_dep_token_id", self.client.session)
         response = self.client.post(reverse("mdm:connect_dep_virtual_server"))
         self.assertEqual(response.status_code, 200)
@@ -194,7 +186,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         self.assertIsNone(dep_token.consumer_key)
 
     def test_connect_dep_virtual_server_post_start_valid_session_token(self):
-        self._login("mdm.add_depvirtualserver")
+        self.login("mdm.add_depvirtualserver")
         session = self.client.session
         dep_token = DEPToken.objects.create()
         session["current_dep_token_id"] = dep_token.pk
@@ -206,7 +198,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         self.assertEqual(dep_token, dep_token2)
 
     def test_connect_dep_virtual_server_post_start_invalid_session_token(self):
-        self._login("mdm.add_depvirtualserver")
+        self.login("mdm.add_depvirtualserver")
         session = self.client.session
         session["current_dep_token_id"] = 3120938120398
         session.save()
@@ -218,7 +210,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
 
     def test_connect_dep_virtual_server_post_start_attached_server_redirect(self):
         virtual_server = force_dep_virtual_server()
-        self._login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
         session = self.client.session
         session["current_dep_token_id"] = virtual_server.token.pk
         session.save()
@@ -226,13 +218,13 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         self.assertRedirects(response, virtual_server.get_absolute_url())
 
     def test_connect_dep_virtual_server_post_cancel(self):
-        self._login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
         response = self.client.post(reverse("mdm:connect_dep_virtual_server"),
                                     {"action": "cancel"})
         self.assertRedirects(response, reverse("mdm:dep_virtual_servers"))
 
     def test_connect_dep_virtual_server_post_no_encrypted_token_error(self):
-        self._login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
         session = self.client.session
         dep_token = DEPToken.objects.create()
         session["current_dep_token_id"] = dep_token.pk
@@ -246,7 +238,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "encrypted_token", "This field is mandatory")
 
     def test_connect_dep_virtual_server_post_bad_encrypted_token_error(self):
-        self._login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
         session = self.client.session
         dep_token = DEPToken.objects.create()
         session["current_dep_token_id"] = dep_token.pk
@@ -266,7 +258,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
     def test_connect_dep_virtual_server_post(self, DEPClient):
         mock_dep_client, server_name, server_uuid = self._build_mock_dep_client()
         DEPClient.return_value = mock_dep_client
-        self._login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
         session = self.client.session
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
@@ -292,19 +284,19 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
     def test_download_dep_token_public_key_redirect(self):
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
-        self._login_redirect(reverse("mdm:download_dep_token_public_key", args=(dep_token.pk,)))
+        self.login_redirect("download_dep_token_public_key", dep_token.pk)
 
     def test_download_dep_token_public_key_permission_denied(self):
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:download_dep_token_public_key", args=(dep_token.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_download_dep_token_public_key(self):
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
-        self._login("mdm.add_depvirtualserver")
+        self.login("mdm.add_depvirtualserver")
         response = self.client.get(reverse("mdm:download_dep_token_public_key", args=(dep_token.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["Content-Type"], "application/x-pem-file")
@@ -315,19 +307,19 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
     def test_renew_dep_token_redirect(self):
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
-        self._login_redirect(reverse("mdm:renew_dep_token", args=(dep_token.pk,)))
+        self.login_redirect("renew_dep_token", dep_token.pk)
 
     def test_renew_dep_token_permission_denied(self):
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:renew_dep_token", args=(dep_token.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_renew_dep_token_get(self):
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
-        self._login("mdm.change_depvirtualserver")
+        self.login("mdm.change_depvirtualserver")
         response = self.client.get(reverse("mdm:renew_dep_token", args=(dep_token.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/deptoken_renew.html")
@@ -339,7 +331,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         DEPClient.return_value = mock_dep_client
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
-        self._login("mdm.change_depvirtualserver")
+        self.login("mdm.change_depvirtualserver")
         dep_token.consumer_key = "oldckey"
         dep_token.set_consumer_secret("oldcsecret")
         dep_token.access_token = "oldatoken"
@@ -347,7 +339,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         dep_token.save()
         # new virtual server
         self.assertEqual(DEPVirtualServer.objects.filter(uuid=server_uuid).count(), 0)
-        self._login("mdm.change_depvirtualserver", "mdm.view_depvirtualserver")
+        self.login("mdm.change_depvirtualserver", "mdm.view_depvirtualserver")
         response = self.client.post(reverse("mdm:renew_dep_token", args=(dep_token.pk,)),
                                     {"encrypted_token": self._build_encrypted_token(dep_token)})
         self.assertRedirects(response, dep_token.virtual_server.get_absolute_url())
@@ -367,7 +359,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         DEPClient.return_value = mock_dep_client
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
-        self._login("mdm.change_depvirtualserver")
+        self.login("mdm.change_depvirtualserver")
         dep_token.consumer_key = "oldckey"
         dep_token.set_consumer_secret("oldcsecret")
         dep_token.access_token = "oldatoken"
@@ -376,7 +368,7 @@ class SetupDEPVirtualServerViewsTestCase(TestCase):
         # create an existing virtual server with this new server_name, server uuid
         existing_virtual_server = force_dep_virtual_server(server_uuid)
         existing_virtual_server_token_pk = existing_virtual_server.token.pk
-        self._login("mdm.change_depvirtualserver", "mdm.view_depvirtualserver")
+        self.login("mdm.change_depvirtualserver", "mdm.view_depvirtualserver")
         response = self.client.post(reverse("mdm:renew_dep_token", args=(dep_token.pk,)),
                                     {"encrypted_token": self._build_encrypted_token(dep_token)})
         self.assertRedirects(response, dep_token.virtual_server.get_absolute_url())

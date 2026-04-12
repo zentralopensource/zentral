@@ -898,9 +898,6 @@ class MachineTagsView(PermissionRequiredMixin, TemplateView):
 class CreateMachineTagView(PBACViewMixin, View):
     pbac_request_class = CreateMachineTagRequest
 
-    def dispatch(self, request, *args, **kwargs):
-        return super().dispatch(request, *args, **kwargs)
-
     def get_pbac_request_kwargs(self):
         return {
             "machine": self.machine,
@@ -919,9 +916,6 @@ class CreateMachineTagView(PBACViewMixin, View):
 
 class DeleteMachineTagView(PBACViewMixin, View):
     pbac_request_class = DeleteMachineTagRequest
-
-    def dispatch(self, request, *args, **kwargs):
-        return super().dispatch(request, *args, **kwargs)
 
     def get_pbac_request_kwargs(self):
         return {

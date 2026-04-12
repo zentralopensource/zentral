@@ -1,19 +1,18 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.events.base import AuditEvent
 from .utils import (force_blueprint, force_blueprint_artifact,
                     force_filevault_config, force_location,
                     force_recovery_password_config, force_software_update_enforcement)
 
 
-class BlueprintManagementViewsTestCase(TestCase):
+class BlueprintManagementViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -22,39 +21,30 @@ class BlueprintManagementViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # blueprints
 
     def test_blueprints_redirect(self):
-        self._login_redirect(reverse("mdm:blueprints"))
+        self.login_redirect("blueprints")
 
     def test_blueprints_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:blueprints"))
         self.assertEqual(response.status_code, 403)
 
     def test_blueprints(self):
         blueprint = force_blueprint()
-        self._login("mdm.view_blueprint")
+        self.login("mdm.view_blueprint")
         response = self.client.get(reverse("mdm:blueprints"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_list.html")
@@ -63,22 +53,22 @@ class BlueprintManagementViewsTestCase(TestCase):
     # create blueprint
 
     def test_create_blueprint_redirect(self):
-        self._login_redirect(reverse("mdm:create_blueprint"))
+        self.login_redirect("create_blueprint")
 
     def test_create_blueprint_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:create_blueprint"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_blueprint_get(self):
-        self._login("mdm.add_blueprint")
+        self.login("mdm.add_blueprint")
         response = self.client.get(reverse("mdm:create_blueprint"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_form.html")
         self.assertContains(response, "Create blueprint")
 
     def test_create_blueprint_post_inventory_interval_too_low(self):
-        self._login("mdm.add_blueprint")
+        self.login("mdm.add_blueprint")
         response = self.client.post(reverse("mdm:create_blueprint"),
                                     {"name": get_random_string(12),
                                      "inventory_interval": 10,
@@ -92,7 +82,7 @@ class BlueprintManagementViewsTestCase(TestCase):
                              'Ensure this value is greater than or equal to 14400.')
 
     def test_create_blueprint_post_inventory_interval_too_high(self):
-        self._login("mdm.add_blueprint")
+        self.login("mdm.add_blueprint")
         response = self.client.post(reverse("mdm:create_blueprint"),
                                     {"name": get_random_string(12),
                                      "inventory_interval": 100000000000,
@@ -107,7 +97,7 @@ class BlueprintManagementViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_blueprint_post(self, post_event):
-        self._login("mdm.add_blueprint", "mdm.view_blueprint")
+        self.login("mdm.add_blueprint", "mdm.view_blueprint")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:create_blueprint"),
@@ -157,11 +147,11 @@ class BlueprintManagementViewsTestCase(TestCase):
 
     def test_blueprint_redirect(self):
         blueprint = force_blueprint()
-        self._login_redirect(reverse("mdm:blueprint", args=(blueprint.pk,)))
+        self.login_redirect("blueprint", blueprint.pk)
 
     def test_blueprint_permission_denied(self):
         blueprint = force_blueprint()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -175,11 +165,11 @@ class BlueprintManagementViewsTestCase(TestCase):
             software_update_enforcement=sue,
         )
         self.assertTrue(blueprint.can_be_deleted())
-        self._login("mdm.view_blueprint",
-                    "mdm.delete_blueprint",
-                    "mdm.view_filevaultconfig",
-                    "mdm.view_recoverypasswordconfig",
-                    "mdm.view_softwareupdateenforcement")
+        self.login("mdm.view_blueprint",
+                   "mdm.delete_blueprint",
+                   "mdm.view_filevaultconfig",
+                   "mdm.view_recoverypasswordconfig",
+                   "mdm.view_softwareupdateenforcement")
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_detail.html")
@@ -199,7 +189,7 @@ class BlueprintManagementViewsTestCase(TestCase):
             software_update_enforcement=sue,
         )
         self.assertTrue(blueprint.can_be_deleted())
-        self._login("mdm.view_blueprint")
+        self.login("mdm.view_blueprint")
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_detail.html")
@@ -213,7 +203,7 @@ class BlueprintManagementViewsTestCase(TestCase):
         blueprint = force_blueprint()
         force_blueprint_artifact(blueprint=blueprint)
         self.assertFalse(blueprint.can_be_deleted())
-        self._login("mdm.view_blueprint", "mdm.delete_blueprint")
+        self.login("mdm.view_blueprint", "mdm.delete_blueprint")
         response = self.client.get(reverse("mdm:blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_detail.html")
@@ -223,17 +213,17 @@ class BlueprintManagementViewsTestCase(TestCase):
 
     def test_update_blueprint_redirect(self):
         blueprint = force_blueprint()
-        self._login_redirect(reverse("mdm:update_blueprint", args=(blueprint.pk,)))
+        self.login_redirect("update_blueprint", blueprint.pk)
 
     def test_update_blueprint_permission_denied(self):
         blueprint = force_blueprint()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:update_blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_blueprint_get(self):
         blueprint = force_blueprint()
-        self._login("mdm.change_blueprint")
+        self.login("mdm.change_blueprint")
         response = self.client.get(reverse("mdm:update_blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_form.html")
@@ -248,7 +238,7 @@ class BlueprintManagementViewsTestCase(TestCase):
         self.assertEqual(blueprint.collect_apps, 0)
         self.assertEqual(blueprint.collect_certificates, 0)
         self.assertEqual(blueprint.collect_profiles, 0)
-        self._login("mdm.change_blueprint", "mdm.view_blueprint")
+        self.login("mdm.change_blueprint", "mdm.view_blueprint")
         new_name = get_random_string(12)
         location = force_location()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -303,17 +293,17 @@ class BlueprintManagementViewsTestCase(TestCase):
 
     def test_delete_blueprint_redirect(self):
         blueprint = force_blueprint()
-        self._login_redirect(reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
+        self.login_redirect("delete_blueprint", blueprint.pk)
 
     def test_delete_blueprint_permission_denied(self):
         blueprint = force_blueprint()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_blueprint_get(self):
         blueprint = force_blueprint()
-        self._login("mdm.delete_blueprint")
+        self.login("mdm.delete_blueprint")
         response = self.client.get(reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/blueprint_confirm_delete.html")
@@ -324,7 +314,7 @@ class BlueprintManagementViewsTestCase(TestCase):
         blueprint = force_blueprint()
         force_blueprint_artifact(blueprint=blueprint)
         self.assertFalse(blueprint.can_be_deleted())
-        self._login("mdm.delete_blueprint")
+        self.login("mdm.delete_blueprint")
         response = self.client.get(reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
         self.assertEqual(response.status_code, 404)
 
@@ -332,7 +322,7 @@ class BlueprintManagementViewsTestCase(TestCase):
     def test_delete_blueprint_post(self, post_event):
         blueprint = force_blueprint()
         prev_value = blueprint.serialize_for_event()
-        self._login("mdm.delete_blueprint", "mdm.view_blueprint")
+        self.login("mdm.delete_blueprint", "mdm.view_blueprint")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:delete_blueprint", args=(blueprint.pk,)),
                                         follow=True)

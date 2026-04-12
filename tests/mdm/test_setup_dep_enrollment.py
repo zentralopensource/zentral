@@ -1,21 +1,20 @@
 from datetime import datetime, timedelta
-from functools import reduce
-import operator
 from unittest.mock import Mock, patch
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import DEPDevice, DEPEnrollment
 from .utils import (force_acme_issuer, force_dep_enrollment, force_dep_device, force_dep_virtual_server,
                     force_push_certificate, force_realm, force_scep_issuer)
 
 
-class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
+class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
@@ -24,45 +23,36 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # create DEP enrollment
 
     def test_create_dep_enrollment_redirect(self):
-        self._login_redirect(reverse("mdm:create_dep_enrollment"))
+        self.login_redirect("create_dep_enrollment")
 
     def test_create_dep_enrollment_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:create_dep_enrollment"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_dep_enrollment_get(self):
-        self._login("mdm.add_depenrollment")
+        self.login("mdm.add_depenrollment")
         response = self.client.get(reverse("mdm:create_dep_enrollment"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
         self.assertContains(response, "Create DEP enrollment")
 
     def test_create_dep_enrollment_os_version_errors(self):
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         display_name = get_random_string(12)
         push_certificate = force_push_certificate()
@@ -88,7 +78,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertFormError(response.context["dep_enrollment_form"], "macos_min_version", "Not a valid OS version")
 
     def test_create_dep_enrollment_macos_admin_only_admin_shortname(self):
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         push_certificate = force_push_certificate()
         scep_issuer = force_scep_issuer()
@@ -111,7 +101,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                              "Auto admin information incomplete")
 
     def test_create_dep_enrollment_macos_admin_info_await_device_configured_error(self):
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         push_certificate = force_push_certificate()
         scep_issuer = force_scep_issuer()
@@ -134,7 +124,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                              "Required for the auto admin account setup")
 
     def test_create_dep_enrollment_missing_realm(self):
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         push_certificate = force_push_certificate()
         scep_issuer = force_scep_issuer()
@@ -154,7 +144,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                              "This option is only valid if a 'realm' is selected")
 
     def test_create_dep_enrollment_missing_username_pattern(self):
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         push_certificate = force_push_certificate()
         scep_issuer = force_scep_issuer()
@@ -176,7 +166,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                              "This field is required when the 'use realm user' option is ticked")
 
     def test_create_dep_enrollment_invalid_username_pattern_choice(self):
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         push_certificate = force_push_certificate()
         scep_issuer = force_scep_issuer()
@@ -198,7 +188,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                              'Select a valid choice. YOLO is not one of the available choices.')
 
     def test_create_dep_enrollment_username_pattern_without_use_realm_user(self):
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         push_certificate = force_push_certificate()
         scep_issuer = force_scep_issuer()
@@ -220,7 +210,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
                              "This field can only be used if the 'use realm user' option is ticked")
 
     def test_create_dep_enrollment_no_token(self):
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         display_name = get_random_string(12)
         push_certificate = force_push_certificate()
@@ -246,7 +236,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], None, "DEP virtual server has no token")
 
     def test_create_dep_enrollment_token_expired(self):
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         display_name = get_random_string(12)
         push_certificate = force_push_certificate()
@@ -280,7 +270,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
             "devices": {}
         }
         from_dep_virtual_server.return_value = client
-        self._login("mdm.add_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollment", "mdm.view_depenrollment")
         name = get_random_string(64)
         display_name = get_random_string(12)
         push_certificate = force_push_certificate()
@@ -338,17 +328,17 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
 
     def test_view_dep_enrollment_redirect(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login_redirect(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
+        self.login_redirect("dep_enrollment", enrollment.pk)
 
     def test_view_dep_enrollment_permission_denied(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_view_dep_enrollment_no_extra_perms(self):
         enrollment = force_dep_enrollment(self.mbu, acme_issuer=True)
-        self._login("mdm.view_depenrollment")
+        self.login("mdm.view_depenrollment")
         response = self.client.get(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
@@ -366,7 +356,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
 
     def test_view_dep_enrollment_extra_perms(self):
         enrollment = force_dep_enrollment(self.mbu, acme_issuer=True)
-        self._login("mdm.view_acmeissuer", "mdm.view_depenrollment", "mdm.view_pushcertificate", "mdm.view_scepissuer")
+        self.login("mdm.view_acmeissuer", "mdm.view_depenrollment", "mdm.view_pushcertificate", "mdm.view_scepissuer")
         response = self.client.get(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
@@ -383,7 +373,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment.use_realm_user = True
         enrollment.username_pattern = DEPEnrollment.UsernamePattern.DEVICE_USERNAME
         enrollment.save()
-        self._login("mdm.view_depenrollment")
+        self.login("mdm.view_depenrollment")
         response = self.client.get(reverse("mdm:dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
@@ -396,11 +386,11 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
 
     def test_check_dep_enrollment_redirect(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login_redirect(reverse("mdm:check_dep_enrollment", args=(enrollment.pk,)))
+        self.login_redirect("check_dep_enrollment", enrollment.pk)
 
     def test_check_dep_enrollment_permission_denied(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:check_dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -410,7 +400,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         client.get_profile.return_value = {"yolo": "fomo"}
         from_dep_token.return_value = client
         enrollment = force_dep_enrollment(self.mbu)
-        self._login("mdm.view_depenrollment")
+        self.login("mdm.view_depenrollment")
         response = self.client.get(reverse("mdm:check_dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_check.html")
@@ -420,17 +410,17 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
 
     def test_update_dep_enrollment_redirect(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login_redirect(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)))
+        self.login_redirect("update_dep_enrollment", enrollment.pk)
 
     def test_update_dep_enrollment_permission_denied(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_dep_enrollment_get(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login("mdm.change_depenrollment")
+        self.login("mdm.change_depenrollment")
         response = self.client.get(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
@@ -438,7 +428,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
 
     def test_update_dep_enrollment_post_not_removable_only_if_supervised(self):
         enrollment = force_dep_enrollment(self.mbu, acme_issuer=True)
-        self._login("mdm.change_depenrollment")
+        self.login("mdm.change_depenrollment")
         response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                     {"de-name": enrollment.name,
                                      "de-acme_issuer": enrollment.acme_issuer.pk,
@@ -455,7 +445,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
 
     def test_update_dep_enrollment_post_add_admin_only_full_name(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login("mdm.change_depenrollment")
+        self.login("mdm.change_depenrollment")
         response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                     {"de-name": enrollment.name,
                                      "de-scep_issuer": enrollment.scep_issuer.pk,
@@ -480,7 +470,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         self.assertFalse(device1.is_deleted())
         device2 = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED, enrollment=enrollment)
         self.assertFalse(device2.is_deleted())
-        self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.change_depenrollment", "mdm.view_depenrollment")
         new_name = get_random_string(12)
         new_display_name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -529,7 +519,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment.admin_full_name = "yolo"
         enrollment.admin_short_name = "fomo"
         enrollment.save()
-        self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.change_depenrollment", "mdm.view_depenrollment")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                         {"de-name": enrollment.name,
@@ -558,7 +548,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment.admin_full_name = "yolo"
         enrollment.admin_short_name = "fomo"
         enrollment.save()
-        self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.change_depenrollment", "mdm.view_depenrollment")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                         {"de-name": enrollment.name,
@@ -595,7 +585,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         enrollment.await_device_configured = True
         enrollment.skip_setup_items = []
         enrollment.save()
-        self._login("mdm.change_depenrollment", "mdm.view_depenrollment")
+        self.login("mdm.change_depenrollment", "mdm.view_depenrollment")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:update_dep_enrollment", args=(enrollment.pk,)),
                                         {"de-name": enrollment.name,
@@ -629,11 +619,11 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
     # list DEP enrollments
 
     def test_list_dep_enrollments_redirect(self):
-        self._login_redirect(reverse("mdm:enrollments"))
+        self.login_redirect("enrollments")
 
     def test_list_dep_enrollments_no_perm_empty(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "1 DEP enrollment")
@@ -641,7 +631,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
 
     def test_list_dep_enrollments(self):
         enrollment = force_dep_enrollment(self.mbu)
-        self._login("mdm.view_depenrollment")
+        self.login("mdm.view_depenrollment")
         response = self.client.get(reverse("mdm:enrollments"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "DEP enrollment (1)")

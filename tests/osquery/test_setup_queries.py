@@ -1,13 +1,12 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from django.test import TestCase
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
@@ -16,7 +15,7 @@ from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
 
 
-class OsquerySetupQueriesViewsTestCase(TestCase):
+class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         # provision the stores
@@ -27,25 +26,18 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group] + stores.admin_console_store.events_url_authorized_roles)
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "osquery"
+
     # utiliy methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _force_pack(self):
         name = get_random_string(12)
@@ -69,15 +61,15 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     # create query
 
     def test_create_query_redirect(self):
-        self._login_redirect(reverse("osquery:create_query"))
+        self.login_redirect("create_query")
 
     def test_create_query_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("osquery:create_query"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_query_get(self):
-        self._login("osquery.add_query")
+        self.login("osquery.add_query")
         response = self.client.get(reverse("osquery:create_query"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_form.html")
@@ -86,7 +78,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     def test_create_query_same_name_error(self):
         query_name = get_random_string(12)
         self._force_query(name=query_name)
-        self._login("osquery.add_query", "osquery.view_query")
+        self.login("osquery.add_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:create_query"),
                                     {"name": query_name,
                                      "sql": "select 1 from users;",
@@ -96,7 +88,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "name", "Query with this Name already exists.")
 
     def test_create_query_post(self):
-        self._login("osquery.add_query", "osquery.view_query")
+        self.login("osquery.add_query", "osquery.view_query")
         query_name = get_random_string(12)
         response = self.client.post(reverse("osquery:create_query"),
                                     {"name": query_name,
@@ -113,7 +105,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         self.assertEqual(query.version, 1)
 
     def test_create_query_with_compliance_check_and_tag_error(self):
-        self._login("osquery.add_query", "osquery.view_query")
+        self.login("osquery.add_query", "osquery.view_query")
         tag = Tag.objects.create(name=get_random_string(12))
         response = self.client.post(reverse("osquery:create_query"),
                                     {"name": get_random_string(12),
@@ -130,7 +122,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
                              "A query can either be a compliance check or a tag update, not both")
 
     def test_create_query_with_compliance_check_sql_error(self):
-        self._login("osquery.add_query", "osquery.view_query")
+        self.login("osquery.add_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:create_query"),
                                     {"name": get_random_string(12),
                                      "sql": "select 1 from processes;",
@@ -143,7 +135,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
                              "The query doesn't contain the 'ztl_status' keyword")
 
     def test_create_query_with_compliance_check(self):
-        self._login("osquery.add_query", "osquery.view_query")
+        self.login("osquery.add_query", "osquery.view_query")
         query_name = get_random_string(12)
         response = self.client.post(reverse("osquery:create_query"),
                                     {"name": query_name,
@@ -162,7 +154,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         self.assertEqual(query.compliance_check.query, query)
 
     def test_create_query_with_tag(self):
-        self._login("osquery.add_query", "osquery.view_query")
+        self.login("osquery.add_query", "osquery.view_query")
         query_name = get_random_string(12)
         tag = Tag.objects.create(name=get_random_string(12))
         response = self.client.post(reverse("osquery:create_query"),
@@ -183,17 +175,17 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
 
     def test_update_query_redirect(self):
         query = self._force_query()
-        self._login_redirect(reverse("osquery:update_query", args=(query.pk,)))
+        self.login_redirect("update_query", query.pk)
 
     def test_update_query_permission_denied(self):
         query = self._force_query()
-        self._login()
+        self.login()
         response = self.client.get(reverse("osquery:update_query", args=(query.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_query_get(self):
         query = self._force_query()
-        self._login("osquery.change_query")
+        self.login("osquery.change_query")
         response = self.client.get(reverse("osquery:update_query", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_form.html")
@@ -201,7 +193,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     def test_update_query_same_name_error(self):
         query0 = self._force_query()
         query = self._force_query()
-        self._login("osquery.change_query", "osquery.view_query")
+        self.login("osquery.change_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
                                     {"name": query0.name,
                                      "sql": "select 2 from users;",
@@ -213,7 +205,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
 
     def test_update_query_post(self):
         query = self._force_query()
-        self._login("osquery.change_query", "osquery.view_query")
+        self.login("osquery.change_query", "osquery.view_query")
         new_name = get_random_string(12)
         version = query.version
         response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
@@ -232,7 +224,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
 
     def test_update_query_set_compliance_check_sql_error(self):
         query = self._force_query()
-        self._login("osquery.change_query", "osquery.view_query")
+        self.login("osquery.change_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
                                     {"name": query.name,
                                      "sql": query.sql,
@@ -249,7 +241,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         # add a pack to schedule this query in 'diff' mode
         pack = Pack.objects.create(name=get_random_string(12))
         PackQuery.objects.create(pack=pack, query=query, interval=600)
-        self._login("osquery.change_query", "osquery.view_query")
+        self.login("osquery.change_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
                                     {"name": query.name,
                                      "sql": "select 'OK' as ztl_status;",
@@ -266,7 +258,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         # add a pack to schedule this query in 'diff' mode
         pack = Pack.objects.create(name=get_random_string(12))
         PackQuery.objects.create(pack=pack, query=query, interval=600)
-        self._login("osquery.change_query", "osquery.view_query")
+        self.login("osquery.change_query", "osquery.view_query")
         tag = Tag.objects.create(name=get_random_string(12))
         response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
                                     {"name": query.name,
@@ -282,7 +274,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     def test_update_query_set_compliance_check(self):
         query = self._force_query()
         self.assertIsNone(query.compliance_check)
-        self._login("osquery.change_query", "osquery.view_query")
+        self.login("osquery.change_query", "osquery.view_query")
         version = query.version
         response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
                                     {"name": query.name,
@@ -303,17 +295,17 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
 
     def test_delete_query_redirect(self):
         query = self._force_query()
-        self._login_redirect(reverse("osquery:delete_query", args=(query.pk,)))
+        self.login_redirect("delete_query", query.pk)
 
     def test_delete_query_permission_denied(self):
         query = self._force_query()
-        self._login()
+        self.login()
         response = self.client.get(reverse("osquery:delete_query", args=(query.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_query_get(self):
         query = self._force_query()
-        self._login("osquery.delete_query")
+        self.login("osquery.delete_query")
         response = self.client.get(reverse("osquery:delete_query", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_confirm_delete.html")
@@ -321,7 +313,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
 
     def test_delete_query_post(self):
         query = self._force_query()
-        self._login("osquery.delete_query", "osquery.view_query")
+        self.login("osquery.delete_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:delete_query", args=(query.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_list.html")
@@ -331,7 +323,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     def test_delete_query_with_compliance_check(self):
         query = self._force_query(force_compliance_check=True)
         compliance_check_pk = query.compliance_check.pk
-        self._login("osquery.delete_query", "osquery.view_query")
+        self.login("osquery.delete_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:delete_query", args=(query.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_list.html")
@@ -341,7 +333,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
 
     def test_delete_scheduled_query(self):
         query = self._force_query(pack_query_mode="diff")
-        self._login("osquery.delete_query", "osquery.view_query")
+        self.login("osquery.delete_query", "osquery.view_query")
         response = self.client.post(reverse("osquery:delete_query", args=(query.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_list.html")
@@ -352,11 +344,11 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
 
     def test_query_events_redirect(self):
         query = self._force_query()
-        self._login_redirect(reverse("osquery:query_events", args=(query.pk,)))
+        self.login_redirect("query_events", query.pk)
 
     def test_query_events_permission_denied(self):
         query = self._force_query()
-        self._login()
+        self.login()
         response = self.client.get(reverse("osquery:query_events", args=(query.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -364,18 +356,18 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     def test_query_events_ok(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         query = self._force_query()
-        self._login("osquery.view_query")
+        self.login("osquery.view_query")
         response = self.client.get(reverse("osquery:query_events", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_events.html")
 
     def test_fetch_query_events_redirect(self):
         query = self._force_query()
-        self._login_redirect(reverse("osquery:fetch_query_events", args=(query.pk,)))
+        self.login_redirect("fetch_query_events", query.pk)
 
     def test_fetch_query_events_permission_denied(self):
         query = self._force_query()
-        self._login()
+        self.login()
         response = self.client.get(reverse("osquery:fetch_query_events", args=(query.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -383,7 +375,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     def test_fetch_query_events_ok(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         query = self._force_query()
-        self._login("osquery.view_query")
+        self.login("osquery.view_query")
         response = self.client.get(reverse("osquery:fetch_query_events", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
@@ -391,17 +383,17 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
     # query list
 
     def test_query_list_redirect(self):
-        self._login_redirect(reverse("osquery:queries"))
+        self.login_redirect("queries")
 
     def test_query_list_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("osquery:queries"))
         self.assertEqual(response.status_code, 403)
 
     def test_query_list(self):
         query = self._force_query()
         query2 = self._force_query(force_compliance_check=True)
-        self._login("osquery.view_query")
+        self.login("osquery.view_query")
         response = self.client.get(reverse("osquery:queries"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_list.html")
@@ -411,7 +403,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase):
         self.assertContains(response, query2.name)
 
     def test_filtered_query_list(self):
-        self._login("osquery.view_query")
+        self.login("osquery.view_query")
         response = self.client.get(reverse("osquery:queries"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_list.html")
