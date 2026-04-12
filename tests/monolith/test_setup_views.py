@@ -1,18 +1,17 @@
 import copy
 from datetime import datetime
-from functools import reduce
 import hashlib
 from io import BytesIO
-import operator
 from unittest.mock import patch
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.events import MonolithSyncCatalogsRequestEvent
 from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, EnrolledMachine,
@@ -35,7 +34,7 @@ from .utils import (CLOUDFRONT_PRIVKEY_PEM,
                     force_repository, force_manifest_sub_manifest)
 
 
-class MonolithSetupViewsTestCase(TestCase):
+class MonolithSetupViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -79,38 +78,29 @@ class MonolithSetupViewsTestCase(TestCase):
             installed_at=datetime.utcnow()
         )
 
-    # utility methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "monolith"
 
     # index
 
     def test_index_redirect(self):
-        self._login_redirect(reverse("monolith:index"))
+        self.login_redirect("index")
 
     def test_index_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:index"))
         self.assertEqual(response.status_code, 403)
 
     def test_index(self):
-        self._login("monolith.view_manifest")
+        self.login("monolith.view_manifest")
         response = self.client.get(reverse("monolith:index"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/index.html")
@@ -118,17 +108,17 @@ class MonolithSetupViewsTestCase(TestCase):
     # repositories
 
     def test_repositories_redirect(self):
-        self._login_redirect(reverse("monolith:repositories"))
+        self.login_redirect("repositories")
 
     def test_repositories_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:repositories"))
         self.assertEqual(response.status_code, 403)
 
     def test_repositories_all_links(self):
         repository = force_repository()
         repository2 = force_repository(provisioning_uid=get_random_string(12))
-        self._login("monolith.view_repository", "monolith.change_repository", "monolith.delete_repository")
+        self.login("monolith.view_repository", "monolith.change_repository", "monolith.delete_repository")
         response = self.client.get(reverse("monolith:repositories"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_list.html")
@@ -143,7 +133,7 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_repositories_no_links(self):
         repository = force_repository()
         repository2 = force_repository(provisioning_uid=get_random_string(12))
-        self._login("monolith.view_repository")
+        self.login("monolith.view_repository")
         response = self.client.get(reverse("monolith:repositories"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_list.html")
@@ -158,21 +148,21 @@ class MonolithSetupViewsTestCase(TestCase):
     # create repository
 
     def test_create_repository_redirect(self):
-        self._login_redirect(reverse("monolith:create_repository"))
+        self.login_redirect("create_repository")
 
     def test_create_repository_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:create_repository"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_repository_get(self):
-        self._login("monolith.add_repository")
+        self.login("monolith.add_repository")
         response = self.client.get(reverse("monolith:create_repository"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_form.html")
 
     def test_create_s3_repository_invalid_private_key(self):
-        self._login("monolith.add_repository", "monolith.view_repository")
+        self.login("monolith.add_repository", "monolith.view_repository")
         name = get_random_string(12)
         bucket = get_random_string(12)
         response = self.client.post(reverse("monolith:create_repository"),
@@ -191,7 +181,7 @@ class MonolithSetupViewsTestCase(TestCase):
         )
 
     def test_create_s3_repository_missing_cf_domain_key_id(self):
-        self._login("monolith.add_repository", "monolith.view_repository")
+        self.login("monolith.add_repository", "monolith.view_repository")
         name = get_random_string(12)
         bucket = get_random_string(12)
         response = self.client.post(reverse("monolith:create_repository"),
@@ -212,7 +202,7 @@ class MonolithSetupViewsTestCase(TestCase):
         )
 
     def test_create_s3_repository_missing_cf_privkey(self):
-        self._login("monolith.add_repository", "monolith.view_repository")
+        self.login("monolith.add_repository", "monolith.view_repository")
         name = get_random_string(12)
         bucket = get_random_string(12)
         response = self.client.post(reverse("monolith:create_repository"),
@@ -232,7 +222,7 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_azure_repository(self, post_event, send_notification):
-        self._login("monolith.add_repository", "monolith.view_repository")
+        self.login("monolith.add_repository", "monolith.view_repository")
         name = get_random_string(12)
         storage_account = get_random_string(12)
         container = get_random_string(12)
@@ -279,7 +269,7 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_s3_repository(self, post_event, send_notification):
-        self._login("monolith.add_repository", "monolith.view_repository")
+        self.login("monolith.add_repository", "monolith.view_repository")
         name = get_random_string(12)
         bucket = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -323,7 +313,7 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_virtual_repository(self, post_event, send_notification):
-        self._login("monolith.add_repository", "monolith.view_repository")
+        self.login("monolith.add_repository", "monolith.view_repository")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:create_repository"),
@@ -365,17 +355,17 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_repository_redirect(self):
         repository = force_repository()
-        self._login_redirect(reverse("monolith:repository", args=(repository.pk,)))
+        self.login_redirect("repository", repository.pk)
 
     def test_repository_permission_denied(self):
         repository = force_repository()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_repository_get_all_links(self):
         repository = force_repository()
-        self._login(
+        self.login(
             "monolith.view_repository",
             "monolith.change_repository",
             "monolith.delete_repository",
@@ -392,7 +382,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_provisioned_repository_get_sync_only_no_secrets(self):
         repository = force_repository(provisioning_uid=get_random_string(12))
-        self._login(
+        self.login(
             "monolith.view_repository",
             "monolith.change_repository",
             "monolith.delete_repository",
@@ -409,7 +399,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_repository_get_no_links(self):
         repository = force_repository()
-        self._login("monolith.view_repository")
+        self.login("monolith.view_repository")
         response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_detail.html")
@@ -420,7 +410,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_repository_get_update_only(self):
         repository = force_repository()
-        self._login("monolith.view_repository", "monolith.change_repository")
+        self.login("monolith.view_repository", "monolith.change_repository")
         response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_detail.html")
@@ -431,7 +421,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_repository_get_delete_only(self):
         repository = force_repository()
-        self._login("monolith.view_repository", "monolith.delete_repository")
+        self.login("monolith.view_repository", "monolith.delete_repository")
         response = self.client.get(reverse("monolith:repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_detail.html")
@@ -444,24 +434,24 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_update_repository_redirect(self):
         repository = force_repository()
-        self._login_redirect(reverse("monolith:update_repository", args=(repository.pk,)))
+        self.login_redirect("update_repository", repository.pk)
 
     def test_update_repository_permission_denied(self):
         repository = force_repository()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:update_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_repository_get(self):
         repository = force_repository()
-        self._login("monolith.change_repository")
+        self.login("monolith.change_repository")
         response = self.client.get(reverse("monolith:update_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_form.html")
 
     def test_update_provisioned_repository_get_404(self):
         repository = force_repository(provisioning_uid=get_random_string(12))
-        self._login("monolith.change_repository")
+        self.login("monolith.change_repository")
         response = self.client.get(reverse("monolith:update_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 404)
 
@@ -471,7 +461,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertIsNone(repository.meta_business_unit)
         self.assertNotEqual(manifest.meta_business_unit, self.mbu)
         force_catalog(repository=repository, manifest=manifest)
-        self._login("monolith.change_repository")
+        self.login("monolith.change_repository")
         response = self.client.post(reverse("monolith:update_repository", args=(repository.pk,)),
                                     {"r-name": get_random_string(12),
                                      "r-meta_business_unit": self.mbu.pk,
@@ -496,7 +486,7 @@ class MonolithSetupViewsTestCase(TestCase):
         prev_value = repository.serialize_for_event()
         new_name = get_random_string(12)
         new_bucket = get_random_string(12)
-        self._login("monolith.change_repository", "monolith.view_repository")
+        self.login("monolith.change_repository", "monolith.view_repository")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:update_repository", args=(repository.pk,)),
                                         {"r-name": new_name,
@@ -595,7 +585,7 @@ class MonolithSetupViewsTestCase(TestCase):
         tenant_id = str(uuid.uuid4())
         client_id = str(uuid.uuid4())
         client_secret = get_random_string(12)
-        self._login("monolith.change_repository", "monolith.view_repository")
+        self.login("monolith.change_repository", "monolith.view_repository")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:update_repository", args=(repository.pk,)),
                                         {"r-name": new_name,
@@ -661,11 +651,11 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_delete_repository_redirect(self):
         repository = force_repository()
-        self._login_redirect(reverse("monolith:delete_repository", args=(repository.pk,)))
+        self.login_redirect("delete_repository", repository.pk)
 
     def test_delete_repository_permission_denied(self):
         repository = force_repository()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -673,19 +663,19 @@ class MonolithSetupViewsTestCase(TestCase):
         repository = force_repository()
         manifest = force_manifest()
         force_catalog(repository=repository, manifest=manifest)
-        self._login("monolith.delete_repository")
+        self.login("monolith.delete_repository")
         response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_delete_provisioned_repository_get_not_found(self):
         repository = force_repository(provisioning_uid=get_random_string(12))
-        self._login("monolith.delete_repository")
+        self.login("monolith.delete_repository")
         response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_delete_repository_get(self):
         repository = force_repository()
-        self._login("monolith.delete_repository")
+        self.login("monolith.delete_repository")
         response = self.client.get(reverse("monolith:delete_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/repository_confirm_delete.html")
@@ -695,7 +685,7 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_delete_repository(self, post_event, send_notification):
         repository = force_repository()
         prev_value = repository.serialize_for_event()
-        self._login("monolith.delete_repository", "monolith.view_repository")
+        self.login("monolith.delete_repository", "monolith.view_repository")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:delete_repository", args=(repository.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -722,11 +712,11 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_sync_repository_redirect(self):
         repository = force_repository()
-        self._login_redirect(reverse("monolith:sync_repository", args=(repository.pk,)))
+        self.login_redirect("sync_repository", repository.pk)
 
     def test_sync_repository_permission_denied(self):
         repository = force_repository()
-        self._login("monolith.change_repository")
+        self.login("monolith.change_repository")
         response = self.client.get(reverse("monolith:sync_repository", args=(repository.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -735,7 +725,7 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("zentral.contrib.monolith.views.load_repository_backend")
     def test_sync_repository(self, load_repository_backend, post_event, send_notification):
         repository = force_repository()
-        self._login("monolith.sync_repository", "monolith.view_repository")
+        self.login("monolith.sync_repository", "monolith.view_repository")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:sync_repository", args=(repository.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -756,7 +746,7 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_sync_repository_error(self, load_repository_backend, post_event, send_notification):
         load_repository_backend.return_value.sync_catalogs.side_effect = ValueError("YoLoFoMo")
         repository = force_repository()
-        self._login("monolith.sync_repository", "monolith.view_repository")
+        self.login("monolith.sync_repository", "monolith.view_repository")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:sync_repository", args=(repository.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -775,22 +765,22 @@ class MonolithSetupViewsTestCase(TestCase):
     # pkg infos
 
     def test_pkg_infos_login_redirect(self):
-        self._login_redirect(reverse("monolith:pkg_infos"))
+        self.login_redirect("pkg_infos")
 
     def test_pkg_infos_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:pkg_infos"))
         self.assertEqual(response.status_code, 403)
 
     def test_pkg_infos(self):
-        self._login("monolith.view_pkginfo")
+        self.login("monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:pkg_infos"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/pkginfo_list.html")
         self.assertContains(response, self.pkginfo_name_1.name)
 
     def test_pkg_infos_search(self):
-        self._login("monolith.view_pkginfo")
+        self.login("monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:pkg_infos"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/pkginfo_list.html")
@@ -804,43 +794,43 @@ class MonolithSetupViewsTestCase(TestCase):
     # pkg info name
 
     def test_pkg_info_name_login_redirect(self):
-        self._login_redirect(reverse("monolith:pkg_info_name", args=(self.pkginfo_name_1.pk,)))
+        self.login_redirect("pkg_info_name", self.pkginfo_name_1.pk)
 
     def test_pkg_info_name_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:pkg_info_name", args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_pkg_info_name(self):
-        self._login("monolith.view_pkginfoname", "monolith.view_pkginfo")
+        self.login("monolith.view_pkginfoname", "monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:pkg_info_name", args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/pkg_info_name.html")
         self.assertContains(response, self.pkginfo_name_1.name)
 
     def test_pkg_info_name_events_login_redirect(self):
-        self._login_redirect(reverse("monolith:pkg_info_name_events", args=(self.pkginfo_name_1.pk,)))
+        self.login_redirect("pkg_info_name_events", self.pkginfo_name_1.pk)
 
     def test_pkg_info_name_fetch_events_login_redirect(self):
-        self._login_redirect(reverse("monolith:fetch_pkg_info_name_events", args=(self.pkginfo_name_1.pk,)))
+        self.login_redirect("fetch_pkg_info_name_events", self.pkginfo_name_1.pk)
 
     def test_pkg_info_name_events_store_redirect_login_redirect(self):
-        self._login_redirect(reverse("monolith:pkg_info_name_events_store_redirect", args=(self.pkginfo_name_1.pk,)))
+        self.login_redirect("pkg_info_name_events_store_redirect", self.pkginfo_name_1.pk)
 
     def test_pkg_info_name_events_permission_denied(self):
-        self._login("monolith.view_pkginfo")
+        self.login("monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:pkg_info_name_events",
                                    args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_pkg_info_name_fetch_events_permission_denied(self):
-        self._login("monolith.view_pkginfo")
+        self.login("monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:fetch_pkg_info_name_events",
                                    args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_pkg_info_name_events_store_redirect_permission_denied(self):
-        self._login("monolith.view_pkginfo")
+        self.login("monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:pkg_info_name_events_store_redirect",
                                    args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 403)
@@ -848,7 +838,7 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_pkg_info_name_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
-        self._login("monolith.view_pkginfo", "monolith.view_pkginfoname")
+        self.login("monolith.view_pkginfo", "monolith.view_pkginfoname")
         response = self.client.get(reverse("monolith:pkg_info_name_events",
                                    args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -857,14 +847,14 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_pkg_info_name_fetch_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
-        self._login("monolith.view_pkginfo", "monolith.view_pkginfoname")
+        self.login("monolith.view_pkginfo", "monolith.view_pkginfoname")
         response = self.client.get(reverse("monolith:fetch_pkg_info_name_events",
                                    args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_pkg_info_name_events_store_redirect(self):
-        self._login("monolith.view_pkginfo", "monolith.view_pkginfoname")
+        self.login("monolith.view_pkginfo", "monolith.view_pkginfoname")
         response = self.client.get(reverse("monolith:pkg_info_name_events_store_redirect",
                                    args=(self.pkginfo_name_1.pk,)))
         # dev store cannot redirect
@@ -873,16 +863,16 @@ class MonolithSetupViewsTestCase(TestCase):
     # create pkg info name
 
     def test_create_pkg_info_name_login_redirect(self):
-        self._login_redirect(reverse("monolith:create_pkg_info_name"))
+        self.login_redirect("create_pkg_info_name")
 
     def test_create_pkg_info_name_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:create_pkg_info_name"))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_pkg_info_name(self, post_event):
-        self._login("monolith.add_pkginfoname", "monolith.view_pkginfoname")
+        self.login("monolith.add_pkginfoname", "monolith.view_pkginfoname")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:create_pkg_info_name"), {"name": name}, follow=True)
@@ -915,21 +905,21 @@ class MonolithSetupViewsTestCase(TestCase):
     # delete pkg info name
 
     def test_delete_pkg_info_name_login_redirect(self):
-        self._login_redirect(reverse("monolith:delete_pkg_info_name", args=(self.pkginfo_name_1.pk,)))
+        self.login_redirect("delete_pkg_info_name", self.pkginfo_name_1.pk)
 
     def test_delete_pkg_info_name_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:delete_pkg_info_name", args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_pkg_info_name_404(self):
-        self._login("monolith.delete_pkginfoname")
+        self.login("monolith.delete_pkginfoname")
         response = self.client.post(reverse("monolith:delete_pkg_info_name", args=(self.pkginfo_name_1.pk,)))
         self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_pkg_info_name(self, post_event):
-        self._login("monolith.delete_pkginfoname", "monolith.view_pkginfo")
+        self.login("monolith.delete_pkginfoname", "monolith.view_pkginfo")
         pkg_info_name = force_name()
         prev_pk = pkg_info_name.pk
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -962,15 +952,15 @@ class MonolithSetupViewsTestCase(TestCase):
     # upload package
 
     def test_upload_package_login_redirect(self):
-        self._login_redirect(reverse("monolith:upload_package"))
+        self.login_redirect("upload_package")
 
     def test_upload_package_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:upload_package"))
         self.assertEqual(response.status_code, 403)
 
     def test_upload_package_get_no_name(self):
-        self._login("monolith.add_pkginfo")
+        self.login("monolith.add_pkginfo")
         pkg_info_name = force_name()
         response = self.client.get(reverse("monolith:upload_package"))
         self.assertEqual(response.status_code, 200)
@@ -980,7 +970,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(set(choices), {pkg_info_name, self.pkginfo_name_1})
 
     def test_upload_package_get_name(self):
-        self._login("monolith.add_pkginfo")
+        self.login("monolith.add_pkginfo")
         pkg_info_name = force_name()
         response = self.client.get(reverse("monolith:upload_package"), {"pin_id": pkg_info_name.pk})
         self.assertEqual(response.status_code, 200)
@@ -989,7 +979,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertNotIn("name", response.context["form"].fields)
 
     def test_upload_package_catalog_different_repository(self):
-        self._login("monolith.add_pkginfo")
+        self.login("monolith.add_pkginfo")
         pkg_info_name = force_name()
         file = BytesIO(build_dummy_package())
         file.name = "test123.pkg"
@@ -1010,7 +1000,7 @@ class MonolithSetupViewsTestCase(TestCase):
         )
 
     def test_upload_package_catalog_category_different_repository(self):
-        self._login("monolith.add_pkginfo")
+        self.login("monolith.add_pkginfo")
         pkg_info_name = force_name()
         file = BytesIO(build_dummy_package())
         file.name = "test123.pkg"
@@ -1032,7 +1022,7 @@ class MonolithSetupViewsTestCase(TestCase):
         )
 
     def test_upload_package_catalog_category_wrong_choices(self):
-        self._login("monolith.add_pkginfo")
+        self.login("monolith.add_pkginfo")
         pkg_info_name = force_name()
         file = BytesIO(build_dummy_package())
         file.name = "test123.pkg"
@@ -1060,7 +1050,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_upload_package(self, post_event):
-        self._login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
+        self.login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
         pkg_info_name = force_name()
         file = BytesIO(build_dummy_package())
         file.name = "test123.pkg"
@@ -1132,7 +1122,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_upload_package_from_pkg_info_name(self, post_event):
-        self._login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
+        self.login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
         pkg_info_category = force_category(repository=repository)
@@ -1239,7 +1229,7 @@ class MonolithSetupViewsTestCase(TestCase):
         pkg_info.file.delete()
 
     def test_upload_package_conflict(self):
-        self._login("monolith.add_pkginfo")
+        self.login("monolith.add_pkginfo")
         pkg_info = force_pkg_info()
         file = BytesIO(build_dummy_package(name=pkg_info.name.name, version=pkg_info.version))
         file.name = "{}.pkg".format(get_random_string(12))
@@ -1259,7 +1249,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_upload_package_existing_archived_package(self, post_event):
-        self._login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
+        self.login("monolith.add_pkginfo", "monolith.view_pkginfoname", "monolith.view_pkginfo")
         pkg_info = force_pkg_info(archived=True)
         pkg_info_name = pkg_info.name
         file = BytesIO(build_dummy_package(pkg_info_name.name, pkg_info.version))
@@ -1332,17 +1322,17 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_update_package_login_redirect(self):
         pkg_info = force_pkg_info()
-        self._login_redirect(reverse("monolith:update_package", args=(pkg_info.pk,)))
+        self.login_redirect("update_package", pkg_info.pk)
 
     def test_update_package_permission_denied(self):
         pkg_info = force_pkg_info()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:update_package", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_package_get_no_name(self):
         pkg_info = force_pkg_info()
-        self._login("monolith.change_pkginfo")
+        self.login("monolith.change_pkginfo")
         response = self.client.get(reverse("monolith:update_package", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/package_form.html")
@@ -1353,7 +1343,7 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_update_package(self, post_event):
         pkg_info = force_pkg_info()
         prev_value = pkg_info.serialize_for_event()
-        self._login("monolith.change_pkginfo", "monolith.view_pkginfo", "monolith.view_pkginfoname")
+        self.login("monolith.change_pkginfo", "monolith.view_pkginfo", "monolith.view_pkginfoname")
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -1401,23 +1391,23 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_delete_pkg_info_login_redirect(self):
         pkg_info = force_pkg_info()
-        self._login_redirect(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)))
+        self.login_redirect("delete_pkg_info", pkg_info.pk)
 
     def test_delete_pkg_info_permission_denied(self):
         pkg_info = force_pkg_info()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_pkg_info_404(self):
         pkg_info = force_pkg_info(local=False)
-        self._login("monolith.delete_pkginfo")
+        self.login("monolith.delete_pkginfo")
         response = self.client.post(reverse("monolith:delete_pkg_info", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_pkg_info(self, post_event):
-        self._login("monolith.delete_pkginfo", "monolith.view_pkginfo", "monolith.view_pkginfoname")
+        self.login("monolith.delete_pkginfo", "monolith.view_pkginfo", "monolith.view_pkginfoname")
         pkg_info = force_pkg_info()
         prev_value = pkg_info.serialize_for_event()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -1452,15 +1442,15 @@ class MonolithSetupViewsTestCase(TestCase):
     # catalogs
 
     def test_catalogs_login_redirect(self):
-        self._login_redirect(reverse("monolith:catalogs"))
+        self.login_redirect("catalogs")
 
     def test_catalogs_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:catalogs"))
         self.assertEqual(response.status_code, 403)
 
     def test_catalogs(self):
-        self._login("monolith.view_catalog")
+        self.login("monolith.view_catalog")
         response = self.client.get(reverse("monolith:catalogs"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/catalog_list.html")
@@ -1469,17 +1459,17 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_catalog_login_redirect(self):
         catalog = force_catalog()
-        self._login_redirect(reverse("monolith:catalog", args=(catalog.pk,)))
+        self.login_redirect("catalog", catalog.pk)
 
     def test_catalog_permission_denied(self):
         catalog = force_catalog()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_catalog(self):
         catalog = force_catalog()
-        self._login("monolith.view_catalog")
+        self.login("monolith.view_catalog")
         response = self.client.get(reverse("monolith:catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/catalog_detail.html")
@@ -1488,16 +1478,16 @@ class MonolithSetupViewsTestCase(TestCase):
     # create catalog
 
     def test_create_catalog_login_redirect(self):
-        self._login_redirect(reverse("monolith:create_catalog"))
+        self.login_redirect("create_catalog")
 
     def test_create_catalog_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:create_catalog"))
         self.assertContains(response, "Forbidden", status_code=403)
 
     def test_create_catalog_not_virtual_repository(self):
         repository = force_repository(virtual=False)
-        self._login("monolith.add_catalog")
+        self.login("monolith.add_catalog")
         response = self.client.post(reverse("monolith:create_catalog"),
                                     {"repository": repository.pk,
                                      "name": get_random_string(12)},
@@ -1512,7 +1502,7 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_catalog(self, post_event):
         repository = force_repository(virtual=True)
-        self._login("monolith.add_catalog", "monolith.view_catalog")
+        self.login("monolith.add_catalog", "monolith.view_catalog")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:create_catalog"),
@@ -1544,19 +1534,19 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_update_catalog_login_redirect(self):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
-        self._login_redirect(reverse("monolith:update_catalog", args=(catalog.pk,)))
+        self.login_redirect("update_catalog", catalog.pk)
 
     def test_update_catalog_permission_denied(self):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:update_catalog", args=(catalog.pk,)))
         self.assertContains(response, "Forbidden", status_code=403)
 
     def test_update_catalog_not_virtual(self):
         repository = force_repository(virtual=False)
         catalog = force_catalog(repository=repository)
-        self._login("monolith.change_catalog")
+        self.login("monolith.change_catalog")
         response = self.client.get(reverse("monolith:update_catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 404)
 
@@ -1566,7 +1556,7 @@ class MonolithSetupViewsTestCase(TestCase):
         catalog = force_catalog(repository=repository, manifest=manifest)
         new_repository = force_repository(mbu=MetaBusinessUnit.objects.create(name=get_random_string(12)),
                                           virtual=True)
-        self._login("monolith.change_catalog")
+        self.login("monolith.change_catalog")
         response = self.client.post(reverse("monolith:update_catalog", args=(catalog.pk,)),
                                     {"repository": new_repository.pk,
                                      "name": catalog.name})
@@ -1582,7 +1572,7 @@ class MonolithSetupViewsTestCase(TestCase):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
         prev_value = catalog.serialize_for_event()
-        self._login("monolith.change_catalog", "monolith.view_catalog")
+        self.login("monolith.change_catalog", "monolith.view_catalog")
         new_name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:update_catalog", args=(catalog.pk,)),
@@ -1616,17 +1606,17 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_delete_catalog_login_redirect(self):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
-        self._login_redirect(reverse("monolith:delete_catalog", args=(catalog.pk,)))
+        self.login_redirect("delete_catalog", catalog.pk)
 
     def test_delete_catalog_permission_denied(self):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:delete_catalog", args=(catalog.pk,)))
         self.assertContains(response, "Forbidden", status_code=403)
 
     def test_delete_catalog_cannot_be_deleted(self):
-        self._login("monolith.delete_catalog")
+        self.login("monolith.delete_catalog")
         response = self.client.get(reverse("monolith:delete_catalog", args=(self.catalog_1.pk,)))
         self.assertEqual(response.status_code, 404)
 
@@ -1636,7 +1626,7 @@ class MonolithSetupViewsTestCase(TestCase):
         catalog = force_catalog(repository=repository)
         prev_pk = catalog.pk
         prev_value = catalog.serialize_for_event()
-        self._login("monolith.delete_catalog", "monolith.view_catalog")
+        self.login("monolith.delete_catalog", "monolith.view_catalog")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:delete_catalog", args=(catalog.pk,)),
                                         follow=True)
@@ -1662,15 +1652,15 @@ class MonolithSetupViewsTestCase(TestCase):
     # conditions
 
     def test_conditions_login_redirect(self):
-        self._login_redirect(reverse("monolith:conditions"))
+        self.login_redirect("conditions")
 
     def test_conditions_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:conditions"))
         self.assertEqual(response.status_code, 403)
 
     def test_conditions(self):
-        self._login("monolith.view_condition")
+        self.login("monolith.view_condition")
         response = self.client.get(reverse("monolith:conditions"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/condition_list.html")
@@ -1679,17 +1669,17 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_condition_login_redirect(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        self._login_redirect(reverse("monolith:condition", args=(condition.pk,)))
+        self.login_redirect("condition", condition.pk)
 
     def test_condition_permission_denied(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_condition(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        self._login("monolith.view_condition")
+        self.login("monolith.view_condition")
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/condition_detail.html")
@@ -1698,7 +1688,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_condition_with_delete(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        self._login("monolith.view_condition", "monolith.delete_condition")
+        self.login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/condition_detail.html")
@@ -1708,7 +1698,7 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_condition_cannot_delete(self):
         condition = force_condition()
         force_sub_manifest_pkg_info(condition=condition)
-        self._login("monolith.view_condition", "monolith.delete_condition")
+        self.login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/condition_detail.html")
@@ -1718,16 +1708,16 @@ class MonolithSetupViewsTestCase(TestCase):
     # create condition
 
     def test_create_condition_login_redirect(self):
-        self._login_redirect(reverse("monolith:create_condition"))
+        self.login_redirect("create_condition")
 
     def test_create_condition_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:create_condition"))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_condition(self, post_event):
-        self._login("monolith.add_condition", "monolith.view_condition")
+        self.login("monolith.add_condition", "monolith.view_condition")
         name = get_random_string(12)
         predicate = 'machine_type == "laptop"'
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -1759,11 +1749,11 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_update_condition_login_redirect(self):
         condition = force_condition()
-        self._login_redirect(reverse("monolith:update_condition", args=(condition.pk,)))
+        self.login_redirect("update_condition", condition.pk)
 
     def test_update_condition_permission_denied(self):
         condition = force_condition()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:update_condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -1775,7 +1765,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(manifest.version, 1)
         sub_manifest = force_sub_manifest(manifest=manifest)
         force_sub_manifest_pkg_info(sub_manifest=sub_manifest, condition=condition)
-        self._login("monolith.change_condition", "monolith.view_condition")
+        self.login("monolith.change_condition", "monolith.view_condition")
         new_name = get_random_string(12)
         new_predicate = 'machine_type == "desktop"'
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -1811,17 +1801,17 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_delete_condition_login_redirect(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        self._login_redirect(reverse("monolith:delete_condition", args=(condition.pk,)))
+        self.login_redirect("delete_condition", condition.pk)
 
     def test_delete_condition_permission_denied(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_condition_get(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        self._login("monolith.delete_condition")
+        self.login("monolith.delete_condition")
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/condition_confirm_delete.html")
@@ -1829,7 +1819,7 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_delete_condition_cannot_delete(self):
         condition = force_condition()
         force_sub_manifest_pkg_info(condition=condition)
-        self._login("monolith.delete_condition")
+        self.login("monolith.delete_condition")
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 404)
 
@@ -1838,7 +1828,7 @@ class MonolithSetupViewsTestCase(TestCase):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         prev_pk = condition.pk
         prev_value = condition.serialize_for_event()
-        self._login("monolith.view_condition", "monolith.delete_condition")
+        self.login("monolith.view_condition", "monolith.delete_condition")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -1863,36 +1853,36 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_delete_condition_get_blocked(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         force_sub_manifest_pkg_info(condition=condition)
-        self._login("monolith.view_condition", "monolith.delete_condition")
+        self.login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.get(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
         self.assertEqual(response.status_code, 404)
 
     def test_delete_condition_post_blocked(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
         force_sub_manifest_pkg_info(condition=condition)
-        self._login("monolith.view_condition", "monolith.delete_condition")
+        self.login("monolith.view_condition", "monolith.delete_condition")
         response = self.client.post(reverse("monolith:delete_condition", args=(condition.pk,)), follow=True)
         self.assertEqual(response.status_code, 404)
 
     # sub manifests
 
     def test_sub_manifests_login_redirect(self):
-        self._login_redirect(reverse("monolith:sub_manifests"))
+        self.login_redirect("sub_manifests")
 
     def test_sub_manifests_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:sub_manifests"))
         self.assertEqual(response.status_code, 403)
 
     def test_sub_manifests(self):
-        self._login("monolith.view_submanifest")
+        self.login("monolith.view_submanifest")
         sub_manifest = force_sub_manifest()
         response = self.client.get(reverse("monolith:sub_manifests"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, sub_manifest.name)
 
     def test_sub_manifests_search(self):
-        self._login("monolith.view_submanifest")
+        self.login("monolith.view_submanifest")
         response = self.client.get(reverse("monolith:sub_manifests"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/sub_manifest_list.html")
@@ -1912,17 +1902,17 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_sub_manifest_login_redirect(self):
         sub_manifest = force_sub_manifest()
-        self._login_redirect(reverse("monolith:sub_manifest", args=(sub_manifest.pk,)))
+        self.login_redirect("sub_manifest", sub_manifest.pk)
 
     def test_sub_manifest_permission_denied(self):
         sub_manifest = force_sub_manifest()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:sub_manifest", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_sub_manifest_no_pkginfo_links(self):
         smpi = force_sub_manifest_pkg_info()
-        self._login("monolith.view_submanifest")
+        self.login("monolith.view_submanifest")
         response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertNotContains(response, 'class="danger"')
@@ -1945,7 +1935,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_sub_manifest_pkginfo_edit_link(self):
         smpi = force_sub_manifest_pkg_info()
-        self._login("monolith.view_submanifest", "monolith.change_submanifestpkginfo")
+        self.login("monolith.view_submanifest", "monolith.change_submanifestpkginfo")
         response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertNotContains(response, 'class="danger"')
@@ -1968,7 +1958,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_sub_manifest_pkginfo_add_link(self):
         smpi = force_sub_manifest_pkg_info()
-        self._login("monolith.view_submanifest", "monolith.add_submanifestpkginfo")
+        self.login("monolith.view_submanifest", "monolith.add_submanifestpkginfo")
         response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertNotContains(response, 'class="danger"')
@@ -1991,7 +1981,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_sub_manifest_pkginfo_delete_link(self):
         smpi = force_sub_manifest_pkg_info()
-        self._login("monolith.view_submanifest", "monolith.delete_submanifestpkginfo")
+        self.login("monolith.view_submanifest", "monolith.delete_submanifestpkginfo")
         response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertNotContains(response, 'class="danger"')
@@ -2014,7 +2004,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_sub_manifest_pkginfo_archived_no_edit_link(self):
         smpi = force_sub_manifest_pkg_info(archived=True)
-        self._login("monolith.view_submanifest", "monolith.change_submanifestpkginfo")
+        self.login("monolith.view_submanifest", "monolith.change_submanifestpkginfo")
         response = self.client.get(reverse("monolith:sub_manifest", args=(smpi.sub_manifest.pk,)))
         self.assertTemplateUsed(response, "monolith/sub_manifest.html")
         self.assertContains(response, 'class="data-row danger"')
@@ -2027,22 +2017,22 @@ class MonolithSetupViewsTestCase(TestCase):
     # create submanifest
 
     def test_create_submanifest_redirect(self):
-        self._login_redirect(reverse("monolith:create_sub_manifest"))
+        self.login_redirect("create_sub_manifest")
 
     def test_create_submanifest_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:create_sub_manifest"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_submanifest_get(self):
-        self._login("monolith.add_submanifest")
+        self.login("monolith.add_submanifest")
         response = self.client.get(reverse("monolith:create_sub_manifest"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/edit_sub_manifest.html")
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_submanifest_post(self, post_event):
-        self._login("monolith.add_submanifest", "monolith.view_submanifest")
+        self.login("monolith.add_submanifest", "monolith.view_submanifest")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:create_sub_manifest"),
@@ -2083,10 +2073,10 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_update_submanifest_redirect(self):
         sub_manifest = force_sub_manifest()
-        self._login_redirect(reverse("monolith:update_sub_manifest", args=(sub_manifest.pk,)))
+        self.login_redirect("update_sub_manifest", sub_manifest.pk)
 
     def test_post_update_configuration_view_permission_denied(self):
-        self._login("monolith.add_submanifest", "monolith.view_submanifest")
+        self.login("monolith.add_submanifest", "monolith.view_submanifest")
         sub_manifest = force_sub_manifest()
         response = self.client.post(reverse("monolith:update_sub_manifest", args=(sub_manifest.pk,)),
                                     {"name": 'Deny me', "meta_business_unit": self.mbu.pk},
@@ -2097,7 +2087,7 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_update_submanifest(self, post_event):
         sub_manifest = force_sub_manifest(self.mbu)
         prev_value = sub_manifest.serialize_for_event()
-        self._login("monolith.change_submanifest", "monolith.view_submanifest")
+        self.login("monolith.change_submanifest", "monolith.view_submanifest")
         new_name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:update_sub_manifest", args=(sub_manifest.pk,)),
@@ -2137,10 +2127,10 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_delete_submanifest_redirect(self):
         sub_manifest = force_sub_manifest()
-        self._login_redirect(reverse("monolith:delete_sub_manifest", args=(sub_manifest.pk,)))
+        self.login_redirect("delete_sub_manifest", sub_manifest.pk)
 
     def test_delete_submanifest_permission_denied(self):
-        self._login("monolith.add_submanifest", "monolith.view_submanifest")
+        self.login("monolith.add_submanifest", "monolith.view_submanifest")
         sub_manifest = force_sub_manifest()
         response = self.client.get(reverse("monolith:delete_sub_manifest", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 403)
@@ -2151,13 +2141,13 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_delete_submanifest_cannot_delete(self):
         sub_manifest = force_sub_manifest()
         force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
-        self._login("monolith.delete_condition")
+        self.login("monolith.delete_condition")
         response = self.client.get(reverse("monolith:delete_condition", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_submanifest(self, post_event):
-        self._login("monolith.delete_submanifest", "monolith.view_submanifest")
+        self.login("monolith.delete_submanifest", "monolith.view_submanifest")
         sub_manifest = force_sub_manifest()
         prev_value = sub_manifest.serialize_for_event()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -2186,24 +2176,24 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_add_sub_manifest_pkg_info_redirect(self):
         sub_manifest = force_sub_manifest()
-        self._login_redirect(reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)))
+        self.login_redirect("sub_manifest_add_pkg_info", sub_manifest.pk)
 
     def test_add_sub_manifest_pkg_info_permission_denied(self):
         sub_manifest = force_sub_manifest()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_add_sub_manifest_pkg_info_get(self):
         sub_manifest = force_sub_manifest()
-        self._login("monolith.add_submanifestpkginfo")
+        self.login("monolith.add_submanifestpkginfo")
         response = self.client.get(reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
 
     def test_add_sub_manifest_pkg_info_post_pkg_info_name_already_included(self):
         smpi = force_sub_manifest_pkg_info()
-        self._login("monolith.add_submanifestpkginfo")
+        self.login("monolith.add_submanifestpkginfo")
         response = self.client.post(
             reverse("monolith:sub_manifest_add_pkg_info", args=(smpi.sub_manifest.pk,)),
             {"pkg_info_name": smpi.pkg_info_name,
@@ -2219,7 +2209,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_add_sub_manifest_pkg_info_post_featured_item_error(self):
         sub_manifest = force_sub_manifest()
-        self._login("monolith.add_submanifestpkginfo")
+        self.login("monolith.add_submanifestpkginfo")
         pkginfo_name = PkgInfoName.objects.create(name=get_random_string(12))
         PkgInfo.objects.create(repository=force_repository(),
                                name=pkginfo_name, version="1.0",
@@ -2239,7 +2229,7 @@ class MonolithSetupViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_add_sub_manifest_pkg_info_post(self, post_event):
         sub_manifest = force_sub_manifest()
-        self._login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
         pkginfo_name = force_name_with_info()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
@@ -2293,12 +2283,12 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_update_sub_manifest_pkg_info_login_redirect(self):
         sub_manifest = force_sub_manifest()
         smpi = force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
-        self._login_redirect(reverse("monolith:update_sub_manifest_pkg_info", args=(sub_manifest.pk, smpi.pk)))
+        self.login_redirect("update_sub_manifest_pkg_info", sub_manifest.pk, smpi.pk)
 
     def test_update_sub_manifest_pkg_info_permission_denied(self):
         sub_manifest = force_sub_manifest()
         smpi = force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:update_sub_manifest_pkg_info", args=(sub_manifest.pk, smpi.pk)))
         self.assertEqual(response.status_code, 403)
 
@@ -2307,7 +2297,7 @@ class MonolithSetupViewsTestCase(TestCase):
         sub_manifest = force_sub_manifest()
         smpi = force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
         prev_value = smpi.serialize_for_event()
-        self._login("monolith.change_submanifestpkginfo", "monolith.view_submanifest")
+        self.login("monolith.change_submanifestpkginfo", "monolith.view_submanifest")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:update_sub_manifest_pkg_info",
                                         args=(sub_manifest.pk, smpi.pk)),
@@ -2351,7 +2341,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_add_default_install_sub_manifest_pkg_info_shard(self):
         sub_manifest = force_sub_manifest()
-        self._login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
         pkginfo_name = force_name_with_info()
         response = self.client.post(
             reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
@@ -2372,19 +2362,18 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_delete_sub_manifest_pkg_info_redirect(self):
         smpi = force_sub_manifest_pkg_info()
-        self._login_redirect(reverse("monolith:delete_sub_manifest_pkg_info",
-                                     args=(smpi.sub_manifest.pk, smpi.pk)))
+        self.login_redirect("delete_sub_manifest_pkg_info", smpi.sub_manifest.pk, smpi.pk)
 
     def test_delete_sub_manifest_pkg_info_permission_denied(self):
         smpi = force_sub_manifest_pkg_info()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:delete_sub_manifest_pkg_info",
                                            args=(smpi.sub_manifest.pk, smpi.pk)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_sub_manifest_pkg_info_get(self):
         smpi = force_sub_manifest_pkg_info()
-        self._login("monolith.delete_submanifestpkginfo", "monolith.view_submanifest")
+        self.login("monolith.delete_submanifestpkginfo", "monolith.view_submanifest")
         response = self.client.get(reverse("monolith:delete_sub_manifest_pkg_info",
                                            args=(smpi.sub_manifest.pk, smpi.pk)))
         self.assertEqual(response.status_code, 200)
@@ -2397,7 +2386,7 @@ class MonolithSetupViewsTestCase(TestCase):
         sub_manifest = force_sub_manifest(manifest=manifest)
         smpi = force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
         prev_value = smpi.serialize_for_event()
-        self._login("monolith.delete_submanifestpkginfo", "monolith.view_submanifest")
+        self.login("monolith.delete_submanifestpkginfo", "monolith.view_submanifest")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:delete_sub_manifest_pkg_info",
                                         args=(sub_manifest.pk, smpi.pk)),
@@ -2428,15 +2417,15 @@ class MonolithSetupViewsTestCase(TestCase):
     # manifests
 
     def test_manifests_login_redirect(self):
-        self._login_redirect(reverse("monolith:manifests"))
+        self.login_redirect("manifests")
 
     def test_manifests_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:manifests"))
         self.assertEqual(response.status_code, 403)
 
     def test_manifests(self):
-        self._login("monolith.view_manifest")
+        self.login("monolith.view_manifest")
         response = self.client.get(reverse("monolith:manifests"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest_list.html")
@@ -2445,15 +2434,15 @@ class MonolithSetupViewsTestCase(TestCase):
     # manifest
 
     def test_manifest_login_redirect(self):
-        self._login_redirect(reverse("monolith:manifest", args=(self.manifest.pk,)))
+        self.login_redirect("manifest", self.manifest.pk)
 
     def test_manifest_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:manifest", args=(self.manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_manifest(self):
-        self._login("monolith.view_manifest")
+        self.login("monolith.view_manifest")
         response = self.client.get(reverse("monolith:manifest", args=(self.manifest.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest.html")
@@ -2464,7 +2453,7 @@ class MonolithSetupViewsTestCase(TestCase):
             response, reverse("monolith_api:enrollment_configuration_profile", args=(self.enrollment.pk,)))
 
     def test_manifest_with_enrollments(self):
-        self._login("monolith.view_manifest", "monolith.view_enrollment")
+        self.login("monolith.view_manifest", "monolith.view_enrollment")
         response = self.client.get(reverse("monolith:manifest", args=(self.manifest.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest.html")
@@ -2475,7 +2464,7 @@ class MonolithSetupViewsTestCase(TestCase):
             response, reverse("monolith_api:enrollment_configuration_profile", args=(self.enrollment.pk,)))
 
     def test_manifest_search(self):
-        self._login("monolith.view_manifest")
+        self.login("monolith.view_manifest")
         response = self.client.get(reverse("monolith:manifests"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest_list.html")
@@ -2495,16 +2484,16 @@ class MonolithSetupViewsTestCase(TestCase):
     # create manifest
 
     def test_create_manifest_login_redirect(self):
-        self._login_redirect(reverse("monolith:create_manifest"))
+        self.login_redirect("create_manifest")
 
     def test_create_manifest_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:create_manifest"))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_manifest(self, post_event):
-        self._login("monolith.add_manifest", "monolith.view_manifest")
+        self.login("monolith.add_manifest", "monolith.view_manifest")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:create_manifest"),
@@ -2543,11 +2532,11 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_update_manifest_login_redirect(self):
         manifest = force_manifest()
-        self._login_redirect(reverse("monolith:update_manifest", args=(manifest.pk,)))
+        self.login_redirect("update_manifest", manifest.pk)
 
     def test_update_manifest_permission_denied(self):
         manifest = force_manifest()
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:update_manifest", args=(manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -2555,7 +2544,7 @@ class MonolithSetupViewsTestCase(TestCase):
     def test_update_manifest(self, post_event):
         manifest = force_manifest()
         prev_value = manifest.serialize_for_event()
-        self._login("monolith.change_manifest", "monolith.view_manifest")
+        self.login("monolith.change_manifest", "monolith.view_manifest")
         new_name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:update_manifest", args=(manifest.pk,)),
@@ -2594,22 +2583,22 @@ class MonolithSetupViewsTestCase(TestCase):
     # manifest machine info
 
     def test_manifest_machine_info_redirect(self):
-        self._login_redirect(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))
-                             + "?serial_number=" + self.serial_number)
+        self.login_redirect("manifest_machine_info", self.manifest.pk,
+                            query_params={"serial_number": self.serial_number})
 
     def test_manifest_machine_info_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))
                                    + "?serial_number=" + self.serial_number)
         self.assertEqual(response.status_code, 403)
 
     def test_manifest_machine_info_not_found(self):
-        self._login("monolith.view_manifest", "monolith.view_pkginfo")
+        self.login("monolith.view_manifest", "monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_manifest_machine_info(self):
-        self._login("monolith.view_manifest", "monolith.view_pkginfo")
+        self.login("monolith.view_manifest", "monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))
                                    + "?serial_number=" + self.serial_number)
         self.assertEqual(response.status_code, 200)
@@ -2633,22 +2622,22 @@ class MonolithSetupViewsTestCase(TestCase):
     # create manifest_catalog
 
     def test_create_manifestcatalog_redirect(self):
-        self._login_redirect(reverse("monolith:add_manifest_catalog", args=(self.manifest.pk,)))
+        self.login_redirect("add_manifest_catalog", self.manifest.pk)
 
     def test_create_manifestcatalog_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:add_manifest_catalog", args=(self.manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_create_manifestcatalog_get(self):
-        self._login("monolith.add_manifestcatalog")
+        self.login("monolith.add_manifestcatalog")
         response = self.client.get(reverse("monolith:add_manifest_catalog", args=(self.manifest.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest_catalog_form.html")
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_manifestcatalog_post(self, post_event):
-        self._login("monolith.add_manifestcatalog", "monolith.view_manifest")
+        self.login("monolith.add_manifestcatalog", "monolith.view_manifest")
         manifest = force_manifest()
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
@@ -2688,11 +2677,10 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_update_manifestcatalog_redirect(self):
         manifest_catalog = force_manifest_catalog()
-        self._login_redirect(reverse("monolith:edit_manifest_catalog",
-                                     args=(manifest_catalog.manifest.pk, manifest_catalog.catalog.pk,)))
+        self.login_redirect("edit_manifest_catalog", manifest_catalog.manifest.pk, manifest_catalog.catalog.pk)
 
     def test_update_manifestcatalog_permission_denied(self):
-        self._login("monolith.add_manifestcatalog", "monolith.view_manifest")
+        self.login("monolith.add_manifestcatalog", "monolith.view_manifest")
         manifest_catalog = force_manifest_catalog()
         tag = force_tag()
         response = self.client.post(reverse("monolith:edit_manifest_catalog",
@@ -2702,7 +2690,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_update_manifestcatalog_view(self):
-        self._login("monolith.change_manifestcatalog", "monolith.view_manifest")
+        self.login("monolith.change_manifestcatalog", "monolith.view_manifest")
         manifest_catalog = force_manifest_catalog()
         response = self.client.get(reverse("monolith:edit_manifest_catalog",
                                            args=(manifest_catalog.manifest.pk, manifest_catalog.catalog.pk,)),
@@ -2716,7 +2704,7 @@ class MonolithSetupViewsTestCase(TestCase):
         manifest_catalog = force_manifest_catalog()
         tag = force_tag()
         prev_value = manifest_catalog.serialize_for_event()
-        self._login("monolith.change_manifestcatalog", "monolith.view_manifest")
+        self.login("monolith.change_manifestcatalog", "monolith.view_manifest")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:edit_manifest_catalog",
                                                 args=(manifest_catalog.manifest.pk, manifest_catalog.catalog.pk,)),
@@ -2752,11 +2740,10 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_delete_manifestcatalog_redirect(self):
         manifest_catalog = force_manifest_catalog()
-        self._login_redirect(reverse("monolith:delete_manifest_catalog",
-                                     args=(manifest_catalog.manifest.pk, manifest_catalog.catalog.pk,)))
+        self.login_redirect("delete_manifest_catalog", manifest_catalog.manifest.pk, manifest_catalog.catalog.pk)
 
     def test_delete_manifestcatalog_permission_denied(self):
-        self._login("monolith.add_manifestcatalog", "monolith.view_manifest")
+        self.login("monolith.add_manifestcatalog", "monolith.view_manifest")
         manifest_catalog = force_manifest_catalog()
         response = self.client.get(reverse("monolith:delete_manifest_catalog",
                                            args=(manifest_catalog.manifest.pk, manifest_catalog.catalog.pk,)))
@@ -2768,7 +2755,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_manifestcatalog(self, post_event):
-        self._login("monolith.delete_manifestcatalog", "monolith.view_manifest")
+        self.login("monolith.delete_manifestcatalog", "monolith.view_manifest")
         manifest_catalog = force_manifest_catalog()
         prev_value = manifest_catalog.serialize_for_event()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -2797,22 +2784,22 @@ class MonolithSetupViewsTestCase(TestCase):
     # manifest submanifest
     # create ManifestSubManifest
     def test_create_manifestsubmanifest_redirect(self):
-        self._login_redirect(reverse("monolith:add_manifest_sub_manifest", args=(self.manifest.pk,)))
+        self.login_redirect("add_manifest_sub_manifest", self.manifest.pk)
 
     def test_create_manifestsubmanifest_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("monolith:add_manifest_sub_manifest", args=(self.manifest.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_create_manifestsubmanifest_get(self):
-        self._login("monolith.add_manifestsubmanifest")
+        self.login("monolith.add_manifestsubmanifest")
         response = self.client.get(reverse("monolith:add_manifest_sub_manifest", args=(self.manifest.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest_sub_manifest_form.html")
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_manifestsubmanifest_post(self, post_event):
-        self._login("monolith.add_manifestsubmanifest", "monolith.view_manifest")
+        self.login("monolith.add_manifestsubmanifest", "monolith.view_manifest")
         manifest = force_manifest()
         sub_manifest = force_sub_manifest()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -2851,12 +2838,12 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_update_manifestsubmanifest_redirect(self):
         manifest_sub_manifest = force_manifest_sub_manifest()
-        self._login_redirect(reverse("monolith:edit_manifest_sub_manifest",
-                                     args=(manifest_sub_manifest.manifest.pk,
-                                           manifest_sub_manifest.sub_manifest.pk,)))
+        self.login_redirect("edit_manifest_sub_manifest",
+                            manifest_sub_manifest.manifest.pk,
+                            manifest_sub_manifest.sub_manifest.pk)
 
     def test_update_manifestsubmanifest_permission_denied(self):
-        self._login("monolith.add_manifestsubmanifest", "monolith.view_manifest")
+        self.login("monolith.add_manifestsubmanifest", "monolith.view_manifest")
         manifest_sub_manifest = force_manifest_sub_manifest()
         tag = force_tag()
         response = self.client.post(reverse("monolith:edit_manifest_sub_manifest",
@@ -2867,7 +2854,7 @@ class MonolithSetupViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_update_manifestsubmanifest_view(self):
-        self._login("monolith.change_manifestsubmanifest", "monolith.view_manifest")
+        self.login("monolith.change_manifestsubmanifest", "monolith.view_manifest")
         manifest_sub_manifest = force_manifest_sub_manifest()
         response = self.client.get(reverse("monolith:edit_manifest_sub_manifest",
                                            args=(manifest_sub_manifest.manifest.pk,
@@ -2881,7 +2868,7 @@ class MonolithSetupViewsTestCase(TestCase):
         manifest_sub_manifest = force_manifest_sub_manifest()
         tag = force_tag()
         prev_value = manifest_sub_manifest.serialize_for_event()
-        self._login("monolith.change_manifestsubmanifest", "monolith.view_manifest")
+        self.login("monolith.change_manifestsubmanifest", "monolith.view_manifest")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("monolith:edit_manifest_sub_manifest",
                                                 args=(manifest_sub_manifest.manifest.pk,
@@ -2918,12 +2905,12 @@ class MonolithSetupViewsTestCase(TestCase):
 
     def test_delete_manifestsubmanifest_redirect(self):
         manifest_sub_manifest = force_manifest_sub_manifest()
-        self._login_redirect(reverse("monolith:delete_manifest_sub_manifest",
-                                     args=(manifest_sub_manifest.manifest.pk,
-                                           manifest_sub_manifest.sub_manifest.pk,)))
+        self.login_redirect("delete_manifest_sub_manifest",
+                            manifest_sub_manifest.manifest.pk,
+                            manifest_sub_manifest.sub_manifest.pk)
 
     def test_delete_manifestsubmanifest_permission_denied(self):
-        self._login("monolith.add_manifestsubmanifest", "monolith.view_manifest")
+        self.login("monolith.add_manifestsubmanifest", "monolith.view_manifest")
         manifest_sub_manifest = force_manifest_sub_manifest()
         response = self.client.get(reverse("monolith:delete_manifest_sub_manifest",
                                            args=(manifest_sub_manifest.manifest.pk,
@@ -2937,7 +2924,7 @@ class MonolithSetupViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_manifestsubmanifest(self, post_event):
-        self._login("monolith.delete_manifestsubmanifest", "monolith.view_manifest")
+        self.login("monolith.delete_manifestsubmanifest", "monolith.view_manifest")
         manifest_sub_manifest = force_manifest_sub_manifest()
         prev_value = manifest_sub_manifest.serialize_for_event()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -2967,15 +2954,15 @@ class MonolithSetupViewsTestCase(TestCase):
     # terraform export
 
     def test_terraform_export_redirect(self):
-        self._login_redirect(reverse("monolith:terraform_export"))
+        self.login_redirect("terraform_export")
 
     def test_terraform_export_permission_denied(self):
-        self._login("monolith.view_manifest")  # no enough
+        self.login("monolith.view_manifest")  # no enough
         response = self.client.get(reverse("monolith:terraform_export"))
         self.assertEqual(response.status_code, 403)
 
     def test_terraform_export(self):
-        self._login(
+        self.login(
             "monolith.view_catalog",
             "monolith.view_condition",
             "monolith.view_enrollment",

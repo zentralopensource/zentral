@@ -1,18 +1,19 @@
-from functools import reduce
-import operator
 from django.apps import apps
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.conf import settings
+from zentral.utils.provisioning import provision
 
 
-class BaseViewsTestCase(TestCase):
+class BaseViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
+        provision()  # provision the stores
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
@@ -36,33 +37,24 @@ class BaseViewsTestCase(TestCase):
         ]
         settings._collection["extra_links"] = cls.extra_links
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "base"
 
     # create index
 
     def test_index_redirect(self):
-        self._login_redirect(reverse("base:index"))
+        self.login_redirect("index")
 
     def test_index_get(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("base:index"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "base/index.html")
@@ -73,7 +65,7 @@ class BaseViewsTestCase(TestCase):
     # app histograms
 
     def test_index_no_perms(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("base:index"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "base/index.html")
@@ -83,7 +75,7 @@ class BaseViewsTestCase(TestCase):
             self.assertNotContains(response, 'data-app="{{ app_name }}"')
 
     def test_index_some_perms(self):
-        self._login("compliance_checks.add_compliancecheck", "osquery.view_configuration")
+        self.login("compliance_checks.add_compliancecheck", "osquery.view_configuration")
         response = self.client.get(reverse("base:index"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "base/index.html")
@@ -91,12 +83,12 @@ class BaseViewsTestCase(TestCase):
         self.assertEqual(response.context["apps"], ["osquery"])
 
     def test_hist_data_unknown_app(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("base:app_hist_data", args=("yolo", "day", 14)))
         self.assertEqual(response.status_code, 404)
 
     def test_hist_data_permission_denied(self):
-        self._login("santa.view_configuration")
+        self.login("santa.view_configuration")
         for app_name in apps.app_configs:
             response = self.client.get(reverse("base:app_hist_data", args=(app_name, "day", 14)))
             if app_name == "santa":
@@ -105,7 +97,7 @@ class BaseViewsTestCase(TestCase):
                 self.assertEqual(response.status_code, 403)
 
     def test_index_santa_perms(self):
-        self._login("santa.view_configuration", "osquery.view_enrollment")
+        self.login("santa.view_configuration", "osquery.view_enrollment")
         response = self.client.get(reverse("base:index"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "base/index.html")
@@ -132,7 +124,7 @@ class BaseViewsTestCase(TestCase):
         self.assertNotContains(response, "/eltest4/un/deux/trois")
 
     def test_index_users_extra_links(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("base:index"))
         filtered_links = [link for link in self.extra_links
                           if not link.get("authorized_groups") or self.group.name in link["authorized_groups"]]
@@ -147,7 +139,7 @@ class BaseViewsTestCase(TestCase):
         self.assertNotContains(response, "/eltest4/un/deux/trois")
 
     def test_index_users_all_extra_links(self):
-        self._login()
+        self.login()
         self.user.groups.add(self.group2)
         response = self.client.get(reverse("base:index"))
         self.assertEqual(response.context["zentral_extra_links"], self.extra_links)

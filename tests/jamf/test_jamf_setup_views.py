@@ -1,18 +1,18 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Taxonomy
 from zentral.contrib.jamf.models import JamfInstance, TagConfig
 from zentral.contrib.jamf.api_client import APIClientError
 
 
-class JamfSetupViewsTestCase(TestCase):
+class JamfSetupViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         # user
@@ -20,25 +20,18 @@ class JamfSetupViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "jamf"
+
     # utility methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _force_jamf_instance(self):
         jamf_instance = JamfInstance.objects.create(
@@ -63,15 +56,15 @@ class JamfSetupViewsTestCase(TestCase):
     # jamf index
 
     def test_jamf_index_redirect(self):
-        self._login_redirect(reverse("jamf:index"))
+        self.login_redirect("index")
 
     def test_jamf_index_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("jamf:index"))
         self.assertEqual(response.status_code, 403)
 
     def test_jamf_index(self):
-        self._login("jamf.view_jamfinstance")
+        self.login("jamf.view_jamfinstance")
         jamf_instance = self._force_jamf_instance()
         response = self.client.get(reverse("jamf:index"))
         self.assertEqual(response.status_code, 200)
@@ -79,7 +72,7 @@ class JamfSetupViewsTestCase(TestCase):
         self.assertContains(response, jamf_instance.host)
 
     def test_jamf_index_no_list(self):
-        self._login("jamf.view_tagconfig")
+        self.login("jamf.view_tagconfig")
         jamf_instance = self._force_jamf_instance()
         response = self.client.get(reverse("jamf:index"))
         self.assertEqual(response.status_code, 200)
@@ -89,15 +82,15 @@ class JamfSetupViewsTestCase(TestCase):
     # jamf instances
 
     def test_jamf_instances_redirect(self):
-        self._login_redirect(reverse("jamf:jamf_instances"))
+        self.login_redirect("jamf_instances")
 
     def test_jamf_instances_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("jamf:jamf_instances"))
         self.assertEqual(response.status_code, 403)
 
     def test_jamf_instances_view(self):
-        self._login("jamf.view_jamfinstance")
+        self.login("jamf.view_jamfinstance")
         response = self.client.get(reverse("jamf:jamf_instances"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "jamf/jamfinstance_list.html")
@@ -106,22 +99,22 @@ class JamfSetupViewsTestCase(TestCase):
     # create jamf instance
 
     def test_create_jamf_instance_redirect(self):
-        self._login_redirect(reverse("jamf:create_jamf_instance"))
+        self.login_redirect("create_jamf_instance")
 
     def test_create_jamf_instance_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("jamf:create_jamf_instance"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_jamf_instance_get(self):
-        self._login("jamf.add_jamfinstance")
+        self.login("jamf.add_jamfinstance")
         response = self.client.get(reverse("jamf:create_jamf_instance"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "jamf/jamfinstance_form.html")
         self.assertContains(response, "Create Instance")
 
     def test_create_jamf_instance_post(self):
-        self._login("jamf.add_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        self.login("jamf.add_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
         password = get_random_string(12)
         response = self.client.post(reverse("jamf:create_jamf_instance"),
                                     {"host": "yo.example.com",
@@ -154,7 +147,7 @@ class JamfSetupViewsTestCase(TestCase):
         self.assertNotContains(response, password)
 
     def test_create_jamf_instance_pu_missing_uid_pn(self):
-        self._login("jamf.add_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        self.login("jamf.add_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
         response = self.client.post(reverse("jamf:create_jamf_instance"),
                                     {"host": "yo.example.com",
                                      "port": 8443,
@@ -177,17 +170,17 @@ class JamfSetupViewsTestCase(TestCase):
 
     def test_delete_jamf_instance_redirect(self):
         jamf_instance = self._force_jamf_instance()
-        self._login_redirect(reverse("jamf:delete_jamf_instance", args=(jamf_instance.pk,)))
+        self.login_redirect("delete_jamf_instance", jamf_instance.pk)
 
     def test_delete_jamf_instance_permission_denied(self):
         jamf_instance = self._force_jamf_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("jamf:delete_jamf_instance", args=(jamf_instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_jamf_instance_get(self):
         jamf_instance = self._force_jamf_instance()
-        self._login("jamf.delete_jamfinstance")
+        self.login("jamf.delete_jamfinstance")
         response = self.client.get(reverse("jamf:delete_jamf_instance", args=(jamf_instance.pk,)))
         self.assertContains(response, "Delete Instance")
 
@@ -195,7 +188,7 @@ class JamfSetupViewsTestCase(TestCase):
     def test_delete_jamf_instance_post_cleanup_ok(self, cleanup):
         cleanup.return_value = None
         jamf_instance = self._force_jamf_instance()
-        self._login("jamf.delete_jamfinstance", "jamf.view_jamfinstance")
+        self.login("jamf.delete_jamfinstance", "jamf.view_jamfinstance")
         response = self.client.post(reverse("jamf:delete_jamf_instance", args=(jamf_instance.pk,)),
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -208,7 +201,7 @@ class JamfSetupViewsTestCase(TestCase):
     def test_delete_jamf_instance_post_failed_cleanup(self, cleanup):
         cleanup.side_effect = APIClientError("Boom!")
         jamf_instance = self._force_jamf_instance()
-        self._login("jamf.delete_jamfinstance", "jamf.view_jamfinstance")
+        self.login("jamf.delete_jamfinstance", "jamf.view_jamfinstance")
         response = self.client.post(reverse("jamf:delete_jamf_instance", args=(jamf_instance.pk,)),
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -221,11 +214,11 @@ class JamfSetupViewsTestCase(TestCase):
 
     def test_setup_jamf_instance_redirect(self):
         jamf_instance = self._force_jamf_instance()
-        self._login_redirect(reverse("jamf:setup_jamf_instance", args=(jamf_instance.pk,)))
+        self.login_redirect("setup_jamf_instance", jamf_instance.pk)
 
     def test_setup_jamf_instance_permission_denied(self):
         jamf_instance = self._force_jamf_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("jamf:setup_jamf_instance", args=(jamf_instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -233,24 +226,24 @@ class JamfSetupViewsTestCase(TestCase):
 
     def test_update_jamf_instance_redirect(self):
         jamf_instance = self._force_jamf_instance()
-        self._login_redirect(reverse("jamf:update_jamf_instance", args=(jamf_instance.pk,)))
+        self.login_redirect("update_jamf_instance", jamf_instance.pk)
 
     def test_update_jamf_instance_permission_denied(self):
         jamf_instance = self._force_jamf_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("jamf:update_jamf_instance", args=(jamf_instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_jamf_instance_get(self):
         jamf_instance = self._force_jamf_instance()
-        self._login("jamf.change_jamfinstance")
+        self.login("jamf.change_jamfinstance")
         response = self.client.get(reverse("jamf:update_jamf_instance", args=(jamf_instance.pk,)))
         self.assertContains(response, "Update Instance")
         self.assertContains(response, jamf_instance.get_password())
 
     def test_update_jamf_instance_post(self):
         jamf_instance = self._force_jamf_instance()
-        self._login("jamf.change_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        self.login("jamf.change_jamfinstance", "jamf.view_jamfinstance", "jamf.view_tagconfig")
         response = self.client.post(reverse("jamf:update_jamf_instance", args=(jamf_instance.pk,)),
                                     {"host": "yo.example2.com",
                                      "port": 8443,
@@ -276,17 +269,17 @@ class JamfSetupViewsTestCase(TestCase):
 
     def test_create_tag_config_redirect(self):
         jamf_instance = self._force_jamf_instance()
-        self._login_redirect(reverse("jamf:create_tag_config", args=(jamf_instance.pk,)))
+        self.login_redirect("create_tag_config", jamf_instance.pk)
 
     def test_create_tag_config_permission_denied(self):
         jamf_instance = self._force_jamf_instance()
-        self._login()
+        self.login()
         response = self.client.get(reverse("jamf:create_tag_config", args=(jamf_instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_create_tag_config_permission_get(self):
         jamf_instance = self._force_jamf_instance()
-        self._login("jamf.add_tagconfig")
+        self.login("jamf.add_tagconfig")
         response = self.client.get(reverse("jamf:create_tag_config", args=(jamf_instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "jamf/tagconfig_form.html")
@@ -295,7 +288,7 @@ class JamfSetupViewsTestCase(TestCase):
         jamf_instance = self._force_jamf_instance()
         t, _ = Taxonomy.objects.get_or_create(name=get_random_string(34))
         regex = r"^YOLOFOMO: (.*)$"
-        self._login("jamf.add_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        self.login("jamf.add_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig")
         response = self.client.post(reverse("jamf:create_tag_config", args=(jamf_instance.pk,)),
                                     {"source": "GROUP",
                                      "taxonomy": t.pk,
@@ -310,7 +303,7 @@ class JamfSetupViewsTestCase(TestCase):
         jamf_instance = self._force_jamf_instance()
         t, _ = Taxonomy.objects.get_or_create(name=get_random_string(34))
         regex = r"^YOLOFOMO: ("
-        self._login("jamf.add_tagconfig")
+        self.login("jamf.add_tagconfig")
         response = self.client.post(reverse("jamf:create_tag_config", args=(jamf_instance.pk,)),
                                     {"source": "GROUP",
                                      "taxonomy": t.pk,
@@ -324,18 +317,18 @@ class JamfSetupViewsTestCase(TestCase):
 
     def test_update_tag_config_redirect(self):
         tag_config = self._force_tag_config()
-        self._login_redirect(reverse("jamf:create_tag_config", args=(tag_config.instance.pk,)))
+        self.login_redirect("create_tag_config", tag_config.instance.pk)
 
     def test_update_tag_config_permission_denied(self):
         tag_config = self._force_tag_config()
-        self._login()
+        self.login()
         response = self.client.get(reverse("jamf:create_tag_config", args=(tag_config.instance.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_tag_config(self):
         tag_config = self._force_tag_config()
         jamf_instance = tag_config.instance
-        self._login("jamf.change_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        self.login("jamf.change_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig")
         response = self.client.post(reverse("jamf:update_tag_config", args=(jamf_instance.pk, tag_config.pk)),
                                     {"source": "GROUP",
                                      "taxonomy": tag_config.taxonomy.pk,
@@ -351,19 +344,19 @@ class JamfSetupViewsTestCase(TestCase):
     def test_delete_tag_config_redirect(self):
         tag_config = self._force_tag_config()
         jamf_instance = tag_config.instance
-        self._login_redirect(reverse("jamf:delete_tag_config", args=(jamf_instance.pk, tag_config.pk)))
+        self.login_redirect("delete_tag_config", jamf_instance.pk, tag_config.pk)
 
     def test_delete_tag_config_permission_denied(self):
         tag_config = self._force_tag_config()
         jamf_instance = tag_config.instance
-        self._login()
+        self.login()
         response = self.client.get(reverse("jamf:delete_tag_config", args=(jamf_instance.pk, tag_config.pk)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_tag_config(self):
         tag_config = self._force_tag_config()
         jamf_instance = tag_config.instance
-        self._login("jamf.delete_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        self.login("jamf.delete_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig")
         response = self.client.post(reverse("jamf:delete_tag_config", args=(jamf_instance.pk, tag_config.pk)),
                                     follow=True)
         self.assertTemplateUsed(response, "jamf/jamfinstance_detail.html")

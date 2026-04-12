@@ -1,48 +1,40 @@
 import base64
 import datetime
-from functools import reduce
 import hashlib
 from io import BytesIO
 import json
-import operator
 from unittest.mock import patch, Mock
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.mdm.apps_books import AppsBooksAPIError
 from zentral.contrib.mdm.models import Location
 
 
-class SetupLocationViewsTestCase(TestCase):
+class SetupLocationViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
+
     # utiliy methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _force_location(self, server_token_hash=None, name=None):
         location = Location.objects.create(
@@ -89,16 +81,16 @@ class SetupLocationViewsTestCase(TestCase):
     # list server server_tokens
 
     def test_list_locations_redirect(self):
-        self._login_redirect(reverse("mdm:locations"))
+        self.login_redirect("locations")
 
     def test_list_locations_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:locations"))
         self.assertEqual(response.status_code, 403)
 
     def test_list_locations(self):
         location, _ = self._force_location()
-        self._login("mdm.view_location")
+        self.login("mdm.view_location")
         response = self.client.get(reverse("mdm:locations"))
         self.assertTemplateUsed(response, "mdm/location_list.html")
         self.assertContains(response, location.name)
@@ -107,17 +99,17 @@ class SetupLocationViewsTestCase(TestCase):
 
     def test_view_locations_redirect(self):
         location, _ = self._force_location()
-        self._login_redirect(reverse("mdm:location", args=(location.pk,)))
+        self.login_redirect("location", location.pk)
 
     def test_view_location_permission_denied(self):
         location, _ = self._force_location()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:location", args=(location.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_view_location(self):
         location, _ = self._force_location()
-        self._login("mdm.view_location")
+        self.login("mdm.view_location")
         response = self.client.get(reverse("mdm:location", args=(location.pk,)))
         self.assertTemplateUsed(response, "mdm/location_detail.html")
         self.assertContains(response, location.name)
@@ -126,23 +118,23 @@ class SetupLocationViewsTestCase(TestCase):
 
     def test_delete_locations_redirect(self):
         location, _ = self._force_location()
-        self._login_redirect(reverse("mdm:delete_location", args=(location.pk,)))
+        self.login_redirect("delete_location", location.pk)
 
     def test_delete_location_permission_denied(self):
         location, _ = self._force_location()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:delete_location", args=(location.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_location_get(self):
         location, _ = self._force_location()
-        self._login("mdm.delete_location")
+        self.login("mdm.delete_location")
         response = self.client.get(reverse("mdm:delete_location", args=(location.pk,)))
         self.assertTemplateUsed(response, "mdm/location_confirm_delete.html")
 
     def test_delete_location_post(self):
         location, _ = self._force_location()
-        self._login("mdm.delete_location", "mdm.view_location")
+        self.login("mdm.delete_location", "mdm.view_location")
         response = self.client.post(reverse("mdm:delete_location", args=(location.pk,)), follow=True)
         self.assertTemplateUsed(response, "mdm/location_list.html")
         self.assertNotContains(response, location.name)
@@ -150,21 +142,21 @@ class SetupLocationViewsTestCase(TestCase):
     # create server server_token
 
     def test_create_location_redirect(self):
-        self._login_redirect(reverse("mdm:create_location"))
+        self.login_redirect("create_location")
 
     def test_create_location_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:create_location"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_location_get(self):
-        self._login("mdm.add_location")
+        self.login("mdm.add_location")
         response = self.client.get(reverse("mdm:create_location"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/location_form.html")
 
     def test_create_location_post_bad_server_token(self):
-        self._login("mdm.add_location")
+        self.login("mdm.add_location")
         vppserver_token = BytesIO(b'yolofomo')
         vppserver_token.name = "bad.vppserver_token"
         response = self.client.post(reverse("mdm:create_location"),
@@ -176,7 +168,7 @@ class SetupLocationViewsTestCase(TestCase):
     def test_create_location_post_hash_collision(self):
         vppserver_token, server_token_hash = self._build_vppserver_token(skip_org_name=True)
         location, _ = self._force_location(server_token_hash=server_token_hash)
-        self._login("mdm.add_location")
+        self.login("mdm.add_location")
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
         self.assertEqual(response.status_code, 200)
@@ -185,7 +177,7 @@ class SetupLocationViewsTestCase(TestCase):
                              "A location with the same server token already exists.")
 
     def test_create_location_post_no_org_name(self):
-        self._login("mdm.add_location")
+        self.login("mdm.add_location")
         vppserver_token, _ = self._build_vppserver_token(skip_org_name=True)
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
@@ -197,7 +189,7 @@ class SetupLocationViewsTestCase(TestCase):
         client = Mock()
         client.get_client_config.side_effect = AppsBooksAPIError("Invalid server_token")
         AppsBooksClient.return_value = client
-        self._login("mdm.add_location")
+        self.login("mdm.add_location")
         vppserver_token, _ = self._build_vppserver_token()
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
@@ -209,7 +201,7 @@ class SetupLocationViewsTestCase(TestCase):
         client = Mock()
         client.get_client_config.return_value = {"un": "deux"}
         AppsBooksClient.return_value = client
-        self._login("mdm.add_location")
+        self.login("mdm.add_location")
         vppserver_token, _ = self._build_vppserver_token()
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
@@ -235,7 +227,7 @@ class SetupLocationViewsTestCase(TestCase):
             'websiteURL': 'https://business.apple.com'
         }
         AppsBooksClient.return_value = client
-        self._login("mdm.add_location")
+        self.login("mdm.add_location")
         vppserver_token, _ = self._build_vppserver_token()
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
@@ -254,7 +246,7 @@ class SetupLocationViewsTestCase(TestCase):
             'websiteURL': 'https://business.apple.com'
         }
         AppsBooksClient.return_value = client
-        self._login("mdm.add_location")
+        self.login("mdm.add_location")
         vppserver_token, _ = self._build_vppserver_token()
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token})
@@ -274,7 +266,7 @@ class SetupLocationViewsTestCase(TestCase):
             'websiteURL': 'https://business.apple.com'
         }
         AppsBooksClient.return_value = client
-        self._login("mdm.add_location", "mdm.view_location")
+        self.login("mdm.add_location", "mdm.view_location")
         vppserver_token, server_token_hash = self._build_vppserver_token()
         response = self.client.post(reverse("mdm:create_location"),
                                     {"server_token_file": vppserver_token}, follow=True)
@@ -288,17 +280,17 @@ class SetupLocationViewsTestCase(TestCase):
 
     def test_update_locations_redirect(self):
         location, _ = self._force_location()
-        self._login_redirect(reverse("mdm:update_location", args=(location.pk,)))
+        self.login_redirect("update_location", location.pk)
 
     def test_update_location_permission_denied(self):
         location, _ = self._force_location()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:update_location", args=(location.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_location_get(self):
         location, _ = self._force_location()
-        self._login("mdm.change_location")
+        self.login("mdm.change_location")
         response = self.client.get(reverse("mdm:update_location", args=(location.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/location_form.html")
@@ -317,7 +309,7 @@ class SetupLocationViewsTestCase(TestCase):
         AppsBooksClient.return_value = client
         location, _ = self._force_location(name="yolo")
         self.assertEqual(location.name, "yolo")
-        self._login("mdm.change_location", "mdm.view_location")
+        self.login("mdm.change_location", "mdm.view_location")
         vppserver_token, server_token_hash = self._build_vppserver_token()
         response = self.client.post(reverse("mdm:update_location", args=(location.pk,)),
                                     {"server_token_file": vppserver_token}, follow=True)

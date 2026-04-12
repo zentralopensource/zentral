@@ -1,12 +1,11 @@
 from datetime import datetime
-from functools import reduce
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaMachine
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Query
@@ -14,7 +13,7 @@ from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.utils.provisioning import provision
 
 
-class InventoryComplianceChecksViewsTestCase(TestCase):
+class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         # provision the stores
@@ -48,29 +47,22 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         sync_query_compliance_check(query, True)
         return query
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    # LoginCase implementation
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "osquery"
 
     # machine
 
     def test_machine_no_compliance_checks(self):
         self._force_check_query()
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'osquery.view_query',
@@ -89,7 +81,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             status=Status.OK.value,
             status_time=datetime.utcnow()
         )
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'osquery.view_query',
@@ -108,7 +100,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             status=Status.OK.value,
             status_time=datetime.utcnow()
         )
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'osquery.view_query',
@@ -135,7 +127,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             status=Status.FAILED.value,
             status_time=datetime.utcnow()
         )
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             # 'osquery.view_query', will block the link
