@@ -18,12 +18,12 @@
       <th></th>
     </thead>
     <tbody>
-      {% for type, tag, pbac_req in current_tags %}
+      {% for tag, pbac_req in current_tags %}
       <tr class="data-row">
         <td>{{ tag.id }}</td>
         <td>{% inventory_tag tag %}</td>
         <td class="text-end py-0">
-          {% if type == "machine" and pbac_req.is_authorized %}
+          {% if pbac_req.is_authorized %}
           <form action="{% url 'inventory:delete_machine_tag' machine.get_urlsafe_serial_number tag.id %}" method="POST">{% csrf_token %}
             <button class="btn">
                 <span class="bi bi-trash" aria-hidden="true" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Delete Tag"></span>

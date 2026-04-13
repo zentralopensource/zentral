@@ -17,7 +17,6 @@ class ZentralInventoryAppConfig(ZentralAppConfig):
         "machinesnapshot",
         "machinetag",
         "metabusinessunit",
-        "metabusinessunittag",
         "osxapp",
         "osxappinstance",
         "program",
