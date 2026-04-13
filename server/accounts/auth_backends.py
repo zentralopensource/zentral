@@ -35,7 +35,7 @@ class ZentralBaseBackend(ModelBackend):
         # should not be used
         return set()
 
-    def with_perm():
+    def with_perm(self, perm, is_active=True, include_superusers=True, obj=None):
         # should not be used.
         return UserModel._default_manager.none()
 
