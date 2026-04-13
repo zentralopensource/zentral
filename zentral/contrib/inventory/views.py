@@ -31,7 +31,7 @@ from .compliance_checks import InventoryJMESPathCheck
 from .events import JMESPathCheckCreated, JMESPathCheckUpdated, JMESPathCheckDeleted
 from .forms import (MetaBusinessUnitForm,
                     MetaBusinessUnitSearchForm, MachineGroupSearchForm,
-                    MergeMBUForm, AddMBUTagForm,
+                    MergeMBUForm,
                     CreateTagForm, UpdateTagForm,
                     AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm,
                     MacOSAppSearchForm, ProgramsSearchForm,
@@ -39,7 +39,7 @@ from .forms import (MetaBusinessUnitForm,
 from .models import (BusinessUnit,
                      MetaBusinessUnit, MachineGroup,
                      MetaMachine,
-                     MetaBusinessUnitTag, Tag, Taxonomy,
+                     Tag, Taxonomy,
                      JMESPathCheck)
 from .pbac import CreateMachineTagRequest, DeleteMachineTagRequest
 from .terraform import iter_compliance_check_resources
@@ -358,9 +358,6 @@ class MBUView(PermissionRequiredMixin, UserPaginationListView):
             source = self.search_form.cleaned_data['source']
             if source:
                 qs = qs.filter(businessunit__source=source)
-            tag = self.search_form.cleaned_data['tag']
-            if tag:
-                qs = qs.filter(metabusinessunittag__tag=tag)
         return qs
 
     def get_context_data(self, **kwargs):
@@ -424,50 +421,6 @@ class DeleteMBUView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "inventory.delete_metabusinessunit"
     model = MetaBusinessUnit
     success_url = reverse_lazy("inventory:mbu")
-
-
-class MBUTagsView(PermissionRequiredMixin, FormView):
-    permission_required = (
-        "inventory.view_metabusinessunittag",
-        "inventory.add_metabusinessunittag",
-        "inventory.change_metabusinessunittag",
-        "inventory.delete_metabusinessunittag",
-        "inventory.add_tag",
-    )
-    template_name = "inventory/mbu_tags.html"
-    form_class = AddMBUTagForm
-
-    def dispatch(self, request, *args, **kwargs):
-        self.mbu = get_object_or_404(MetaBusinessUnit, pk=kwargs['pk'])
-        return super(MBUTagsView, self).dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super(MBUTagsView, self).get_context_data(**kwargs)
-        context['meta_business_unit'] = self.mbu
-        context['tags'] = self.mbu.tags()
-        context['color_presets'] = TAG_COLOR_PRESETS
-        return context
-
-    def get_form_kwargs(self, *args, **kwargs):
-        kwargs = super(MBUTagsView, self).get_form_kwargs(*args, **kwargs)
-        kwargs['meta_business_unit'] = self.mbu
-        return kwargs
-
-    def form_valid(self, form):
-        form.save()
-        return super(MBUTagsView, self).form_valid(form)
-
-    def get_success_url(self):
-        return reverse('inventory:mbu_tags', args=(self.mbu.id,))
-
-
-class RemoveMBUTagView(PermissionRequiredMixin, View):
-    permission_required = "inventory.delete_metabusinessunittag"
-
-    def post(self, request, *args, **kwargs):
-        MetaBusinessUnitTag.objects.filter(tag__id=kwargs['tag_id'],
-                                           meta_business_unit__id=kwargs['pk']).delete()
-        return HttpResponseRedirect(reverse('inventory:mbu_tags', args=(kwargs['pk'],)))
 
 
 class DetachBUView(PermissionRequiredMixin, TemplateView):
@@ -876,10 +829,10 @@ class MachineTagsView(PermissionRequiredMixin, TemplateView):
         context['machine'] = self.machine
         pbac_requests = []
         context['current_tags'] = []
-        for tag_type, tag in self.machine.tags_with_types:
+        for tag in self.machine.tags:
             pbac_request = DeleteMachineTagRequest(self.request.user, self.machine, tag)
             pbac_requests.append(pbac_request)
-            context['current_tags'].append((tag_type, tag, pbac_request))
+            context['current_tags'].append((tag, pbac_request))
         context['current_tag_count'] = len(context['current_tags'])
         extra_tags = []
         for extra_tag in (

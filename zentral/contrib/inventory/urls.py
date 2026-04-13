@@ -17,10 +17,6 @@ urlpatterns = [
     path('business_units/create/', views.CreateMBUView.as_view(), name='create_mbu'),
     path('business_units/<int:pk>/update/', views.UpdateMBUView.as_view(), name='update_mbu'),
     path('business_units/<int:pk>/delete/', views.DeleteMBUView.as_view(), name='delete_mbu'),
-    path('business_units/<int:pk>/tags/', views.MBUTagsView.as_view(), name='mbu_tags'),
-    path('business_units/<int:pk>/tags/<int:tag_id>/remove/',
-         views.RemoveMBUTagView.as_view(),
-         name='remove_mbu_tag'),
     path('business_units/<int:pk>/machines/', views.MBUMachinesView.as_view(), name='mbu_machines'),
     path('business_units/<int:pk>/detach_bu/<int:bu_id>/', views.DetachBUView.as_view(), name='detach_bu'),
 
