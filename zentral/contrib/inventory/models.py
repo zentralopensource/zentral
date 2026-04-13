@@ -89,11 +89,6 @@ class MetaBusinessUnit(models.Model):
             b.set_meta_business_unit(self)
         return b
 
-    def tags(self):
-        tags = list(mbut.tag for mbut in self.metabusinessunittag_set.select_related('tag'))
-        tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
-        return tags
-
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "name": self.name}
         if keys_only:
@@ -830,28 +825,6 @@ class TagManager(models.Manager):
     def available_for_meta_business_unit(self, meta_business_unit):
         return self.filter(Q(meta_business_unit=meta_business_unit) | Q(meta_business_unit__isnull=True))
 
-    def used_in_inventory(self):
-        query = """
-        select tag_id, count(*) from (
-            select mt.tag_id, cms.serial_number
-            from inventory_machinetag as mt
-            join inventory_currentmachinesnapshot as cms on (mt.serial_number = cms.serial_number)
-
-            union
-
-            select mbut.tag_id, cms.serial_number
-            from inventory_metabusinessunittag as mbut
-            join inventory_businessunit as bu on mbut.meta_business_unit_id = bu.meta_business_unit_id
-            join inventory_machinesnapshot as ms on (ms.business_unit_id = bu.id)
-            join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)
-        ) as tag_serial_numbers
-        group by tag_id;"""
-        cursor = connection.cursor()
-        cursor.execute(query)
-        counts = {t[0]: t[1] for t in cursor.fetchall()}
-        for tag in self.filter(pk__in=counts.keys()):
-            yield tag, counts[tag.id]
-
 
 def validate_color(value):
     if not re.match(r'^[0-9a-fA-F]{6}$', value):
@@ -892,8 +865,6 @@ class Tag(models.Model):
             EnrollmentSecret: ("enrollment secret", "enrollment secrets", None),
             MachineTag: ("machine", "machines",
                          "{}?tag={}".format(reverse("inventory:index"), self.id)),
-            MetaBusinessUnitTag: ("business unit", "business units",
-                                  "{}?tag={}".format(reverse("inventory:mbu"), self.id))
         }
         link_list = []
         for related_objects in find_all_related_objects(self):
@@ -932,11 +903,6 @@ class MachineTag(models.Model):
 
     class Meta:
         unique_together = (('serial_number', 'tag'),)
-
-
-class MetaBusinessUnitTag(models.Model):
-    meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.CASCADE)
-    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
 
 
 class MetaMachine:
@@ -1070,27 +1036,16 @@ class MetaMachine:
     # Inventory tags
 
     @cached_property
-    def tags_with_types(self):
-        tags = [('machine', mt.tag)
-                for mt in (MachineTag.objects.select_related('tag',
-                                                             'tag__meta_business_unit',
-                                                             'tag__taxonomy',
-                                                             'tag__taxonomy__meta_business_unit')
-                                             .filter(serial_number=self.serial_number))]
-        tags.extend(('meta_business_unit', mbut.tag)
-                    for mbut in (MetaBusinessUnitTag.objects.select_related('tag',
-                                                                            'tag__meta_business_unit',
-                                                                            'tag__taxonomy',
-                                                                            'tag__taxonomy__meta_business_unit')
-                                                            .filter(meta_business_unit__in=self.meta_business_units)))
-        tags.sort(key=lambda t: (t[1].meta_business_unit is None, str(t[1]).upper()))
-        return tags
-
-    @cached_property
     def tags(self):
-        tags = list({t[1] for t in self.tags_with_types})
-        tags.sort(key=lambda t: (t.meta_business_unit is None, str(t).upper()))
-        return tags
+        return sorted(
+            (mt.tag
+             for mt in (MachineTag.objects.select_related('tag',
+                                                          'tag__meta_business_unit',
+                                                          'tag__taxonomy',
+                                                          'tag__taxonomy__meta_business_unit')
+                                          .filter(serial_number=self.serial_number))),
+            key=lambda t: (t.meta_business_unit is None, str(t).upper())
+        )
 
     def available_tags(self):
         # tags w/o mbu or w mbu where this machine is and that this machine does not have yet
@@ -1106,20 +1061,15 @@ class MetaMachine:
 
     @cached_property
     def tag_pks_and_names(self):
-        # Optimized for only one SQL query
         query = (
-            "select id, name from inventory_tag where id in ("
-            "  select tag_id from inventory_machinetag where serial_number = %s"
-            "  union"
-            "  select tag_id from inventory_metabusinessunittag as mbut"
-            "  join inventory_businessunit as bu on (bu.meta_business_unit_id = mbut.meta_business_unit_id)"
-            "  join inventory_machinesnapshot as ms on (ms.business_unit_id = bu.id)"
-            "  join inventory_currentmachinesnapshot as cms on (cms.machine_snapshot_id = ms.id)"
-            "  where cms.serial_number = %s"
-            ")"
+            "select t.id, t.name "
+            "from inventory_tag t "
+            "join inventory_machinetag mt on (mt.tag_id = t.id) "
+            "where serial_number = %s "
+            "order by lower(t.name)"
         )
         cursor = connection.cursor()
-        cursor.execute(query, [self.serial_number, self.serial_number])
+        cursor.execute(query, [self.serial_number])
         return sorted(cursor.fetchall(), key=lambda t: t[1].lower())
 
     def max_incident_severity(self):
@@ -1175,9 +1125,6 @@ class MetaMachine:
             "  join inventory_source as s on (s.id = bu.source_id)"
             "), t as ("
             "  select mt.tag_id as id from inventory_machinetag as mt where mt.serial_number = %s"
-            "  union"
-            "  select mbut.tag_id as id from inventory_metabusinessunittag as mbut"
-            "  join bu on (bu.meta_business_unit_id = mbut.meta_business_unit_id)"
             ") "
 
             # hostnames

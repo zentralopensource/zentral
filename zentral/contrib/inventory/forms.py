@@ -11,7 +11,7 @@ from zentral.utils.text import get_version_sort_key
 from .conf import PLATFORM_CHOICES
 from .models import (CurrentMachineSnapshot,
                      EnrollmentSecret,
-                     MetaBusinessUnit, MetaBusinessUnitTag,
+                     MetaBusinessUnit,
                      Source, Tag,
                      JMESPathCheck)
 from .utils import (AndroidAppFilter,
@@ -49,12 +49,6 @@ class MetaBusinessUnitSearchForm(forms.Form):
         label='Source',
         empty_label='...',
         )
-    tag = forms.ModelChoiceField(
-        queryset=Tag.objects.distinct().filter(metabusinessunittag__isnull=False),
-        required=False,
-        label='Tag',
-        empty_label='...',
-        )
 
 
 class MetaBusinessUnitForm(forms.ModelForm):
@@ -86,17 +80,12 @@ class MergeMBUForm(forms.Form):
 
     def merge(self):
         dest_mbu = self.cleaned_data['dest_mbu']
-        tags = []
         for mbu in self.cleaned_data['mbu']:
-            tags.extend(mbu.tags())
             if mbu == dest_mbu:
                 continue
             for bu in mbu.businessunit_set.all():
                 bu.set_meta_business_unit(dest_mbu)
             mbu.delete()
-        for tag in set(tags).difference(dest_mbu.tags()):
-            MetaBusinessUnitTag.objects.get_or_create(meta_business_unit=dest_mbu,
-                                                      tag=tag)
         return dest_mbu
 
 
@@ -150,64 +139,6 @@ class UpdateTagForm(forms.ModelForm):
             if qs.filter(slug=slug).exists():
                 raise ValidationError("A tag with a conflicting slug already exists.")
         return name
-
-
-class AddTagForm(forms.Form):
-    existing_tag = forms.ModelChoiceField(label="Existing tag",
-                                          queryset=Tag.objects.none(),
-                                          required=False,
-                                          empty_label='...')
-    new_tag_name = forms.CharField(label="New tag name", required=False)
-    new_tag_color = forms.CharField(label="Color", max_length=6, required=False)
-
-    def clean(self):
-        cleaned_data = super(AddTagForm, self).clean()
-        existing_tag = cleaned_data.get("existing_tag")
-        new_tag_name = cleaned_data.get("new_tag_name")
-        if not existing_tag:
-            if not new_tag_name or not new_tag_name.strip():
-                if not self.has_error("existing_tag"):
-                    msg = "You must select an existing tag or enter a name for a new tag"
-                    self.add_error('existing_tag', msg)
-                    self.add_error('new_tag_name', msg)
-            else:
-                t = Tag(name=new_tag_name, slug=slugify(new_tag_name))
-                try:
-                    t.validate_unique()
-                except ValidationError:
-                    self.add_error('new_tag_name', "A tag with the same name or slug already exists")
-
-    def _get_tag(self):
-        tag = self.cleaned_data['existing_tag']
-        if not tag:
-            kwargs = {'name': self.cleaned_data.get('new_tag_name')}
-            meta_business_unit = self._get_mbu()
-            if meta_business_unit:
-                kwargs['meta_business_unit'] = meta_business_unit
-            new_tag_color = self.cleaned_data.get('new_tag_color')
-            if new_tag_color:
-                kwargs['color'] = new_tag_color
-            tag = Tag(**kwargs)
-            tag.save()
-        return tag
-
-
-class AddMBUTagForm(AddTagForm):
-    restrict_new_tag_to_mbu = forms.BooleanField(label="Restrict new tag to mbu", required=False)
-
-    def __init__(self, *args, **kwargs):
-        self.mbu = kwargs.pop('meta_business_unit')
-        super(AddMBUTagForm, self).__init__(*args, **kwargs)
-        etqs = Tag.objects.available_for_meta_business_unit(self.mbu)
-        self.fields['existing_tag'].queryset = etqs.exclude(metabusinessunittag__meta_business_unit=self.mbu)
-
-    def _get_mbu(self):
-        if self.cleaned_data['restrict_new_tag_to_mbu']:
-            return self.mbu
-
-    def save(self):
-        return MetaBusinessUnitTag.objects.get_or_create(meta_business_unit=self.mbu,
-                                                         tag=self._get_tag())
 
 
 class BaseAppSearchForm(forms.Form):

@@ -69,12 +69,6 @@ class InventoryLoginRedirectTestCase(TestCase):
     def test_business_units_merge(self):
         self.login_redirect("merge_mbu")
 
-    def test_business_units_tags(self):
-        self.login_redirect("mbu_tags", self.mbu2_id)
-
-    def test_business_units_remove_tag(self):
-        self.login_redirect("remove_mbu_tag", self.mbu2_id, self.tag2.id)
-
     def test_business_units_machines(self):
         self.login_redirect("mbu_machines", self.mbu_id, query="sf=mbu-t-tp-hm-pf-osv")
 
