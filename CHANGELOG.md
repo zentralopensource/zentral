@@ -9,6 +9,10 @@ Added `zentral_mdm_target_artifacts_bucket` metrics.
 
 ### Backward incompatibilities
 
+#### 🧨 Business unit tags removed
+
+Tags cannot be applied to all the machines in a business unit anymore.
+
 #### 🧨 Monolith catalogs API endpoint pagination
 
 The API endpoint for the monolith catalog list is paginated now. Remember to upgrade the Terraform Provider.
