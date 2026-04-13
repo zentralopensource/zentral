@@ -1,10 +1,12 @@
 from django.contrib.auth.models import Group
+from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.inventory.machine_actions import MachineAction
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.provisioning import provision
 
@@ -31,6 +33,21 @@ class InventoryMachineActionsViewsTestCase(TestCase, LoginCase):
 
     def _get_url_namespace(self):
         return "inventory"
+
+    # base model
+
+    def test_machine_action_missing_permission_required(self):
+        with self.assertRaises(ImproperlyConfigured) as cm:
+            list(MachineAction("12345678910", None).get_permission_required())
+        self.assertEqual(cm.exception.args[0], "MachineAction is missing the permission_required attribute.")
+
+    def test_machine_action_permission_required_iterable(self):
+        ma = MachineAction("12345678910", None)
+        ma.permission_required = ("inventory.view_machinesnapshot", "inventory.view_machinetag")
+        self.assertEqual(
+            list(ma.get_permission_required()),
+            ["inventory.view_machinesnapshot", "inventory.view_machinetag"],
+        )
 
     # inventory
 
