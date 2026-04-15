@@ -395,15 +395,23 @@ def get_session_device_udid_and_serial_number(session):
 def authenticate_enrollment_session(session):
     device_udid, serial_number = get_session_device_udid_and_serial_number(session)
     if not session.enrolled_device:
-        enrolled_device = EnrolledDevice.objects.create(
+        defaults_dict = {
+            "enrollment_id": device_udid,
+            "serial_number": serial_number,
+            "push_certificate": session.get_enrollment().push_certificate,
+            "platform": "macOS",
+            "cert_fingerprint": hashlib.sha256(get_random_string(12).encode("utf-8")).digest(),
+            "cert_not_valid_after": (datetime.utcnow() + timedelta(days=366))
+        }
+        enrolled_device, created = EnrolledDevice.objects.get_or_create(
             udid=device_udid,
-            enrollment_id=device_udid,
-            serial_number=serial_number,
-            push_certificate=session.get_enrollment().push_certificate,
-            platform="macOS",
-            cert_fingerprint=hashlib.sha256(get_random_string(12).encode("utf-8")).digest(),
-            cert_not_valid_after=(datetime.utcnow() + timedelta(days=366))
+            defaults=defaults_dict,
         )
+        if not created:
+            enrolled_device.purge_state()
+            for key, val in defaults_dict.items():
+                setattr(enrolled_device, key, val)
+            enrolled_device.save()
     else:
         # To avoid issues in the ReEnrollmentSessions
         enrolled_device = session.enrolled_device

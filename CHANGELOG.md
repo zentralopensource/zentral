@@ -10,6 +10,8 @@ Added `zentral_mdm_target_artifacts_bucket` metrics.
 
 Replaced slow Santa `zentral_santa_targets_*`  metrics with `zentral_santa_target_states` metrics.
 
+Fix MDM tagging issue when multiple enrollment sessions exist on the same device, some authenticated, some unauthenticated.
+
 ## 2026.3
 
 ### Features

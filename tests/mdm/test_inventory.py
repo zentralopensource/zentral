@@ -201,6 +201,38 @@ class MDMInventoryTestCase(TestCase):
         self.assertTrue(mt_qs.filter(tag=unmanaged_tag).exists())
         self.assertFalse(mt_qs.filter(tag=tag_to_remove).exists())
 
+        # add a newer enrollment session on the device, without realm_user
+        es, _, _ = force_dep_enrollment_session(
+            self.mbu,
+            device_udid=self.enrolled_device.udid,
+            serial_number=self.enrolled_device.serial_number,
+            authenticated=True, completed=True,
+            realm_user=False  # no mappings!
+        )
+        self.assertEqual(es.enrolled_device, self.enrolled_device)  # same device
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            update_realm_tags(self.realm, None)
+        self.assertEqual(len(callbacks), 1)
+        event3, event4 = sorted(
+            [c.args[0] for c in post_event.call_args_list[2:]],
+            key=lambda e: e.payload["tag"]["pk"],
+        )
+        self.assertIsInstance(event3, MachineTagEvent)
+        self.assertEqual(
+            event3.payload,
+            {'action': 'removed', 'tag': {'name': tag_to_add.name, 'pk': tag_to_add.pk}}
+        )
+        self.assertIsInstance(event4, MachineTagEvent)
+        self.assertEqual(
+            event4.payload,
+            {'action': 'removed', 'tag': {'name': tag_already_present.name, 'pk': tag_already_present.pk}}
+        )
+        self.assertEqual(mt_qs.count(), 1)
+        self.assertFalse(mt_qs.filter(tag=tag_to_add).exists())
+        self.assertFalse(mt_qs.filter(tag=tag_already_present).exists())
+        self.assertTrue(mt_qs.filter(tag=unmanaged_tag).exists())
+        self.assertFalse(mt_qs.filter(tag=tag_to_remove).exists())
+
     @patch("zentral.contrib.mdm.inventory.logger.error")
     def test_realm_group_members_updated_missing_realm_receiver_error(self, logger_error):
         sentinel = object()
