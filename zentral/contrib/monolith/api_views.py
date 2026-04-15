@@ -1,4 +1,7 @@
 import logging
+
+from accounts.api_authentication import APITokenAuthentication
+from base.notifier import notifier
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
@@ -9,25 +12,44 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer
 from rest_framework.views import APIView
-from accounts.api_authentication import APITokenAuthentication
-from base.notifier import notifier
-from zentral.utils.drf import (DjangoPermissionRequired, DefaultDjangoModelPermissions,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
-from zentral.utils.http import user_agent_and_ip_address_from_request
-from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
-from .models import (CacheServer, Catalog, Condition, Enrollment,
-                     Manifest, ManifestCatalog, ManifestEnrollmentPackage,  ManifestSubManifest,
-                     Repository,
-                     SubManifest, SubManifestPkgInfo)
-from .repository_backends import load_repository_backend
-from .serializers import (CatalogSerializer, ConditionSerializer,
-                          EnrollmentSerializer,
-                          ManifestCatalogSerializer, ManifestEnrollmentPackageSerializer,
-                          ManifestSerializer, ManifestSubManifestSerializer,
-                          RepositorySerializer,
-                          SubManifestSerializer, SubManifestPkgInfoSerializer)
-from .utils import build_configuration_plist, build_configuration_profile
 
+from zentral.utils.drf import (
+    DefaultDjangoModelPermissions,
+    DjangoPermissionRequired,
+    ListCreateAPIViewWithAudit,
+    MaxLimitOffsetPagination,
+    RetrieveUpdateDestroyAPIViewWithAudit,
+)
+from zentral.utils.http import user_agent_and_ip_address_from_request
+
+from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
+from .models import (
+    CacheServer,
+    Catalog,
+    Condition,
+    Enrollment,
+    Manifest,
+    ManifestCatalog,
+    ManifestEnrollmentPackage,
+    ManifestSubManifest,
+    Repository,
+    SubManifest,
+    SubManifestPkgInfo,
+)
+from .repository_backends import load_repository_backend
+from .serializers import (
+    CatalogSerializer,
+    ConditionSerializer,
+    EnrollmentSerializer,
+    ManifestCatalogSerializer,
+    ManifestEnrollmentPackageSerializer,
+    ManifestSerializer,
+    ManifestSubManifestSerializer,
+    RepositorySerializer,
+    SubManifestPkgInfoSerializer,
+    SubManifestSerializer,
+)
+from .utils import build_configuration_plist, build_configuration_profile
 
 logger = logging.getLogger("zentral.contrib.monolith.api_views")
 
@@ -126,7 +148,8 @@ class CatalogList(generics.ListCreateAPIView):
     serializer_class = CatalogSerializer
     permission_classes = (DefaultDjangoModelPermissions,)
     filter_backends = (filters.DjangoFilterBackend,)
-    filterset_fields = ('name',)
+    filterset_fields = ('name', 'repository')
+    pagination_class = MaxLimitOffsetPagination
 
 
 class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
