@@ -1,10 +1,17 @@
 ## 2026.4
 
+
 ### Features
 
 #### MDM
 
 Added `zentral_mdm_target_artifacts_bucket` metrics.
+
+### Backward incompatibilities
+
+#### 🧨 Monolith catalogs API endpoint pagination
+
+The API endpoint for the monolith catalog list is paginated now. Remember to upgrade the Terraform Provider.
 
 ### Bug fixes
 

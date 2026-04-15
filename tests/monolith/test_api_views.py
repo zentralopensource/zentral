@@ -1,33 +1,50 @@
-from datetime import datetime
-from functools import reduce
 import json
 import operator
 import plistlib
+from datetime import datetime
+from functools import reduce
 from unittest.mock import patch
+
+from accounts.models import APIToken, User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import APIToken, User
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.monolith.events import MonolithSyncCatalogsRequestEvent
-from zentral.contrib.monolith.models import (CacheServer, Catalog, Condition, Enrollment,
-                                             Manifest, ManifestCatalog, ManifestSubManifest,
-                                             PkgInfo, PkgInfoName,
-                                             Repository,
-                                             SubManifest, SubManifestPkgInfo)
+from zentral.contrib.monolith.models import (
+    CacheServer,
+    Catalog,
+    Condition,
+    Enrollment,
+    Manifest,
+    ManifestCatalog,
+    ManifestSubManifest,
+    PkgInfo,
+    PkgInfoName,
+    Repository,
+    SubManifest,
+    SubManifestPkgInfo,
+)
 from zentral.contrib.monolith.repository_backends import load_repository_backend
 from zentral.core.events.base import AuditEvent
-from .utils import (CLOUDFRONT_PRIVKEY_PEM,
-                    force_catalog, force_condition,
-                    force_enrollment,
-                    force_manifest,
-                    force_name, force_pkg_info,
-                    force_repository,
-                    force_sub_manifest, force_sub_manifest_pkg_info)
+
+from .utils import (
+    CLOUDFRONT_PRIVKEY_PEM,
+    force_catalog,
+    force_condition,
+    force_enrollment,
+    force_manifest,
+    force_name,
+    force_pkg_info,
+    force_repository,
+    force_sub_manifest,
+    force_sub_manifest_pkg_info,
+)
 
 
 class MonolithAPIViewsTestCase(TestCase):
@@ -1161,15 +1178,18 @@ class MonolithAPIViewsTestCase(TestCase):
         self._set_permissions("monolith.view_catalog")
         response = self.get(reverse("monolith_api:catalogs"), {"name": "foo"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json()["results"], [])
 
-    def test_get_catalogs_filter_by_name(self):
-        force_catalog()
-        catalog = force_catalog()
+    def test_get_catalogs_filter_by_name_and_repository(self):
+        repository = force_repository()
+        force_catalog(name="katalog")
+        catalog = force_catalog(name="katalog", repository=repository)
         self._set_permissions("monolith.view_catalog")
-        response = self.get(reverse("monolith_api:catalogs"), {"name": catalog.name})
+        response = self.get(reverse("monolith_api:catalogs"), {"name": catalog.name, "repository": repository.id})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"], [{
             'id': catalog.pk,
             'repository': catalog.repository.pk,
             'name': catalog.name,
@@ -1178,12 +1198,35 @@ class MonolithAPIViewsTestCase(TestCase):
             'archived_at': None,
         }])
 
+    def test_get_catalogs_filter_by_repository(self):
+        repository = force_repository()
+        catalog1 = force_catalog(repository=repository)
+        catalog2 = force_catalog(repository=repository)
+        force_catalog()  # different repository, should not appear
+        self._set_permissions("monolith.view_catalog")
+        response = self.get(reverse("monolith_api:catalogs"), {"repository": repository.id})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 2)
+        result_ids = {r["id"] for r in payload["results"]}
+        self.assertEqual(result_ids, {catalog1.pk, catalog2.pk})
+
+    def test_get_catalogs_filter_by_name(self):
+        catalog = force_catalog(name="katalog")
+        force_catalog()  # different name, should not appear
+        self._set_permissions("monolith.view_catalog")
+        response = self.get(reverse("monolith_api:catalogs"), {"name": "katalog"})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["id"], catalog.pk)
+
     def test_get_catalogs(self):
         catalog = force_catalog()
         self._set_permissions("monolith.view_catalog")
         response = self.get(reverse("monolith_api:catalogs"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': catalog.pk,
             'repository': catalog.repository.pk,
             'name': catalog.name,
