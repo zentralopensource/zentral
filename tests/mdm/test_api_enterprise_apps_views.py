@@ -1,15 +1,16 @@
-from functools import lru_cache, reduce
+from functools import lru_cache
 import hashlib
-import operator
 import os
 import tempfile
 from unittest.mock import Mock, patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import Artifact, ArtifactVersion, ArtifactVersionTag, DeviceArtifact, TargetArtifact
 from zentral.core.events.base import AuditEvent
@@ -17,7 +18,7 @@ from utils.packages import build_dummy_package
 from .utils import force_artifact, force_blueprint_artifact, force_dep_enrollment_session
 
 
-class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
+class MDMEnterpriseAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     maxDiff = None
 
     @classmethod
@@ -33,28 +34,23 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         cls.user.groups.set([cls.group])
         _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm_api"
+
+    # RequestCase implementation
+
+    def _get_api_key(self):
+        return self.api_key
+
     # utility methods
-
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
 
     @lru_cache
     def _build_package(self, name="test123", version="1.0", product_archive=True):
@@ -67,27 +63,6 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         sha256 = hashlib.sha256(content).hexdigest()
         md5 = hashlib.md5(content).hexdigest()
         return file, sha256, md5, len(content)
-
-    def _make_request(self, method, url, data=None, include_token=True):
-        kwargs = {}
-        if data is not None:
-            kwargs["content_type"] = "application/json"
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return method(url, **kwargs)
-
-    def delete(self, *args, **kwargs):
-        return self._make_request(self.client.delete, *args, **kwargs)
-
-    def get(self, *args, **kwargs):
-        return self._make_request(self.client.get, *args, **kwargs)
-
-    def post(self, *args, **kwargs):
-        return self._make_request(self.client.post, *args, **kwargs)
-
-    def put(self, *args, **kwargs):
-        return self._make_request(self.client.put, *args, **kwargs)
 
     # list enterprise apps
 

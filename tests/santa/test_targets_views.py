@@ -1,18 +1,12 @@
 from datetime import datetime, timedelta
-from functools import reduce
-from importlib import import_module
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.conf import settings
-from django.db.models import Q
-from django.http import HttpRequest
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
-from realms.backends.views import finalize_session
-from realms.models import RealmAuthenticationSession
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Source, File
 from zentral.contrib.santa.models import Target, TargetCounter, TargetState
 from zentral.core.stores.conf import stores
@@ -22,7 +16,7 @@ from .utils import (add_file_to_test_class, force_ballot, force_configuration,
                     new_sha256)
 
 
-class SantaSetupViewsTestCase(TestCase):
+class SantaSetupViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         # provision the stores
@@ -37,67 +31,35 @@ class SantaSetupViewsTestCase(TestCase):
         # file tree
         add_file_to_test_class(cls)
 
-    # utility methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions, realm_user=False):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        if not realm_user:
-            self.client.force_login(self.user)
-        else:
-            # see https://github.com/django/django/blob/705066d186ce880bf64142e47084f3d8df3c2352/django/test/client.py#L785  # NOQA
-            request = HttpRequest()
-            # HACK
-            # see https://github.com/django/django/blob/705066d186ce880bf64142e47084f3d8df3c2352/django/contrib/auth/__init__.py#L141-L142  # NOQA
-            # so that the user is attached to the request. The realm callback expects a user on the request!
-            request.user = None
-            if self.client.session:
-                request.session = self.client.session
-            else:
-                engine = import_module(settings.SESSION_ENGINE)
-                request.session = engine.SessionStore()
-            ras = RealmAuthenticationSession.objects.create(
-                realm=self.realm,
-                callback="realms.utils.login_callback",
-            )
-            finalize_session(ras, request, self.realm_user)
-            request.session.save()
-            session_cookie = settings.SESSION_COOKIE_NAME
-            self.client.cookies[session_cookie] = request.session.session_key
-            cookie_data = {
-                "max-age": None,
-                "path": "/",
-                "domain": settings.SESSION_COOKIE_DOMAIN,
-                "secure": settings.SESSION_COOKIE_SECURE or None,
-                "expires": None,
-            }
-            self.client.cookies[session_cookie].update(cookie_data)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "santa"
+
+    def _get_realm(self):
+        return self.realm
+
+    def _get_realm_user(self):
+        return self.realm_user
 
     # targets
 
     def test_targets_redirect(self):
-        self._login_redirect(reverse("santa:targets"))
+        self.login_redirect("targets")
 
     def test_targets_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:targets"))
         self.assertEqual(response.status_code, 403)
 
     def test_targets(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -113,7 +75,7 @@ class SantaSetupViewsTestCase(TestCase):
             cdhash=bad_cdhash_identifier
         )
         Target.objects.create(type=Target.Type.CDHASH, identifier=bad_cdhash_identifier)
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"))
         for target in response.context["targets"]:
             if target["target_type"] == Target.Type.CDHASH and target["identifier"] == bad_cdhash_identifier:
@@ -122,7 +84,7 @@ class SantaSetupViewsTestCase(TestCase):
                 self.assertTrue(isinstance(target["url"], str))
 
     def test_binary_targets(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"target_type": Target.Type.BINARY})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -136,7 +98,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, self.metabundle_sha256)
 
     def test_cdhash_targets(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"target_type": Target.Type.CDHASH})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -150,7 +112,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, self.metabundle_sha256)
 
     def test_certificate_targets(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"target_type": Target.Type.CERTIFICATE})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -164,7 +126,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, self.metabundle_sha256)
 
     def test_team_id_targets(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"target_type": Target.Type.TEAM_ID})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -178,7 +140,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, self.metabundle_sha256)
 
     def test_signing_id_targets(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"target_type": Target.Type.SIGNING_ID})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -192,7 +154,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, self.metabundle_sha256)
 
     def test_bundle_targets(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"target_type": Target.Type.BUNDLE})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -206,7 +168,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, self.metabundle_sha256)
 
     def test_metabundle_targets(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"target_type": Target.Type.METABUNDLE})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -220,14 +182,14 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertContains(response, self.metabundle_sha256)
 
     def test_search_targets_empty_results(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"q": "does not exists"})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
         self.assertContains(response, "We didn't find any item related to your search")
 
     def test_search_target_file_identifier(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"q": self.file_sha256})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -244,7 +206,7 @@ class SantaSetupViewsTestCase(TestCase):
             state=TargetState.State.GLOBALLY_ALLOWLISTED,
             score=100,
         )
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"target_state": TargetState.State.GLOBALLY_ALLOWLISTED})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -257,7 +219,7 @@ class SantaSetupViewsTestCase(TestCase):
         TargetCounter.objects.exclude(
             target=self.file_target
         ).update(updated_at=datetime.utcnow() - timedelta(days=100))
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"),
                                    {"target_type": "BINARY",
                                     "last_seen_days": 3})
@@ -270,7 +232,7 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_search_target_configuration_no_link(self):
         configuration = force_configuration()
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"configuration": configuration.pk})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -286,7 +248,7 @@ class SantaSetupViewsTestCase(TestCase):
             state=TargetState.State.GLOBALLY_ALLOWLISTED,
             score=100,
         )
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"configuration": configuration.pk})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -307,7 +269,7 @@ class SantaSetupViewsTestCase(TestCase):
             executed_count=2,
             collected_count=3,
         )
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"configuration": configuration.pk})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -320,7 +282,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(targets[0]["collected_count"], 3)
 
     def test_search_target_has_yes_votes_no_result(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"has_yes_votes": "on"})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -328,7 +290,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(len(response.context["targets"]), 0)
 
     def test_search_target_has_no_votes_no_result(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"has_no_votes": "on"})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -336,7 +298,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(len(response.context["targets"]), 0)
 
     def test_search_target_has_yes_votes_different_config_no_result(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         realm, realm_user = force_realm_user()
         vote_configuration = force_configuration(voting_realm=realm)
         force_ballot(self.file_target, realm_user, [(vote_configuration, True, 1)])
@@ -349,7 +311,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(len(response.context["targets"]), 0)
 
     def test_search_target_has_no_votes_same_config_result(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         realm, realm_user = force_realm_user()
         configuration = force_configuration(voting_realm=realm)
         force_ballot(self.file_target, realm_user, [(configuration, False, 1)])
@@ -370,7 +332,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(targets[0]["identifier"], self.file_sha256)
 
     def test_search_target_has_yes_votes_no_config_result(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         realm, realm_user = force_realm_user()
         configuration = force_configuration(voting_realm=realm)
         force_ballot(self.file_target, realm_user, [(configuration, True, 1)])
@@ -383,7 +345,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(targets[0]["identifier"], self.file_sha256)
 
     def test_search_target_todo_no_votes_all(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:targets"), {"todo": "on"})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targets.html")
@@ -391,7 +353,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(len(response.context["targets"]), 7)
 
     def test_search_target_todo_missing_one_vote_no_config(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         realm, realm_user = force_realm_user(username=self.user.username)
         configuration = force_configuration(voting_realm=realm)
         # vote on all targets except the binary
@@ -406,7 +368,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(targets[0]["identifier"], self.file_sha256)
 
     def test_search_target_todo_missing_one_vote_same_config(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         realm, realm_user = force_realm_user(username=self.user.username)
         configuration = force_configuration(voting_realm=realm)
         # vote on all targets except the binary
@@ -438,7 +400,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(targets[0]["identifier"], self.file_sha256)
 
     def test_search_target_order_by_score(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         realm, realm_user = force_realm_user(username=self.user.username)
         configuration = force_configuration(voting_realm=realm)
         # vote on all targets except the binary
@@ -473,16 +435,16 @@ class SantaSetupViewsTestCase(TestCase):
     # binary target
 
     def test_binary_target_redirect(self):
-        self._login_redirect(reverse("santa:binary", args=(self.file_sha256,)))
+        self.login_redirect("binary", self.file_sha256)
 
     def test_binary_target_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 403)
 
     def test_binary_target_configuration_no_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
@@ -492,54 +454,54 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_binary_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_binary_target_events_redirect(self):
-        self._login_redirect(reverse("santa:binary_events", args=(self.file_sha256,)))
+        self.login_redirect("binary_events", self.file_sha256)
 
     def test_binary_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:binary_events", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_binary_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:binary_events", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.file_sha256)
 
     def test_fetch_binary_target_events_redirect(self):
-        self._login_redirect(reverse("santa:fetch_binary_events", args=(self.file_sha256,)))
+        self.login_redirect("fetch_binary_events", self.file_sha256)
 
     def test_fetch_binary_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:fetch_binary_events", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_binary_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:fetch_binary_events", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_binary_target_store_redirect_login_redirect(self):
-        self._login_redirect(reverse("santa:binary_events_store_redirect", args=(self.file_sha256,)))
+        self.login_redirect("binary_events_store_redirect", self.file_sha256)
 
     def test_binary_target_store_redirect_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:binary_events_store_redirect", args=(self.file_sha256,)))
         self.assertEqual(response.status_code, 403)
 
     def test_binary_target_store_redirect(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:binary_events_store_redirect", args=(self.file_sha256,)),
                                    {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
@@ -547,16 +509,16 @@ class SantaSetupViewsTestCase(TestCase):
     # bundle target
 
     def test_bundle_target_redirect(self):
-        self._login_redirect(reverse("santa:bundle", args=(self.bundle_target.identifier,)))
+        self.login_redirect("bundle", self.bundle_target.identifier)
 
     def test_bundle_target_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:bundle", args=(self.bundle_target.identifier,)))
         self.assertEqual(response.status_code, 403)
 
     def test_bundle_target_configuration_no_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:bundle", args=(self.bundle_target.identifier,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
@@ -565,23 +527,23 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, configuration.name)
 
     def test_bundle_target_configuration_add_rule_perm(self):
-        self._login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:bundle", args=(self.bundle_target.identifier,)))
         self.assertNotContains(response, "createRule")
 
     # metabundle target
 
     def test_metabundle_target_redirect(self):
-        self._login_redirect(reverse("santa:metabundle", args=(self.metabundle_sha256,)))
+        self.login_redirect("metabundle", self.metabundle_sha256)
 
     def test_metabundle_target_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:metabundle", args=(self.metabundle_sha256,)))
         self.assertEqual(response.status_code, 403)
 
     def test_metabundle_target_configuration_no_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:metabundle", args=(self.metabundle_sha256,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
@@ -590,23 +552,23 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertNotContains(response, configuration.name)
 
     def test_metabundle_target_configuration_add_rule_perm(self):
-        self._login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:metabundle", args=(self.metabundle_sha256,)))
         self.assertNotContains(response, "createRule")
 
     # cdhash target
 
     def test_cdhash_target_redirect(self):
-        self._login_redirect(reverse("santa:cdhash", args=(self.cdhash,)))
+        self.login_redirect("cdhash", self.cdhash)
 
     def test_cdhash_target_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:cdhash", args=(self.cdhash,)))
         self.assertEqual(response.status_code, 403)
 
     def test_cdhash_target_configuration_no_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:cdhash", args=(self.cdhash,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
@@ -616,51 +578,51 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_cdhash_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:cdhash", args=(self.cdhash,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_cdhash_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:cdhash_events", args=(self.cdhash,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_cdhash_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:cdhash_events", args=(self.cdhash,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.cdhash)
 
     def test_fetch_cdhash_target_events_redirect(self):
-        self._login_redirect(reverse("santa:fetch_cdhash_events", args=(self.cdhash,)))
+        self.login_redirect("fetch_cdhash_events", self.cdhash)
 
     def test_fetch_cdhash_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:fetch_cdhash_events", args=(self.cdhash,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_cdhash_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:fetch_cdhash_events", args=(self.cdhash,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_cdhash_target_store_redirect_login_redirect(self):
-        self._login_redirect(reverse("santa:cdhash_events_store_redirect", args=(self.cdhash,)))
+        self.login_redirect("cdhash_events_store_redirect", self.cdhash)
 
     def test_cdhash_target_store_redirect_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:cdhash_events_store_redirect", args=(self.cdhash,)))
         self.assertEqual(response.status_code, 403)
 
     def test_cdhash_target_store_redirect(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:cdhash_events_store_redirect", args=(self.cdhash,)),
                                    {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
@@ -668,16 +630,16 @@ class SantaSetupViewsTestCase(TestCase):
     # certificate target
 
     def test_certificate_target_redirect(self):
-        self._login_redirect(reverse("santa:certificate", args=(self.file_cert_sha256,)))
+        self.login_redirect("certificate", self.file_cert_sha256)
 
     def test_certificate_target_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:certificate", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 403)
 
     def test_certificate_target_configuration_no_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:certificate", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
@@ -687,51 +649,51 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_certificate_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:certificate", args=(self.file_cert_sha256,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_certificate_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:certificate_events", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_certificate_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:certificate_events", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.file_cert_sha256)
 
     def test_fetch_certificate_target_events_redirect(self):
-        self._login_redirect(reverse("santa:fetch_certificate_events", args=(self.file_cert_sha256,)))
+        self.login_redirect("fetch_certificate_events", self.file_cert_sha256)
 
     def test_fetch_certificate_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:fetch_certificate_events", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_certificate_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:fetch_certificate_events", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_certificate_target_store_redirect_login_redirect(self):
-        self._login_redirect(reverse("santa:certificate_events_store_redirect", args=(self.file_cert_sha256,)))
+        self.login_redirect("certificate_events_store_redirect", self.file_cert_sha256)
 
     def test_certificate_target_store_redirect_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:certificate_events_store_redirect", args=(self.file_cert_sha256,)))
         self.assertEqual(response.status_code, 403)
 
     def test_certificate_target_store_redirect(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:certificate_events_store_redirect", args=(self.file_cert_sha256,)),
                                    {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
@@ -739,16 +701,16 @@ class SantaSetupViewsTestCase(TestCase):
     # team ID target
 
     def test_team_id_target_redirect(self):
-        self._login_redirect(reverse("santa:teamid", args=(self.file_team_id,)))
+        self.login_redirect("teamid", self.file_team_id)
 
     def test_team_id_target_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:teamid", args=(self.file_team_id,)))
         self.assertEqual(response.status_code, 403)
 
     def test_team_id_target_configuration_no_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:teamid", args=(self.file_team_id,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
@@ -758,51 +720,51 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_team_id_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:teamid", args=(self.file_team_id,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_team_id_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:teamid_events", args=(self.file_team_id,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_team_id_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:teamid_events", args=(self.file_team_id,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.file_team_id)
 
     def test_fetch_team_id_target_events_redirect(self):
-        self._login_redirect(reverse("santa:fetch_teamid_events", args=(self.file_team_id,)))
+        self.login_redirect("fetch_teamid_events", self.file_team_id)
 
     def test_fetch_team_id_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:fetch_teamid_events", args=(self.file_team_id,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_team_id_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:fetch_teamid_events", args=(self.file_team_id,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_team_id_target_store_redirect_login_redirect(self):
-        self._login_redirect(reverse("santa:teamid_events_store_redirect", args=(self.file_team_id,)))
+        self.login_redirect("teamid_events_store_redirect", self.file_team_id)
 
     def test_team_id_target_store_redirect_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:teamid_events_store_redirect", args=(self.file_team_id,)))
         self.assertEqual(response.status_code, 403)
 
     def test_team_id_target_store_redirect(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:teamid_events_store_redirect", args=(self.file_team_id,)),
                                    {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
@@ -810,16 +772,16 @@ class SantaSetupViewsTestCase(TestCase):
     # signing ID target
 
     def test_signing_id_target_redirect(self):
-        self._login_redirect(reverse("santa:signingid", args=(self.file_signing_id,)))
+        self.login_redirect("signingid", self.file_signing_id)
 
     def test_signing_id_target_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:signingid", args=(self.file_signing_id,)))
         self.assertEqual(response.status_code, 403)
 
     def test_signing_id_target_configuration_no_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:signingid", args=(self.file_signing_id,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_detail.html")
@@ -829,51 +791,51 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_signing_id_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self._login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:signingid", args=(self.file_signing_id,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
 
     def test_signing_id_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:signingid_events", args=(self.file_signing_id,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.get_aggregated_object_event_counts")
     def test_signing_id_target_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:signingid_events", args=(self.file_signing_id,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.file_signing_id)
 
     def test_fetch_signing_id_target_events_redirect(self):
-        self._login_redirect(reverse("santa:fetch_signingid_events", args=(self.file_signing_id,)))
+        self.login_redirect("fetch_signingid_events", self.file_signing_id)
 
     def test_fetch_signing_id_target_events_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:fetch_signingid_events", args=(self.file_signing_id,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.stores.backends.elasticsearch.ElasticsearchStore.fetch_object_events")
     def test_fetch_signing_id_target_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:fetch_signingid_events", args=(self.file_signing_id,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     def test_signing_id_target_store_redirect_login_redirect(self):
-        self._login_redirect(reverse("santa:signingid_events_store_redirect", args=(self.file_signing_id,)))
+        self.login_redirect("signingid_events_store_redirect", self.file_signing_id)
 
     def test_signing_id_target_store_redirect_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:signingid_events_store_redirect", args=(self.file_signing_id,)))
         self.assertEqual(response.status_code, 403)
 
     def test_signing_id_target_store_redirect(self):
-        self._login("santa.view_target")
+        self.login("santa.view_target")
         response = self.client.get(reverse("santa:signingid_events_store_redirect", args=(self.file_signing_id,)),
                                    {"es": stores.admin_console_store.name})
         self.assertTrue(response.url.startswith("/kibana/"))
@@ -883,19 +845,19 @@ class SantaSetupViewsTestCase(TestCase):
     def test_reset_target_state_redirect(self):
         configuration = force_configuration()
         ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
-        self._login_redirect(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)))
+        self.login_redirect("reset_target_state", configuration.pk, ts.pk)
 
     def test_reset_target_state_permission_denied(self):
         configuration = force_configuration()
         ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)))
         self.assertEqual(response.status_code, 403)
 
     def test_reset_target_state_get_not_allowed(self):
         configuration = force_configuration()
         ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
-        self._login("santa.view_target", realm_user=True)
+        self.login("santa.view_target", realm_user=True)
         response = self.client.get(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/targetstate_reset.html")
@@ -905,7 +867,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_reset_target_state_get_allowed(self):
         configuration = force_configuration()
         ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
-        self._login("santa.view_target", realm_user=True)
+        self.login("santa.view_target", realm_user=True)
         force_voting_group(configuration, self.realm_user, can_reset_target=True)
         response = self.client.get(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)))
         self.assertEqual(response.status_code, 200)
@@ -916,7 +878,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_rest_target_state_post_not_allowed(self):
         configuration = force_configuration()
         ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
-        self._login("santa.view_target", realm_user=True)
+        self.login("santa.view_target", realm_user=True)
         response = self.client.post(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)),
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -929,7 +891,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_rest_target_state_post_allowed(self, post_event):
         configuration = force_configuration()
         ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
-        self._login("santa.view_target", realm_user=True)
+        self.login("santa.view_target", realm_user=True)
         force_voting_group(configuration, self.realm_user, can_reset_target=True)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("santa:reset_target_state", args=(configuration.pk, ts.pk)),

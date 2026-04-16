@@ -1,9 +1,21 @@
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.models import BusinessUnit, MetaBusinessUnit, Tag, Taxonomy
+
+from tests.mdm.utils import force_software_update_enforcement
+from zentral.contrib.inventory.models import (
+    BusinessUnit,
+    EnrollmentSecret,
+    MachineTag,
+    MetaBusinessUnit,
+    Tag,
+    Taxonomy,
+)
 
 
 class InventoryModelsTestCase(TestCase):
+
+    # BusinessUnit
+
     def test_business_unit_key(self):
         business_unit, _ = BusinessUnit.objects.commit({
             "name": "un",
@@ -103,6 +115,8 @@ class InventoryModelsTestCase(TestCase):
         self.assertEqual(business_unit1.meta_business_unit, business_unit2.meta_business_unit)
         self.assertEqual(business_unit1.meta_business_unit.name, business_unit1.name)
 
+    # MBU
+
     def test_meta_business_unit_serialize_for_event_keys_only(self):
         mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         mbu.create_enrollment_business_unit()
@@ -143,6 +157,8 @@ class InventoryModelsTestCase(TestCase):
              "updated_at": taxonomy.updated_at}
         )
 
+    # Tag
+
     def test_tag_serialize_for_event_keys_only(self):
         name = get_random_string(12)
         tag = Tag.objects.create(name=name)
@@ -162,4 +178,38 @@ class InventoryModelsTestCase(TestCase):
              "taxonomy": {"pk": taxonomy.pk, "name": taxonomy.name},
              "color": "0079bf",
              "slug": name.lower()}
+        )
+
+    def test_tag_str_no_mbu_no_taxonomy(self):
+        name = get_random_string(12)
+        tag = Tag(name=name)
+        self.assertEqual(str(tag), name)
+
+    def test_tag_str_mbu_no_taxonomy(self):
+        mbu_name = get_random_string(12)
+        mbu = MetaBusinessUnit(name=mbu_name)
+        name = get_random_string(12)
+        tag = Tag(meta_business_unit=mbu, name=name)
+        self.assertEqual(str(tag), f"{mbu_name}/{name}")
+
+    def test_tag_str_no_mbu_taxonomy(self):
+        taxonomy_name = get_random_string(12)
+        taxonomy = Taxonomy(name=taxonomy_name)
+        name = get_random_string(12)
+        tag = Tag(taxonomy=taxonomy, name=name)
+        self.assertEqual(str(tag), f"{taxonomy_name}: {name}")
+
+    def test_tag_links(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        tag = Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=mbu)
+        enrollment_secret.tags.add(tag)
+        MachineTag.objects.create(serial_number="12345678910", tag=tag)
+        force_software_update_enforcement(tags=[tag])
+        self.assertEqual(
+            sorted(tag.links()),
+            [('1 enrollment secret', None),
+             ('1 machine', f'/inventory/?tag={tag.id}'),
+             ('1 softwareupdateenforcement', None)]
         )

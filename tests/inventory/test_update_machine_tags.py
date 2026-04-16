@@ -1,18 +1,17 @@
-from functools import reduce
-import json
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, Tag, Taxonomy
 
 
-class InventoryAPITests(TestCase):
+class InventoryAPITests(TestCase, LoginCase, RequestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(
@@ -25,34 +24,30 @@ class InventoryAPITests(TestCase):
         _, cls.api_key = APIToken.objects.create_for_user(cls.user)
         cls.url = reverse("inventory_api:update_machine_tags")
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "inventory_api"
+
+    # RequestCase implementation
+
+    def _get_api_key(self):
+        return self.api_key
+
     # utility methods
 
-    def _set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
+    def post(self, data, include_token=True):
+        return super().post(self.url, data, include_token)
 
-    def _set_required_permission(self):
-        self._set_permissions("inventory.add_tag", "inventory.add_taxonomy",
-                              "inventory.add_machinetag", "inventory.delete_machinetag")
-
-    def _post_data(self, data, content_type, include_token=True):
-        kwargs = {"content_type": content_type}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.post(self.url, data, **kwargs)
-
-    def _post_json_data(self, data, include_token=True):
-        data = json.dumps(data)
-        return self._post_data(data, "application/json", include_token)
+    def set_required_permission(self):
+        self.set_permissions("inventory.add_tag", "inventory.add_taxonomy",
+                             "inventory.add_machinetag", "inventory.delete_machinetag")
 
     def _force_machine(self):
         serial_number = get_random_string(12)
@@ -82,24 +77,24 @@ class InventoryAPITests(TestCase):
     # tests
 
     def test_post_unauthorized(self):
-        response = self._post_json_data({}, include_token=False)
+        response = self.post({}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_post_permission_denied(self):
-        response = self._post_json_data({}, include_token=True)
+        response = self.post({}, include_token=True)
         self.assertEqual(response.status_code, 403)
 
     def test_post_empty_tags(self):
-        self._set_required_permission()
-        response = self._post_json_data({
+        self.set_required_permission()
+        response = self.post({
             "principal_users": {"unique_ids": ["yolo"]}
         })
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'operations': ['This field is required.']})
 
     def test_post_principal_users_or_serial_numbers(self):
-        self._set_required_permission()
-        response = self._post_json_data({
+        self.set_required_permission()
+        response = self.post({
             "operations": [{"kind": "SET", "taxonomy": "yol", "names": []},
                            {"kind": "SET", "taxonomy": "lo", "names": ["1"]}]
         })
@@ -110,8 +105,8 @@ class InventoryAPITests(TestCase):
         )
 
     def test_post_add_operation_empty_names(self):
-        self._set_required_permission()
-        response = self._post_json_data({
+        self.set_required_permission()
+        response = self.post({
             "operations": [{"kind": "ADD", "taxonomy": "yol", "names": []}],
             "serial_numbers": ["un"]
         })
@@ -122,8 +117,8 @@ class InventoryAPITests(TestCase):
         )
 
     def test_post_remove_operation_empty_names(self):
-        self._set_required_permission()
-        response = self._post_json_data({
+        self.set_required_permission()
+        response = self.post({
             "operations": [{"kind": "REMOVE", "names": []}],
             "serial_numbers": ["un"]
         })
@@ -134,8 +129,8 @@ class InventoryAPITests(TestCase):
         )
 
     def test_post_set_operation_empty_taxonomy(self):
-        self._set_required_permission()
-        response = self._post_json_data({
+        self.set_required_permission()
+        response = self.post({
             "operations": [{"kind": "SET", "taxonomy": None, "names": ["yolo"]}],
             "serial_numbers": ["un"]
         })
@@ -146,8 +141,8 @@ class InventoryAPITests(TestCase):
         )
 
     def test_post_remove_operation_non_empty_taxonomy(self):
-        self._set_required_permission()
-        response = self._post_json_data({
+        self.set_required_permission()
+        response = self.post({
             "operations": [{"kind": "REMOVE", "taxonomy": "fomo", "names": ["yolo"]}],
             "serial_numbers": ["un"]
         })
@@ -158,8 +153,8 @@ class InventoryAPITests(TestCase):
         )
 
     def test_post_empty_unique_ids_and_principal_names(self):
-        self._set_required_permission()
-        response = self._post_json_data({
+        self.set_required_permission()
+        response = self.post({
             "operations": [{"kind": "SET", "taxonomy": "yol", "names": []},
                            {"kind": "SET", "taxonomy": "lo", "names": ["1"]}],
             "principal_users": {}
@@ -173,8 +168,8 @@ class InventoryAPITests(TestCase):
         )
 
     def test_post_empty_serial_numbers(self):
-        self._set_required_permission()
-        response = self._post_json_data({
+        self.set_required_permission()
+        response = self.post({
             "operations": [{"kind": "SET", "taxonomy": "yol", "names": []},
                            {"kind": "SET", "taxonomy": "lo", "names": ["1"]}],
             "serial_numbers": []
@@ -186,13 +181,13 @@ class InventoryAPITests(TestCase):
         )
 
     def test_post_set_no_change(self):
-        self._set_required_permission()
+        self.set_required_permission()
         # non matching machine
         serial_number, _, _ = self._force_machine()
         principal_name = get_random_string(12)
         taxonomy_name = get_random_string(12)
         tag_name = get_random_string(12)
-        response = self._post_json_data({
+        response = self.post({
             "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
             "principal_users": {"principal_names": [principal_name]}
         })
@@ -209,10 +204,10 @@ class InventoryAPITests(TestCase):
         )
 
     def test_post_add_existing_taxonomy_tag_without_taxonomy(self):
-        self._set_required_permission()
+        self.set_required_permission()
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
         tag = Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
-        response = self._post_json_data({
+        response = self.post({
             "operations": [{"kind": "ADD", "names": [tag.name]}],  # No taxonomy but existing tag with one
             "serial_numbers": [get_random_string(12)],
         })
@@ -222,10 +217,10 @@ class InventoryAPITests(TestCase):
         )
 
     def test_post_set_existing_taxonomy_tag_with_taxonomy(self):
-        self._set_required_permission()
+        self.set_required_permission()
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
         tag = Tag.objects.create(name=get_random_string(12))
-        response = self._post_json_data({
+        response = self.post({
             "operations": [{"kind": "SET",
                             "taxonomy": taxonomy.name,
                             "names": [tag.name]}],  # With taxonomy but existing tag doesn't have one
@@ -238,7 +233,7 @@ class InventoryAPITests(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_set_add_one_tag(self, post_event):
-        self._set_required_permission()
+        self.set_required_permission()
         # non matching machine
         self._force_machine()
         # matching machine
@@ -246,7 +241,7 @@ class InventoryAPITests(TestCase):
         taxonomy_name = get_random_string(12)
         tag_name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data({
+            response = self.post({
                 "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
                 "principal_users": {"principal_names": [principal_name]}
             })
@@ -274,7 +269,7 @@ class InventoryAPITests(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_set_add_one_remove_three(self, post_event):
-        self._set_required_permission()
+        self.set_required_permission()
         # non matching machine
         self._force_machine()
         # matching machine
@@ -287,7 +282,7 @@ class InventoryAPITests(TestCase):
         # 1 taxonomy with 1 tag
         taxonomy_name2, _ = self._force_machine_tags(serial_number, 1)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data({
+            response = self.post({
                 "operations": [
                     {"kind": "SET", "taxonomy": taxonomy_name0, "names": [tag_names0[0]]},
                     {"kind": "SET", "taxonomy": taxonomy_name1, "names": [new_taxonomy_tag_name1]},
@@ -320,7 +315,7 @@ class InventoryAPITests(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_set_multiple_add_one(self, post_event):
-        self._set_required_permission()
+        self.set_required_permission()
         # 3 matching machines
         serial_number0, _, principal_name0 = self._force_machine()
         serial_number1, unique_id1, principal_name1 = self._force_machine()
@@ -328,7 +323,7 @@ class InventoryAPITests(TestCase):
         taxonomy_name = get_random_string(12)
         tag_name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data({
+            response = self.post({
                 "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name]}],
                 "principal_users": {"unique_ids": [unique_id1, unique_id2],
                                     "principal_names": [principal_name0, principal_name1]}
@@ -348,7 +343,7 @@ class InventoryAPITests(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_add_three_tags(self, post_event):
-        self._set_required_permission()
+        self.set_required_permission()
         serial_number, _, principal_name = self._force_machine()
         self.assertEqual(MachineTag.objects.filter(serial_number=serial_number).count(), 0)
         tag_name_1 = get_random_string(12)
@@ -356,7 +351,7 @@ class InventoryAPITests(TestCase):
         taxonomy_name_3 = get_random_string(12)
         tag_name_3 = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data({
+            response = self.post({
                 "operations": [{"kind": "ADD", "names": [tag_name_1, tag_name_2]},
                                {"kind": "ADD", "taxonomy": taxonomy_name_3, "names": [tag_name_3]}],
                 "principal_users": {"principal_names": [principal_name]}
@@ -381,11 +376,11 @@ class InventoryAPITests(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_post_remove_one_tag(self, post_event):
-        self._set_required_permission()
+        self.set_required_permission()
         serial_number, _, _ = self._force_machine()
         taxonomy_name, (tag_name_1, tag_name_2) = self._force_machine_tags(serial_number, 2)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self._post_json_data({
+            response = self.post({
                 "operations": [{"kind": "REMOVE", "names": [tag_name_1]}],
                 "serial_numbers": [serial_number],
             })

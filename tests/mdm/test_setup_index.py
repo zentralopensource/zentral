@@ -1,20 +1,19 @@
-from functools import reduce
 import io
-import operator
 import plistlib
 import zipfile
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from .utils import (force_artifact, force_blueprint, force_blueprint_artifact,
                     force_filevault_config, force_recovery_password_config)
 
 
-class SetupIndexViewsTestCase(TestCase):
+class SetupIndexViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -23,38 +22,29 @@ class SetupIndexViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # index
 
     def test_index_redirect(self):
-        self._login_redirect(reverse("mdm:index"))
+        self.login_redirect("index")
 
     def test_index_locations_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:index"))
         self.assertEqual(response.status_code, 403)
 
     def test_index_view_artifact_perm(self):
-        self._login("mdm.view_artifact")
+        self.login("mdm.view_artifact")
         response = self.client.get(reverse("mdm:index"))
         self.assertTemplateUsed(response, "mdm/index.html")
         self.assertContains(response, "Overview")
@@ -63,7 +53,7 @@ class SetupIndexViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("mdm:terraform_export"))
 
     def test_index_view_blueprint_perm(self):
-        self._login("mdm.view_blueprint")
+        self.login("mdm.view_blueprint")
         response = self.client.get(reverse("mdm:index"))
         self.assertTemplateUsed(response, "mdm/index.html")
         self.assertContains(response, "Overview")
@@ -74,15 +64,15 @@ class SetupIndexViewsTestCase(TestCase):
     # root CA
 
     def test_root_ca_redirect(self):
-        self._login_redirect(reverse("mdm:root_ca"))
+        self.login_redirect("root_ca")
 
     def test_root_ca_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:root_ca"))
         self.assertEqual(response.status_code, 403)
 
     def test_root_ca(self):
-        self._login("mdm.view_artifact")
+        self.login("mdm.view_artifact")
         response = self.client.get(reverse("mdm:root_ca"))
         self.assertEqual(response.status_code, 200)
         _, data = verify_signed_payload(response.content)
@@ -93,15 +83,15 @@ class SetupIndexViewsTestCase(TestCase):
     # terraform export
 
     def test_terraform_export_redirect(self):
-        self._login_redirect(reverse("mdm:terraform_export"))
+        self.login_redirect("terraform_export")
 
     def test_terraform_export_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:terraform_export"))
         self.assertEqual(response.status_code, 403)
 
     def test_terraform_export(self):
-        self._login("mdm.view_blueprint")
+        self.login("mdm.view_blueprint")
         fv_config1 = force_filevault_config()
         fv_config2 = force_filevault_config()
         rp_config1 = force_recovery_password_config()

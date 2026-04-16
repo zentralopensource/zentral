@@ -1,17 +1,16 @@
-from functools import reduce
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.provisioning import provision
 from .utils import force_munki_state
 
 
-class MunkiMachineActionsViewsTestCase(TestCase):
+class MunkiMachineActionsViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -23,44 +22,35 @@ class MunkiMachineActionsViewsTestCase(TestCase):
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
-    # utility methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "munki"
 
     # force machine full sync
 
     def test_force_machine_full_sync_redirect(self):
-        self._login_redirect(reverse("munki:force_machine_full_sync", args=("012345678",)))
+        self.login_redirect("force_machine_full_sync", "012345678")
 
     def test_force_machine_full_sync_permission_denied(self):
-        self._login("munki.view_configuration")
+        self.login("munki.view_configuration")
         response = self.client.get(reverse("munki:force_machine_full_sync", args=("012345678",)))
         self.assertEqual(response.status_code, 403)
 
     def test_force_machine_full_sync_not_found(self):
-        self._login("munki.change_munkistate")
+        self.login("munki.change_munkistate")
         response = self.client.get(reverse("munki:force_machine_full_sync", args=("012345678",)))
         self.assertEqual(response.status_code, 404)
 
     def test_force_machine_full_sync_get(self):
         munki_state = force_munki_state()
-        self._login("munki.change_munkistate")
+        self.login("munki.change_munkistate")
         response = self.client.get(
             reverse("munki:force_machine_full_sync", args=(munki_state.machine_serial_number,))
         )
@@ -71,7 +61,7 @@ class MunkiMachineActionsViewsTestCase(TestCase):
     def test_force_machine_full_sync_post(self):
         munki_state = force_munki_state()
         self.assertIsNone(munki_state.force_full_sync_at)
-        self._login("munki.change_munkistate", "inventory.view_machinesnapshot")
+        self.login("munki.change_munkistate", "inventory.view_machinesnapshot")
         response = self.client.post(
             reverse("munki:force_machine_full_sync", args=(munki_state.machine_serial_number,)),
             follow=True
@@ -89,7 +79,7 @@ class MunkiMachineActionsViewsTestCase(TestCase):
     # inventory
 
     def test_machine_detail_no_munki_state_disabled_full_sync(self):
-        self._login("munki.change_munkistate", "inventory.view_machinesnapshot")
+        self.login("munki.change_munkistate", "inventory.view_machinesnapshot")
         machine = MetaMachine(serial_number=get_random_string(12))
         response = self.client.get(machine.get_absolute_url())
         self.assertTemplateUsed(response, "inventory/machine_detail.html")
@@ -103,7 +93,7 @@ class MunkiMachineActionsViewsTestCase(TestCase):
         )
 
     def test_machine_detail_munki_state_full_sync_enabled(self):
-        self._login("munki.change_munkistate", "inventory.view_machinesnapshot")
+        self.login("munki.change_munkistate", "inventory.view_machinesnapshot")
         machine = MetaMachine(serial_number=get_random_string(12))
         force_munki_state(serial_number=machine.serial_number)
         response = self.client.get(machine.get_absolute_url())
@@ -118,7 +108,7 @@ class MunkiMachineActionsViewsTestCase(TestCase):
         )
 
     def test_machine_detail_no_perm_no_full_sync(self):
-        self._login("inventory.view_machinesnapshot")
+        self.login("inventory.view_machinesnapshot")
         machine = MetaMachine(serial_number=get_random_string(12))
         force_munki_state(serial_number=machine.serial_number)
         response = self.client.get(machine.get_absolute_url())

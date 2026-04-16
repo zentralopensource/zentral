@@ -1,15 +1,14 @@
-import operator
-from functools import reduce
 from unittest.mock import patch
 from urllib.parse import urlencode
 
-from accounts.models import APIToken, User
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
+from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.events import DEPDeviceDisownedEvent
@@ -17,7 +16,7 @@ from zentral.contrib.mdm.events import DEPDeviceDisownedEvent
 from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
 
 
-class APIViewsTestCase(TestCase):
+class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     maxDiff = None
 
     @classmethod
@@ -35,46 +34,21 @@ class APIViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
-    # utility methods
+    # LoginCase implementation
 
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
+    def _get_user(self):
+        return self.user
 
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
 
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_url_namespace(self):
+        return "mdm_api"
 
-    def _make_query(self, verb, url, data=None, include_token=True):
-        kwargs = {}
-        if data is not None:
-            kwargs["content_type"] = "application/json"
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return getattr(self.client, verb)(url, **kwargs)
+    # RequestCase implementation
 
-    def get(self, url, include_token=True):
-        return self._make_query("get", url, include_token=include_token)
-
-    def post(self, url, include_token=True):
-        return self._make_query("post", url, include_token=include_token)
-
-    def put(self, url, data=None, include_token=True):
-        return self._make_query("put", url, data=data, include_token=include_token)
+    def _get_api_key(self):
+        return self.api_key
 
     # dep_virtual_server_sync_devices
 

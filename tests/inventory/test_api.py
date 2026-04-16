@@ -1,21 +1,21 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django_celery_results.models import TaskResult
+from django.contrib.auth.models import Group
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django_celery_results.models import TaskResult
 from rest_framework import status
-from rest_framework.test import APITestCase
+
 from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSnapshot,
                                               MachineSnapshotCommit, MachineTag,
                                               MetaBusinessUnit, Tag, Taxonomy)
 from zentral.core.events.base import AuditEvent
 
 
-class InventoryAPITests(APITestCase):
+class InventoryAPITests(TestCase, LoginCase, RequestCase):
     maxDiff = None
 
     @classmethod
@@ -29,24 +29,23 @@ class InventoryAPITests(APITestCase):
         cls.user.groups.set([cls.group])
         cls.api_token, cls.api_key = APIToken.objects.create_for_user(user=cls.user)
 
-    def setUp(self):
-        super().setUp()
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.api_key)
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm_api"
+
+    # RequestCase implementation
+
+    def _get_api_key(self):
+        return self.api_key
 
     # utils
-
-    def _set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
 
     def commit_machine_snapshot(self, serial_number=None, computer_name=None):
         if serial_number is None:
@@ -83,17 +82,17 @@ class InventoryAPITests(APITestCase):
     # meta machines
 
     def test_get_meta_machine_unauthorized(self):
-        response = self.client.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
+        response = self.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_meta_machine_wrong_permissions(self):
-        self._set_permissions("inventory.view_tag")
-        response = self.client.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
+        self.set_permissions("inventory.view_tag")
+        response = self.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_meta_machine_does_not_exist(self):
-        self._set_permissions("inventory.view_machinesnapshot")
-        response = self.client.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
         self.assertEqual(response.status_code, 404)
 
     def test_get_meta_machine(self):
@@ -102,8 +101,8 @@ class InventoryAPITests(APITestCase):
         tag_name = get_random_string(12)
         tag = Tag.objects.create(name=tag_name)
         MachineTag.objects.create(serial_number=serial_number, tag=tag)
-        self._set_permissions("inventory.view_machinesnapshot")
-        response = self.client.get(reverse('inventory_api:meta_machine', args=(serial_number,)))
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.get(reverse('inventory_api:meta_machine', args=(serial_number,)))
         self.assertEqual(
             response.data,
             {'serial_number': serial_number,
@@ -117,26 +116,26 @@ class InventoryAPITests(APITestCase):
     # archive machines
 
     def test_archive_machines_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:archive_machines'))
+        response = self.post(reverse('inventory_api:archive_machines'))
         self.assertEqual(response.status_code, 403)
 
     def test_archive_machines_wrong_permissions(self):
-        self._set_permissions("inventory.view_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:archive_machines'))
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:archive_machines'))
         self.assertEqual(response.status_code, 403)
 
     def test_archive_machines_bad_request(self):
-        self._set_permissions("inventory.change_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:archive_machines'),
-                                    {"yolo": "fomo"}, format="json")
+        self.set_permissions("inventory.change_machinesnapshot")
+        response = self.post(reverse('inventory_api:archive_machines'),
+                             {"yolo": "fomo"})
         self.assertEqual(response.status_code, 400)
 
     def test_archive_machines(self):
         serial_number = self.commit_machine_snapshot()
         serial_number2 = self.commit_machine_snapshot()
-        self._set_permissions("inventory.change_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:archive_machines'),
-                                    {"serial_numbers": [serial_number]}, format="json")
+        self.set_permissions("inventory.change_machinesnapshot")
+        response = self.post(reverse('inventory_api:archive_machines'),
+                             {"serial_numbers": [serial_number]})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data,
                          {"current_machine_snapshots": 1})
@@ -148,27 +147,27 @@ class InventoryAPITests(APITestCase):
     # prune machines
 
     def test_prune_machines_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:prune_machines'))
+        response = self.post(reverse('inventory_api:prune_machines'))
         self.assertEqual(response.status_code, 403)
 
     def test_prune_machines_wrong_permissions(self):
-        self._set_permissions("inventory.change_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:prune_machines'))
+        self.set_permissions("inventory.change_machinesnapshot")
+        response = self.post(reverse('inventory_api:prune_machines'))
         self.assertEqual(response.status_code, 403)
 
     def test_prune_machines_bad_request(self):
-        self._set_permissions("inventory.delete_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:prune_machines'),
-                                    {"yolo": "fomo"}, format="json")
+        self.set_permissions("inventory.delete_machinesnapshot")
+        response = self.post(reverse('inventory_api:prune_machines'),
+                             {"yolo": "fomo"})
         self.assertEqual(response.status_code, 400)
 
     def test_prune_machines(self):
         serial_number = self.commit_machine_snapshot()
         self.commit_machine_snapshot(serial_number)
         serial_number2 = self.commit_machine_snapshot()
-        self._set_permissions("inventory.delete_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:prune_machines'),
-                                    {"serial_numbers": [serial_number]}, format="json")
+        self.set_permissions("inventory.delete_machinesnapshot")
+        response = self.post(reverse('inventory_api:prune_machines'),
+                             {"serial_numbers": [serial_number]})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data,
                          {"current_machine_snapshots": 1,
@@ -190,12 +189,12 @@ class InventoryAPITests(APITestCase):
     # machines export
 
     def test_export_machines_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:machines_export'))
+        response = self.post(reverse('inventory_api:machines_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_machines(self):
-        self._set_permissions("inventory.view_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:machines_export'))
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:machines_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -205,12 +204,12 @@ class InventoryAPITests(APITestCase):
     # Android apps export
 
     def test_export_android_apps_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:android_apps_export'))
+        response = self.post(reverse('inventory_api:android_apps_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_android_apps(self):
-        self._set_permissions("inventory.view_androidapp")
-        response = self.client.post(reverse('inventory_api:android_apps_export'))
+        self.set_permissions("inventory.view_androidapp")
+        response = self.post(reverse('inventory_api:android_apps_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -220,12 +219,12 @@ class InventoryAPITests(APITestCase):
     # Debian packages export
 
     def test_export_deb_packages_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:deb_packages_export'))
+        response = self.post(reverse('inventory_api:deb_packages_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_deb_packages(self):
-        self._set_permissions("inventory.view_debpackage")
-        response = self.client.post(reverse('inventory_api:deb_packages_export'))
+        self.set_permissions("inventory.view_debpackage")
+        response = self.post(reverse('inventory_api:deb_packages_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -235,12 +234,12 @@ class InventoryAPITests(APITestCase):
     # iOS apps export
 
     def test_export_ios_apps_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:ios_apps_export'))
+        response = self.post(reverse('inventory_api:ios_apps_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_ios_apps(self):
-        self._set_permissions("inventory.view_iosapp")
-        response = self.client.post(reverse('inventory_api:ios_apps_export'))
+        self.set_permissions("inventory.view_iosapp")
+        response = self.post(reverse('inventory_api:ios_apps_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -250,12 +249,12 @@ class InventoryAPITests(APITestCase):
     # macOS apps export
 
     def test_export_macos_apps_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:macos_apps_export'))
+        response = self.post(reverse('inventory_api:macos_apps_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_macos_apps(self):
-        self._set_permissions("inventory.view_osxapp", "inventory.view_osxappinstance")
-        response = self.client.post(reverse('inventory_api:macos_apps_export'))
+        self.set_permissions("inventory.view_osxapp", "inventory.view_osxappinstance")
+        response = self.post(reverse('inventory_api:macos_apps_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -265,12 +264,12 @@ class InventoryAPITests(APITestCase):
     # Programs export
 
     def test_export_programs_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:programs_export'))
+        response = self.post(reverse('inventory_api:programs_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_programs(self):
-        self._set_permissions("inventory.view_program", "inventory.view_programinstance")
-        response = self.client.post(reverse('inventory_api:programs_export'))
+        self.set_permissions("inventory.view_program", "inventory.view_programinstance")
+        response = self.post(reverse('inventory_api:programs_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -280,12 +279,12 @@ class InventoryAPITests(APITestCase):
     # machine android apps export
 
     def test_export_machine_android_apps_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:machine_android_apps_export'))
+        response = self.post(reverse('inventory_api:machine_android_apps_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_machine_android_apps(self):
-        self._set_permissions("inventory.view_androidapp")
-        response = self.client.post(reverse('inventory_api:machine_android_apps_export'))
+        self.set_permissions("inventory.view_androidapp")
+        response = self.post(reverse('inventory_api:machine_android_apps_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -295,12 +294,12 @@ class InventoryAPITests(APITestCase):
     # machine Debian packages export
 
     def test_export_machine_deb_packages_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:machine_deb_packages_export'))
+        response = self.post(reverse('inventory_api:machine_deb_packages_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_machine_deb_packages(self):
-        self._set_permissions("inventory.view_debpackage")
-        response = self.client.post(reverse('inventory_api:machine_deb_packages_export'))
+        self.set_permissions("inventory.view_debpackage")
+        response = self.post(reverse('inventory_api:machine_deb_packages_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -310,12 +309,12 @@ class InventoryAPITests(APITestCase):
     # machine iOS apps export
 
     def test_export_machine_ios_apps_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:machine_ios_apps_export'))
+        response = self.post(reverse('inventory_api:machine_ios_apps_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_machine_ios_apps(self):
-        self._set_permissions("inventory.view_iosapp")
-        response = self.client.post(reverse('inventory_api:machine_ios_apps_export'))
+        self.set_permissions("inventory.view_iosapp")
+        response = self.post(reverse('inventory_api:machine_ios_apps_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -325,12 +324,12 @@ class InventoryAPITests(APITestCase):
     # machine macos apps export
 
     def test_export_machine_macos_apps_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:machine_macos_app_instances_export'))
+        response = self.post(reverse('inventory_api:machine_macos_app_instances_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_machine_macos_apps(self):
-        self._set_permissions("inventory.view_osxapp", "inventory.view_osxappinstance")
-        response = self.client.post(reverse('inventory_api:machine_macos_app_instances_export'))
+        self.set_permissions("inventory.view_osxapp", "inventory.view_osxappinstance")
+        response = self.post(reverse('inventory_api:machine_macos_app_instances_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -340,12 +339,12 @@ class InventoryAPITests(APITestCase):
     # machine program instances export
 
     def test_export_machine_program_instances_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:machine_program_instances_export'))
+        response = self.post(reverse('inventory_api:machine_program_instances_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_machine_program_instances(self):
-        self._set_permissions("inventory.view_program", "inventory.view_programinstance")
-        response = self.client.post(reverse('inventory_api:machine_program_instances_export'))
+        self.set_permissions("inventory.view_program", "inventory.view_programinstance")
+        response = self.post(reverse('inventory_api:machine_program_instances_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -355,12 +354,12 @@ class InventoryAPITests(APITestCase):
     # machine snapshots export
 
     def test_export_machine_snapshots_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:machine_snapshots_export'))
+        response = self.post(reverse('inventory_api:machine_snapshots_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_export_machine_snapshots(self):
-        self._set_permissions("inventory.view_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:machine_snapshots_export'))
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:machine_snapshots_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -370,18 +369,18 @@ class InventoryAPITests(APITestCase):
     # cleanup
 
     def test_cleanup_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:cleanup'))
+        response = self.post(reverse('inventory_api:cleanup'))
         self.assertEqual(response.status_code, 403)
 
     def test_cleanup_bad_request(self):
-        self._set_permissions("inventory.delete_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:cleanup'), {"days": 7000})
+        self.set_permissions("inventory.delete_machinesnapshot")
+        response = self.post(reverse('inventory_api:cleanup'), {"days": 7000})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"days": ["Ensure this value is less than or equal to 3660."]})
 
     def test_cleanup(self):
-        self._set_permissions("inventory.delete_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:cleanup'), {"days": 70})
+        self.set_permissions("inventory.delete_machinesnapshot")
+        response = self.post(reverse('inventory_api:cleanup'), {"days": 70})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -389,12 +388,12 @@ class InventoryAPITests(APITestCase):
     # full export
 
     def test_full_export_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:full_export'))
+        response = self.post(reverse('inventory_api:full_export'))
         self.assertEqual(response.status_code, 403)
 
     def test_full_export(self):
-        self._set_permissions("inventory.view_machinesnapshot")
-        response = self.client.post(reverse('inventory_api:full_export'))
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
@@ -403,16 +402,16 @@ class InventoryAPITests(APITestCase):
 
     def test_create_meta_business_unit_unauthorized(self):
         data = {'name': 'TestMBU0'}
-        response = self.client.post(reverse('inventory_api:meta_business_units'), data, format='json')
+        response = self.post(reverse('inventory_api:meta_business_units'), data)
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_meta_business_unit(self, post_event):
         name = get_random_string(12)
         data = {'name': name}
-        self._set_permissions("inventory.add_metabusinessunit")
+        self.set_permissions("inventory.add_metabusinessunit")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(reverse('inventory_api:meta_business_units'), data, format='json')
+            response = self.post(reverse('inventory_api:meta_business_units'), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(callbacks), 1)
         mbus = list(MetaBusinessUnit.objects.filter(name=name))
@@ -468,8 +467,8 @@ class InventoryAPITests(APITestCase):
     def test_create_api_enabled_meta_business_unit(self):
         url = reverse('inventory_api:meta_business_units')
         data = {'name': 'TestMBU1', 'api_enrollment_enabled': True}
-        self._set_permissions("inventory.add_metabusinessunit")
-        response = self.client.post(url, data, format='json')
+        self.set_permissions("inventory.add_metabusinessunit")
+        response = self.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(MetaBusinessUnit.objects.filter(name='TestMBU1').count(), 1)
         meta_business_unit = MetaBusinessUnit.objects.get(name='TestMBU1')
@@ -480,8 +479,8 @@ class InventoryAPITests(APITestCase):
         name = get_random_string(12)
         MetaBusinessUnit.objects.create(name=name)
         data = {'name': name}
-        self._set_permissions("inventory.add_metabusinessunit")
-        response = self.client.post(reverse('inventory_api:meta_business_units'), data, format='json')
+        self.set_permissions("inventory.add_metabusinessunit")
+        response = self.post(reverse('inventory_api:meta_business_units'), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {"name": ["meta business unit with this name already exists."]})
 
@@ -489,13 +488,13 @@ class InventoryAPITests(APITestCase):
 
     def test_get_meta_business_unit_unauthorized(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        response = self.client.get(reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,)))
+        response = self.get(reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_meta_business_unit(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self._set_permissions("inventory.view_metabusinessunit")
-        response = self.client.get(reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,)))
+        self.set_permissions("inventory.view_metabusinessunit")
+        response = self.get(reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data,
                          {'id': meta_business_unit.pk,
@@ -508,7 +507,7 @@ class InventoryAPITests(APITestCase):
 
     def test_update_meta_business_unit_unauthorized(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        response = self.client.put(reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,)))
+        response = self.put(reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -516,12 +515,12 @@ class InventoryAPITests(APITestCase):
         name = get_random_string(12)
         meta_business_unit = MetaBusinessUnit.objects.create(name=name)
         self.assertFalse(meta_business_unit.api_enrollment_enabled())
-        self._set_permissions("inventory.change_metabusinessunit")
+        self.set_permissions("inventory.change_metabusinessunit")
         url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
         updated_name = get_random_string(12)
         data = {'name': updated_name, 'api_enrollment_enabled': True}
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.put(url, data, format='json')
+            response = self.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(callbacks), 1)
         prev_updated_at = meta_business_unit.updated_at
@@ -584,10 +583,10 @@ class InventoryAPITests(APITestCase):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         meta_business_unit.create_enrollment_business_unit()
         self.assertTrue(meta_business_unit.api_enrollment_enabled())
-        self._set_permissions("inventory.change_metabusinessunit")
+        self.set_permissions("inventory.change_metabusinessunit")
         url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
         data = {"name": get_random_string(12), 'api_enrollment_enabled': False}
-        response = self.client.put(url, data, format='json')
+        response = self.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data,
                          {"api_enrollment_enabled": [
@@ -598,10 +597,10 @@ class InventoryAPITests(APITestCase):
         name = get_random_string(12)
         MetaBusinessUnit.objects.create(name=name)
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self._set_permissions("inventory.change_metabusinessunit")
+        self.set_permissions("inventory.change_metabusinessunit")
         url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
         data = {'name': name, 'api_enrollment_enabled': False}
-        response = self.client.put(url, data, format='json')
+        response = self.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {"name": ["meta business unit with this name already exists."]})
 
@@ -610,7 +609,7 @@ class InventoryAPITests(APITestCase):
     def test_delete_meta_business_unit_unauthorized(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
-        response = self.client.delete(url)
+        response = self.delete(url)
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -618,10 +617,10 @@ class InventoryAPITests(APITestCase):
         name = get_random_string(12)
         meta_business_unit = MetaBusinessUnit.objects.create(name=name)
         prev_pk = meta_business_unit.pk
-        self._set_permissions("inventory.delete_metabusinessunit")
+        self.set_permissions("inventory.delete_metabusinessunit")
         url = reverse('inventory_api:meta_business_unit', args=(meta_business_unit.pk,))
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.delete(url)
+            response = self.delete(url)
         self.assertEqual(response.status_code, 204)
         self.assertEqual(len(callbacks), 1)
         self.assertEqual(MetaBusinessUnit.objects.filter(pk=meta_business_unit.pk).count(), 0)
@@ -672,14 +671,14 @@ class InventoryAPITests(APITestCase):
     # list meta business unit
 
     def test_list_meta_business_unit_unauthorized(self):
-        response = self.client.get(reverse('inventory_api:meta_business_units'))
+        response = self.get(reverse('inventory_api:meta_business_units'))
         self.assertEqual(response.status_code, 403)
 
     def test_list_meta_business_unit(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         url = reverse('inventory_api:meta_business_units')
-        self._set_permissions("inventory.view_metabusinessunit")
-        response = self.client.get(url, {"name": meta_business_unit.name})
+        self.set_permissions("inventory.view_metabusinessunit")
+        response = self.get(url, {"name": meta_business_unit.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data,
                          [{"id": meta_business_unit.pk,
@@ -692,7 +691,7 @@ class InventoryAPITests(APITestCase):
 
     def test_create_tag_unauthorized(self):
         data = {'name': 'TestTag0'}
-        response = self.client.post(reverse('inventory_api:tags'), data, format='json')
+        response = self.post(reverse('inventory_api:tags'), data)
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -701,9 +700,9 @@ class InventoryAPITests(APITestCase):
         meta_business_unit = MetaBusinessUnit.objects.create(name=mbu_name)
         name = get_random_string(12)
         data = {'meta_business_unit': meta_business_unit.pk, 'name': name, 'color': 'ff0000'}
-        self._set_permissions("inventory.add_tag")
+        self.set_permissions("inventory.add_tag")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(reverse('inventory_api:tags'), data, format='json')
+            response = self.post(reverse('inventory_api:tags'), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(callbacks), 1)
         tag = Tag.objects.get(name=name)
@@ -767,14 +766,14 @@ class InventoryAPITests(APITestCase):
 
     def test_get_tag_unauthorized(self):
         tag = Tag.objects.create(name=get_random_string(12))
-        response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
+        response = self.get(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_tag(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         tag = Tag.objects.create(meta_business_unit=meta_business_unit, name=get_random_string(12))
-        self._set_permissions("inventory.view_tag")
-        response = self.client.get(reverse('inventory_api:tag', args=(tag.pk,)))
+        self.set_permissions("inventory.view_tag")
+        response = self.get(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.data,
@@ -790,7 +789,7 @@ class InventoryAPITests(APITestCase):
 
     def test_update_tag_unauthorized(self):
         tag = Tag.objects.create(name=get_random_string(12))
-        response = self.client.put(reverse('inventory_api:tag', args=(tag.pk,)))
+        response = self.put(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -798,12 +797,12 @@ class InventoryAPITests(APITestCase):
         name = get_random_string(12)
         tag = Tag.objects.create(name=name)
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        self._set_permissions("inventory.change_tag")
+        self.set_permissions("inventory.change_tag")
         url = reverse('inventory_api:tag', args=(tag.pk,))
         updated_name = get_random_string(12)
         data = {'name': updated_name, 'taxonomy': taxonomy.pk}
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.put(url, data, format='json')
+            response = self.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(callbacks), 1)
         tag.refresh_from_db()
@@ -862,10 +861,10 @@ class InventoryAPITests(APITestCase):
         name = get_random_string(12)
         Tag.objects.create(name=name)
         tag = Tag.objects.create(name=get_random_string(12))
-        self._set_permissions("inventory.change_tag")
+        self.set_permissions("inventory.change_tag")
         url = reverse('inventory_api:tag', args=(tag.pk,))
         data = {'name': name}
-        response = self.client.put(url, data, format='json')
+        response = self.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {"name": ["tag with this name already exists."]})
 
@@ -873,16 +872,16 @@ class InventoryAPITests(APITestCase):
 
     def test_delete_tag_unauthorized(self):
         tag = Tag.objects.create(name=get_random_string(12))
-        response = self.client.delete(reverse('inventory_api:tag', args=(tag.pk,)))
+        response = self.delete(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_tag(self, post_event):
         tag = Tag.objects.create(name=get_random_string(12))
         prev_pk = tag.pk
-        self._set_permissions("inventory.delete_tag")
+        self.set_permissions("inventory.delete_tag")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.delete(reverse('inventory_api:tag', args=(tag.pk,)))
+            response = self.delete(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(len(callbacks), 1)
         self.assertEqual(Tag.objects.filter(pk=tag.pk).count(), 0)
@@ -932,7 +931,7 @@ class InventoryAPITests(APITestCase):
     # list tag
 
     def test_list_tag_unauthorized(self):
-        response = self.client.get(reverse('inventory_api:tags'))
+        response = self.get(reverse('inventory_api:tags'))
         self.assertEqual(response.status_code, 403)
 
     def test_list_tag(self):
@@ -943,8 +942,8 @@ class InventoryAPITests(APITestCase):
             meta_business_unit=meta_business_unit,
             name=get_random_string(12)
         )
-        self._set_permissions("inventory.view_tag")
-        response = self.client.get(reverse('inventory_api:tags'), {"name": tag.name})
+        self.set_permissions("inventory.view_tag")
+        response = self.get(reverse('inventory_api:tags'), {"name": tag.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(
@@ -961,7 +960,7 @@ class InventoryAPITests(APITestCase):
 
     def test_create_taxonomy_unauthorized(self):
         data = {"name": "TestTax01"}
-        response = self.client.post(reverse('inventory_api:taxonomies'), data)
+        response = self.post(reverse('inventory_api:taxonomies'), data)
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -969,9 +968,9 @@ class InventoryAPITests(APITestCase):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         name = get_random_string(12)
         data = {'meta_business_unit': meta_business_unit.pk, 'name': name}
-        self._set_permissions("inventory.add_taxonomy")
+        self.set_permissions("inventory.add_taxonomy")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(reverse('inventory_api:taxonomies'), data, format='json')
+            response = self.post(reverse('inventory_api:taxonomies'), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(len(callbacks), 1)
         taxonomy = Taxonomy.objects.get(name=name)
@@ -1033,14 +1032,14 @@ class InventoryAPITests(APITestCase):
 
     def test_get_taxonomy_unauthorized(self):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        response = self.client.get(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+        response = self.get(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_taxonomy(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         taxonomy = Taxonomy.objects.create(meta_business_unit=meta_business_unit, name=get_random_string(12))
-        self._set_permissions("inventory.view_taxonomy")
-        response = self.client.get(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+        self.set_permissions("inventory.view_taxonomy")
+        response = self.get(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.data,
@@ -1055,7 +1054,7 @@ class InventoryAPITests(APITestCase):
 
     def test_update_taxonomy_unauthorized(self):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        response = self.client.put(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+        response = self.put(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -1063,12 +1062,12 @@ class InventoryAPITests(APITestCase):
         name = get_random_string(12)
         taxonomy = Taxonomy.objects.create(name=name)
         prev_updated_at = taxonomy.updated_at
-        self._set_permissions("inventory.change_taxonomy")
+        self.set_permissions("inventory.change_taxonomy")
         url = reverse('inventory_api:taxonomy', args=(taxonomy.pk,))
         updated_name = get_random_string(12)
         data = {'name': updated_name}
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.put(url, data, format='json')
+            response = self.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(callbacks), 1)
         taxonomy.refresh_from_db()
@@ -1126,10 +1125,10 @@ class InventoryAPITests(APITestCase):
         name = get_random_string(12)
         Taxonomy.objects.create(name=name)
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        self._set_permissions("inventory.change_taxonomy")
+        self.set_permissions("inventory.change_taxonomy")
         url = reverse('inventory_api:taxonomy', args=(taxonomy.pk,))
         data = {'name': name}
-        response = self.client.put(url, data, format='json')
+        response = self.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {"name": ["taxonomy with this name already exists."]})
 
@@ -1137,16 +1136,16 @@ class InventoryAPITests(APITestCase):
 
     def test_delete_taxonomy_unauthorized(self):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        response = self.client.delete(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+        response = self.delete(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_taxonomy(self, post_event):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
         prev_pk = taxonomy.pk
-        self._set_permissions("inventory.delete_taxonomy")
+        self.set_permissions("inventory.delete_taxonomy")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.delete(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
+            response = self.delete(reverse('inventory_api:taxonomy', args=(taxonomy.pk,)))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(len(callbacks), 1)
         self.assertEqual(Taxonomy.objects.filter(pk=taxonomy.pk).count(), 0)
@@ -1196,7 +1195,7 @@ class InventoryAPITests(APITestCase):
     # list taxonomy
 
     def test_list_taxonomy_unauthorized(self):
-        response = self.client.get(reverse('inventory_api:taxonomies'))
+        response = self.get(reverse('inventory_api:taxonomies'))
         self.assertEqual(response.status_code, 403)
 
     def test_list_taxonomy(self):
@@ -1205,8 +1204,8 @@ class InventoryAPITests(APITestCase):
             meta_business_unit=meta_business_unit,
             name=get_random_string(12)
         )
-        self._set_permissions("inventory.view_taxonomy")
-        response = self.client.get(reverse('inventory_api:taxonomies'), {"name": taxonomy.name})
+        self.set_permissions("inventory.view_taxonomy")
+        response = self.get(reverse('inventory_api:taxonomies'), {"name": taxonomy.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(

@@ -1,6 +1,7 @@
 import json
 import logging
 from urllib.parse import urlparse
+from cedarpy import format_policies
 import celpy
 from celpy import celtypes
 from django import forms
@@ -21,7 +22,7 @@ from zentral.conf import settings as zentral_settings
 from zentral.conf.config import ConfigList
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
 from zentral.utils.oidc import get_openid_configuration_from_issuer_uri
-from .models import APIToken, OIDCAPITokenIssuer, User, UserTOTP, UserWebAuthn
+from .models import APIToken, OIDCAPITokenIssuer, Policy, User, UserTOTP, UserWebAuthn
 from .password_reset import handler as password_reset_handler
 from .utils import all_permissions_queryset
 
@@ -46,6 +47,22 @@ class GroupForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["permissions"].queryset = all_permissions_queryset()
+
+
+class PolicyForm(forms.ModelForm):
+    class Meta:
+        model = Policy
+        exclude = ["type"]
+
+    def clean_source(self):
+        try:
+            return format_policies(self.cleaned_data.get("source"))
+        except Exception:
+            raise forms.ValidationError("Invalid policy.")
+
+    def save(self, *args, **kwargs):
+        self.instance.type = Policy.Type.CEDAR
+        return super().save(*args, **kwargs)
 
 
 class InviteUserForm(forms.ModelForm):
