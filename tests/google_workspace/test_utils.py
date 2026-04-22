@@ -28,11 +28,11 @@ class UtilsTestCase(TestCase):
     def _given_serial_number(self):
         return f"sn_{get_random_string(8)}"
 
-    def _force_machine(self, user_email, serial_number=None):
+    def _force_machine(self, user_email, serial_number=None, source_name='zentral'):
         if not serial_number:
             serial_number = self._given_serial_number()
         MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
-            "source": {'module': 'io.zentral.tests', 'name': 'zentral'},
+            "source": {'module': 'io.zentral.tests', 'name': source_name},
             "serial_number": serial_number,
             "principal_user": {
                 "source": {"type": "LOGGED_IN_USER", "properties": {"method": "System Configuration"}},
@@ -504,6 +504,33 @@ class UtilsTestCase(TestCase):
         self.assertFalse(MachineTag.objects.filter(serial_number=serial_number, tag_id=managed_tag.pk).exists())
         self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag_id=unmanaged_tag.pk).exists())
         self.assertEqual(result, {"added": 0, "removed": 1})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_sync_group_tag_mappings_keeps_tag_when_any_source_reports_member(self, build, post_event):
+        # Given: one serial number with two current snapshots from different
+        # inventory sources reporting different principal users.
+        member_email = self._given_user_email()
+        other_email = self._given_user_email()
+        build.return_value.members.return_value.list.return_value.execute.return_value = {
+            "members": [{'email': member_email, 'type': "USER"}]}
+
+        serial_number = self._force_machine(member_email, source_name='source-a')
+        self._force_machine(other_email, serial_number=serial_number, source_name='source-b')
+
+        connection = self._given_connection()
+        tag = self._given_tag()
+        self._given_group_tag_mapping(connection, tag)
+
+        # When
+        with self.captureOnCommitCallbacks(execute=True):
+            result = sync_group_tag_mappings(connection)
+
+        # Then: tag is added via source-a's member principal user, and the
+        # orphan cleanup does not remove it just because source-b reports a
+        # non-member principal user.
+        self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag_id=tag.pk).exists())
+        self.assertEqual(result, {"added": 1, "removed": 0})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch('zentral.contrib.google_workspace.api_client.build')

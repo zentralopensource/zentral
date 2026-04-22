@@ -78,46 +78,57 @@ def _sync_machine_tags(
             results r
             join inventory_tag t on (r.pk = t.id)
             left join inventory_taxonomy tx on (t.taxonomy_id = tx.id)"""
-    group_member_tags = list(group_member_tags)
-    results = []
-    with connection.cursor() as cursor:
-        if group_member_tags:
+    # Remove managed tags from machines none of whose current principal users
+    # are still members of a mapped group. The reconciliation above only emits
+    # tuples for current members, so a user who leaves every mapped group would
+    # otherwise keep their tags indefinitely.
+    #
+    # A serial number can have several current snapshots (one per inventory
+    # source), and they may report different principal users. The tag is kept
+    # if any current snapshot's principal user is a member; it is removed only
+    # when no such snapshot exists. Machines with no principal user on any
+    # current snapshot are left alone, matching the add path which can only
+    # tag a machine via a principal-user match.
+    orphan_query = """
+        with orphaned_tags as (
+            delete from inventory_machinetag im
+            where im.tag_id = ANY(%(managed_tag_pks)s::int[])
+              and exists (
+                select 1
+                from inventory_currentmachinesnapshot cms
+                join inventory_machinesnapshot ms on ms.id = cms.machine_snapshot_id
+                join inventory_principaluser pu on pu.id = ms.principal_user_id
+                where ms.serial_number = im.serial_number)
+              and not exists (
+                select 1
+                from inventory_currentmachinesnapshot cms
+                join inventory_machinesnapshot ms on ms.id = cms.machine_snapshot_id
+                join inventory_principaluser pu on pu.id = ms.principal_user_id
+                where ms.serial_number = im.serial_number
+                  and pu.unique_id = ANY(%(current_emails)s::text[]))
+            returning im.serial_number, im.tag_id, 'removed'::text as action
+        )
+        select
+            ot.serial_number, ot.action, ot.tag_id pk, t.name,
+            tx.id taxonomy_pk, tx.name taxonomy_name
+        from
+            orphaned_tags ot
+            join inventory_tag t on (ot.tag_id = t.id)
+            left join inventory_taxonomy tx on (t.taxonomy_id = tx.id)"""
+    with transaction.atomic():
+        with connection.cursor() as cursor:
             results = psycopg2.extras.execute_values(
                 cursor, query,
                 group_member_tags,
                 page_size=1000,
                 fetch=True
             )
-        if managed_tag_pks:
-            # Remove managed tags from machines whose principal user is not a
-            # current member of any mapped group. The reconciliation above only
-            # emits tuples for current members, so a user who leaves every
-            # mapped group would otherwise keep their tags indefinitely.
-            orphan_query = """
-                with orphaned_tags as (
-                    delete from inventory_machinetag im
-                    using inventory_machinesnapshot ms,
-                          inventory_currentmachinesnapshot cms,
-                          inventory_principaluser pu
-                    where im.tag_id = ANY(%(managed_tag_pks)s::int[])
-                      and ms.serial_number = im.serial_number
-                      and cms.machine_snapshot_id = ms.id
-                      and pu.id = ms.principal_user_id
-                      and not (pu.unique_id = ANY(%(current_emails)s::text[]))
-                    returning im.serial_number, im.tag_id, 'removed'::text as action
-                )
-                select
-                    ot.serial_number, ot.action, ot.tag_id pk, t.name,
-                    tx.id taxonomy_pk, tx.name taxonomy_name
-                from
-                    orphaned_tags ot
-                    join inventory_tag t on (ot.tag_id = t.id)
-                    left join inventory_taxonomy tx on (t.taxonomy_id = tx.id)"""
-            cursor.execute(orphan_query, {
-                "managed_tag_pks": list(managed_tag_pks),
-                "current_emails": list(current_emails),
-            })
-            results = list(results) + cursor.fetchall()
+            if managed_tag_pks:
+                cursor.execute(orphan_query, {
+                    "managed_tag_pks": list(managed_tag_pks),
+                    "current_emails": list(current_emails),
+                })
+                results = list(results) + cursor.fetchall()
 
     def send_machine_tag_added_events():
         send_machine_tag_events_with_event_request(results, event_request)
