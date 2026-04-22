@@ -1,5 +1,6 @@
 import uuid
 import logging
+from django.db import transaction
 from celery import shared_task
 from zentral.contrib.google_workspace.models import Connection
 from zentral.core.events.base import EventRequest
@@ -22,7 +23,8 @@ def sync_group_tag_mappings_task(
     event_request = None
     if serialized_event_request:
         event_request = EventRequest.deserialize(serialized_event_request)
-    count = sync(connection, event_request)
+    with transaction.atomic():
+        count = sync(connection, event_request)
     return {
         "connection": {"pk": str(connection.pk), "name": connection.name},
         "machine_tags": count}
