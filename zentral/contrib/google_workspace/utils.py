@@ -33,6 +33,8 @@ def _iter_group_members_tags(email_tags: dict[str, set[int]], tag_pks: set[int])
 
 def _sync_machine_tags(
         group_member_tags: Iterator[tuple[str, int, bool]],
+        managed_tag_pks: set[int],
+        current_emails: set[str],
         event_request: EventRequest
         ) -> dict[str, int]:
     query = """
@@ -76,13 +78,46 @@ def _sync_machine_tags(
             results r
             join inventory_tag t on (r.pk = t.id)
             left join inventory_taxonomy tx on (t.taxonomy_id = tx.id)"""
+    group_member_tags = list(group_member_tags)
+    results = []
     with connection.cursor() as cursor:
-        results = psycopg2.extras.execute_values(
-            cursor, query,
-            group_member_tags,
-            page_size=1000,
-            fetch=True
-        )
+        if group_member_tags:
+            results = psycopg2.extras.execute_values(
+                cursor, query,
+                group_member_tags,
+                page_size=1000,
+                fetch=True
+            )
+        if managed_tag_pks:
+            # Remove managed tags from machines whose principal user is not a
+            # current member of any mapped group. The reconciliation above only
+            # emits tuples for current members, so a user who leaves every
+            # mapped group would otherwise keep their tags indefinitely.
+            orphan_query = """
+                with orphaned_tags as (
+                    delete from inventory_machinetag im
+                    using inventory_machinesnapshot ms,
+                          inventory_currentmachinesnapshot cms,
+                          inventory_principaluser pu
+                    where im.tag_id = ANY(%(managed_tag_pks)s::int[])
+                      and ms.serial_number = im.serial_number
+                      and cms.machine_snapshot_id = ms.id
+                      and pu.id = ms.principal_user_id
+                      and not (pu.unique_id = ANY(%(current_emails)s::text[]))
+                    returning im.serial_number, im.tag_id, 'removed'::text as action
+                )
+                select
+                    ot.serial_number, ot.action, ot.tag_id pk, t.name,
+                    tx.id taxonomy_pk, tx.name taxonomy_name
+                from
+                    orphaned_tags ot
+                    join inventory_tag t on (ot.tag_id = t.id)
+                    left join inventory_taxonomy tx on (t.taxonomy_id = tx.id)"""
+            cursor.execute(orphan_query, {
+                "managed_tag_pks": list(managed_tag_pks),
+                "current_emails": list(current_emails),
+            })
+            results = list(results) + cursor.fetchall()
 
     def send_machine_tag_added_events():
         send_machine_tag_events_with_event_request(results, event_request)
@@ -108,4 +143,4 @@ def _sync_machine_tags(
 def sync_group_tag_mappings(api_connection: Connection, event_request: EventRequest = None) -> None:
     email_tags, tag_pks = _resolve_group_members_to_tags(api_connection)
     group_member_tags = _iter_group_members_tags(email_tags, tag_pks)
-    return _sync_machine_tags(group_member_tags, event_request)
+    return _sync_machine_tags(group_member_tags, tag_pks, set(email_tags.keys()), event_request)

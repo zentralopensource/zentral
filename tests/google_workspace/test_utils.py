@@ -441,6 +441,72 @@ class UtilsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_sync_group_tag_mappings_removes_tag_when_user_leaves_all_groups(self, build, post_event):
+        # Given
+        user_email = self._given_user_email()
+        build.return_value.members.return_value.list.return_value.execute.return_value = {
+            "members": [{'email': user_email, 'type': "USER"}]}
+
+        serial_number = self._force_machine(user_email)
+        connection = self._given_connection()
+        tag = self._given_tag()
+        self._given_group_tag_mapping(connection, tag)
+
+        # First sync: user is a member, tag is added
+        with self.captureOnCommitCallbacks(execute=True):
+            result = sync_group_tag_mappings(connection)
+        self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag_id=tag.pk).exists())
+        self.assertEqual(result, {"added": 1, "removed": 0})
+
+        # User leaves the group
+        build.return_value.members.return_value.list.return_value.execute.return_value = {"members": []}
+        post_event.reset_mock()
+
+        # When: second sync
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            result = sync_group_tag_mappings(connection)
+
+        # Then: tag is removed
+        self.assertFalse(MachineTag.objects.filter(serial_number=serial_number, tag_id=tag.pk).exists())
+        self.assertEqual(result, {"added": 0, "removed": 1})
+        self.assertEqual(len(callbacks), 1)
+
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, MachineTagEvent)
+        self.assertEqual(
+            event.payload,
+            self._expected_machine_tag_event_payload(tag, "removed")
+        )
+        self.assertEqual(event.metadata.serialize()["machine_serial_number"], serial_number)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch('zentral.contrib.google_workspace.api_client.build')
+    def test_sync_group_tag_mappings_orphan_removal_preserves_unmanaged_tags(self, build, post_event):
+        # Given
+        user_email = self._given_user_email()
+        build.return_value.members.return_value.list.return_value.execute.return_value = {"members": []}
+
+        serial_number = self._force_machine(user_email)
+        connection = self._given_connection()
+        managed_tag = self._given_tag()
+        unmanaged_tag = self._given_tag()
+        self._given_group_tag_mapping(connection, managed_tag)
+
+        # device has both tags applied outside the sync
+        self._given_machine_tag(serial_number, managed_tag)
+        self._given_machine_tag(serial_number, unmanaged_tag)
+
+        # When
+        with self.captureOnCommitCallbacks(execute=True):
+            result = sync_group_tag_mappings(connection)
+
+        # Then: managed tag removed, unmanaged tag preserved
+        self.assertFalse(MachineTag.objects.filter(serial_number=serial_number, tag_id=managed_tag.pk).exists())
+        self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag_id=unmanaged_tag.pk).exists())
+        self.assertEqual(result, {"added": 0, "removed": 1})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch('zentral.contrib.google_workspace.api_client.build')
     def test_sync_group_tag_mappings_exclude_not_managed_users(self, build, post_event):
         # Given
         user_email = self._given_user_email()
