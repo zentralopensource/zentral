@@ -1,16 +1,15 @@
-from functools import reduce
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from .utils import force_scep_issuer
 
 
-class MDMUserEnrollmentSetupViewsTestCase(TestCase):
+class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
@@ -19,25 +18,16 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # can be deleted
 
@@ -85,17 +75,17 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_view_scep_issuer_redirect(self):
         scep_issuer = force_scep_issuer()
-        self._login_redirect(reverse("mdm:scep_issuer", args=(scep_issuer.pk,)))
+        self.login_redirect("scep_issuer", scep_issuer.pk)
 
     def test_view_scep_issuer_permission_denied(self):
         scep_issuer = force_scep_issuer()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:scep_issuer", args=(scep_issuer.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_view_scep_issuer(self):
         scep_issuer = force_scep_issuer()
-        self._login("mdm.view_scepissuer", "mdm.delete_scepissuer", "mdm.change_scepissuer")
+        self.login("mdm.view_scepissuer", "mdm.delete_scepissuer", "mdm.change_scepissuer")
         response = self.client.get(reverse("mdm:scep_issuer", args=(scep_issuer.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/scepissuer_detail.html")
@@ -105,7 +95,7 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
 
     def test_view_provisioned_scep_issuer(self):
         scep_issuer = force_scep_issuer(provisioning_uid=get_random_string(12))
-        self._login("mdm.view_scepissuer", "mdm.delete_scepissuer", "mdm.change_scepissuer")
+        self.login("mdm.view_scepissuer", "mdm.delete_scepissuer", "mdm.change_scepissuer")
         response = self.client.get(reverse("mdm:scep_issuer", args=(scep_issuer.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/scepissuer_detail.html")
@@ -116,17 +106,17 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase):
     # list SCEP issuers
 
     def test_list_scep_issuers_redirect(self):
-        self._login_redirect(reverse("mdm:scep_issuers"))
+        self.login_redirect("scep_issuers")
 
     def test_list_scep_issuers_permission_denied(self):
         force_scep_issuer()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:scep_issuers"))
         self.assertEqual(response.status_code, 403)
 
     def test_list_scep_issuers(self):
         scep_issuer = force_scep_issuer()
-        self._login("mdm.view_scepissuer")
+        self.login("mdm.view_scepissuer")
         response = self.client.get(reverse("mdm:scep_issuers"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/scepissuer_list.html")

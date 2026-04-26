@@ -1,17 +1,16 @@
-from functools import reduce
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import Artifact, DeviceArtifact, TargetArtifact
 from .utils import force_artifact, force_blueprint_artifact, force_dep_enrollment_session
 
 
-class ArtifactVersionManagementViewsTestCase(TestCase):
+class ArtifactVersionManagementViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
@@ -19,41 +18,32 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
         cls.user.groups.set([cls.group])
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # artifact version
 
     def test_artifact_version_redirect(self):
         artifact, (profile_av,) = force_artifact()
-        self._login_redirect(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
+        self.login_redirect("artifact_version", artifact.pk, profile_av.pk)
 
     def test_artifact_version_permission_denied(self):
         artifact, (profile_av,) = force_artifact()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 403)
 
     def test_profile_artifact_version_get_no_perms_no_links(self):
         artifact, (profile_av,) = force_artifact()
-        self._login("mdm.view_artifactversion")
+        self.login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
@@ -65,7 +55,7 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
 
     def test_enterprise_app_artifact_version_get_no_perms_no_links(self):
         artifact, (app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self._login("mdm.view_artifactversion")
+        self.login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, app_av.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
@@ -77,7 +67,7 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
     def test_artifact_version_get_delete_perm_link(self):
         artifact, (profile_av,) = force_artifact()
         self.assertTrue(profile_av.can_be_deleted())
-        self._login("mdm.view_artifactversion", "mdm.delete_artifactversion")
+        self.login("mdm.view_artifactversion", "mdm.delete_artifactversion")
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
@@ -87,7 +77,7 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
 
     def test_artifact_version_get_change_perm_link(self):
         artifact, (profile_av,) = force_artifact()
-        self._login("mdm.view_artifactversion", "mdm.change_artifactversion")
+        self.login("mdm.view_artifactversion", "mdm.change_artifactversion")
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
@@ -104,7 +94,7 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
             status=TargetArtifact.Status.INSTALLED
         )
         self.assertFalse(profile_av.can_be_deleted())
-        self._login("mdm.view_artifactversion", "mdm.delete_artifactversion")
+        self.login("mdm.view_artifactversion", "mdm.delete_artifactversion")
         response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifactversion_detail.html")
@@ -114,17 +104,17 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
 
     def test_update_artifact_version_redirect(self):
         artifact, (profile_av,) = force_artifact()
-        self._login_redirect(reverse("mdm:update_artifact_version", args=(artifact.pk, profile_av.pk)))
+        self.login_redirect("update_artifact_version", artifact.pk, profile_av.pk)
 
     def test_update_artifact_version_permission_denied(self):
         artifact, (profile_av,) = force_artifact()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:update_artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_artifact_version_get(self):
         artifact, (profile_av,) = force_artifact()
-        self._login("mdm.change_artifactversion")
+        self.login("mdm.change_artifactversion")
         response = self.client.get(reverse("mdm:update_artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifactversion_form.html")
@@ -147,7 +137,7 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
         self.assertEqual(serialized_artifact_version["tag_shards"], {})
         excluded_tag = Tag.objects.create(name=get_random_string(12))
         shard_tag = Tag.objects.create(name=get_random_string(12))
-        self._login("mdm.change_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.change_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:update_artifact_version", args=(artifact.pk, profile_av.pk)),
                                     {"macos": "on",
                                      "macos_min_version": "13.3.1",
@@ -178,11 +168,11 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
 
     def test_delete_artifact_version_redirect(self):
         artifact, (profile_av,) = force_artifact()
-        self._login_redirect(reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av.pk)))
+        self.login_redirect("delete_artifact_version", artifact.pk, profile_av.pk)
 
     def test_delete_artifact_version_permission_denied(self):
         artifact, (profile_av,) = force_artifact()
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 403)
 
@@ -195,13 +185,13 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
             status=TargetArtifact.Status.INSTALLED
         )
         self.assertFalse(profile_av.can_be_deleted())
-        self._login("mdm.delete_artifactversion", "mdm.view_artifact")
+        self.login("mdm.delete_artifactversion", "mdm.view_artifact")
         response = self.client.get(reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 404)
 
     def test_delete_artifact_version_get(self):
         artifact, (profile_av,) = force_artifact()
-        self._login("mdm.delete_artifactversion")
+        self.login("mdm.delete_artifactversion")
         response = self.client.get(reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f"Delete artifact version v{profile_av.version}")
@@ -210,7 +200,7 @@ class ArtifactVersionManagementViewsTestCase(TestCase):
         blueprint_artifact, artifact, (profile_av1, profile_av2) = force_blueprint_artifact(version_count=2)
         blueprint = blueprint_artifact.blueprint
         self.assertEqual(len(blueprint.serialized_artifacts[str(artifact.pk)]["versions"]), 2)
-        self._login("mdm.delete_artifactversion", "mdm.view_artifact")
+        self.login("mdm.delete_artifactversion", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:delete_artifact_version", args=(artifact.pk, profile_av1.pk)),
                                     follow=True)
         self.assertEqual(response.status_code, 200)
