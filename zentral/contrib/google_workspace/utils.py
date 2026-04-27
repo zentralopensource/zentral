@@ -1,5 +1,4 @@
 import logging
-import psycopg2.extras
 from collections import defaultdict
 from collections.abc import Iterator
 from django.db import connection, transaction
@@ -25,7 +24,7 @@ def _resolve_group_members_to_tags(api_connection: Connection) -> tuple[dict[str
     return email_tags, tag_pks
 
 
-def _iter_group_members_tags(email_tags: dict[str, set[int]], tag_pks: set[int]) -> Iterator[tuple[str, int, bool]]:
+def _iter_group_members_tags(email_tags: dict[str, set[int]], tag_pks: set[int]) -> Iterator[tuple[str | None, int]]:
     seen_tag_pks = set()
     for email, expected_tag_pks in email_tags.items():
         seen_tag_pks.update(expected_tag_pks)
@@ -38,12 +37,22 @@ def _iter_group_members_tags(email_tags: dict[str, set[int]], tag_pks: set[int])
 
 
 def _sync_machine_tags(
-        group_member_tags: Iterator[tuple[str, int, bool]],
+        group_member_tags: Iterator[tuple[str | None, int]],
         event_request: EventRequest
 ) -> dict[str, int]:
+    # The deleted_tags CTE removes any managed-tag row that is not in the
+    # machine_managed_tags set. That set must be derived from the *complete*
+    # member list, so the query has to run as a single statement: chunking the
+    # input (e.g. via psycopg2.extras.execute_values page_size) would make each
+    # chunk delete the tags belonging to the other chunks.
+    emails: list[str | None] = []
+    tag_ids: list[int] = []
+    for email, tag_id in group_member_tags:
+        emails.append(email)
+        tag_ids.append(tag_id)
     query = """
         with given_values as (
-             select email, tag_id from (values %s) as v(email, tag_id)),
+             select * from unnest(%(emails)s::text[], %(tag_ids)s::int[]) as v(email, tag_id)),
         machine_managed_tags as (
             select ms.serial_number, v.tag_id from
                 inventory_machinesnapshot ms
@@ -85,12 +94,8 @@ def _sync_machine_tags(
             left join inventory_taxonomy tx on (t.taxonomy_id = tx.id)"""
 
     with connection.cursor() as cursor:
-        results = psycopg2.extras.execute_values(
-            cursor, query,
-            group_member_tags,
-            page_size=1000,
-            fetch=True
-        )
+        cursor.execute(query, {"emails": emails, "tag_ids": tag_ids})
+        results = cursor.fetchall()
 
     def send_machine_tag_added_events():
         send_machine_tag_events_with_event_request(results, event_request)
