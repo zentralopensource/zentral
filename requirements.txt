@@ -4,6 +4,7 @@ asn1crypto                      # MDM, mTLS, SCEP
 azure-storage-blob
 backports.zstd ; python_version<'3.14'
 boto3                           # conf, monolith, events (kinesis, sns/sqs)
+cedarpy
 celery<6
 clickhouse-connect
 django-celery-results==2.6.0
@@ -39,6 +40,7 @@ requests_oauthlib               # MDM DEP
 snowflake-connector-python
 sqlparse                        # SQL syntax highlighting
 tqdm
+typing_extensions
 XlsxWriter
 PyJWT<3                         # Auth / OpenID Connect
 python-ldap                     # Auth / LDAP
