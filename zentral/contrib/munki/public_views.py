@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import datetime, timedelta
 
+from dateutil import parser
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
 from django.http import JsonResponse
@@ -25,10 +26,33 @@ from .compliance_checks import (
     update_machine_munki_script_check_statuses,
 )
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
-from .models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
+from .models import EnrolledMachine, Enrollment, ManagedInstall, MunkiState, ScriptCheck
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
 logger = logging.getLogger('zentral.contrib.munki.public_views')
+
+
+class EnrollmentView(View):
+    def get_enrollment_secret(self, request):
+        authorization_header = request.META.get("HTTP_AUTHORIZATION")
+        if not authorization_header:
+            raise APIAuthError("Missing or empty Authorization header")
+        if "ZtlEnrollmentSecret" not in authorization_header:
+            raise APIAuthError("Wrong authorization token")
+        return authorization_header.replace("ZtlEnrollmentSecret_", "").strip()
+
+    def post(self, request, *args, **kwargs):
+        user_agent, ip = user_agent_and_ip_address_from_request(request)
+        try:
+            enrollment_secret = self.get_enrollment_secret(request)
+            enrollment = Enrollment.objects.get(secret__secret=enrollment_secret)
+        except Enrollment.DoesNotExist:
+            raise SuspiciousOperation
+        else:
+            # TODO: post event
+            # post_munki_enrollment_event(serial_number, user_agent, ip,
+            #                            {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
+            return JsonResponse({"id": enrollment.id, "version": enrollment.version})
 
 
 class EnrollView(View):
