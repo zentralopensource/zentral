@@ -1,22 +1,31 @@
-from datetime import datetime, timedelta
 import gzip
 import json
-from unittest.mock import patch
 import uuid
 import zlib
-from django.urls import reverse, NoReverseMatch
+from datetime import datetime, timedelta
+from unittest.mock import patch
+
+from django.core.exceptions import SuspiciousOperation
 from django.test import TestCase
+from django.urls import NoReverseMatch, reverse
 from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
+
 from zentral.conf import settings
-from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.contrib.munki.events import (MunkiInstallEvent, MunkiInstallFailedEvent,
-                                          MunkiRequestEvent, MunkiScriptCheckStatusUpdated)
+from zentral.contrib.munki.events import (
+    MunkiInstallEvent,
+    MunkiInstallFailedEvent,
+    MunkiRequestEvent,
+    MunkiScriptCheckStatusUpdated,
+)
 from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
 from zentral.contrib.munki.models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
 from zentral.core.compliance_checks.models import MachineStatus
 from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
+from zentral.utils.api_views import APIAuthError
+
 from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
 
@@ -40,6 +49,36 @@ class MunkiAPIViewsTestCase(TestCase):
                                 json.dumps(data),
                                 content_type="application/json",
                                 **extra)
+
+    # enrollment
+
+    def test_enrollment_missing_auth_header_err(self):
+        with self.assertRaises(APIAuthError):
+            response = self._post_as_json(reverse("munki_public:enrollment"), {})
+            self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_wrong_auth_token_err(self):
+        with self.assertRaises(APIAuthError):
+            response = self._post_as_json(reverse("munki_public:enrollment"), {},
+                                          HTTP_AUTHORIZATION=get_random_string(23))
+            self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_does_not_exist_err(self):
+        # with self.assertRaises(SuspiciousOperation):
+        response = self._post_as_json(reverse("munki_public:enrollment"), {},
+                                    HTTP_AUTHORIZATION="ZtlEnrollmentSecret_{}".format(get_random_string(34)))
+        self.assertEqual(response.status_code, 400)
+
+    def test_enrollment_ok(self):
+        response = self._post_as_json(reverse("munki_public:enrollment"), {},
+                                      HTTP_AUTHORIZATION="ZtlEnrollmentSecret_{}".format(self.enrollment.secret.secret))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "application/json")
+        json_response = response.json()
+        self.assertCountEqual(["id", "version"], json_response.keys())
+        self.assertEqual(json_response["id"], self.enrollment.id)
+        self.assertEqual(json_response["version"], self.enrollment.version)
+        # TODO: test events
 
     # enroll
 
