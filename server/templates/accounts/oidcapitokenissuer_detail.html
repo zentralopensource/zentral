@@ -55,6 +55,10 @@
             <th>CEL condition</th>
             <td>{% if object.cel_condition %}<code>{{ object.cel_condition }}</code>{% else %}-{% endif %}</td>
           </tr>
+          <tr>
+            <th>Max validity</th>
+            <td>{% if object.max_validity %}{{ object.max_validity }}s{% else %}-{% endif %}</td>
+          </tr>
       </tbody>
       </table>
     </div>
