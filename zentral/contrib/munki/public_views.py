@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
 import json
 import logging
+from datetime import datetime, timedelta
+
 from dateutil import parser
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
@@ -8,8 +9,10 @@ from django.http import JsonResponse
 from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
 from django.views.generic import View
+from rest_framework.generics import RetrieveAPIView
+
+from zentral.contrib.inventory.events import post_enrollment_info_request_event, post_machine_snapshot_raw_event
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.events import post_machine_snapshot_raw_event
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.utils import add_machine_tags, verify_enrollment_secret
 from zentral.core.events.base import post_machine_conflict_event
@@ -17,15 +20,45 @@ from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from zentral.utils.os_version import make_comparable_os_version
-from .compliance_checks import (prune_out_of_scope_machine_statuses,
-                                serialize_script_check_for_job,
-                                update_machine_munki_script_check_statuses)
-from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
-from .models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
+
+from .authentication import MunkiEnrollmentSecretAuthentication
+from .compliance_checks import (
+    prune_out_of_scope_machine_statuses,
+    serialize_script_check_for_job,
+    update_machine_munki_script_check_statuses,
+)
+from .events import (
+    post_munki_enrollment_event,
+    post_munki_events,
+    post_munki_request_event,
+)
+from .models import EnrolledMachine, Enrollment, ManagedInstall, MunkiState, ScriptCheck
+from .serializers import EnrollmentInfoSerializer
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
-
 logger = logging.getLogger('zentral.contrib.munki.public_views')
+
+
+class EnrollmentView(RetrieveAPIView):
+    """Return information about an enrollment, identified by its secret in the Authorization header."""
+    authentication_classes = [MunkiEnrollmentSecretAuthentication]
+    permission_classes = []  # auth class gates access; no Django user is attached
+    serializer_class = EnrollmentInfoSerializer
+    queryset = Enrollment.objects.all()  # hint for drf-spectacular; runtime uses get_object()
+
+    def get_object(self):
+        # the auth class resolves the Authorization header into the Enrollment instance
+        return self.request.auth
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        user_agent, ip = user_agent_and_ip_address_from_request(request)
+        post_enrollment_info_request_event(
+            MunkiEnrollmentSecretAuthentication.enrollment_token,
+            user_agent, ip,
+            {"status": "ok", "enrollment": {"pk": request.auth.pk}},
+        )
+        return response
 
 
 class EnrollView(View):
