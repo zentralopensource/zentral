@@ -1,6 +1,8 @@
 import logging
 import uuid
+
 from dateutil import parser
+
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 
 logger = logging.getLogger('zentral.contrib.munki.events')
@@ -15,6 +17,14 @@ class MunkiEnrollmentEvent(BaseEvent):
 
 
 register_event_type(MunkiEnrollmentEvent)
+
+
+class MunkiEnrollmentInfoRequestEvent(BaseEvent):
+    event_type = "munki_enrollment_info_request"
+    tags = ["munki"]
+
+
+register_event_type(MunkiEnrollmentInfoRequestEvent)
 
 
 class MunkiRequestEvent(BaseEvent):
@@ -188,3 +198,8 @@ def post_munki_events(msn, user_agent, ip, data):
 
 def post_munki_enrollment_event(msn, user_agent, ip, data):
     MunkiEnrollmentEvent.post_machine_request_payloads(msn, user_agent, ip, [data])
+
+
+def post_munki_enrollment_info_request_event(user_agent, ip, data):
+    # TODO: the caller is not enrolled yet — no machine serial number, do we need it for better audibility?
+    MunkiEnrollmentInfoRequestEvent.post_machine_request_payloads(None, user_agent, ip, [data])

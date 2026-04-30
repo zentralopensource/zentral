@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from dateutil import parser
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
-from django.http import JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse
 from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
 from django.views.generic import View
@@ -25,7 +25,12 @@ from .compliance_checks import (
     serialize_script_check_for_job,
     update_machine_munki_script_check_statuses,
 )
-from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
+from .events import (
+    post_munki_enrollment_event,
+    post_munki_enrollment_info_request_event,
+    post_munki_events,
+    post_munki_request_event,
+)
 from .models import EnrolledMachine, Enrollment, ManagedInstall, MunkiState, ScriptCheck
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
@@ -33,26 +38,52 @@ logger = logging.getLogger('zentral.contrib.munki.public_views')
 
 
 class EnrollmentView(View):
-    def get_enrollment_secret(self, request):
-        authorization_header = request.META.get("HTTP_AUTHORIZATION")
-        if not authorization_header:
-            raise APIAuthError("Missing or empty Authorization header")
-        if "ZtlEnrollmentSecret" not in authorization_header:
-            raise APIAuthError("Wrong authorization token")
-        return authorization_header.replace("ZtlEnrollmentSecret_", "").strip()
+    """Return information about an enrollment, identified by its secret in the Authorization header. """
+    authorization_scheme = "ZtlEnrollmentSecret"
 
-    def post(self, request, *args, **kwargs):
+    def _extract_secret(self, request):
+        authorization_header = request.META.get("HTTP_AUTHORIZATION") or ""
+        prefix = f"{self.authorization_scheme} "
+        if not authorization_header.startswith(prefix):
+            raise APIAuthError("Missing or invalid Authorization header")
+        secret = authorization_header[len(prefix):].strip()
+        if not secret:
+            raise APIAuthError("Empty enrollment secret")
+        return secret
+
+    def _deny(self, request, user_agent, ip, reason, enrollment_pk=None):
+        logger.warning("Enrollment info request denied: %s", reason, extra={"request": request})
+        payload = {"status": "denied", "reason": reason}
+        if enrollment_pk is not None:
+            payload["enrollment"] = {"pk": enrollment_pk}
+        post_munki_enrollment_info_request_event(user_agent, ip, payload)
+        return HttpResponseForbidden()
+
+    def get(self, request, *args, **kwargs):
         user_agent, ip = user_agent_and_ip_address_from_request(request)
         try:
-            enrollment_secret = self.get_enrollment_secret(request)
-            enrollment = Enrollment.objects.get(secret__secret=enrollment_secret)
+            secret = self._extract_secret(request)
+        except APIAuthError as e:
+            return self._deny(request, user_agent, ip, str(e))
+
+        try:
+            enrollment = (Enrollment.objects
+                                    .select_related("secret__meta_business_unit", "configuration")
+                                    .get(secret__secret=secret))
         except Enrollment.DoesNotExist:
-            raise SuspiciousOperation
-        else:
-            # TODO: post event
-            # post_munki_enrollment_event(serial_number, user_agent, ip,
-            #                            {'action': "enrollment" if enrolled_machine_created else "re-enrollment"})
-            return JsonResponse({"id": enrollment.id, "version": enrollment.version})
+            return self._deny(request, user_agent, ip, "unknown secret")
+
+        is_valid, err_msg = enrollment.secret.is_valid()
+        if not is_valid:
+            return self._deny(request, user_agent, ip, err_msg, enrollment_pk=enrollment.pk)
+
+        post_munki_enrollment_info_request_event(user_agent, ip, {"status": "ok",
+                                                                  "enrollment": {"pk": enrollment.pk}})
+
+        return JsonResponse({
+            "pk": enrollment.pk,
+            "version": enrollment.version,
+        })
 
 
 class EnrollView(View):
