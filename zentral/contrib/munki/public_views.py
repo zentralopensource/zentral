@@ -5,12 +5,13 @@ from datetime import datetime, timedelta
 from dateutil import parser
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import JsonResponse
 from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
 from django.views.generic import View
+from rest_framework.generics import RetrieveAPIView
 
-from zentral.contrib.inventory.events import post_machine_snapshot_raw_event
+from zentral.contrib.inventory.events import post_enrollment_info_request_event, post_machine_snapshot_raw_event
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.utils import add_machine_tags, verify_enrollment_secret
@@ -20,6 +21,7 @@ from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from zentral.utils.os_version import make_comparable_os_version
 
+from .authentication import MunkiEnrollmentSecretAuthentication
 from .compliance_checks import (
     prune_out_of_scope_machine_statuses,
     serialize_script_check_for_job,
@@ -27,63 +29,36 @@ from .compliance_checks import (
 )
 from .events import (
     post_munki_enrollment_event,
-    post_munki_enrollment_info_request_event,
     post_munki_events,
     post_munki_request_event,
 )
 from .models import EnrolledMachine, Enrollment, ManagedInstall, MunkiState, ScriptCheck
+from .serializers import EnrollmentInfoSerializer
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
 
 logger = logging.getLogger('zentral.contrib.munki.public_views')
 
 
-class EnrollmentView(View):
-    """Return information about an enrollment, identified by its secret in the Authorization header. """
-    authorization_scheme = "ZtlEnrollmentSecret"
+class EnrollmentView(RetrieveAPIView):
+    """Return information about an enrollment, identified by its secret in the Authorization header."""
+    authentication_classes = [MunkiEnrollmentSecretAuthentication]
+    permission_classes = []  # auth class gates access; no Django user is attached
+    serializer_class = EnrollmentInfoSerializer
+    queryset = Enrollment.objects.all()  # hint for drf-spectacular; runtime uses get_object()
 
-    def _extract_secret(self, request):
-        authorization_header = request.META.get("HTTP_AUTHORIZATION") or ""
-        prefix = f"{self.authorization_scheme} "
-        if not authorization_header.startswith(prefix):
-            raise APIAuthError("Missing or invalid Authorization header")
-        secret = authorization_header[len(prefix):].strip()
-        if not secret:
-            raise APIAuthError("Empty enrollment secret")
-        return secret
+    def get_object(self):
+        # the auth class resolves the Authorization header into the Enrollment instance
+        return self.request.auth
 
-    def _deny(self, request, user_agent, ip, reason, enrollment_pk=None):
-        logger.warning("Enrollment info request denied: %s", reason, extra={"request": request})
-        payload = {"status": "denied", "reason": reason}
-        if enrollment_pk is not None:
-            payload["enrollment"] = {"pk": enrollment_pk}
-        post_munki_enrollment_info_request_event(user_agent, ip, payload)
-        return HttpResponseForbidden()
-
-    def get(self, request, *args, **kwargs):
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
         user_agent, ip = user_agent_and_ip_address_from_request(request)
-        try:
-            secret = self._extract_secret(request)
-        except APIAuthError as e:
-            return self._deny(request, user_agent, ip, str(e))
-
-        try:
-            enrollment = (Enrollment.objects
-                                    .select_related("secret__meta_business_unit", "configuration")
-                                    .get(secret__secret=secret))
-        except Enrollment.DoesNotExist:
-            return self._deny(request, user_agent, ip, "unknown secret")
-
-        is_valid, err_msg = enrollment.secret.is_valid()
-        if not is_valid:
-            return self._deny(request, user_agent, ip, err_msg, enrollment_pk=enrollment.pk)
-
-        post_munki_enrollment_info_request_event(user_agent, ip, {"status": "ok",
-                                                                  "enrollment": {"pk": enrollment.pk}})
-
-        return JsonResponse({
-            "pk": enrollment.pk,
-            "version": enrollment.version,
-        })
+        post_enrollment_info_request_event(
+            MunkiEnrollmentSecretAuthentication.enrollment_token,
+            user_agent, ip,
+            {"status": "ok", "enrollment": {"pk": request.auth.pk}},
+        )
+        return response
 
 
 class EnrollView(View):

@@ -86,6 +86,22 @@ class EnrollmentSecretVerificationEvent(BaseEvent):
 register_event_type(EnrollmentSecretVerificationEvent)
 
 
+class EnrollmentInfoRequestEvent(BaseEvent):
+    event_type = 'enrollment_info_request'
+    tags = ['inventory']
+
+
+register_event_type(EnrollmentInfoRequestEvent)
+
+
+def post_enrollment_info_request_event(model, user_agent, ip, payload):
+    # `model` mirrors the EnrollmentSecret related_name (e.g. "munki_enrollment");
+    # written to payload["type"] for symmetry with EnrollmentSecretVerificationEvent.
+    # The caller is not enrolled yet, so the event has no machine_serial_number.
+    enriched = {"type": model, **payload}
+    EnrollmentInfoRequestEvent.post_machine_request_payloads(None, user_agent, ip, [enriched])
+
+
 def post_enrollment_secret_verification_failure(model,
                                                 user_agent, public_ip_address, serial_number,
                                                 err_msg, enrollment_secret):

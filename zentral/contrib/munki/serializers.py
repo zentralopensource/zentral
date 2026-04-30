@@ -1,11 +1,13 @@
-from django.urls import reverse
 from django.db.models import F
+from django.urls import reverse
 from rest_framework import serializers
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.utils.os_version import make_comparable_os_version
+
 from .compliance_checks import MunkiScriptCheck, validate_expected_result
 from .models import Configuration, Enrollment, ScriptCheck
 
@@ -19,6 +21,14 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         instance = super().update(instance, validated_data)
         instance.refresh_from_db()
         return instance
+
+
+class EnrollmentInfoSerializer(serializers.ModelSerializer):
+    """Slim public-facing representation of an Enrollment, used by the agent-facing info endpoint."""
+    class Meta:
+        model = Enrollment
+        fields = ["pk", "version"]
+        read_only_fields = ["pk", "version"]
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
