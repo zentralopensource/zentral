@@ -180,6 +180,32 @@ class MunkiAPIViewsTestCase(TestCase):
             set(self.enrollment.secret.tags.all())
         )
 
+    @patch("zentral.contrib.munki.public_views.post_munki_enrollment_event")
+    def test_enroll_first_time_posts_enrollment_event(self, post_event):
+        serial_number = get_random_string(32)
+        response = self._post_as_json(reverse("munki_public:enroll"),
+                                      {"secret": self.enrollment.secret.secret,
+                                       "uuid": str(uuid.uuid4()),
+                                       "serial_number": serial_number})
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        msn, _, _, payload = post_event.call_args.args
+        self.assertEqual(msn, serial_number)
+        self.assertEqual(payload, {"action": "enrollment"})
+
+    @patch("zentral.contrib.munki.public_views.post_munki_enrollment_event")
+    def test_enroll_existing_machine_posts_reenrollment_event(self, post_event):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self._post_as_json(reverse("munki_public:enroll"),
+                                      {"secret": self.enrollment.secret.secret,
+                                       "uuid": str(uuid.uuid4()),
+                                       "serial_number": enrolled_machine.serial_number})
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        msn, _, _, payload = post_event.call_args.args
+        self.assertEqual(msn, enrolled_machine.serial_number)
+        self.assertEqual(payload, {"action": "re-enrollment"})
+
     # job details
 
     def test_job_details_missing_auth_header_err(self):
@@ -209,6 +235,20 @@ class MunkiAPIViewsTestCase(TestCase):
                                       {"machine_serial_number": data_sn},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.munki.public_views.post_machine_conflict_event")
+    def test_job_details_machine_conflict_posts_event(self, post_event):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        data_sn = get_random_string(9)
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": data_sn},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 403)
+        post_event.assert_called_once()
+        _, source, reported_sn, enrolled_sn, _ = post_event.call_args.args
+        self.assertEqual(source, "zentral.contrib.munki")
+        self.assertEqual(reported_sn, data_sn)
+        self.assertEqual(enrolled_sn, enrolled_machine.serial_number)
 
     def test_job_details_not_json(self):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
@@ -258,6 +298,20 @@ class MunkiAPIViewsTestCase(TestCase):
             "tags": [],
         }
         self.assertEqual(expected_response, response.json())
+
+    @patch("zentral.contrib.munki.public_views.post_munki_request_event")
+    def test_job_details_posts_request_event(self, post_event):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        msn, _, _ = post_event.call_args.args
+        self.assertEqual(msn, enrolled_machine.serial_number)
+        self.assertEqual(post_event.call_args.kwargs,
+                         {"request_type": "job_details",
+                          "enrollment": {"pk": self.enrollment.pk}})
 
     def test_job_details_deflate(self):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
