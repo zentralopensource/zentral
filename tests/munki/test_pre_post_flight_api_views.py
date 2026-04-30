@@ -50,33 +50,35 @@ class MunkiAPIViewsTestCase(TestCase):
                                 content_type="application/json",
                                 **extra)
 
+    def _get_as_json(self, url, **extra):
+        return self.client.get(url, content_type="application/json", **extra)
+
     # enrollment
 
     def test_enrollment_missing_auth_header_err(self):
-        with self.assertRaises(APIAuthError):
-            response = self._post_as_json(reverse("munki_public:enrollment"), {})
-            self.assertEqual(response.status_code, 403)
+        response = self._get_as_json(reverse("munki_public:enrollment"))
+        self.assertEqual(response.status_code, 403)
 
     def test_enrollment_wrong_auth_token_err(self):
         with self.assertRaises(APIAuthError):
-            response = self._post_as_json(reverse("munki_public:enrollment"), {},
-                                          HTTP_AUTHORIZATION=get_random_string(23))
+            response = self._get_as_json(reverse("munki_public:enrollment"),
+                                         HTTP_AUTHORIZATION=get_random_string(23))
             self.assertEqual(response.status_code, 403)
 
     def test_enrollment_does_not_exist_err(self):
         # with self.assertRaises(SuspiciousOperation):
-        response = self._post_as_json(reverse("munki_public:enrollment"), {},
-                                    HTTP_AUTHORIZATION="ZtlEnrollmentSecret_{}".format(get_random_string(34)))
-        self.assertEqual(response.status_code, 400)
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(get_random_string(34)))
+        self.assertEqual(response.status_code, 403)
 
     def test_enrollment_ok(self):
-        response = self._post_as_json(reverse("munki_public:enrollment"), {},
-                                      HTTP_AUTHORIZATION="ZtlEnrollmentSecret_{}".format(self.enrollment.secret.secret))
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(self.enrollment.secret.secret))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/json")
         json_response = response.json()
-        self.assertCountEqual(["id", "version"], json_response.keys())
-        self.assertEqual(json_response["id"], self.enrollment.id)
+        self.assertCountEqual(["pk", "version"], json_response.keys())
+        self.assertEqual(json_response["pk"], self.enrollment.id)
         self.assertEqual(json_response["version"], self.enrollment.version)
         # TODO: test events
 
