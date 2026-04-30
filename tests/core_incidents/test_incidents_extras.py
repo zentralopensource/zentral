@@ -9,7 +9,7 @@ class IncidentsExtrasTestCase(SimpleTestCase):
                                          (100, "Minor", "DDDD00"),):
             result = (
                 '<span class="label rounded p-1" '
-                f'style="white-space:nowrap;background-color:#{color};color:#FFF">'
+                f'style="white-space:nowrap;background-color:#{color};color:#000">'
                 f'{display}&nbsp;<i class="bi bi-exclamation-triangle-fill"></i>'
                 '</span>'
             )
