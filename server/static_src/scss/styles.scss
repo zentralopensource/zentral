@@ -44,6 +44,7 @@ $link-color: shift-color($link-hover-color, 20%);
 @import "~bootstrap/scss/buttons";
 @import "~bootstrap/scss/close";
 @import "~bootstrap/scss/transitions";
+@import "~bootstrap/scss/accordion";
 @import "~bootstrap/scss/dropdown";
 @import "~bootstrap/scss/button-group";
 @import "~bootstrap/scss/nav";
@@ -347,4 +348,10 @@ td > p:last-child, td > table:last-child {
 
 select#id_permissions {
   height: 60vh;
+}
+
+// Accordion
+
+.accordion-button {
+  cursor: pointer;
 }

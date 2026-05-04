@@ -1,6 +1,7 @@
 from django import forms
-from .text import split_comma_separated_quoted_string
 from django.forms.renderers import TemplatesSetting
+
+from .text import split_comma_separated_quoted_string
 
 
 class CommaSeparatedQuotedStringField(forms.CharField):
@@ -22,3 +23,4 @@ class CommaSeparatedQuotedStringField(forms.CharField):
 class ZentralFormRenderer(TemplatesSetting):
     form_template_name = "django/forms/div.html"
     formset_template_name = "django/forms/formsets/div.html"
+    field_template_name = "django/forms/field.html"

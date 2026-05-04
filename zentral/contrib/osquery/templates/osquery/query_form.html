@@ -16,7 +16,47 @@
 <h3>{% if object %}Update{% else %}Create{% endif %} query</h3>
 
 <form method="post" class="update-form">{% csrf_token %}
-  {{ form }}
+   {{ form.non_field_errors }}
+  <div class="mb-3">
+    {{ form.name.as_field_group}}
+  </div>
+  <div class="mb-3">
+    {{ form.sql.as_field_group}}
+  </div>
+  {{ form.platforms.as_field_group}}
+  <div class="mb-3">
+    {{ form.minimum_osquery_version.as_field_group}}
+  </div>
+  <div class="mb-3">
+    {{ form.description.as_field_group}}
+  </div>
+  <div class="mb-3">
+    {{ form.value.as_field_group}}
+  </div>
+  <div class="accordion mb-5 mt-5" id="accordionAdvanced">
+    <div class="accordion-item">
+      <h2 class="accordion-header">
+        <span class="accordion-button {% if form.tag.errors or form.compliance_check.errors %}collapsed error{% endif %} fw-bold" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="{% if not form.tag.errors and not form.compliance_check.errors %}false{% else %}true{% endif %}" aria-controls="collapseOne">
+          {% if form.tag.errors or form.compliance_check.errors %}
+            <i class="bi bi-exclamation-triangle " data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Errors"></i>&nbsp;
+          {% endif %}
+          Advanced settings
+        </span>
+      </h2>
+      <div id="collapseOne" class="accordion-collapse collapse {% if form.tag.errors or form.compliance_check.errors %}show{% endif %}" data-bs-parent="#accordionAdvanced">
+        <div class="accordion-body">
+
+          <div class="mb-3">
+            {{ form.tag.as_field_group }}
+          </div>
+          <div class="mb-3">
+            {{ form.compliance_check.as_field_group}}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <p>
     <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'osquery:queries' %}{% endif %}">
       Cancel
