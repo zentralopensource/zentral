@@ -1,7 +1,11 @@
 import logging
 from collections import defaultdict
 from collections.abc import Iterator
+from typing import Any
+
 from django.db import connection, transaction
+import psycopg2.extras
+
 from zentral.contrib.google_workspace.models import Connection
 from zentral.contrib.google_workspace.api_client import APIClient
 from zentral.contrib.inventory.utils import send_machine_tag_events_with_event_request
@@ -24,78 +28,107 @@ def _resolve_group_members_to_tags(api_connection: Connection) -> tuple[dict[str
     return email_tags, tag_pks
 
 
-def _iter_group_members_tags(email_tags: dict[str, set[int]], tag_pks: set[int]) -> Iterator[tuple[str | None, int]]:
-    seen_tag_pks = set()
+def _get_current_tags(cursor: Any, tag_pks: set[int]):
+    query = """
+        select pu.unique_id, mt.tag_id from
+        inventory_principaluser pu
+        join inventory_machinesnapshot ms on (ms.principal_user_id = pu.id)
+        join inventory_machinetag mt on (ms.serial_number = mt.serial_number)
+        where exists (
+          select * from inventory_currentmachinesnapshot
+          where machine_snapshot_id = ms.id
+        ) and mt.tag_id in %s
+        group by pu.unique_id, mt.tag_id
+    """
+    cursor.execute(query, [tuple(tag_pks)])
+    current_tags = set()
+    for email, tag_pk in cursor.fetchall():
+        current_tags.add((email, tag_pk))
+    return current_tags
+
+
+def _iter_group_members_tag_operations(
+    email_tags: dict[str, set[int]],
+    tag_pks: set[int],
+    current_tags: set[(str, int)],
+) -> Iterator[tuple[str, int, bool]]:
     for email, expected_tag_pks in email_tags.items():
-        seen_tag_pks.update(expected_tag_pks)
-        for tag_pk in expected_tag_pks:
-            yield (email, tag_pk)
-    for tag_pk in tag_pks - seen_tag_pks:
-        # the tag is managed, but no matching member was found.
-        # still included in the data to delete orphan tags.
-        yield (None, tag_pk)
+        for tag_pk in tag_pks:
+            tag_key = (email, tag_pk)
+            tag_present = tag_key in current_tags
+            tag_to_add = tag_pk in expected_tag_pks
+            if tag_to_add:
+                if tag_present:
+                    current_tags.remove(tag_key)
+                else:
+                    # add the tag
+                    yield (email, tag_pk, True)
+            elif tag_present:
+                # remove the tag
+                current_tags.remove(tag_key)
+                yield (email, tag_pk, False)
+    # remove the other tags
+    for email, tag_pk in current_tags:
+        yield (email, tag_pk, False)
 
 
 def _sync_machine_tags(
-        group_member_tags: Iterator[tuple[str | None, int]],
-        event_request: EventRequest
+    email_tags: dict[str, set[int]],
+    tag_pks: set[int],
+    event_request: EventRequest,
 ) -> dict[str, int]:
-    # The deleted_tags CTE removes any managed-tag row that is not in the
-    # machine_managed_tags set. That set must be derived from the *complete*
-    # member list, so the query has to run as a single statement: chunking the
-    # input (e.g. via psycopg2.extras.execute_values page_size) would make each
-    # chunk delete the tags belonging to the other chunks.
-    emails: list[str | None] = []
-    tag_ids: list[int] = []
-    for email, tag_id in group_member_tags:
-        emails.append(email)
-        tag_ids.append(tag_id)
     query = """
         with given_values as (
-             select * from unnest(%(emails)s::text[], %(tag_ids)s::int[]) as v(email, tag_id)),
-        machine_managed_tags as (
-            select ms.serial_number, v.tag_id from
+             select email, tag_id, add_operation from (values %s) as v(email, tag_id, add_operation)),
+        serial_numbers as (
+            select ms.serial_number, v.email, v.tag_id, v.add_operation from
                 inventory_machinesnapshot ms
                 join inventory_currentmachinesnapshot cms on (cms.machine_snapshot_id = ms.id)
                 join inventory_principaluser pu on (pu.id = ms.principal_user_id)
                 join given_values v on v.email = pu.unique_id
-                where v.email is not null
-            group by ms.serial_number, v.tag_id),
+            group by ms.serial_number, v.email, v.tag_id, v.add_operation),
         inserted_tags as (
             insert into inventory_machinetag(serial_number, tag_id)
-                select serial_number, tag_id
-                from machine_managed_tags
+                select sn.serial_number, sn.tag_id
+                from serial_numbers sn
+                where sn.add_operation
             on conflict do nothing
             returning serial_number, tag_id, 'added'::text as action),
         deleted_tags as (
-            delete from inventory_machinetag mt
-            where exists (
-              -- tag is managed
-              select * from given_values
-              where tag_id = mt.tag_id
-            )
-            and not exists (
-              -- tag is not set for the machine
-              select * from machine_managed_tags
-              where serial_number = mt.serial_number
-              and tag_id = mt.tag_id
-            )
-            returning mt.serial_number, mt.tag_id, 'removed'::text as action),
+            delete from inventory_machinetag im
+            using serial_numbers sn
+            where not sn.add_operation
+                and im.serial_number = sn.serial_number
+                and im.tag_id = sn.tag_id
+            returning im.serial_number, im.tag_id, 'removed'::text as action),
         results as (
-            select * from inserted_tags
+            select
+                it.serial_number, 'added' action, it.tag_id pk
+            from
+                inserted_tags it
             union
-            select * from deleted_tags
+            select
+                dt.serial_number, 'removed' action, dt.tag_id pk
+            from
+                deleted_tags dt
         )
         select
-            r.serial_number, r.action, t.id, t.name, tx.id taxonomy_pk, tx.name taxonomy_name
+            r.serial_number, r.action, r.pk, t.name, tx.id taxonomy_pk, tx.name taxonomy_name
         from
             results r
-            join inventory_tag t on (r.tag_id = t.id)
+            join inventory_tag t on (r.pk = t.id)
             left join inventory_taxonomy tx on (t.taxonomy_id = tx.id)"""
 
-    with connection.cursor() as cursor:
-        cursor.execute(query, {"emails": emails, "tag_ids": tag_ids})
-        results = cursor.fetchall()
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            current_tags = _get_current_tags(cursor, tag_pks)
+            tag_ops_iterator = _iter_group_members_tag_operations(email_tags, tag_pks, current_tags)
+            results = psycopg2.extras.execute_values(
+                cursor, query,
+                tag_ops_iterator,
+                page_size=1000,
+                fetch=True
+            )
 
     def send_machine_tag_added_events():
         send_machine_tag_events_with_event_request(results, event_request)
@@ -120,5 +153,4 @@ def _sync_machine_tags(
 
 def sync_group_tag_mappings(api_connection: Connection, event_request: EventRequest = None) -> None:
     email_tags, tag_pks = _resolve_group_members_to_tags(api_connection)
-    group_member_tags = _iter_group_members_tags(email_tags, tag_pks)
-    return _sync_machine_tags(group_member_tags, event_request)
+    return _sync_machine_tags(email_tags, tag_pks, event_request)
