@@ -65,12 +65,12 @@ class MunkiAPIViewsTestCase(TestCase):
 
     def test_enrollment_empty_secret_err(self):
         response = self._get_as_json(reverse("munki_public:enrollment"),
-                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret  ")
+                                     HTTP_AUTHORIZATION="ZtlMunkiEnrollmentSecret  ")
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_does_not_exist_err(self):
         response = self._get_as_json(reverse("munki_public:enrollment"),
-                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(get_random_string(34)))
+                                     HTTP_AUTHORIZATION="ZtlMunkiEnrollmentSecret {}".format(get_random_string(34)))
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_revoked_secret_err(self):
@@ -78,7 +78,7 @@ class MunkiAPIViewsTestCase(TestCase):
         enrollment.secret.revoked_at = timezone.now()
         enrollment.secret.save()
         response = self._get_as_json(reverse("munki_public:enrollment"),
-                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(enrollment.secret.secret))
+                                     HTTP_AUTHORIZATION="ZtlMunkiEnrollmentSecret {}".format(enrollment.secret.secret))
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_expired_secret_err(self):
@@ -86,7 +86,7 @@ class MunkiAPIViewsTestCase(TestCase):
         enrollment.secret.expired_at = timezone.now() - timedelta(seconds=1)
         enrollment.secret.save()
         response = self._get_as_json(reverse("munki_public:enrollment"),
-                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(enrollment.secret.secret))
+                                     HTTP_AUTHORIZATION="ZtlMunkiEnrollmentSecret {}".format(enrollment.secret.secret))
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_used_up_secret_err(self):
@@ -95,19 +95,20 @@ class MunkiAPIViewsTestCase(TestCase):
         enrollment.secret.request_count = 1
         enrollment.secret.save()
         response = self._get_as_json(reverse("munki_public:enrollment"),
-                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(enrollment.secret.secret))
+                                     HTTP_AUTHORIZATION="ZtlMunkiEnrollmentSecret {}".format(enrollment.secret.secret))
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_post_not_allowed(self):
         response = self.client.post(
             reverse("munki_public:enrollment"),
-            HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(self.enrollment.secret.secret),
+            HTTP_AUTHORIZATION="ZtlMunkiEnrollmentSecret {}".format(self.enrollment.secret.secret),
         )
         self.assertEqual(response.status_code, 405)
 
     def test_enrollment_ok(self):
         response = self._get_as_json(reverse("munki_public:enrollment"),
-                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(self.enrollment.secret.secret))
+                                     HTTP_AUTHORIZATION="ZtlMunkiEnrollmentSecret {}"
+                                     .format(self.enrollment.secret.secret))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/json")
         json_response = response.json()
@@ -118,7 +119,8 @@ class MunkiAPIViewsTestCase(TestCase):
     @patch("zentral.contrib.munki.public_views.post_enrollment_info_request_event")
     def test_enrollment_ok_posts_event(self, post_event):
         response = self._get_as_json(reverse("munki_public:enrollment"),
-                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(self.enrollment.secret.secret))
+                                     HTTP_AUTHORIZATION="ZtlMunkiEnrollmentSecret {}"
+                                     .format(self.enrollment.secret.secret))
         self.assertEqual(response.status_code, 200)
         post_event.assert_called_once()
         model, _, _, payload = post_event.call_args.args
@@ -142,7 +144,7 @@ class MunkiAPIViewsTestCase(TestCase):
         enrollment.secret.revoked_at = timezone.now()
         enrollment.secret.save()
         response = self._get_as_json(reverse("munki_public:enrollment"),
-                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(enrollment.secret.secret))
+                                     HTTP_AUTHORIZATION="ZtlMunkiEnrollmentSecret {}".format(enrollment.secret.secret))
         self.assertEqual(response.status_code, 403)
         post_event.assert_called_once()
         model, _, _, payload = post_event.call_args.args
