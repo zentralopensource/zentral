@@ -8,11 +8,13 @@ from zentral.core.compliance_checks.models import ComplianceCheck
 def force_configuration(
     auto_reinstall_incidents=False,
     auto_failed_install_incidents=False,
+    **kwargs,
 ):
     return Configuration.objects.create(
         name=get_random_string(12),
         auto_failed_install_incidents=auto_failed_install_incidents,
         auto_reinstall_incidents=auto_reinstall_incidents,
+        **kwargs,
     )
 
 

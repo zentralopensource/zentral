@@ -1,21 +1,24 @@
-from functools import reduce
 import io
 import json
 import operator
 import zipfile
+from functools import reduce
+from unittest.mock import patch
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
-from unittest.mock import patch
+
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.munki.models import Enrollment
-from accounts.models import User
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
+
 from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
 
@@ -227,6 +230,9 @@ class MunkiSetupViewsTestCase(TestCase):
                      "pk": configuration.pk,
                      "name": name,
                      "description": description,
+                     "devicecheck_private_key_id": '',
+                     "devicecheck_sandbox": False,
+                     "devicecheck_team_id": '',
                      "inventory_apps_full_info_shard": 17,
                      "principal_user_detection_sources": ["logged_in_user"],
                      "principal_user_detection_domains": ["yolo.fr"],
@@ -269,6 +275,7 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_update_configuration_post(self, post_event):
         configuration = force_configuration()
         prev_updated_at = configuration.updated_at
+        prev_value = configuration.serialize_for_event()
         self._login("munki.change_configuration", "munki.view_configuration")
         collected_condition_keys = sorted(get_random_string(12) for _ in range(3))
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -308,25 +315,13 @@ class MunkiSetupViewsTestCase(TestCase):
                 {
                  "model": "munki.configuration",
                  "pk": str(configuration.pk),
-                 "prev_value": {
-                    "pk": configuration.pk,
-                    "name": configuration.name,
-                    "description": "",
-                    "inventory_apps_full_info_shard": 100,
-                    "principal_user_detection_sources": [],
-                    "principal_user_detection_domains": [],
-                    "collected_condition_keys": [],
-                    "managed_installs_sync_interval_days": 7,
-                    "script_checks_run_interval_seconds": 86400,
-                    "auto_failed_install_incidents": False,
-                    "auto_reinstall_incidents": False,
-                    "created_at": configuration.created_at,
-                    "updated_at": prev_updated_at,
-                    "version": 0,
-                 },
+                 "prev_value": prev_value,
                  "new_value": {
                     "pk": configuration2.pk,
                     "description": "",
+                    "devicecheck_private_key_id": '',
+                    "devicecheck_sandbox": False,
+                    "devicecheck_team_id": '',
                     "name": configuration2.name,
                     "inventory_apps_full_info_shard": 17,
                     "principal_user_detection_sources": ["logged_in_user"],

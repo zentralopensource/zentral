@@ -1,20 +1,23 @@
+import operator
+import uuid
 from datetime import datetime
 from functools import reduce
-import operator
 from unittest.mock import patch
-import uuid
+
+from accounts.models import APIToken, User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.http import http_date
-from django.test import TestCase
-from accounts.models import APIToken, User
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.munki.models import Configuration, Enrollment, ScriptCheck
 from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.core.events.base import AuditEvent
+
 from .utils import force_script_check
 
 
@@ -102,6 +105,10 @@ class APIViewsTestCase(TestCase):
              'collected_condition_keys': [],
              'created_at': configuration.created_at.isoformat(),
              'description': '',
+             'devicecheck_private_key': '',
+             'devicecheck_private_key_id': '',
+             'devicecheck_sandbox': False,
+             'devicecheck_team_id': '',
              'id': configuration.pk,
              'inventory_apps_full_info_shard': 100,
              'managed_installs_sync_interval_days': 7,
@@ -127,6 +134,10 @@ class APIViewsTestCase(TestCase):
               'collected_condition_keys': [],
               'created_at': configuration.created_at.isoformat(),
               'description': '',
+              'devicecheck_private_key': '',
+              'devicecheck_private_key_id': '',
+              'devicecheck_sandbox': False,
+              'devicecheck_team_id': '',
               'id': configuration.pk,
               'inventory_apps_full_info_shard': 100,
               'managed_installs_sync_interval_days': 7,
@@ -173,6 +184,10 @@ class APIViewsTestCase(TestCase):
              'script_checks_run_interval_seconds': 86400,
              'auto_reinstall_incidents': False,
              'auto_failed_install_incidents': False,
+             'devicecheck_private_key': '',
+             'devicecheck_private_key_id': '',
+             'devicecheck_sandbox': False,
+             'devicecheck_team_id': '',
              'version': 0,
              'created_at': configuration.created_at.isoformat(),
              'updated_at': configuration.updated_at.isoformat()}
@@ -231,6 +246,9 @@ class APIViewsTestCase(TestCase):
                         'script_checks_run_interval_seconds': 86400,
                         'auto_reinstall_incidents': True,
                         'auto_failed_install_incidents': True,
+                        'devicecheck_private_key_id': '',
+                        'devicecheck_sandbox': False,
+                        'devicecheck_team_id': '',
                         'created_at': configuration.created_at,
                         'updated_at': configuration.updated_at,
                         'version': 0,
@@ -256,6 +274,10 @@ class APIViewsTestCase(TestCase):
                 'script_checks_run_interval_seconds': 86400,
                 'auto_reinstall_incidents': True,
                 'auto_failed_install_incidents': True,
+                'devicecheck_private_key': '',
+                'devicecheck_private_key_id': '',
+                'devicecheck_sandbox': False,
+                'devicecheck_team_id': '',
                 'version': 0,
                 'created_at': configuration.created_at.isoformat(),
                 'updated_at': configuration.updated_at.isoformat()
@@ -295,6 +317,10 @@ class APIViewsTestCase(TestCase):
              'collected_condition_keys': [],
              'created_at': configuration.created_at.isoformat(),
              'description': '',
+             'devicecheck_private_key': '',
+             'devicecheck_private_key_id': '',
+             'devicecheck_sandbox': False,
+             'devicecheck_team_id': '',
              'id': configuration.pk,
              'inventory_apps_full_info_shard': 100,
              'managed_installs_sync_interval_days': 7,
@@ -323,8 +349,7 @@ class APIViewsTestCase(TestCase):
     def test_update_configuration(self, post_event):
         configuration = self.force_configuration()
         self.set_permissions("munki.change_configuration")
-        prev_name = configuration.name
-        prev_updated_at = configuration.updated_at
+        prev_value = configuration.serialize_for_event()
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(
@@ -354,22 +379,7 @@ class APIViewsTestCase(TestCase):
                 {
                     "model": "munki.configuration",
                     "pk": str(configuration.pk),
-                    "prev_value": {
-                        'pk': configuration.pk,
-                        'name': prev_name,
-                        'description': '',
-                        'inventory_apps_full_info_shard': 100,
-                        'principal_user_detection_sources': [],
-                        'principal_user_detection_domains': [],
-                        'collected_condition_keys': [],
-                        'managed_installs_sync_interval_days': 7,
-                        'script_checks_run_interval_seconds': 86400,
-                        'auto_reinstall_incidents': False,
-                        'auto_failed_install_incidents': False,
-                        'version': 0,
-                        'created_at': configuration.created_at,
-                        'updated_at': prev_updated_at
-                    },
+                    "prev_value": prev_value,
                     "new_value": {
                         'pk': configuration.pk,
                         'name': name,
@@ -382,6 +392,9 @@ class APIViewsTestCase(TestCase):
                         'script_checks_run_interval_seconds': 86400,
                         'auto_reinstall_incidents': True,
                         'auto_failed_install_incidents': True,
+                        'devicecheck_private_key_id': '',
+                        'devicecheck_sandbox': False,
+                        'devicecheck_team_id': '',
                         'version': 1,
                         'created_at': configuration.created_at,
                         'updated_at': configuration.updated_at
@@ -399,6 +412,10 @@ class APIViewsTestCase(TestCase):
                 'id': configuration.pk,
                 'name': name,
                 'description': 'Description',
+                'devicecheck_private_key': '',
+                'devicecheck_private_key_id': '',
+                'devicecheck_sandbox': False,
+                'devicecheck_team_id': '',
                 'inventory_apps_full_info_shard': 50,
                 'principal_user_detection_sources': ["google_chrome", "company_portal"],
                 'principal_user_detection_domains': ["zentral.io"],
@@ -459,6 +476,9 @@ class APIViewsTestCase(TestCase):
                         'pk': prev_pk,
                         'name': configuration.name,
                         'description': '',
+                        'devicecheck_private_key_id': '',
+                        'devicecheck_sandbox': False,
+                        'devicecheck_team_id': '',
                         'inventory_apps_full_info_shard': 100,
                         'principal_user_detection_sources': [],
                         'principal_user_detection_domains': [],
