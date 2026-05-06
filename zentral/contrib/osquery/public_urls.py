@@ -4,6 +4,7 @@ from . import public_views
 
 app_name = "osquery_public"
 urlpatterns = [
+    path('enrollment', csrf_exempt(public_views.EnrollmentView.as_view()), name='enrollment'),
     # osquery API
     path('enroll', csrf_exempt(public_views.EnrollView.as_view()), name='enroll'),
     path('config', csrf_exempt(public_views.ConfigView.as_view()), name='config'),

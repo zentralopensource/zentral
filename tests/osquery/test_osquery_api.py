@@ -1,9 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from unittest.mock import patch
 import uuid
 from django.test import TestCase
 from django.urls import reverse, NoReverseMatch
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from server.urls import build_urlpatterns_for_zentral_apps
@@ -178,6 +179,11 @@ class OsqueryAPIViewsTestCase(TestCase):
                                 json.dumps(data),
                                 content_type="application/json")
 
+    def get_as_json(self, url_name, **extra):
+        return self.client.get(reverse("osquery_public:{}".format(url_name)),
+                               content_type="application/json",
+                               **extra)
+
     def force_enrolled_machine(self, osquery_version="1.2.3", platform_mask=21):
         return EnrolledMachine.objects.create(
             enrollment=self.enrollment,
@@ -299,6 +305,121 @@ class OsqueryAPIViewsTestCase(TestCase):
                      'unixTime': '1480605737',
                  }]}
             )
+
+    # enrollment endpoint
+
+    def test_enrollment_missing_auth_header_err(self):
+        response = self.get_as_json("enrollment")
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_wrong_auth_token_err(self):
+        response = self.get_as_json("enrollment", HTTP_AUTHORIZATION=get_random_string(23))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_empty_secret_err(self):
+        response = self.get_as_json("enrollment", HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret  ")
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_does_not_exist_err(self):
+        response = self.get_as_json("enrollment",
+                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(get_random_string(34)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_revoked_secret_err(self):
+        enrollment = Enrollment.objects.create(
+            configuration=self.configuration,
+            secret=EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
+        )
+        enrollment.secret.revoked_at = timezone.now()
+        enrollment.secret.save()
+        response = self.get_as_json("enrollment",
+                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                        enrollment.secret.secret))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_expired_secret_err(self):
+        enrollment = Enrollment.objects.create(
+            configuration=self.configuration,
+            secret=EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
+        )
+        enrollment.secret.expired_at = timezone.now() - timedelta(seconds=1)
+        enrollment.secret.save()
+        response = self.get_as_json("enrollment",
+                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                        enrollment.secret.secret))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_used_up_secret_err(self):
+        enrollment = Enrollment.objects.create(
+            configuration=self.configuration,
+            secret=EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
+        )
+        enrollment.secret.quota = 1
+        enrollment.secret.request_count = 1
+        enrollment.secret.save()
+        response = self.get_as_json("enrollment",
+                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                        enrollment.secret.secret))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_post_not_allowed(self):
+        response = self.client.post(
+            reverse("osquery_public:enrollment"),
+            HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(self.enrollment.secret.secret),
+        )
+        self.assertEqual(response.status_code, 405)
+
+    def test_enrollment_ok(self):
+        response = self.get_as_json("enrollment",
+                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                        self.enrollment.secret.secret))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        json_response = response.json()
+        self.assertCountEqual(["pk", "version"], json_response.keys())
+        self.assertEqual(json_response["pk"], self.enrollment.pk)
+        self.assertEqual(json_response["version"], self.enrollment.version)
+
+    @patch("zentral.contrib.osquery.public_views.post_enrollment_info_request_event")
+    def test_enrollment_ok_posts_event(self, post_event):
+        response = self.get_as_json("enrollment",
+                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                        self.enrollment.secret.secret))
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        model, _, _, payload = post_event.call_args.args
+        self.assertEqual(model, "osquery_enrollment")
+        self.assertEqual(payload, {"status": "ok", "enrollment": {"pk": self.enrollment.pk}})
+
+    @patch("zentral.contrib.inventory.authentication.post_enrollment_info_request_event")
+    def test_enrollment_missing_auth_header_posts_event(self, post_event):
+        response = self.get_as_json("enrollment")
+        self.assertEqual(response.status_code, 403)
+        post_event.assert_called_once()
+        model, _, _, payload = post_event.call_args.args
+        self.assertEqual(model, "osquery_enrollment")
+        self.assertEqual(payload["status"], "denied")
+        self.assertEqual(payload["reason"], "Missing or invalid Authorization header")
+        self.assertNotIn("enrollment", payload)
+
+    @patch("zentral.contrib.inventory.authentication.post_enrollment_info_request_event")
+    def test_enrollment_revoked_secret_posts_event_with_pk(self, post_event):
+        enrollment = Enrollment.objects.create(
+            configuration=self.configuration,
+            secret=EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
+        )
+        enrollment.secret.revoked_at = timezone.now()
+        enrollment.secret.save()
+        response = self.get_as_json("enrollment",
+                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                        enrollment.secret.secret))
+        self.assertEqual(response.status_code, 403)
+        post_event.assert_called_once()
+        model, _, _, payload = post_event.call_args.args
+        self.assertEqual(model, "osquery_enrollment")
+        self.assertEqual(payload["status"], "denied")
+        self.assertEqual(payload["reason"], "revoked")
+        self.assertEqual(payload["enrollment"], {"pk": enrollment.pk})
 
     # enrollment
 
