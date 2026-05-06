@@ -2,15 +2,16 @@ import logging
 import time
 import uuid
 
-from dateutil import parser
-from cryptography import x509
-from django.utils.timezone import is_aware, make_naive
 import httpx
 import jwt
-from zentral.utils.certificates import is_ca, build_cert_tree
+from cryptography import x509
+from dateutil import parser
+from django.utils.timezone import is_aware, make_naive
+
+from zentral.utils.certificates import build_cert_tree, is_ca
+
 from .incidents import MunkiInstallFailedIncident, MunkiReinstallIncident, Severity
 from .models import ManagedInstall
-
 
 logger = logging.getLogger("zentral.contrib.munki.utils")
 
