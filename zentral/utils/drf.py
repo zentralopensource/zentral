@@ -1,11 +1,66 @@
+import io
+import json
+import zlib
+from gzip import GzipFile
+
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django_filters import rest_framework as filters
 from rest_framework import generics
+from rest_framework.exceptions import ParseError, UnsupportedMediaType
 from rest_framework.pagination import LimitOffsetPagination
+from rest_framework.parsers import BaseParser
 from rest_framework.permissions import BasePermission, DjangoModelPermissions
+
 from zentral.core.events.base import AuditEvent
 
+# parsers
+
+
+class ZentralEncodedJSONParser(BaseParser):
+    """JSON parser that also understands the Content-Encoding values our agents send.
+
+    Mirrors the behavior of the (now-superseded) JSONPostAPIView.post body-decoding step:
+      - Content-Encoding: deflate                                → zlib.decompress
+      - Content-Encoding: zlib  + User-Agent contains "santa"    → zlib.decompress
+      - Content-Encoding: gzip  + User-Agent == "Zentral/mnkpf 0.1" → zlib.decompress
+      - Content-Encoding: gzip                                   → gzip.GzipFile
+      - any other Content-Encoding                               → 415 Unsupported Media Type
+      - empty body                                               → returns None
+    """
+    media_type = "application/json"
+
+    def parse(self, stream, media_type=None, parser_context=None):
+        request = (parser_context or {}).get("view").request if parser_context else None
+        if request is None:
+            # parser_context["request"] is the canonical lookup
+            request = (parser_context or {}).get("request")
+        raw = stream.read()
+        if not raw:
+            return None
+        if request is not None:
+            content_encoding = request.META.get("HTTP_CONTENT_ENCODING")
+            if content_encoding:
+                user_agent = request.META.get("HTTP_USER_AGENT", "")
+                if (
+                    content_encoding == "deflate"
+                    or (content_encoding == "zlib" and "santa" in user_agent)
+                    or (content_encoding == "gzip" and user_agent == "Zentral/mnkpf 0.1")
+                ):
+                    raw = zlib.decompress(raw)
+                elif content_encoding == "gzip":
+                    raw = GzipFile(fileobj=io.BytesIO(raw)).read()
+                else:
+                    raise UnsupportedMediaType(content_encoding)
+        encoding = (parser_context or {}).get("encoding", "utf-8")
+        try:
+            payload = raw.decode(encoding)
+        except UnicodeDecodeError as exc:
+            raise ParseError(f"Could not decode payload with encoding {encoding}") from exc
+        try:
+            return json.loads(payload)
+        except ValueError as exc:
+            raise ParseError("Payload is not valid json") from exc
 
 # pagination
 

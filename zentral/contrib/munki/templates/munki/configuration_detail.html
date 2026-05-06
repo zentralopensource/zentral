@@ -77,6 +77,10 @@
             <td>Auto failed install incidents</td>
             <td>{{ object.auto_failed_install_incidents|yesno }}</td>
         </tr>
+         <tr>
+            <td>Devicecheck enabled</td>
+            <td>{{ object.has_devicecheck|yesno }}</td>
+        </tr>
     </tbody>
     </table>
 

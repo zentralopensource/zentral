@@ -1,5 +1,7 @@
 from django import forms
+
 from zentral.utils.os_version import make_comparable_os_version
+
 from .compliance_checks import validate_expected_result
 from .models import Configuration, Enrollment, PrincipalUserDetectionSource, ScriptCheck
 
@@ -15,13 +17,51 @@ class PrincipalUserDetectionSourceWidget(forms.CheckboxSelectMultiple):
 
 
 class ConfigurationForm(forms.ModelForm):
+    # Declared explicitly because the model field has editable=False (it stores an
+    # encrypted blob and must go through set_devicecheck_private_key on save).
+    # Leave empty / upload nothing to keep the existing key.
+    devicecheck_private_key_file = forms.FileField(
+        label="DeviceCheck private key (.p8)",
+        required=False,
+        help_text="Upload a .p8 file from the Apple Developer portal.",
+    )
+    devicecheck_private_key = forms.CharField(
+        label="DeviceCheck private key (PEM)",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 4}),
+        help_text="Paste the PEM-encoded EC private key. "
+                  "Ignored when a .p8 file is uploaded. "
+                  "Leave empty to keep the existing key.",
+    )
+
     class Meta:
         model = Configuration
         fields = "__all__"
         widgets = {
             "principal_user_detection_sources": PrincipalUserDetectionSourceWidget,
-            "description": forms.Textarea(attrs={"rows": "2"})
+            "description": forms.Textarea(attrs={"rows": "2"}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        p8_file = cleaned_data.pop("devicecheck_private_key_file", None)
+        if p8_file:
+            try:
+                cleaned_data["devicecheck_private_key"] = p8_file.read().decode("utf-8")
+            except Exception:
+                raise forms.ValidationError("Could not read the .p8 file.")
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+        pem = self.cleaned_data.get("devicecheck_private_key", "").strip()
+        if pem and commit:
+            instance.set_devicecheck_private_key(pem)
+            # Use update() to avoid a second version increment on the Configuration.
+            Configuration.objects.filter(pk=instance.pk).update(
+                devicecheck_private_key=instance.devicecheck_private_key,
+            )
+        return instance
 
 
 class EnrollmentForm(forms.ModelForm):

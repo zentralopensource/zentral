@@ -15,7 +15,7 @@
 
 <h2>{% if object %}Update{% else %}Create{% endif %} Munki configuration</h2>
 
-<form method="post" class="update-form">{% csrf_token %}
+<form method="post" enctype="multipart/form-data" class="update-form">{% csrf_token %}
 
   {{ form }}
 

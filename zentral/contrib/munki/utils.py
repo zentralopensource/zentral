@@ -1,9 +1,66 @@
+import logging
+import time
+import uuid
+
 from dateutil import parser
 from cryptography import x509
 from django.utils.timezone import is_aware, make_naive
+import httpx
+import jwt
 from zentral.utils.certificates import is_ca, build_cert_tree
 from .incidents import MunkiInstallFailedIncident, MunkiReinstallIncident, Severity
 from .models import ManagedInstall
+
+
+logger = logging.getLogger("zentral.contrib.munki.utils")
+
+
+# Apple DeviceCheck
+
+
+DEVICECHECK_BASE_URL = "https://api.devicecheck.apple.com"
+DEVICECHECK_SANDBOX_BASE_URL = "https://api.development.devicecheck.apple.com"
+
+
+def validate_device_token_with_apple(configuration, device_token):
+    """Call Apple's DeviceCheck API to validate a device token.
+
+    Returns True if the token is valid, False if Apple rejects it,
+    or None if the upstream request itself failed.
+    """
+    private_key_pem = configuration.get_devicecheck_private_key()
+    base_url = DEVICECHECK_SANDBOX_BASE_URL if configuration.devicecheck_sandbox else DEVICECHECK_BASE_URL
+    auth_token = jwt.encode(
+        {"iss": configuration.devicecheck_team_id, "iat": int(time.time())},
+        private_key_pem,
+        algorithm="ES256",
+        headers={"kid": configuration.devicecheck_private_key_id},
+    )
+    payload = {
+        "device_token": device_token,
+        "transaction_id": str(uuid.uuid4()),
+        "timestamp": int(time.time() * 1000),
+    }
+    try:
+        response = httpx.post(
+            f"{base_url}/v1/validate_device_token",
+            json=payload,
+            headers={"Authorization": f"Bearer {auth_token}"},
+            timeout=10,
+        )
+    except httpx.RequestError:
+        logger.exception("DeviceCheck API request error for configuration %s", configuration.pk)
+        return None
+    if response.status_code == 200:
+        return True
+    if response.status_code == 400:
+        logger.warning("DeviceCheck rejected token for configuration %s: %s", configuration.pk, response.text)
+        return False
+    logger.error(
+        "DeviceCheck API unexpected status %d for configuration %s: %s",
+        response.status_code, configuration.pk, response.text,
+    )
+    return None
 
 
 # machine snapshots

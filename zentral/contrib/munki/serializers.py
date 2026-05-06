@@ -62,6 +62,12 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         secret_serializer.update(instance.secret, secret_data)
         return super().update(instance, validated_data)
 
+class MunkiDeviceValidationRequestSerializer(serializers.Serializer):
+    """Body posted by the agent to /public/munki/validate_device/."""
+    device_token = serializers.CharField(
+        help_text="Base64-encoded device token from the DeviceCheck framework."
+    )
+
 
 class ScriptCheckSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="compliance_check.name")

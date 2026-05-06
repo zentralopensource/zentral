@@ -9,7 +9,10 @@ from django.http import JsonResponse
 from django.utils.crypto import get_random_string
 from django.utils.timezone import is_aware, make_naive
 from django.views.generic import View
+from rest_framework import status
 from rest_framework.generics import RetrieveAPIView
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from zentral.contrib.inventory.events import post_enrollment_info_request_event, post_machine_snapshot_raw_event
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
@@ -17,11 +20,12 @@ from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.utils import add_machine_tags, verify_enrollment_secret
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
+from zentral.utils.drf import ZentralEncodedJSONParser
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from zentral.utils.os_version import make_comparable_os_version
 
-from .authentication import MunkiEnrollmentSecretAuthentication
+from .authentication import MunkiEnrolledMachineAuthentication, MunkiEnrollmentSecretAuthentication
 from .compliance_checks import (
     prune_out_of_scope_machine_statuses,
     serialize_script_check_for_job,
@@ -33,8 +37,13 @@ from .events import (
     post_munki_request_event,
 )
 from .models import EnrolledMachine, Enrollment, ManagedInstall, MunkiState, ScriptCheck
-from .serializers import EnrollmentInfoSerializer
-from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
+from .serializers import EnrollmentInfoSerializer, MunkiDeviceValidationRequestSerializer
+from .utils import (
+    apply_managed_installs,
+    prepare_ms_tree_certificates,
+    update_managed_install_with_event,
+    validate_device_token_with_apple,
+)
 
 logger = logging.getLogger('zentral.contrib.munki.public_views')
 
@@ -123,6 +132,27 @@ class BaseView(JSONPostAPIView):
         enrolled_machine_token = self.get_enrolled_machine_token(request)
         self.verify_enrolled_machine_token(enrolled_machine_token)
 
+class _EnrolledMachineMixin:
+    """Common bits for views authenticated by `Authorization: MunkiEnrolledMachine <token>`."""
+    authentication_classes = [MunkiEnrolledMachineAuthentication]
+    permission_classes = []
+    parser_classes = [ZentralEncodedJSONParser]
+
+    @property
+    def enrolled_machine(self):
+        return self.request.auth
+
+    @property
+    def enrollment(self):
+        return self.enrolled_machine.enrollment
+
+    @property
+    def machine_serial_number(self):
+        return self.enrolled_machine.serial_number
+
+    @property
+    def business_unit(self):
+        return self.enrollment.secret.get_api_enrollment_business_unit()
 
 class JobDetailsView(BaseView):
     def check_data_secret(self, data):
@@ -379,3 +409,43 @@ class PostJobView(BaseView):
         )
 
         return {}
+
+class DeviceValidationView(_EnrolledMachineMixin, APIView):
+
+    def post(self, request, *args, **kwargs):
+        configuration = self.enrollment.configuration
+        if not configuration.has_devicecheck:
+            return Response(
+                {"detail": "DeviceCheck not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        serializer = MunkiDeviceValidationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        device_token = serializer.validated_data["device_token"]
+
+        user_agent, ip = user_agent_and_ip_address_from_request(request)
+        result = validate_device_token_with_apple(configuration, device_token)
+
+        event_kwargs = {
+            "request_type": "device_validation",
+            "enrollment": {"pk": self.enrollment.pk},
+        }
+
+        if result is None:
+            event_kwargs["result"] = "error"
+            post_munki_request_event(self.machine_serial_number, user_agent, ip, **event_kwargs)
+            return Response(
+                {"detail": "DeviceCheck upstream error."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        event_kwargs["result"] = "valid" if result else "invalid"
+        post_munki_request_event(self.machine_serial_number, user_agent, ip, **event_kwargs)
+
+        if result:
+            return Response({})
+        return Response(
+            {"detail": "Device validation failed."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )

@@ -1,14 +1,16 @@
-from datetime import datetime
 import enum
+from datetime import datetime
+
 from django.contrib.postgres.fields import ArrayField
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import F, Q
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from zentral.contrib.inventory.models import BaseEnrollment, Tag
-from zentral.utils.os_version import make_comparable_os_version
 
+from zentral.contrib.inventory.models import BaseEnrollment, Tag
+from zentral.core.secret_engines import decrypt_str, encrypt_str, rewrap
+from zentral.utils.os_version import make_comparable_os_version
 
 # configuration
 
@@ -71,6 +73,12 @@ class Configuration(models.Model):
         help_text="Enable automatic package failed install incidents"
     )
 
+    # Apple DeviceCheck
+    devicecheck_private_key = models.TextField(blank=True, default="", editable=False)
+    devicecheck_private_key_id = models.CharField(max_length=10, blank=True)
+    devicecheck_team_id = models.CharField(max_length=10, blank=True)
+    devicecheck_sandbox = models.BooleanField(default=True)
+
     version = models.PositiveIntegerField(editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -87,6 +95,33 @@ class Configuration(models.Model):
         else:
             self.version = F("version") + 1
         super().save(*args, **kwargs)
+
+    # DeviceCheck private key helpers
+
+    def _get_devicecheck_secret_engine_kwargs(self, field):
+        if not self.pk:
+            raise ValueError("Configuration must have a pk")
+        return {"pk": self.pk, "model": "munki.configuration", "field": field}
+
+    def get_devicecheck_private_key(self):
+        if not self.devicecheck_private_key:
+            return None
+        return decrypt_str(self.devicecheck_private_key, **self._get_devicecheck_secret_engine_kwargs("devicecheck_private_key"))
+
+    def set_devicecheck_private_key(self, private_key):
+        self.devicecheck_private_key = encrypt_str(private_key, **self._get_devicecheck_secret_engine_kwargs("devicecheck_private_key"))
+
+    def rewrap_secrets(self):
+        if self.devicecheck_private_key:
+            self.devicecheck_private_key = rewrap(
+                self.devicecheck_private_key,
+                **self._get_devicecheck_secret_engine_kwargs("devicecheck_private_key"),
+            )
+            self.save()
+
+    @property
+    def has_devicecheck(self):
+        return bool(self.devicecheck_private_key and self.devicecheck_private_key_id and self.devicecheck_team_id)
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "name": self.name}
@@ -105,6 +140,9 @@ class Configuration(models.Model):
                 "script_checks_run_interval_seconds": self.script_checks_run_interval_seconds,
                 "auto_reinstall_incidents": self.auto_reinstall_incidents,
                 "auto_failed_install_incidents": self.auto_failed_install_incidents,
+                'devicecheck_private_key_id': self.devicecheck_private_key_id,
+                'devicecheck_sandbox': self.devicecheck_sandbox,
+                'devicecheck_team_id': self.devicecheck_team_id,
                 "created_at": self.created_at,
                 "updated_at": self.updated_at,
                 "version": self.version,
