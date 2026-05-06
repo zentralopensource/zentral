@@ -1,3 +1,4 @@
+import copy
 import logging
 from django.urls import reverse
 from zentral.conf import settings
@@ -12,24 +13,51 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.install_enterprise_appl
 
 class InstallEnterpriseApplication(Command):
     request_type = "InstallEnterpriseApplication"
+    db_name = "InstallEnterpriseApplication"
     artifact_operation = Artifact.Operation.INSTALLATION
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
-        return channel == Channel.DEVICE and enrolled_device.platform == Platform.MACOS
+        return channel == Channel.DEVICE and enrolled_device.platform in (
+            Platform.MACOS, Platform.IOS, Platform.IPADOS
+        )
+
+    def load_kwargs(self):
+        if self.artifact_version and self.artifact_version.enterprise_app.ios_app:
+            self.request_type = "InstallApplication"
 
     def build_command(self):
         enterprise_app = self.artifact_version.enterprise_app
-        manifest = enterprise_app.manifest
-        manifest["items"][0]["assets"][0]["url"] = "https://{}{}".format(settings["api"]["fqdn"],
-                                                                         reverse("mdm_public:enterprise_app_download",
-                                                                                 args=(self.db_command.uuid,)))
+        if enterprise_app.ios_app:
+            return self._build_ios_command(enterprise_app)
+        return self._build_macos_command(enterprise_app)
+
+    def _build_ios_command(self, enterprise_app):
+        cmd = {
+            "ManifestURL": "https://{}{}".format(
+                settings["api"]["fqdn"],
+                reverse("mdm_public:enterprise_app_manifest", args=(self.db_command.uuid,))
+            )
+        }
+        configuration = enterprise_app.get_configuration()
+        if configuration:
+            cmd["Configuration"] = substitute_variables(configuration, self.enrollment_session, self.enrolled_user)
+        if enterprise_app.install_as_managed:
+            cmd["InstallAsManaged"] = True
+            cmd["ChangeManagementState"] = "Managed"
+            cmd["ManagementFlags"] = 1 if enterprise_app.remove_on_unenroll else 0
+        return cmd
+
+    def _build_macos_command(self, enterprise_app):
+        manifest = copy.deepcopy(enterprise_app.manifest)
+        manifest["items"][0]["assets"][0]["url"] = "https://{}{}".format(
+            settings["api"]["fqdn"],
+            reverse("mdm_public:enterprise_app_download", args=(self.db_command.uuid,))
+        )
         cmd = {"Manifest": manifest}
         configuration = enterprise_app.get_configuration()
         if configuration:
             cmd["Configuration"] = substitute_variables(configuration, self.enrollment_session, self.enrolled_user)
-        if enterprise_app.ios_app:
-            cmd["iOSApp"] = True
         if self.enrolled_device.comparable_os_version >= (11,):
             if enterprise_app.install_as_managed:
                 # App must install to /Applications

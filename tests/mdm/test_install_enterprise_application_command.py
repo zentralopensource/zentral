@@ -59,16 +59,16 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
 
     def test_scope(self):
         for channel, platform, user_enrollment, result in (
-            (Channel.DEVICE, Platform.IOS, False, False),
-            (Channel.DEVICE, Platform.IPADOS, False, False),
+            (Channel.DEVICE, Platform.IOS, False, True),
+            (Channel.DEVICE, Platform.IPADOS, False, True),
             (Channel.DEVICE, Platform.MACOS, False, True),
             (Channel.DEVICE, Platform.TVOS, False, False),
             (Channel.USER, Platform.IOS, False, False),
             (Channel.USER, Platform.IPADOS, False, False),
             (Channel.USER, Platform.MACOS, False, False),
             (Channel.USER, Platform.TVOS, False, False),
-            (Channel.DEVICE, Platform.IOS, True, False),
-            (Channel.DEVICE, Platform.IPADOS, True, False),
+            (Channel.DEVICE, Platform.IOS, True, True),
+            (Channel.DEVICE, Platform.IPADOS, True, True),
             (Channel.DEVICE, Platform.MACOS, True, True),
             (Channel.DEVICE, Platform.TVOS, True, False),
         ):
@@ -180,6 +180,66 @@ class InstallEnterpriseApplicationCommandTestCase(TestCase):
              "Configuration": {
                 "Yolo": f"Fomo {self.enrolled_device.serial_number}"
              }}
+        )
+
+    def test_build_command_ios(self):
+        self.enrolled_device.platform = Platform.IOS
+        self.enterprise_app.ios_app = True
+        cmd = InstallEnterpriseApplication.create_for_device(self.enrolled_device, self.artifact_version)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "InstallApplication",
+             "ManifestURL": f"https://zentral/public/mdm/device_commands/{cmd.uuid}/enterprise_app_manifest/"}
+        )
+
+    def test_build_command_ios_managed_remove_on_unenroll(self):
+        self.enrolled_device.platform = Platform.IOS
+        self.enterprise_app.ios_app = True
+        self.enterprise_app.install_as_managed = True
+        self.enterprise_app.remove_on_unenroll = True
+        cmd = InstallEnterpriseApplication.create_for_device(self.enrolled_device, self.artifact_version)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "InstallApplication",
+             "ManifestURL": f"https://zentral/public/mdm/device_commands/{cmd.uuid}/enterprise_app_manifest/",
+             "InstallAsManaged": True,
+             "ChangeManagementState": "Managed",
+             "ManagementFlags": 1}
+        )
+
+    def test_build_command_ios_managed_do_not_remove_on_unenroll(self):
+        self.enrolled_device.platform = Platform.IOS
+        self.enterprise_app.ios_app = True
+        self.enterprise_app.install_as_managed = True
+        self.enterprise_app.remove_on_unenroll = False
+        cmd = InstallEnterpriseApplication.create_for_device(self.enrolled_device, self.artifact_version)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "InstallApplication",
+             "ManifestURL": f"https://zentral/public/mdm/device_commands/{cmd.uuid}/enterprise_app_manifest/",
+             "InstallAsManaged": True,
+             "ChangeManagementState": "Managed",
+             "ManagementFlags": 0}
+        )
+
+    def test_build_command_ios_configuration(self):
+        self.enrolled_device.platform = Platform.IOS
+        self.enterprise_app.ios_app = True
+        self.enterprise_app.configuration = plistlib.dumps({"Yolo": "Fomo $ENROLLED_DEVICE.SERIAL_NUMBER"})
+        cmd = InstallEnterpriseApplication.create_for_device(self.enrolled_device, self.artifact_version)
+        response = cmd.build_http_response(self.dep_enrollment_session)
+        payload = plistlib.loads(response.content)["Command"]
+        self.assertEqual(
+            payload,
+            {"RequestType": "InstallApplication",
+             "ManifestURL": f"https://zentral/public/mdm/device_commands/{cmd.uuid}/enterprise_app_manifest/",
+             "Configuration": {"Yolo": f"Fomo {self.enrolled_device.serial_number}"}}
         )
 
     # process_response

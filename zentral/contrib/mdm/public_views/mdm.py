@@ -1,4 +1,5 @@
 import base64
+import copy
 import json
 import logging
 import plistlib
@@ -16,6 +17,7 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils.functional import cached_property
 from django.views.generic import View
 
@@ -60,6 +62,7 @@ from zentral.contrib.mdm.models import (
     RequestStatus,
     UserEnrollmentSession,
 )
+from zentral.conf import settings
 from zentral.contrib.mdm.payloads import substitute_variables
 from zentral.utils.certificates import parse_dn
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
@@ -578,6 +581,21 @@ class ProfileDownloadView(DownloadView):
 
 # TODO limit access
 # TODO DownloadEnterpriseAppEvent with mdm namespace
+class EnterpriseAppManifestView(View):
+    def get(self, request, *args, **kwargs):
+        device_command = get_object_or_404(
+            DeviceCommand.objects.select_related("artifact_version__enterprise_app"),
+            name="InstallEnterpriseApplication", uuid=kwargs["uuid"]
+        )
+        enterprise_app = device_command.artifact_version.enterprise_app
+        manifest = copy.deepcopy(enterprise_app.manifest)
+        manifest["items"][0]["assets"][0]["url"] = "https://{}{}".format(
+            settings["api"]["fqdn"],
+            reverse("mdm_public:enterprise_app_download", args=(device_command.uuid,))
+        )
+        return HttpResponse(plistlib.dumps(manifest), content_type="application/xml")
+
+
 class EnterpriseAppDownloadView(View):
     @cached_property
     def _file_storage(self):
