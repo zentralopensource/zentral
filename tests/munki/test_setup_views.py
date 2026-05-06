@@ -274,7 +274,6 @@ class MunkiSetupViewsTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_configuration_post(self, post_event):
         configuration = force_configuration()
-        prev_updated_at = configuration.updated_at
         prev_value = configuration.serialize_for_event()
         self._login("munki.change_configuration", "munki.view_configuration")
         collected_condition_keys = sorted(get_random_string(12) for _ in range(3))
@@ -288,6 +287,7 @@ class MunkiSetupViewsTestCase(TestCase):
                                             "collected_condition_keys": ",".join(collected_condition_keys),
                                             "managed_installs_sync_interval_days": 2,
                                             "script_checks_run_interval_seconds": 3600,
+                                            "devicecheck_sandbox": "on",
                                             "auto_failed_install_incidents": "on"},
                                         follow=True
                                         )
@@ -320,7 +320,7 @@ class MunkiSetupViewsTestCase(TestCase):
                     "pk": configuration2.pk,
                     "description": "",
                     "devicecheck_private_key_id": '',
-                    "devicecheck_sandbox": False,
+                    "devicecheck_sandbox": True,
                     "devicecheck_team_id": '',
                     "name": configuration2.name,
                     "inventory_apps_full_info_shard": 17,
