@@ -5,21 +5,21 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from .utils import force_configuration, force_enrollment, make_enrolled_machine
+from .utils import force_configuration, force_enrollment
 
 
-class DeviceValidationViewTestCase(TestCase):
+class EnrollmentViewDeviceCheckTestCase(TestCase):
+    """Device-validation branch of EnrollmentView (serial_number + device_token in POST body)."""
+
     @classmethod
     def setUpTestData(cls):
-        # Base enrollment without DeviceCheck — used for auth and not-configured tests.
         cls.enrollment = force_enrollment()
-        cls.enrolled_machine = make_enrolled_machine(enrollment=cls.enrollment)
-        cls.url = reverse("munki_public:validate_device")
+        cls.url = reverse("munki_public:enrollment")
 
-    def _post(self, data, token=None):
+    def _post(self, data, secret=None):
         headers = {}
-        if token is not None:
-            headers["HTTP_AUTHORIZATION"] = f"MunkiEnrolledMachine {token}"
+        if secret is not None:
+            headers["HTTP_AUTHORIZATION"] = f"ZtlEnrollmentSecret {secret}"
         return self.client.post(
             self.url,
             json.dumps(data),
@@ -27,48 +27,46 @@ class DeviceValidationViewTestCase(TestCase):
             **headers,
         )
 
-    def _make_devicecheck_em(self):
-        """Return an EnrolledMachine whose Configuration has DeviceCheck fields set."""
+    def _make_devicecheck_enrollment(self):
+        """Return an Enrollment whose Configuration has DeviceCheck fields set."""
         configuration = force_configuration(
-            # The value is intentionally not a real encrypted blob — the view tests
-            # mock validate_device_token_with_apple so decryption never runs.
+            # Not a real encrypted blob — tests mock validate_device_token_with_apple.
             devicecheck_private_key="fakesecretengine$fakeencryptedvalue",
             devicecheck_private_key_id=get_random_string(10),
             devicecheck_team_id=get_random_string(10),
         )
-        return make_enrolled_machine(enrollment=force_enrollment(configuration=configuration))
+        return force_enrollment(configuration=configuration)
 
-    # --- authentication ---
+    # --- no serial_number → DeviceCheck skipped, enrollment info returned ---
 
-    def test_missing_auth_header(self):
-        response = self._post({"device_token": "abc"})
-        self.assertEqual(response.status_code, 403)
-
-    def test_unknown_token(self):
-        response = self._post({"device_token": "abc"}, token=get_random_string(34))
-        self.assertEqual(response.status_code, 403)
-
-    # --- DeviceCheck not configured ---
-
-    def test_devicecheck_not_configured(self):
-        response = self._post({"device_token": "abc"}, token=self.enrolled_machine.token)
-        self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["detail"], "DeviceCheck not configured.")
-
-    # --- invalid request body ---
-
-    def test_missing_device_token_field(self):
-        em = self._make_devicecheck_em()
-        response = self._post({}, token=em.token)
-        self.assertEqual(response.status_code, 400)
-
-    def test_get_method_not_allowed(self):
-        em = self._make_devicecheck_em()
-        response = self.client.get(
-            self.url,
-            HTTP_AUTHORIZATION=f"MunkiEnrolledMachine {em.token}",
+    def test_no_serial_number_skips_devicecheck(self):
+        response = self._post(
+            {"device_token": "abc"},
+            secret=self.enrollment.secret.secret,
         )
-        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("pk", response.json())
+
+    # --- serial_number present, DeviceCheck not configured → skipped ---
+
+    def test_serial_number_without_devicecheck_configured_skips_validation(self):
+        response = self._post(
+            {"serial_number": get_random_string(12)},
+            secret=self.enrollment.secret.secret,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("pk", response.json())
+
+    # --- serial_number present, DeviceCheck configured, device_token missing ---
+
+    def test_serial_number_without_device_token_returns_400(self):
+        enrollment = self._make_devicecheck_enrollment()
+        response = self._post(
+            {"serial_number": get_random_string(12)},
+            secret=enrollment.secret.secret,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "device_token required.")
 
     # --- valid device token ---
 
@@ -76,34 +74,44 @@ class DeviceValidationViewTestCase(TestCase):
     @patch("zentral.contrib.munki.public_views.validate_device_token_with_apple")
     def test_valid_device_token(self, mock_validate, mock_post_event):
         mock_validate.return_value = True
-        em = self._make_devicecheck_em()
-        response = self._post({"device_token": "YWJj"}, token=em.token)
+        enrollment = self._make_devicecheck_enrollment()
+        serial_number = get_random_string(12)
+        response = self._post(
+            {"serial_number": serial_number, "device_token": "YWJj"},
+            secret=enrollment.secret.secret,
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {})
-        mock_validate.assert_called_once_with(em.enrollment.configuration, "YWJj")
+        self.assertIn("pk", response.json())
+        mock_validate.assert_called_once_with(enrollment.configuration, "YWJj")
         mock_post_event.assert_called_once()
         msn, _, _ = mock_post_event.call_args.args
-        self.assertEqual(msn, em.serial_number)
+        self.assertEqual(msn, serial_number)
         self.assertEqual(mock_post_event.call_args.kwargs, {
             "request_type": "device_validation",
-            "enrollment": {"pk": em.enrollment.pk},
+            "enrollment": {"pk": enrollment.pk},
             "result": "valid",
         })
 
-    # --- invalid device token (Apple rejected it) ---
+    # --- invalid device token (Apple rejected) ---
 
     @patch("zentral.contrib.munki.public_views.post_munki_request_event")
     @patch("zentral.contrib.munki.public_views.validate_device_token_with_apple")
     def test_invalid_device_token(self, mock_validate, mock_post_event):
         mock_validate.return_value = False
-        em = self._make_devicecheck_em()
-        response = self._post({"device_token": "YWJj"}, token=em.token)
+        enrollment = self._make_devicecheck_enrollment()
+        serial_number = get_random_string(12)
+        response = self._post(
+            {"serial_number": serial_number, "device_token": "YWJj"},
+            secret=enrollment.secret.secret,
+        )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "Device validation failed.")
         mock_post_event.assert_called_once()
+        msn, _, _ = mock_post_event.call_args.args
+        self.assertEqual(msn, serial_number)
         self.assertEqual(mock_post_event.call_args.kwargs, {
             "request_type": "device_validation",
-            "enrollment": {"pk": em.enrollment.pk},
+            "enrollment": {"pk": enrollment.pk},
             "result": "invalid",
         })
 
@@ -113,13 +121,19 @@ class DeviceValidationViewTestCase(TestCase):
     @patch("zentral.contrib.munki.public_views.validate_device_token_with_apple")
     def test_upstream_error(self, mock_validate, mock_post_event):
         mock_validate.return_value = None
-        em = self._make_devicecheck_em()
-        response = self._post({"device_token": "YWJj"}, token=em.token)
+        enrollment = self._make_devicecheck_enrollment()
+        serial_number = get_random_string(12)
+        response = self._post(
+            {"serial_number": serial_number, "device_token": "YWJj"},
+            secret=enrollment.secret.secret,
+        )
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "DeviceCheck upstream error.")
         mock_post_event.assert_called_once()
+        msn, _, _ = mock_post_event.call_args.args
+        self.assertEqual(msn, serial_number)
         self.assertEqual(mock_post_event.call_args.kwargs, {
             "request_type": "device_validation",
-            "enrollment": {"pk": em.enrollment.pk},
+            "enrollment": {"pk": enrollment.pk},
             "result": "error",
         })
