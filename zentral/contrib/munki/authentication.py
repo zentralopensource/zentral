@@ -4,5 +4,4 @@ from .models import Enrollment
 
 
 class MunkiEnrollmentSecretAuthentication(EnrollmentSecretAuthentication):
-    keyword = "ZtlMunkiEnrollmentSecret"
     enrollment_model = Enrollment
