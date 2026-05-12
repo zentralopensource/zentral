@@ -672,7 +672,7 @@ class MachineSnapshot(AbstractMTObject):
     @cached_property
     def last_commit(self):
         try:
-            return self.machinesnapshotcommit_set.all().order_by("-id")[0]
+            return self.machinesnapshotcommit_set.all().order_by("-created_at")[0]
         except IndexError:
             pass
 
