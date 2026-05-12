@@ -1,25 +1,41 @@
-from datetime import datetime, timedelta
 import json
-from unittest.mock import patch
 import uuid
+from datetime import datetime, timedelta
+from unittest.mock import patch
+
 from django.test import TestCase
-from django.urls import reverse, NoReverseMatch
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from server.urls import build_urlpatterns_for_zentral_apps
+
 from zentral.conf import settings
 from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
-from zentral.contrib.osquery.events import (OsqueryEnrollmentEvent, OsqueryRequestEvent, OsqueryResultEvent,
-                                            OsqueryCheckStatusUpdated, OsqueryFileCarvingEvent)
-from zentral.contrib.osquery.models import (Configuration, ConfigurationPack,
-                                            DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
-                                            EnrolledMachine, Enrollment, FileCarvingSession,
-                                            Query, Pack, PackQuery)
+from zentral.contrib.osquery.events import (
+    OsqueryCheckStatusUpdated,
+    OsqueryEnrollmentEvent,
+    OsqueryFileCarvingEvent,
+    OsqueryRequestEvent,
+    OsqueryResultEvent,
+)
+from zentral.contrib.osquery.models import (
+    Configuration,
+    ConfigurationPack,
+    DistributedQuery,
+    DistributedQueryMachine,
+    DistributedQueryResult,
+    EnrolledMachine,
+    Enrollment,
+    FileCarvingSession,
+    Pack,
+    PackQuery,
+    Query,
+)
 from zentral.contrib.osquery.views.utils import update_tree_with_inventory_query_snapshot
 from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
@@ -390,6 +406,18 @@ class OsqueryAPIViewsTestCase(TestCase):
         model, _, _, payload = post_event.call_args.args
         self.assertEqual(model, "osquery_enrollment")
         self.assertEqual(payload, {"status": "ok", "enrollment": {"pk": self.enrollment.pk}})
+        self.assertIsNone(post_event.call_args.kwargs.get("machine_serial_number"))
+
+    @patch("zentral.contrib.osquery.public_views.post_enrollment_info_request_event")
+    def test_enrollment_ok_with_serial_number_posts_event(self, post_event):
+        serial_number = get_random_string(12)
+        response = self.get_as_json("enrollment",
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}"
+                                     .format(self.enrollment.secret.secret),
+                                     HTTP_X_ZENTRAL_SERIAL_NUMBER=serial_number)
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        self.assertEqual(post_event.call_args.kwargs.get("machine_serial_number"), serial_number)
 
     @patch("zentral.contrib.inventory.authentication.post_enrollment_info_request_event")
     def test_enrollment_missing_auth_header_posts_event(self, post_event):

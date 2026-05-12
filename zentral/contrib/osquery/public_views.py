@@ -1,11 +1,12 @@
+import json
+import logging
 from base64 import b64decode
 from datetime import datetime
 from gzip import GzipFile
 from itertools import chain, islice
-import json
-import logging
+
 import pytz
-from django.core.exceptions import SuspiciousOperation, PermissionDenied
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.http import Http404, JsonResponse
@@ -13,31 +14,48 @@ from django.utils.crypto import get_random_string
 from django.utils.timezone import make_naive
 from django.views.generic import View
 from rest_framework.generics import RetrieveAPIView
+
 from zentral.contrib.inventory.events import post_enrollment_info_request_event, post_machine_snapshot_raw_event
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
-from zentral.contrib.inventory.utils import (add_machine_tags,
-                                             commit_machine_snapshot_and_trigger_events,
-                                             verify_enrollment_secret)
+from zentral.contrib.inventory.utils import (
+    add_machine_tags,
+    commit_machine_snapshot_and_trigger_events,
+    verify_enrollment_secret,
+)
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
-from zentral.contrib.osquery.conf import build_osquery_conf, INVENTORY_QUERY_NAME
-from zentral.contrib.osquery.events import (post_enrollment_event,
-                                            post_file_carve_events,
-                                            post_request_event, post_results, post_status_logs)
-from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
-                                            EnrolledMachine, Enrollment,
-                                            FileCarvingBlock, FileCarvingSession,
-                                            PackQuery, parse_result_name)
+from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME, build_osquery_conf
+from zentral.contrib.osquery.events import (
+    post_enrollment_event,
+    post_file_carve_events,
+    post_request_event,
+    post_results,
+    post_status_logs,
+)
+from zentral.contrib.osquery.models import (
+    DistributedQuery,
+    DistributedQueryMachine,
+    DistributedQueryResult,
+    EnrolledMachine,
+    Enrollment,
+    FileCarvingBlock,
+    FileCarvingSession,
+    PackQuery,
+    parse_result_name,
+)
 from zentral.contrib.osquery.tags import TagUpdateAggregator
 from zentral.contrib.osquery.tasks import build_file_carving_session_archive
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
+
 from .authentication import OsqueryEnrollmentSecretAuthentication
 from .serializers import EnrollmentInfoSerializer
-from .views.utils import (prepare_file_carving_session_if_necessary,
-                          update_tree_with_enrollment_host_details, update_tree_with_inventory_query_snapshot)
-
+from .views.utils import (
+    prepare_file_carving_session_if_necessary,
+    update_tree_with_enrollment_host_details,
+    update_tree_with_inventory_query_snapshot,
+)
 
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
 
@@ -55,10 +73,12 @@ class EnrollmentView(RetrieveAPIView):
     def retrieve(self, request, *args, **kwargs):
         response = super().retrieve(request, *args, **kwargs)
         user_agent, ip = user_agent_and_ip_address_from_request(request)
+        serial_number = request.META.get("HTTP_X_ZENTRAL_SERIAL_NUMBER") or None
         post_enrollment_info_request_event(
             OsqueryEnrollmentSecretAuthentication.enrollment_event_type,
             user_agent, ip,
             {"status": "ok", "enrollment": {"pk": request.auth.pk}},
+            machine_serial_number=serial_number,
         )
         return response
 
