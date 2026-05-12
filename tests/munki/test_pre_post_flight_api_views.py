@@ -1,22 +1,29 @@
-from datetime import datetime, timedelta
 import gzip
 import json
-from unittest.mock import patch
 import uuid
 import zlib
-from django.urls import reverse, NoReverseMatch
+from datetime import datetime, timedelta
+from unittest.mock import patch
+
 from django.test import TestCase
+from django.urls import NoReverseMatch, reverse
 from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
+
 from zentral.conf import settings
-from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MetaBusinessUnit, Tag, MachineTag
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
-from zentral.contrib.munki.events import (MunkiInstallEvent, MunkiInstallFailedEvent,
-                                          MunkiRequestEvent, MunkiScriptCheckStatusUpdated)
+from zentral.contrib.munki.events import (
+    MunkiInstallEvent,
+    MunkiInstallFailedEvent,
+    MunkiRequestEvent,
+    MunkiScriptCheckStatusUpdated,
+)
 from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIncident
 from zentral.contrib.munki.models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
 from zentral.core.compliance_checks.models import MachineStatus
 from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
+
 from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
 
@@ -859,3 +866,33 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         munki_state.refresh_from_db()
         self.assertIsNone(munki_state.force_full_sync_at)
+
+    @patch("zentral.contrib.munki.public_views.post_machine_snapshot_raw_event")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_job_mixed_timezone_reports(self, post_event, post_machine_snapshot_raw_event):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self._post_as_json(
+            reverse("munki_public:post_job"),
+            {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
+                                  "system_info": {"computer_name": get_random_string(12)}},
+             "last_seen_report_found": True,
+             "reports": [
+                 {"start_time": "2026-01-01 00:00:00 +0000",
+                  "end_time": "2026-01-01 00:01:00 +0000",
+                  "basename": "report2026a",
+                  "run_type": "auto",
+                  "sha1sum": 40 * "0",
+                  "events": []},
+                 {"start_time": "2026-01-02 00:00:00",
+                  "end_time": "2026-01-02 00:01:00",
+                  "basename": "report2026b",
+                  "run_type": "auto",
+                  "sha1sum": 40 * "1",
+                  "events": []},
+             ]},
+            HTTP_AUTHORIZATION=f"MunkiEnrolledMachine {enrolled_machine.token}"
+        )
+        self.assertEqual(response.status_code, 200)
+        munki_state = MunkiState.objects.get(machine_serial_number=enrolled_machine.serial_number)
+        self.assertEqual(munki_state.start_time, datetime(2026, 1, 2, 0, 0, 0))
+        self.assertEqual(munki_state.end_time, datetime(2026, 1, 2, 0, 1, 0))
