@@ -40,7 +40,6 @@ from zentral.contrib.osquery.views.utils import update_tree_with_inventory_query
 from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
 
-
 INVENTORY_QUERY_SNAPSHOT = [
     {'build': '19H1824',
      'major': '10',
@@ -333,12 +332,12 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_empty_secret_err(self):
-        response = self.get_as_json("enrollment", HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret  ")
+        response = self.get_as_json("enrollment", HTTP_AUTHORIZATION="ZtlEnrollmentSecret  ")
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_does_not_exist_err(self):
         response = self.get_as_json("enrollment",
-                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(get_random_string(34)))
+                                    HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(get_random_string(34)))
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_revoked_secret_err(self):
@@ -349,7 +348,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         enrollment.secret.revoked_at = timezone.now()
         enrollment.secret.save()
         response = self.get_as_json("enrollment",
-                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                    HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(
                                         enrollment.secret.secret))
         self.assertEqual(response.status_code, 403)
 
@@ -361,7 +360,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         enrollment.secret.expired_at = timezone.now() - timedelta(seconds=1)
         enrollment.secret.save()
         response = self.get_as_json("enrollment",
-                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                    HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(
                                         enrollment.secret.secret))
         self.assertEqual(response.status_code, 403)
 
@@ -374,20 +373,20 @@ class OsqueryAPIViewsTestCase(TestCase):
         enrollment.secret.request_count = 1
         enrollment.secret.save()
         response = self.get_as_json("enrollment",
-                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                    HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(
                                         enrollment.secret.secret))
         self.assertEqual(response.status_code, 403)
 
     def test_enrollment_post_not_allowed(self):
         response = self.client.post(
             reverse("osquery_public:enrollment"),
-            HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(self.enrollment.secret.secret),
+            HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(self.enrollment.secret.secret),
         )
         self.assertEqual(response.status_code, 405)
 
     def test_enrollment_ok(self):
         response = self.get_as_json("enrollment",
-                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                    HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(
                                         self.enrollment.secret.secret))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
@@ -399,7 +398,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     @patch("zentral.contrib.osquery.public_views.post_enrollment_info_request_event")
     def test_enrollment_ok_posts_event(self, post_event):
         response = self.get_as_json("enrollment",
-                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                    HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(
                                         self.enrollment.secret.secret))
         self.assertEqual(response.status_code, 200)
         post_event.assert_called_once()
@@ -439,7 +438,7 @@ class OsqueryAPIViewsTestCase(TestCase):
         enrollment.secret.revoked_at = timezone.now()
         enrollment.secret.save()
         response = self.get_as_json("enrollment",
-                                    HTTP_AUTHORIZATION="ZtlOsqueryEnrollmentSecret {}".format(
+                                    HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(
                                         enrollment.secret.secret))
         self.assertEqual(response.status_code, 403)
         post_event.assert_called_once()

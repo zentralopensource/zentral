@@ -4,5 +4,4 @@ from .models import Enrollment
 
 
 class OsqueryEnrollmentSecretAuthentication(EnrollmentSecretAuthentication):
-    keyword = "ZtlOsqueryEnrollmentSecret"
     enrollment_model = Enrollment
