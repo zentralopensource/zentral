@@ -1,10 +1,10 @@
-from enum import Enum
 import logging
 import uuid
+from enum import Enum
+
 from zentral.core.events import event_cls_from_type, register_event_type
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
 from zentral.core.queues import queues
-
 
 logger = logging.getLogger('zentral.contrib.inventory.events')
 
@@ -94,12 +94,11 @@ class EnrollmentInfoRequestEvent(BaseEvent):
 register_event_type(EnrollmentInfoRequestEvent)
 
 
-def post_enrollment_info_request_event(model, user_agent, ip, payload):
+def post_enrollment_info_request_event(model, user_agent, ip, payload, machine_serial_number=None):
     # `model` mirrors the EnrollmentSecret related_name (e.g. "munki_enrollment");
     # written to payload["type"] for symmetry with EnrollmentSecretVerificationEvent.
-    # The caller is not enrolled yet, so the event has no machine_serial_number.
     enriched = {"type": model, **payload}
-    EnrollmentInfoRequestEvent.post_machine_request_payloads(None, user_agent, ip, [enriched])
+    EnrollmentInfoRequestEvent.post_machine_request_payloads(machine_serial_number, user_agent, ip, [enriched])
 
 
 def post_enrollment_secret_verification_failure(model,

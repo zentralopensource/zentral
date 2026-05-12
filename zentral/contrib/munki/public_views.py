@@ -2,7 +2,6 @@ import json
 import logging
 from datetime import datetime, timedelta
 
-from dateutil import parser
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
 from django.http import JsonResponse
@@ -53,10 +52,12 @@ class EnrollmentView(RetrieveAPIView):
     def retrieve(self, request, *args, **kwargs):
         response = super().retrieve(request, *args, **kwargs)
         user_agent, ip = user_agent_and_ip_address_from_request(request)
+        serial_number = request.META.get("HTTP_X_ZENTRAL_SERIAL_NUMBER") or None
         post_enrollment_info_request_event(
             MunkiEnrollmentSecretAuthentication.enrollment_event_type,
             user_agent, ip,
             {"status": "ok", "enrollment": {"pk": request.auth.pk}},
+            machine_serial_number=serial_number,
         )
         return response
 
