@@ -126,6 +126,18 @@ class MunkiAPIViewsTestCase(TestCase):
         model, _, _, payload = post_event.call_args.args
         self.assertEqual(model, "munki_enrollment")
         self.assertEqual(payload, {"status": "ok", "enrollment": {"pk": self.enrollment.pk}})
+        self.assertIsNone(post_event.call_args.kwargs.get("machine_serial_number"))
+
+    @patch("zentral.contrib.munki.public_views.post_enrollment_info_request_event")
+    def test_enrollment_ok_with_serial_number_posts_event(self, post_event):
+        serial_number = get_random_string(12)
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}"
+                                     .format(self.enrollment.secret.secret),
+                                     HTTP_X_ZENTRAL_SERIAL_NUMBER=serial_number)
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        self.assertEqual(post_event.call_args.kwargs.get("machine_serial_number"), serial_number)
 
     @patch("zentral.contrib.inventory.authentication.post_enrollment_info_request_event")
     def test_enrollment_missing_auth_header_posts_event(self, post_event):
