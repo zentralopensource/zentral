@@ -1,15 +1,15 @@
-from datetime import datetime, timedelta
 import json
 import logging
-from dateutil import parser
+from datetime import datetime, timedelta
+
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
 from django.http import JsonResponse
 from django.utils.crypto import get_random_string
-from django.utils.timezone import is_aware, make_naive
 from django.views.generic import View
-from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
+
 from zentral.contrib.inventory.events import post_machine_snapshot_raw_event
+from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.utils import add_machine_tags, verify_enrollment_secret
 from zentral.core.events.base import post_machine_conflict_event
@@ -17,13 +17,16 @@ from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from zentral.utils.os_version import make_comparable_os_version
-from .compliance_checks import (prune_out_of_scope_machine_statuses,
-                                serialize_script_check_for_job,
-                                update_machine_munki_script_check_statuses)
+from zentral.utils.time import parse_naive_datetime
+
+from .compliance_checks import (
+    prune_out_of_scope_machine_statuses,
+    serialize_script_check_for_job,
+    update_machine_munki_script_check_statuses,
+)
 from .events import post_munki_enrollment_event, post_munki_events, post_munki_request_event
 from .models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
 from .utils import apply_managed_installs, prepare_ms_tree_certificates, update_managed_install_with_event
-
 
 logger = logging.getLogger('zentral.contrib.munki.public_views')
 
@@ -253,11 +256,9 @@ class PostJobView(BaseView):
         for r in data.pop('reports'):
             report_count += 1
             event_count += len(r.get("events", []))
-            reports.append((
-                parser.parse(r.pop('start_time')),
-                parser.parse(r.pop('end_time')),
-                r
-            ))
+            start_time = parse_naive_datetime(r.pop('start_time'))
+            end_time = parse_naive_datetime(r.pop('end_time'))
+            reports.append((start_time, end_time, r))
         reports.sort()
 
         munki_request_event_kwargs = {
@@ -288,9 +289,7 @@ class PostJobView(BaseView):
             for _, _, report in reports:
                 for created_at, event in report.get("events", []):
                     # time
-                    event_time = parser.parse(created_at)
-                    if is_aware(event_time):
-                        event_time = make_naive(event_time)
+                    event_time = parse_naive_datetime(created_at)
                     for incident_update in update_managed_install_with_event(
                         self.machine_serial_number, event, event_time,
                         self.enrollment.configuration

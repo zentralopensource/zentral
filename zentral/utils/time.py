@@ -1,3 +1,14 @@
+from dateutil import parser
+from django.utils.timezone import is_aware, make_naive
+
+
+def parse_naive_datetime(value):
+    dt = parser.parse(value)
+    if is_aware(dt):
+        dt = make_naive(dt)
+    return dt
+
+
 def duration_repr(seconds):
     result = []
     for divisor, unit in ((3600 * 24, "d"), (3600, "h"), (60, "m"), (1, "s")):
