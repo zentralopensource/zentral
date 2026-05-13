@@ -1,23 +1,33 @@
 import copy
+import hashlib
+import operator
+import uuid
 from datetime import datetime
 from functools import reduce
-import hashlib
 from io import BytesIO
-import operator
 from unittest.mock import patch
-import uuid
+
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
-from django.urls import reverse
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
-from accounts.models import User
+
+from tests.utils.packages import build_dummy_package
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.events import MonolithSyncCatalogsRequestEvent
-from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment, EnrolledMachine,
-                                             PkgInfo, PkgInfoName, SubManifestPkgInfo, ManifestCatalog,
-                                             ManifestSubManifest)
+from zentral.contrib.monolith.models import (
+    Catalog,
+    Condition,
+    EnrolledMachine,
+    Enrollment,
+    ManifestCatalog,
+    ManifestSubManifest,
+    PkgInfo,
+    PkgInfoName,
+    SubManifestPkgInfo,
+)
 from zentral.contrib.monolith.repository_backends import load_repository_backend
 from zentral.contrib.monolith.repository_backends.azure import AzureRepository
 from zentral.contrib.monolith.repository_backends.s3 import S3Repository
@@ -26,13 +36,23 @@ from zentral.contrib.munki.models import ManagedInstall
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
-from utils.packages import build_dummy_package
-from .utils import (CLOUDFRONT_PRIVKEY_PEM,
-                    force_catalog, force_category, force_condition,
-                    force_manifest, force_name, force_name_with_info,
-                    force_pkg_info, force_manifest_catalog, force_tag,
-                    force_sub_manifest, force_sub_manifest_pkg_info,
-                    force_repository, force_manifest_sub_manifest)
+
+from .utils import (
+    CLOUDFRONT_PRIVKEY_PEM,
+    force_catalog,
+    force_category,
+    force_condition,
+    force_manifest,
+    force_manifest_catalog,
+    force_manifest_sub_manifest,
+    force_name,
+    force_name_with_info,
+    force_pkg_info,
+    force_repository,
+    force_sub_manifest,
+    force_sub_manifest_pkg_info,
+    force_tag,
+)
 
 
 class MonolithSetupViewsTestCase(TestCase):

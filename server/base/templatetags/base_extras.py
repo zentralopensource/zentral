@@ -1,20 +1,20 @@
-from datetime import datetime, timedelta
-from importlib import import_module
 import json
 import logging
 import pprint
+from importlib import import_module
+
 from django import template
+from django.conf import settings
 from django.template.defaultfilters import stringfilter
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
-from pygments import lexers, highlight
+from pygments import highlight, lexers
 from pygments.formatters import HtmlFormatter
-from django.conf import settings
-from zentral.utils.time import duration_repr as _duration_repr
+
 from zentral.core.incidents.models import Incident
+from zentral.utils.time import duration_repr as _duration_repr
 
 register = template.Library()
 
@@ -173,19 +173,6 @@ class CodeExampleNode(template.Node):
         lexer = lexers.get_lexer_by_name(self.lexer_name)
         formatter = HtmlFormatter(cssclass="highlight code-example")
         return mark_safe(highlight(output, lexer, formatter))
-
-
-@register.filter()
-def maybetimestamp(val):
-    try:
-        dt = datetime.utcfromtimestamp(int(val))
-    except (OSError, OverflowError, TypeError, ValueError):
-        pass
-    else:
-        now = timezone.now()
-        if abs(now - dt) < timedelta(days=5*366):
-            return dt
-    return val
 
 
 # see https://stackoverflow.com/a/57022261

@@ -1,18 +1,21 @@
-from functools import lru_cache, reduce
-from io import BytesIO
 import operator
 import plistlib
+from functools import lru_cache, reduce
+from io import BytesIO
 from unittest.mock import patch
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import User
-from utils.packages import build_dummy_package
+
+from tests.utils.packages import build_dummy_package
 from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.models import Artifact, Channel
+
 from .utils import force_artifact, force_blueprint_artifact
 
 
