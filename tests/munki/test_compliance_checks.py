@@ -1,19 +1,24 @@
 from datetime import datetime
 from unittest.mock import patch
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
+from tests.inventory.utils import force_jmespath_check
 from zentral.contrib.inventory.models import Tag
-from zentral.contrib.munki.compliance_checks import (convert_bool_expected_result,
-                                                     prune_out_of_scope_machine_statuses,
-                                                     serialize_script_check_for_job,
-                                                     update_machine_munki_script_check_statuses,
-                                                     validate_expected_result,
-                                                     MunkiScriptCheck)
+from zentral.contrib.munki.compliance_checks import (
+    MunkiScriptCheck,
+    convert_bool_expected_result,
+    prune_out_of_scope_machine_statuses,
+    serialize_script_check_for_job,
+    update_machine_munki_script_check_statuses,
+    validate_expected_result,
+)
 from zentral.contrib.munki.events import MunkiScriptCheckStatusUpdated
 from zentral.contrib.munki.models import ScriptCheck
 from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
-from inventory.utils import force_jmespath_check
+
 from .utils import force_script_check
 
 

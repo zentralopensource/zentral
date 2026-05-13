@@ -1,19 +1,22 @@
-from functools import lru_cache, reduce
 import hashlib
 import operator
 import os
 import tempfile
+from functools import lru_cache, reduce
 from unittest.mock import Mock, patch
+
+from accounts.models import APIToken, User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
-from accounts.models import APIToken, User
+
+from tests.utils.packages import build_dummy_package
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import Artifact, ArtifactVersion, ArtifactVersionTag, DeviceArtifact, TargetArtifact
 from zentral.core.events.base import AuditEvent
-from utils.packages import build_dummy_package
+
 from .utils import force_artifact, force_blueprint_artifact, force_dep_enrollment_session
 
 
