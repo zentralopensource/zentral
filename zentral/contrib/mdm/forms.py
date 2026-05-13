@@ -1,17 +1,21 @@
 import base64
-from datetime import datetime, timedelta
 import hashlib
 import json
 import logging
 import os.path
 import plistlib
 import zipfile
+from datetime import timedelta
+
 from dateutil import parser
 from django import forms
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F, Q, OuterRef, Exists
+from django.db.models import Count, Exists, F, OuterRef, Q
+
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.os_version import make_comparable_os_version
+from zentral.utils.time import naive_utcnow
+
 from .app_manifest import read_package_info, validate_configuration
 from .apps_books import AppsBooksClient
 from .artifacts import update_blueprint_serialized_artifacts
@@ -20,22 +24,46 @@ from .crypto import generate_push_certificate_key_bytes, load_push_certificate_a
 from .declarations import verify_declaration_source
 from .dep import decrypt_dep_token
 from .dep_client import DEPClient
+from .models import (
+    Artifact,
+    ArtifactVersion,
+    ArtifactVersionTag,
+    Blueprint,
+    BlueprintArtifact,
+    BlueprintArtifactTag,
+    CertAsset,
+    Channel,
+    DataAsset,
+    Declaration,
+    DeclarationRef,
+    DEPDevice,
+    DEPEnrollment,
+    DEPEnrollmentCustomView,
+    DEPOrganization,
+    DEPToken,
+    DEPVirtualServer,
+    DeviceArtifact,
+    EnrolledDevice,
+    EnterpriseApp,
+    FileVaultConfig,
+    Location,
+    LocationAsset,
+    OTAEnrollment,
+    Platform,
+    Profile,
+    ProvisioningProfile,
+    PushCertificate,
+    RecoveryPasswordConfig,
+    SoftwareUpdateEnforcement,
+    StoreApp,
+    TargetArtifact,
+    UserEnrollment,
+)
 from .payloads import get_configuration_profile_info
-from .models import (Artifact, ArtifactVersion, ArtifactVersionTag,
-                     Blueprint, BlueprintArtifact, BlueprintArtifactTag, Channel,
-                     CertAsset, DataAsset, Declaration, DeclarationRef,
-                     DEPDevice, DEPOrganization, DEPEnrollment, DEPEnrollmentCustomView, DEPToken, DEPVirtualServer,
-                     EnrolledDevice, EnterpriseApp, Platform,
-                     FileVaultConfig, RecoveryPasswordConfig,
-                     OTAEnrollment, UserEnrollment, PushCertificate,
-                     Profile, ProvisioningProfile, Location, LocationAsset, StoreApp,
-                     SoftwareUpdateEnforcement,
-                     DeviceArtifact, TargetArtifact)
 from .serializers import CertAssetSANSerializer, RDNSerializer
 from .skip_keys import skippable_setup_panes
 from .utils import get_provisioning_profile_info
 from .validators import DEPEnrollmentValidator
-
 
 logger = logging.getLogger("zentral.contrib.mdm.forms")
 
@@ -272,7 +300,7 @@ class EnrolledDeviceSearchForm(forms.Form):
         last_seen = self.cleaned_data.get("last_seen")
         if last_seen:
             days = int(last_seen.removesuffix("d"))
-            qs = qs.filter(last_seen_at__gte=datetime.utcnow() - timedelta(days=days))
+            qs = qs.filter(last_seen_at__gte=naive_utcnow() - timedelta(days=days))
         return qs
 
     def get_redirect_to(self):

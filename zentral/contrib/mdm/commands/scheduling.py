@@ -1,14 +1,23 @@
-from datetime import datetime, timedelta
 import logging
+from datetime import timedelta
+
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
-from zentral.contrib.mdm.models import (Artifact,
-                                        Blueprint, Command,
-                                        RequestStatus, Platform,
-                                        DeviceCommand, ReEnrollmentSession)
+
+from zentral.contrib.mdm.models import (
+    Artifact,
+    Blueprint,
+    Command,
+    DeviceCommand,
+    Platform,
+    ReEnrollmentSession,
+    RequestStatus,
+)
+from zentral.utils.time import naive_utcnow
+
 from .account_configuration import AccountConfiguration
-from .base import registered_commands, load_command
+from .base import load_command, registered_commands
 from .certificate_list import CertificateList
 from .declarative_management import DeclarativeManagement
 from .device_configured import DeviceConfigured
@@ -29,7 +38,6 @@ from .set_firmware_password import SetFirmwarePassword
 from .set_recovery_lock import SetRecoveryLock
 from .setup_filevault import SetupFileVault
 
-
 logger = logging.getLogger("zentral.contrib.mdm.commands.scheduling")
 
 
@@ -42,7 +50,7 @@ def _update_base_inventory(target, enrollment_session, status):
     if not target.is_device:
         return
     try:
-        min_date = datetime.utcnow() - timedelta(seconds=target.blueprint.inventory_interval)
+        min_date = naive_utcnow() - timedelta(seconds=target.blueprint.inventory_interval)
     except Exception:
         min_date = None
     enrolled_device = target.enrolled_device
@@ -69,7 +77,7 @@ def _update_extra_inventory(target, enrollment_session, status):
     if not blueprint:
         return
     enrolled_device = target.enrolled_device
-    min_date = datetime.utcnow() - timedelta(seconds=blueprint.inventory_interval)
+    min_date = naive_utcnow() - timedelta(seconds=blueprint.inventory_interval)
     # apps
     if (
         blueprint.collect_apps > Blueprint.InventoryItemCollectionOption.NO
@@ -148,11 +156,11 @@ def _reenroll(target, enrollment_session, status):
     # no certificate expiry or certificate expiry within the next 90 days
     if (
         enrolled_device.cert_not_valid_after is None
-        or enrolled_device.cert_not_valid_after - datetime.utcnow() < timedelta(days=90)
+        or enrolled_device.cert_not_valid_after - naive_utcnow() < timedelta(days=90)
     ):
         # no other re-enrollment session for this enrolled device in the last 4 hours
         if ReEnrollmentSession.objects.filter(enrolled_device=enrolled_device,
-                                              created_at__gt=datetime.utcnow() - timedelta(hours=4)).count() == 0:
+                                              created_at__gt=naive_utcnow() - timedelta(hours=4)).count() == 0:
             return Reenroll.create_for_enrollment_session(enrollment_session)
         else:
             logger.warning("Enrolled device %s needs to re-enroll, but there was at least one re-enrollment session "
@@ -224,7 +232,7 @@ def _setup_filevault(target, enrollment_session, status):
         latest_cmd = (
             DeviceCommand.objects.filter(name=SetupFileVault.get_db_name(),
                                          enrolled_device=enrolled_device,
-                                         time__gte=datetime.utcnow() - timedelta(hours=4))
+                                         time__gte=naive_utcnow() - timedelta(hours=4))
                                  .order_by("-time")
                                  .first()
         )
@@ -245,7 +253,7 @@ def _rotate_filevault_key(target, enrollment_session, status):
     except AttributeError:
         return
     enrolled_device = target.enrolled_device
-    now = datetime.utcnow()
+    now = naive_utcnow()
     if (
         prk_rotation_interval_days > 0
         and enrolled_device.filevault_prk_updated_at
@@ -295,7 +303,7 @@ def _manage_recovery_password(target, enrollment_session, status):
                 )
             )
             or (enrolled_device.recovery_password_updated_at
-                and (datetime.utcnow() - enrolled_device.recovery_password_updated_at
+                and (naive_utcnow() - enrolled_device.recovery_password_updated_at
                      < timedelta(days=recovery_password_config.rotation_interval_days))
                 )
         )
@@ -305,7 +313,7 @@ def _manage_recovery_password(target, enrollment_session, status):
     latest_cmd = (
         DeviceCommand.objects.filter(name=cmd_class.get_db_name(),
                                      enrolled_device=enrolled_device,
-                                     time__gte=datetime.utcnow() - timedelta(hours=4))
+                                     time__gte=naive_utcnow() - timedelta(hours=4))
                              .order_by("-time")
                              .first()
     )

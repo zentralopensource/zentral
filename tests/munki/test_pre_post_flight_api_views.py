@@ -23,6 +23,7 @@ from zentral.contrib.munki.incidents import IncidentUpdate, MunkiInstallFailedIn
 from zentral.contrib.munki.models import EnrolledMachine, ManagedInstall, MunkiState, ScriptCheck
 from zentral.core.compliance_checks.models import MachineStatus
 from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
+from zentral.utils.time import naive_utcnow
 
 from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
 
@@ -232,14 +233,14 @@ class MunkiAPIViewsTestCase(TestCase):
                 incident_type=get_random_string(12),
                 key={"un": get_random_string(12)},
                 status=status.value,
-                status_time=datetime.utcnow(),
+                status_time=naive_utcnow(),
                 severity=Severity.MAJOR.value
             )
             MachineIncident.objects.create(
                 incident=i,
                 serial_number=enrolled_machine.serial_number,
                 status=status.value,
-                status_time=datetime.utcnow()
+                status_time=naive_utcnow()
             )
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number},
@@ -351,7 +352,7 @@ class MunkiAPIViewsTestCase(TestCase):
             expected_result="t",
         )
         MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
-                                  last_script_checks_run=datetime.utcnow())
+                                  last_script_checks_run=naive_utcnow())
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number,
                                        "os_version": "14.1",
@@ -369,8 +370,8 @@ class MunkiAPIViewsTestCase(TestCase):
             expected_result="t",
         )
         MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
-                                  last_script_checks_run=datetime.utcnow(),
-                                  force_full_sync_at=datetime.utcnow())  # forced
+                                  last_script_checks_run=naive_utcnow(),
+                                  force_full_sync_at=naive_utcnow())  # forced
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number,
                                        "os_version": "14.1",
@@ -410,7 +411,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(MachineStatus.objects.filter(serial_number=enrolled_machine.serial_number).count(), 1)
         configuration = enrolled_machine.enrollment.configuration
         last_script_checks_run = (
-            datetime.utcnow()
+            naive_utcnow()
             - timedelta(seconds=configuration.script_checks_run_interval_seconds)
             - timedelta(seconds=1)
         )
@@ -461,7 +462,7 @@ class MunkiAPIViewsTestCase(TestCase):
     def test_job_details_managed_installs_too_early(self):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
-                                  last_managed_installs_sync=datetime.utcnow())
+                                  last_managed_installs_sync=naive_utcnow())
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number,
                                        "os_version": "14.1",
@@ -472,8 +473,8 @@ class MunkiAPIViewsTestCase(TestCase):
     def test_job_details_managed_installs_too_forced_sync(self):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
-                                  last_managed_installs_sync=datetime.utcnow(),
-                                  force_full_sync_at=datetime.utcnow())
+                                  last_managed_installs_sync=naive_utcnow(),
+                                  force_full_sync_at=naive_utcnow())
         response = self._post_as_json(reverse("munki_public:job_details"),
                                       {"machine_serial_number": enrolled_machine.serial_number,
                                        "os_version": "14.1",
@@ -486,7 +487,7 @@ class MunkiAPIViewsTestCase(TestCase):
         MunkiState.objects.create(
             machine_serial_number=enrolled_machine.serial_number,
             last_managed_installs_sync=(
-                datetime.utcnow()
+                naive_utcnow()
                 - timedelta(days=enrolled_machine.enrollment.configuration.managed_installs_sync_interval_days,
                             seconds=1)
             )
@@ -767,7 +768,7 @@ class MunkiAPIViewsTestCase(TestCase):
     def test_post_job_script_check_results(self, post_event):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         sc = force_script_check()
-        start_dt = datetime.utcnow()
+        start_dt = naive_utcnow()
         machine_status_qs = MachineStatus.objects.filter(serial_number=enrolled_machine.serial_number)
         # no MachineStatus yet
         self.assertEqual(machine_status_qs.count(), 0)
@@ -854,7 +855,7 @@ class MunkiAPIViewsTestCase(TestCase):
     def test_post_job_force_full_sync(self):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
         munki_state = MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
-                                                force_full_sync_at=datetime.utcnow())
+                                                force_full_sync_at=naive_utcnow())
         response = self._post_as_json(reverse("munki_public:post_job"),
                                       {"machine_snapshot": {"serial_number": enrolled_machine.serial_number,
                                                             "system_info": {"computer_name": get_random_string(12)}},

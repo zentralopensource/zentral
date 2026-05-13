@@ -1,5 +1,5 @@
 import plistlib
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -15,6 +15,7 @@ from zentral.contrib.mdm.events import (
     RecoveryPasswordUpdatedEvent,
 )
 from zentral.contrib.mdm.models import Channel, Command, Platform, RequestStatus
+from zentral.utils.time import naive_utcnow
 
 from .utils import (
     force_blueprint,
@@ -326,7 +327,7 @@ class SetRecoveryLockCommandTestCase(TestCase):
         self.enrolled_device.recovery_password_updated_at -= timedelta(days=91)
         self.enrolled_device.save()
         cmd = SetRecoveryLock.create_for_target(Target(self.enrolled_device))
-        cmd.db_command.time = datetime.utcnow() - timedelta(hours=5)
+        cmd.db_command.time = naive_utcnow() - timedelta(hours=5)
         cmd.db_command.save()
         cmd.process_response(
             {"UDID": self.enrolled_device.udid,

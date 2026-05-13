@@ -1,15 +1,25 @@
-from datetime import datetime
 from django.utils.crypto import get_random_string
+
 from tests.munki.utils import force_enrollment as force_munki_enrollment
 from tests.osquery.utils import force_enrollment as force_osquery_enrollment
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
-from zentral.contrib.monolith.models import (Catalog, Condition, Enrollment,
-                                             Manifest, ManifestCatalog,
-                                             ManifestEnrollmentPackage, ManifestSubManifest,
-                                             PkgInfo, PkgInfoCategory, PkgInfoName,
-                                             SubManifest, SubManifestPkgInfo,
-                                             Repository, RepositoryBackend)
-
+from zentral.contrib.monolith.models import (
+    Catalog,
+    Condition,
+    Enrollment,
+    Manifest,
+    ManifestCatalog,
+    ManifestEnrollmentPackage,
+    ManifestSubManifest,
+    PkgInfo,
+    PkgInfoCategory,
+    PkgInfoName,
+    Repository,
+    RepositoryBackend,
+    SubManifest,
+    SubManifestPkgInfo,
+)
+from zentral.utils.time import naive_utcnow
 
 CLOUDFRONT_PRIVKEY_PEM = """-----BEGIN RSA PRIVATE KEY-----
 MIIBOwIBAAJBAKRhksp6Bvp6Iph7vxcAT1FO3p78ek34i3Zjv5p65Yve8SC5ZCef
@@ -80,7 +90,7 @@ def force_catalog(name=None, repository=None, manifest=None, tags=None, archived
     catalog = Catalog.objects.create(
         repository=repository,
         name=get_random_string(12) if name is None else name,
-        archived_at=datetime.utcnow() if archived else None,
+        archived_at=naive_utcnow() if archived else None,
     )
     if manifest:
         mc = ManifestCatalog.objects.create(manifest=manifest, catalog=catalog)
@@ -135,7 +145,7 @@ def _force_pkg_info(
     pi = PkgInfo.objects.create(
         repository=catalog.repository,
         name=pkg_info_name, version=version, local=local,
-        archived_at=datetime.utcnow() if archived else None,
+        archived_at=naive_utcnow() if archived else None,
         data=data
     )
     pi.catalogs.add(catalog)

@@ -1,14 +1,16 @@
-from datetime import datetime
 import logging
-from django.db import connection
+
 import psycopg2.extras
-from zentral.utils.leaky_bucket import LeakyBucket
+from django.db import connection
+
 from zentral.conf import settings
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.queues import queues
+from zentral.utils.leaky_bucket import LeakyBucket
+from zentral.utils.time import naive_utcnow
+
 from .apns import apns_client_cache
 from .events import post_mdm_device_notification_event
-
 
 logger = logging.getLogger("zentral.contrib.mdm.workers")
 
@@ -127,7 +129,7 @@ class BaseAPNSWorker:
                 )
                 if success:
                     self.inc_counter("success")
-                    updates.append((pk, a_id, serial_number, udid, datetime.utcnow()))
+                    updates.append((pk, a_id, serial_number, udid, naive_utcnow()))
                 else:
                     self.inc_counter("failure")
                     updates.append((pk, a_id, serial_number, udid, None))

@@ -1,19 +1,26 @@
-from datetime import datetime
 import os.path
 import plistlib
 from unittest.mock import call, patch
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from realms.models import RealmGroup, RealmUserGroupMembership
+
 from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, MetaMachine, Tag
 from zentral.contrib.mdm.commands.certificate_list import CertificateList
 from zentral.contrib.mdm.commands.device_information import DeviceInformation
 from zentral.contrib.mdm.commands.installed_application_list import InstalledApplicationList
 from zentral.contrib.mdm.commands.profile_list import ProfileList
-from zentral.contrib.mdm.inventory import (ms_tree_from_payload, realm_group_members_updated_receiver,
-                                           update_realm_tags, update_realm_user_machine_tags)
+from zentral.contrib.mdm.inventory import (
+    ms_tree_from_payload,
+    realm_group_members_updated_receiver,
+    update_realm_tags,
+    update_realm_user_machine_tags,
+)
 from zentral.contrib.mdm.models import Blueprint, RealmGroupTagMapping
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_dep_enrollment_session
 
 
@@ -62,7 +69,7 @@ class MDMInventoryTestCase(TestCase):
         self.assertEqual(ms_tree["os_version"]["build"], "22E772610a")
 
     def test_full_inventory_tree(self):
-        step1 = datetime.utcnow()
+        step1 = naive_utcnow()
         # certificates
         cmd = CertificateList.create_for_device(
             self.dep_enrollment_session.enrolled_device,
@@ -78,7 +85,7 @@ class MDMInventoryTestCase(TestCase):
         self.assertTrue(self.enrolled_device.certificates_updated_at > step1)
         self.assertIsNone(self.enrolled_device.profiles_updated_at)
         # profiles
-        step2 = datetime.utcnow()
+        step2 = naive_utcnow()
         cmd = ProfileList.create_for_device(
             self.dep_enrollment_session.enrolled_device,
             kwargs={"update_inventory": True},
@@ -93,7 +100,7 @@ class MDMInventoryTestCase(TestCase):
         self.assertTrue(self.enrolled_device.certificates_updated_at < step2)
         self.assertTrue(self.enrolled_device.profiles_updated_at > step2)
         # apps
-        step3 = datetime.utcnow()
+        step3 = naive_utcnow()
         cmd = InstalledApplicationList.create_for_device(
             self.dep_enrollment_session.enrolled_device,
             kwargs={"update_inventory": True},
@@ -108,7 +115,7 @@ class MDMInventoryTestCase(TestCase):
         self.assertTrue(self.enrolled_device.certificates_updated_at < step2)
         self.assertTrue(self.enrolled_device.profiles_updated_at < step3)
         # device information
-        step4 = datetime.utcnow()
+        step4 = naive_utcnow()
         cmd = DeviceInformation.create_for_device(self.enrolled_device)
         cmd.process_response(
             self.read_plist("device_information.plist"),

@@ -1,40 +1,58 @@
+import json
+import logging
 from base64 import b64decode
 from datetime import datetime
 from gzip import GzipFile
 from itertools import chain, islice
-import json
-import logging
+
 import pytz
-from django.core.exceptions import SuspiciousOperation, PermissionDenied
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.http import Http404, JsonResponse
 from django.utils.crypto import get_random_string
 from django.utils.timezone import make_naive
 from django.views.generic import View
+
 from zentral.contrib.inventory.events import post_machine_snapshot_raw_event
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
-from zentral.contrib.inventory.utils import (add_machine_tags,
-                                             commit_machine_snapshot_and_trigger_events,
-                                             verify_enrollment_secret)
+from zentral.contrib.inventory.utils import (
+    add_machine_tags,
+    commit_machine_snapshot_and_trigger_events,
+    verify_enrollment_secret,
+)
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
-from zentral.contrib.osquery.conf import build_osquery_conf, INVENTORY_QUERY_NAME
-from zentral.contrib.osquery.events import (post_enrollment_event,
-                                            post_file_carve_events,
-                                            post_request_event, post_results, post_status_logs)
-from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
-                                            EnrolledMachine,
-                                            FileCarvingBlock, FileCarvingSession,
-                                            PackQuery, parse_result_name)
+from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME, build_osquery_conf
+from zentral.contrib.osquery.events import (
+    post_enrollment_event,
+    post_file_carve_events,
+    post_request_event,
+    post_results,
+    post_status_logs,
+)
+from zentral.contrib.osquery.models import (
+    DistributedQuery,
+    DistributedQueryMachine,
+    DistributedQueryResult,
+    EnrolledMachine,
+    FileCarvingBlock,
+    FileCarvingSession,
+    PackQuery,
+    parse_result_name,
+)
 from zentral.contrib.osquery.tags import TagUpdateAggregator
 from zentral.contrib.osquery.tasks import build_file_carving_session_archive
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
-from .views.utils import (prepare_file_carving_session_if_necessary,
-                          update_tree_with_enrollment_host_details, update_tree_with_inventory_query_snapshot)
+from zentral.utils.time import naive_utcnow
 
+from .views.utils import (
+    prepare_file_carving_session_if_necessary,
+    update_tree_with_enrollment_host_details,
+    update_tree_with_inventory_query_snapshot,
+)
 
 logger = logging.getLogger('zentral.contrib.osquery.views.api')
 
@@ -381,7 +399,7 @@ class DistributedWriteView(BaseNodeView):
         # process compliance checks & tag updates
         cc_status_agg = ComplianceCheckStatusAggregator(self.machine.serial_number)
         tag_update_agg = TagUpdateAggregator(self.machine.serial_number, self.request)
-        result_time = datetime.utcnow()  # TODO: how to get a better time? add ztl_status_time = now() to the query?
+        result_time = naive_utcnow()  # TODO: how to get a better time? add ztl_status_time = now() to the query?
         for dqm_pk, dqm in dqm_cache.items():
             distributed_query = dqm.distributed_query
             query = distributed_query.query

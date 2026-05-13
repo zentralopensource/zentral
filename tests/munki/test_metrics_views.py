@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta
-from django.urls import reverse
+
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from prometheus_client.parser import text_string_to_metric_families
-from zentral.contrib.munki.models import ManagedInstall, MunkiState
+
 from zentral.conf import settings
+from zentral.contrib.munki.models import ManagedInstall, MunkiState
+from zentral.utils.time import naive_utcnow
 
 
 class MunkiMetricsViewsTestCase(TestCase):
@@ -20,7 +23,7 @@ class MunkiMetricsViewsTestCase(TestCase):
             failed_at=datetime.now() if failed else None,
             reinstall=reinstall,
         )
-        last_seen = datetime.utcnow() - timedelta(days=age_days)
+        last_seen = naive_utcnow() - timedelta(days=age_days)
         ms = MunkiState.objects.create(machine_serial_number=mi.machine_serial_number)
         MunkiState.objects.filter(pk=ms.pk).update(last_seen=last_seen)
         return mi
@@ -42,7 +45,7 @@ class MunkiMetricsViewsTestCase(TestCase):
     def test_active_machines(self):
         for age in (2, 22, 31):
             ms = MunkiState.objects.create(machine_serial_number=get_random_string(12))
-            MunkiState.objects.filter(pk=ms.pk).update(last_seen=datetime.utcnow() - timedelta(days=age))
+            MunkiState.objects.filter(pk=ms.pk).update(last_seen=naive_utcnow() - timedelta(days=age))
         response = self._make_authenticated_request()
         self.assertEqual(response.status_code, 200)
         for family in text_string_to_metric_families(response.content.decode("utf-8")):

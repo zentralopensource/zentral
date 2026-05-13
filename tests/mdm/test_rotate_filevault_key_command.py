@@ -1,11 +1,13 @@
-from datetime import datetime, timedelta
 import plistlib
+from datetime import timedelta
 from unittest.mock import patch
+
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import load_der_x509_certificate
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import RotateFileVaultKey
@@ -13,6 +15,8 @@ from zentral.contrib.mdm.commands.scheduling import _rotate_filevault_key
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
 from zentral.contrib.mdm.events import FileVaultPRKUpdatedEvent
 from zentral.contrib.mdm.models import Channel, Command, Platform, RequestStatus
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_blueprint, force_dep_enrollment_session, force_filevault_config
 
 
@@ -238,7 +242,7 @@ class RotateFileVaultKeyCommandTestCase(TestCase):
         filevault_config = force_filevault_config()
         filevault_config.prk_rotation_interval_days = 90
         self.enrolled_device.blueprint = force_blueprint(filevault_config=filevault_config)
-        self.enrolled_device.filevault_prk_updated_at = datetime.utcnow() - timedelta(days=89)
+        self.enrolled_device.filevault_prk_updated_at = naive_utcnow() - timedelta(days=89)
         self.assertIsNone(_rotate_filevault_key(
             Target(self.enrolled_device),
             self.dep_enrollment_session,
@@ -251,7 +255,7 @@ class RotateFileVaultKeyCommandTestCase(TestCase):
         filevault_config = force_filevault_config()
         filevault_config.prk_rotation_interval_days = 90
         self.enrolled_device.blueprint = force_blueprint(filevault_config=filevault_config)
-        self.enrolled_device.filevault_prk_updated_at = datetime.utcnow() - timedelta(days=91)
+        self.enrolled_device.filevault_prk_updated_at = naive_utcnow() - timedelta(days=91)
         cmd = RotateFileVaultKey.create_for_target(Target(self.enrolled_device))
         cmd.process_response(
             {"UDID": self.enrolled_device.udid,
@@ -272,9 +276,9 @@ class RotateFileVaultKeyCommandTestCase(TestCase):
         filevault_config = force_filevault_config()
         filevault_config.prk_rotation_interval_days = 90
         self.enrolled_device.blueprint = force_blueprint(filevault_config=filevault_config)
-        self.enrolled_device.filevault_prk_updated_at = datetime.utcnow() - timedelta(days=91)
+        self.enrolled_device.filevault_prk_updated_at = naive_utcnow() - timedelta(days=91)
         cmd = RotateFileVaultKey.create_for_target(Target(self.enrolled_device))
-        cmd.db_command.time = datetime.utcnow() - timedelta(hours=5)
+        cmd.db_command.time = naive_utcnow() - timedelta(hours=5)
         cmd.db_command.save()
         cmd.process_response(
             {"UDID": self.enrolled_device.udid,

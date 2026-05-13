@@ -1,21 +1,30 @@
-from datetime import datetime
 import json
 import os.path
 import queue
 import threading
+from datetime import datetime
 from unittest.mock import Mock, patch
+
 import boto3
 from botocore.stub import Stubber
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from pyarrow.fs import LocalFileSystem
+
 from zentral.conf.config import ConfigDict
-from zentral.core.queues.backends.aws_sns_sqs import (BulkStoreWorker, ConcurrentStoreWorker, EnrichWorker,
-                                                      EventQueues, PreprocessWorker, ProcessWorker, SimpleStoreWorker)
 from zentral.core.queues.backends.aws_sns_sqs.consumer import ConsumerProducerFinalThread
 from zentral.core.queues.backends.aws_sns_sqs.sns import SNSPublishThread
 from zentral.core.queues.backends.aws_sns_sqs.sqs import SQSSendThread
+from zentral.core.queues.backends.aws_sns_sqs import (
+    BulkStoreWorker,
+    ConcurrentStoreWorker,
+    EnrichWorker,
+    EventQueues,
+    PreprocessWorker,
+    ProcessWorker,
+    SimpleStoreWorker,
+)
 from zentral.core.stores.backends.http import HTTPStoreSerializer
 from zentral.core.stores.backends.s3_parquet import S3ParquetStoreSerializer
 from zentral.core.stores.models import Store
@@ -377,9 +386,9 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         get_queue.assert_called_once_with("store-enriched-events-elasticsearch")
 
     @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
-    @patch("zentral.core.queues.backends.aws_sns_sqs.datetime")
-    def test_mark_store_worker_queue_for_deletion(self, patched_datetime, get_queue):
-        patched_datetime.utcnow.return_value = datetime(2000, 1, 1)
+    @patch("zentral.core.queues.backends.aws_sns_sqs.naive_utcnow")
+    def test_mark_store_worker_queue_for_deletion(self, patched_naive_utcnow, get_queue):
+        patched_naive_utcnow.return_value = datetime(2000, 1, 1)
         store = self.build_store(name="Elasticsearch", provisioned=True)
         get_queue.return_value = (
             False,

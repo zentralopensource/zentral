@@ -1,12 +1,15 @@
-from datetime import datetime
 import json
 import plistlib
+
+import psycopg2.extras
 from dateutil import parser
 from django.db import connection, transaction
 from django.urls import reverse
-import psycopg2.extras
+
 from zentral.conf import settings
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload
+from zentral.utils.time import naive_utcnow
+
 from .models import Rule, Target
 
 
@@ -157,7 +160,7 @@ def update_or_create_targets(configuration, targets):
             cursor, query,
             ((target_type.value, target_identifier, configuration.id,
               val["blocked_incr"], val["collected_incr"], val["executed_incr"],
-              datetime.utcnow())
+              naive_utcnow())
              for (target_type, target_identifier), val in targets.items()),
             fetch=True
         )

@@ -1,9 +1,11 @@
-from datetime import datetime, timedelta
 import plistlib
-from unittest.mock import Mock, patch
 import uuid
+from datetime import timedelta
+from unittest.mock import Mock, patch
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import Reenroll
@@ -12,9 +14,11 @@ from zentral.contrib.mdm.models import (
     Channel,
     EnrolledUser,
     Platform,
-    RequestStatus,
     ReEnrollmentSession,
+    RequestStatus,
 )
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_dep_enrollment_session
 
 
@@ -283,7 +287,7 @@ class ReenrollCommandTestCase(TestCase):
         )
 
     def test_reenroll_device_channel_cert_too_old(self):
-        self.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=10)
+        self.enrolled_device.cert_not_valid_after = naive_utcnow() + timedelta(days=10)
         self.enrolled_device.save()
         command = _reenroll(
             Target(self.enrolled_device),
@@ -300,7 +304,7 @@ class ReenrollCommandTestCase(TestCase):
         )
 
     def test_reenroll_device_channel_cert_too_old_recent_reenrollment_session_noop(self):
-        self.enrolled_device.cert_not_valid_after = datetime.utcnow()
+        self.enrolled_device.cert_not_valid_after = naive_utcnow()
         self.enrolled_device.save()
         ReEnrollmentSession.objects.create_from_enrollment_session(
             self.dep_enrollment_session
@@ -314,13 +318,13 @@ class ReenrollCommandTestCase(TestCase):
         )
 
     def test_reenroll_device_channel_cert_too_old_older_reenrollment_session(self):
-        self.enrolled_device.cert_not_valid_after = datetime.utcnow()
+        self.enrolled_device.cert_not_valid_after = naive_utcnow()
         self.enrolled_device.save()
         rs = ReEnrollmentSession.objects.create_from_enrollment_session(
             self.dep_enrollment_session
         )
         ReEnrollmentSession.objects.filter(pk=rs.pk).update(
-            created_at=datetime.utcnow() - timedelta(hours=8)
+            created_at=naive_utcnow() - timedelta(hours=8)
         )
         command = _reenroll(
             Target(self.enrolled_device),
@@ -337,7 +341,7 @@ class ReenrollCommandTestCase(TestCase):
         )
 
     def test_reenroll_device_channel_cert_ok_noop(self):
-        self.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(days=167)
+        self.enrolled_device.cert_not_valid_after = naive_utcnow() + timedelta(days=167)
         self.enrolled_device.save()
         self.assertIsNone(
             _reenroll(

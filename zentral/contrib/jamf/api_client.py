@@ -1,20 +1,23 @@
 import logging
-from datetime import datetime, timedelta
 import re
+from datetime import timedelta
 from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape as xml_escape
+
+import requests
 from dateutil import parser
 from django.urls import reverse
 from django.utils.functional import cached_property
-import requests
+
 from zentral.conf import settings
 from zentral.contrib.inventory.conf import macos_version_from_build
 from zentral.contrib.inventory.utils import clean_ip_address
 from zentral.utils.requests import CustomHTTPAdapter
 from zentral.utils.text import shard
-from .events import JAMF_EVENTS
+from zentral.utils.time import naive_utcnow
 
+from .events import JAMF_EVENTS
 
 logger = logging.getLogger('zentral.contrib.jamf.api_client')
 
@@ -89,7 +92,7 @@ class APIClient(object):
         if (
             force or
             self.token is None
-            or self.token["expires"] + timedelta(seconds=self.token_min_validity_seconds) < datetime.utcnow()
+            or self.token["expires"] + timedelta(seconds=self.token_min_validity_seconds) < naive_utcnow()
         ):
             logger.info("Fetch bearer token for %s", self.base_url)
             self.session.headers.pop("Authorization", None)

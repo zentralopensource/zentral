@@ -1,11 +1,15 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import SetFirmwarePassword
 from zentral.contrib.mdm.commands.scheduling import _manage_recovery_password
 from zentral.contrib.mdm.models import Channel, Command, Platform, RequestStatus
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_blueprint, force_dep_enrollment_session, force_recovery_password_config
 
 
@@ -62,7 +66,7 @@ class SetFirmwarePasswordCommandTestCase(TestCase):
 
     def test_process_acknowledged_response_password_changed(self):
         cmd = SetFirmwarePassword.create_for_automatic_scheduling(Target(self.enrolled_device), "12345678")
-        now = datetime.utcnow()
+        now = naive_utcnow()
         cmd.process_response(
             {"UDID": self.enrolled_device.udid,
              "Status": "Acknowledged",

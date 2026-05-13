@@ -1,6 +1,8 @@
-from datetime import datetime
-from django.db import connection
 import psycopg2.extras
+from django.db import connection
+
+from zentral.utils.time import naive_utcnow
+
 from . import compliance_check_classes
 from .compliance_checks import BaseComplianceCheck
 from .models import Status
@@ -29,7 +31,7 @@ def update_machine_statuses(serial_number, compliance_check_statuses):
     )
 
     with connection.cursor() as cursor:
-        now = datetime.utcnow()  # default status time
+        now = naive_utcnow()  # default status time
         query = cursor.mogrify(query, {"serial_number": serial_number})
         results = psycopg2.extras.execute_values(
             cursor, query,

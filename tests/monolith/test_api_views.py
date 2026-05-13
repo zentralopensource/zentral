@@ -1,7 +1,6 @@
 import json
 import operator
 import plistlib
-from datetime import datetime
 from functools import reduce
 from unittest.mock import patch
 
@@ -32,6 +31,7 @@ from zentral.contrib.monolith.models import (
 )
 from zentral.contrib.monolith.repository_backends import load_repository_backend
 from zentral.core.events.base import AuditEvent
+from zentral.utils.time import naive_utcnow
 
 from .utils import (
     CLOUDFRONT_PRIVKEY_PEM,
@@ -1290,7 +1290,7 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._post_json_data(reverse("monolith_api:catalogs"), data={
             'repository': repository.pk,
             'name': name,
-            'archived_at': datetime.utcnow().isoformat(),
+            'archived_at': naive_utcnow().isoformat(),
         })
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {
@@ -1304,7 +1304,7 @@ class MonolithAPIViewsTestCase(TestCase):
         response = self._post_json_data(reverse("monolith_api:catalogs"), data={
             'repository': repository.pk,
             'name': name,
-            'archived_at': datetime.utcnow().isoformat(),
+            'archived_at': naive_utcnow().isoformat(),
         })
         self.assertEqual(response.status_code, 201)
         catalog = Catalog.objects.get(name=name)

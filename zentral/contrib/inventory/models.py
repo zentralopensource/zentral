@@ -1,19 +1,20 @@
 import base64
-from collections import Counter
-from datetime import datetime, timedelta
 import json
 import logging
 import re
 import urllib.parse
+from collections import Counter
+from datetime import timedelta
+
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.urls import reverse
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import connection, IntegrityError, models, transaction
-from django.db.models import Count, F, Q, Max
+from django.db import IntegrityError, connection, models, transaction
+from django.db.models import Count, F, Max, Q
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
@@ -21,17 +22,25 @@ from django.utils.text import slugify
 from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
 from realms.models import RealmUser
+
 from zentral.conf import settings
 from zentral.core.compliance_checks.utils import get_machine_compliance_check_statuses
 from zentral.core.incidents.models import MachineIncident, Status
 from zentral.utils.model_extras import find_all_related_objects
-from zentral.utils.mt_models import (prepare_commit_tree,
-                                     AbstractMTObject, MTObjectManager, MTOError)
-from .conf import (has_deb_packages,
-                   os_version_display, os_version_version_display,
-                   update_ms_tree_platform, update_ms_tree_type,
-                   PLATFORM_CHOICES, PLATFORM_CHOICES_DICT,
-                   TYPE_CHOICES, TYPE_CHOICES_DICT)
+from zentral.utils.mt_models import AbstractMTObject, MTObjectManager, MTOError, prepare_commit_tree
+from zentral.utils.time import naive_utcnow
+
+from .conf import (
+    PLATFORM_CHOICES,
+    PLATFORM_CHOICES_DICT,
+    TYPE_CHOICES,
+    TYPE_CHOICES_DICT,
+    has_deb_packages,
+    os_version_display,
+    os_version_version_display,
+    update_ms_tree_platform,
+    update_ms_tree_type,
+)
 from .exceptions import EnrollmentSecretVerificationFailed
 
 logger = logging.getLogger('zentral.contrib.inventory.models')
@@ -685,7 +694,7 @@ class MachineSnapshotCommitManager(models.Manager):
     def commit_machine_snapshot_tree(self, tree):
         last_seen = tree.pop('last_seen', None)
         if not last_seen:
-            last_seen = datetime.utcnow()
+            last_seen = naive_utcnow()
         if timezone.is_aware(last_seen):
             last_seen = timezone.make_naive(last_seen)
         system_uptime = tree.pop('system_uptime', None)
@@ -763,7 +772,7 @@ class MachineSnapshotCommit(models.Model):
 
     def get_system_update_display(self):
         if self.system_uptime:
-            now = datetime.utcnow()
+            now = naive_utcnow()
             return timesince(now - timedelta(seconds=self.system_uptime), now=now)
 
 

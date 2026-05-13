@@ -1,17 +1,19 @@
 import csv
-from datetime import datetime
 import json
 import logging
 import os
 import tempfile
+
+import xlsxwriter
 from celery import shared_task
 from django.core.files import File
 from django.core.files.storage import default_storage
 from django.utils.text import slugify
-import xlsxwriter
-from zentral.core.events import event_cls_from_type
-from .models import DistributedQuery, FileCarvingSession
 
+from zentral.core.events import event_cls_from_type
+from zentral.utils.time import naive_utcnow
+
+from .models import DistributedQuery, FileCarvingSession
 
 logger = logging.getLogger("zentral.contrib.osquery.tasks")
 
@@ -115,7 +117,7 @@ def _dqr_export_filename_filepath(distributed_query, extension):
         filename_items.append(slugify(distributed_query.query.name))
     filename_items.append("run")
     filename_items.append(str(distributed_query.pk))
-    filename_items.append("{:%Y-%m-%d_%H-%M-%S}{}".format(datetime.utcnow(), extension))
+    filename_items.append("{:%Y-%m-%d_%H-%M-%S}{}".format(naive_utcnow(), extension))
     filename = "_".join(filename_items)
     filepath = os.path.join("exports", filename)
     return filename, filepath

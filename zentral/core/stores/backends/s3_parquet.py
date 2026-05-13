@@ -1,13 +1,14 @@
-from datetime import datetime
 import logging
 import secrets
-from kombu.utils import json
-import pyarrow as pa
-from pyarrow.fs import S3FileSystem
-import pyarrow.parquet as pq
-from rest_framework import serializers
-from zentral.core.stores.backends.base import AWSAuthSerializer, BaseStore, serialize_needles
 
+import pyarrow as pa
+import pyarrow.parquet as pq
+from kombu.utils import json
+from pyarrow.fs import S3FileSystem
+from rest_framework import serializers
+
+from zentral.core.stores.backends.base import AWSAuthSerializer, BaseStore, serialize_needles
+from zentral.utils.time import naive_utc_fromisoformat, naive_utcnow
 
 logger = logging.getLogger('zentral.core.stores.backends.s3_parquet')
 
@@ -69,7 +70,7 @@ class S3ParquetStore(BaseStore):
         logger.info("Writer ID: %s", self._writer_id)
 
     def _get_parquet_path(self):
-        n = datetime.utcnow()
+        n = naive_utcnow()
         return (
             f"{self.bucket}/{self.prefix}{n:%Y/%m/%d}/"
             f"{self._writer_id}/{self._batch_index:08d}.parquet"
@@ -89,7 +90,7 @@ class S3ParquetStore(BaseStore):
         needles = serialize_needles(metadata)
         serial_number = metadata.get("machine_serial_number")
         return {
-            "created_at": datetime.fromisoformat(created_at),
+            "created_at": naive_utc_fromisoformat(created_at),
             "type": event_type,
             "id": f'{event_id}_{event_index:06d}',
             "tags": tags,

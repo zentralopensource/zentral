@@ -1,26 +1,39 @@
 import datetime
-from functools import reduce
 import html
 import operator
 import plistlib
 import urllib.parse
-from accounts.models import User
+from functools import reduce
 from unittest.mock import patch
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
-from django.urls import reverse
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from zentral.conf import settings
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, File, Tag
+from zentral.contrib.inventory.models import EnrollmentSecret, File, MetaBusinessUnit, Tag
 from zentral.contrib.santa.events import SantaRuleUpdateEvent
 from zentral.contrib.santa.models import Bundle, Enrollment, Rule, Target
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
-from .utils import (force_configuration,
-                    force_realm, force_realm_group, force_realm_user, force_rule, force_voting_group,
-                    new_cdhash, new_sha256, new_signing_id_identifier, new_team_id)
+from zentral.utils.time import naive_utcnow
+
+from .utils import (
+    force_configuration,
+    force_realm,
+    force_realm_group,
+    force_realm_user,
+    force_rule,
+    force_voting_group,
+    new_cdhash,
+    new_sha256,
+    new_signing_id_identifier,
+    new_team_id,
+)
 
 
 class SantaSetupViewsTestCase(TestCase):
@@ -123,7 +136,7 @@ class SantaSetupViewsTestCase(TestCase):
             version=self.file.bundle.bundle_version,
             version_str=self.file.bundle.bundle_version_str,
             binary_count=1,
-            uploaded_at=datetime.datetime.utcnow() if uploaded else None,
+            uploaded_at=naive_utcnow() if uploaded else None,
         )
 
     def _force_rule(self, target_type, configuration=None, target_identifier=None, policy=Rule.Policy.ALLOWLIST):

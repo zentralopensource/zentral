@@ -1,13 +1,14 @@
 import csv
-from datetime import datetime
 import logging
 import os
 import tempfile
 import zipfile
+
 from django.core.files.storage import default_storage
 from django.db import connection, transaction
 from django.utils.text import slugify
 
+from zentral.utils.time import naive_utcnow
 
 __all__ = [
     "export_machine_android_apps",
@@ -57,7 +58,7 @@ def _export_machine_csv_zip(query, source_name, basename, window_size=5000):
             zip_a.write(csv_p, "{}.csv".format(slugify(source_name)))
             os.unlink(csv_p)
 
-    filename = "{}-{:%Y-%m-%d_%H-%M-%S}.zip".format(slugify(basename).replace("-", "_"), datetime.utcnow())
+    filename = "{}-{:%Y-%m-%d_%H-%M-%S}.zip".format(slugify(basename).replace("-", "_"), naive_utcnow())
     filepath = os.path.join("exports", filename)
     with os.fdopen(zip_fh, "rb") as zip_f:
         default_storage.save(filepath, zip_f)

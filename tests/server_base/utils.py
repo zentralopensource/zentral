@@ -1,8 +1,11 @@
-from datetime import datetime, timedelta
 import json
 import uuid
+from datetime import timedelta
+
 from django.utils.crypto import get_random_string
 from django_celery_results.models import TaskResult
+
+from zentral.utils.time import naive_utcnow
 
 
 def force_task_result(bad_json=False, result=None):
@@ -28,8 +31,8 @@ def force_task_result(bad_json=False, result=None):
         content_type='application/json',
         content_encoding='utf-8',
         result=result_json,
-        date_created=datetime.utcnow() - timedelta(days=1, seconds=10),
-        date_done=datetime.utcnow() - timedelta(days=1),
+        date_created=naive_utcnow() - timedelta(days=1, seconds=10),
+        date_done=naive_utcnow() - timedelta(days=1),
         meta='{"children": []}'
     )
     filepath = result.pop("filepath", None)

@@ -1,14 +1,16 @@
-from datetime import datetime
 import hashlib
 import logging
 import plistlib
 import uuid
+from datetime import datetime
+
 from django.db import transaction
 from django.db.models import Count, Q
+
 from zentral.contrib.monolith.models import Catalog, Manifest, PkgInfo, PkgInfoCategory, PkgInfoName
 from zentral.core.events.base import AuditEvent, EventRequest
 from zentral.core.secret_engines import decrypt, decrypt_str, encrypt_str, rewrap
-
+from zentral.utils.time import naive_utcnow
 
 logger = logging.getLogger('zentral.contrib.monolith.repository_backends.base')
 
@@ -209,13 +211,13 @@ class BaseRepository:
 
     def _archive_catalog(self, catalog, audit_callback):
         prev_value = catalog.serialize_for_event()
-        catalog.archived_at = datetime.utcnow()
+        catalog.archived_at = naive_utcnow()
         catalog.save()
         audit_callback(catalog, AuditEvent.Action.UPDATED, prev_value)
 
     def _archive_pkg_info(self, pkg_info, audit_callback):
         prev_value = pkg_info.serialize_for_event()
-        pkg_info.archived_at = datetime.utcnow()
+        pkg_info.archived_at = naive_utcnow()
         pkg_info.save()
         audit_callback(pkg_info, AuditEvent.Action.UPDATED, prev_value)
 
@@ -263,7 +265,7 @@ class BaseRepository:
         # update repository
         self.repository.icon_hashes = repo_icon_hashes
         self.repository.client_resources = list(self.iter_client_resources())
-        self.repository.last_synced_at = datetime.utcnow()
+        self.repository.last_synced_at = naive_utcnow()
         self.repository.save()
         # bump versions of manifests connected to found catalogs
         for manifest in Manifest.objects.distinct().filter(manifestcatalog__catalog__pk__in=found_catalog_pks):

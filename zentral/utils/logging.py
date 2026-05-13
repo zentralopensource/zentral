@@ -1,8 +1,11 @@
-from datetime import datetime
 import logging
+
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpRequest
 from django.http.request import split_domain_port
+
+from zentral.utils.time import naive_utcnow
+
 from .http import user_agent_and_ip_address_from_request
 
 
@@ -30,7 +33,7 @@ class JSONFormatter(logging.Formatter):
     def format(self, record):
         rd = {"message": record.getMessage(),
               "level":  record.levelname,
-              "time": datetime.utcnow()}
+              "time": naive_utcnow()}
 
         # _info
         if record.exc_info:

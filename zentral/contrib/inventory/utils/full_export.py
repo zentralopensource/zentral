@@ -1,14 +1,15 @@
-from datetime import datetime
 import json
 import logging
 import os.path
 import tempfile
 import zipfile
+
 from django.core.files.storage import default_storage
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import connections, transaction
-from zentral.utils.db import get_read_only_database
 
+from zentral.utils.db import get_read_only_database
+from zentral.utils.time import naive_utcnow
 
 __all__ = [
     "do_full_export"
@@ -128,7 +129,7 @@ def iter_model_exports(export_dt, max_temp_file_size, window_size):
 
 
 def do_full_export(max_temp_file_size=2**30, window_size=5000):
-    export_dt = datetime.utcnow()
+    export_dt = naive_utcnow()
 
     # create ZIP archive
     zip_fh, zip_p = tempfile.mkstemp()

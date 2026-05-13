@@ -1,9 +1,9 @@
-from datetime import datetime
 import logging
+
 from zentral.core.events import register_event_type
 from zentral.core.events.base import BaseEvent
 from zentral.core.queues import queues
-
+from zentral.utils.time import naive_utcnow
 
 logger = logging.getLogger('zentral.contrib.mdm.events.apps_books')
 
@@ -159,7 +159,7 @@ def post_apps_books_notification_event(location, user_agent, ip, data):
                 "user_agent": user_agent,
                 "ip": ip,
             },
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": naive_utcnow().isoformat(),
         },
         "location": {
             "pk": location.pk,

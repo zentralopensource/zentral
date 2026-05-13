@@ -1,13 +1,20 @@
 from datetime import datetime
+
 from django.http import HttpRequest
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.core.events.base import BaseEvent, EventMetadata
-from zentral.core.incidents.events import (IncidentCreatedEvent, IncidentSeverityUpdatedEvent,
-                                           IncidentStatusUpdatedEvent, MachineIncidentCreatedEvent,
-                                           MachineIncidentStatusUpdatedEvent)
+from zentral.core.incidents.events import (
+    IncidentCreatedEvent,
+    IncidentSeverityUpdatedEvent,
+    IncidentStatusUpdatedEvent,
+    MachineIncidentCreatedEvent,
+    MachineIncidentStatusUpdatedEvent,
+)
 from zentral.core.incidents.models import Incident, IncidentUpdate, MachineIncident, Severity, Status
 from zentral.core.incidents.utils import apply_incident_updates, update_incident_status, update_machine_incident_status
+from zentral.utils.time import naive_utcnow
 
 
 class TestEvent(BaseEvent):
@@ -58,7 +65,7 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.CRITICAL.value
         )
         events = apply_incident_updates(original_event)
@@ -74,7 +81,7 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         events = apply_incident_updates(original_event)
@@ -111,7 +118,7 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         events = apply_incident_updates(original_event)
@@ -141,7 +148,7 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.IN_PROGRESS.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         events = apply_incident_updates(original_event)
@@ -156,14 +163,14 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         existing_machine_incident = MachineIncident.objects.create(
             incident=existing_incident,
             serial_number=get_random_string(12),
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         events = apply_incident_updates(original_event)
         self.assertEqual(len(events), 0)
@@ -179,14 +186,14 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         existing_machine_incident = MachineIncident.objects.create(
             incident=existing_incident,
             serial_number="12345678",
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         events = apply_incident_updates(original_event)
         self.assertEqual(len(events), 0)
@@ -202,14 +209,14 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         existing_machine_incident = MachineIncident.objects.create(
             incident=existing_incident,
             serial_number="12345678",
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         events = apply_incident_updates(original_event)
         self.assertEqual(len(events), 2)
@@ -256,20 +263,20 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         existing_machine_incident = MachineIncident.objects.create(
             incident=existing_incident,
             serial_number="12345678",
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         existing_machine_incident2 = MachineIncident.objects.create(
             incident=existing_incident,
             serial_number="87654321",
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         events = apply_incident_updates(original_event)
         self.assertEqual(len(events), 1)
@@ -308,14 +315,14 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.CRITICAL.value
         )
         MachineIncident.objects.create(
             incident=existing_incident,
             serial_number="12345678",
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         events = apply_incident_updates(original_event)
         self.assertEqual(len(events), 0)
@@ -330,14 +337,14 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.CRITICAL.value
         )
         MachineIncident.objects.create(
             incident=existing_incident,
             serial_number="87654321",
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         events = apply_incident_updates(original_event)
         self.assertEqual(len(events), 1)
@@ -370,14 +377,14 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         MachineIncident.objects.create(
             incident=existing_incident,
             serial_number="87654321",
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         events = apply_incident_updates(original_event)
         self.assertEqual(len(events), 2)
@@ -424,14 +431,14 @@ class IncidentTestCase(TestCase):
             incident_type=incident_type,
             key=key,
             status=Status.CLOSED.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         existing_machine_incident = MachineIncident.objects.create(
             incident=existing_incident,
             serial_number="12345678",
             status=Status.CLOSED.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         events = apply_incident_updates(original_event)
         self.assertEqual(len(events), 2)
@@ -482,7 +489,7 @@ class IncidentTestCase(TestCase):
             incident_type=get_random_string(12),
             key={"key": get_random_string(12)},
             status=Status.CLOSED.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         request = HttpRequest()
@@ -497,7 +504,7 @@ class IncidentTestCase(TestCase):
             incident_type=get_random_string(12),
             key={"key": get_random_string(12)},
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         request = HttpRequest()
@@ -518,14 +525,14 @@ class IncidentTestCase(TestCase):
             incident_type=get_random_string(12),
             key={"key": get_random_string(12)},
             status=Status.CLOSED.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         machine_incident = MachineIncident.objects.create(
             incident=incident,
             serial_number="12345678",
             status=Status.CLOSED.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
         )
         request = HttpRequest()
         request.user = None
@@ -541,14 +548,14 @@ class IncidentTestCase(TestCase):
             incident_type=get_random_string(12),
             key={"key": get_random_string(12)},
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         machine_incident = MachineIncident.objects.create(
             incident=incident,
             serial_number="12345678",
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
         )
         request = HttpRequest()
         request.user = None

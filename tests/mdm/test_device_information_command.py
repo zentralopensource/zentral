@@ -1,7 +1,8 @@
 import copy
-from datetime import datetime
 import os.path
 import plistlib
+from datetime import datetime
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
@@ -10,6 +11,8 @@ from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import DeviceInformation, SecurityInfo
 from zentral.contrib.mdm.commands.scheduling import _update_base_inventory
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_dep_enrollment_session
 
 
@@ -111,7 +114,7 @@ class DeviceInformationCommandTestCase(TestCase):
         self.assertEqual(enrolled_device.platform, "iOS")
 
     def test_process_acknowledged_response(self):
-        start = datetime.utcnow()
+        start = naive_utcnow()
         enrolled_device = self.dep_enrollment_session.enrolled_device
         enrolled_device.os_version_extra = "(a)"
         enrolled_device.build_version_extra = "YOLOa"
@@ -145,7 +148,7 @@ class DeviceInformationCommandTestCase(TestCase):
         self.assertEqual(enrolled_device.model, "VirtualMac2,1")
 
     def test_process_acknowledged_response_missing_info(self):
-        start = datetime.utcnow()
+        start = naive_utcnow()
         enrolled_device = self.dep_enrollment_session.enrolled_device
         self.assertIsNone(enrolled_device.device_information_updated_at)
         m0 = MetaMachine(self.dep_enrollment_session.enrolled_device.serial_number)
@@ -242,7 +245,7 @@ class DeviceInformationCommandTestCase(TestCase):
         self.assertIsInstance(cmd, DeviceInformation)
 
     def test_update_base_inventory_device_information_updated_at_ok(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.device_information_updated_at = naive_utcnow()
         self.assertIsNone(self.enrolled_device.security_info_updated_at)
         cmd = _update_base_inventory(
             Target(self.enrolled_device),

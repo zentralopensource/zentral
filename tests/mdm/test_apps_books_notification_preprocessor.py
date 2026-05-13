@@ -1,19 +1,28 @@
 import datetime
-from unittest.mock import call, patch, Mock
 import uuid
+from unittest.mock import Mock, call, patch
+
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.apps_books import get_otf_association_cache_key
-from zentral.contrib.mdm.events import (AssetAssociationEvent, AssetAssociationErrorEvent,
-                                        AssetCountNotificationEvent,
-                                        AssetDisassociationEvent, AssetDisassociationErrorEvent,
-                                        AssetRevocationEvent, AssetRevocationErrorEvent,
-                                        MDMDeviceNotificationEvent)
+from zentral.contrib.mdm.events import (
+    AssetAssociationErrorEvent,
+    AssetAssociationEvent,
+    AssetCountNotificationEvent,
+    AssetDisassociationErrorEvent,
+    AssetDisassociationEvent,
+    AssetRevocationErrorEvent,
+    AssetRevocationEvent,
+    MDMDeviceNotificationEvent,
+)
 from zentral.contrib.mdm.models import Location
 from zentral.contrib.mdm.preprocessors import get_preprocessors
 from zentral.core.incidents.models import Severity
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_dep_enrollment_session
 
 
@@ -84,7 +93,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         location_cache_get.return_value = self.location, client
         update_location_asset_counts.return_value = []
         notification_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         events = list(self.preprocessor.process_raw_event({
             "data": {"notificationType": "ASSET_COUNT",
                      "notificationId": notification_id,
@@ -141,7 +150,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         associate_location_asset.return_value = []
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         events = list(self.preprocessor.process_raw_event({
             "data": {"notificationType": "ASSET_MANAGEMENT",
                      "notificationId": notification_id,
@@ -199,7 +208,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         apns_client_cache.get_or_create_with_push_cert.return_value.send_notification.return_value = True  # success
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         cache.set(get_otf_association_cache_key(event_id), "1")  # mark the event as OTF assignment
         enrollment_session, _, _ = force_dep_enrollment_session(
             MetaBusinessUnit.objects.create(name=get_random_string(12)),
@@ -261,7 +270,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         send_enrolled_device_notification.side_effect = ValueError
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         cache.set(get_otf_association_cache_key(event_id), "1")  # mark the event as OTF assignment
         enrollment_session, _, _ = force_dep_enrollment_session(
             MetaBusinessUnit.objects.create(name=get_random_string(12)),
@@ -318,7 +327,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         associate_location_asset.return_value = []
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         events = list(self.preprocessor.process_raw_event({
             "data": {"notificationType": "ASSET_MANAGEMENT",
                      "notificationId": notification_id,
@@ -372,7 +381,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         disassociate_location_asset.return_value = []
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         events = list(self.preprocessor.process_raw_event({
             "data": {"notificationType": "ASSET_MANAGEMENT",
                      "notificationId": notification_id,
@@ -422,7 +431,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         disassociate_location_asset.return_value = []
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         events = list(self.preprocessor.process_raw_event({
             "data": {"notificationType": "ASSET_MANAGEMENT",
                      "notificationId": notification_id,
@@ -475,7 +484,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         disassociate_location_asset.return_value = []
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         events = list(self.preprocessor.process_raw_event({
             "data": {"notificationType": "ASSET_MANAGEMENT",
                      "notificationId": notification_id,
@@ -525,7 +534,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         disassociate_location_asset.return_value = []
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         events = list(self.preprocessor.process_raw_event({
             "data": {"notificationType": "ASSET_MANAGEMENT",
                      "notificationId": notification_id,
@@ -576,7 +585,7 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         location_cache_get.return_value = self.location, client
         notification_id = str(uuid.uuid4())
         event_id = str(uuid.uuid4())
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         events = list(self.preprocessor.process_raw_event({
             "data": {"notificationType": "ASSET_MANAGEMENT",
                      "notificationId": notification_id,

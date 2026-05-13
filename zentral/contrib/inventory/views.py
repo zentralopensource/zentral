@@ -1,56 +1,89 @@
-from datetime import datetime, timedelta
-from importlib import import_module
 import logging
+from datetime import timedelta
+from importlib import import_module
 from math import ceil
 from urllib.parse import urlencode
+
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import F
-from django.urls import reverse, reverse_lazy
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
+
 from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
 from zentral.core.compliance_checks.models import Status
 from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores.conf import stores
-from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
-from zentral.utils.text import encode_args
+from zentral.core.stores.views import EventsStoreRedirectView, EventsView, FetchEventsView
 from zentral.utils.terraform import build_config_response
-from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit,
-                                 UserPaginationListView, UserPaginationMixin)
-from .compliance_checks import InventoryJMESPathCheck
-from .events import JMESPathCheckCreated, JMESPathCheckUpdated, JMESPathCheckDeleted
-from .forms import (MetaBusinessUnitForm,
-                    MetaBusinessUnitSearchForm, MachineGroupSearchForm,
-                    MergeMBUForm, AddMBUTagForm, AddMachineTagForm,
-                    CreateTagForm, UpdateTagForm,
-                    AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm,
-                    MacOSAppSearchForm, ProgramsSearchForm,
-                    JMESPathCheckForm, JMESPathCheckDevToolForm, Source)
-from .models import (BusinessUnit,
-                     MetaBusinessUnit, MachineGroup,
-                     MetaMachine,
-                     MetaBusinessUnitTag, Tag, Taxonomy,
-                     JMESPathCheck)
-from .terraform import iter_compliance_check_resources
-from .utils import (AndroidAppFilter, AndroidAppFilterForm,
-                    BundleFilter, BundleFilterForm,
-                    ComplianceCheckStatusFilter, ComplianceCheckStatusFilterForm,
-                    DebPackageFilter, DebPackageFilterForm,
-                    MachineGroupFilter, MetaBusinessUnitFilter,
-                    IOSAppFilter, IOSAppFilterForm,
-                    ProgramFilter, ProgramFilterForm,
-                    SourceFilter,
-                    MSQuery,
-                    remove_machine_tags)
+from zentral.utils.text import encode_args
+from zentral.utils.time import naive_utcnow
+from zentral.utils.views import (
+    CreateViewWithAudit,
+    DeleteViewWithAudit,
+    UpdateViewWithAudit,
+    UserPaginationListView,
+    UserPaginationMixin,
+)
 
+from .compliance_checks import InventoryJMESPathCheck
+from .events import JMESPathCheckCreated, JMESPathCheckDeleted, JMESPathCheckUpdated
+from .forms import (
+    AddMachineTagForm,
+    AddMBUTagForm,
+    AndroidAppSearchForm,
+    CreateTagForm,
+    DebPackageSearchForm,
+    IOSAppSearchForm,
+    JMESPathCheckDevToolForm,
+    JMESPathCheckForm,
+    MachineGroupSearchForm,
+    MacOSAppSearchForm,
+    MergeMBUForm,
+    MetaBusinessUnitForm,
+    MetaBusinessUnitSearchForm,
+    ProgramsSearchForm,
+    Source,
+    UpdateTagForm,
+)
+from .models import (
+    BusinessUnit,
+    JMESPathCheck,
+    MachineGroup,
+    MetaBusinessUnit,
+    MetaBusinessUnitTag,
+    MetaMachine,
+    Tag,
+    Taxonomy,
+)
+from .terraform import iter_compliance_check_resources
+from .utils import (
+    AndroidAppFilter,
+    AndroidAppFilterForm,
+    BundleFilter,
+    BundleFilterForm,
+    ComplianceCheckStatusFilter,
+    ComplianceCheckStatusFilterForm,
+    DebPackageFilter,
+    DebPackageFilterForm,
+    IOSAppFilter,
+    IOSAppFilterForm,
+    MachineGroupFilter,
+    MetaBusinessUnitFilter,
+    MSQuery,
+    ProgramFilter,
+    ProgramFilterForm,
+    SourceFilter,
+    remove_machine_tags,
+)
 
 logger = logging.getLogger("zentral.contrib.inventory.views")
 
@@ -520,7 +553,7 @@ class MachineHeartbeatsView(PermissionRequiredMixin, TemplateView):
         try:
             last_machine_heartbeats = stores.admin_console_store.get_last_machine_heartbeats(
                 machine.serial_number,
-                from_dt=datetime.utcnow() - timedelta(days=self.time_range_days)
+                from_dt=naive_utcnow() - timedelta(days=self.time_range_days)
             )
         except Exception:
             logger.exception("Could not get machine heartbeats")
@@ -537,7 +570,7 @@ class MachineHeartbeatsView(PermissionRequiredMixin, TemplateView):
                     if timezone.is_aware(all_ua_max_date):
                         all_ua_max_date = timezone.make_naive(all_ua_max_date)
                     if heartbeat_timeout:
-                        if datetime.utcnow() - all_ua_max_date > heartbeat_timeout:
+                        if naive_utcnow() - all_ua_max_date > heartbeat_timeout:
                             date_class = "danger"
                         else:
                             date_class = "success"

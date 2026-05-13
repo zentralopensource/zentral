@@ -1,17 +1,20 @@
+import operator
 from datetime import datetime
 from functools import reduce
-import operator
 from unittest.mock import patch
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
-from django.urls import reverse
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import User
-from zentral.core.incidents.models import Incident, MachineIncident, Status, Severity
+
+from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
 from zentral.core.probes.models import ProbeSource
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
+from zentral.utils.time import naive_utcnow
 
 
 class InventoryViewsTestCase(TestCase):
@@ -56,7 +59,7 @@ class InventoryViewsTestCase(TestCase):
             incident_type=incident_type,
             key={"probe_pk": self.probe_source.pk} if key is None else key,
             status=status.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=severity.value,
         )
 
@@ -65,7 +68,7 @@ class InventoryViewsTestCase(TestCase):
             serial_number=get_random_string(12),
             incident=incident,
             status=status.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
         )
 
     # index

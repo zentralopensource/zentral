@@ -1,12 +1,7 @@
+from datetime import datetime, timezone
+
 from dateutil import parser
 from django.utils.timezone import is_aware, make_naive
-
-
-def parse_naive_datetime(value):
-    dt = parser.parse(value)
-    if is_aware(dt):
-        dt = make_naive(dt)
-    return dt
 
 
 def duration_repr(seconds):
@@ -27,3 +22,26 @@ def naive_utc_fromisoformat(s):
     if is_aware(dt):
         dt = make_naive(dt)
     return dt
+
+
+def parse_naive_datetime(value):
+    dt = parser.parse(value)
+    if is_aware(dt):
+        dt = make_naive(dt)
+    return dt
+
+
+def naive_utcnow():
+    """Naive UTC datetime, replacing the deprecated datetime.utcnow().
+
+    Returns the current UTC datetime stripped of its tzinfo so the value
+    keeps comparing and serializing the same way as datetime.utcnow() did.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def naive_utcfromtimestamp(ts):
+    """Naive UTC datetime from a POSIX timestamp, replacing the deprecated
+    datetime.utcfromtimestamp().
+    """
+    return datetime.fromtimestamp(ts, tz=timezone.utc).replace(tzinfo=None)

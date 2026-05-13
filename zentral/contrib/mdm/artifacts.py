@@ -3,7 +3,7 @@ import hashlib
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 from functools import cached_property, lru_cache
 from graphlib import TopologicalSorter
 from itertools import chain
@@ -16,6 +16,7 @@ from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.text import shard as compute_shard
+from zentral.utils.time import naive_utcnow
 
 from .apns import send_enrolled_device_notification, send_enrolled_user_notification
 from .declarations import (
@@ -250,7 +251,7 @@ class Target:
     def update_last_info(self, request):
         _, ip = user_agent_and_ip_address_from_request(request)
         self.target.last_ip = ip or None
-        self.target.last_seen_at = datetime.utcnow()
+        self.target.last_seen_at = naive_utcnow()
         self.target.save(update_fields=["last_ip", "last_seen_at", "updated_at"])
 
     def unlock_device_pin(self, request):
@@ -448,7 +449,7 @@ class Target:
             if (
                 reinstall_interval and (
                     av_installed_at is None  # should never happen
-                    or (datetime.utcnow() > av_installed_at + timedelta(days=reinstall_interval))
+                    or (naive_utcnow() > av_installed_at + timedelta(days=reinstall_interval))
                 )
             ):
                 return True
@@ -748,7 +749,7 @@ class Target:
                      "absent_statuses": tuple(s.value for s in TargetArtifact.Status if not s.present),
                      "artifact_retries": self.ARTIFACT_RETRIES,
                      "artifact_types": artifact_types,
-                     "now": datetime.utcnow()},
+                     "now": naive_utcnow()},
                 )
                 if target_artifacts_info:
                     results = psycopg2.extras.execute_values(
@@ -957,7 +958,7 @@ class Target:
         declarations_token = self.declaration_items["DeclarationsToken"]
         tokens_response = {
             "SyncTokens": {
-                "Timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "Timestamp": naive_utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "DeclarationsToken": declarations_token
             }
         }

@@ -1,10 +1,14 @@
-from datetime import datetime, timedelta
-from unittest.mock import patch, Mock
 import uuid
+from datetime import datetime, timedelta
+from unittest.mock import Mock, patch
+
 from django.test import TestCase
-from zentral.contrib.mdm.declarations import (artifact_pk_from_identifier_and_model,
-                                              get_artifact_identifier,
-                                              get_artifact_version_server_token)
+
+from zentral.contrib.mdm.declarations import (
+    artifact_pk_from_identifier_and_model,
+    get_artifact_identifier,
+    get_artifact_version_server_token,
+)
 from zentral.contrib.mdm.models import Artifact, Declaration
 
 
@@ -64,10 +68,10 @@ class MDMDeclarationUtilsTestCase(TestCase):
         )
         self.assertEqual(server_token, f"{av_pk}.ov-15.2.1")
 
-    @patch("zentral.contrib.mdm.declarations.utils.datetime")
-    def test_get_artifact_version_server_token_reinstall_interval(self, patched_datetime):
+    @patch("zentral.contrib.mdm.declarations.utils.naive_utcnow")
+    def test_get_artifact_version_server_token_reinstall_interval(self, patched_naive_utcnow):
         now = datetime(2025, 1, 1, 0, 0, 0)
-        patched_datetime.utcnow.return_value = now
+        patched_naive_utcnow.return_value = now
         target = Mock()
         target.comparable_os_version = (15, 2, 1)
         target.target.created_at = now - timedelta(days=91)

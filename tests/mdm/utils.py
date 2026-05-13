@@ -1,13 +1,14 @@
-from datetime import date, datetime, time, timedelta
 import hashlib
 import io
 import json
-import plistlib
 import os.path
+import plistlib
 import random
-from unittest.mock import patch
-import zipfile
 import uuid
+import zipfile
+from datetime import date, datetime, time, timedelta
+from unittest.mock import patch
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -15,28 +16,57 @@ from cryptography.x509.oid import NameOID
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmGroup, RealmUser
+
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.cert_issuer_backends import CertIssuerBackend
 from zentral.contrib.mdm.crypto import load_push_certificate_and_key
 from zentral.contrib.mdm.declarations import get_declaration_info
-from zentral.contrib.mdm.models import (ACMEIssuer, Artifact, ArtifactVersion, Asset,
-                                        Blueprint, BlueprintArtifact,
-                                        Channel, CertAsset, DataAsset, Declaration, DeclarationRef, Platform,
-                                        DEPDevice, DEPEnrollment, DEPEnrollmentSession, DEPOrganization, DEPToken,
-                                        EnrollmentCustomView, DEPEnrollmentCustomView,
-                                        DEPVirtualServer, EnrolledDevice, EnrolledUser,
-                                        EnterpriseApp, FileVaultConfig, Location, LocationAsset,
-                                        OTAEnrollment, OTAEnrollmentSession,
-                                        ProvisioningProfile, Profile,
-                                        PushCertificate, RecoveryPasswordConfig, SCEPIssuer,
-                                        RealmGroupTagMapping,
-                                        SoftwareUpdate, SoftwareUpdateDeviceID, SoftwareUpdateEnforcement,
-                                        StoreApp,
-                                        UserEnrollment, UserEnrollmentSession)
+from zentral.contrib.mdm.models import (
+    ACMEIssuer,
+    Artifact,
+    ArtifactVersion,
+    Asset,
+    Blueprint,
+    BlueprintArtifact,
+    CertAsset,
+    Channel,
+    DataAsset,
+    Declaration,
+    DeclarationRef,
+    DEPDevice,
+    DEPEnrollment,
+    DEPEnrollmentCustomView,
+    DEPEnrollmentSession,
+    DEPOrganization,
+    DEPToken,
+    DEPVirtualServer,
+    EnrolledDevice,
+    EnrolledUser,
+    EnrollmentCustomView,
+    EnterpriseApp,
+    FileVaultConfig,
+    Location,
+    LocationAsset,
+    OTAEnrollment,
+    OTAEnrollmentSession,
+    Platform,
+    Profile,
+    ProvisioningProfile,
+    PushCertificate,
+    RealmGroupTagMapping,
+    RecoveryPasswordConfig,
+    SCEPIssuer,
+    SoftwareUpdate,
+    SoftwareUpdateDeviceID,
+    SoftwareUpdateEnforcement,
+    StoreApp,
+    UserEnrollment,
+    UserEnrollmentSession,
+)
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.utils.payloads import sign_payload
-
+from zentral.utils.time import naive_utcnow
 
 # realm
 
@@ -293,9 +323,9 @@ def force_dep_device(
         serial_number=get_random_string(10).upper(),
         asset_tag=get_random_string(12),
         device_assigned_by="support@zentral.com",
-        device_assigned_date=datetime.utcnow(),
+        device_assigned_date=naive_utcnow(),
         last_op_type=op_type,
-        last_op_date=datetime.utcnow(),
+        last_op_date=naive_utcnow(),
         profile_status=profile_status,
     )
     if device_family == "iPhone":
@@ -315,7 +345,7 @@ def force_dep_device(
             enrollment = force_dep_enrollment(mbu)
         dep_device.enrollment = enrollment
         dep_device.profile_uuid = enrollment.uuid
-        dep_device.profile_assign_time = datetime.utcnow()
+        dep_device.profile_assign_time = naive_utcnow()
     dep_device.save()
     return dep_device
 
@@ -401,7 +431,7 @@ def authenticate_enrollment_session(session):
             "push_certificate": session.get_enrollment().push_certificate,
             "platform": "macOS",
             "cert_fingerprint": hashlib.sha256(get_random_string(12).encode("utf-8")).digest(),
-            "cert_not_valid_after": (datetime.utcnow() + timedelta(days=366))
+            "cert_not_valid_after": (naive_utcnow() + timedelta(days=366))
         }
         enrolled_device, created = EnrolledDevice.objects.get_or_create(
             udid=device_udid,
@@ -581,7 +611,7 @@ def build_provisioning_profile_content(name=None, pp_uuid=None):
         "Name": name or get_random_string(12),
         "UUID": str(pp_uuid or uuid.uuid4()),
         "AppIDName": "com.example.yolo",
-        "CreationDate": datetime.utcnow().replace(microsecond=0)  # not supported in the plist
+        "CreationDate": naive_utcnow().replace(microsecond=0)  # not supported in the plist
     }
 
 
@@ -646,7 +676,7 @@ def force_software_update_enforcement(
         local_time = local_time or time(9, 30)
         delay_days = delay_days or 14
     else:
-        local_datetime = local_datetime or datetime.utcnow() + timedelta(days=30)
+        local_datetime = local_datetime or naive_utcnow() + timedelta(days=30)
     sue = SoftwareUpdateEnforcement.objects.create(
         name=name,
         details_url=details_url,

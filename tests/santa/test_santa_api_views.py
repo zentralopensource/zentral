@@ -1,19 +1,29 @@
-from datetime import datetime
 import json
-from unittest.mock import patch
 import uuid
+from unittest.mock import patch
+
 from django.db.models import F
-from django.urls import reverse
 from django.test import TestCase
-from django.urls import NoReverseMatch
+from django.urls import NoReverseMatch, reverse
 from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, File, MachineSnapshot, MetaBusinessUnit
 from zentral.contrib.santa.events import SantaEnrollmentEvent, SantaEventEvent, SantaPreflightEvent
-from zentral.contrib.santa.models import (Bundle, Configuration, EnrolledMachine, Enrollment,
-                                          MachineRule, Rule, Target, TargetCounter)
+from zentral.contrib.santa.models import (
+    Bundle,
+    Configuration,
+    EnrolledMachine,
+    Enrollment,
+    MachineRule,
+    Rule,
+    Target,
+    TargetCounter,
+)
 from zentral.core.incidents.models import Severity
+from zentral.utils.time import naive_utcnow
+
 from .utils import new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
@@ -57,7 +67,7 @@ class SantaAPIViewsTestCase(TestCase):
 
     def _get_preflight_data(self, version=None, enrolled=False, legacy=False):
         if version is None:
-            version = datetime.utcnow().strftime("%Y.2")
+            version = naive_utcnow().strftime("%Y.2")
         if enrolled:
             serial_number = self.machine_serial_number
             hardware_uuid = self.enrolled_machine.hardware_uuid

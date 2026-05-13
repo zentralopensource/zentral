@@ -1,7 +1,8 @@
 import uuid
-from datetime import datetime
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import DeviceInformation
@@ -13,9 +14,11 @@ from zentral.contrib.mdm.commands.scheduling import (
 from zentral.contrib.mdm.models import (
     Blueprint,
     Command,
-    RequestStatus,
     EnrolledUser,
+    RequestStatus,
 )
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_dep_enrollment_session
 
 
@@ -141,8 +144,8 @@ class TestMDMCommandsScheduling(TestCase):
         )
 
     def test_update_inventory_up_to_date(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.device_information_updated_at = naive_utcnow()
+        self.enrolled_device.security_info_updated_at = naive_utcnow()
         self.enrolled_device.blueprint.collect_apps = (
             Blueprint.InventoryItemCollectionOption.ALL
         )
@@ -152,9 +155,9 @@ class TestMDMCommandsScheduling(TestCase):
         self.enrolled_device.blueprint.collect_profiles = (
             Blueprint.InventoryItemCollectionOption.ALL
         )
-        self.enrolled_device.apps_updated_at = datetime.utcnow()
-        self.enrolled_device.certificates_updated_at = datetime.utcnow()
-        self.enrolled_device.profiles_updated_at = datetime.utcnow()
+        self.enrolled_device.apps_updated_at = naive_utcnow()
+        self.enrolled_device.certificates_updated_at = naive_utcnow()
+        self.enrolled_device.profiles_updated_at = naive_utcnow()
         self.assertIsNone(
             _update_base_inventory(
                 Target(self.enrolled_device),

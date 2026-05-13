@@ -1,15 +1,18 @@
+import operator
 from datetime import datetime
 from functools import reduce
-import operator
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
-from accounts.models import User
+
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaMachine
-from zentral.core.incidents.models import MachineIncident, Incident, Severity, Status
+from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
 from zentral.core.probes.models import ProbeSource
+from zentral.utils.time import naive_utcnow
 
 
 class InventoryIncidentsViewsTestCase(TestCase):
@@ -67,7 +70,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
             incident_type=incident_type,
             key={"probe_pk": self.probe_source.pk} if key is None else key,
             status=status.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=severity.value,
         )
 
@@ -76,7 +79,7 @@ class InventoryIncidentsViewsTestCase(TestCase):
             serial_number=self.serial_number,
             incident=incident,
             status=status.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
         )
 
     # machine incidents

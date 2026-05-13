@@ -1,10 +1,13 @@
 from datetime import datetime
-from django.urls import reverse
+
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from prometheus_client.parser import text_string_to_metric_families
+
 from zentral.conf import settings
 from zentral.core.incidents.models import Incident, MachineIncident, Severity, Status
+from zentral.utils.time import naive_utcnow
 
 
 class IncidentsMetricsViewsTestCase(TestCase):
@@ -14,20 +17,20 @@ class IncidentsMetricsViewsTestCase(TestCase):
             incident_type="this_is_not_an_incident",
             key={"not_an_incident": 42},
             status=Status.OPEN.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
             severity=Severity.MAJOR.value
         )
         MachineIncident.objects.create(
             incident=cls.incident,
             serial_number=get_random_string(12),
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         MachineIncident.objects.create(
             incident=cls.incident,
             serial_number=get_random_string(12),
             status=Status.OPEN.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
 
     # utility methods

@@ -1,10 +1,14 @@
 from datetime import datetime
 from unittest.mock import patch
-from django.utils.crypto import get_random_string
+
 from django.test import TestCase
+from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.puppet.models import Instance
 from zentral.contrib.puppet.preprocessors import get_preprocessors
+from zentral.utils.time import naive_utcnow
+
 from .utils import build_report, build_self_signed_cert
 
 
@@ -48,7 +52,7 @@ class PuppetWebhookPreprocessorTestCase(TestCase):
                        "name": "puppet",
                        "config": {"url": self.instance.url}},
             "reference": host,
-            "last_seen": datetime.utcnow(),
+            "last_seen": naive_utcnow(),
             "business_unit": self.bu.serialize(),
             "serial_number": serial_number,
             "system_info": {"computer_name": host}
@@ -77,7 +81,7 @@ class PuppetWebhookPreprocessorTestCase(TestCase):
                        "name": "puppet",
                        "config": {"url": self.instance.url}},
             "reference": host,
-            "last_seen": datetime.utcnow(),
+            "last_seen": naive_utcnow(),
             "business_unit": self.bu.serialize(),
             "serial_number": serial_number,
             "system_info": {"computer_name": host}

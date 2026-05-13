@@ -1,25 +1,35 @@
-from datetime import datetime, timedelta
+import operator
+from datetime import timedelta
 from functools import reduce
 from importlib import import_module
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
+
+from accounts.models import User
 from django.conf import settings
+from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.http import HttpRequest
-from django.urls import reverse
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import User
 from realms.backends.views import finalize_session
 from realms.models import RealmAuthenticationSession
-from zentral.contrib.inventory.models import Source, File
+
+from zentral.contrib.inventory.models import File, Source
 from zentral.contrib.santa.models import Target, TargetCounter, TargetState
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
-from .utils import (add_file_to_test_class, force_ballot, force_configuration,
-                    force_realm, force_realm_user, force_voting_group,
-                    new_sha256)
+from zentral.utils.time import naive_utcnow
+
+from .utils import (
+    add_file_to_test_class,
+    force_ballot,
+    force_configuration,
+    force_realm,
+    force_realm_user,
+    force_voting_group,
+    new_sha256,
+)
 
 
 class SantaSetupViewsTestCase(TestCase):
@@ -256,7 +266,7 @@ class SantaSetupViewsTestCase(TestCase):
     def test_search_target_last_seen(self):
         TargetCounter.objects.exclude(
             target=self.file_target
-        ).update(updated_at=datetime.utcnow() - timedelta(days=100))
+        ).update(updated_at=naive_utcnow() - timedelta(days=100))
         self._login("santa.view_target")
         response = self.client.get(reverse("santa:targets"),
                                    {"target_type": "BINARY",

@@ -1,13 +1,15 @@
-from datetime import datetime
 import json
 import logging
 import os
 import tempfile
 import zipfile
+
 from django.core.files.storage import default_storage
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import connection, transaction
 from django.utils.text import slugify
+
+from zentral.utils.time import naive_utcnow
 
 __all__ = [
     "export_machine_snapshots",
@@ -146,7 +148,7 @@ def export_machine_snapshots(source_name=None, window_size=5000):
             zip_a.write(json_p, "{}.jsonl".format(slugify(source_name)))
             os.unlink(json_p)
 
-    filename = "machine_snapshots-{:%Y-%m-%d_%H-%M-%S}.zip".format(datetime.utcnow())
+    filename = "machine_snapshots-{:%Y-%m-%d_%H-%M-%S}.zip".format(naive_utcnow())
     filepath = os.path.join("exports", filename)
     with os.fdopen(zip_fh, "rb") as zip_f:
         default_storage.save(filepath, zip_f)

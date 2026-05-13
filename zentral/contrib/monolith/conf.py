@@ -1,12 +1,15 @@
-from datetime import datetime, timedelta
 import logging
 import threading
-from django.utils.functional import cached_property, SimpleLazyObject
+from datetime import timedelta
+
+from base.notifier import notifier
+from django.utils.functional import SimpleLazyObject, cached_property
+
 from zentral.conf import settings
 from zentral.utils.osx_package import get_package_builders
-from base.notifier import notifier
-from .repository_backends import load_repository_backend
+from zentral.utils.time import naive_utcnow
 
+from .repository_backends import load_repository_backend
 
 logger = logging.getLogger("zentral.contrib.monolith.conf")
 
@@ -38,7 +41,7 @@ class MonolithConf:
             for repository in repositories:
                 self._repositories[repository.pk] = load_repository_backend(repository)
                 logger.info("Repository %s loaded", repository)
-            self._repositories_last_loaded_at = datetime.utcnow()
+            self._repositories_last_loaded_at = naive_utcnow()
             if not self._notifier_callback_registered:
                 # first time
                 notifier.add_callback("monolith.repository", self._reset_repositories)
@@ -47,7 +50,7 @@ class MonolithConf:
     def get_repository(self, pk):
         if (
             self._repositories_last_loaded_at is None
-            or datetime.utcnow() - self._repositories_last_loaded_at > self.reload_interval
+            or naive_utcnow() - self._repositories_last_loaded_at > self.reload_interval
             or pk not in self._repositories
         ):
             self._reload_repositories()

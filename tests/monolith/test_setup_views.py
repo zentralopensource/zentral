@@ -2,11 +2,11 @@ import copy
 import hashlib
 import operator
 import uuid
-from datetime import datetime
 from functools import reduce
 from io import BytesIO
 from unittest.mock import patch
 
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase
@@ -36,6 +36,7 @@ from zentral.contrib.munki.models import ManagedInstall
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
+from zentral.utils.time import naive_utcnow
 
 from .utils import (
     CLOUDFRONT_PRIVKEY_PEM,
@@ -96,7 +97,7 @@ class MonolithSetupViewsTestCase(TestCase):
             machine_serial_number=cls.serial_number,
             name=cls.pkginfo_name_1.name,
             installed_version=cls.pkginfo_1_1.version,
-            installed_at=datetime.utcnow()
+            installed_at=naive_utcnow()
         )
 
     # utility methods

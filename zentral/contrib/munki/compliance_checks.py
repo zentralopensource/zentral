@@ -1,15 +1,17 @@
-from datetime import datetime
 import logging
+
 from django.db import transaction
 from django.utils.functional import cached_property
+
 from zentral.core.compliance_checks import register_compliance_check_class
 from zentral.core.compliance_checks.compliance_checks import BaseComplianceCheck
 from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.core.compliance_checks.utils import update_machine_statuses
+from zentral.utils.time import naive_utcnow
+
 from .events import MunkiScriptCheckStatusUpdated
 from .models import ScriptCheck
-
 
 logger = logging.getLogger("zentral.contrib.osquery.compliance_checks")
 
@@ -148,7 +150,7 @@ def prune_out_of_scope_machine_statuses(serial_number, in_scope_cc_ids):
         events.append(MunkiScriptCheckStatusUpdated.build_update(
             machine_status.compliance_check.script_check,
             serial_number,
-            Status.OUT_OF_SCOPE, datetime.utcnow(),
+            Status.OUT_OF_SCOPE, naive_utcnow(),
             Status(machine_status.status)
         ))
         machine_status.delete()

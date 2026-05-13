@@ -1,14 +1,16 @@
-from datetime import datetime
 import logging
 import uuid
+
 from django.db import connection
 from django.db.models import Q
 from django.utils.functional import cached_property
+
 from zentral.core.events.base import EventMetadata, EventRequest
+from zentral.utils.time import naive_utcnow
+
 from .events import SantaBallotEvent, SantaRuleUpdateEvent, SantaTargetStateUpdateEvent
 from .models import Ballot, Configuration, EnrolledMachine, Rule, Target, TargetState, Vote, VotingGroup
 from .utils import target_related_targets, update_voting_rules
-
 
 logger = logging.getLogger("zentral.contrib.santa.ballot_box")
 
@@ -516,7 +518,7 @@ class BallotBox:
         target_state.score = 0
         target_state.flagged = False
         self._update_target_state_state(target_state, 0)
-        target_state.reset_at = datetime.utcnow()
+        target_state.reset_at = naive_utcnow()
         target_state.save()
         self._queue_target_state_update_event(pre_update_state, target_state)
         self._update_voting_rules([configuration])

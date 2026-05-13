@@ -1,8 +1,10 @@
-from datetime import datetime, timedelta
-from django.urls import reverse
+from datetime import timedelta
+
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from prometheus_client.parser import text_string_to_metric_families
+
 from zentral.conf import ConfigDict, settings
 from zentral.contrib.inventory.models import (
     MachineSnapshotCommit,
@@ -10,6 +12,7 @@ from zentral.contrib.inventory.models import (
     Tag,
     Taxonomy,
 )
+from zentral.utils.time import naive_utcnow
 
 
 class PrometheusViewsTestCase(TestCase):
@@ -73,7 +76,7 @@ class PrometheusViewsTestCase(TestCase):
                     "install_source": "tests",
                 },
             ],
-            "last_seen": datetime.utcnow() - timedelta(days=2),
+            "last_seen": naive_utcnow() - timedelta(days=2),
         }
         _, cls.ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         cls.source_id = cls.ms.source.pk
@@ -139,7 +142,7 @@ class PrometheusViewsTestCase(TestCase):
                     "install_source": "tests",
                 },
             ],
-            "last_seen": datetime.utcnow() - timedelta(days=13),
+            "last_seen": naive_utcnow() - timedelta(days=13),
         }
         _, cls.ms2, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         cls.source_id2 = cls.ms2.source.pk

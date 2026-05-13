@@ -1,23 +1,25 @@
-from datetime import datetime, timedelta
 import logging
 import os.path
-import boto3
 import plistlib
+from datetime import timedelta
+
+import boto3
+import requests
 from botocore.client import Config
 from botocore.signers import CloudFrontSigner
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from django import forms
 from django.http import HttpResponseRedirect
 from django.utils.functional import cached_property
-import requests
 from requests.utils import requote_uri
 from rest_framework import serializers
+
 from zentral.contrib.monolith.exceptions import RepositoryError
 from zentral.utils.boto3 import make_refreshable_assume_role_session
-from .base import BaseRepository
+from zentral.utils.time import naive_utcnow
 
+from .base import BaseRepository
 
 logger = logging.getLogger("zentral.contrib.monolith.repository_backends.s3")
 
@@ -267,7 +269,7 @@ class S3Repository(BaseRepository):
         if self.cloudfront_signer:
             url = self.cloudfront_signer.generate_presigned_url(
                 requote_uri(f"https://{self.cloudfront_domain}/{key}"),
-                date_less_than=datetime.utcnow() + timedelta(seconds=expires_in)
+                date_less_than=naive_utcnow() + timedelta(seconds=expires_in)
             )
         else:
             # max AWS sig v4 = 7 days

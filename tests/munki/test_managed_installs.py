@@ -1,10 +1,14 @@
 from datetime import datetime
-from django.utils.crypto import get_random_string
+
 from django.test import TestCase
+from django.utils.crypto import get_random_string
+
 from zentral.contrib.munki.incidents import MunkiInstallFailedIncident, MunkiReinstallIncident
 from zentral.contrib.munki.models import ManagedInstall
 from zentral.contrib.munki.utils import apply_managed_installs, update_managed_install_with_event
 from zentral.core.incidents.models import Severity
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_configuration
 
 
@@ -56,7 +60,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         event = self._build_install_event(failed=True)
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
         self.assertEqual(mi_qs.count(), 0)
@@ -83,7 +87,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=False
         )
         event = self._build_install_event(display_name=None, failed=True)
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
         self.assertEqual(mi_qs.count(), 0)
@@ -114,7 +118,7 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_new_successful_install_no_incident(self):
         configuration = force_configuration()
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
         self.assertEqual(mi_qs.count(), 0)
@@ -140,7 +144,7 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_new_removal_noop(self):
         configuration = force_configuration()
         event = self._build_removal_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
         self.assertEqual(mi_qs.count(), 0)
@@ -164,7 +168,7 @@ class MunkiSetupViewsTestCase(TestCase):
             machine_serial_number=serial_number,
             name=event["name"],
             installed_version=get_random_string(12),
-            installed_at=datetime.utcnow()
+            installed_at=naive_utcnow()
         )
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
         self.assertEqual(mi_qs.count(), 1)
@@ -187,7 +191,7 @@ class MunkiSetupViewsTestCase(TestCase):
             machine_serial_number=serial_number,
             name=event["name"],
             failed_version=get_random_string(12),
-            failed_at=datetime.utcnow()
+            failed_at=naive_utcnow()
         )
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
         self.assertEqual(mi_qs.count(), 1)
@@ -210,7 +214,7 @@ class MunkiSetupViewsTestCase(TestCase):
             machine_serial_number=serial_number,
             name=event["name"],
             installed_version=event["version"],
-            installed_at=datetime.utcnow()
+            installed_at=naive_utcnow()
         )
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
         self.assertEqual(mi_qs.count(), 1)
@@ -233,7 +237,7 @@ class MunkiSetupViewsTestCase(TestCase):
             machine_serial_number=serial_number,
             name=event["name"],
             failed_version=event["version"],
-            failed_at=datetime.utcnow()
+            failed_at=naive_utcnow()
         )
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
         self.assertEqual(mi_qs.count(), 1)
@@ -255,7 +259,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=False
         )
         event = self._build_removal_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -283,7 +287,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=False
         )
         event = self._build_removal_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         failed_version = get_random_string(12)
         ManagedInstall.objects.create(
@@ -317,7 +321,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         event = self._build_removal_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         failed_version = get_random_string(12)
         mi = ManagedInstall.objects.create(
@@ -348,7 +352,7 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_update_sucessful_removal_reinstall_all_incident_updates(self):
         configuration = force_configuration(auto_failed_install_incidents=True, auto_reinstall_incidents=True)
         event = self._build_removal_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         failed_version = get_random_string(12)
         mi = ManagedInstall.objects.create(
@@ -384,7 +388,7 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_update_sucessful_removal_reinstall_null_timestamps_no_incidents(self):
         configuration = force_configuration()
         event = self._build_removal_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         failed_version = get_random_string(12)
         ManagedInstall.objects.create(
@@ -412,7 +416,7 @@ class MunkiSetupViewsTestCase(TestCase):
     def test_update_failed_removal_noop(self):
         configuration = force_configuration()
         event = self._build_removal_event(failed=True)
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -443,7 +447,7 @@ class MunkiSetupViewsTestCase(TestCase):
             machine_serial_number=serial_number,
             name=event["name"],
             failed_version=get_random_string(12),
-            installed_at=datetime.utcnow()
+            installed_at=naive_utcnow()
         )
         mi_qs = ManagedInstall.objects.filter(machine_serial_number=serial_number, name=event["name"])
         self.assertEqual(mi_qs.count(), 1)
@@ -463,7 +467,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         event = self._build_install_event(failed=True)
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -494,7 +498,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=False
         )
         event = self._build_install_event(failed=True)
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -530,7 +534,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=False
         )
         event = self._build_install_event(display_name=None, failed=True)
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -574,7 +578,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -605,7 +609,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -636,7 +640,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=False
         )
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -669,7 +673,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -707,7 +711,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=False
         )
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -739,7 +743,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -776,7 +780,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -807,7 +811,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True
         )
         event = self._build_install_event(display_name=None)
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -840,7 +844,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=False
         )
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -878,7 +882,7 @@ class MunkiSetupViewsTestCase(TestCase):
             auto_reinstall_incidents=True,
         )
         event = self._build_install_event()
-        event_time = datetime.utcnow()
+        event_time = naive_utcnow()
         serial_number = get_random_string(12)
         mi = ManagedInstall.objects.create(
             machine_serial_number=serial_number,
@@ -1016,7 +1020,7 @@ class MunkiSetupViewsTestCase(TestCase):
             name=name,
             display_name=get_random_string(12),
             installed_version=get_random_string(12),
-            installed_at=datetime.utcnow(),
+            installed_at=naive_utcnow(),
             failed_version=None,
             failed_at=None,
         )
@@ -1048,7 +1052,7 @@ class MunkiSetupViewsTestCase(TestCase):
         name = get_random_string(12)
         version = get_random_string(12)
         display_name = get_random_string(12)
-        installed_at = datetime.utcnow()
+        installed_at = naive_utcnow()
 
         # existing mi
         mi = ManagedInstall.objects.create(
@@ -1093,7 +1097,7 @@ class MunkiSetupViewsTestCase(TestCase):
         name = get_random_string(12)
         version = get_random_string(12)
         display_name = get_random_string(12)
-        installed_at = datetime.utcnow()
+        installed_at = naive_utcnow()
 
         # existing mi, with failed install
         mi = ManagedInstall.objects.create(
@@ -1140,7 +1144,7 @@ class MunkiSetupViewsTestCase(TestCase):
         name = get_random_string(12)
         version = get_random_string(12)
         display_name = get_random_string(12)
-        installed_at = datetime.utcnow()
+        installed_at = naive_utcnow()
 
         # existing mi, with failed install
         mi = ManagedInstall.objects.create(
@@ -1192,7 +1196,7 @@ class MunkiSetupViewsTestCase(TestCase):
         name = get_random_string(12)
         version = get_random_string(12)
         display_name = get_random_string(12)
-        installed_at = datetime.utcnow()
+        installed_at = naive_utcnow()
 
         # existing mi, with failed install
         mi = ManagedInstall.objects.create(
@@ -1237,7 +1241,7 @@ class MunkiSetupViewsTestCase(TestCase):
         name = get_random_string(12)
         version = get_random_string(12)
         display_name = get_random_string(12)
-        installed_at = datetime.utcnow()
+        installed_at = naive_utcnow()
 
         # existing mi, with failed install
         mi = ManagedInstall.objects.create(
@@ -1282,7 +1286,7 @@ class MunkiSetupViewsTestCase(TestCase):
         name = get_random_string(12)
         version = get_random_string(12)
         display_name = get_random_string(12)
-        installed_at = datetime.utcnow()
+        installed_at = naive_utcnow()
 
         # existing mi, with failed install
         mi = ManagedInstall.objects.create(
@@ -1333,7 +1337,7 @@ class MunkiSetupViewsTestCase(TestCase):
         name = get_random_string(12)
         version = get_random_string(12)
         display_name = get_random_string(12)
-        installed_at = datetime.utcnow()
+        installed_at = naive_utcnow()
 
         # existing mi
         mi = ManagedInstall.objects.create(
@@ -1378,7 +1382,7 @@ class MunkiSetupViewsTestCase(TestCase):
         name = get_random_string(12)
         version = get_random_string(12)
         display_name = get_random_string(12)
-        installed_at = datetime.utcnow()
+        installed_at = naive_utcnow()
 
         # existing mi
         mi = ManagedInstall.objects.create(

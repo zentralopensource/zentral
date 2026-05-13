@@ -1,24 +1,28 @@
-from datetime import datetime, timezone
-from enum import Enum
 import logging
 import os.path
 import uuid
 import weakref
+from datetime import datetime, timezone
+from enum import Enum
+
+from accounts.models import APIToken
 from dateutil import parser
-from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils.functional import cached_property
 from geoip2.models import City
 from rest_framework.authentication import TokenAuthentication
+
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.incidents.models import IncidentUpdate
 from zentral.core.probes.conf import all_probes_dict
 from zentral.core.queues import queues
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.text import decode_args, encode_args
-from accounts.models import APIToken
-from .template_loader import TemplateLoader
+from zentral.utils.time import naive_utc_fromisoformat
+
 from . import register_event_type
+from .template_loader import TemplateLoader
 
 logger = logging.getLogger('zentral.core.events.base')
 
@@ -152,7 +156,7 @@ class EventRequestUser(object):
             pass
         else:
             if isinstance(token_expiry, str):
-                user_d["session"]["token"]["expiry"] = datetime.fromisoformat(token_expiry)
+                user_d["session"]["token"]["expiry"] = naive_utc_fromisoformat(token_expiry)
         return cls(**user_d)
 
 
@@ -311,6 +315,7 @@ class EventMetadata(object):
         self.index = int(kwargs.pop('index', 0))
         self.created_at = kwargs.pop('created_at', None)
         if self.created_at is None:
+            # created_at is intentionally aware UTC
             self.created_at = datetime.now(timezone.utc)
         elif isinstance(self.created_at, str):
             try:

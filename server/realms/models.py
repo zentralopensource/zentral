@@ -1,17 +1,19 @@
-from datetime import datetime
-from functools import partial
 import logging
-from importlib import import_module
 import uuid
+from functools import partial
+from importlib import import_module
+
+import django.dispatch
+from accounts.models import User
 from django.contrib.auth.models import Group
 from django.db import connection, models
 from django.db.models import Q
-import django.dispatch
 from django.urls import reverse
 from django.utils.functional import cached_property
-from accounts.models import User
-from .backends.registry import backend_classes
 
+from zentral.utils.time import naive_utcnow
+
+from .backends.registry import backend_classes
 
 logger = logging.getLogger('zentral.realms.models')
 
@@ -365,7 +367,7 @@ class RealmAuthenticationSession(models.Model):
         elif self.expires_at:
             # fall back to the session expiry attached to the realm authentication session
             if not from_dt:
-                from_dt = datetime.utcnow()
+                from_dt = naive_utcnow()
             expiry_delta = self.expires_at - from_dt
             session_expiry = expiry_delta.days * 86400 + expiry_delta.seconds
             if session_expiry < 0:

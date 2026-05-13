@@ -1,17 +1,30 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
+
 from django import forms
 from django.db.models import Count, F, Q
 from django.utils.text import slugify
 from rest_framework.parsers import JSONParser
 from rest_framework_yaml.parsers import YAMLParser
+
+from zentral.utils.time import naive_utcnow
+
 from .compliance_checks import sync_query_compliance_check
-from .models import (AutomaticTableConstruction, Configuration, ConfigurationPack,
-                     DistributedQuery, DistributedQueryMachine, Enrollment, FileCategory,
-                     Pack, PackQuery, Platform, Query)
+from .models import (
+    AutomaticTableConstruction,
+    Configuration,
+    ConfigurationPack,
+    DistributedQuery,
+    DistributedQueryMachine,
+    Enrollment,
+    FileCategory,
+    Pack,
+    PackQuery,
+    Platform,
+    Query,
+)
 from .packs import OsqueryConfigParser, update_or_create_pack
 from .releases import get_osquery_versions
 from .serializers import OsqueryPackSerializer
-
 
 # common
 
@@ -95,9 +108,9 @@ class DistributedQueryForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.query = kwargs.pop("query", None)
         super().__init__(*args, **kwargs)
-        self.fields["valid_from"].initial = datetime.utcnow()
+        self.fields["valid_from"].initial = naive_utcnow()
         if not self.instance.pk:
-            self.fields["valid_until"].initial = datetime.utcnow() + timedelta(hours=1)
+            self.fields["valid_until"].initial = naive_utcnow() + timedelta(hours=1)
             current_runs = self.query.distributedquery_set.active().count()
             if current_runs:
                 self.fields["halt_current_runs"].label = "Halt current run{}".format("" if current_runs == 1 else "s")
@@ -113,7 +126,7 @@ class DistributedQueryForm(forms.ModelForm):
             valid_from = self.cleaned_data.get("valid_from")
             if valid_from and valid_until < valid_from:
                 self.add_error("valid_until", "Valid until must be greater than valid from")
-            if not self.instance.pk and valid_until < datetime.utcnow():
+            if not self.instance.pk and valid_until < naive_utcnow():
                 self.add_error("valid_until", "Valid until is in the past")
 
         # default values
@@ -126,7 +139,7 @@ class DistributedQueryForm(forms.ModelForm):
 
     def save(self, *args, **kwargs):
         if not self.instance.pk and self.cleaned_data.get("halt_current_runs"):
-            self.query.distributedquery_set.active().update(valid_until=datetime.utcnow())
+            self.query.distributedquery_set.active().update(valid_until=naive_utcnow())
         return super().save(*args, **kwargs)
 
 

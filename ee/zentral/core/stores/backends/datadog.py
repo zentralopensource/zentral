@@ -1,17 +1,18 @@
-from datetime import datetime
-from kombu.utils import json
 import logging
 import re
-import requests
 import time
 import zlib
-from rest_framework import serializers
 from urllib.parse import urlencode
+
+import requests
 from base.utils import deployment_info
+from kombu.utils import json
+from rest_framework import serializers
+
 from zentral.core.events import event_from_event_d
 from zentral.core.stores.backends.base import BaseStore
 from zentral.utils.requests import CustomHTTPAdapter
-
+from zentral.utils.time import naive_utcnow
 
 logger = logging.getLogger('zentral.core.stores.backends.datadog')
 
@@ -264,7 +265,7 @@ class DatadogStore(BaseStore):
         kwargs = {"query": self._get_machine_events_query(serial_number, event_type),
                   "live": "true",
                   "from_ts": self._prepare_datetime(from_dt, tick=1000),
-                  "to_ts": self._prepare_datetime(to_dt or datetime.utcnow(), tick=1000)}
+                  "to_ts": self._prepare_datetime(to_dt or naive_utcnow(), tick=1000)}
         return "{}?{}".format(self.log_url, urlencode(kwargs))
 
     # probe events
@@ -301,7 +302,7 @@ class DatadogStore(BaseStore):
         kwargs = {"query": self._get_probe_events_query(probe, event_type),
                   "live": "true",
                   "from_ts": self._prepare_datetime(from_dt, tick=1000),
-                  "to_ts": self._prepare_datetime(to_dt or datetime.utcnow(), tick=1000)}
+                  "to_ts": self._prepare_datetime(to_dt or naive_utcnow(), tick=1000)}
         return "{}?{}".format(self.log_url, urlencode(kwargs))
 
 

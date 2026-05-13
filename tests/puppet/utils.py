@@ -1,11 +1,14 @@
-from datetime import datetime, timedelta
-from unittest.mock import patch
 import uuid
+from datetime import timedelta
+from unittest.mock import patch
+
 from cryptography import x509
-from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 from django.utils.crypto import get_random_string
+
+from zentral.utils.time import naive_utcnow
 
 
 def build_self_signed_cert(name):
@@ -27,9 +30,9 @@ def build_self_signed_cert(name):
     ).serial_number(
         x509.random_serial_number()
     ).not_valid_before(
-        datetime.utcnow()
+        naive_utcnow()
     ).not_valid_after(
-        datetime.utcnow() + timedelta(days=10)
+        naive_utcnow() + timedelta(days=10)
     ).add_extension(
         x509.SubjectAlternativeName([x509.DNSName(name)]),
         critical=False,

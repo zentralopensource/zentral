@@ -1,5 +1,3 @@
-from datetime import datetime
-from importlib import import_module
 import json
 import logging
 import queue
@@ -7,17 +5,21 @@ import signal
 import threading
 import time
 import weakref
+from importlib import import_module
+
 import boto3
+from base.notifier import notifier
 from botocore.config import Config
 from django.utils.functional import cached_property
-from base.notifier import notifier
+
 from zentral.conf import settings
 from zentral.conf.config import ConfigDict
 from zentral.core.queues.backends.base import BaseEventQueues
+from zentral.utils.time import naive_utcnow
+
 from .consumer import BatchConsumer, ConcurrentConsumer, Consumer, ConsumerProducer
 from .sns import SNSPublishThread
 from .sqs import SQSSendThread
-
 
 logger = logging.getLogger('zentral.core.queues.backends.aws_sns_sqs')
 
@@ -461,7 +463,7 @@ class EventQueues(BaseEventQueues):
             return
         self.sqs_client.tag_queue(
             QueueUrl=queue_url,
-            Tags={self.deletion_tag: datetime.utcnow().isoformat()}
+            Tags={self.deletion_tag: naive_utcnow().isoformat()}
         )
 
     def get_preprocess_worker(self):
