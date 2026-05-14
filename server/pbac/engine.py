@@ -1,14 +1,16 @@
 import logging
 import re
 from typing import Optional
+
 from django.apps.config import AppConfig
 from django.contrib.auth import get_permission_codename
 from django.db.models.base import ModelBase
+
 from .cedar import authorize_request, authorize_requests
 from .entities import Action, ActionGroup, Namespace, Principal, Request, Resource
 
 
-logger = logging.getLogger("zentral.accounts.pbac.engine")
+logger = logging.getLogger("zentral.pbac.engine")
 
 
 class Engine:

@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from accounts.models import User
-from accounts.pbac.entities import Action, Entity, Namespace, Principal, Request
+from pbac.entities import Action, Entity, Namespace, Principal, Request
 
 
 class PBACEntitiesTestCase(TestCase):

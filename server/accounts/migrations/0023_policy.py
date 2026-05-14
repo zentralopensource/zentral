@@ -8,7 +8,7 @@ from django.db import migrations, models
 
 def create_policies_for_role_perms(apps, schema_editor):
     try:
-        from accounts.pbac.engine import engine
+        from pbac.engine import engine
     except ImportError:
         return
     Group = apps.get_model("auth", "Group")

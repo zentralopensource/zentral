@@ -14,7 +14,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
 from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
-from accounts.pbac.engine import engine
+from pbac.engine import engine
 from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
 from zentral.core.compliance_checks.forms import ComplianceCheckForm

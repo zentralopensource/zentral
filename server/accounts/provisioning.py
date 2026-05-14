@@ -1,8 +1,10 @@
 import logging
+
 from django.db import transaction
+
+from pbac.utils import signal_policy_change
 from zentral.utils.provisioning import Provisioner
 from .serializers import PolicyProvisioningSerializer, RoleSerializer
-from .pbac.utils import signal_policy_change
 
 
 logger = logging.getLogger("zentral.accounts.provisioning")

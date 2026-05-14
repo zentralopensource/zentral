@@ -4,12 +4,14 @@ import threading
 import time
 from typing import Optional
 import weakref
+
 from cedarpy import is_authorized, is_authorized_batch
+
 from base.notifier import notifier
 from .entities import Entity, Request
 
 
-logger = logging.getLogger("zentral.accounts.pbac.cedar")
+logger = logging.getLogger("zentral.pbac.cedar")
 
 
 class PoliciesCache:

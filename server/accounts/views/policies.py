@@ -5,7 +5,7 @@ from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, Update
 from django.views.generic import DetailView
 from accounts.forms import PolicyForm
 from accounts.models import Policy
-from accounts.pbac.utils import signal_policy_change
+from pbac.utils import signal_policy_change
 
 
 logger = logging.getLogger("zentral.accounts.views.policies")
