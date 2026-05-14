@@ -1,7 +1,6 @@
 import json
 import logging
 from urllib.parse import urlparse
-from cedarpy import format_policies
 import celpy
 from celpy import celtypes
 from django import forms
@@ -53,12 +52,6 @@ class PolicyForm(forms.ModelForm):
     class Meta:
         model = Policy
         exclude = ["type"]
-
-    def clean_source(self):
-        try:
-            return format_policies(self.cleaned_data.get("source"))
-        except Exception:
-            raise forms.ValidationError("Invalid policy.")
 
     def save(self, *args, **kwargs):
         self.instance.type = Policy.Type.CEDAR
