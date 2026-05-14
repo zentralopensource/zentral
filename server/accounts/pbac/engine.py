@@ -33,9 +33,11 @@ class Engine:
 
     def get_action(self, id: str, namespace: Namespace, parents: Optional[list[ActionGroup]] = None) -> Action:
         key = (id, namespace)
-        if key not in self.actions:
-            self.actions[key] = Action(id, namespace, parents)
-        return self.actions[key]
+        action = self.actions.get(key)
+        if not action:
+            self.actions[key] = action = Action(id, namespace, parents)
+        assert parents == action.parents
+        return action
 
     # legacy perms
 
