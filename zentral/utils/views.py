@@ -1,6 +1,6 @@
 import json
 import logging
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import AccessMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import HttpResponseServerError
@@ -118,15 +118,18 @@ def server_error(request, *args, **kwargs):
     return django_server_error(request)
 
 
-class PBACViewMixin(LoginRequiredMixin):
+class PBACViewMixin(AccessMixin):
     pbac_request_class = None
 
-    def check_pbac_request(self):
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
         pbac_request = self.pbac_request_class(
-            self.request.user,
-            **self.get_pbac_request_kwargs(),
+            request.user,
+            **self.get_pbac_request_kwargs(kwargs),
         )
         engine.authorize_request(pbac_request)
         if not pbac_request.is_authorized:
-            logger.error("Permission denied %s", pbac_request)
+            logger.error("Permission denied %s", pbac_request, extra={"request": request})
             raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
