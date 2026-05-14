@@ -1,6 +1,7 @@
 from importlib import import_module
 import logging
 import os.path
+import re
 
 from django.apps import AppConfig
 
@@ -55,6 +56,12 @@ class ZentralAppConfig(AppConfig):
 
     def import_provisioning(self):
         self._import_submodule("provisioning")
+
+    # PBAC
+
+    @property
+    def pbac_namespace_id(self):
+        return "".join(w.title() for w in re.split(r"[ _]", self.name.split(".")[-1]))
 
     def register_legacy_perms(self):
         engine.register_app_legacy_perms(self)

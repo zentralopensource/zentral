@@ -1,5 +1,5 @@
+from enum import Enum
 import logging
-import re
 from typing import Optional
 
 from django.apps.config import AppConfig
@@ -11,6 +11,15 @@ from .entities import Action, ActionGroup, Namespace, Principal, Request, Resour
 
 
 logger = logging.getLogger("zentral.pbac.engine")
+
+
+class ActionGroupBasename(Enum):
+    ADMIN = "Admin"
+    USER = "User"
+    VIEWER = "Viewer"
+
+    def __str__(self):
+        return self.value
 
 
 class Engine:
@@ -27,54 +36,56 @@ class Engine:
             self.namespaces[id] = Namespace(id)
         return self.namespaces[id]
 
-    def get_action_group(self, id: str, namespace: Optional[Namespace] = None) -> ActionGroup:
+    def get_action_group(self, basename: ActionGroupBasename, namespace: Optional[Namespace] = None) -> ActionGroup:
+        id = f"{basename}Actions"
         key = (id, namespace)
         if key not in self.action_groups:
             self.action_groups[key] = ActionGroup(id, namespace)
         return self.action_groups[key]
 
-    def get_action(self, id: str, namespace: Namespace, parents: Optional[list[ActionGroup]] = None) -> Action:
+    def get_action(
+        self,
+        id: str,
+        namespace: Namespace,
+        group_basenames: Optional[list[ActionGroupBasename]] = None
+    ) -> Action:
         key = (id, namespace)
+        action_groups = []
+        if group_basenames:
+            for group_basename in group_basenames:
+                # add namespace scoped action group
+                action_groups.append(self.get_action_group(group_basename, namespace))
+                # add global action group
+                action_groups.append(self.get_action_group(group_basename))
         action = self.actions.get(key)
         if not action:
-            self.actions[key] = action = Action(id, namespace, parents)
-        assert parents == action.parents
+            self.actions[key] = action = Action(id, namespace, action_groups)
+        assert action_groups == action.parents
         return action
 
     # legacy perms
 
     def _get_app_config_namespace(self, app_config: AppConfig) -> Namespace:
-        app_name = app_config.name.split(".")[-1]
-        id = "".join(
-            w.upper() if w in ("mdm",) else w.title()
-            for w in re.split(r"[ _]", app_name)
-        )
-        return self.get_namespace(id)
+        namespace_id = getattr(app_config, "pbac_namespace_id", app_config.name.split(".")[-1].title())
+        return self.get_namespace(namespace_id)
 
     def _register_module_legacy_perm_action(self, app_config: AppConfig) -> None:
         namespace = self._get_app_config_namespace(app_config)
         action_id = "NOOP"
-        group_id = "ViewerActions"
-        action_groups = [
-            self.get_action_group(group_id, namespace),
-            self.get_action_group(group_id)
-        ]
-        self.module_legacy_perm_actions[app_config.label] = self.get_action(action_id, namespace, action_groups)
+        self.module_legacy_perm_actions[app_config.label] = self.get_action(
+            action_id, namespace,
+            [ActionGroupBasename.VIEWER],
+        )
 
     def _register_legacy_perm_action(
         self,
         app_config: AppConfig,
         codename: str,
         action_id: str,
-        group_basenames: list[str]
+        group_basenames: list[ActionGroupBasename]
     ) -> None:
         namespace = self._get_app_config_namespace(app_config)
-        action_groups = []
-        for group_basename in group_basenames:
-            group_id = f"{group_basename}Actions"
-            action_groups.append(self.get_action_group(group_id, namespace))
-            action_groups.append(self.get_action_group(group_id))
-        action = self.get_action(action_id, namespace, action_groups)
+        action = self.get_action(action_id, namespace, group_basenames)
         self.legacy_perm_actions[f"{app_config.label}.{codename}"] = action
 
     def _register_model_default_legacy_perm_actions(self, app_config: AppConfig, model: ModelBase) -> None:
@@ -82,9 +93,9 @@ class Engine:
         opts = model._meta
         for operation in opts.default_permissions:
             codename = get_permission_codename(operation, opts)
-            group_basenames = ["Admin"]
+            group_basenames = [ActionGroupBasename.ADMIN]
             if object_name == "MachineTag":
-                group_basenames.append("User")
+                group_basenames.append(ActionGroupBasename.USER)
             if operation == "add":
                 action_action = "create"
             elif operation == "change":
@@ -92,7 +103,7 @@ class Engine:
             else:
                 action_action = operation
                 if operation == "view":
-                    group_basenames.append("Viewer")
+                    group_basenames.append(ActionGroupBasename.VIEWER)
             action_id = f"{action_action}{object_name}"
             self._register_legacy_perm_action(app_config, codename, action_id, group_basenames)
 
@@ -108,7 +119,11 @@ class Engine:
                     w = w.title()
                 action_id_items.append(w)
             action_id = "".join(action_id_items)
-            self._register_legacy_perm_action(app_config, codename, action_id, ["Admin", "User"])
+            self._register_legacy_perm_action(
+                app_config, codename, action_id,
+                [ActionGroupBasename.ADMIN,
+                 ActionGroupBasename.USER]
+            )
 
     def register_app_legacy_perms(self, app_config: AppConfig) -> None:
         permission_models = getattr(app_config, "permission_models", [])

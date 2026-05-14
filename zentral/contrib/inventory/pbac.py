@@ -1,5 +1,5 @@
 from pbac.entities import Namespace, Principal, Request, Resource
-from pbac.engine import engine
+from pbac.engine import ActionGroupBasename, engine
 from .models import MetaBusinessUnit, MetaMachine, Tag
 
 
@@ -27,15 +27,10 @@ def get_meta_machine_resource(machine: MetaMachine) -> Resource:
 
 class BaseMachineTagRequest(Request):
     def __init__(self, user_obj, machine: MetaMachine, tag: Tag) -> None:
-        namespace = get_namespace()
         action = engine.get_action(
             f"{self.operation}MachineTag",
-            namespace,
-            parents=[
-                engine.get_action_group(f"{gbn}Actions", ns)
-                for gbn in self.action_group_basenames
-                for ns in (namespace, None)
-            ],
+            get_namespace(),
+            self.action_group_basenames,
         )
         resource = get_meta_machine_resource(machine)
         context = {"tagName": tag.name,
@@ -54,14 +49,24 @@ class BaseMachineTagRequest(Request):
 
 class CreateMachineTagRequest(BaseMachineTagRequest):
     operation = "create"
-    action_group_basenames = ["Admin", "User"]
+    action_group_basenames = [
+        ActionGroupBasename.ADMIN,
+        ActionGroupBasename.USER,
+    ]
 
 
 class DeleteMachineTagRequest(BaseMachineTagRequest):
     operation = "delete"
-    action_group_basenames = ["Admin", "User"]
+    action_group_basenames = [
+        ActionGroupBasename.ADMIN,
+        ActionGroupBasename.USER,
+    ]
 
 
 class ViewMachineTagRequest(BaseMachineTagRequest):
     operation = "view"
-    action_group_basenames = ["Admin", "User", "Viewer"]
+    action_group_basenames = [
+        ActionGroupBasename.ADMIN,
+        ActionGroupBasename.USER,
+        ActionGroupBasename.VIEWER,
+    ]
