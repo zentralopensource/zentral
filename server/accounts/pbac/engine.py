@@ -125,28 +125,54 @@ class Engine:
             self._register_module_legacy_perm_action(app_config)
 
     def has_legacy_perm(self, user_obj, perm):
-        action = self.legacy_perm_actions.get(perm)
-        if action is None:
-            return False
-        request = Request(
-            Principal.from_user(user_obj),
-            action,
-            self.system_any_resource,
-        )
-        self.authorize_request(request)
-        return request.is_authorized
+        # Uses a cache in the user object.
+        # Group/Role membership changes within the lifetime of the user object may lead to inconsistent decisions.
+        legacy_perm_cache_name = "_pbac_legacy_perms"
+        sentinel = object()
+        legacy_perm_cache = getattr(user_obj, legacy_perm_cache_name, sentinel)
+        if legacy_perm_cache == sentinel:
+            legacy_perm_cache = {}
+            setattr(user_obj, legacy_perm_cache_name, legacy_perm_cache)
+        try:
+            return legacy_perm_cache[perm]
+        except KeyError:
+            action = self.legacy_perm_actions.get(perm)
+            if action is None:
+                legacy_perm_cache[perm] = False
+                return False
+            request = Request(
+                Principal.from_user(user_obj),
+                action,
+                self.system_any_resource,
+            )
+            self.authorize_request(request)
+            legacy_perm_cache[perm] = request.is_authorized
+            return request.is_authorized
 
     def has_module_legacy_perms(self, user_obj, app_label):
-        action = self.module_legacy_perm_actions.get(app_label)
-        if action is None:
-            return False
-        request = Request(
-            Principal.from_user(user_obj),
-            action,
-            self.system_any_resource,
-        )
-        self.authorize_request(request)
-        return request.is_authorized
+        # Uses a cache in the user object.
+        # Group/Role membership changes within the lifetime of the user object may lead to inconsistent decisions.
+        module_legacy_perm_cache_name = "_pbac_module_legacy_perms"
+        sentinel = object()
+        module_legacy_perm_cache = getattr(user_obj, module_legacy_perm_cache_name, sentinel)
+        if module_legacy_perm_cache == sentinel:
+            module_legacy_perm_cache = {}
+            setattr(user_obj, module_legacy_perm_cache_name, module_legacy_perm_cache)
+        try:
+            return module_legacy_perm_cache[app_label]
+        except KeyError:
+            action = self.module_legacy_perm_actions.get(app_label)
+            if action is None:
+                module_legacy_perm_cache[app_label] = False
+                return False
+            request = Request(
+                Principal.from_user(user_obj),
+                action,
+                self.system_any_resource,
+            )
+            self.authorize_request(request)
+            module_legacy_perm_cache[app_label] = request.is_authorized
+            return request.is_authorized
 
     def authorize_request(self, request: Request):
         if request.is_pending:
