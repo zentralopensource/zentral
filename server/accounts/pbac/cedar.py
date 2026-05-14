@@ -13,23 +13,27 @@ logger = logging.getLogger("zentral.accounts.pbac.cedar")
 
 
 class PoliciesCache:
+    # Fallback for missed notifier notifications
     max_age_seconds = 300
 
     def __init__(self, with_sync=False):
         self._concatenated_policies = None
         self._last_refresh_ts = None
         self._lock = threading.Lock()
-        self.with_sync = with_sync
+        self.with_sync = with_sync  # if False, every read will hit the DB
         self._sync_started = False
 
     def clear(self, *args, **kwargs):
         with self._lock:
             self._concatenated_policies = None
+            self._last_refresh_ts = None
             logger.debug("Policies cache sync cleared")
 
     def _start_sync(self):
         if self.with_sync:
             if not self._sync_started:
+                # Currently, a weakref doesn't buy us much since this class is only use as a module level singleton,
+                # but it might be used differently in the future.
                 notifier.add_callback("policies.change", weakref.WeakMethod(self.clear))
                 logger.debug("Policies cache sync started")
                 self._sync_started = True
@@ -55,6 +59,8 @@ class PoliciesCache:
     @property
     def all_policies_concatenated(self):
         with self._lock:
+            # It might trigger a DB request, but we are OK because the DB query is cheap.
+            # Also, the lock is not shared across the application.
             self._refresh()
             return self._concatenated_policies
 
