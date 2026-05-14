@@ -49,6 +49,8 @@ class Resource(Entity):
 class Principal(Entity):
     @classmethod
     def from_user(cls, user_obj) -> Self:
+        # Cached in the user object.
+        # Group/Role membership changes within the lifetime of the user obj may lead to inconsistent decisions.
         entity_cache_name = "_pbac_principal"
         if not hasattr(user_obj, entity_cache_name):
             principal = cls(
