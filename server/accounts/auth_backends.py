@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
-from .pbac.engine import engine
+from pbac.engine import engine
 
 UserModel = get_user_model()
 

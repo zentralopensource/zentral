@@ -1,12 +1,14 @@
 import json
 import logging
+
 from django.contrib.auth.mixins import AccessMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import HttpResponseServerError
 from django.views.defaults import server_error as django_server_error
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
-from accounts.pbac.engine import engine
+
+from pbac.engine import engine
 from zentral.core.events.base import AuditEvent
 
 

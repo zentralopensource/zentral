@@ -1,8 +1,10 @@
 from importlib import import_module
 import logging
 import os.path
+
 from django.apps import AppConfig
-from accounts.pbac.engine import engine
+
+from pbac.engine import engine
 
 
 logger = logging.getLogger('zentral.utils.apps')

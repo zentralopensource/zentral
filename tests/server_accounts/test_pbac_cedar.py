@@ -1,7 +1,7 @@
 from cedarpy import format_policies
 from django.test import TestCase
 
-from accounts.pbac.cedar import authorize_requests, PoliciesCache
+from pbac.cedar import authorize_requests, PoliciesCache
 from .utils import force_policy
 
 

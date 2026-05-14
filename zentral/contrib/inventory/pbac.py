@@ -1,5 +1,5 @@
-from accounts.pbac.entities import Namespace, Principal, Request, Resource
-from accounts.pbac.engine import engine
+from pbac.entities import Namespace, Principal, Request, Resource
+from pbac.engine import engine
 from .models import MetaBusinessUnit, MetaMachine, Tag
 
 

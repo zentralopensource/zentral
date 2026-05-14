@@ -10,9 +10,9 @@ from django.urls import reverse
 from django.utils.http import urlencode
 
 from accounts.models import Policy
-from accounts.pbac.engine import engine
-from accounts.pbac.entities import Entity
 from accounts.models import User
+from pbac.engine import engine
+from pbac.entities import Entity
 from realms.backends.views import finalize_session
 from realms.models import Realm, RealmAuthenticationSession, RealmUser
 

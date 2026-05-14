@@ -1,5 +1,6 @@
 from django.apps import apps
-from accounts.pbac.engine import engine
+
+from pbac.engine import engine
 from zentral.utils.apps import ZentralAppConfig
 
 
