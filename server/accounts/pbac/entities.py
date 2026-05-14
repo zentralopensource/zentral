@@ -1,5 +1,6 @@
 from typing import Dict, Optional
 from typing_extensions import Self
+import uuid
 
 
 class Namespace:
@@ -96,14 +97,11 @@ class Request:
             self.is_authorized = True
         else:
             self.is_authorized = None
+        self.correlation_id = uuid.uuid4().hex
 
     @property
     def is_pending(self):
         return self.is_authorized is None
-
-    @property
-    def correlation_id(self):
-        return str(id(self))
 
     def get_authorized_display(self):
         if self.is_pending:
