@@ -1,4 +1,5 @@
 import json
+import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -7,6 +8,9 @@ from django.views.defaults import server_error as django_server_error
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from accounts.pbac.engine import engine
 from zentral.core.events.base import AuditEvent
+
+
+logger = logging.getLogger("zentral.utils.views")
 
 
 class UserPaginationMixin:
@@ -124,4 +128,5 @@ class PBACViewMixin(LoginRequiredMixin):
         )
         engine.authorize_request(pbac_request)
         if not pbac_request.is_authorized:
-            raise PermissionDenied(f"{pbac_request}")
+            logger.error("Permission denied %s", pbac_request)
+            raise PermissionDenied
