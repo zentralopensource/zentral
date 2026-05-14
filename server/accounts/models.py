@@ -3,10 +3,12 @@ import uuid
 from hashlib import blake2b
 from itertools import chain
 
+from cedarpy import format_policies
 import pyotp
 from django.contrib.auth.models import AbstractUser, Group
 from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ValidationError
 from django.core.validators import MinLengthValidator, MaxValueValidator, MinValueValidator, URLValidator
 from django.db import models
 from django.db.models import Q
@@ -400,6 +402,12 @@ class Policy(models.Model):
 
     def get_absolute_url(self):
         return reverse("accounts:policy", args=(self.pk,))
+
+    def clean(self):
+        try:
+            self.source = format_policies(self.source)
+        except Exception:
+            raise ValidationError({"source": "Invalid CEDAR policy"})
 
     def can_be_deleted(self):
         return Policy.objects.for_deletion().filter(pk=self.pk).exists()

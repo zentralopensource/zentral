@@ -4,9 +4,9 @@ import operator
 from datetime import timedelta
 import re
 
-from cedarpy import format_policies
 import celpy
 from django.contrib.auth.models import Permission
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -86,11 +86,17 @@ class PolicyProvisioningSerializer(serializers.ModelSerializer):
                         f'Role::"{role_provisioning_uid}"',
                         f'Role::"{role_pk}"',
                     )
-            try:
-                value = format_policies(value)
-            except Exception:
-                raise serializers.ValidationError("Invalid CEDAR policy")
         return value
+
+    def validate(self, data):
+        # Run the model-level clean()
+        instance = self.Meta.model(**data)
+        try:
+            instance.clean_fields()
+            instance.clean()
+        except ValidationError as e:
+            raise serializers.ValidationError(e.message_dict)
+        return data
 
 
 class OIDCAPITokenIssuerSerializer(serializers.ModelSerializer):
