@@ -1,14 +1,16 @@
 import logging
+
+import httpx
 from asgiref.sync import async_to_sync
 from azure.identity.aio import ClientSecretCredential
 from kiota_authentication_azure.azure_identity_authentication_provider import AzureIdentityAuthenticationProvider
 from msgraph import GraphRequestAdapter, GraphServiceClient
 from msgraph.generated.device_management.managed_devices.managed_devices_request_builder import (
-    ManagedDevicesRequestBuilder
+    ManagedDevicesRequestBuilder,
 )
 from msgraph_core import GraphClientFactory
+
 from zentral.contrib.inventory.conf import windows_version_from_build
-import httpx
 
 logger = logging.getLogger("zentral.contrib.intune.api_client")
 
@@ -156,7 +158,7 @@ class Client:
             try:
                 os_version_d = windows_version_from_build(os_build)
             except ValueError:
-                logging.exception("Device %s: could not parse OS version", device.id)
+                logger.exception("Device %s: could not parse OS version", device.id)
                 return
         elif operating_system in ("ios", "ipados", "macos", "tvos"):
             try:
