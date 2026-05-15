@@ -62,13 +62,13 @@ class ZentralBackend(ZentralBaseBackend):
     def has_perm(self, user_obj, perm, obj=None):
         if not user_obj.is_active or user_obj.is_anonymous or obj is not None:
             return False
-        if user_obj.is_superuser:
+        if not user_obj.is_service_account and user_obj.is_superuser:
             return True
         return engine.has_legacy_perm(user_obj, perm)
 
     def has_module_perms(self, user_obj, app_label):
         if not user_obj.is_active or user_obj.is_anonymous:
             return False
-        if user_obj.is_superuser:
+        if not user_obj.is_service_account and user_obj.is_superuser:
             return True
         return engine.has_module_legacy_perms(user_obj, app_label)
