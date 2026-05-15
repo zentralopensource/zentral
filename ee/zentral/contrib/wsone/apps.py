@@ -8,4 +8,3 @@ class ZentralWSOneAppConfig(ZentralAppConfig):
     permission_models = (
         "instance",
     )
-    pbac_namespace_id = "WorkspaceONE"

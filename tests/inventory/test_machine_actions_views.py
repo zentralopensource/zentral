@@ -63,12 +63,8 @@ class InventoryMachineActionsViewsTestCase(TestCase, LoginCase):
 
     def test_machine_detail_perms_machine_tags_action(self):
         self.login(
+            "inventory.view_machinesnapshot",
             "inventory.view_machinetag",
-            "inventory.add_machinetag",
-            "inventory.change_machinetag",
-            "inventory.delete_machinetag",
-            "inventory.add_tag",
-            "inventory.view_machinesnapshot"
         )
         machine = MetaMachine(serial_number=get_random_string(12))
         response = self.client.get(machine.get_absolute_url())

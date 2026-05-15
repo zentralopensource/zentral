@@ -47,7 +47,8 @@ class Engine:
         self,
         id: str,
         namespace: Namespace,
-        group_basenames: Optional[list[ActionGroupBasename]] = None
+        group_basenames: Optional[list[ActionGroupBasename]] = None,
+        legacy_perm: Optional[str] = None,
     ) -> Action:
         key = (id, namespace)
         action_groups = []
@@ -60,6 +61,8 @@ class Engine:
         action = self.actions.get(key)
         if not action:
             self.actions[key] = action = Action(id, namespace, action_groups)
+        if legacy_perm and legacy_perm not in self.legacy_perm_actions:
+            self.legacy_perm_actions[legacy_perm] = action
         assert action_groups == action.parents
         return action
 
@@ -77,25 +80,12 @@ class Engine:
             [ActionGroupBasename.VIEWER],
         )
 
-    def _register_legacy_perm_action(
-        self,
-        app_config: AppConfig,
-        codename: str,
-        action_id: str,
-        group_basenames: list[ActionGroupBasename]
-    ) -> None:
-        namespace = self._get_app_config_namespace(app_config)
-        action = self.get_action(action_id, namespace, group_basenames)
-        self.legacy_perm_actions[f"{app_config.label}.{codename}"] = action
-
     def _register_model_default_legacy_perm_actions(self, app_config: AppConfig, model: ModelBase) -> None:
+        namespace = self._get_app_config_namespace(app_config)
         object_name = model._meta.object_name
         opts = model._meta
         for operation in opts.default_permissions:
-            codename = get_permission_codename(operation, opts)
             group_basenames = [ActionGroupBasename.ADMIN]
-            if object_name == "MachineTag":
-                group_basenames.append(ActionGroupBasename.USER)
             if operation == "add":
                 action_action = "create"
             elif operation == "change":
@@ -105,25 +95,8 @@ class Engine:
                 if operation == "view":
                     group_basenames.append(ActionGroupBasename.VIEWER)
             action_id = f"{action_action}{object_name}"
-            self._register_legacy_perm_action(app_config, codename, action_id, group_basenames)
-
-    def _register_model_custom_legacy_perm_actions(self, app_config: AppConfig, model: ModelBase) -> None:
-        for codename, _ in model._meta.permissions:
-            action_id_items = []
-            for i, w in enumerate(codename.split("_")):
-                if w in ("prk",):
-                    w = w.upper()
-                elif w == "depdevice":
-                    w = "DEPDevice"
-                elif i > 0:
-                    w = w.title()
-                action_id_items.append(w)
-            action_id = "".join(action_id_items)
-            self._register_legacy_perm_action(
-                app_config, codename, action_id,
-                [ActionGroupBasename.ADMIN,
-                 ActionGroupBasename.USER]
-            )
+            codename = get_permission_codename(operation, opts)
+            self.get_action(action_id, namespace, group_basenames, f"{app_config.label}.{codename}")
 
     def register_app_legacy_perms(self, app_config: AppConfig) -> None:
         permission_models = getattr(app_config, "permission_models", [])
@@ -138,7 +111,6 @@ class Engine:
             ):
                 continue
             self._register_model_default_legacy_perm_actions(app_config, model)
-            self._register_model_custom_legacy_perm_actions(app_config, model)
             perm_registered = True
         if perm_registered:
             self._register_module_legacy_perm_action(app_config)
