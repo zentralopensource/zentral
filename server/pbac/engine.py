@@ -38,7 +38,7 @@ class Engine:
 
     def get_action_group(self, basename: ActionGroupBasename, namespace: Optional[Namespace] = None) -> ActionGroup:
         id = f"{basename}Actions"
-        key = (id, namespace)
+        key = (id, namespace.id if namespace else None)
         if key not in self.action_groups:
             self.action_groups[key] = ActionGroup(id, namespace)
         return self.action_groups[key]
@@ -50,7 +50,7 @@ class Engine:
         group_basenames: Optional[list[ActionGroupBasename]] = None,
         legacy_perm: Optional[str] = None,
     ) -> Action:
-        key = (id, namespace)
+        key = (id, namespace.id)
         action_groups = []
         if group_basenames:
             for group_basename in group_basenames:
