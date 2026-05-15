@@ -42,7 +42,6 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "usercommand",
         "userenrollment",
     )
-    pbac_namespace_id = "MDM"
 
     def ready(self):
         super().ready()
