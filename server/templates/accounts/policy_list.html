@@ -19,7 +19,7 @@
   </nav>
 
   <div class="d-flex align-items-center mb-1">
-    <h3>Polic{{ page_obj.paginator.count|length|pluralize:"y,ies" }} ({{ page_obj.paginator.count }})</h3>
+    <h3>Polic{{ page_obj.paginator.count|pluralize:"y,ies" }} ({{ page_obj.paginator.count }})</h3>
     <div class="ms-auto">
       {% if perms.accounts.add_policy %}
         {% url 'accounts:create_policy' as url %}
