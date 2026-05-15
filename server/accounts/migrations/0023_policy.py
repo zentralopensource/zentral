@@ -22,13 +22,15 @@ def create_policies_for_role_perms(apps, schema_editor):
         if not permissions:
             continue
         # legacy permission actions
-        actions = [
-            engine.legacy_perm_actions[f"{perm.content_type.app_label}.{perm.codename}"]
-            for perm in permissions
-        ]
+        action_keys = [f"{p.content_type.app_label}.{p.codename}" for p in permissions]
+        # silently skip any missing permission that might have been activated in the past
+        actions = [engine.legacy_perm_actions[k] for k in action_keys if k in engine.legacy_perm_actions]
         # module level NOOP actions
         for app_label in set(perm.content_type.app_label for perm in permissions):
-            actions.append(engine.module_legacy_perm_actions[app_label])
+            noop_action = engine.module_legacy_perm_actions.get(app_label)
+            # silently skip any missing app that might have been activated in the past
+            if noop_action:
+                actions.append(noop_action)
         serialized_actions = "\n".join(
             "     " + str(action) + ","
             for action in actions
