@@ -61,11 +61,21 @@ class ZentralBackendTestCase(TestCase):
     def test_superuser_has_perm(self):
         self.assertTrue(self.backend.has_perm(self.superuser, "inventory.view_machinesnapshot"))
 
+    def test_service_account_superuser_no_perm(self):
+        # a service account must never be a superuser, but if it happens
+        self.superuser.is_service_account = True
+        self.assertFalse(self.backend.has_perm(self.superuser, "inventory.view_machinesnapshot"))
+
     def test_anonymous_has_perm(self):
         self.assertFalse(self.backend.has_perm(AnonymousUser(), "inventory.view_machinesnapshot"))
 
     def test_superuser_has_module_perms(self):
         self.assertTrue(self.backend.has_module_perms(self.superuser, "inventory"))
+
+    def test_service_account_superuser_has_module_perms(self):
+        # a service account must never be a superuser, but if it happens
+        self.superuser.is_service_account = True
+        self.assertFalse(self.backend.has_module_perms(self.superuser, "inventory"))
 
     def test_anonymous_has_module_perms(self):
         self.assertFalse(self.backend.has_module_perms(AnonymousUser(), "inventory"))
