@@ -6,7 +6,6 @@ anyio==4.6.2.post1
 asgiref==3.8.1
 asn1crypto==1.5.1
 asttokens==2.4.1
-async-timeout==5.0.1
 attrs==25.3.0
 azure-core==1.38.0
 azure-identity==1.19.0
@@ -41,7 +40,6 @@ elastic-transport==8.15.1
 elasticsearch==8.15.1
 elementpath==4.6.0
 Events==0.5
-exceptiongroup==1.2.2
 executing==2.1.0
 filelock==3.20.3
 frozenlist==1.7.0
@@ -142,7 +140,6 @@ sortedcontainers==2.4.0
 sqlparse==0.5.4
 stack-data==0.6.3
 std-uritemplate==2.0.8
-tomli==2.4.0
 tomlkit==0.14.0
 tqdm==4.66.6
 traitlets==5.14.3
