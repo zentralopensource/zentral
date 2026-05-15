@@ -1,6 +1,13 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
+
 from pbac.engine import engine
+
+
+logger = logging.getLogger("zentral.accounts.auth_backends")
+
 
 UserModel = get_user_model()
 
@@ -60,7 +67,11 @@ class ZentralBackend(ZentralBaseBackend):
     # Evaluate the permission against the policies
 
     def has_perm(self, user_obj, perm, obj=None):
-        if not user_obj.is_active or user_obj.is_anonymous or obj is not None:
+        if not user_obj.is_active or user_obj.is_anonymous:
+            return False
+        if obj is not None:
+            # This should never happen
+            logger.error("Legacy user perm %s check with obj != None", perm)
             return False
         if not user_obj.is_service_account and user_obj.is_superuser:
             return True

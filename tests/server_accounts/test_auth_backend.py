@@ -66,6 +66,9 @@ class ZentralBackendTestCase(TestCase):
         self.superuser.is_service_account = True
         self.assertFalse(self.backend.has_perm(self.superuser, "inventory.view_machinesnapshot"))
 
+    def test_superuser_with_obj_no_perm(self):
+        self.assertFalse(self.backend.has_perm(self.superuser, "inventory.view_machinesnapshot", object()))
+
     def test_anonymous_has_perm(self):
         self.assertFalse(self.backend.has_perm(AnonymousUser(), "inventory.view_machinesnapshot"))
 
