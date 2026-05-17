@@ -1,5 +1,6 @@
 from pbac.engine import ActionGroupBasename, engine
 from pbac.entities import Namespace
+from pbac.types import LEGACY_PERM_APPLIES_TO
 
 
 # namespace
@@ -13,6 +14,10 @@ def get_namespace() -> Namespace:
 
 
 # actions
+#
+# syncRepository is only reachable via the legacy-perm path
+# (user.has_perm("monolith.sync_repository")), so applies_to matches
+# LEGACY_PERM_APPLIES_TO.
 
 
 sync_repository_action = engine.register_action(
@@ -20,4 +25,5 @@ sync_repository_action = engine.register_action(
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     "monolith.sync_repository",
+    applies_to=LEGACY_PERM_APPLIES_TO,
 )

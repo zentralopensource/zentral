@@ -524,6 +524,7 @@ class PBACEngineRegistrationTestCase(TestCase):
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
             "inventory.add_machinetag",
+            applies_to=LEGACY_PERM_APPLIES_TO,
         )
         self.assertEqual(self.engine.get_action("createMachineTag", self.namespace), action)
         self.assertEqual(self.engine.legacy_perm_actions["inventory.add_machinetag"], action)
@@ -542,11 +543,13 @@ class PBACEngineRegistrationTestCase(TestCase):
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN],
             "inventory.add_machinetag",
+            applies_to=LEGACY_PERM_APPLIES_TO,
         )
         second = self.engine.register_action(
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN],
             "inventory.add_machinetag",
+            applies_to=LEGACY_PERM_APPLIES_TO,
         )
         self.assertIs(first, second)
 
@@ -554,35 +557,42 @@ class PBACEngineRegistrationTestCase(TestCase):
         self.engine.register_action(
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN],
+            applies_to=LEGACY_PERM_APPLIES_TO,
         )
         with self.assertRaises(ActionRegistrationConflict):
             self.engine.register_action(
                 "createMachineTag", self.namespace,
                 [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
+                applies_to=LEGACY_PERM_APPLIES_TO,
             )
 
     def test_register_action_lookup_after_registration_does_not_mutate(self):
-        # Calling register_action with no group_basenames after a registration with
-        # groups must not silently change the parents. It either matches (works) or
-        # conflicts (errors). Empty groups vs non-empty groups must conflict.
+        # Calling register_action a second time with different group_basenames
+        # must conflict — empty groups vs non-empty groups counts as different.
         self.engine.register_action(
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN],
+            applies_to=LEGACY_PERM_APPLIES_TO,
         )
         with self.assertRaises(ActionRegistrationConflict):
-            self.engine.register_action("createMachineTag", self.namespace)
+            self.engine.register_action(
+                "createMachineTag", self.namespace,
+                applies_to=LEGACY_PERM_APPLIES_TO,
+            )
 
     def test_register_action_legacy_perm_remap_conflict(self):
         self.engine.register_action(
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN],
             "inventory.add_machinetag",
+            applies_to=LEGACY_PERM_APPLIES_TO,
         )
         with self.assertRaises(ActionRegistrationConflict):
             self.engine.register_action(
                 "deleteMachineTag", self.namespace,
                 [ActionGroupBasename.ADMIN],
                 "inventory.add_machinetag",  # same legacy perm, different action
+                applies_to=LEGACY_PERM_APPLIES_TO,
             )
 
     def test_get_action_missing_raises(self):
@@ -593,6 +603,7 @@ class PBACEngineRegistrationTestCase(TestCase):
         action = self.engine.register_action(
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN],
+            applies_to=LEGACY_PERM_APPLIES_TO,
         )
         self.assertIs(self.engine.get_action("createMachineTag", self.namespace), action)
 
@@ -691,43 +702,26 @@ class PBACEngineEntityTypeRegistryTestCase(TestCase):
                 applies_to=None,
             )
 
-    def test_register_action_without_applies_to_does_not_crash(self):
-        # Backward compat: contrib actions not yet annotated still register.
-        action = self.engine.register_action(
-            "yoloAction", self.engine.get_namespace("Inventory"),
-            [ActionGroupBasename.ADMIN],
-        )
-        self.assertIsNone(action.applies_to)
+    def test_register_action_requires_applies_to(self):
+        # applies_to is keyword-only and required; the schema generator needs
+        # every action to declare its principals/resources/context.
+        with self.assertRaises(TypeError):
+            self.engine.register_action(
+                "yoloAction", self.engine.get_namespace("Inventory"),
+                [ActionGroupBasename.ADMIN],
+            )
 
 
 class PBACEngineSingletonAppliesToTestCase(TestCase):
-    # Smoke-tests on the real `engine` singleton to confirm every
-    # auto-registered legacy-perm action carries LEGACY_PERM_APPLIES_TO.
-    #
-    # Note: actions registered directly by contrib pbac.py modules (e.g.
-    # inventory.add_machinetag -> Inventory::Action::"createMachineTag") do
-    # not carry applies_to in PR A; that gets added when those modules opt
-    # in (PR B). Until then, those actions are excluded from the assertion.
+    # Smoke-tests on the real `engine` singleton: every registered action
+    # carries applies_to (PR B onwards, applies_to is required at
+    # registration time).
 
-    _CONTRIB_OVERRIDDEN_LEGACY_PERMS = {
-        "inventory.add_machinetag",
-        "inventory.delete_machinetag",
-        "inventory.view_machinetag",
-        "mdm.disown_depdevice",
-        "mdm.view_admin_password",
-        "mdm.view_device_lock_pin",
-        "mdm.view_filevault_prk",
-        "mdm.view_recovery_password",
-        "monolith.sync_repository",
-    }
-
-    def test_auto_registered_legacy_perm_actions_have_applies_to(self):
-        for perm, action in engine.legacy_perm_actions.items():
-            if perm in self._CONTRIB_OVERRIDDEN_LEGACY_PERMS:
-                continue
-            self.assertEqual(
-                action.applies_to, LEGACY_PERM_APPLIES_TO,
-                f"{perm!r} -> {action!r} missing LEGACY_PERM_APPLIES_TO",
+    def test_every_action_has_applies_to(self):
+        for (action_id, ns_id), action in engine.actions.items():
+            self.assertIsNotNone(
+                action.applies_to,
+                f"{ns_id}::Action::\"{action_id}\" missing applies_to",
             )
 
     def test_every_module_legacy_perm_action_has_applies_to(self):
@@ -749,3 +743,16 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
 
     def test_role_entity_type_registered(self):
         self.assertIs(engine.entity_types[(None, "Role")], ROLE)
+
+    def test_inventory_entity_types_registered_from_contrib_pbac(self):
+        # inventory/pbac.py declares MACHINE_RESOURCE_TYPE in [MetaBusinessUnit]
+        # and the create/delete actions reference both, so registering those
+        # actions auto-registers the two entity types.
+        self.assertEqual(engine.entity_types[("Inventory", "Machine")].name, "Machine")
+        self.assertEqual(engine.entity_types[("Inventory", "MetaBusinessUnit")].name, "MetaBusinessUnit")
+
+    def test_create_machine_tag_action_accepts_machine_and_system(self):
+        action = engine.legacy_perm_actions["inventory.add_machinetag"]
+        self.assertIsNotNone(action.applies_to)
+        resource_names = {r.name for r in action.applies_to.resources}
+        self.assertEqual(resource_names, {"Machine", "System"})
