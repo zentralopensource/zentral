@@ -22,6 +22,10 @@ class ActionGroupBasename(Enum):
         return self.value
 
 
+class ActionRegistrationConflict(ValueError):
+    pass
+
+
 class Engine:
     def __init__(self) -> None:
         self.namespaces = {}
@@ -43,28 +47,61 @@ class Engine:
             self.action_groups[key] = ActionGroup(id, namespace)
         return self.action_groups[key]
 
-    def get_action(
+    def _build_action_groups(
+        self,
+        namespace: Namespace,
+        group_basenames: Optional[list[ActionGroupBasename]],
+    ) -> list[ActionGroup]:
+        groups = []
+        for group_basename in group_basenames or ():
+            # namespace-scoped action group
+            groups.append(self.get_action_group(group_basename, namespace))
+            # global action group
+            groups.append(self.get_action_group(group_basename))
+        return groups
+
+    def register_action(
         self,
         id: str,
         namespace: Namespace,
         group_basenames: Optional[list[ActionGroupBasename]] = None,
         legacy_perm: Optional[str] = None,
     ) -> Action:
+        """Register (or idempotently re-register) an Action.
+
+        Raises ActionRegistrationConflict if (id, namespace) is already registered
+        with different action groups, or if `legacy_perm` is already mapped to a
+        different action.
+        """
         key = (id, namespace.id)
-        action_groups = []
-        if group_basenames:
-            for group_basename in group_basenames:
-                # add namespace scoped action group
-                action_groups.append(self.get_action_group(group_basename, namespace))
-                # add global action group
-                action_groups.append(self.get_action_group(group_basename))
+        new_groups = self._build_action_groups(namespace, group_basenames)
         action = self.actions.get(key)
-        if not action:
-            self.actions[key] = action = Action(id, namespace, action_groups)
-        if legacy_perm and legacy_perm not in self.legacy_perm_actions:
+        if action is None:
+            action = Action(id, namespace, new_groups)
+            self.actions[key] = action
+        elif action.parents != new_groups:
+            raise ActionRegistrationConflict(
+                f"Action {action} already registered with parents {action.parents!r}; "
+                f"refusing to re-register with {new_groups!r}"
+            )
+        if legacy_perm:
+            previous = self.legacy_perm_actions.get(legacy_perm)
+            if previous is not None and previous is not action:
+                raise ActionRegistrationConflict(
+                    f"Legacy perm {legacy_perm!r} is already mapped to {previous}; "
+                    f"refusing to remap to {action}"
+                )
             self.legacy_perm_actions[legacy_perm] = action
-        assert action_groups == action.parents
         return action
+
+    def get_action(self, id: str, namespace: Namespace) -> Action:
+        """Look up a previously registered Action. Never mutates state."""
+        try:
+            return self.actions[(id, namespace.id)]
+        except KeyError:
+            raise LookupError(
+                f"Action {id!r} is not registered in namespace {namespace.id!r}"
+            )
 
     # legacy perms
 
@@ -75,7 +112,7 @@ class Engine:
     def _register_module_legacy_perm_action(self, app_config: AppConfig) -> None:
         namespace = self._get_app_config_namespace(app_config)
         action_id = "NOOP"
-        self.module_legacy_perm_actions[app_config.label] = self.get_action(
+        self.module_legacy_perm_actions[app_config.label] = self.register_action(
             action_id, namespace,
             [ActionGroupBasename.VIEWER],
         )
@@ -96,7 +133,7 @@ class Engine:
                     group_basenames.append(ActionGroupBasename.VIEWER)
             action_id = f"{action_action}{object_name}"
             codename = get_permission_codename(operation, opts)
-            self.get_action(action_id, namespace, group_basenames, f"{app_config.label}.{codename}")
+            self.register_action(action_id, namespace, group_basenames, f"{app_config.label}.{codename}")
 
     def register_app_legacy_perms(self, app_config: AppConfig) -> None:
         permission_models = getattr(app_config, "permission_models", [])

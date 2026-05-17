@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from pbac.engine import ActionGroupBasename, engine
+from pbac.engine import ActionGroupBasename, ActionRegistrationConflict, Engine, engine
 
 
 class PBACEngineTestCase(TestCase):
@@ -492,3 +492,88 @@ class PBACEngineTestCase(TestCase):
                 self.assertNotIn(global_user_action_group, action.parents)
                 self.assertNotIn(user_action_group, action.parents)
         self.assertEqual(found_user_actions, len(user_action_keys))
+
+
+class PBACEngineRegistrationTestCase(TestCase):
+    # Uses an isolated Engine instance per test to avoid polluting the singleton.
+
+    def setUp(self):
+        self.engine = Engine()
+        self.namespace = self.engine.get_namespace("Inventory")
+
+    def test_register_action_creates(self):
+        action = self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
+            "inventory.add_machinetag",
+        )
+        self.assertEqual(self.engine.get_action("createMachineTag", self.namespace), action)
+        self.assertEqual(self.engine.legacy_perm_actions["inventory.add_machinetag"], action)
+        self.assertEqual(
+            action.parents,
+            [
+                self.engine.get_action_group(ActionGroupBasename.ADMIN, self.namespace),
+                self.engine.get_action_group(ActionGroupBasename.ADMIN),
+                self.engine.get_action_group(ActionGroupBasename.USER, self.namespace),
+                self.engine.get_action_group(ActionGroupBasename.USER),
+            ],
+        )
+
+    def test_register_action_idempotent(self):
+        first = self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+            "inventory.add_machinetag",
+        )
+        second = self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+            "inventory.add_machinetag",
+        )
+        self.assertIs(first, second)
+
+    def test_register_action_conflicting_groups(self):
+        self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+        )
+        with self.assertRaises(ActionRegistrationConflict):
+            self.engine.register_action(
+                "createMachineTag", self.namespace,
+                [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
+            )
+
+    def test_register_action_lookup_after_registration_does_not_mutate(self):
+        # Calling register_action with no group_basenames after a registration with
+        # groups must not silently change the parents. It either matches (works) or
+        # conflicts (errors). Empty groups vs non-empty groups must conflict.
+        self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+        )
+        with self.assertRaises(ActionRegistrationConflict):
+            self.engine.register_action("createMachineTag", self.namespace)
+
+    def test_register_action_legacy_perm_remap_conflict(self):
+        self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+            "inventory.add_machinetag",
+        )
+        with self.assertRaises(ActionRegistrationConflict):
+            self.engine.register_action(
+                "deleteMachineTag", self.namespace,
+                [ActionGroupBasename.ADMIN],
+                "inventory.add_machinetag",  # same legacy perm, different action
+            )
+
+    def test_get_action_missing_raises(self):
+        with self.assertRaises(LookupError):
+            self.engine.get_action("createMachineTag", self.namespace)
+
+    def test_get_action_returns_registered(self):
+        action = self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+        )
+        self.assertIs(self.engine.get_action("createMachineTag", self.namespace), action)

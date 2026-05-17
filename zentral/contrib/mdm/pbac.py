@@ -15,7 +15,7 @@ def get_namespace() -> Namespace:
 # actions
 
 
-disown_dep_device_action = engine.get_action(
+disown_dep_device_action = engine.register_action(
     "disownDEPDevice",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
@@ -23,7 +23,7 @@ disown_dep_device_action = engine.get_action(
 )
 
 
-view_admin_password_action = engine.get_action(
+view_admin_password_action = engine.register_action(
     "viewAdminPassword",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
@@ -31,7 +31,7 @@ view_admin_password_action = engine.get_action(
 )
 
 
-view_device_lock_pin_action = engine.get_action(
+view_device_lock_pin_action = engine.register_action(
     "viewDeviceLockPIN",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
@@ -39,7 +39,7 @@ view_device_lock_pin_action = engine.get_action(
 )
 
 
-view_filevaul_prk_action = engine.get_action(
+view_filevaul_prk_action = engine.register_action(
     "viewFileVaultPRK",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
@@ -47,7 +47,7 @@ view_filevaul_prk_action = engine.get_action(
 )
 
 
-view_recovery_password_action = engine.get_action(
+view_recovery_password_action = engine.register_action(
     "viewRecoveryPassword",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],

@@ -15,7 +15,7 @@ def get_namespace() -> Namespace:
 # actions
 
 
-sync_repository_action = engine.get_action(
+sync_repository_action = engine.register_action(
     "syncRepository",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
