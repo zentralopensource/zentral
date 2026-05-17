@@ -1,5 +1,14 @@
 from pbac.engine import ActionGroupBasename, engine
 from pbac.entities import Namespace, Principal, Request, Resource
+from pbac.types import (
+    AppliesTo,
+    AttrSpec,
+    LEGACY_PERM_APPLIES_TO,
+    ResourceType,
+    SERVICE_ACCOUNT,
+    SYSTEM,
+    USER,
+)
 from .models import MetaBusinessUnit, MetaMachine, Tag
 
 
@@ -13,7 +22,36 @@ def get_namespace() -> Namespace:
     return engine.get_namespace(NAMESPACE_ID)
 
 
+# resource types
+
+
+MBU_RESOURCE_TYPE = ResourceType("MetaBusinessUnit", get_namespace())
+MACHINE_RESOURCE_TYPE = ResourceType("Machine", get_namespace(), parents=(MBU_RESOURCE_TYPE,))
+
+
 # actions
+#
+# createMachineTag and deleteMachineTag are reachable via two paths:
+#   - PBACViewMixin -> Create/DeleteMachineTagRequest, with a Machine resource
+#     and the tag context built from BaseMachineTagRequest below.
+#   - the legacy-perm path (user.has_perm("inventory.{add,delete}_machinetag")),
+#     which constructs a Request(... resource=engine.system_any_resource ...)
+#     with an empty context.
+#
+# applies_to therefore lists both Machine and System as accepted resource
+# types, and every context attribute is marked optional so the empty-context
+# legacy requests remain valid.
+
+_MACHINE_TAG_APPLIES_TO = AppliesTo(
+    principals=(USER, SERVICE_ACCOUNT),
+    resources=(MACHINE_RESOURCE_TYPE, SYSTEM),
+    context={
+        "tagName": AttrSpec(str, required=False),
+        "tagID": AttrSpec(int, required=False),
+        "taxonomyName": AttrSpec(str, required=False),
+        "taxonomyID": AttrSpec(int, required=False),
+    },
+)
 
 
 create_machine_tag_action = engine.register_action(
@@ -21,6 +59,7 @@ create_machine_tag_action = engine.register_action(
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     "inventory.add_machinetag",
+    applies_to=_MACHINE_TAG_APPLIES_TO,
 )
 
 
@@ -29,14 +68,19 @@ delete_machine_tag_action = engine.register_action(
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     "inventory.delete_machinetag",
+    applies_to=_MACHINE_TAG_APPLIES_TO,
 )
 
 
+# viewMachineTag has no typed PBAC request class today; it's only exercised
+# via the legacy-perm path. Keep it at LEGACY_PERM_APPLIES_TO until a typed
+# view path is introduced.
 view_machine_tag_action = engine.register_action(
     "viewMachineTag",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     "inventory.view_machinetag",
+    applies_to=LEGACY_PERM_APPLIES_TO,
 )
 
 

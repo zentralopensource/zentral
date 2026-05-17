@@ -1,6 +1,5 @@
 from enum import Enum
 import logging
-import os
 from typing import Optional
 
 from django.apps.config import AppConfig
@@ -21,12 +20,6 @@ from .types import (
 
 
 logger = logging.getLogger("zentral.pbac.engine")
-
-
-# Controls the warning emitted when register_action is called without
-# applies_to. On in dev so we can find unannotated contrib actions; off in
-# tests so they don't pollute the test log.
-_WARN_UNANNOTATED = os.environ.get("ZENTRAL_PBAC_WARN_UNANNOTATED", "1") == "1"
 
 
 class ActionGroupBasename(Enum):
@@ -116,13 +109,19 @@ class Engine:
         namespace: Namespace,
         group_basenames: Optional[list[ActionGroupBasename]] = None,
         legacy_perm: Optional[str] = None,
-        applies_to: Optional[AppliesTo] = None,
+        *,
+        applies_to: AppliesTo,
     ) -> Action:
         """Register (or idempotently re-register) an Action.
 
-        Raises ActionRegistrationConflict if (id, namespace) is already registered
-        with different action groups, a different applies_to, or if `legacy_perm`
-        is already mapped to a different action.
+        ``applies_to`` is required: every action must declare the principals,
+        resources, and context shape it accepts, so the schema generator can
+        emit a complete schema. Use LEGACY_PERM_APPLIES_TO for actions that
+        are only reachable via the legacy-perm path.
+
+        Raises ActionRegistrationConflict if (id, namespace) is already
+        registered with different action groups, a different applies_to, or
+        if ``legacy_perm`` is already mapped to a different action.
 
         Any EntityType referenced in ``applies_to`` is auto-registered.
         """
@@ -151,11 +150,8 @@ class Engine:
                     f"refusing to remap to {action}"
                 )
             self.legacy_perm_actions[legacy_perm] = action
-        if applies_to is not None:
-            for et in (*applies_to.principals, *applies_to.resources):
-                self.register_entity_type(et)
-        elif _WARN_UNANNOTATED:
-            logger.warning("Action %s registered without applies_to", action)
+        for et in (*applies_to.principals, *applies_to.resources):
+            self.register_entity_type(et)
         return action
 
     def get_action(self, id: str, namespace: Namespace) -> Action:
