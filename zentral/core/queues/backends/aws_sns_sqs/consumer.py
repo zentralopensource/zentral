@@ -239,7 +239,16 @@ class ConsumerProducerFinalThread(threading.Thread):
                 logger.debug("[%s] receipt handle %s: new published event", self.name, receipt_handle[-7:])
                 if self.callback(receipt_handle):
                     logger.debug("[%s] receipt handle %s: no more unpublished events", self.name, receipt_handle[-7:])
-                    self.out_queue.put((receipt_handle, time.monotonic()))
+                    while True:
+                        try:
+                            self.out_queue.put((receipt_handle, time.monotonic()), timeout=1)
+                        except queue.Full:
+                            if self.stop_event.is_set():
+                                logger.error("[%s] receipt handle %s: dropped during shutdown",
+                                             self.name, receipt_handle[-7:])
+                                break
+                        else:
+                            break
                 else:
                     logger.debug("[%s] receipt handle %s: still waiting for some unpublished events",
                                  self.name, receipt_handle[-7:])

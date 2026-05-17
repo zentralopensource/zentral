@@ -212,8 +212,18 @@ class SQSSendThread(threading.Thread):
                         logger.error("[%s] could not put receipt receipt handle to out queue", self.name)
                     else:
                         if receipt_handle:
-                            self.out_queue.put(receipt_handle)
-                            logger.debug("[%s] receipt handle %s: put to out queue", self.name, receipt_handle[-7:])
+                            while True:
+                                try:
+                                    self.out_queue.put(receipt_handle, timeout=1)
+                                except queue.Full:
+                                    if self.stop_event.is_set():
+                                        logger.error("[%s] receipt handle %s: dropped during shutdown",
+                                                     self.name, receipt_handle[-7:])
+                                        break
+                                else:
+                                    logger.debug("[%s] receipt handle %s: put to out queue",
+                                                 self.name, receipt_handle[-7:])
+                                    break
             logger.debug("[%s] %s/%s event(s) sent", self.name, successful_entry_count, entry_count)
             failed_entry_count = 0
             for failed_entry in response.get("Failed", []):

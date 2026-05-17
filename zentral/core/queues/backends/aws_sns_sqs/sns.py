@@ -65,5 +65,15 @@ class SNSPublishThread(threading.Thread):
                     logger.exception("[%s] could not publish event", self.name)
                 else:
                     logger.debug("[%s] event with MessageID %s published", self.name, response["MessageId"])
-                    self.out_queue.put(receipt_handle)
-                    logger.debug("[%s] receipt handle %s: put to out queue", self.name, receipt_handle[-7:])
+                    while True:
+                        try:
+                            self.out_queue.put(receipt_handle, timeout=1)
+                        except queue.Full:
+                            if self.stop_event.is_set():
+                                logger.error("[%s] receipt handle %s: dropped during shutdown",
+                                             self.name, receipt_handle[-7:])
+                                break
+                        else:
+                            logger.debug("[%s] receipt handle %s: put to out queue",
+                                         self.name, receipt_handle[-7:])
+                            break
