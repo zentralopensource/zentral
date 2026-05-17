@@ -16,7 +16,7 @@ def get_namespace() -> Namespace:
 # actions
 
 
-create_machine_tag_action = engine.get_action(
+create_machine_tag_action = engine.register_action(
     "createMachineTag",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
@@ -24,7 +24,7 @@ create_machine_tag_action = engine.get_action(
 )
 
 
-delete_machine_tag_action = engine.get_action(
+delete_machine_tag_action = engine.register_action(
     "deleteMachineTag",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
@@ -32,7 +32,7 @@ delete_machine_tag_action = engine.get_action(
 )
 
 
-view_machine_tag_action = engine.get_action(
+view_machine_tag_action = engine.register_action(
     "viewMachineTag",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
