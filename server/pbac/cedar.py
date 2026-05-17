@@ -9,6 +9,8 @@ from cedarpy import is_authorized, is_authorized_batch
 
 from base.notifier import notifier
 from .entities import Entity, Request
+from .schema import ActionIR, AppliesToIR, EntityTypeIR, SchemaIR
+from .types import AttrSpec, EntityType, ExtensionType, PrimitiveType, RecordOf, SetOf
 
 
 logger = logging.getLogger("zentral.pbac.cedar")
@@ -127,3 +129,226 @@ def authorize_requests(requests: list[Request]) -> None:
         _serialize_requests_entities(requests),
     ):
         req_dict[cedar_result.correlation_id].is_authorized = cedar_result.allowed
+
+
+# ---------------------------------------------------------------------------
+# Cedar schema rendering
+# ---------------------------------------------------------------------------
+#
+# Two renderers, both pure functions over a SchemaIR:
+#
+#   render_schema_json(ir) -> dict
+#       The JSON-schema form cedarpy expects via the ``schema=`` argument
+#       to ``is_authorized`` and ``validate_policies``. Uses Cedar's JSON
+#       spelling: "Boolean"/"Long"/"String", "principalTypes"/"resourceTypes",
+#       and the empty string "" for the global namespace.
+#
+#   render_schema_human(ir) -> str
+#       The human-readable schema form Cedar accepts. Mainly for the
+#       pbac_dump_schema management command and ad-hoc debugging — uses
+#       Cedar's policy-syntax spelling: "Bool"/"Long"/"String",
+#       "principal"/"resource", explicit "namespace X { ... }" blocks.
+
+
+# Primitive type spellings.
+
+_JSON_PRIMITIVES = {
+    PrimitiveType.BOOL: "Boolean",
+    PrimitiveType.LONG: "Long",
+    PrimitiveType.STRING: "String",
+}
+
+_HUMAN_PRIMITIVES = {
+    PrimitiveType.BOOL: "Bool",
+    PrimitiveType.LONG: "Long",
+    PrimitiveType.STRING: "String",
+}
+
+
+def _attr_to_json(attr: AttrSpec) -> dict:
+    t = attr.type
+    if isinstance(t, PrimitiveType):
+        out = {"type": _JSON_PRIMITIVES[t]}
+    elif isinstance(t, ExtensionType):
+        out = {"type": "Extension", "name": t.value}
+    elif isinstance(t, EntityType):
+        out = {"type": "Entity", "name": t.qualified_name}
+    elif isinstance(t, SetOf):
+        # Cedar's Set element is itself an attr-shaped object.
+        out = {"type": "Set", "element": _attr_to_json(AttrSpec(t.inner))}
+    elif isinstance(t, RecordOf):
+        out = {
+            "type": "Record",
+            "attributes": {n: _attr_to_json(a) for n, a in t.fields.items()},
+        }
+    else:
+        raise TypeError(f"Unsupported attribute type {t!r}")
+    if not attr.required:
+        out["required"] = False
+    return out
+
+
+def _entity_type_to_json(et: EntityTypeIR) -> dict:
+    entry: dict = {}
+    if et.parents:
+        entry["memberOfTypes"] = list(et.parents)
+    if et.attrs:
+        entry["shape"] = {
+            "type": "Record",
+            "attributes": {n: _attr_to_json(a) for n, a in et.attrs.items()},
+        }
+    return entry
+
+
+def _action_to_json(action: ActionIR) -> dict:
+    entry: dict = {}
+    # Only reference global action groups in memberOf — Cedar's name
+    # resolution treats `Inventory::Action::"AdminActions"` as illegally
+    # shadowing the global `Action::"AdminActions"` if both exist. The
+    # engine declares both (group basenames are global concepts that also
+    # appear scoped per namespace at runtime) but the schema only ships
+    # the global ones; see render_schema_json for the matching filter.
+    global_parents = [(ag_id, ns) for ag_id, ns in action.member_of if ns is None]
+    if global_parents:
+        entry["memberOf"] = [{"id": ag_id} for ag_id, _ in global_parents]
+    if action.applies_to is not None:
+        applies_to: AppliesToIR = action.applies_to
+        appt: dict = {
+            "principalTypes": list(applies_to.principals),
+            "resourceTypes": list(applies_to.resources),
+        }
+        if applies_to.context is not None:
+            appt["context"] = {
+                "type": "Record",
+                "attributes": {n: _attr_to_json(a) for n, a in applies_to.context.items()},
+            }
+        entry["appliesTo"] = appt
+    return entry
+
+
+def _is_namespaced_action_group(ns_id: Optional[str], action: ActionIR) -> bool:
+    # Action groups are ActionIRs with no applies_to. Per-namespace ones
+    # (ns_id is not None) collide with their global namesakes in Cedar's
+    # name resolution; skip them from the rendered schema.
+    return ns_id is not None and action.applies_to is None
+
+
+def render_schema_json(ir: SchemaIR) -> dict:
+    """Render a SchemaIR into the Cedar JSON schema format.
+
+    Every emitted namespace contains both ``entityTypes`` and ``actions``
+    keys, even when one is empty — cedarpy treats a missing key as a parse
+    error.
+
+    Per-namespace action groups are filtered out (see _action_to_json).
+    """
+    out = {}
+    for ns_id, ns in ir.namespaces.items():
+        filtered_actions = {
+            i: a for i, a in ns.actions.items()
+            if not _is_namespaced_action_group(ns_id, a)
+        }
+        if not ns.entity_types and not filtered_actions:
+            continue
+        # Cedar uses "" as the key for the global namespace.
+        ns_key = ns_id if ns_id is not None else ""
+        out[ns_key] = {
+            "entityTypes": {n: _entity_type_to_json(et) for n, et in ns.entity_types.items()},
+            "actions": {i: _action_to_json(a) for i, a in filtered_actions.items()},
+        }
+    return out
+
+
+# Human-readable rendering.
+
+def _attr_to_human(attr: AttrSpec) -> str:
+    t = attr.type
+    if isinstance(t, PrimitiveType):
+        return _HUMAN_PRIMITIVES[t]
+    if isinstance(t, ExtensionType):
+        return t.value
+    if isinstance(t, EntityType):
+        return t.qualified_name
+    if isinstance(t, SetOf):
+        return f"Set<{_attr_to_human(AttrSpec(t.inner))}>"
+    if isinstance(t, RecordOf):
+        body = ", ".join(
+            f"{n}{_optional_marker(a)}: {_attr_to_human(a)}"
+            for n, a in t.fields.items()
+        )
+        return "{" + body + "}"
+    raise TypeError(f"Unsupported attribute type {t!r}")
+
+
+def _optional_marker(attr: AttrSpec) -> str:
+    return "" if attr.required else "?"
+
+
+def _format_attr_record(record: dict, indent: str) -> str:
+    """Format a {name: AttrSpec} dict as a Cedar record body."""
+    if not record:
+        return "{}"
+    lines = []
+    for name, attr in record.items():
+        lines.append(f'{indent}  {name}{_optional_marker(attr)}: {_attr_to_human(attr)}')
+    return "{\n" + ",\n".join(lines) + f"\n{indent}}}"
+
+
+def _entity_type_to_human(et: EntityTypeIR, indent: str) -> str:
+    head = f"{indent}entity {et.name}"
+    if et.parents:
+        head += " in [" + ", ".join(et.parents) + "]"
+    if et.attrs:
+        head += " = " + _format_attr_record(et.attrs, indent)
+    return head + ";"
+
+
+def _action_to_human(action: ActionIR, indent: str) -> str:
+    head = f"{indent}action {action.id!r}".replace("'", '"')
+    # Same filter as the JSON renderer: only emit global action groups.
+    global_parents = [(ag_id, ns) for ag_id, ns in action.member_of if ns is None]
+    if global_parents:
+        head += " in [" + ", ".join(f'"{ag_id}"' for ag_id, _ in global_parents) + "]"
+    if action.applies_to is None:
+        return head + ";"
+    appt: AppliesToIR = action.applies_to
+    parts = [
+        f"{indent}  principal: [" + ", ".join(appt.principals) + "]",
+        f"{indent}  resource: [" + ", ".join(appt.resources) + "]",
+    ]
+    if appt.context is not None:
+        parts.append(f"{indent}  context: " + _format_attr_record(appt.context, indent + "  "))
+    body = ",\n".join(parts)
+    return head + " appliesTo {\n" + body + f"\n{indent}}};"
+
+
+def render_schema_human(ir: SchemaIR) -> str:
+    """Render a SchemaIR into Cedar's human-readable schema syntax.
+
+    Primarily for ops/debugging via the pbac_dump_schema management
+    command. The JSON form is what we feed to cedarpy.
+
+    Per-namespace action groups are filtered out (see render_schema_json).
+    """
+    blocks = []
+    # Global namespace first (no wrapping `namespace { ... }`).
+    global_ns = ir.namespaces.get(None)
+    if global_ns is not None and (global_ns.entity_types or global_ns.actions):
+        for et in global_ns.entity_types.values():
+            blocks.append(_entity_type_to_human(et, ""))
+        for action in global_ns.actions.values():
+            blocks.append(_action_to_human(action, ""))
+    # Namespaced blocks.
+    for ns_id, ns in ir.namespaces.items():
+        if ns_id is None:
+            continue
+        actions = {i: a for i, a in ns.actions.items() if not _is_namespaced_action_group(ns_id, a)}
+        if not ns.entity_types and not actions:
+            continue
+        inner = []
+        for et in ns.entity_types.values():
+            inner.append(_entity_type_to_human(et, "  "))
+        for action in actions.values():
+            inner.append(_action_to_human(action, "  "))
+        blocks.append(f"namespace {ns_id} {{\n" + "\n".join(inner) + "\n}")
+    return "\n\n".join(blocks) + ("\n" if blocks else "")
