@@ -24,6 +24,6 @@ sync_repository_action = engine.register_action(
     "syncRepository",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-    "monolith.sync_repository",
     applies_to=LEGACY_PERM_APPLIES_TO,
+    legacy_perm="monolith.sync_repository",
 )

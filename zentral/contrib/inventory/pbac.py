@@ -58,8 +58,8 @@ create_machine_tag_action = engine.register_action(
     "createMachineTag",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-    "inventory.add_machinetag",
     applies_to=_MACHINE_TAG_APPLIES_TO,
+    legacy_perm="inventory.add_machinetag",
 )
 
 
@@ -67,8 +67,8 @@ delete_machine_tag_action = engine.register_action(
     "deleteMachineTag",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-    "inventory.delete_machinetag",
     applies_to=_MACHINE_TAG_APPLIES_TO,
+    legacy_perm="inventory.delete_machinetag",
 )
 
 
@@ -79,8 +79,8 @@ view_machine_tag_action = engine.register_action(
     "viewMachineTag",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-    "inventory.view_machinetag",
     applies_to=LEGACY_PERM_APPLIES_TO,
+    legacy_perm="inventory.view_machinetag",
 )
 
 
