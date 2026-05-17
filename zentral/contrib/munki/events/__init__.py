@@ -1,6 +1,8 @@
 import logging
 import uuid
+
 from dateutil import parser
+
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 
 logger = logging.getLogger('zentral.contrib.munki.events')
