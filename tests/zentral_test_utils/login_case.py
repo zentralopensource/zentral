@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from importlib import import_module
 from typing import Optional
 
-from cedarpy import format_policies
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.http import HttpRequest, QueryDict
@@ -37,7 +36,6 @@ class LoginCase(ABC):
         return
 
     def set_policy(self, source):
-        format_policies(source)
         Policy.objects.update_or_create(
             name="Tests",
             defaults={"source": source}
