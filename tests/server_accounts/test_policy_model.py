@@ -34,6 +34,50 @@ class PolicyModelTestCase(TestCase):
             {"source": ["Invalid CEDAR policy: invalid policy effect: allow"]},
         )
 
+    # Schema validation in clean()
+
+    def test_clean_rejects_unknown_action(self):
+        p = Policy(
+            name=get_random_string(12),
+            source='permit (principal, action == Inventory::Action::"crteateMachineTag", resource);',
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            p.clean()
+        # cedarpy surfaces the offending action by name in the error.
+        message = ctx.exception.message_dict["source"][0]
+        self.assertIn("crteateMachineTag", message)
+        self.assertIn("unrecognized action", message)
+
+    def test_clean_rejects_unknown_entity_type(self):
+        p = Policy(
+            name=get_random_string(12),
+            source='permit (principal == Bogus::"x", action, resource);',
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            p.clean()
+        self.assertIn(
+            "Invalid CEDAR policy",
+            ctx.exception.message_dict["source"][0],
+        )
+
+    def test_clean_accepts_valid_action_reference(self):
+        # createMachineTag is registered by inventory/pbac.py; this policy
+        # must pass schema validation.
+        p = Policy(
+            name=get_random_string(12),
+            source='permit (principal in Role::"7", action == Inventory::Action::"createMachineTag", resource);',
+        )
+        p.clean()
+        self.assertIn('Inventory::Action::"createMachineTag"', p.source)
+
+    def test_clean_accepts_global_action_group_reference(self):
+        p = Policy(
+            name=get_random_string(12),
+            source='permit (principal in Role::"7", action in Action::"GlobalAdminActions", resource);',
+        )
+        p.clean()
+        self.assertIn('Action::"GlobalAdminActions"', p.source)
+
     def test_serialize_for_event_keys_only(self):
         p = force_policy()
         self.assertEqual(
