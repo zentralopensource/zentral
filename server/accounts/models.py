@@ -3,7 +3,7 @@ import uuid
 from hashlib import blake2b
 from itertools import chain
 
-from cedarpy import format_policies
+from cedarpy import format_policies, policies_to_json_str
 import pyotp
 from django.contrib.auth.models import AbstractUser, Group
 from django.contrib.auth.models import UserManager as DjangoUserManager
@@ -404,10 +404,15 @@ class Policy(models.Model):
         return reverse("accounts:policy", args=(self.pk,))
 
     def clean(self):
+        # Parse first: policies_to_json_str surfaces a useful cedarpy error
+        # message (e.g. "unexpected end of input", "invalid policy effect",
+        # "unexpected token `…`"); format_policies just says "cannot parse
+        # input policies" for any failure.
         try:
-            self.source = format_policies(self.source)
-        except Exception:
-            raise ValidationError({"source": "Invalid CEDAR policy"})
+            policies_to_json_str(self.source)
+        except Exception as exc:
+            raise ValidationError({"source": f"Invalid CEDAR policy: {exc}"})
+        self.source = format_policies(self.source)
 
     def can_be_deleted(self):
         return Policy.objects.for_deletion().filter(pk=self.pk).exists()
