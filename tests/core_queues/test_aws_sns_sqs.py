@@ -2,6 +2,7 @@ from datetime import datetime
 import json
 import os.path
 import queue
+import threading
 from unittest.mock import Mock, patch
 import boto3
 from botocore.stub import Stubber
@@ -12,6 +13,9 @@ from pyarrow.fs import LocalFileSystem
 from zentral.conf.config import ConfigDict
 from zentral.core.queues.backends.aws_sns_sqs import (BulkStoreWorker, ConcurrentStoreWorker, EnrichWorker,
                                                       EventQueues, PreprocessWorker, ProcessWorker, SimpleStoreWorker)
+from zentral.core.queues.backends.aws_sns_sqs.consumer import ConsumerProducerFinalThread
+from zentral.core.queues.backends.aws_sns_sqs.sns import SNSPublishThread
+from zentral.core.queues.backends.aws_sns_sqs.sqs import SQSSendThread
 from zentral.core.stores.backends.http import HTTPStoreSerializer
 from zentral.core.stores.backends.s3_parquet import S3ParquetStoreSerializer
 from zentral.core.stores.models import Store
@@ -557,3 +561,121 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         w = eq.get_store_worker(store)
         self.assertIsInstance(w, SimpleStoreWorker)
         self.assertEqual(w._threads[0].visibility_timeout, 120)
+
+    # shutdown behavior: out_queue.put loops must observe stop_event
+
+    def _make_full_out_queue_mock(self):
+        """Return a Mock out_queue whose .put always raises queue.Full."""
+        out_queue = Mock()
+        out_queue.put = Mock(side_effect=queue.Full)
+        return out_queue
+
+    def test_sqs_send_thread_drops_receipt_handle_when_out_queue_full_and_stop_event_set(self):
+        # ConsumerProducer-based workers (PreprocessWorker) used to block forever
+        # in SQSSendThread.send_entries when the published_message_queue was full,
+        # hanging the worker on shutdown after a SQL error.
+        eq = self.get_queues()
+        stop_event = threading.Event()
+        out_queue = self._make_full_out_queue_mock()
+        thread = SQSSendThread(
+            "https://www.example.com/queue",
+            stop_event,
+            queue.Queue(),
+            out_queue,
+            eq.client_kwargs,
+        )
+        # send_entries is normally called from run(), which seeds these
+        thread.entries = {
+            "entry-id-1": ("receipt_handle_1", {"Id": "entry-id-1", "MessageBody": "{}"}),
+        }
+        thread.min_event_ts = 0.0
+        thread.client = Mock()
+        thread.client.send_message_batch = Mock(return_value={
+            "Successful": [{"Id": "entry-id-1", "MessageId": "msg-1", "MD5OfMessageBody": "x"}],
+            "Failed": [],
+        })
+        # the put would block forever without the fix; with stop_event set
+        # it should drop the receipt handle and return
+        stop_event.set()
+        thread.send_entries()
+        out_queue.put.assert_called_once_with("receipt_handle_1", timeout=1)
+        # entries always cleared at the end of send_entries
+        self.assertEqual(thread.entries, {})
+
+    def test_sqs_send_thread_retries_out_queue_put_until_space_available(self):
+        # When stop_event is not set, send_entries should keep retrying the put
+        # rather than dropping. We simulate a transient queue.Full followed by success.
+        eq = self.get_queues()
+        stop_event = threading.Event()
+        out_queue = Mock()
+        out_queue.put = Mock(side_effect=[queue.Full, None])
+        thread = SQSSendThread(
+            "https://www.example.com/queue",
+            stop_event,
+            queue.Queue(),
+            out_queue,
+            eq.client_kwargs,
+        )
+        thread.entries = {
+            "entry-id-1": ("receipt_handle_1", {"Id": "entry-id-1", "MessageBody": "{}"}),
+        }
+        thread.min_event_ts = 0.0
+        thread.client = Mock()
+        thread.client.send_message_batch = Mock(return_value={
+            "Successful": [{"Id": "entry-id-1", "MessageId": "msg-1", "MD5OfMessageBody": "x"}],
+            "Failed": [],
+        })
+        thread.send_entries()
+        # one queue.Full, then one successful put
+        self.assertEqual(out_queue.put.call_count, 2)
+        out_queue.put.assert_called_with("receipt_handle_1", timeout=1)
+
+    def test_sns_publish_thread_drops_receipt_handle_when_out_queue_full_and_stop_event_set(self):
+        # EnrichWorker hits the same shutdown-hang via SNSPublishThread.
+        eq = self.get_queues()
+        stop_event = threading.Event()
+        # stop_event is set from the start: the loop will pull our one event,
+        # publish it, fail to put on the full out_queue, then exit via the
+        # queue.Empty path on the next iteration.
+        stop_event.set()
+        in_queue = queue.Queue()
+        in_queue.put(("receipt_handle_1", "routing_key",
+                      {"_zentral": {"type": "event_type"}}, 0.0))
+        out_queue = self._make_full_out_queue_mock()
+        thread = SNSPublishThread(
+            1, "arn:aws:sns:eu-central-1:000000000000:topic",
+            stop_event,
+            in_queue,
+            out_queue,
+            eq.client_kwargs,
+        )
+        thread.client = Mock()
+        thread.client.publish = Mock(return_value={"MessageId": "msg-1"})
+        thread.run()
+        # publish was called once for the one event
+        thread.client.publish.assert_called_once()
+        # one (failed) put attempt; not retried because stop_event was set
+        out_queue.put.assert_called_once_with("receipt_handle_1", timeout=1)
+
+    def test_consumer_producer_final_thread_drops_receipt_handle_when_out_queue_full_and_stop_event_set(self):
+        # The third site of the same bug: ConsumerProducerFinalThread put into
+        # delete_message_queue could block forever during shutdown.
+        stop_event = threading.Event()
+        in_queue = queue.Queue()
+        in_queue.put("receipt_handle_1")
+        out_queue = self._make_full_out_queue_mock()
+        fake_consumer = Mock()
+        fake_consumer.stop_event = stop_event
+        fake_consumer.published_message_queue = in_queue
+        fake_consumer.delete_message_queue = out_queue
+        # decrement returns True meaning "all events published, ready to delete"
+        fake_consumer.decrement_receipt_handle_unpublished_event_count = Mock(return_value=True)
+        thread = ConsumerProducerFinalThread(fake_consumer)
+        stop_event.set()
+        thread.run()
+        fake_consumer.decrement_receipt_handle_unpublished_event_count.assert_called_once_with("receipt_handle_1")
+        # one (failed) put attempt; dropped on the shutdown branch, not retried
+        out_queue.put.assert_called_once()
+        args, kwargs = out_queue.put.call_args
+        self.assertEqual(args[0][0], "receipt_handle_1")
+        self.assertEqual(kwargs, {"timeout": 1})
