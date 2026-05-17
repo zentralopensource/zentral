@@ -79,8 +79,17 @@ class ActionGroup(Entity):
 
 
 class Action(Entity):
-    def __init__(self, id: str, namespace: Optional[Namespace], parents: Optional[list[ActionGroup]] = None) -> None:
-        return super().__init__(ACTION_ENTITY_TYPE, id, namespace, parents)
+    def __init__(
+        self,
+        id: str,
+        namespace: Optional[Namespace],
+        parents: Optional[list[ActionGroup]] = None,
+        applies_to=None,
+    ) -> None:
+        super().__init__(ACTION_ENTITY_TYPE, id, namespace, parents)
+        # applies_to is a pbac.types.AppliesTo or None. Imported lazily by
+        # callers to keep entities.py free of type-IR dependencies.
+        self.applies_to = applies_to
 
 
 class Request:

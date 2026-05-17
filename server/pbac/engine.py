@@ -1,5 +1,6 @@
 from enum import Enum
 import logging
+import os
 from typing import Optional
 
 from django.apps.config import AppConfig
@@ -8,9 +9,24 @@ from django.db.models.base import ModelBase
 
 from .cedar import authorize_request, authorize_requests
 from .entities import Action, ActionGroup, Namespace, Principal, Request, Resource
+from .types import (
+    AppliesTo,
+    EntityType,
+    LEGACY_PERM_APPLIES_TO,
+    ROLE,
+    SERVICE_ACCOUNT,
+    SYSTEM,
+    USER,
+)
 
 
 logger = logging.getLogger("zentral.pbac.engine")
+
+
+# Controls the warning emitted when register_action is called without
+# applies_to. On in dev so we can find unannotated contrib actions; off in
+# tests so they don't pollute the test log.
+_WARN_UNANNOTATED = os.environ.get("ZENTRAL_PBAC_WARN_UNANNOTATED", "1") == "1"
 
 
 class ActionGroupBasename(Enum):
@@ -26,14 +42,48 @@ class ActionRegistrationConflict(ValueError):
     pass
 
 
+class EntityTypeConflict(ValueError):
+    pass
+
+
 class Engine:
     def __init__(self) -> None:
         self.namespaces = {}
         self.action_groups = {}
         self.actions = {}
+        self.entity_types = {}            # (namespace_id|None, name) -> EntityType
         self.module_legacy_perm_actions = {}
         self.legacy_perm_actions = {}
         self.system_any_resource = Resource("System", "any")
+        # Register built-in entity types so the schema generator (PR C) sees
+        # User/ServiceAccount/Role/System without anyone having to call
+        # register_entity_type explicitly.
+        for et in (ROLE, USER, SERVICE_ACCOUNT, SYSTEM):
+            self.register_entity_type(et)
+
+    # Entity types
+
+    def register_entity_type(self, et: EntityType) -> EntityType:
+        """Register (or idempotently re-register) an EntityType.
+
+        Parents are auto-registered. Re-registering with the same EntityType
+        instance is a no-op. Re-registering with a different instance under
+        the same (namespace, name) raises EntityTypeConflict — entity types
+        are global declarations and must be unique.
+        """
+        key = (et.namespace.id if et.namespace else None, et.name)
+        existing = self.entity_types.get(key)
+        if existing is None:
+            self.entity_types[key] = et
+            for parent in et.parents:
+                self.register_entity_type(parent)
+            return et
+        if existing is et:
+            return existing
+        raise EntityTypeConflict(
+            f"Entity type {et.qualified_name!r} already registered with a different definition "
+            f"(existing={existing!r}, new={et!r})"
+        )
 
     def get_namespace(self, id: str) -> Namespace:
         if id not in self.namespaces:
@@ -66,24 +116,33 @@ class Engine:
         namespace: Namespace,
         group_basenames: Optional[list[ActionGroupBasename]] = None,
         legacy_perm: Optional[str] = None,
+        applies_to: Optional[AppliesTo] = None,
     ) -> Action:
         """Register (or idempotently re-register) an Action.
 
         Raises ActionRegistrationConflict if (id, namespace) is already registered
-        with different action groups, or if `legacy_perm` is already mapped to a
-        different action.
+        with different action groups, a different applies_to, or if `legacy_perm`
+        is already mapped to a different action.
+
+        Any EntityType referenced in ``applies_to`` is auto-registered.
         """
         key = (id, namespace.id)
         new_groups = self._build_action_groups(namespace, group_basenames)
         action = self.actions.get(key)
         if action is None:
-            action = Action(id, namespace, new_groups)
+            action = Action(id, namespace, new_groups, applies_to=applies_to)
             self.actions[key] = action
-        elif action.parents != new_groups:
-            raise ActionRegistrationConflict(
-                f"Action {action} already registered with parents {action.parents!r}; "
-                f"refusing to re-register with {new_groups!r}"
-            )
+        else:
+            if action.parents != new_groups:
+                raise ActionRegistrationConflict(
+                    f"Action {action} already registered with parents {action.parents!r}; "
+                    f"refusing to re-register with {new_groups!r}"
+                )
+            if action.applies_to != applies_to:
+                raise ActionRegistrationConflict(
+                    f"Action {action} already registered with applies_to {action.applies_to!r}; "
+                    f"refusing to re-register with {applies_to!r}"
+                )
         if legacy_perm:
             previous = self.legacy_perm_actions.get(legacy_perm)
             if previous is not None and previous is not action:
@@ -92,6 +151,11 @@ class Engine:
                     f"refusing to remap to {action}"
                 )
             self.legacy_perm_actions[legacy_perm] = action
+        if applies_to is not None:
+            for et in (*applies_to.principals, *applies_to.resources):
+                self.register_entity_type(et)
+        elif _WARN_UNANNOTATED:
+            logger.warning("Action %s registered without applies_to", action)
         return action
 
     def get_action(self, id: str, namespace: Namespace) -> Action:
@@ -115,6 +179,7 @@ class Engine:
         self.module_legacy_perm_actions[app_config.label] = self.register_action(
             action_id, namespace,
             [ActionGroupBasename.VIEWER],
+            applies_to=LEGACY_PERM_APPLIES_TO,
         )
 
     def _register_model_default_legacy_perm_actions(self, app_config: AppConfig, model: ModelBase) -> None:
@@ -133,7 +198,11 @@ class Engine:
                     group_basenames.append(ActionGroupBasename.VIEWER)
             action_id = f"{action_action}{object_name}"
             codename = get_permission_codename(operation, opts)
-            self.register_action(action_id, namespace, group_basenames, f"{app_config.label}.{codename}")
+            self.register_action(
+                action_id, namespace, group_basenames,
+                f"{app_config.label}.{codename}",
+                applies_to=LEGACY_PERM_APPLIES_TO,
+            )
 
     def register_app_legacy_perms(self, app_config: AppConfig) -> None:
         permission_models = getattr(app_config, "permission_models", [])
