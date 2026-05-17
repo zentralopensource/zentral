@@ -86,7 +86,19 @@ class Engine:
         return self.namespaces[id]
 
     def get_action_group(self, basename: ActionGroupBasename, namespace: Optional[Namespace] = None) -> ActionGroup:
-        id = f"{basename}Actions"
+        # The id differs depending on whether the group is namespace-scoped
+        # or global, so the two coexist in a Cedar schema:
+        #
+        #   Inventory::Action::"AdminActions"   <- namespace-scoped
+        #   Action::"GlobalAdminActions"        <- global, all namespaces
+        #
+        # Cedar enforces global uniqueness of action ids across all
+        # namespaces; without the "Global" prefix the global group would
+        # "illegally shadow" each namespace-scoped one with the same id.
+        if namespace is None:
+            id = f"Global{basename}Actions"
+        else:
+            id = f"{basename}Actions"
         key = (id, namespace.id if namespace else None)
         if key not in self.action_groups:
             self.action_groups[key] = ActionGroup(id, namespace)

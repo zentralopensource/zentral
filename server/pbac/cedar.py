@@ -202,15 +202,12 @@ def _entity_type_to_json(et: EntityTypeIR) -> dict:
 
 def _action_to_json(action: ActionIR) -> dict:
     entry: dict = {}
-    # Only reference global action groups in memberOf — Cedar's name
-    # resolution treats `Inventory::Action::"AdminActions"` as illegally
-    # shadowing the global `Action::"AdminActions"` if both exist. The
-    # engine declares both (group basenames are global concepts that also
-    # appear scoped per namespace at runtime) but the schema only ships
-    # the global ones; see render_schema_json for the matching filter.
-    global_parents = [(ag_id, ns) for ag_id, ns in action.member_of if ns is None]
-    if global_parents:
-        entry["memberOf"] = [{"id": ag_id} for ag_id, _ in global_parents]
+    if action.member_of:
+        # Reference action groups by id alone. cedarpy resolves
+        # `{"id": "AdminActions"}` inside namespace block ``Inventory`` to
+        # ``Inventory::Action::"AdminActions"``, and a top-level
+        # ``{"id": "GlobalAdminActions"}`` to ``Action::"GlobalAdminActions"``.
+        entry["memberOf"] = [{"id": ag_id} for ag_id, _ in action.member_of]
     if action.applies_to is not None:
         applies_to: AppliesToIR = action.applies_to
         appt: dict = {
@@ -226,35 +223,22 @@ def _action_to_json(action: ActionIR) -> dict:
     return entry
 
 
-def _is_namespaced_action_group(ns_id: Optional[str], action: ActionIR) -> bool:
-    # Action groups are ActionIRs with no applies_to. Per-namespace ones
-    # (ns_id is not None) collide with their global namesakes in Cedar's
-    # name resolution; skip them from the rendered schema.
-    return ns_id is not None and action.applies_to is None
-
-
 def render_schema_json(ir: SchemaIR) -> dict:
     """Render a SchemaIR into the Cedar JSON schema format.
 
     Every emitted namespace contains both ``entityTypes`` and ``actions``
     keys, even when one is empty — cedarpy treats a missing key as a parse
     error.
-
-    Per-namespace action groups are filtered out (see _action_to_json).
     """
     out = {}
     for ns_id, ns in ir.namespaces.items():
-        filtered_actions = {
-            i: a for i, a in ns.actions.items()
-            if not _is_namespaced_action_group(ns_id, a)
-        }
-        if not ns.entity_types and not filtered_actions:
+        if not ns.entity_types and not ns.actions:
             continue
         # Cedar uses "" as the key for the global namespace.
         ns_key = ns_id if ns_id is not None else ""
         out[ns_key] = {
             "entityTypes": {n: _entity_type_to_json(et) for n, et in ns.entity_types.items()},
-            "actions": {i: _action_to_json(a) for i, a in filtered_actions.items()},
+            "actions": {i: _action_to_json(a) for i, a in ns.actions.items()},
         }
     return out
 
@@ -303,12 +287,24 @@ def _entity_type_to_human(et: EntityTypeIR, indent: str) -> str:
     return head + ";"
 
 
+def _action_group_ref_human(action_ns_id, ag_id, ag_ns_id) -> str:
+    if ag_ns_id == action_ns_id:
+        # Same namespace as the referrer — bare form.
+        return f'"{ag_id}"'
+    if ag_ns_id is None:
+        # Cross-namespace global reference.
+        return f'Action::"{ag_id}"'
+    # Different non-global namespace.
+    return f'{ag_ns_id}::Action::"{ag_id}"'
+
+
 def _action_to_human(action: ActionIR, indent: str) -> str:
     head = f"{indent}action {action.id!r}".replace("'", '"')
-    # Same filter as the JSON renderer: only emit global action groups.
-    global_parents = [(ag_id, ns) for ag_id, ns in action.member_of if ns is None]
-    if global_parents:
-        head += " in [" + ", ".join(f'"{ag_id}"' for ag_id, _ in global_parents) + "]"
+    if action.member_of:
+        head += " in [" + ", ".join(
+            _action_group_ref_human(action.namespace_id, ag_id, ag_ns)
+            for ag_id, ag_ns in action.member_of
+        ) + "]"
     if action.applies_to is None:
         return head + ";"
     appt: AppliesToIR = action.applies_to
@@ -327,8 +323,6 @@ def render_schema_human(ir: SchemaIR) -> str:
 
     Primarily for ops/debugging via the pbac_dump_schema management
     command. The JSON form is what we feed to cedarpy.
-
-    Per-namespace action groups are filtered out (see render_schema_json).
     """
     blocks = []
     # Global namespace first (no wrapping `namespace { ... }`).
@@ -342,13 +336,12 @@ def render_schema_human(ir: SchemaIR) -> str:
     for ns_id, ns in ir.namespaces.items():
         if ns_id is None:
             continue
-        actions = {i: a for i, a in ns.actions.items() if not _is_namespaced_action_group(ns_id, a)}
-        if not ns.entity_types and not actions:
+        if not ns.entity_types and not ns.actions:
             continue
         inner = []
         for et in ns.entity_types.values():
             inner.append(_entity_type_to_human(et, "  "))
-        for action in actions.values():
+        for action in ns.actions.values():
             inner.append(_action_to_human(action, "  "))
         blocks.append(f"namespace {ns_id} {{\n" + "\n".join(inner) + "\n}")
     return "\n\n".join(blocks) + ("\n" if blocks else "")
