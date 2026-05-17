@@ -23,7 +23,6 @@ from zentral.utils.base64 import trimmed_urlsafe_b64decode
 from zentral.utils.oidc import get_openid_configuration_from_issuer_uri
 from .models import APIToken, OIDCAPITokenIssuer, Policy, User, UserTOTP, UserWebAuthn
 from .password_reset import handler as password_reset_handler
-from .utils import all_permissions_queryset
 
 
 logger = logging.getLogger("zentral.accounts.forms")
@@ -41,11 +40,7 @@ class ZentralAuthenticationForm(AuthenticationForm):
 class GroupForm(forms.ModelForm):
     class Meta:
         model = Group
-        fields = "__all__"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["permissions"].queryset = all_permissions_queryset()
+        fields = ["name"]
 
 
 class PolicyForm(forms.ModelForm):

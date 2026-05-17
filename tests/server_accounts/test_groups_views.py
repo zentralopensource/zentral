@@ -173,7 +173,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "accounts/group_form.html")
         form = response.context["form"]
         self.assertIn("name", form.fields)
-        self.assertIn("permissions", form.fields)
+        self.assertNotIn("permissions", form.fields)
 
     def test_user_update_username_error(self):
         self.login("auth.change_group")
