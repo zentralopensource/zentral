@@ -44,7 +44,9 @@ class Engine:
         self.namespaces = {}
         self.action_groups = {}
         self.actions = {}
-        self.entity_types = {}            # (namespace_id|None, name) -> EntityType
+        # Keyed (name, namespace_id|None) to match ``actions`` and
+        # ``action_groups`` (both id-first, namespace-second).
+        self.entity_types = {}
         self.module_legacy_perm_actions = {}
         self.legacy_perm_actions = {}
         self.system_any_resource = Resource("System", "any")
@@ -64,7 +66,7 @@ class Engine:
         the same (namespace, name) raises EntityTypeConflict — entity types
         are global declarations and must be unique.
         """
-        key = (et.namespace.id if et.namespace else None, et.name)
+        key = (et.name, et.namespace.id if et.namespace else None)
         existing = self.entity_types.get(key)
         if existing is None:
             self.entity_types[key] = et
@@ -107,10 +109,9 @@ class Engine:
         self,
         id: str,
         namespace: Namespace,
-        group_basenames: Optional[list[ActionGroupBasename]] = None,
-        legacy_perm: Optional[str] = None,
-        *,
+        group_basenames: list[ActionGroupBasename],
         applies_to: AppliesTo,
+        legacy_perm: Optional[str] = None,
     ) -> Action:
         """Register (or idempotently re-register) an Action.
 
@@ -118,6 +119,11 @@ class Engine:
         resources, and context shape it accepts, so the schema generator can
         emit a complete schema. Use LEGACY_PERM_APPLIES_TO for actions that
         are only reachable via the legacy-perm path.
+
+        ``legacy_perm`` is the optional Django-perm string (e.g.
+        ``"inventory.add_machinetag"``) that maps to this action via
+        ``ZentralBackend.has_perm``. It's intended to be retired once every
+        view uses PBACViewMixin directly.
 
         Raises ActionRegistrationConflict if (id, namespace) is already
         registered with different action groups, a different applies_to, or
@@ -175,7 +181,7 @@ class Engine:
         self.module_legacy_perm_actions[app_config.label] = self.register_action(
             action_id, namespace,
             [ActionGroupBasename.VIEWER],
-            applies_to=LEGACY_PERM_APPLIES_TO,
+            LEGACY_PERM_APPLIES_TO,
         )
 
     def _register_model_default_legacy_perm_actions(self, app_config: AppConfig, model: ModelBase) -> None:
@@ -196,8 +202,8 @@ class Engine:
             codename = get_permission_codename(operation, opts)
             self.register_action(
                 action_id, namespace, group_basenames,
-                f"{app_config.label}.{codename}",
-                applies_to=LEGACY_PERM_APPLIES_TO,
+                LEGACY_PERM_APPLIES_TO,
+                legacy_perm=f"{app_config.label}.{codename}",
             )
 
     def register_app_legacy_perms(self, app_config: AppConfig) -> None:

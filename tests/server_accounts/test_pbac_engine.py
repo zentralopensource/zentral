@@ -523,8 +523,8 @@ class PBACEngineRegistrationTestCase(TestCase):
         action = self.engine.register_action(
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-            "inventory.add_machinetag",
             applies_to=LEGACY_PERM_APPLIES_TO,
+            legacy_perm="inventory.add_machinetag",
         )
         self.assertEqual(self.engine.get_action("createMachineTag", self.namespace), action)
         self.assertEqual(self.engine.legacy_perm_actions["inventory.add_machinetag"], action)
@@ -542,14 +542,14 @@ class PBACEngineRegistrationTestCase(TestCase):
         first = self.engine.register_action(
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN],
-            "inventory.add_machinetag",
             applies_to=LEGACY_PERM_APPLIES_TO,
+            legacy_perm="inventory.add_machinetag",
         )
         second = self.engine.register_action(
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN],
-            "inventory.add_machinetag",
             applies_to=LEGACY_PERM_APPLIES_TO,
+            legacy_perm="inventory.add_machinetag",
         )
         self.assertIs(first, second)
 
@@ -577,6 +577,7 @@ class PBACEngineRegistrationTestCase(TestCase):
         with self.assertRaises(ActionRegistrationConflict):
             self.engine.register_action(
                 "createMachineTag", self.namespace,
+                [],
                 applies_to=LEGACY_PERM_APPLIES_TO,
             )
 
@@ -584,15 +585,15 @@ class PBACEngineRegistrationTestCase(TestCase):
         self.engine.register_action(
             "createMachineTag", self.namespace,
             [ActionGroupBasename.ADMIN],
-            "inventory.add_machinetag",
             applies_to=LEGACY_PERM_APPLIES_TO,
+            legacy_perm="inventory.add_machinetag",
         )
         with self.assertRaises(ActionRegistrationConflict):
             self.engine.register_action(
                 "deleteMachineTag", self.namespace,
                 [ActionGroupBasename.ADMIN],
-                "inventory.add_machinetag",  # same legacy perm, different action
                 applies_to=LEGACY_PERM_APPLIES_TO,
+                legacy_perm="inventory.add_machinetag",  # same legacy perm, different action
             )
 
     def test_get_action_missing_raises(self):
@@ -620,7 +621,7 @@ class PBACEngineEntityTypeRegistryTestCase(TestCase):
         # ROLE, USER, SERVICE_ACCOUNT, SYSTEM all get registered when Engine() is
         # constructed. They live at the global (None) namespace.
         for et in (ROLE, USER, SERVICE_ACCOUNT, SYSTEM):
-            self.assertIs(self.engine.entity_types[(None, et.name)], et)
+            self.assertIs(self.engine.entity_types[(et.name, None)], et)
 
     # register_entity_type
 
@@ -635,8 +636,8 @@ class PBACEngineEntityTypeRegistryTestCase(TestCase):
         mbu = ResourceType("MetaBusinessUnit")
         machine = ResourceType("Machine", parents=(mbu,))
         self.engine.register_entity_type(machine)
-        self.assertIs(self.engine.entity_types[(None, "MetaBusinessUnit")], mbu)
-        self.assertIs(self.engine.entity_types[(None, "Machine")], machine)
+        self.assertIs(self.engine.entity_types[("MetaBusinessUnit", None)], mbu)
+        self.assertIs(self.engine.entity_types[("Machine", None)], machine)
 
     def test_register_entity_type_conflict(self):
         self.engine.register_entity_type(ResourceType("Machine"))
@@ -668,8 +669,8 @@ class PBACEngineEntityTypeRegistryTestCase(TestCase):
             [ActionGroupBasename.ADMIN],
             applies_to=applies_to,
         )
-        self.assertIs(self.engine.entity_types[(None, "Machine")], machine)
-        self.assertIs(self.engine.entity_types[(None, "MetaBusinessUnit")], mbu)
+        self.assertIs(self.engine.entity_types[("Machine", None)], machine)
+        self.assertIs(self.engine.entity_types[("MetaBusinessUnit", None)], mbu)
 
     def test_register_action_re_register_with_different_applies_to_conflicts(self):
         machine = ResourceType("Machine")
@@ -733,23 +734,23 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
             )
 
     def test_system_entity_type_registered(self):
-        self.assertIs(engine.entity_types[(None, "System")], SYSTEM)
+        self.assertIs(engine.entity_types[("System", None)], SYSTEM)
 
     def test_user_entity_type_registered(self):
-        self.assertIs(engine.entity_types[(None, "User")], USER)
+        self.assertIs(engine.entity_types[("User", None)], USER)
 
     def test_service_account_entity_type_registered(self):
-        self.assertIs(engine.entity_types[(None, "ServiceAccount")], SERVICE_ACCOUNT)
+        self.assertIs(engine.entity_types[("ServiceAccount", None)], SERVICE_ACCOUNT)
 
     def test_role_entity_type_registered(self):
-        self.assertIs(engine.entity_types[(None, "Role")], ROLE)
+        self.assertIs(engine.entity_types[("Role", None)], ROLE)
 
     def test_inventory_entity_types_registered_from_contrib_pbac(self):
         # inventory/pbac.py declares MACHINE_RESOURCE_TYPE in [MetaBusinessUnit]
         # and the create/delete actions reference both, so registering those
         # actions auto-registers the two entity types.
-        self.assertEqual(engine.entity_types[("Inventory", "Machine")].name, "Machine")
-        self.assertEqual(engine.entity_types[("Inventory", "MetaBusinessUnit")].name, "MetaBusinessUnit")
+        self.assertEqual(engine.entity_types[("Machine", "Inventory")].name, "Machine")
+        self.assertEqual(engine.entity_types[("MetaBusinessUnit", "Inventory")].name, "MetaBusinessUnit")
 
     def test_create_machine_tag_action_accepts_machine_and_system(self):
         action = engine.legacy_perm_actions["inventory.add_machinetag"]

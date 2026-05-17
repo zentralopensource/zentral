@@ -27,8 +27,8 @@ disown_dep_device_action = engine.register_action(
     "disownDEPDevice",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-    "mdm.disown_depdevice",
     applies_to=LEGACY_PERM_APPLIES_TO,
+    legacy_perm="mdm.disown_depdevice",
 )
 
 
@@ -36,8 +36,8 @@ view_admin_password_action = engine.register_action(
     "viewAdminPassword",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-    "mdm.view_admin_password",
     applies_to=LEGACY_PERM_APPLIES_TO,
+    legacy_perm="mdm.view_admin_password",
 )
 
 
@@ -45,8 +45,8 @@ view_device_lock_pin_action = engine.register_action(
     "viewDeviceLockPIN",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-    "mdm.view_device_lock_pin",
     applies_to=LEGACY_PERM_APPLIES_TO,
+    legacy_perm="mdm.view_device_lock_pin",
 )
 
 
@@ -54,8 +54,8 @@ view_filevaul_prk_action = engine.register_action(
     "viewFileVaultPRK",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-    "mdm.view_filevault_prk",
     applies_to=LEGACY_PERM_APPLIES_TO,
+    legacy_perm="mdm.view_filevault_prk",
 )
 
 
@@ -63,6 +63,6 @@ view_recovery_password_action = engine.register_action(
     "viewRecoveryPassword",
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
-    "mdm.view_recovery_password",
     applies_to=LEGACY_PERM_APPLIES_TO,
+    legacy_perm="mdm.view_recovery_password",
 )
