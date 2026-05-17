@@ -60,12 +60,20 @@ class BuildSchemaIRTestCase(SimpleTestCase):
             applies_to=LEGACY_PERM_APPLIES_TO,
         )
         ir = build_schema_ir(self.engine)
+        # Global groups are prefixed "Global" so they don't shadow the
+        # per-namespace ones in a Cedar schema.
         global_actions = ir.namespaces[None].actions
         self.assertEqual(
             set(global_actions.keys()),
-            {"AdminActions", "UserActions", "ViewerActions"},
+            {"GlobalAdminActions", "GlobalUserActions", "GlobalViewerActions"},
         )
-        for action in global_actions.values():
+        # Per-namespace groups keep the unprefixed names.
+        ns_actions = ir.namespaces["Inventory"].actions
+        self.assertIn("AdminActions", ns_actions)
+        self.assertIn("UserActions", ns_actions)
+        self.assertIn("ViewerActions", ns_actions)
+        # All action groups have applies_to=None.
+        for action in (*global_actions.values(), ns_actions["AdminActions"]):
             self.assertIsNone(action.applies_to)
 
     def test_user_entity_type_carries_attrs_and_parents(self):
@@ -168,26 +176,26 @@ class RenderSchemaJSONTestCase(SimpleTestCase):
             "Boolean",
         )
 
-    def test_per_namespace_action_groups_are_filtered_out(self):
-        # The engine creates both global and per-namespace action groups
-        # (one per ActionGroupBasename touched). Cedar refuses to accept
-        # both because of its global action-id uniqueness rule; the
-        # renderer drops the per-namespace ones.
+    def test_per_namespace_and_global_action_groups_both_appear(self):
+        # Per-namespace and global action groups have distinct ids
+        # ("AdminActions" vs "GlobalAdminActions"), so both safely live in
+        # the schema. Cedar won't shadow.
         self._build_inventory_engine()
         schema = render_schema_json(build_schema_ir(self.engine))
-        # _build_inventory_engine touches only ADMIN, so only AdminActions
-        # is created. The per-namespace AdminActions must not appear in
-        # the Inventory block; the global one must appear in "".
-        self.assertNotIn("AdminActions", schema["Inventory"]["actions"])
-        self.assertIn("AdminActions", schema[""]["actions"])
+        self.assertIn("AdminActions", schema["Inventory"]["actions"])
+        self.assertIn("GlobalAdminActions", schema[""]["actions"])
 
-    def test_member_of_only_references_global_action_groups(self):
+    def test_member_of_references_both_groups(self):
         self._build_inventory_engine()
         schema = render_schema_json(build_schema_ir(self.engine))
         action = schema["Inventory"]["actions"]["createMachineTag"]
-        # The action has [global AdminActions, ns-scoped AdminActions] as
-        # parents in the engine; only the global one shows up here.
-        self.assertEqual(action["memberOf"], [{"id": "AdminActions"}])
+        # Inside the Inventory namespace block, the bare "AdminActions"
+        # resolves to Inventory::Action::"AdminActions"; the bare
+        # "GlobalAdminActions" to the global Action::"GlobalAdminActions".
+        self.assertEqual(
+            action["memberOf"],
+            [{"id": "AdminActions"}, {"id": "GlobalAdminActions"}],
+        )
 
     def test_applies_to_emits_principal_types_plural(self):
         # Cedar JSON uses principalTypes / resourceTypes (plural).
@@ -234,7 +242,14 @@ class CedarpyRoundTripTestCase(SimpleTestCase):
 
     def test_schema_validates_global_action_group_reference(self):
         r = validate_policies(
-            'permit (principal, action in Action::"AdminActions", resource);',
+            'permit (principal, action in Action::"GlobalAdminActions", resource);',
+            self.schema,
+        )
+        self.assertTrue(r.validation_passed, msg=[str(e) for e in r.errors])
+
+    def test_schema_validates_per_namespace_action_group_reference(self):
+        r = validate_policies(
+            'permit (principal, action in Inventory::Action::"AdminActions", resource);',
             self.schema,
         )
         self.assertTrue(r.validation_passed, msg=[str(e) for e in r.errors])
@@ -286,7 +301,10 @@ class RenderSchemaHumanTestCase(SimpleTestCase):
         out = render_schema_human(build_schema_ir(self.engine))
         self.assertIn("namespace Inventory {", out)
         self.assertIn('action "syncStuff"', out)
-        self.assertIn('in ["AdminActions"]', out)
+        # Action belongs to both the per-namespace and the global group.
+        # The per-namespace one is referenced bare ("AdminActions"); the
+        # global one needs the explicit Action::"…" form.
+        self.assertIn('in ["AdminActions", Action::"GlobalAdminActions"]', out)
 
     def test_human_uses_bool_not_boolean(self):
         out = render_schema_human(build_schema_ir(self.engine))

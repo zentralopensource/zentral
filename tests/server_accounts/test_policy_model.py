@@ -76,7 +76,7 @@ class PolicyModelTestCase(TestCase):
                                      "description": "yolo desc",
                                      "source": "permit (\n"
                                                f"  principal in Role::\"{rpuid}\",\n"
-                                               "  action in Action::\"AdminActions\",\n"
+                                               "  action in Action::\"GlobalAdminActions\",\n"
                                                "  resource\n"
                                                ");"
                                   }
@@ -134,7 +134,7 @@ class PolicyModelTestCase(TestCase):
         source = (
             "permit (\n"
             f"  principal in Role::\"{rpuid}\",\n"
-            "  action in Action::\"AdminActions\",\n"
+            "  action in Action::\"GlobalAdminActions\",\n"
             "  resource\n"
             ");"
         )
