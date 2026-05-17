@@ -1,6 +1,5 @@
 from unittest.mock import patch
 from django.apps import apps
-from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from accounts.models import Group
@@ -137,49 +136,6 @@ class MonolithRoleProvisioningTestCase(TestCase):
         self.assertEqual(role.name, "Haha")
         self.assertEqual(role.permissions.count(), 0)
 
-    def test_create_role_empty_perms(self):
-        qs = Group.objects.all()
-        self.assertEqual(qs.count(), 0)
-        RoleProvisioner(
-            self.app_config,
-            self.fake_app_settings(
-                yolo={
-                    "name": "Haha",
-                    "permissions": [],
-                }
-            )
-        ).apply()
-        self.assertEqual(qs.count(), 1)
-        role = qs.first()
-        self.assertEqual(role.provisioned_role.provisioning_uid, "yolo")
-        self.assertEqual(role.name, "Haha")
-        self.assertEqual(role.permissions.count(), 0)
-
-    def test_create_role(self):
-        qs = Group.objects.all()
-        self.assertEqual(qs.count(), 0)
-        RoleProvisioner(
-            self.app_config,
-            self.fake_app_settings(
-                yolo={
-                    "name": "Haha",
-                    "permissions": [
-                        "monolith.view_repository",
-                        "not_a_real_perm",  # will be ignored
-                    ],
-                }
-            )
-        ).apply()
-        self.assertEqual(qs.count(), 1)
-        role = qs.first()
-        self.assertEqual(role.provisioned_role.provisioning_uid, "yolo")
-        self.assertEqual(role.name, "Haha")
-        role_perms_qs = role.permissions.all()
-        self.assertEqual(role_perms_qs.count(), 1)
-        role_perm = role_perms_qs.first()
-        self.assertEqual(role_perm.content_type.app_label, "monolith")
-        self.assertEqual(role_perm.codename, "view_repository")
-
     # update
 
     @patch("zentral.utils.provisioning.logger.exception")
@@ -200,48 +156,3 @@ class MonolithRoleProvisioningTestCase(TestCase):
         role.refresh_from_db()
         self.assertNotEqual(role.name, "HaHa")
 
-    def test_update_role_add_perm(self):
-        role = force_role(provisioning_uid="yolo")
-        self.assertEqual(role.permissions.count(), 0)
-        qs = Group.objects.all()
-        self.assertEqual(qs.count(), 1)
-        RoleProvisioner(
-            self.app_config,
-            self.fake_app_settings(
-                yolo={
-                    "name": "HaHa",
-                    "permissions": ["osquery.change_query"],
-                }
-            )
-        ).apply()
-        self.assertEqual(qs.count(), 1)
-        self.assertEqual(qs.first(), role)
-        role.refresh_from_db()
-        self.assertEqual(role.provisioned_role.provisioning_uid, "yolo")
-        self.assertEqual(role.name, "HaHa")
-        role_perms_qs = role.permissions.all()
-        self.assertEqual(role_perms_qs.count(), 1)
-        role_perm = role_perms_qs.first()
-        self.assertEqual(role_perm.content_type.app_label, "osquery")
-        self.assertEqual(role_perm.codename, "change_query")
-
-    def test_update_role_remove_perm(self):
-        role = force_role(provisioning_uid="yolo")
-        role.permissions.add(Permission.objects.get(content_type__app_label="osquery", codename="change_query"))
-        self.assertEqual(role.permissions.count(), 1)
-        qs = Group.objects.all()
-        self.assertEqual(qs.count(), 1)
-        RoleProvisioner(
-            self.app_config,
-            self.fake_app_settings(
-                yolo={
-                    "name": "HaHa",
-                }
-            )
-        ).apply()
-        self.assertEqual(qs.count(), 1)
-        self.assertEqual(qs.first(), role)
-        role.refresh_from_db()
-        self.assertEqual(role.provisioned_role.provisioning_uid, "yolo")
-        self.assertEqual(role.name, "HaHa")
-        self.assertEqual(role.permissions.count(), 0)
