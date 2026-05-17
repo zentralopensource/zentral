@@ -1,6 +1,24 @@
 from django.test import TestCase
 
-from pbac.engine import ActionGroupBasename, ActionRegistrationConflict, Engine, engine
+from pbac.engine import (
+    ActionGroupBasename,
+    ActionRegistrationConflict,
+    Engine,
+    EntityTypeConflict,
+    engine,
+)
+from pbac.types import (
+    AppliesTo,
+    AttrSpec,
+    EntityType,
+    LEGACY_PERM_APPLIES_TO,
+    PrincipalType,
+    ResourceType,
+    ROLE,
+    SERVICE_ACCOUNT,
+    SYSTEM,
+    USER,
+)
 
 
 class PBACEngineTestCase(TestCase):
@@ -577,3 +595,157 @@ class PBACEngineRegistrationTestCase(TestCase):
             [ActionGroupBasename.ADMIN],
         )
         self.assertIs(self.engine.get_action("createMachineTag", self.namespace), action)
+
+
+class PBACEngineEntityTypeRegistryTestCase(TestCase):
+    # Isolated Engine() per test — keeps assertions independent of the singleton.
+
+    def setUp(self):
+        self.engine = Engine()
+
+    # built-ins
+
+    def test_builtins_registered_on_construction(self):
+        # ROLE, USER, SERVICE_ACCOUNT, SYSTEM all get registered when Engine() is
+        # constructed. They live at the global (None) namespace.
+        for et in (ROLE, USER, SERVICE_ACCOUNT, SYSTEM):
+            self.assertIs(self.engine.entity_types[(None, et.name)], et)
+
+    # register_entity_type
+
+    def test_register_entity_type_idempotent(self):
+        machine = ResourceType("Machine")
+        first = self.engine.register_entity_type(machine)
+        second = self.engine.register_entity_type(machine)
+        self.assertIs(first, machine)
+        self.assertIs(second, machine)
+
+    def test_register_entity_type_recurses_on_parents(self):
+        mbu = ResourceType("MetaBusinessUnit")
+        machine = ResourceType("Machine", parents=(mbu,))
+        self.engine.register_entity_type(machine)
+        self.assertIs(self.engine.entity_types[(None, "MetaBusinessUnit")], mbu)
+        self.assertIs(self.engine.entity_types[(None, "Machine")], machine)
+
+    def test_register_entity_type_conflict(self):
+        self.engine.register_entity_type(ResourceType("Machine"))
+        with self.assertRaises(EntityTypeConflict):
+            self.engine.register_entity_type(ResourceType("Machine"))
+
+    # register_action(applies_to=...)
+
+    def test_register_action_stores_applies_to(self):
+        machine = ResourceType("Machine")
+        applies_to = AppliesTo(
+            principals=(USER, SERVICE_ACCOUNT),
+            resources=(machine,),
+            context={"tagName": AttrSpec(str)},
+        )
+        action = self.engine.register_action(
+            "createMachineTag", self.engine.get_namespace("Inventory"),
+            [ActionGroupBasename.ADMIN],
+            applies_to=applies_to,
+        )
+        self.assertIs(action.applies_to, applies_to)
+
+    def test_register_action_auto_registers_referenced_entity_types(self):
+        mbu = ResourceType("MetaBusinessUnit")
+        machine = ResourceType("Machine", parents=(mbu,))
+        applies_to = AppliesTo(principals=(USER,), resources=(machine,))
+        self.engine.register_action(
+            "createMachineTag", self.engine.get_namespace("Inventory"),
+            [ActionGroupBasename.ADMIN],
+            applies_to=applies_to,
+        )
+        self.assertIs(self.engine.entity_types[(None, "Machine")], machine)
+        self.assertIs(self.engine.entity_types[(None, "MetaBusinessUnit")], mbu)
+
+    def test_register_action_re_register_with_different_applies_to_conflicts(self):
+        machine = ResourceType("Machine")
+        ns = self.engine.get_namespace("Inventory")
+        self.engine.register_action(
+            "createMachineTag", ns,
+            [ActionGroupBasename.ADMIN],
+            applies_to=AppliesTo(principals=(USER,), resources=(machine,)),
+        )
+        with self.assertRaises(ActionRegistrationConflict):
+            self.engine.register_action(
+                "createMachineTag", ns,
+                [ActionGroupBasename.ADMIN],
+                applies_to=AppliesTo(principals=(USER,), resources=(SYSTEM,)),
+            )
+
+    def test_register_action_re_register_with_none_applies_to_conflicts_with_existing(self):
+        # Once an action has applies_to, re-registering without it must error —
+        # silently dropping the metadata would defeat the schema generator.
+        ns = self.engine.get_namespace("Inventory")
+        self.engine.register_action(
+            "createMachineTag", ns,
+            [ActionGroupBasename.ADMIN],
+            applies_to=LEGACY_PERM_APPLIES_TO,
+        )
+        with self.assertRaises(ActionRegistrationConflict):
+            self.engine.register_action(
+                "createMachineTag", ns,
+                [ActionGroupBasename.ADMIN],
+                applies_to=None,
+            )
+
+    def test_register_action_without_applies_to_does_not_crash(self):
+        # Backward compat: contrib actions not yet annotated still register.
+        action = self.engine.register_action(
+            "yoloAction", self.engine.get_namespace("Inventory"),
+            [ActionGroupBasename.ADMIN],
+        )
+        self.assertIsNone(action.applies_to)
+
+
+class PBACEngineSingletonAppliesToTestCase(TestCase):
+    # Smoke-tests on the real `engine` singleton to confirm every
+    # auto-registered legacy-perm action carries LEGACY_PERM_APPLIES_TO.
+    #
+    # Note: actions registered directly by contrib pbac.py modules (e.g.
+    # inventory.add_machinetag -> Inventory::Action::"createMachineTag") do
+    # not carry applies_to in PR A; that gets added when those modules opt
+    # in (PR B). Until then, those actions are excluded from the assertion.
+
+    _CONTRIB_OVERRIDDEN_LEGACY_PERMS = {
+        "inventory.add_machinetag",
+        "inventory.delete_machinetag",
+        "inventory.view_machinetag",
+        "mdm.disown_depdevice",
+        "mdm.view_admin_password",
+        "mdm.view_device_lock_pin",
+        "mdm.view_filevault_prk",
+        "mdm.view_recovery_password",
+        "monolith.sync_repository",
+    }
+
+    def test_auto_registered_legacy_perm_actions_have_applies_to(self):
+        for perm, action in engine.legacy_perm_actions.items():
+            if perm in self._CONTRIB_OVERRIDDEN_LEGACY_PERMS:
+                continue
+            self.assertEqual(
+                action.applies_to, LEGACY_PERM_APPLIES_TO,
+                f"{perm!r} -> {action!r} missing LEGACY_PERM_APPLIES_TO",
+            )
+
+    def test_every_module_legacy_perm_action_has_applies_to(self):
+        # Module-level NOOP actions are always auto-registered.
+        for app_label, action in engine.module_legacy_perm_actions.items():
+            self.assertEqual(
+                action.applies_to, LEGACY_PERM_APPLIES_TO,
+                f"{app_label!r} -> {action!r} missing LEGACY_PERM_APPLIES_TO",
+            )
+
+    def test_system_entity_type_registered(self):
+        self.assertIs(engine.entity_types[(None, "System")], SYSTEM)
+
+    def test_user_entity_type_registered(self):
+        self.assertIs(engine.entity_types[(None, "User")], USER)
+
+    def test_service_account_entity_type_registered(self):
+        self.assertIs(engine.entity_types[(None, "ServiceAccount")], SERVICE_ACCOUNT)
+
+    def test_role_entity_type_registered(self):
+        self.assertIs(engine.entity_types[(None, "Role")], ROLE)
