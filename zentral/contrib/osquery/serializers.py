@@ -22,6 +22,14 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class EnrollmentInfoSerializer(serializers.ModelSerializer):
+    """Slim public-facing representation of an Enrollment, used by the agent-facing info endpoint."""
+    class Meta:
+        model = Enrollment
+        fields = ["pk", "version"]
+        read_only_fields = ["pk", "version"]
+
+
 class EnrollmentSerializer(serializers.ModelSerializer):
     secret = EnrollmentSecretSerializer(many=False)
     enrolled_machines_count = serializers.SerializerMethodField()
