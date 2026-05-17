@@ -1,4 +1,5 @@
 from enum import Enum
+from functools import cached_property
 import logging
 from typing import Optional
 
@@ -6,8 +7,9 @@ from django.apps.config import AppConfig
 from django.contrib.auth import get_permission_codename
 from django.db.models.base import ModelBase
 
-from .cedar import authorize_request, authorize_requests
+from .cedar import authorize_request, authorize_requests, render_schema_json
 from .entities import Action, ActionGroup, Namespace, Principal, Request, Resource
+from .schema import build_schema_ir
 from .types import (
     AppliesTo,
     EntityType,
@@ -285,12 +287,22 @@ class Engine:
             module_legacy_perm_cache[app_label] = request.is_authorized
             return request.is_authorized
 
+    # Cedar schema (lazily built, cached). Bust with
+    # ``del engine.cedar_schema_json`` if you've re-registered something
+    # at runtime — production code never should.
+    @cached_property
+    def cedar_schema_json(self):
+        return render_schema_json(build_schema_ir(self))
+
     def authorize_request(self, request: Request):
         if request.is_pending:
-            authorize_request(request)
+            authorize_request(request, self.cedar_schema_json)
 
     def authorize_requests(self, requests: list[Request]):
-        authorize_requests([r for r in requests if r.is_pending])
+        authorize_requests(
+            [r for r in requests if r.is_pending],
+            self.cedar_schema_json,
+        )
 
 
 engine = Engine()

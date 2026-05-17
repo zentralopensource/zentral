@@ -3,7 +3,7 @@ import uuid
 from hashlib import blake2b
 from itertools import chain
 
-from cedarpy import format_policies, policies_to_json_str
+from cedarpy import format_policies, policies_to_json_str, validate_policies
 import pyotp
 from django.contrib.auth.models import AbstractUser, Group
 from django.contrib.auth.models import UserManager as DjangoUserManager
@@ -412,6 +412,18 @@ class Policy(models.Model):
             policies_to_json_str(self.source)
         except Exception as exc:
             raise ValidationError({"source": f"Invalid CEDAR policy: {exc}"})
+        # Schema validation: catches typo'd action ids, unknown entity
+        # types, and context-attribute type mismatches at policy-write
+        # time so operators don't discover the problem at decision time
+        # (where the only signal would be "this rule never grants").
+        # Imported lazily so accounts/models.py doesn't pull in the
+        # whole pbac module at Django app-loading time.
+        from pbac.engine import engine
+        result = validate_policies(self.source, engine.cedar_schema_json)
+        if not result.validation_passed:
+            raise ValidationError({
+                "source": "Invalid CEDAR policy: " + "; ".join(str(e) for e in result.errors)
+            })
         self.source = format_policies(self.source)
 
     def can_be_deleted(self):

@@ -81,7 +81,12 @@ def _serialize_entity(entity: Entity, collected_entities: dict) -> None:
     if key not in collected_entities:
         serialized_entity = {
             "uid": {"type": entity.full_type, "id": entity.id},
-            "attrs": {},
+            # Include the entity's attrs. Required for the schema-on path
+            # (cedarpy validates User against the schema's
+            # is_superuser: Boolean shape), and a correctness fix for the
+            # schema-off path too: policies that reference principal.is_superuser
+            # never matched before because attrs was always empty here.
+            "attrs": dict(entity.attrs),
             "parents": []
         }
         collected_entities[key] = serialized_entity
@@ -91,9 +96,15 @@ def _serialize_entity(entity: Entity, collected_entities: dict) -> None:
 
 
 def _serialize_requests_entities(requests: list[Request]) -> list:
+    """Serialize the entities that need to accompany a batch of requests.
+
+    Action entities are intentionally omitted: cedarpy derives the action
+    entity hierarchy from the schema and rejects the request if an Action
+    also appears in the entities array ("failed to parse entities").
+    """
     collected_entities = {}
     for request in requests:
-        for entity in (request.principal, request.action, request.resource):
+        for entity in (request.principal, request.resource):
             _serialize_entity(entity, collected_entities)
     return list(collected_entities.values())
 
@@ -110,16 +121,17 @@ def _serialize_request(request: Request, correlation_id: Optional[str] = None) -
     return data
 
 
-def authorize_request(request: Request) -> None:
+def authorize_request(request: Request, schema: dict) -> None:
     cedar_result = is_authorized(
         _serialize_request(request),
         policies_cache.all_policies_concatenated,
         _serialize_requests_entities([request]),
+        schema=schema,
     )
     request.is_authorized = cedar_result.allowed
 
 
-def authorize_requests(requests: list[Request]) -> None:
+def authorize_requests(requests: list[Request], schema: dict) -> None:
     if not requests:
         return
     req_dict = {r.correlation_id: r for r in requests}
@@ -127,6 +139,7 @@ def authorize_requests(requests: list[Request]) -> None:
         (_serialize_request(r, correlation_id=r.correlation_id) for r in requests),
         policies_cache.all_policies_concatenated,
         _serialize_requests_entities(requests),
+        schema=schema,
     ):
         req_dict[cedar_result.correlation_id].is_authorized = cedar_result.allowed
 
