@@ -109,7 +109,10 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "accounts/policy_form.html")
-        self.assertFormError(response.context["form"], "source", "Invalid CEDAR policy")
+        self.assertFormError(
+            response.context["form"], "source",
+            "Invalid CEDAR policy: unexpected end of input"
+        )
 
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")

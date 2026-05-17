@@ -1,5 +1,6 @@
 from unittest.mock import patch
 from django.apps import apps
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
@@ -9,6 +10,30 @@ from .utils import force_policy, force_role
 
 
 class PolicyModelTestCase(TestCase):
+    def test_clean_formats_valid_source(self):
+        p = Policy(name=get_random_string(12), source='permit (principal,action,resource);')
+        p.clean()
+        # canonical formatting from cedarpy.format_policies
+        self.assertEqual(p.source, 'permit (principal, action, resource);\n')
+
+    def test_clean_invalid_source_surfaces_cedar_error(self):
+        p = Policy(name=get_random_string(12), source='permit (')
+        with self.assertRaises(ValidationError) as ctx:
+            p.clean()
+        self.assertEqual(
+            ctx.exception.message_dict,
+            {"source": ["Invalid CEDAR policy: unexpected end of input"]},
+        )
+
+    def test_clean_invalid_effect_surfaces_cedar_error(self):
+        p = Policy(name=get_random_string(12), source='allow (principal, action, resource);')
+        with self.assertRaises(ValidationError) as ctx:
+            p.clean()
+        self.assertEqual(
+            ctx.exception.message_dict,
+            {"source": ["Invalid CEDAR policy: invalid policy effect: allow"]},
+        )
+
     def test_serialize_for_event_keys_only(self):
         p = force_policy()
         self.assertEqual(
