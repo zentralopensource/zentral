@@ -53,14 +53,23 @@ class Principal(Entity):
         # Group/Role membership changes within the lifetime of the user obj may lead to inconsistent decisions.
         entity_cache_name = "_pbac_principal"
         if not hasattr(user_obj, entity_cache_name):
+            # is_superuser is declared on the User schema only; ServiceAccount
+            # has no attributes. Setting it on a ServiceAccount principal would
+            # make cedarpy reject the entities array against the schema.
+            if user_obj.is_service_account:
+                entity_type = "ServiceAccount"
+                attrs = {}
+            else:
+                entity_type = "User"
+                attrs = {"is_superuser": user_obj.is_superuser}
             principal = cls(
-                "ServiceAccount" if user_obj.is_service_account else "User",
+                entity_type,
                 str(user_obj.pk),
                 parents=[
                     Entity("Role", str(g.pk))
                     for g in user_obj.groups.all()
                 ],
-                attrs={"is_superuser": not user_obj.is_service_account and user_obj.is_superuser}
+                attrs=attrs,
             )
             setattr(user_obj, entity_cache_name, principal)
         return getattr(user_obj, entity_cache_name)

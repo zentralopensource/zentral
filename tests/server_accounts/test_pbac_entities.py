@@ -17,6 +17,33 @@ class PBACEntitiesTestCase(TestCase):
             get_random_string(12) + "zentral.com",
             is_superuser=True,
         )
+        cls.service_account = User.objects.create(
+            username=get_random_string(12),
+            email="{}@zentral.com".format(get_random_string(12)),
+            is_service_account=True,
+        )
+
+    # Principal.from_user
+
+    def test_user_principal_carries_is_superuser_attr(self):
+        # The schema declares is_superuser on User; the Principal must
+        # carry it so the entities array round-trips through cedarpy.
+        p = Principal.from_user(self.user)
+        self.assertEqual(p.type, "User")
+        self.assertEqual(p.attrs, {"is_superuser": False})
+
+    def test_superuser_principal_carries_is_superuser_true(self):
+        p = Principal.from_user(self.superuser)
+        self.assertEqual(p.type, "User")
+        self.assertEqual(p.attrs, {"is_superuser": True})
+
+    def test_service_account_principal_has_no_attrs(self):
+        # The schema's ServiceAccount has no shape; setting is_superuser
+        # on a ServiceAccount entity would make cedarpy reject the
+        # entities array against the schema.
+        p = Principal.from_user(self.service_account)
+        self.assertEqual(p.type, "ServiceAccount")
+        self.assertEqual(p.attrs, {})
 
     # entities
 
