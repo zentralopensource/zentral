@@ -63,7 +63,20 @@ Running the full suite uses Docker Compose:
 docker compose -f docker-compose.yml -f docker-compose.tests.yml run web tests_with_coverage
 ```
 
-Individual tests can be run via `server/manage.py test tests.<module>` inside a configured environment.
+Individual tests can be run via `server/manage.py test tests.<module>`, but the run needs every env var in `TESTS_EXTRA_ENV` (see [docker-entrypoint.py](docker-entrypoint.py)) to be set. The headline one is `ZENTRAL_CONF_DIR=/zentral/tests/conf`, which puts the full set of contrib apps in `INSTALLED_APPS`; the others force synchronous event-store writes and disable cache-sync paths that would otherwise race with tests. **All of them are load-bearing — skipping any produces misleading failures.** The `tests`/`tests_with_coverage` entrypoint commands always run the full suite (the `tests/` path is hardcoded); to run a subset, pass the env vars explicitly:
+
+```
+docker compose -f docker-compose.yml -f docker-compose.tests.yml run --rm \
+    -e ZENTRAL_CONF_DIR=/zentral/tests/conf \
+    -e ZENTRAL_FORCE_ES_OS_INDEX_REFRESH=1 \
+    -e ZENTRAL_POLICIES_SYNC=0 \
+    -e ZENTRAL_PROBES_SYNC=0 \
+    -e ZENTRAL_QUIET=1 \
+    -e ZENTRAL_STORES_SYNC=0 \
+    web python server/manage.py test --keepdb tests.<module>
+```
+
+`--keepdb` reuses the test database across runs and skips the (slow) migration replay — the first invocation is unchanged, subsequent ones start in seconds. If migrations are renamed/squashed or the DB ends up wedged, drop the flag for one run to rebuild from scratch.
 
 ## Style & linting
 
