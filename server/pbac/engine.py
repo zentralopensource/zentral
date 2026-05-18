@@ -46,13 +46,11 @@ class Engine:
         self.namespaces = {}
         self.action_groups = {}
         self.actions = {}
-        # Keyed (name, namespace_id|None) to match ``actions`` and
-        # ``action_groups`` (both id-first, namespace-second).
         self.entity_types = {}
         self.module_legacy_perm_actions = {}
         self.legacy_perm_actions = {}
         self.system_any_resource = Resource("System", "any")
-        # Register built-in entity types so the schema generator (PR C) sees
+        # Register built-in entity types so the schema generator sees
         # User/ServiceAccount/Role/System without anyone having to call
         # register_entity_type explicitly.
         for et in (ROLE, USER, SERVICE_ACCOUNT, SYSTEM):

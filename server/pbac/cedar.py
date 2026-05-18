@@ -81,9 +81,6 @@ def _serialize_entity(entity: Entity, collected_entities: dict) -> None:
     if key not in collected_entities:
         serialized_entity = {
             "uid": {"type": entity.full_type, "id": entity.id},
-            # Include the entity's attrs so policies that reference e.g.
-            # ``principal.is_superuser`` actually evaluate against the
-            # user's flag (previously hard-coded to {}).
             "attrs": dict(entity.attrs),
             "parents": []
         }
@@ -141,9 +138,7 @@ def authorize_requests(requests: list[Request]) -> None:
         req_dict[cedar_result.correlation_id].is_authorized = cedar_result.allowed
 
 
-# ---------------------------------------------------------------------------
 # Cedar schema rendering
-# ---------------------------------------------------------------------------
 #
 # Two renderers, both pure functions over a SchemaIR:
 #

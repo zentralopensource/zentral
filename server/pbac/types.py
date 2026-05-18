@@ -2,11 +2,7 @@
 
 These types describe what an Action accepts (its principal types, resource
 types, and optional context shape) and what attributes/parent relationships
-each entity type has. They are consumed by:
-
-  * the engine, eventually, to validate Request shape at decision time, and
-  * the schema generators (pbac/cedar.py for Cedar, future pbac/rego.py),
-    which render the IR into the target backend's schema format.
+each entity type has.
 
 Nothing in this module imports cedarpy or any other authorization backend.
 The naming follows Cedar's human-readable schema conventions where they
@@ -20,9 +16,7 @@ from enum import Enum
 from typing import Optional, Union
 
 
-# ---------------------------------------------------------------------------
 # Primitive and extension types
-# ---------------------------------------------------------------------------
 
 
 class PrimitiveType(Enum):
@@ -38,9 +32,7 @@ class ExtensionType(Enum):
     DURATION = "duration"
 
 
-# ---------------------------------------------------------------------------
 # Entity types (type-level, distinct from pbac.entities.Entity instances)
-# ---------------------------------------------------------------------------
 
 
 class EntityType:
@@ -75,9 +67,7 @@ class ResourceType(EntityType):
     pass
 
 
-# ---------------------------------------------------------------------------
 # Container types
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -98,9 +88,7 @@ class RecordOf:
 TypeRef = Union[PrimitiveType, ExtensionType, EntityType, SetOf, RecordOf]
 
 
-# ---------------------------------------------------------------------------
 # AttrSpec with Python-type coercion
-# ---------------------------------------------------------------------------
 
 
 # Hash-equality lookup table. `bool` and `int` are distinct dict keys, so
@@ -136,9 +124,7 @@ class AttrSpec:
         object.__setattr__(self, "required", required)
 
 
-# ---------------------------------------------------------------------------
 # AppliesTo
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -161,9 +147,7 @@ class AppliesTo:
             object.__setattr__(self, "resources", tuple(self.resources))
 
 
-# ---------------------------------------------------------------------------
 # Built-ins
-# ---------------------------------------------------------------------------
 
 
 # Common ancestor type used as a parent of User and ServiceAccount, mirroring
