@@ -1,14 +1,15 @@
-from hashlib import md5, sha256
 import logging
 import os
 import plistlib
 import subprocess
 import tempfile
 import zipfile
-from defusedxml.ElementTree import fromstring, ParseError
-from django.core.files.uploadedfile import TemporaryUploadedFile, UploadedFile
-from .models import Platform
+from hashlib import md5, sha256
 
+from defusedxml.ElementTree import ParseError, fromstring
+from django.core.files.uploadedfile import TemporaryUploadedFile, UploadedFile
+
+from .models import Platform
 
 logger = logging.getLogger("zentral.contrib.mdm.app_manifest")
 
@@ -105,7 +106,7 @@ def read_distribution_info(tmp_filepath):
     # name
     name = product_id
     title_elm = installer_script_elm.find("title")
-    if title_elm and title_elm.text:
+    if title_elm is not None and title_elm.text:
         name = title_elm.text
     return name, [Platform.MACOS], ea_data
 

@@ -34,7 +34,7 @@ class PackageFile(AttachmentFile):
             return
         with open(filepath, "rb") as f:
             root = ET.parse(f).getroot()
-            if root and root.tag == tag_name:
+            if root is not None and root.tag == tag_name:
                 return root
 
     @staticmethod
@@ -59,13 +59,13 @@ class PackageFile(AttachmentFile):
 
     def iter_component_package_items(self):
         pkg_info = self.get_package_xml_file_root("PackageInfo", "pkg-info")
-        if pkg_info:
+        if pkg_info is not None:
             yield self.item_from_pkg_info(pkg_info)
 
     def iter_product_archive_items(self):
         installer_script = self.get_package_xml_file_root("Distribution",
                                                           "installer-gui-script")
-        if not installer_script:
+        if installer_script is None:
             return
         for pkg_ref in installer_script.findall("pkg-ref"):
             if not pkg_ref.text or not pkg_ref.text.strip():
@@ -74,7 +74,7 @@ class PackageFile(AttachmentFile):
             pkg_info = self.get_package_xml_file_root(
                 os.path.join(product_subdir, "PackageInfo"),
                 "pkg-info")
-            if not pkg_info:
+            if pkg_info is None:
                 raise AttachmentError("Missing PkgInfo for product {}".format(
                                           product_subdir
                                       ))

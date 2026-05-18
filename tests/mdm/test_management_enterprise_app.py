@@ -101,7 +101,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], None, "Invalid app: Could not read Distribution file")
 
     def test_upload_enterprise_app_post(self):
-        package = self._build_package()
+        package = self._build_package(name="Test345")
         self._login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_enterprise_app"),
                                     {"package": package},
@@ -109,16 +109,16 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_detail.html")
         self.assertContains(response, "Artifact created")
-        self.assertContains(response, "io.zentral.test123")
+        self.assertContains(response, "io.zentral.test345")
         artifact = response.context["object"]
         self.assertEqual(artifact.type, Artifact.Type.ENTERPRISE_APP)
         self.assertEqual(artifact.channel, Channel.DEVICE)
-        self.assertEqual(artifact.name, "io.zentral.test123")
+        self.assertEqual(artifact.name, "Test345")
         self.assertEqual(artifact.artifactversion_set.count(), 1)
         artifact_version = artifact.artifactversion_set.first()
         self.assertEqual(artifact_version.version, 1)
         enterprise_app = artifact_version.enterprise_app
-        self.assertEqual(enterprise_app.product_id, "io.zentral.test123")
+        self.assertEqual(enterprise_app.product_id, "io.zentral.test345")
         self.assertEqual(enterprise_app.product_version, "1.0")
         self.assertIsNone(enterprise_app.get_configuration())
         self.assertFalse(enterprise_app.ios_app)
@@ -128,16 +128,17 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         artifact.name = "io.zentral.test123"  # prepare name collision
         artifact.save()
-        package = self._build_package()
+        package = self._build_package(name="TestPackage789")
         self._login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_enterprise_app"),
                                     {"package": package},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_detail.html")
-        self.assertContains(response, "io.zentral.test123 (1)")
+        self.assertContains(response, "TestPackage789")
+        self.assertContains(response, "io.zentral.testpackage789")
         artifact = response.context["object"]
-        self.assertEqual(artifact.name, "io.zentral.test123 (1)")
+        self.assertEqual(artifact.name, "TestPackage789")
 
     # upgrade enterprise app GET
 
