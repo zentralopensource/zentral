@@ -223,6 +223,10 @@ for database_key, host_key in (("default", "HOST"),
 # Django >= 3.2 have uses BigAutoField
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
+# Transitional Django 6.0 setting: opt into the new URLField default scheme.
+# Remove this line once we are on Django 6.0+.
+FORMS_URLFIELD_ASSUME_HTTPS = True
+
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_BROKER_URL = django_zentral_settings.get("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
 CELERY_BROKER_TRANSPORT_OPTIONS = django_zentral_settings.get("CELERY_BROKER_TRANSPORT_OPTIONS", {})
