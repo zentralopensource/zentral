@@ -1,15 +1,15 @@
 from datetime import datetime
-from functools import reduce
-import operator
 from unittest.mock import patch
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.http import http_date
 from django.test import TestCase
+
 from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.munki.models import Configuration, Enrollment, ScriptCheck
@@ -18,7 +18,7 @@ from zentral.core.events.base import AuditEvent
 from .utils import force_script_check
 
 
-class APIViewsTestCase(TestCase):
+class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     maxDiff = None
 
     @classmethod
@@ -36,6 +36,19 @@ class APIViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "munki_api"
+
+    # utiliy methods
+
     def force_configuration(self):
         return Configuration.objects.create(name=get_random_string(12))
 
@@ -44,42 +57,10 @@ class APIViewsTestCase(TestCase):
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
         return Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
 
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
+    # RequestCase implementation
 
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def _make_request(self, method, url, data, include_token):
-        kwargs = {"content_type": "application/json"}
-        if data is not None:
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return method(url, **kwargs)
-
-    def get(self, url, data=None, include_token=True):
-        return self._make_request(self.client.get, url, data, include_token)
-
-    def post(self, url, data=None, include_token=True):
-        return self._make_request(self.client.post, url, data, include_token)
-
-    def put(self, url, data=None, include_token=True):
-        return self._make_request(self.client.put, url, data, include_token)
-
-    def delete(self, url, include_token=True):
-        return self._make_request(self.client.delete, url, None, include_token)
+    def _get_api_key(self):
+        return self.api_key
 
     # list configurations
 

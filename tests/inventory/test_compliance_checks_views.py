@@ -1,14 +1,13 @@
 from datetime import datetime
-from functools import reduce
-import operator
 from unittest.mock import patch
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.compliance_checks import InventoryJMESPathCheck
 from zentral.contrib.inventory.models import JMESPathCheck, MachineSnapshotCommit, MachineTag, MetaMachine, Source, Tag
 from zentral.core.compliance_checks.models import ComplianceCheck, MachineStatus, Status
@@ -16,10 +15,10 @@ from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
 
 
-class InventoryComplianceChecksViewsTestCase(TestCase):
+class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
-        # provision the stores
+        # stores
         provision()
         stores._load(force=True)
         # user
@@ -45,25 +44,18 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         cls.machine = MetaMachine(cls.serial_number)
         cls.url_msn = cls.machine.get_urlsafe_serial_number()
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "inventory"
+
     # utility methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _force_jmespath_check(
         self,
@@ -96,16 +88,16 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     # list
 
     def test_compliance_checks_redirect(self):
-        self._login_redirect(reverse("inventory:compliance_checks"))
+        self.login_redirect("compliance_checks")
 
     def test_compliance_checks_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:compliance_checks"))
         self.assertEqual(response.status_code, 403)
 
     def test_compliance_checks_no_create_link(self):
         cc = self._force_jmespath_check()
-        self._login("inventory.view_jmespathcheck")
+        self.login("inventory.view_jmespathcheck")
         response = self.client.get(reverse("inventory:compliance_checks"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_list.html")
@@ -114,7 +106,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_compliance_checks_with_create_link(self):
         cc = self._force_jmespath_check()
-        self._login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
+        self.login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
         response = self.client.get(reverse("inventory:compliance_checks"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_list.html")
@@ -124,22 +116,22 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     # create
 
     def test_create_compliance_check_redirect(self):
-        self._login_redirect(reverse("inventory:create_compliance_check"))
+        self.login_redirect("create_compliance_check")
 
     def test_create_compliance_check_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:create_compliance_check"))
         self.assertEqual(response.status_code, 403)
 
     def test_create_compliance_check_get(self):
-        self._login("inventory.add_jmespathcheck")
+        self.login("inventory.add_jmespathcheck")
         response = self.client.get(reverse("inventory:create_compliance_check"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_form.html")
         self.assertContains(response, "Create compliance check")
 
     def test_create_compliance_check_devtool_pre_fill(self):
-        self._login("inventory.add_jmespathcheck")
+        self.login("inventory.add_jmespathcheck")
         source_name = get_random_string(12)
         jmespath_expression = "os_version.major > `11`"
         response = self.client.get(
@@ -155,7 +147,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(form.initial["jmespath_expression"], jmespath_expression)
 
     def test_create_compliance_check_post(self):
-        self._login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
+        self.login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
         name = get_random_string(12)
         response = self.client.post(reverse("inventory:create_compliance_check"),
                                     {"ccf-name": name,
@@ -172,7 +164,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_create_compliance_check_post_name_collision(self):
         cc = self._force_jmespath_check()
-        self._login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
+        self.login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
         response = self.client.post(reverse("inventory:create_compliance_check"),
                                     {"ccf-name": cc.compliance_check.name,
                                      "ccf-description": get_random_string(12),
@@ -185,7 +177,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertContains(response, "Inventory JMESPath check with this name already exists")
 
     def test_create_compliance_check_post_bad_jmespath_expression(self):
-        self._login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
+        self.login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
         response = self.client.post(reverse("inventory:create_compliance_check"),
                                     {"ccf-name": get_random_string(12),
                                      "ccf-description": get_random_string(12),
@@ -201,17 +193,17 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_compliance_check_redirect(self):
         cc = self._force_jmespath_check()
-        self._login_redirect(cc.get_absolute_url())
+        self.login_redirect("compliance_check", cc.pk)
 
     def test_compliance_check_permission_denied(self):
         cc = self._force_jmespath_check()
-        self._login()
+        self.login()
         response = self.client.get(cc.get_absolute_url())
         self.assertEqual(response.status_code, 403)
 
     def test_compliance_check(self):
         cc = self._force_jmespath_check()
-        self._login("inventory.view_jmespathcheck")
+        self.login("inventory.view_jmespathcheck")
         response = self.client.get(cc.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_detail.html")
@@ -222,11 +214,11 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_cc_events_redirect(self):
         cc = self._force_jmespath_check()
-        self._login_redirect(reverse("inventory:compliance_check_events", args=(cc.pk,)))
+        self.login_redirect("compliance_check_events", cc.pk)
 
     def test_cc_events_permission_denied(self):
         cc = self._force_jmespath_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:compliance_check_events", args=(cc.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -234,7 +226,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     def test_cc_events(self, get_aggregated_object_event_counts):
         get_aggregated_object_event_counts.return_value = {}
         cc = self._force_jmespath_check()
-        self._login("inventory.view_jmespathcheck")
+        self.login("inventory.view_jmespathcheck")
         response = self.client.get(reverse("inventory:compliance_check_events", args=(cc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_events.html")
@@ -243,11 +235,11 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_cc_fetch_events_redirect(self):
         cc = self._force_jmespath_check()
-        self._login_redirect(reverse("inventory:fetch_compliance_check_events", args=(cc.pk,)))
+        self.login_redirect("fetch_compliance_check_events", cc.pk)
 
     def test_cc_fetch_events_permission_denied(self):
         cc = self._force_jmespath_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:fetch_compliance_check_events", args=(cc.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -255,7 +247,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     def test_cc_fetch_events(self, fetch_object_events):
         fetch_object_events.return_value = ([], None)
         cc = self._force_jmespath_check()
-        self._login("inventory.view_jmespathcheck")
+        self.login("inventory.view_jmespathcheck")
         response = self.client.get(reverse("inventory:fetch_compliance_check_events", args=(cc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
@@ -264,17 +256,17 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_cc_events_store_redirect_redirect(self):
         cc = self._force_jmespath_check()
-        self._login_redirect(reverse("inventory:compliance_check_events_store_redirect", args=(cc.pk,)))
+        self.login_redirect("compliance_check_events_store_redirect", cc.pk)
 
     def test_cc_events_store_redirect_permission_denied(self):
         cc = self._force_jmespath_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:compliance_check_events_store_redirect", args=(cc.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_cc_events_store_redirect(self):
         cc = self._force_jmespath_check()
-        self._login("inventory.view_jmespathcheck")
+        self.login("inventory.view_jmespathcheck")
         response = self.client.get(reverse("inventory:compliance_check_events_store_redirect", args=(cc.pk,)))
         # dev store cannot redirect
         self.assertRedirects(response, reverse("inventory:compliance_check_events", args=(cc.pk,)))
@@ -283,17 +275,17 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_update_compliance_check_redirect(self):
         cc = self._force_jmespath_check()
-        self._login_redirect(reverse("inventory:update_compliance_check", args=(cc.pk,)))
+        self.login_redirect("update_compliance_check", cc.pk)
 
     def test_update_compliance_check_permission_denied(self):
         cc = self._force_jmespath_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:update_compliance_check", args=(cc.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_compliance_check_get(self):
         cc = self._force_jmespath_check()
-        self._login("inventory.change_jmespathcheck")
+        self.login("inventory.change_jmespathcheck")
         response = self.client.get(reverse("inventory:update_compliance_check", args=(cc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_form.html")
@@ -302,7 +294,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     def test_update_compliance_check_post(self):
         cc = self._force_jmespath_check()
         old_version = cc.compliance_check.version
-        self._login("inventory.change_jmespathcheck", "inventory.view_jmespathcheck")
+        self.login("inventory.change_jmespathcheck", "inventory.view_jmespathcheck")
         name = get_random_string(12)
         response = self.client.post(reverse("inventory:update_compliance_check", args=(cc.pk,)),
                                     {"ccf-name": name,
@@ -324,7 +316,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     def test_update_compliance_check_post_updated_version(self):
         cc = self._force_jmespath_check()
         old_version = cc.compliance_check.version
-        self._login("inventory.change_jmespathcheck", "inventory.view_jmespathcheck")
+        self.login("inventory.change_jmespathcheck", "inventory.view_jmespathcheck")
         source_name = get_random_string(12)
         response = self.client.post(reverse("inventory:update_compliance_check", args=(cc.pk,)),
                                     {"ccf-name": cc.compliance_check.name,
@@ -348,7 +340,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     def test_update_compliance_check_post_name_collision(self):
         cc0 = self._force_jmespath_check()
         cc = self._force_jmespath_check()
-        self._login("inventory.change_jmespathcheck", "inventory.view_jmespathcheck")
+        self.login("inventory.change_jmespathcheck", "inventory.view_jmespathcheck")
         response = self.client.post(reverse("inventory:update_compliance_check", args=(cc.pk,)),
                                     {"ccf-name": cc0.compliance_check.name,
                                      "ccf-description": cc.compliance_check.description,
@@ -363,17 +355,17 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
 
     def test_delete_compliance_check_redirect(self):
         cc = self._force_jmespath_check()
-        self._login_redirect(reverse("inventory:delete_compliance_check", args=(cc.pk,)))
+        self.login_redirect("delete_compliance_check", cc.pk)
 
     def test_delete_compliance_check_permission_denied(self):
         cc = self._force_jmespath_check()
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:delete_compliance_check", args=(cc.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_compliance_check_get(self):
         cc = self._force_jmespath_check()
-        self._login('inventory.delete_jmespathcheck')
+        self.login('inventory.delete_jmespathcheck')
         response = self.client.get(reverse("inventory:delete_compliance_check", args=(cc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_confirm_delete.html")
@@ -383,7 +375,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         cc0 = self._force_jmespath_check()
         cc = self._force_jmespath_check()
         cc_pk = cc.pk
-        self._login('inventory.delete_jmespathcheck', 'inventory.view_jmespathcheck')
+        self.login('inventory.delete_jmespathcheck', 'inventory.view_jmespathcheck')
         response = self.client.post(reverse("inventory:delete_compliance_check", args=(cc_pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_list.html")
@@ -394,29 +386,29 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     # devtool
 
     def test_compliance_check_devtool_redirect(self):
-        self._login_redirect(reverse("inventory:compliance_check_devtool"))
+        self.login_redirect("compliance_check_devtool")
 
     def test_compliance_check_devtool_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("inventory:compliance_check_devtool"))
         self.assertEqual(response.status_code, 403)
 
     def test_compliance_check_devtool_no_create(self):
-        self._login('inventory.view_machinesnapshot')
+        self.login('inventory.view_machinesnapshot')
         response = self.client.get(reverse("inventory:compliance_check_devtool"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
         self.assertNotContains(response, "Create")
 
     def test_compliance_check_devtool_with_create(self):
-        self._login('inventory.view_machinesnapshot', 'inventory.add_jmespathcheck')
+        self.login('inventory.view_machinesnapshot', 'inventory.add_jmespathcheck')
         response = self.client.get(reverse("inventory:compliance_check_devtool"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_devtool.html")
         self.assertContains(response, "Create")
 
     def test_compliance_check_devtool_invalid_jmespath(self):
-        self._login('inventory.view_machinesnapshot')
+        self.login('inventory.view_machinesnapshot')
         response = self.client.post(
             reverse("inventory:compliance_check_devtool"),
             {"source": self.source.pk,
@@ -433,7 +425,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertIsNone(response.context.get("result"))
 
     def test_compliance_check_devtool_machine_not_found(self):
-        self._login('inventory.view_machinesnapshot')
+        self.login('inventory.view_machinesnapshot')
         response = self.client.post(
             reverse("inventory:compliance_check_devtool"),
             {"source": self.source.pk,
@@ -450,7 +442,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertIsNone(response.context.get("result"))
 
     def test_compliance_check_devtool_not_a_bool(self):
-        self._login('inventory.view_machinesnapshot')
+        self.login('inventory.view_machinesnapshot')
         response = self.client.post(
             reverse("inventory:compliance_check_devtool"),
             {"source": self.source.pk,
@@ -467,7 +459,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(response.context["result"],  10)
 
     def test_compliance_check_devtool_test(self):
-        self._login('inventory.view_machinesnapshot')
+        self.login('inventory.view_machinesnapshot')
         response = self.client.post(
             reverse("inventory:compliance_check_devtool"),
             {"source": self.source.pk,
@@ -481,7 +473,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(response.context["result"],  True)
 
     def test_compliance_check_devtool_create(self):
-        self._login('inventory.view_machinesnapshot', 'inventory.add_jmespathcheck')
+        self.login('inventory.view_machinesnapshot', 'inventory.add_jmespathcheck')
         response = self.client.post(
             reverse("inventory:compliance_check_devtool"),
             {"action": "create",
@@ -499,19 +491,19 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
     # terraform export
 
     def test_compliance_check_terraform_export_redirect(self):
-        self._login_redirect(reverse("inventory:compliance_check_terraform_export"))
+        self.login_redirect("compliance_check_terraform_export")
 
     def test_compliance_check_terraform_export(self):
         cc_tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         self._force_jmespath_check(tags=cc_tags)
-        self._login('inventory.view_jmespathcheck')
+        self.login('inventory.view_jmespathcheck')
         response = self.client.get(reverse("inventory:compliance_check_terraform_export"))
         self.assertEqual(response.status_code, 200)
 
     # machine
 
     def test_machine_no_compliance_checks(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
@@ -522,7 +514,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertContains(response, "<h3>Compliance checks (0)</h3>")
 
     def test_machine_no_tags_no_compliance_checks_in_scope(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
@@ -535,7 +527,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertContains(response, "<h3>Compliance checks (0)</h3>")
 
     def test_machine_with_tag_no_compliance_checks_in_scope(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
@@ -550,7 +542,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertContains(response, "<h3>Compliance checks (0)</h3>")
 
     def test_machine_source_mismatch_no_compliance_checks_in_scope(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
@@ -562,7 +554,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertContains(response, "<h3>Compliance checks (0)</h3>")
 
     def test_machine_source_match_platform_missmatch_no_compliance_checks_in_scope(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
@@ -574,7 +566,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertContains(response, "<h3>Compliance checks (0)</h3>")
 
     def test_machine_source_match_one_compliance_checks_in_scope(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
@@ -594,7 +586,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(compliance_check_statuses[0][2], Status.PENDING)
 
     def test_machine_no_tags_compliance_checks_one_in_scope_one_out_of_scope_pending_with_link(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
@@ -618,7 +610,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(compliance_check_statuses[0][2], Status.PENDING)
 
     def test_machine_no_tags_compliance_checks_one_in_scope_one_out_of_scope_pending_without_link(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             # no view_jmespathcheck, no link
@@ -642,7 +634,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(compliance_check_statuses[0][2], Status.PENDING)
 
     def test_machine_no_tags_compliance_checks_one_in_scope_one_out_of_scope_no_section(self):
-        self._login(
+        self.login(
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck',
             # no compliance_checks.view_machinestatus, no section
@@ -661,7 +653,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(len(compliance_check_statuses), 0)
 
     def test_machine_tags_once_compliance_check_in_scope_ok_with_link(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'
@@ -692,7 +684,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
         self.assertEqual(compliance_check_statuses[0][2], Status.OK)
 
     def test_machine_tags_once_compliance_check_in_scope_two_different_statuses_ok_with_link(self):
-        self._login(
+        self.login(
             'compliance_checks.view_machinestatus',
             'inventory.view_machinesnapshot',
             'inventory.view_jmespathcheck'

@@ -1,46 +1,38 @@
 import datetime
-from functools import reduce
-import operator
 import plistlib
 import uuid
 from django_celery_results.models import TaskResult
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         Channel, Location, LocationAsset, Platform, StoreApp)
 from .utils import force_artifact, force_dep_virtual_server, force_blueprint_artifact
 
 
-class AssetManagementViewsTestCase(TestCase):
+class AssetManagementViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
+
     # utiliy methods
-
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     def _force_asset(self, supported_platforms=None):
         if supported_platforms is None:
@@ -161,16 +153,16 @@ class AssetManagementViewsTestCase(TestCase):
     # assets
 
     def test_assets_redirect(self):
-        self._login_redirect(reverse("mdm:assets"))
+        self.login_redirect("assets")
 
     def test_assets_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:assets"))
         self.assertEqual(response.status_code, 403)
 
     def test_assets(self):
         asset = self._force_asset()
-        self._login("mdm.view_asset")
+        self.login("mdm.view_asset")
         response = self.client.get(reverse("mdm:assets"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/asset_list.html")
@@ -181,16 +173,16 @@ class AssetManagementViewsTestCase(TestCase):
 
     def test_asset_redirect(self):
         asset = self._force_asset()
-        self._login_redirect(reverse("mdm:asset", args=(asset.pk,)))
+        self.login_redirect("asset", asset.pk)
 
     def test_asset_permission_denied(self):
-        self._login()
+        self.login()
         asset = self._force_asset()
         response = self.client.get(reverse("mdm:asset", args=(asset.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_asset(self):
-        self._login("mdm.view_asset")
+        self.login("mdm.view_asset")
         asset = self._force_asset()
         response = self.client.get(reverse("mdm:asset", args=(asset.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -203,7 +195,7 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertNotContains(response, reverse("mdm:create_asset_artifact", args=(asset.pk,)))
 
     def test_asset_with_add_artifact(self):
-        self._login("mdm.view_asset", "mdm.add_artifact")
+        self.login("mdm.view_asset", "mdm.add_artifact")
         asset = self._force_asset()
         response = self.client.get(reverse("mdm:asset", args=(asset.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -213,7 +205,7 @@ class AssetManagementViewsTestCase(TestCase):
     def test_asset_with_artifact(self):
         location_asset = self._force_location_asset(artifacts=True)
         artifact = location_asset.storeapp_set.first().artifact_version.artifact
-        self._login("mdm.view_asset")
+        self.login("mdm.view_asset")
         response = self.client.get(reverse("mdm:asset", args=(location_asset.asset.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/asset_detail.html")
@@ -224,13 +216,11 @@ class AssetManagementViewsTestCase(TestCase):
 
     def test_associate_location_asset_login_redirect(self):
         location_asset = self._force_location_asset()
-        self._login_redirect(
-            reverse("mdm:associate_location_asset", args=(location_asset.asset.pk, location_asset.pk))
-        )
+        self.login_redirect("associate_location_asset", location_asset.asset.pk, location_asset.pk)
 
     def test_associate_location_asset_permission_denied(self):
         location_asset = self._force_location_asset()
-        self._login()
+        self.login()
         response = self.client.get(
             reverse("mdm:associate_location_asset", args=(location_asset.asset.pk, location_asset.pk))
         )
@@ -238,7 +228,7 @@ class AssetManagementViewsTestCase(TestCase):
 
     def test_associate_location_asset_get(self):
         location_asset = self._force_location_asset()
-        self._login("mdm.change_locationasset", "mdm.view_depvirtualserver")
+        self.login("mdm.change_locationasset", "mdm.view_depvirtualserver")
         response = self.client.get(
             reverse("mdm:associate_location_asset", args=(location_asset.asset.pk, location_asset.pk))
         )
@@ -248,7 +238,7 @@ class AssetManagementViewsTestCase(TestCase):
     def test_associate_location_asset_post(self):
         location_asset = self._force_location_asset()
         dep_virtual_server = force_dep_virtual_server()
-        self._login("mdm.change_locationasset", "mdm.view_depvirtualserver", "mdm.view_asset")
+        self.login("mdm.change_locationasset", "mdm.view_depvirtualserver", "mdm.view_asset")
         task_qs = TaskResult.objects.filter(task_name="zentral.contrib.mdm.tasks.bulk_assign_location_asset_task")
         self.assertEqual(task_qs.count(), 0)
         response = self.client.post(
@@ -266,16 +256,16 @@ class AssetManagementViewsTestCase(TestCase):
 
     def test_create_asset_artifact_login_redirect(self):
         asset = self._force_asset()
-        self._login_redirect(reverse("mdm:create_asset_artifact", args=(asset.pk,)))
+        self.login_redirect("create_asset_artifact", asset.pk)
 
     def test_create_asset_artifact_permission_denied(self):
-        self._login()
+        self.login()
         asset = self._force_asset()
         response = self.client.get(reverse("mdm:create_asset_artifact", args=(asset.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_create_asset_artifact_get(self):
-        self._login("mdm.view_asset", "mdm.add_artifact")
+        self.login("mdm.view_asset", "mdm.add_artifact")
         asset = self._force_asset()
         response = self.client.get(reverse("mdm:create_asset_artifact", args=(asset.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -284,7 +274,7 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertContains(response, "Create artifact")
 
     def test_create_asset_artifact_post_name_error(self):
-        self._login("mdm.view_asset", "mdm.add_artifact")
+        self.login("mdm.view_asset", "mdm.add_artifact")
         location_asset = self._force_location_asset()
         asset = location_asset.asset
         artifact = Artifact.objects.create(
@@ -311,7 +301,7 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "name", "An artifact with this name already exists")
 
     def test_create_asset_artifact_post_invalid_plist(self):
-        self._login("mdm.view_asset", "mdm.add_artifact")
+        self.login("mdm.view_asset", "mdm.add_artifact")
         location_asset = self._force_location_asset()
         asset = location_asset.asset
         response = self.client.post(reverse("mdm:create_asset_artifact", args=(asset.pk,)),
@@ -332,7 +322,7 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "configuration", "Invalid property list")
 
     def test_create_asset_artifact_post_plist_not_a_dict(self):
-        self._login("mdm.view_asset", "mdm.add_artifact")
+        self.login("mdm.view_asset", "mdm.add_artifact")
         location_asset = self._force_location_asset()
         asset = location_asset.asset
         response = self.client.post(reverse("mdm:create_asset_artifact", args=(asset.pk,)),
@@ -353,7 +343,7 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertFormError(response.context["form"], "configuration", "Not a dictionary")
 
     def test_create_asset_artifact_post(self):
-        self._login("mdm.view_asset", "mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.view_asset", "mdm.add_artifact", "mdm.view_artifact")
         location_asset = self._force_location_asset()
         asset = location_asset.asset
         name = get_random_string(12)
@@ -381,7 +371,7 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertEqual(store_app.get_configuration(), {"un": 1})
 
     def test_create_asset_artifact_get_default_name_collision_avoided(self):
-        self._login("mdm.view_asset", "mdm.add_artifact")
+        self.login("mdm.view_asset", "mdm.add_artifact")
         location_asset = self._force_location_asset()
         asset = location_asset.asset
         for i in range(0, 4):
@@ -403,7 +393,7 @@ class AssetManagementViewsTestCase(TestCase):
         self.assertEqual(form.fields["name"].initial, f"{asset.name} (4)")
 
     def test_create_asset_artifact_get_default_name_collision(self):
-        self._login("mdm.view_asset", "mdm.add_artifact")
+        self.login("mdm.view_asset", "mdm.add_artifact")
         asset = self._force_asset()
         for i in range(0, 11):
             if i > 0:
@@ -427,17 +417,17 @@ class AssetManagementViewsTestCase(TestCase):
 
     def test_upgrade_store_app_get_redirect(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.STORE_APP)
-        self._login_redirect(reverse("mdm:upgrade_store_app", args=(artifact.pk,)))
+        self.login_redirect("upgrade_store_app", artifact.pk)
 
     def test_upgrade_store_app_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.STORE_APP)
-        self._login("mdm.change_artifactversion")
+        self.login("mdm.change_artifactversion")
         response = self.client.get(reverse("mdm:upgrade_store_app", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_upgrade_store_app_get_ok(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.STORE_APP)
-        self._login("mdm.add_artifactversion")
+        self.login("mdm.add_artifactversion")
         response = self.client.get(reverse("mdm:upgrade_store_app", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
@@ -455,7 +445,7 @@ class AssetManagementViewsTestCase(TestCase):
             list(str(av["pk"]) for av in blueprint.serialized_artifacts[artifact_pk]["versions"]),
             [str(store_app_av1.pk)]
         )
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_store_app", args=(artifact.pk,)),
                                     {"default_shard": 1,
                                      "shard_modulo": 10,
@@ -488,7 +478,7 @@ class AssetManagementViewsTestCase(TestCase):
         store_app_1 = store_app_av1.store_app
         store_app_1.configuration = plistlib.dumps({"un": 1})
         store_app_1.save()
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_store_app", args=(artifact.pk,)),
                                     {"default_shard": 1,
                                      "shard_modulo": 10,

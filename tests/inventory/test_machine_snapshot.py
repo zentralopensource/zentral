@@ -11,7 +11,6 @@ from zentral.contrib.inventory.models import (BusinessUnit,
                                               CurrentMachineSnapshot,
                                               MachineSnapshot, MachineSnapshotCommit,
                                               MachineTag,
-                                              MetaBusinessUnitTag,
                                               MetaMachine,
                                               Source,
                                               Tag)
@@ -386,19 +385,18 @@ class MachineSnapshotTestCase(TestCase):
         MachineTag.objects.create(tag=tag1, serial_number=self.serial_number)
         self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id}),
                          mm.get_probe_filtering_values())
-        MetaBusinessUnitTag.objects.create(tag=tag2, meta_business_unit=self.meta_business_unit)
         # cached
         self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id}),
                          mm.get_probe_filtering_values())
         # fresh
         mm = MetaMachine(self.serial_number)
-        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id, tag2.id}),
+        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id}),
                          mm.get_probe_filtering_values())
         # cached with cache framework
         mm = MetaMachine(self.serial_number)
-        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id, tag2.id}),
+        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id}),
                          mm.cached_probe_filtering_values)
-        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id, tag2.id}),
+        self.assertEqual((MACOS, None, {self.meta_business_unit.id}, {tag1.id}),
                          cache.get("mm-probe-fvs_{}".format(mm.get_urlsafe_serial_number())))
 
         # get_serialized_info_for_event
@@ -439,17 +437,6 @@ class MachineSnapshotTestCase(TestCase):
                                "hostname": "hostname yo"}
         msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(copy.deepcopy(tree))
         self.assertEqual(ms.get_machine_str(), "computername yo")
-
-    def test_machine_tag(self):
-        tree = copy.deepcopy(self.machine_snapshot)
-        msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
-        tag = Tag.objects.create(name="tag name")
-        self.assertEqual(str(tag), "tag name")
-        MachineTag.objects.create(tag=tag, serial_number=self.serial_number)
-        self.assertEqual(list(Tag.objects.used_in_inventory()), [(tag, 1)])
-        mm = MetaMachine(self.serial_number)
-        mm.archive()
-        self.assertEqual(list(Tag.objects.used_in_inventory()), [])
 
     # update ms tree
 

@@ -29,27 +29,6 @@
     </div>
 </div>
 
-<h3>Permission{{ permission_count|pluralize }} ({{ permission_count }})</h3>
-
-{% if permission_count %}
-<table class="table table-striped align-middle object-details">
-  <thead>
-    <th>App</th>
-    <th>Model</th>
-    <th>Actions</th>
-  </thead>
-  <tbody>
-    {% for content_type, codenames in permissions %}
-    <tr>
-      <td>{{ content_type.app_label }}</td>
-      <td>{{ content_type.model }}</td>
-      <td>{{ codenames|join:", " }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% endif %}
-
 {% if perms.accounts.view_user %}
 <h3>User{{ user_count|pluralize }} ({{ user_count }})</h3>
 {% if user_count %}

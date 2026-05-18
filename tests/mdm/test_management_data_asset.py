@@ -1,47 +1,33 @@
-from functools import reduce
 from io import BytesIO
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.models import Artifact, Channel, DataAsset, Platform
 from .utils import build_plistfile, build_zipfile, force_artifact, force_blueprint_artifact
 
 
-class MDMDataAssetManagementViewsTestCase(TestCase):
+class MDMDataAssetManagementViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url, data=None):
-        if data:
-            func = self.client.post
-        else:
-            func = self.client.get
-        response = func(url, data=data)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # model
 
@@ -90,15 +76,15 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
     # upload data asset GET
 
     def test_upload_data_asset_get_redirect(self):
-        self._login_redirect(reverse("mdm:upload_data_asset"))
+        self.login_redirect("upload_data_asset")
 
     def test_upload_data_asset_get_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:upload_data_asset"))
         self.assertEqual(response.status_code, 403)
 
     def test_upload_data_asset_get(self):
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         response = self.client.get(reverse("mdm:upload_data_asset"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/dataasset_form.html")
@@ -107,15 +93,15 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
 
     def test_upload_data_asset_post_redirect(self):
         zipfile = build_zipfile()
-        self._login_redirect(reverse("mdm:upload_data_asset"),
-                             {"type": str(DataAsset.Type.ZIP),
-                              "file": zipfile,
-                              "name": get_random_string(12),
-                              "platforms": [str(Platform.MACOS)]})
+        self.login_redirect("upload_data_asset",
+                            data={"type": str(DataAsset.Type.ZIP),
+                                  "file": zipfile,
+                                  "name": get_random_string(12),
+                                  "platforms": [str(Platform.MACOS)]})
 
     def test_upload_data_asset_post_permission_denied(self):
         zipfile = build_zipfile()
-        self._login()
+        self.login()
         response = self.client.post(reverse("mdm:upload_data_asset"),
                                     {"type": str(DataAsset.Type.ZIP),
                                      "file": zipfile,
@@ -128,7 +114,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
     def test_upload_data_asset_post_invalid_plist_ext(self):
         notaplist = BytesIO(b"-")
         notaplist.name = "test.yolo"
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_data_asset"),
                                     {"type": str(DataAsset.Type.PLIST),
                                      "file": notaplist,
@@ -142,7 +128,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
     def test_upload_data_asset_post_invalid_plist(self):
         notaplist = BytesIO(b"-")
         notaplist.name = "test.plist"
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_data_asset"),
                                     {"type": str(DataAsset.Type.PLIST),
                                      "file": notaplist,
@@ -156,7 +142,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
     def test_upload_data_asset_post_plist(self):
         plistfile = build_plistfile()
         name = get_random_string(12)
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_data_asset"),
                                     {"type": str(DataAsset.Type.PLIST),
                                      "file": plistfile,
@@ -183,7 +169,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
     def test_upload_data_asset_post_invalid_zip_ext(self):
         notazip = BytesIO(b"-")
         notazip.name = "test.yolo"
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_data_asset"),
                                     {"type": str(DataAsset.Type.ZIP),
                                      "file": notazip,
@@ -197,7 +183,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
     def test_upload_data_asset_post_invalid_zip(self):
         notazip = BytesIO(b"-")
         notazip.name = "test.zip"
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_data_asset"),
                                     {"type": str(DataAsset.Type.ZIP),
                                      "file": notazip,
@@ -211,7 +197,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
     def test_upload_data_asset_post_zip(self):
         zipfile = build_zipfile()
         name = get_random_string(12)
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_data_asset"),
                                     {"type": str(DataAsset.Type.ZIP),
                                      "file": zipfile,
@@ -237,17 +223,17 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
 
     def test_upgrade_data_asset_get_redirect(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
-        self._login_redirect(reverse("mdm:upgrade_data_asset", args=(artifact.pk,)))
+        self.login_redirect("upgrade_data_asset", artifact.pk)
 
     def test_upgrade_data_asset_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
-        self._login("mdm.change_artifactversion")  # upgrade is creation of a new version
+        self.login("mdm.change_artifactversion")  # upgrade is creation of a new version
         response = self.client.get(reverse("mdm:upgrade_data_asset", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_upgrade_data_asset_get(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
-        self._login("mdm.add_artifactversion")
+        self.login("mdm.add_artifactversion")
         response = self.client.get(reverse("mdm:upgrade_data_asset", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
@@ -258,7 +244,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
         artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
         same_zipfile = BytesIO(artifact_version.data_asset.file.open("rb").read())
         same_zipfile.name = get_random_string(12) + ".zip"
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_data_asset", args=(artifact.pk,)),
                                     {"type": str(DataAsset.Type.PLIST),
                                      "file": same_zipfile,
@@ -288,7 +274,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
             {str(artifact_version.pk)}
         )
         new_zipfile = build_zipfile(random=True)
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_data_asset", args=(artifact.pk,)),
                                     {"type": str(DataAsset.Type.ZIP),
                                      "file": new_zipfile,

@@ -7,7 +7,7 @@ class ZentralInventoryAppConfig(ZentralAppConfig):
     verbose_name = "Zentral inventory contrib app"
     permission_models = (
         "androidapp",
-        "bunsinessunit",
+        "businessunit",
         "debpackage",
         "file",
         "iosapp",
@@ -15,9 +15,7 @@ class ZentralInventoryAppConfig(ZentralAppConfig):
         "link",
         "machinegroup",
         "machinesnapshot",
-        "machinetag",
         "metabusinessunit",
-        "metabusinessunittag",
         "osxapp",
         "osxappinstance",
         "program",

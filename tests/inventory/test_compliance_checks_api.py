@@ -1,19 +1,19 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from rest_framework.test import APITestCase
+
 from accounts.models import APIToken, User
-from zentral.core.compliance_checks.models import ComplianceCheck
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.events import JMESPathCheckCreated, JMESPathCheckDeleted, JMESPathCheckUpdated
 from zentral.contrib.inventory.models import JMESPathCheck, Tag
 from zentral.contrib.inventory.compliance_checks import InventoryJMESPathCheck
+from zentral.core.compliance_checks.models import ComplianceCheck
 
 
-class JMESPathCheckAPITests(APITestCase):
+class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(
@@ -25,24 +25,23 @@ class JMESPathCheckAPITests(APITestCase):
         cls.user.groups.set([cls.group])
         _, cls.api_key = APIToken.objects.create_for_user(cls.user)
 
-    def setUp(self):
-        super().setUp()
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + self.api_key)
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "inventory_api"
+
+    # RequestCase implementation
+
+    def _get_api_key(self):
+        return self.api_key
 
     # utils
-
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
 
     def force_compliance_check(self, name=None, jmespath_expression=None, source_name=None, platforms=None, tags=None):
         if name is None:
@@ -71,7 +70,7 @@ class JMESPathCheckAPITests(APITestCase):
     # create compliance check
 
     def test_create_jpcc_unauthorized(self):
-        response = self.client.post(reverse('inventory_api:jmespath_checks'), {}, format='json')
+        response = self.post(reverse('inventory_api:jmespath_checks'), {})
         self.assertEqual(response.status_code, 403)
 
     def test_create_jpcc_name_conflict(self):
@@ -92,7 +91,7 @@ class JMESPathCheckAPITests(APITestCase):
             "tags": [t.id for t in tags],
         }
         self.set_permissions('inventory.add_jmespathcheck')
-        response = self.client.post(reverse('inventory_api:jmespath_checks'), data, format='json')
+        response = self.post(reverse('inventory_api:jmespath_checks'), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['name'], ['A Inventory JMESPath check with this name already exists.'])
 
@@ -115,7 +114,7 @@ class JMESPathCheckAPITests(APITestCase):
         }
         self.set_permissions('inventory.add_jmespathcheck')
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(reverse('inventory_api:jmespath_checks'), data, format='json')
+            response = self.post(reverse('inventory_api:jmespath_checks'), data)
         self.assertEqual(response.status_code, 201)
         jpcc = JMESPathCheck.objects.get(compliance_check__name=name)
         self.assertEqual(jpcc.compliance_check.description, description)
@@ -148,7 +147,7 @@ class JMESPathCheckAPITests(APITestCase):
         }
         self.set_permissions('inventory.add_jmespathcheck')
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(reverse('inventory_api:jmespath_checks'), data, format='json')
+            response = self.post(reverse('inventory_api:jmespath_checks'), data)
         self.assertEqual(response.status_code, 201)
         jpcc = JMESPathCheck.objects.get(compliance_check__name=name)
         self.assertEqual(jpcc.compliance_check.description, "")
@@ -180,7 +179,7 @@ class JMESPathCheckAPITests(APITestCase):
         }
         self.set_permissions('inventory.add_jmespathcheck')
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(reverse('inventory_api:jmespath_checks'), data, format='json')
+            response = self.post(reverse('inventory_api:jmespath_checks'), data)
         self.assertEqual(response.status_code, 201)
         jpcc = JMESPathCheck.objects.get(compliance_check__name=name)
         self.assertEqual(jpcc.compliance_check.description, "")
@@ -199,14 +198,14 @@ class JMESPathCheckAPITests(APITestCase):
 
     def test_get_jpcc_unauthorized(self):
         jpcc = self.force_compliance_check()
-        response = self.client.get(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)))
+        response = self.get(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_get_jpcc(self):
         tags = [Tag.objects.create(name=get_random_string(12))]
         jpcc = self.force_compliance_check(tags=tags)
         self.set_permissions('inventory.view_jmespathcheck')
-        response = self.client.get(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)))
+        response = self.get(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -226,7 +225,7 @@ class JMESPathCheckAPITests(APITestCase):
 
     def test_update_jpcc_unauthorized(self):
         jpcc = self.force_compliance_check()
-        response = self.client.put(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)), {}, format='json')
+        response = self.put(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)), {})
         self.assertEqual(response.status_code, 403)
 
     def test_update_jpcc_name_conflict(self):
@@ -242,7 +241,7 @@ class JMESPathCheckAPITests(APITestCase):
             "tags": [t.id for t in jpcc.tags.all()],
         }
         self.set_permissions('inventory.add_jmespathcheck')
-        response = self.client.post(reverse('inventory_api:jmespath_checks'), data, format='json')
+        response = self.post(reverse('inventory_api:jmespath_checks'), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['name'], ['A Inventory JMESPath check with this name already exists.'])
 
@@ -265,7 +264,7 @@ class JMESPathCheckAPITests(APITestCase):
         }
         self.set_permissions('inventory.change_jmespathcheck')
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.put(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)), data, format='json')
+            response = self.put(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)), data)
         self.assertEqual(response.status_code, 200)
         jpcc.refresh_from_db()
         self.assertEqual(jpcc.compliance_check.name, new_name)
@@ -295,7 +294,7 @@ class JMESPathCheckAPITests(APITestCase):
         }
         self.set_permissions('inventory.change_jmespathcheck')
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.put(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)), data, format='json')
+            response = self.put(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)), data)
         self.assertEqual(response.status_code, 200)
         jpcc.refresh_from_db()
         self.assertEqual(jpcc.platforms, [])
@@ -310,7 +309,7 @@ class JMESPathCheckAPITests(APITestCase):
 
     def test_delete_jpcc_unauthorized(self):
         jpcc = self.force_compliance_check()
-        response = self.client.delete(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)))
+        response = self.delete(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)))
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -319,7 +318,7 @@ class JMESPathCheckAPITests(APITestCase):
         cc_pk = jpcc.compliance_check.pk
         self.set_permissions("inventory.delete_jmespathcheck")
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.delete(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)))
+            response = self.delete(reverse('inventory_api:jmespath_check', args=(jpcc.pk,)))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(JMESPathCheck.objects.filter(pk=jpcc.pk).count(), 0)
         # event
@@ -331,14 +330,14 @@ class JMESPathCheckAPITests(APITestCase):
     # list compliance check
 
     def test_list_jpcc_unauthorized(self):
-        response = self.client.get(reverse('inventory_api:jmespath_checks'))
+        response = self.get(reverse('inventory_api:jmespath_checks'))
         self.assertEqual(response.status_code, 403)
 
     def test_list_jpcc(self):
         tags = [Tag.objects.create(name=get_random_string(12))]
         jpcc = self.force_compliance_check(tags=tags)
         self.set_permissions('inventory.view_jmespathcheck')
-        response = self.client.get(reverse('inventory_api:jmespath_checks'))
+        response = self.get(reverse('inventory_api:jmespath_checks'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -359,7 +358,7 @@ class JMESPathCheckAPITests(APITestCase):
         self.force_compliance_check(tags=tags)
         jpcc = self.force_compliance_check(tags=tags)
         self.set_permissions('inventory.view_jmespathcheck')
-        response = self.client.get(reverse('inventory_api:jmespath_checks'), data={"name": jpcc.compliance_check.name})
+        response = self.get(reverse('inventory_api:jmespath_checks'), data={"name": jpcc.compliance_check.name})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),

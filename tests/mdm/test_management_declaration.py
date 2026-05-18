@@ -1,46 +1,32 @@
-from functools import reduce
 import json
-import operator
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.mdm.models import Artifact, Channel, Platform
 from .utils import force_artifact, force_blueprint_artifact
 
 
-class MDMDeclarationManagementViewsTestCase(TestCase):
+class MDMDeclarationManagementViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url, data=None):
-        if data:
-            func = self.client.post
-        else:
-            func = self.client.get
-        response = func(url, data=data)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # model
 
@@ -92,16 +78,16 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
 
     def test_create_declaration_get_redirect(self):
         for suffix in ("activation", "asset", "configuration", "manual_configuration"):
-            self._login_redirect(reverse(f"mdm:create_{suffix}"))
+            self.login_redirect(f"create_{suffix}")
 
     def test_create_declaration_get_permission_denied(self):
-        self._login()
+        self.login()
         for suffix in ("activation", "asset", "configuration", "manual_configuration"):
             response = self.client.get(reverse(f"mdm:create_{suffix}"))
             self.assertEqual(response.status_code, 403)
 
     def test_create_declaration_get(self):
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         for suffix in ("activation", "asset", "configuration", "manual_configuration"):
             response = self.client.get(reverse(f"mdm:create_{suffix}"))
             self.assertEqual(response.status_code, 200)
@@ -111,16 +97,16 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
 
     def test_create_declaration_post_redirect(self):
         for suffix in ("activation", "asset", "configuration", "manual_configuration"):
-            self._login_redirect(reverse(f"mdm:create_{suffix}"), {"yolo": "fomo"})
+            self.login_redirect(f"create_{suffix}", data={"yolo": "fomo"})
 
     def test_create_declaration_post_permission_denied(self):
-        self._login()
+        self.login()
         for suffix in ("activation", "asset", "configuration", "manual_configuration"):
             response = self.client.post(reverse(f"mdm:create_{suffix}"), {"yolo": "fomo"})
             self.assertEqual(response.status_code, 403)
 
     def test_create_declaration_post_invalid_declaration_type(self):
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         for artifact_type in (t for t in Artifact.Type if t.is_raw_declaration):
             suffix = artifact_type.label.lower().replace(" ", "_")
             response = self.client.post(reverse(f"mdm:create_{suffix}"),
@@ -139,7 +125,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
 
     def test_create_declaration_post_name_conflict(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         response = self.client.post(reverse("mdm:create_asset"),
                                     {"source": json.dumps({
                                         "Identifier": "yolo",
@@ -156,7 +142,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
 
     def test_create_declaration_post_identifier_conflict(self):
         _, (av,) = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         response = self.client.post(reverse("mdm:create_asset"),
                                     {"source": json.dumps({
                                         "Identifier": av.declaration.identifier,
@@ -173,7 +159,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
 
     def test_create_declaration_post_server_token_conflict(self):
         _, (av,) = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         response = self.client.post(reverse("mdm:create_asset"),
                                     {"source": json.dumps({
                                         "Identifier": "yolo",
@@ -191,7 +177,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
 
     def test_create_declaration_post_different_channel(self):
         artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         identifier = get_random_string(12)
         response = self.client.post(reverse("mdm:create_configuration"),
                                     {"source": json.dumps({
@@ -215,7 +201,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
             artifact_type=Artifact.Type.DATA_ASSET,
             platforms=[Platform.IOS],
         )
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         identifier = get_random_string(12)
         response = self.client.post(reverse("mdm:create_configuration"),
                                     {"source": json.dumps({
@@ -238,7 +224,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
         data_asset_artifact, (data_asset_artifact_version,) = force_artifact(
             artifact_type=Artifact.Type.DATA_ASSET,
         )
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         name = get_random_string(12)
         identifier = get_random_string(12)
         response = self.client.post(reverse("mdm:create_configuration"),
@@ -285,28 +271,28 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
 
     def test_upgrade_declaration_get_redirect(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        self._login_redirect(reverse("mdm:upgrade_declaration", args=(artifact.pk,)))
+        self.login_redirect("upgrade_declaration", artifact.pk)
 
     def test_upgrade_declaration_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:upgrade_declaration", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_upgrade_declaration_post_redirect(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        self._login_redirect(reverse("mdm:upgrade_declaration", args=(artifact.pk,)), {"un": 2})
+        self.login_redirect("upgrade_declaration", artifact.pk, data={"un": 2})
 
     def test_upgrade_declaration_post_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        self._login("mdm.change_artifactversion")
+        self.login("mdm.change_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_declaration", args=(artifact.pk,)), {"un": 2})
         self.assertEqual(response.status_code, 403)
 
     def test_upgrade_declaration_post_different_type_error(self):
         artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
         declaration = artifact_version.declaration
-        self._login("mdm.add_artifactversion")
+        self.login("mdm.add_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_declaration", args=(artifact.pk,)),
                                     {"source": json.dumps({
                                      "Identifier": declaration.identifier,
@@ -323,7 +309,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
     def test_upgrade_declaration_post_different_identifier_error(self):
         artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
         declaration = artifact_version.declaration
-        self._login("mdm.add_artifactversion")
+        self.login("mdm.add_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_declaration", args=(artifact.pk,)),
                                     {"source": json.dumps({
                                      "Identifier": "yolo",
@@ -340,7 +326,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
     def test_upgrade_declaration_post_same_payload_error(self):
         artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
         declaration = artifact_version.declaration
-        self._login("mdm.add_artifactversion")
+        self.login("mdm.add_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_declaration", args=(artifact.pk,)),
                                     {"source": json.dumps({
                                      "Identifier": declaration.identifier,
@@ -358,7 +344,7 @@ class MDMDeclarationManagementViewsTestCase(TestCase):
         bpa, artifact, (artifact_version,) = force_blueprint_artifact(artifact_type=Artifact.Type.CONFIGURATION)
         blueprint = bpa.blueprint
         declaration = artifact_version.declaration
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_declaration", args=(artifact.pk,)),
                                     {"source": json.dumps({
                                      "Identifier": declaration.identifier,

@@ -3,11 +3,13 @@ import uuid
 from hashlib import blake2b
 from itertools import chain
 
+from cedarpy import format_policies, policies_to_json_str, validate_policies
 import pyotp
 from django.contrib.auth.models import AbstractUser, Group
 from django.contrib.auth.models import UserManager as DjangoUserManager
 from django.contrib.postgres.fields import ArrayField
-from django.core.validators import MaxValueValidator, MinValueValidator, URLValidator
+from django.core.exceptions import ValidationError
+from django.core.validators import MinLengthValidator, MaxValueValidator, MinValueValidator, URLValidator
 from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Now
@@ -367,3 +369,84 @@ class OIDCAPITokenIssuer(models.Model):
 class UserTask(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     task_result = models.OneToOneField(TaskResult, on_delete=models.CASCADE)
+
+
+class PolicyManager(models.Manager):
+    def not_provisioned(self):
+        return self.filter(provisioning_uid__isnull=True)
+
+    def for_deletion(self):
+        return self.not_provisioned()
+
+    def for_update(self):
+        return self.not_provisioned()
+
+
+class Policy(models.Model):
+    class Type(models.TextChoices):
+        CEDAR = "CEDAR", _("Cedar")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    provisioning_uid = models.CharField(max_length=256, unique=True, null=True, editable=False)
+    name = models.CharField(unique=True, validators=[MinLengthValidator(1)])
+    is_active = models.BooleanField(default=True)
+    description = models.TextField(blank=True)
+    type = models.CharField(max_length=64, choices=Type.choices, default=Type.CEDAR)
+    source = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    objects = PolicyManager()
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("accounts:policy", args=(self.pk,))
+
+    def clean(self):
+        # Parse first: policies_to_json_str surfaces a useful cedarpy error
+        # message (e.g. "unexpected end of input", "invalid policy effect",
+        # "unexpected token `…`"); format_policies just says "cannot parse
+        # input policies" for any failure.
+        try:
+            policies_to_json_str(self.source)
+        except Exception as exc:
+            raise ValidationError({"source": f"Invalid CEDAR policy: {exc}"})
+        # Schema validation: catches typo'd action ids, unknown entity
+        # types, and context-attribute type mismatches at policy-write
+        # time so operators don't discover the problem at decision time
+        # (where the only signal would be "this rule never grants").
+        # Imported lazily so accounts/models.py doesn't pull in the
+        # whole pbac module at Django app-loading time.
+        from pbac.engine import engine
+        result = validate_policies(self.source, engine.cedar_schema_json)
+        if not result.validation_passed:
+            raise ValidationError({
+                "source": "Invalid CEDAR policy: " + "; ".join(str(e) for e in result.errors)
+            })
+        self.source = format_policies(self.source)
+
+    def can_be_deleted(self):
+        return Policy.objects.for_deletion().filter(pk=self.pk).exists()
+
+    def can_be_updated(self):
+        return Policy.objects.for_update().filter(pk=self.pk).exists()
+
+    def serialize_for_event(self, keys_only=False):
+        d = {
+            "pk": str(self.pk),
+            "name": self.name,
+        }
+        if keys_only:
+            return d
+        d.update({
+            "is_active": self.is_active,
+            "description": self.description,
+            "type": self.type,
+            "source": self.source,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        if self.provisioning_uid:
+            d["provisioning_uid"] = self.provisioning_uid
+        return d

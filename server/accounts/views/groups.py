@@ -1,5 +1,4 @@
 import logging
-from collections import OrderedDict
 
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.contrib.auth.models import Group
@@ -52,15 +51,6 @@ class GroupView(PermissionRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        permissions = OrderedDict()
-        permission_count = 0
-        for permission in self.object.permissions.select_related("content_type").all():
-            content_type = permission.content_type
-            codename = permission.codename.replace(f"_{content_type.model}", "")
-            permissions.setdefault(content_type, []).append(codename)
-            permission_count += 1
-        ctx["permissions"] = permissions.items()
-        ctx["permission_count"] = permission_count
         qs = self.object.user_set.all().order_by("username", "email", "last_name", "first_name")
         users = qs.filter(is_service_account=False)
         ctx["users"] = users

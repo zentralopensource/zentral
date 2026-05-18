@@ -1,12 +1,10 @@
-import functools
 import logging
-import operator
 from datetime import timedelta
+import re
 
 import celpy
-from django.contrib.auth.models import Permission
+from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -18,37 +16,15 @@ from .forms import (
     make_oidc_api_token_issuer_issuer_uri_validator,
     make_oidc_api_token_issuer_user_validator,
 )
-from .models import APIToken, Group, OIDCAPITokenIssuer, ProvisionedRole, User
+from .models import APIToken, Group, OIDCAPITokenIssuer, Policy, ProvisionedRole, User
 
 logger = logging.getLogger("server.accounts.serializer")
 
 
 class RoleSerializer(serializers.ModelSerializer):
-    permissions = serializers.ListField(child=serializers.CharField(min_length=1), required=False)
-
     class Meta:
         model = Group
-        fields = (
-            "name",
-            "permissions",
-        )
-
-    def validate(self, data):
-        data_permissions = data.pop("permissions", [])
-        data = super().validate(data)
-        permission_filters = []
-        if data_permissions:
-            for data_permission in data_permissions:
-                try:
-                    app_label, codename = data_permission.split(".", 1)
-                except ValueError:
-                    pass
-                permission_filters.append(Q(content_type__app_label=app_label, codename=codename))
-        if permission_filters:
-            data["permissions"] = Permission.objects.filter(functools.reduce(operator.or_, permission_filters))
-        else:
-            data["permissions"] = []
-        return data
+        fields = ("name",)
 
     def create(self, validated_data):
         provisioning_uid = validated_data.pop("provisioning_uid", None)
@@ -56,6 +32,45 @@ class RoleSerializer(serializers.ModelSerializer):
         if provisioning_uid:
             ProvisionedRole.objects.create(group=role, provisioning_uid=provisioning_uid)
         return role
+
+
+class PolicyProvisioningSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Policy
+        fields = (
+            "name",
+            "is_active",
+            "description",
+            "source",
+        )
+
+    def validate_source(self, value):
+        # The provisioning UIDs for the roles in the source are replaced by the PKs.
+        if value:
+            role_provisioning_uids = []
+            for match in re.finditer(r'Role::"(\S+)"', value):
+                role_provisioning_uid = match.group(1)
+                if role_provisioning_uid not in role_provisioning_uids:
+                    role_provisioning_uids.append(role_provisioning_uid)
+            if role_provisioning_uids:
+                for role_provisioning_uid, role_pk in Group.objects.filter(
+                    provisioned_role__provisioning_uid__in=role_provisioning_uids
+                ).values_list("provisioned_role__provisioning_uid", "pk"):
+                    value = value.replace(
+                        f'Role::"{role_provisioning_uid}"',
+                        f'Role::"{role_pk}"',
+                    )
+        return value
+
+    def validate(self, data):
+        # Run the model-level clean()
+        instance = self.Meta.model(**data)
+        try:
+            instance.clean_fields()
+            instance.clean()
+        except ValidationError as e:
+            raise serializers.ValidationError(e.message_dict)
+        return data
 
 
 class OIDCAPITokenIssuerSerializer(serializers.ModelSerializer):

@@ -419,15 +419,11 @@ class TagFilter(BaseMSFilter):
         return [("left join lateral ("
                  "select distinct * "
                  "from inventory_tag "
-                 "where id in ("
-                 "select mt.tag_id "
+                 "where exists ("
+                 "select mt.id "
                  "from inventory_machinetag as mt "
                  "where mt.serial_number = ms.serial_number "
-                 "union "
-                 "select mbut.tag_id "
-                 "from inventory_metabusinessunittag as mbut "
-                 "join inventory_businessunit as bu on (bu.meta_business_unit_id = mbut.meta_business_unit_id) "
-                 "where bu.id = ms.business_unit_id "
+                 "and mt.tag_id = inventory_tag.id"
                  ")"
                  ") t on TRUE"),
                 "left join inventory_metabusinessunit as tmbu on (tmbu.id = t.meta_business_unit_id)"]

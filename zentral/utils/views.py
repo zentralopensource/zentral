@@ -1,9 +1,18 @@
 import json
+import logging
+
+from django.contrib.auth.mixins import AccessMixin
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import HttpResponseServerError
 from django.views.defaults import server_error as django_server_error
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
+
+from pbac.engine import engine
 from zentral.core.events.base import AuditEvent
+
+
+logger = logging.getLogger("zentral.utils.views")
 
 
 class UserPaginationMixin:
@@ -109,3 +118,20 @@ def server_error(request, *args, **kwargs):
             content_type=json_content_type
         )
     return django_server_error(request)
+
+
+class PBACViewMixin(AccessMixin):
+    pbac_request_class = None
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        pbac_request = self.pbac_request_class(
+            request.user,
+            **self.get_pbac_request_kwargs(kwargs),
+        )
+        engine.authorize_request(pbac_request)
+        if not pbac_request.is_authorized:
+            logger.error("Permission denied %s", pbac_request, extra={"request": request})
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)

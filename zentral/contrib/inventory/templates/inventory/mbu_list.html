@@ -52,7 +52,6 @@
                 <tr>
                     <th></th>
                     <th>Name</th>
-                    <th>Tags</th>
                     <th>API enrollment</th>
                     <th></th>
                 </tr>
@@ -72,22 +71,11 @@
                     {% endif %}
                 </td>
                 <td>
-                {% for tag in mbu.tags %}
-                    {% inventory_tag tag %}
-                {% endfor %}
-                </td>
-                <td>
                     {% if mbu.api_enrollment_enabled %}
                     <span class="badge text-bg-success">Available for API enrollment</span>
                     {% endif %}
                 </td>
                 <td class="text-end py-0">
-                    {% if perms.inventory.view_metabusinessunittag and perms.inventory.add_metabusinessunittag and perms.inventory.change_metabusinessunittag and perms.inventory.delete_metabusinessunittag and perms.inventory.add_tag %}
-                        <a href="{% url 'inventory:mbu_tags' mbu.id %}" class="btn btn-link"
-                            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Manage Tags">
-                            <i class="bi bi-tags"></i>
-                        </a>
-                    {% endif %}
                     {% if perms.mbu.change_metabusinessunit %}
                         {% url 'inventory:update_mbu' mbu.pk as url %}
                         {% button 'UPDATE' url "Edit Business Unit" %}

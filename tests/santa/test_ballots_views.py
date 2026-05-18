@@ -1,25 +1,19 @@
 from datetime import datetime, timedelta
-from functools import reduce
-from importlib import import_module
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.conf import settings
-from django.db.models import Q
-from django.http import HttpRequest
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
-from realms.backends.views import finalize_session
-from realms.models import RealmAuthenticationSession
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.santa.ballot_box import DuplicateVoteError, VotingNotAllowedError
 from zentral.contrib.santa.events import SantaBallotEvent, SantaTargetStateUpdateEvent
 from zentral.contrib.santa.models import Ballot, Target, TargetState
 from .utils import add_file_to_test_class, force_ballot, force_configuration, force_realm, force_realm_user
 
 
-class SantaBallotsViewsTestCase(TestCase):
+class SantaBallotsViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         # user
@@ -35,67 +29,35 @@ class SantaBallotsViewsTestCase(TestCase):
             default_voting_weight=1,
         )
 
-    # utility methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions, realm_user=False):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        if not realm_user:
-            self.client.force_login(self.user)
-        else:
-            # see https://github.com/django/django/blob/705066d186ce880bf64142e47084f3d8df3c2352/django/test/client.py#L785  # NOQA
-            request = HttpRequest()
-            # HACK
-            # see https://github.com/django/django/blob/705066d186ce880bf64142e47084f3d8df3c2352/django/contrib/auth/__init__.py#L141-L142  # NOQA
-            # so that the user is attached to the request. The realm callback expects a user on the request!
-            request.user = None
-            if self.client.session:
-                request.session = self.client.session
-            else:
-                engine = import_module(settings.SESSION_ENGINE)
-                request.session = engine.SessionStore()
-            ras = RealmAuthenticationSession.objects.create(
-                realm=self.realm,
-                callback="realms.utils.login_callback",
-            )
-            finalize_session(ras, request, self.realm_user)
-            request.session.save()
-            session_cookie = settings.SESSION_COOKIE_NAME
-            self.client.cookies[session_cookie] = request.session.session_key
-            cookie_data = {
-                "max-age": None,
-                "path": "/",
-                "domain": settings.SESSION_COOKIE_DOMAIN,
-                "secure": settings.SESSION_COOKIE_SECURE or None,
-                "expires": None,
-            }
-            self.client.cookies[session_cookie].update(cookie_data)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "santa"
+
+    def _get_realm(self):
+        return self.realm
+
+    def _get_realm_user(self):
+        return self.realm_user
 
     # ballots
 
     def test_ballots_redirect(self):
-        self._login_redirect(reverse("santa:ballots"))
+        self.login_redirect("ballots")
 
     def test_ballots_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:ballots"))
         self.assertEqual(response.status_code, 403)
 
     def test_no_ballots_no_filters(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         response = self.client.get(reverse("santa:ballots"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/ballots.html")
@@ -103,7 +65,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertNotContains(response, "We didn't find any item related to your search")
 
     def test_ballots_no_filters(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 1)])
         response = self.client.get(reverse("santa:ballots"))
         self.assertEqual(response.status_code, 200)
@@ -113,7 +75,7 @@ class SantaBallotsViewsTestCase(TestCase):
     @patch("zentral.contrib.santa.views.ballots.BallotsView.get_paginate_by")
     def test_ballots_no_filters_next_page(self, get_paginate_by):
         get_paginate_by.return_value = 1
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 1)])
         force_ballot(self.bundle_target, self.realm_user, [(self.configuration, True, 1)])
         response = self.client.get(reverse("santa:ballots"), {"page": "yolo"})
@@ -125,7 +87,7 @@ class SantaBallotsViewsTestCase(TestCase):
     @patch("zentral.contrib.santa.views.ballots.BallotsView.get_paginate_by")
     def test_ballots_no_filters_prev_page(self, get_paginate_by):
         get_paginate_by.return_value = 1
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 1)])
         force_ballot(self.bundle_target, self.realm_user, [(self.configuration, True, 1)])
         response = self.client.get(reverse("santa:ballots"), {"page": 2})
@@ -135,7 +97,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertContains(response, "page 2 of 2")
 
     def test_ballots_target_type_filter(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         force_ballot(self.metabundle_target, self.realm_user, [(self.configuration, True, 934)])
         response = self.client.get(reverse("santa:ballots"), {"target_type": Target.Type.METABUNDLE})
@@ -146,7 +108,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertNotContains(response, "+192")
 
     def test_ballots_target_identifier_filter(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         force_ballot(self.metabundle_target, self.realm_user, [(self.configuration, True, 934)])
         response = self.client.get(reverse("santa:ballots"), {"target_identifier": self.metabundle_sha256})
@@ -157,7 +119,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertNotContains(response, "+192")
 
     def test_ballots_target_state_filter(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         force_ballot(self.metabundle_target, self.realm_user, [(self.configuration, False, 934)])
         TargetState.objects.create(
@@ -174,7 +136,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertNotContains(response, "-934")
 
     def test_ballots_configuration_filter(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         configuration = force_configuration(voting_realm=self.realm)
         force_ballot(self.metabundle_target, self.realm_user, [(configuration, False, 934)])
@@ -187,7 +149,7 @@ class SantaBallotsViewsTestCase(TestCase):
 
     def test_ballots_realm_user_filter(self):
         _, realm_user2 = force_realm_user(realm=self.realm)
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         force_ballot(self.metabundle_target, realm_user2, [(self.configuration, False, 934)])
         response = self.client.get(reverse("santa:ballots"), {"realm_user": realm_user2.username})
@@ -198,7 +160,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertContains(response, "-934")
 
     def test_ballots_yes_vote_filter(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         force_ballot(self.metabundle_target, self.realm_user, [(self.configuration, False, 934)])
         response = self.client.get(reverse("santa:ballots"), {"include_yes_votes": "on"})
@@ -209,7 +171,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertNotContains(response, "-934")
 
     def test_ballots_no_vote_filter(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         force_ballot(self.metabundle_target, self.realm_user, [(self.configuration, False, 934)])
         response = self.client.get(reverse("santa:ballots"), {"include_no_votes": "on"})
@@ -220,7 +182,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertContains(response, "-934")
 
     def test_ballots_revised_ballot_not_included(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         ballot = force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         force_ballot(self.file_target, self.realm_user, [(self.configuration, False, 934)], replaced_by=ballot)
         response = self.client.get(reverse("santa:ballots"))
@@ -231,7 +193,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertNotContains(response, "-934")
 
     def test_ballots_revised_ballot_included(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         ballot = force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         force_ballot(self.file_target, self.realm_user, [(self.configuration, False, 934)], replaced_by=ballot)
         response = self.client.get(reverse("santa:ballots"), {"include_revised_ballots": "on"})
@@ -242,7 +204,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertContains(response, "-934")
 
     def test_ballots_reset_ballot_not_included(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         reset_ballot = force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         reset_ballot.created_at -= timedelta(days=10)
         reset_ballot.save()
@@ -263,7 +225,7 @@ class SantaBallotsViewsTestCase(TestCase):
         self.assertContains(response, "+193")
 
     def test_ballots_reset_ballot_included(self):
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         reset_ballot = force_ballot(self.file_target, self.realm_user, [(self.configuration, True, 192)])
         reset_ballot.created_at -= timedelta(days=10)
         reset_ballot.save()
@@ -285,7 +247,7 @@ class SantaBallotsViewsTestCase(TestCase):
 
     def test_ballots_todo_filter(self):
         _, realm_user2 = force_realm_user(realm=self.realm)
-        self._login("santa.view_ballot")
+        self.login("santa.view_ballot")
         TargetState.objects.create(
             target=self.file_target,
             configuration=self.configuration,
@@ -305,27 +267,27 @@ class SantaBallotsViewsTestCase(TestCase):
     # cast ballot
 
     def test_cast_ballot_redirect(self):
-        self._login_redirect(reverse("santa:cast_ballot"))
+        self.login_redirect("cast_ballot")
 
     def test_cast_ballot_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("santa:cast_ballot"))
         self.assertEqual(response.status_code, 403)
 
     def test_cast_ballot_no_target(self):
-        self._login("santa.add_ballot")
+        self.login("santa.add_ballot")
         response = self.client.get(reverse("santa:cast_ballot"))
         self.assertEqual(response.status_code, 404)
 
     def test_cast_ballot_file_target_no_realm_user(self):
-        self._login("santa.add_ballot")
+        self.login("santa.add_ballot")
         response = self.client.get(reverse("santa:cast_ballot"),
                                    {"target_type": self.file_target.type,
                                     "target_identifier": self.file_target.identifier})
         self.assertEqual(response.status_code, 403)
 
     def test_cast_ballot_get(self):
-        self._login("santa.add_ballot", realm_user=True)
+        self.login("santa.add_ballot", realm_user=True)
         response = self.client.get(reverse("santa:cast_ballot"),
                                    {"target_type": self.file_target.type,
                                     "target_identifier": self.file_target.identifier})
@@ -335,7 +297,7 @@ class SantaBallotsViewsTestCase(TestCase):
     def test_cast_ballot_post_form_error(self):
         ballot_qs = Ballot.objects.filter(target=self.bundle_target)
         self.assertEqual(ballot_qs.count(), 0)
-        self._login("santa.add_ballot", realm_user=True)
+        self.login("santa.add_ballot", realm_user=True)
         response = self.client.post(reverse("santa:cast_ballot")
                                     + f"?target_type=BUNDLE&target_identifier={self.bundle_sha256}",
                                     {f"cfg-{self.configuration.pk}-yes_no": "NO"},  # no vote on bundle → error
@@ -348,7 +310,7 @@ class SantaBallotsViewsTestCase(TestCase):
     def test_cast_ballot_post_empty_ballot(self):
         ballot_qs = Ballot.objects.filter(target=self.bundle_target)
         self.assertEqual(ballot_qs.count(), 0)
-        self._login("santa.add_ballot", realm_user=True)
+        self.login("santa.add_ballot", realm_user=True)
         response = self.client.post(reverse("santa:cast_ballot")
                                     + f"?target_type=BUNDLE&target_identifier={self.bundle_sha256}",
                                     {f"cfg-{self.configuration.pk}-yes_no": "NOVOTE"},
@@ -363,7 +325,7 @@ class SantaBallotsViewsTestCase(TestCase):
         cast_votes.side_effect = DuplicateVoteError
         ballot_qs = Ballot.objects.filter(target=self.bundle_target)
         self.assertEqual(ballot_qs.count(), 0)
-        self._login("santa.add_ballot", realm_user=True)
+        self.login("santa.add_ballot", realm_user=True)
         response = self.client.post(reverse("santa:cast_ballot")
                                     + f"?target_type=BUNDLE&target_identifier={self.bundle_sha256}",
                                     {f"cfg-{self.configuration.pk}-yes_no": "YES"},
@@ -378,7 +340,7 @@ class SantaBallotsViewsTestCase(TestCase):
         cast_votes.side_effect = VotingNotAllowedError
         ballot_qs = Ballot.objects.filter(target=self.bundle_target)
         self.assertEqual(ballot_qs.count(), 0)
-        self._login("santa.add_ballot", realm_user=True)
+        self.login("santa.add_ballot", realm_user=True)
         response = self.client.post(reverse("santa:cast_ballot")
                                     + f"?target_type=BUNDLE&target_identifier={self.bundle_sha256}",
                                     {f"cfg-{self.configuration.pk}-yes_no": "YES"},
@@ -392,7 +354,7 @@ class SantaBallotsViewsTestCase(TestCase):
     def test_cast_ballot_post_yes(self, post_event):
         ballot_qs = Ballot.objects.filter(target=self.metabundle_target)
         self.assertEqual(ballot_qs.count(), 0)
-        self._login("santa.add_ballot", "santa.view_target", realm_user=True)
+        self.login("santa.add_ballot", "santa.view_target", realm_user=True)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("santa:cast_ballot")
                                         + f"?target_type=METABUNDLE&target_identifier={self.metabundle_sha256}",
@@ -417,7 +379,7 @@ class SantaBallotsViewsTestCase(TestCase):
     def test_cast_ballot_post_no(self):
         ballot_qs = Ballot.objects.filter(target=self.file_target)
         self.assertEqual(ballot_qs.count(), 0)
-        self._login("santa.add_ballot", "santa.view_target", realm_user=True)
+        self.login("santa.add_ballot", "santa.view_target", realm_user=True)
         response = self.client.post(reverse("santa:cast_ballot")
                                     + f"?target_type=BINARY&target_identifier={self.file_sha256}",
                                     {f"cfg-{self.configuration.pk}-yes_no": "NO"},

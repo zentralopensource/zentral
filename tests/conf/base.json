@@ -40,10 +40,7 @@
             "name": "First role"
           },
           "second-role": {
-            "name": "Second role",
-            "permissions": [
-              "inventory.view_machinesnapshot"
-            ]
+            "name": "Second role"
           }
         }
       }

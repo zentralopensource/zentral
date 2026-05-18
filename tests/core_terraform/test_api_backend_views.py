@@ -1,21 +1,20 @@
 import base64
-from functools import reduce
 import json
-import operator
 from urllib.parse import urlencode
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.terraform.models import Lock, State
 from zentral.core.terraform.api_views import MAX_VERSIONS_PER_STATE
 from .utils import build_lock_info, force_state, force_state_version
 
 
-class TerraformBackendAPIViewsTestCase(TestCase):
+class TerraformBackendAPIViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -29,28 +28,18 @@ class TerraformBackendAPIViewsTestCase(TestCase):
         cls.service_account.groups.set([cls.group])
         _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "terraform_api"
+
     # utility methods
-
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
 
     def _make_request(
         self, method, url,
@@ -116,7 +105,7 @@ class TerraformBackendAPIViewsTestCase(TestCase):
         self.assertEqual(response.content, b"Forbidden")
 
     def test_backend_state_get_bad_module_perm_forbidden(self):
-        self.set_permissions("terraform.view_stateversion")
+        self.set_permissions("terraform.add_state")
         response = self.get(reverse("terraform_api:backend_state", args=("yolo",)))
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.content, b"Forbidden")

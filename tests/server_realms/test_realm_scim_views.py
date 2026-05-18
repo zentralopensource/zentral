@@ -1,21 +1,22 @@
-from functools import partial, reduce
+from functools import partial
 import json
-import operator
 from unittest.mock import patch
 import uuid
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from rest_framework.request import Request
+
 from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
 from realms.models import RealmGroup, RealmUser, RealmUserGroupMembership
 from realms.scim_views import SCIMPermissions
 from .utils import force_realm, force_realm_group, force_realm_user, force_user
 
 
-class RealmViewsTestCase(TestCase):
+class RealmViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -33,23 +34,21 @@ class RealmViewsTestCase(TestCase):
         cls.realm.scim_enabled = True
         cls.realm.save()
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "realms_public"
+
     # utility methods
 
     def serialize_datetime(self, value):
         return f"{value.isoformat(timespec='milliseconds')}Z"
-
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
 
     def _make_client_request(self, method, url, data=None, content_type="application/scim+json", include_token=True):
         kwargs = {"HTTP_ACCEPT": 'application/scim+json'}

@@ -1,18 +1,17 @@
-from functools import reduce
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.events.base import AuditEvent
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from .utils import force_dep_enrollment, force_dep_enrollment_custom_view, force_enrollment_custom_view
 
 
-class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
+class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
@@ -24,45 +23,36 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
         mbu.create_enrollment_business_unit()
         cls.dep_enrollment = force_dep_enrollment(mbu)
 
-    # utiliy methods
+    # LoginCase implementation
 
-    def _login_redirect(self, url):
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
+    def _get_user(self):
+        return self.user
 
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # create DEP enrollment custom view
 
     def test_create_dep_enrollment_custom_view_redirect(self):
-        self._login_redirect(reverse("mdm:create_dep_enrollment_custom_view", args=(self.dep_enrollment.pk,)))
+        self.login_redirect("create_dep_enrollment_custom_view", self.dep_enrollment.pk)
 
     def test_create_dep_enrollment_custom_view_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:create_dep_enrollment_custom_view", args=(self.dep_enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_create_dep_enrollment_custom_view_get(self):
-        self._login("mdm.add_depenrollmentcustomview")
+        self.login("mdm.add_depenrollmentcustomview")
         response = self.client.get(reverse("mdm:create_dep_enrollment_custom_view", args=(self.dep_enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollmentcustomview_form.html")
         self.assertContains(response, "Create custom view")
 
     def test_create_dep_enrollment_custom_view_same_custom_view_error(self):
-        self._login("mdm.add_depenrollmentcustomview", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollmentcustomview", "mdm.view_depenrollment")
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
         response = self.client.post(reverse("mdm:create_dep_enrollment_custom_view", args=(self.dep_enrollment.pk,)),
                                     {"custom_view": decv.custom_view.pk,
@@ -74,7 +64,7 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
                              "Select a valid choice. That choice is not one of the available choices.")
 
     def test_create_dep_enrollment_custom_view_same_weight_error(self):
-        self._login("mdm.add_depenrollmentcustomview", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollmentcustomview", "mdm.view_depenrollment")
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
         cv = force_enrollment_custom_view()
         response = self.client.post(reverse("mdm:create_dep_enrollment_custom_view", args=(self.dep_enrollment.pk,)),
@@ -87,7 +77,7 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_dep_enrollment_custom_view(self, post_event):
-        self._login("mdm.add_depenrollmentcustomview", "mdm.view_depenrollment")
+        self.login("mdm.add_depenrollmentcustomview", "mdm.view_depenrollment")
         cv = force_enrollment_custom_view()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:create_dep_enrollment_custom_view",
@@ -131,18 +121,18 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
 
     def test_update_dep_enrollment_custom_view_redirect(self):
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
-        self._login_redirect(reverse("mdm:update_dep_enrollment_custom_view", args=(self.dep_enrollment.pk, decv.pk)))
+        self.login_redirect("update_dep_enrollment_custom_view", self.dep_enrollment.pk, decv.pk)
 
     def test_update_dep_enrollment_custom_view_permission_denied(self):
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:update_dep_enrollment_custom_view",
                                            args=(self.dep_enrollment.pk, decv.pk)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_dep_enrollment_custom_view_get(self):
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
-        self._login("mdm.change_depenrollmentcustomview")
+        self.login("mdm.change_depenrollmentcustomview")
         response = self.client.get(reverse("mdm:update_dep_enrollment_custom_view",
                                            args=(self.dep_enrollment.pk, decv.pk)))
         self.assertEqual(response.status_code, 200)
@@ -150,7 +140,7 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
         self.assertContains(response, "Update custom view")
 
     def test_update_dep_enrollment_custom_view_same_custom_view_error(self):
-        self._login("mdm.change_depenrollmentcustomview")
+        self.login("mdm.change_depenrollmentcustomview")
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
         decv2 = force_dep_enrollment_custom_view(self.dep_enrollment, weight=2)
         response = self.client.post(reverse("mdm:update_dep_enrollment_custom_view",
@@ -164,7 +154,7 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
                              "Select a valid choice. That choice is not one of the available choices.")
 
     def test_update_dep_enrollment_custom_view_same_weight_error(self):
-        self._login("mdm.change_depenrollmentcustomview")
+        self.login("mdm.change_depenrollmentcustomview")
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
         decv2 = force_dep_enrollment_custom_view(self.dep_enrollment, weight=2)
         response = self.client.post(reverse("mdm:update_dep_enrollment_custom_view",
@@ -178,7 +168,7 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_dep_enrollment_custom_view(self, post_event):
-        self._login("mdm.change_depenrollmentcustomview", "mdm.view_depenrollment")
+        self.login("mdm.change_depenrollmentcustomview", "mdm.view_depenrollment")
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
         prev_value = decv.serialize_for_event()
         cv = force_enrollment_custom_view()
@@ -225,18 +215,18 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
 
     def test_delete_dep_enrollment_custom_view_redirect(self):
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
-        self._login_redirect(reverse("mdm:delete_dep_enrollment_custom_view", args=(self.dep_enrollment.pk, decv.pk)))
+        self.login_redirect("delete_dep_enrollment_custom_view", self.dep_enrollment.pk, decv.pk)
 
     def test_delete_dep_enrollment_custom_view_permission_denied(self):
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:delete_dep_enrollment_custom_view",
                                            args=(self.dep_enrollment.pk, decv.pk)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_dep_enrollment_custom_view_get(self):
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
-        self._login("mdm.delete_depenrollmentcustomview")
+        self.login("mdm.delete_depenrollmentcustomview")
         response = self.client.get(reverse("mdm:delete_dep_enrollment_custom_view",
                                            args=(self.dep_enrollment.pk, decv.pk)))
         self.assertEqual(response.status_code, 200)
@@ -247,7 +237,7 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase):
     def test_delete_dep_enrollment_custom_view(self, post_event):
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
         decv_pk = decv.pk
-        self._login("mdm.delete_depenrollmentcustomview", "mdm.view_depenrollment")
+        self.login("mdm.delete_depenrollmentcustomview", "mdm.view_depenrollment")
         prev_value = decv.serialize_for_event()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:delete_dep_enrollment_custom_view",

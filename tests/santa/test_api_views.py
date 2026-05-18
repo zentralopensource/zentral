@@ -1,15 +1,14 @@
-from functools import reduce
-import json
-import operator
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from rest_framework import status
 import yaml
+
 from accounts.models import User, APIToken
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
 from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
@@ -20,7 +19,7 @@ from zentral.utils.payloads import get_payload_identifier
 from .utils import force_rule, new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
 
 
-class APIViewsTestCase(TestCase):
+class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     maxDiff = None
 
     @classmethod
@@ -37,9 +36,24 @@ class APIViewsTestCase(TestCase):
         cls.service_account.groups.set([cls.group])
         cls.user.groups.set([cls.group])
         _, cls.api_key = APIToken.objects.create_for_user(cls.service_account)
-        cls.maxDiff = None
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
+
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm_api"
+
+    # RequestCase implementation
+
+    def _get_api_key(self):
+        return self.api_key
 
     # utils
 
@@ -59,66 +73,6 @@ class APIViewsTestCase(TestCase):
             Enrollment.objects.create(configuration=configuration, secret=enrollment_secret),
             tags
         )
-
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
-
-    def post_data(self, url, data, content_type, include_token=True, dry_run=None):
-        kwargs = {"content_type": content_type}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        if dry_run is not None:
-            url = f"{url}?{dry_run}"
-        return self.client.post(url, data, **kwargs)
-
-    def post_yaml_data(self, url, data, include_token=True):
-        content_type = "application/yaml"
-        data = yaml.dump(data)
-        return self.post_data(url, data, content_type, include_token)
-
-    def get(self, url, data=None, include_token=True):
-        kwargs = {}
-        if data is not None:
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.get(url, **kwargs)
-
-    def delete(self, url, include_token=True):
-        kwargs = {}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.delete(url, **kwargs)
-
-    def put_data(self, url, data, content_type, include_token=True):
-        kwargs = {"content_type": content_type}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.put(url, data, **kwargs)
-
-    def put_json_data(self, url, data, include_token=True):
-        content_type = "application/json"
-        data = json.dumps(data)
-        return self.put_data(url, data, content_type, include_token)
-
-    def post_json_data(self, url, data, include_token=True, dry_run=None):
-        content_type = "application/json"
-        data = json.dumps(data)
-        return self.post_data(url, data, content_type, include_token, dry_run)
 
     def force_rule(
         self,
@@ -151,16 +105,20 @@ class APIViewsTestCase(TestCase):
             return rule, tags, excluded_tags
         return rule
 
+    def post_yaml_data(self, url, data, include_token=True):
+        data = yaml.dump(data)
+        return self.make_request(url, data, include_token, method="POST", content_type="application/yaml")
+
     # ingest file info
 
     def test_ingest_fileinfo_unauthorized(self):
         url = reverse("santa_api:ingest_file_info")
-        response = self.post_json_data(url, [], include_token=False)
+        response = self.post(url, [], include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_ingest_fileinfo_permission_denied(self):
         url = reverse("santa_api:ingest_file_info")
-        response = self.post_json_data(url, [], include_token=True)
+        response = self.post(url, [], include_token=True)
         self.assertEqual(response.status_code, 403)
 
     def test_ingest_fileinfo(self):
@@ -207,7 +165,7 @@ class APIViewsTestCase(TestCase):
         cert_qs = Certificate.objects.filter(sha_256=data[0]['Signing Chain'][0]['SHA-256'])
         self.assertEqual(file_qs.count(), 0)
         self.assertEqual(cert_qs.count(), 0)
-        response = self.post_json_data(url, data)
+        response = self.post(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(
@@ -218,7 +176,7 @@ class APIViewsTestCase(TestCase):
              'ignored': 1,
              'present': 0}
         )
-        response = self.post_json_data(url, data)
+        response = self.post(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(
@@ -240,12 +198,12 @@ class APIViewsTestCase(TestCase):
 
     def test_ruleset_update_unauthorized(self):
         url = reverse("santa_api:ruleset_update")
-        response = self.post_json_data(url, {}, include_token=False)
+        response = self.post(url, {}, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_ruleset_update_permission_denied(self):
         url = reverse("santa_api:ruleset_update")
-        response = self.post_json_data(url, {}, include_token=True)
+        response = self.post(url, {}, include_token=True)
         self.assertEqual(response.status_code, 403)
 
     def test_ruleset_update_rule(self):
@@ -286,7 +244,7 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(self.configuration.rule_set.count(), 0)
         self.assertEqual(self.configuration2.rule_set.count(), 0)
         # dryRun, nothing changes
-        response = self.post_json_data(url, data, dry_run="dryRun")
+        response = self.post(url + "?dryRun", data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertTrue(json_response["dry_run"])
@@ -296,12 +254,12 @@ class APIViewsTestCase(TestCase):
         self.assertEqual(self.configuration.rule_set.count(), 0)
         self.assertEqual(self.configuration2.rule_set.count(), 0)
         # dryRun=All, nothing changes
-        response = self.post_json_data(url, data, dry_run="dryRun=All")
+        response = self.post(url + "?dryRun=All", data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertTrue(json_response["dry_run"])
         # real fire and water run
-        response = self.post_json_data(url, data, dry_run="yolo")
+        response = self.post(url + "?dryRun=yolo", data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         ruleset = RuleSet.objects.get(name=data["name"])
@@ -389,7 +347,7 @@ class APIViewsTestCase(TestCase):
         data["rules"][0]["excluded_primary_users"].append(get_random_string(12))
         data["rules"][0]["tags"].insert(0, get_random_string(12))
         data["rules"][0]["excluded_tags"] = [get_random_string(12)]
-        response = self.post_json_data(url, data)
+        response = self.post(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         ruleset = RuleSet.objects.get(name=data["name"])
@@ -468,7 +426,7 @@ class APIViewsTestCase(TestCase):
                  "policy": "ALLOWLIST"}
             ]
         }
-        response = self.post_json_data(url, data2)
+        response = self.post(url, data2)
         self.assertEqual(response.status_code, 400)
         json_response = response.json()
         self.assertEqual(
@@ -481,7 +439,7 @@ class APIViewsTestCase(TestCase):
 
         # new scoped ruleset
         data2["rules"][0]["identifier"] = get_random_string(64, "0123456789abcdef")
-        response = self.post_json_data(url, data2)
+        response = self.post(url, data2)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         ruleset2 = RuleSet.objects.get(name=data2["name"])
@@ -514,7 +472,7 @@ class APIViewsTestCase(TestCase):
 
         # delete last rule / YAML
         data2["rules"] = []
-        response = self.post_json_data(url, data2)
+        response = self.post(url, data2)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(
@@ -538,7 +496,7 @@ class APIViewsTestCase(TestCase):
 
         # duplicated
         sha256 = get_random_string(64, "0123456789abcdef")
-        response = self.post_json_data(
+        response = self.post(
             url,
             {"name": get_random_string(12),
              "rules": [
@@ -555,7 +513,7 @@ class APIViewsTestCase(TestCase):
 
         # BUNDLE not allowed
         sha256 = get_random_string(64, "0123456789abcdef")
-        response = self.post_json_data(
+        response = self.post(
             url,
             {"name": get_random_string(12),
              "rules": [
@@ -570,7 +528,7 @@ class APIViewsTestCase(TestCase):
         )
 
         # serial number conflict
-        response = self.post_json_data(
+        response = self.post(
             url,
             {"name": get_random_string(12),
              "rules": [{"rule_type": "BINARY",
@@ -587,7 +545,7 @@ class APIViewsTestCase(TestCase):
         )
 
         # primary user conflict
-        response = self.post_json_data(
+        response = self.post(
             url,
             {"name": get_random_string(12),
              "rules": [{"rule_type": "BINARY",
@@ -604,7 +562,7 @@ class APIViewsTestCase(TestCase):
         )
 
         # tag conflict
-        response = self.post_json_data(
+        response = self.post(
             url,
             {"name": get_random_string(12),
              "rules": [{"rule_type": "BINARY",
@@ -636,7 +594,7 @@ class APIViewsTestCase(TestCase):
         }
         self.assertEqual(self.configuration.rule_set.count(), 0)
         self.assertEqual(self.configuration2.rule_set.count(), 0)
-        response = self.post_json_data(url, data)
+        response = self.post(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         ruleset = RuleSet.objects.get(name=data["name"])
@@ -686,7 +644,7 @@ class APIViewsTestCase(TestCase):
             ]
         }
         self.assertEqual(self.configuration.rule_set.count(), 0)
-        response = self.post_json_data(url, data)
+        response = self.post(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         ruleset = RuleSet.objects.get(name=data["name"])
@@ -731,7 +689,7 @@ class APIViewsTestCase(TestCase):
             ]
         }
         self.assertEqual(self.configuration.rule_set.count(), 0)
-        response = self.post_json_data(url, data)
+        response = self.post(url, data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'rules': {'0': {'identifier': ['Invalid CDHASH identifier']}}})
 
@@ -895,7 +853,7 @@ class APIViewsTestCase(TestCase):
             "target_type": rule.target.type,
             "target_identifier": rule.target.identifier
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target': ['rule already exists for this target']})
         self.assertEqual(Rule.objects.count(), 1)
@@ -908,7 +866,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.CDHASH,
             "target_identifier": get_random_string(32)
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target_identifier': ['Invalid CDHASH identifier']})
         self.assertEqual(Rule.objects.count(), 0)
@@ -921,7 +879,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.TEAM_ID,
             "target_identifier": get_random_string(32)
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target_identifier': ['Invalid TEAMID identifier']})
         self.assertEqual(Rule.objects.count(), 0)
@@ -934,7 +892,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.SIGNING_ID,
             "target_identifier": get_random_string(32)
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target_identifier': ['Invalid SIGNINGID identifier']})
         self.assertEqual(Rule.objects.count(), 0)
@@ -947,7 +905,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.BINARY,
             "target_identifier": get_random_string(5)
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target_identifier': ['Invalid BINARY identifier']})
         self.assertEqual(Rule.objects.count(), 0)
@@ -960,7 +918,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.BUNDLE,
             "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789')
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(),
                          {'target_type': ['"BUNDLE" is not a valid choice.']})
@@ -975,7 +933,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789'),
             "custom_msg": "This should not be here"
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'custom_msg': ['Cannot be set for this rule policy']})
         self.assertEqual(Rule.objects.count(), 0)
@@ -989,7 +947,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789'),
             "custom_url": "https://zentral.com/no_custom_url_wanted"
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'custom_url': ['Cannot be set for this rule policy']})
         self.assertEqual(Rule.objects.count(), 0)
@@ -1004,7 +962,7 @@ class APIViewsTestCase(TestCase):
             "custom_msg": "This should not be here",
             "custom_url": "https://zentral.com/no_custom_url_wanted"
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {
             'custom_url': ['Cannot be set for this rule policy'],
@@ -1021,7 +979,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789'),
             "cel_expr": "This should not be here"
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'cel_expr': ['Can only be set on CEL rules']})
         self.assertEqual(Rule.objects.count(), 0)
@@ -1035,7 +993,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789'),
             # missing cel_expr
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'cel_expr': ['This field is required for CEL rules']})
         self.assertEqual(Rule.objects.count(), 0)
@@ -1051,7 +1009,7 @@ class APIViewsTestCase(TestCase):
             "primary_users": [primary_user_conflicts],
             "excluded_primary_users": [primary_user_conflicts]
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(),
                          {'primary_users': [f"'{primary_user_conflicts}' in both included and excluded"]})
@@ -1068,7 +1026,7 @@ class APIViewsTestCase(TestCase):
             "serial_numbers": [serial_number_conflicts],
             "excluded_serial_numbers": [serial_number_conflicts]
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(),
                          {'serial_numbers': [f"'{serial_number_conflicts}' in both included and excluded"]})
@@ -1085,7 +1043,7 @@ class APIViewsTestCase(TestCase):
             "tags": [t.id for t in tag_conflicts],
             "excluded_tags": [t.id for t in tag_conflicts]
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(),
                          {'tags': [f"'{[t.name for t in tag_conflicts][0]}' in both included and excluded"]})
@@ -1110,7 +1068,7 @@ class APIViewsTestCase(TestCase):
             "is_voting_rule": True,  # Read Only!!!
         }
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.post_json_data(reverse("santa_api:rules"), data)
+            response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         rule = Rule.objects.select_related('target').first()
         self.assertEqual(Rule.objects.count(), 1)
@@ -1190,7 +1148,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.SIGNING_ID,
             "target_identifier": "platform:com.apple.curl",
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'policy': ['"invalid" is not a valid choice.']})
         self.assertEqual(Rule.objects.count(), 0)
@@ -1211,7 +1169,7 @@ class APIViewsTestCase(TestCase):
                 "target_type": target_type,
                 "target_identifier": target_identifier,
             }
-            response = self.post_json_data(reverse("santa_api:rules"), data)
+            response = self.post(reverse("santa_api:rules"), data)
             self.assertEqual(response.status_code, status.HTTP_201_CREATED)
             self.assertEqual(Rule.objects.count(), 1)
             rule_json = response.json()
@@ -1232,7 +1190,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": "1234567890",
             "custom_msg": "Custom message"
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Rule.objects.count(), 1)
         self.assertEqual(response.json()["custom_msg"], "Custom message")
@@ -1249,7 +1207,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.TEAM_ID,
             "target_identifier": "1234567890",
         }
-        response = self.post_json_data(reverse("santa_api:rules"), data)
+        response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Rule.objects.count(), 1)
         self.assertEqual(response.json()["cel_expr"],
@@ -1278,7 +1236,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": rule.target.identifier,
             "description": "Description Text Updated"
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["description"], "Description Text Updated")
         rule.refresh_from_db()
@@ -1297,7 +1255,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": rule.target.identifier,
             "tags": tags
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(set(response.json()["tags"]), set(tags))
         rule.refresh_from_db()
@@ -1316,7 +1274,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": rule.target.identifier,
             "excluded_tags": tags
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(set(response.json()["excluded_tags"]), set(tags))
         rule.refresh_from_db()
@@ -1334,7 +1292,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": rule.target.identifier,
             "description": "I was added recently"
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["description"], "I was added recently")
         rule.refresh_from_db()
@@ -1353,7 +1311,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": rule.target.identifier,
             "excluded_primary_users": users
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(set(response.json()["excluded_primary_users"]), set(users))
         rule.refresh_from_db()
@@ -1374,7 +1332,7 @@ class APIViewsTestCase(TestCase):
             "primary_users": users,
             "excluded_primary_users": users2
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(set(response.json()["primary_users"]), set(users))
         self.assertEqual(set(response.json()["excluded_primary_users"]), set(users2))
@@ -1395,7 +1353,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": rule.target.identifier,
             "primary_users": users
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(set(response.json()["primary_users"]), set(users))
         rule.refresh_from_db()
@@ -1412,7 +1370,7 @@ class APIViewsTestCase(TestCase):
             "target_type": rule.target.type,
             "target_identifier": get_random_string(length=64, allowed_chars='abcdef0123456789')
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["target_identifier"], data["target_identifier"])
         rule.refresh_from_db()
@@ -1429,7 +1387,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.TEAM_ID,
             "target_identifier": '1234567890'
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["target_type"], Target.Type.TEAM_ID)
         self.assertEqual(response.json()["target_identifier"], '1234567890')
@@ -1450,7 +1408,7 @@ class APIViewsTestCase(TestCase):
             "target_type": rule.target.type,
             "target_identifier": rule.target.identifier,
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["configuration"], configuration2.pk)
         rule.refresh_from_db()
@@ -1472,7 +1430,7 @@ class APIViewsTestCase(TestCase):
             "target_type": rule2.target.type,
             "target_identifier": rule2.target.identifier,
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {"target": ["rule already exists for this target"]})
         rule.refresh_from_db()
@@ -1490,7 +1448,7 @@ class APIViewsTestCase(TestCase):
             "target_type": rule.target.type,
             "target_identifier": get_random_string(32)
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target_identifier': ['Invalid TEAMID identifier']})
         rule.refresh_from_db()
@@ -1508,7 +1466,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.BINARY,
             "target_identifier": get_random_string(5)
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'target_identifier': ['Invalid BINARY identifier']})
         rule.refresh_from_db()
@@ -1527,7 +1485,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.BUNDLE,
             "target_identifier": target_identifier
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(),
                          {'target_type': ['"BUNDLE" is not a valid choice.']})
@@ -1547,7 +1505,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": target_identifier,
             "custom_msg": "This should not be here"
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(), {'custom_msg': ['Cannot be set for this rule policy']})
         rule.refresh_from_db()
@@ -1566,7 +1524,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": rule.target.identifier,
             "version": 95
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rule.refresh_from_db()
         self.assertEqual(rule.version, 1)
@@ -1583,7 +1541,7 @@ class APIViewsTestCase(TestCase):
             "target_identifier": rule.target.identifier,
             "ruleset": ruleset.pk
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rule.refresh_from_db()
         self.assertEqual(rule.ruleset, None)
@@ -1603,7 +1561,7 @@ class APIViewsTestCase(TestCase):
             "primary_users": [primary_user_conflicts],
             "excluded_primary_users": [primary_user_conflicts]
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(),
                          {'primary_users': [f"'{primary_user_conflicts}' in both included and excluded"]})
@@ -1626,7 +1584,7 @@ class APIViewsTestCase(TestCase):
             "serial_numbers": [serial_number_conflicts],
             "excluded_serial_numbers": [serial_number_conflicts]
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(),
                          {'serial_numbers': [f"'{serial_number_conflicts}' in both included and excluded"]})
@@ -1649,7 +1607,7 @@ class APIViewsTestCase(TestCase):
             "tags": [t.id for t in tag_conflicts],
             "excluded_tags": [t.id for t in tag_conflicts]
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.json(),
                          {'tags': [f"'{[t.name for t in tag_conflicts][0]}' in both included and excluded"]})
@@ -1669,7 +1627,7 @@ class APIViewsTestCase(TestCase):
             "target_type": Target.Type.BINARY,
             "target_identifier": target_identifier
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rule.refresh_from_db()
         self.assertEqual(rule.target.identifier, target_identifier)
@@ -1691,7 +1649,7 @@ class APIViewsTestCase(TestCase):
             "description": rule.description,
             "custom_msg": "new custom message"
         }
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rule.refresh_from_db()
         self.assertEqual(rule.custom_msg, "new custom message")
@@ -1699,25 +1657,25 @@ class APIViewsTestCase(TestCase):
 
     def test_update_rule_not_found(self):
         self.set_permissions("santa.change_rule")
-        response = self.put_json_data(reverse("santa_api:rule", args=(1234567890,)), {})
+        response = self.put(reverse("santa_api:rule", args=(1234567890,)), {})
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_update_rule_permission_denied(self):
         configuration = self.force_configuration()
         rule = self.force_rule(configuration=configuration)
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), {})
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), {})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_update_rule_unauthorized(self):
         configuration = self.force_configuration()
         rule = self.force_rule(configuration=configuration)
-        response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), {}, include_token=False)
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), {}, include_token=False)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_update_rule_voting_rule_error(self):
         self.set_permissions("santa.change_rule")
         rule = force_rule(is_voting_rule=True)
-        response = self.put_json_data(
+        response = self.put(
             reverse("santa_api:rule", args=(rule.pk,)),
             {"configuration": rule.configuration.pk,
              "policy": rule.policy,
@@ -1749,7 +1707,7 @@ class APIViewsTestCase(TestCase):
             "tags": [t.id for t in self.force_tags(1)]
         }
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.put_json_data(reverse("santa_api:rule", args=(rule.pk,)), data)
+            response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         rule = Rule.objects.select_related('target').first()
         self.assertEqual(response.json(), {
@@ -1979,13 +1937,13 @@ class APIViewsTestCase(TestCase):
 
     def test_create_configuration_unauthorized(self):
         data = {'name': 'Configuration0'}
-        self.set_permissions("santa.configurations")
-        response = self.post_json_data(reverse('santa_api:configurations'), data, include_token=False)
+        self.set_permissions("santa.view_configuration")
+        response = self.post(reverse('santa_api:configurations'), data, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_configuration_permission_denied(self):
         data = {'name': 'Configuration0'}
-        response = self.post_json_data(reverse('santa_api:configurations'), data)
+        response = self.post(reverse('santa_api:configurations'), data)
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -1993,7 +1951,7 @@ class APIViewsTestCase(TestCase):
         self.set_permissions("santa.add_configuration")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.post_json_data(reverse('santa_api:configurations'), {'name': name})
+            response = self.post(reverse('santa_api:configurations'), {'name': name})
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(callbacks), 1)
         configuration = Configuration.objects.get(name=name)
@@ -2042,7 +2000,7 @@ class APIViewsTestCase(TestCase):
         config = self.force_configuration()
         data = {'name': get_random_string(12)}
         self.set_permissions("santa.change_configuration")
-        response = self.put_json_data(
+        response = self.put(
             reverse("santa_api:configuration", args=(config.pk,)),
             data, include_token=False)
         self.assertEqual(response.status_code, 401)
@@ -2050,7 +2008,7 @@ class APIViewsTestCase(TestCase):
     def test_update_configuration_permission_denied(self):
         config = self.force_configuration()
         data = {'name': get_random_string(12)}
-        response = self.put_json_data(
+        response = self.put(
             reverse("santa_api:configuration", args=(config.pk,)),
             data)
         self.assertEqual(response.status_code, 403)
@@ -2063,7 +2021,7 @@ class APIViewsTestCase(TestCase):
         new_name = get_random_string(12)
         self.set_permissions("santa.change_configuration")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.put_json_data(reverse('santa_api:configuration', args=(config.pk,)), {"name": new_name})
+            response = self.put(reverse('santa_api:configuration', args=(config.pk,)), {"name": new_name})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         config.refresh_from_db()
@@ -2137,7 +2095,7 @@ class APIViewsTestCase(TestCase):
         config1 = self.force_configuration()
         data = {'name': config0.name}
         self.set_permissions("santa.change_configuration")
-        response = self.put_json_data(reverse('santa_api:configuration', args=(config1.pk,)), data)
+        response = self.put(reverse('santa_api:configuration', args=(config1.pk,)), data)
         self.assertEqual(response.status_code, 400)
         response_j = response.json()
         self.assertEqual(response_j["name"][0], "configuration with this name already exists.")
@@ -2215,7 +2173,7 @@ class APIViewsTestCase(TestCase):
     # list enrollments
 
     def test_get_enrollments_unauthorized(self):
-        self.set_permissions("santa.view_enrollments")
+        self.set_permissions("santa.view_enrollment")
         response = self.get(reverse("santa_api:enrollments"), include_token=False)
         self.assertEqual(response.status_code, 401)
 
@@ -2431,7 +2389,7 @@ class APIViewsTestCase(TestCase):
         config = self.force_configuration()
         self.set_permissions("santa.add_enrollment")
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
-        response = self.post_json_data(
+        response = self.post(
             reverse('santa_api:enrollments'),
             {'configuration': config.pk,
              'secret': {"meta_business_unit": self.mbu.pk,
@@ -2448,13 +2406,13 @@ class APIViewsTestCase(TestCase):
 
     def test_create_enrollment_unauthorized(self):
         data = {'name': 'Configuration0'}
-        self.set_permissions("santa.add_enrollments")
-        response = self.post_json_data(reverse('santa_api:enrollments'), data, include_token=False)
+        self.set_permissions("santa.add_enrollment")
+        response = self.post(reverse('santa_api:enrollments'), data, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_enrollment_permission_denied(self):
         data = {'name': 'Configuration0'}
-        response = self.post_json_data(reverse('santa_api:enrollments'), data)
+        response = self.post(reverse('santa_api:enrollments'), data)
         self.assertEqual(response.status_code, 403)
 
     # update enrollment
@@ -2476,7 +2434,7 @@ class APIViewsTestCase(TestCase):
         data = {"configuration": enrollment.configuration.pk,
                 "secret": secret_data}
         self.set_permissions("santa.change_enrollment")
-        response = self.put_json_data(reverse('santa_api:enrollment', args=(enrollment.pk,)), data)
+        response = self.put(reverse('santa_api:enrollment', args=(enrollment.pk,)), data)
         self.assertEqual(response.status_code, 200)
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.secret, enrollment_secret)
@@ -2502,8 +2460,7 @@ class APIViewsTestCase(TestCase):
         data = {"configuration": enrollment.configuration.pk,
                 "secret": secret_data}
         self.set_permissions("santa.change_enrollment")
-        response = self.put_json_data(reverse('santa_api:enrollment', args=(enrollment.pk,)), data,
-                                      include_token=False)
+        response = self.put(reverse('santa_api:enrollment', args=(enrollment.pk,)), data, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_enrollment_permission_denied(self):
@@ -2519,7 +2476,7 @@ class APIViewsTestCase(TestCase):
         secret_data["serial_numbers"] = serial_numbers
         data = {"configuration": enrollment.configuration.pk,
                 "secret": secret_data}
-        response = self.put_json_data(reverse('santa_api:enrollment', args=(enrollment.pk,)), data)
+        response = self.put(reverse('santa_api:enrollment', args=(enrollment.pk,)), data)
         self.assertEqual(response.status_code, 403)
 
     def test_update_enrollment_not_found(self):
@@ -2536,7 +2493,7 @@ class APIViewsTestCase(TestCase):
         data = {"configuration": enrollment.configuration.pk,
                 "secret": secret_data}
         self.set_permissions("santa.change_enrollment")
-        response = self.put_json_data(reverse("santa_api:enrollment", args=(1213028133,)), data)
+        response = self.put(reverse("santa_api:enrollment", args=(1213028133,)), data)
         self.assertEqual(response.status_code, 404)
 
     # delete enrollment

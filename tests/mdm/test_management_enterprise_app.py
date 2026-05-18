@@ -1,51 +1,40 @@
-from functools import lru_cache, reduce
+from functools import lru_cache
 from io import BytesIO
-import operator
 import plistlib
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
+from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from accounts.models import User
+from tests.zentral_test_utils.login_case import LoginCase
 from utils.packages import build_dummy_package
 from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.models import Artifact, Channel
 from .utils import force_artifact, force_blueprint_artifact
 
 
-class EnterpriseAppManagementViewsTestCase(TestCase):
+class EnterpriseAppManagementViewsTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
 
+    # LoginCase implementation
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
+
     # utiliy methods
-
-    def _login_redirect(self, url, data=None):
-        if data:
-            func = self.client.post
-        else:
-            func = self.client.get
-        response = func(url, data=data)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
-    def _login(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
-        self.client.force_login(self.user)
 
     @lru_cache
     def _build_package(self, name="test123", version="1.0", product_archive=True):
@@ -59,15 +48,15 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
     # upload enterprise app GET
 
     def test_upload_enterprise_app_get_redirect(self):
-        self._login_redirect(reverse("mdm:upload_enterprise_app"))
+        self.login_redirect("upload_enterprise_app")
 
     def test_upload_enterprise_app_get_permission_denied(self):
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:upload_enterprise_app"))
         self.assertEqual(response.status_code, 403)
 
     def test_upload_enterprise_app_get(self):
-        self._login("mdm.add_artifact")
+        self.login("mdm.add_artifact")
         response = self.client.get(reverse("mdm:upload_enterprise_app"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enterpriseapp_form.html")
@@ -76,12 +65,11 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
 
     def test_upload_enterprise_app_post_redirect(self):
         package = self._build_package()
-        self._login_redirect(reverse("mdm:upload_enterprise_app"),
-                             {"package": package})
+        self.login_redirect("upload_enterprise_app", data={"package": package})
 
     def test_upload_enterprise_app_post_permission_denied(self):
         package = self._build_package()
-        self._login()
+        self.login()
         response = self.client.post(reverse("mdm:upload_enterprise_app"),
                                     {"package": package})
         self.assertEqual(response.status_code, 403)
@@ -89,7 +77,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
     def test_upload_enterprise_app_post_could_not_read_distribution_file(self):
         notapackage = BytesIO(b"-")
         notapackage.name = "test.pkg"
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_enterprise_app"),
                                     {"package": notapackage},
                                     follow=True)
@@ -99,7 +87,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
 
     def test_upload_enterprise_app_post(self):
         package = self._build_package()
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_enterprise_app"),
                                     {"package": package},
                                     follow=True)
@@ -126,7 +114,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
         artifact.name = "io.zentral.test123"  # prepare name collision
         artifact.save()
         package = self._build_package()
-        self._login("mdm.add_artifact", "mdm.view_artifact")
+        self.login("mdm.add_artifact", "mdm.view_artifact")
         response = self.client.post(reverse("mdm:upload_enterprise_app"),
                                     {"package": package},
                                     follow=True)
@@ -140,17 +128,17 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
 
     def test_upgrade_enterprise_app_get_login_redirect(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self._login_redirect(reverse("mdm:upgrade_enterprise_app", args=(artifact.pk,)))
+        self.login_redirect("upgrade_enterprise_app", artifact.pk)
 
     def test_upgrade_enterprise_app_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:upgrade_enterprise_app", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_upgrade_enterprise_app_get(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self._login("mdm.add_artifactversion")
+        self.login("mdm.add_artifactversion")
         response = self.client.get(reverse("mdm:upgrade_enterprise_app", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_upgrade_form.html")
@@ -169,7 +157,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
         enterprise_app.configuration = plistlib.dumps({"un": 1})
         enterprise_app.save()
         package.seek(0)
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_enterprise_app", args=(artifact.pk,)),
                                     {"package": package,
                                      "configuration": plistlib.dumps({"un": 1}).decode("utf-8")},
@@ -182,7 +170,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
     def test_upgrade_enterprise_app_post_platform_not_available(self):
         artifact, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
         package = self._build_package()
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_enterprise_app", args=(artifact.pk,)),
                                     {"package": package,
                                      "default_shard": 100,
@@ -198,7 +186,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
         enterprise_app_av.enterprise_app.product_id = "yolo"  # not the same
         enterprise_app_av.enterprise_app.save()
         package = self._build_package()
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_enterprise_app", args=(artifact.pk,)),
                                     {"package": package,
                                      "default_shard": 100,
@@ -224,7 +212,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
             [str(enterprise_app_av1.pk)]
         )
         package = self._build_package()
-        self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
+        self.login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_enterprise_app", args=(artifact_pk,)),
                                     {"package": package,
                                      "configuration": plistlib.dumps({"deux": 2}).decode("utf-8"),
@@ -257,17 +245,17 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
 
     def test_download_enterprise_app_login_redirect(self):
         _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self._login_redirect(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
+        self.login_redirect("download_enterprise_app", enterprise_app_av.pk)
 
     def test_download_enterprise_app_permission_denied(self):
         _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self._login()
+        self.login()
         response = self.client.get(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_download_enterprise_app(self):
         _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self._login("mdm.view_artifactversion")
+        self.login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -280,7 +268,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
     def test_download_enterprise_app_redirect(self, file_storage_has_signed_urls):
         file_storage_has_signed_urls.return_value = True
         _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self._login("mdm.view_artifactversion")
+        self.login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
         self.assertEqual(response.status_code, 302)
 
@@ -289,7 +277,7 @@ class EnterpriseAppManagementViewsTestCase(TestCase):
         enterprise_app = enterprise_app_av.enterprise_app
         enterprise_app.filename = ""
         enterprise_app.save()
-        self._login("mdm.view_artifactversion")
+        self.login("mdm.view_artifactversion")
         response = self.client.get(reverse("mdm:download_enterprise_app", args=(enterprise_app_av.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(

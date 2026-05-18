@@ -1,21 +1,22 @@
-from functools import reduce
 import hashlib
-import operator
 import uuid
 from unittest.mock import patch
-from django.contrib.auth.models import Group, Permission
-from django.db.models import Q
+
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+
 from accounts.models import APIToken, User
+from tests.zentral_test_utils.login_case import LoginCase
+from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.intune.models import Tenant
 from zentral.core.events.base import AuditEvent
 from .utils import force_tenant
 
 
-class APIViewsTestCase(TestCase):
+class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     maxDiff = None
 
     @classmethod
@@ -33,59 +34,21 @@ class APIViewsTestCase(TestCase):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.bu = cls.mbu.create_enrollment_business_unit()
 
-    def set_permissions(self, *permissions):
-        if permissions:
-            permission_filter = reduce(operator.or_, (
-                Q(content_type__app_label=app_label, codename=codename)
-                for app_label, codename in (
-                    permission.split(".")
-                    for permission in permissions
-                )
-            ))
-            self.group.permissions.set(list(Permission.objects.filter(permission_filter)))
-        else:
-            self.group.permissions.clear()
+    # LoginCase implementation
 
-    def login(self, *permissions):
-        self.set_permissions(*permissions)
-        self.client.force_login(self.user)
+    def _get_user(self):
+        return self.user
 
-    def make_request(self, url, data=None, include_token=True, method="GET"):
-        kwargs = {}
-        if data is not None:
-            kwargs["data"] = data
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        if method == "POST":
-            return self.client.post(url, **kwargs)
-        else:
-            return self.client.get(url, **kwargs)
+    def _get_group(self):
+        return self.group
 
-    def get(self, url, data=None, include_token=True):
-        return self.make_request(url, data, include_token, method="GET")
+    def _get_url_namespace(self):
+        return "intune_api"
 
-    def post(self, url, data=None, include_token=True):
-        return self.make_request(url, data, include_token, method="POST")
+    # RequestCase implementation
 
-    def delete(self, url, include_token=True):
-        kwargs = {}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.delete(url, **kwargs)
-
-    def post_json_data(self, url, data, include_token=True):
-        kwargs = {'content_type': 'application/json',
-                  'data': data}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.post(url, **kwargs)
-
-    def put_json_data(self, url, data, include_token=True):
-        kwargs = {'content_type': 'application/json',
-                  'data': data}
-        if include_token:
-            kwargs["HTTP_AUTHORIZATION"] = f"Token {self.api_key}"
-        return self.client.put(url, **kwargs)
+    def _get_api_key(self):
+        return self.api_key
 
     # list tenants
 
@@ -202,7 +165,7 @@ class APIViewsTestCase(TestCase):
             'client_secret': get_random_string(12),  # plain secret
         }
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.post_json_data(reverse('intune_api:tenants'), data)
+            response = self.post(reverse('intune_api:tenants'), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(len(callbacks), 1)
         self.assertEqual(Tenant.objects.filter(tenant_id=data['tenant_id']).count(), 1)
@@ -259,8 +222,8 @@ class APIViewsTestCase(TestCase):
             'client_id': str(uuid.uuid4()),
             'client_secret': get_random_string(12),  # plain secret
         }
-        self.set_permissions('intune.add_tenants')
-        response = self.post_json_data(reverse('intune_api:tenants'), data, include_token=False)
+        self.set_permissions('intune.add_tenant')
+        response = self.post(reverse('intune_api:tenants'), data, include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_create_tenant_permission_denied(self):
@@ -272,7 +235,7 @@ class APIViewsTestCase(TestCase):
             'client_id': str(uuid.uuid4()),
             'client_secret': get_random_string(12),  # plain secret
         }
-        response = self.post_json_data(reverse('intune_api:tenants'), data)
+        response = self.post(reverse('intune_api:tenants'), data)
         self.assertEqual(response.status_code, 403)
 
     # update tenant
@@ -291,7 +254,7 @@ class APIViewsTestCase(TestCase):
         }
         self.set_permissions('intune.change_tenant')
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.put_json_data(
+            response = self.put(
                 reverse('intune_api:tenant', args=(tenant.tenant_id,)),
                 data
             )
@@ -343,7 +306,7 @@ class APIViewsTestCase(TestCase):
             'description': 'Tenant Description',
         }
         self.set_permissions('intune.change_tenant')
-        response = self.put_json_data(
+        response = self.put(
             reverse('intune_api:tenant', args=(tenant.tenant_id,)),
             data, include_token=False
         )
@@ -354,7 +317,7 @@ class APIViewsTestCase(TestCase):
         data = {
             'description': 'Tenant Description',
         }
-        response = self.put_json_data(
+        response = self.put(
             reverse('intune_api:tenant', args=(tenant.tenant_id,)),
             data
         )

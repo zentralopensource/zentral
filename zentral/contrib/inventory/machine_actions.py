@@ -1,3 +1,4 @@
+from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse
 from .models import MetaMachine
 
@@ -23,7 +24,7 @@ class MachineAction:
 
     def get_permission_required(self):
         if not self.permission_required:
-            return
+            raise ImproperlyConfigured(f"{self.__class__.__name__} is missing the permission_required attribute.")
         if isinstance(self.permission_required, str):
             yield self.permission_required
         else:
@@ -48,13 +49,7 @@ class ManageTags(MachineAction):
     title = "Manage tags"
     description = "Manage the machine tags"
     url_name = "inventory:machine_tags"
-    permission_required = (
-        "inventory.view_machinetag",
-        "inventory.add_machinetag",
-        "inventory.change_machinetag",
-        "inventory.delete_machinetag",
-        "inventory.add_tag",
-    )
+    permission_required = "inventory.view_machinetag"
 
 
 class ArchiveMachine(MachineAction):
