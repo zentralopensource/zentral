@@ -328,7 +328,7 @@ class RuleForm(RuleFormMixin, forms.Form):
                                widget=forms.Textarea(attrs={"cols": "40", "rows": "5"}))
     custom_msg = forms.CharField(label="Custom message", required=False,
                                  widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
-    custom_url = forms.URLField(label="Custom URL", required=False, max_length=800,
+    custom_url = forms.URLField(label="Custom URL", required=False, max_length=800, assume_scheme="https",
                                 widget=forms.URLInput(attrs={"size": 40}),)
     description = forms.CharField(required=False, widget=forms.Textarea(attrs={"cols": "40", "rows": "2"}))
     serial_numbers = SimpleArrayField(forms.CharField(), required=False)
