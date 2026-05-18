@@ -287,22 +287,21 @@ class Engine:
             module_legacy_perm_cache[app_label] = request.is_authorized
             return request.is_authorized
 
-    # Cedar schema (lazily built, cached). Bust with
-    # ``del engine.cedar_schema_json`` if you've re-registered something
-    # at runtime — production code never should.
+    # Cedar schema (lazily built, cached). Built once on first access — the
+    # production caller is Policy.clean, which schema-validates each policy
+    # at write time. We deliberately do not pass the schema to
+    # cedarpy.is_authorized at decision time (see authorize_request in
+    # pbac.cedar for the rationale).
     @cached_property
     def cedar_schema_json(self):
         return render_schema_json(build_schema_ir(self))
 
     def authorize_request(self, request: Request):
         if request.is_pending:
-            authorize_request(request, self.cedar_schema_json)
+            authorize_request(request)
 
     def authorize_requests(self, requests: list[Request]):
-        authorize_requests(
-            [r for r in requests if r.is_pending],
-            self.cedar_schema_json,
-        )
+        authorize_requests([r for r in requests if r.is_pending])
 
 
 engine = Engine()

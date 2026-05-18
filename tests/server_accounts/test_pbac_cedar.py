@@ -12,7 +12,7 @@ from .utils import force_policy
 
 class PBACCedarTestCase(TestCase):
     def test_authorize_requests_no_requests(self):
-        self.assertIsNone(authorize_requests([], engine.cedar_schema_json))
+        self.assertIsNone(authorize_requests([]))
 
     def test_policies_cache_with_sync(self):
         force_policy()
@@ -103,13 +103,13 @@ class AuthorizeRequestTestCase(TestCase):
 
     def test_authorize_legacy_request_granted(self):
         req = self._make_legacy_request("accounts.view_user")
-        authorize_request(req, engine.cedar_schema_json)
+        authorize_request(req)
         self.assertTrue(req.is_authorized)
 
     def test_authorize_unmatched_legacy_request_denied(self):
         # An action this group's policy doesn't grant.
         req = self._make_legacy_request("accounts.delete_user")
-        authorize_request(req, engine.cedar_schema_json)
+        authorize_request(req)
         self.assertFalse(req.is_authorized)
 
 

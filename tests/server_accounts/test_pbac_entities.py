@@ -26,8 +26,8 @@ class PBACEntitiesTestCase(TestCase):
     # Principal.from_user
 
     def test_user_principal_carries_is_superuser_attr(self):
-        # The schema declares is_superuser on User; the Principal must
-        # carry it so the entities array round-trips through cedarpy.
+        # Policies can reference principal.is_superuser; the attribute has
+        # to be on the Principal for that reference to evaluate.
         p = Principal.from_user(self.user)
         self.assertEqual(p.type, "User")
         self.assertEqual(p.attrs, {"is_superuser": False})
@@ -38,9 +38,10 @@ class PBACEntitiesTestCase(TestCase):
         self.assertEqual(p.attrs, {"is_superuser": True})
 
     def test_service_account_principal_has_no_attrs(self):
-        # The schema's ServiceAccount has no shape; setting is_superuser
-        # on a ServiceAccount entity would make cedarpy reject the
-        # entities array against the schema.
+        # is_superuser is meaningless on a ServiceAccount (the engine's
+        # auth-backend logic gates it on type == "User"), so we don't
+        # carry the attribute. Keeps the Principal shape aligned with the
+        # schema declaration too (ServiceAccount has no attrs declared).
         p = Principal.from_user(self.service_account)
         self.assertEqual(p.type, "ServiceAccount")
         self.assertEqual(p.attrs, {})

@@ -81,11 +81,9 @@ def _serialize_entity(entity: Entity, collected_entities: dict) -> None:
     if key not in collected_entities:
         serialized_entity = {
             "uid": {"type": entity.full_type, "id": entity.id},
-            # Include the entity's attrs. Required for the schema-on path
-            # (cedarpy validates User against the schema's
-            # is_superuser: Boolean shape), and a correctness fix for the
-            # schema-off path too: policies that reference principal.is_superuser
-            # never matched before because attrs was always empty here.
+            # Include the entity's attrs so policies that reference e.g.
+            # ``principal.is_superuser`` actually evaluate against the
+            # user's flag (previously hard-coded to {}).
             "attrs": dict(entity.attrs),
             "parents": []
         }
@@ -96,15 +94,9 @@ def _serialize_entity(entity: Entity, collected_entities: dict) -> None:
 
 
 def _serialize_requests_entities(requests: list[Request]) -> list:
-    """Serialize the entities that need to accompany a batch of requests.
-
-    Action entities are intentionally omitted: cedarpy derives the action
-    entity hierarchy from the schema and rejects the request if an Action
-    also appears in the entities array ("failed to parse entities").
-    """
     collected_entities = {}
     for request in requests:
-        for entity in (request.principal, request.resource):
+        for entity in (request.principal, request.action, request.resource):
             _serialize_entity(entity, collected_entities)
     return list(collected_entities.values())
 
@@ -121,17 +113,23 @@ def _serialize_request(request: Request, correlation_id: Optional[str] = None) -
     return data
 
 
-def authorize_request(request: Request, schema: dict) -> None:
+def authorize_request(request: Request) -> None:
+    # Note: we deliberately do not pass the engine schema here. Schema
+    # validation happens once at policy-write time (Policy.clean calls
+    # cedarpy.validate_policies against engine.cedar_schema_json) so the
+    # policies stored in the DB are known-good. Re-validating per request
+    # would add ~16ms / call (cedarpy re-parses the ~120KB schema on every
+    # is_authorized call), which dominates view rendering when there are
+    # multiple has_perm / has_module_perms checks.
     cedar_result = is_authorized(
         _serialize_request(request),
         policies_cache.all_policies_concatenated,
         _serialize_requests_entities([request]),
-        schema=schema,
     )
     request.is_authorized = cedar_result.allowed
 
 
-def authorize_requests(requests: list[Request], schema: dict) -> None:
+def authorize_requests(requests: list[Request]) -> None:
     if not requests:
         return
     req_dict = {r.correlation_id: r for r in requests}
@@ -139,7 +137,6 @@ def authorize_requests(requests: list[Request], schema: dict) -> None:
         (_serialize_request(r, correlation_id=r.correlation_id) for r in requests),
         policies_cache.all_policies_concatenated,
         _serialize_requests_entities(requests),
-        schema=schema,
     ):
         req_dict[cedar_result.correlation_id].is_authorized = cedar_result.allowed
 
