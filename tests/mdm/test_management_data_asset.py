@@ -256,7 +256,8 @@ class MDMDataAssetManagementViewsTestCase(TestCase):
 
     def test_upgrade_data_asset_post_same_file_error(self):
         artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
-        same_zipfile = BytesIO(artifact_version.data_asset.file.open("rb").read())
+        with artifact_version.data_asset.file.open("rb") as f:
+            same_zipfile = BytesIO(f.read())
         same_zipfile.name = get_random_string(12) + ".zip"
         self._login("mdm.add_artifactversion", "mdm.view_artifactversion")
         response = self.client.post(reverse("mdm:upgrade_data_asset", args=(artifact.pk,)),

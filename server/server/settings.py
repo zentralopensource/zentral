@@ -231,6 +231,10 @@ CELERY_RESULT_BACKEND = 'django-db'
 CELERY_BROKER_URL = django_zentral_settings.get("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
 CELERY_BROKER_TRANSPORT_OPTIONS = django_zentral_settings.get("CELERY_BROKER_TRANSPORT_OPTIONS", {})
 
+# Opt out of django-celery-results' deprecated id-first URL patterns.
+# We don't include their URLs anywhere, so this only silences a DeprecationWarning.
+DJANGO_CELERY_RESULTS_ID_FIRST_URLS = False
+
 # Internationalization
 # https://docs.djangoproject.com/en/2.2/topics/i18n/
 

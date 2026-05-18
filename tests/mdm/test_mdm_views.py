@@ -2970,6 +2970,8 @@ class MDMViewsTestCase(TestCase):
             reverse("mdm_public:enterprise_app_download", args=(cmd.uuid,))
         )
         self.assertEqual(response.status_code, 200)
+        # consume the streaming content so FileResponse closes the underlying file
+        b"".join(response.streaming_content)
 
     @patch("zentral.contrib.mdm.public_views.mdm.file_storage_has_signed_urls")
     def test_enterprise_app_download_redirect(

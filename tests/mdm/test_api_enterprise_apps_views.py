@@ -64,8 +64,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase):
         kwargs = {"name": name, "version": version}
         if product_archive:
             kwargs["product_archive_title"] = name
-        file = tempfile.NamedTemporaryFile(suffix=".pkg", delete=False)
         content = build_dummy_package(**kwargs)
+        file = tempfile.NamedTemporaryFile(suffix=".pkg")
         file.write(content)
         sha256 = hashlib.sha256(content).hexdigest()
         md5 = hashlib.md5(content).hexdigest()

@@ -10,8 +10,10 @@ class TestMunkiTreeCertificates(SimpleTestCase):
         super().setUpClass()
         tlsdir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "../../conf/start/docker/tls/")
-        cls.cert = open(os.path.join(tlsdir, "zentral.crt")).read()
-        cls.ca_cert = open(os.path.join(tlsdir, "zentral_ca.crt")).read()
+        with open(os.path.join(tlsdir, "zentral.crt")) as f:
+            cls.cert = f.read()
+        with open(os.path.join(tlsdir, "zentral_ca.crt")) as f:
+            cls.ca_cert = f.read()
         cls.certs = [cls.cert, cls.ca_cert]
 
     def test_ms_tree_certificates(self):
