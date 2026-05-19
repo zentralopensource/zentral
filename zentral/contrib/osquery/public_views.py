@@ -1,17 +1,14 @@
 import json
 import logging
 from base64 import b64decode
-from datetime import datetime
 from gzip import GzipFile
 from itertools import chain, islice
 
-import pytz
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.http import Http404, JsonResponse
 from django.utils.crypto import get_random_string
-from django.utils.timezone import make_naive
 from django.views.generic import View
 
 from zentral.contrib.inventory.events import post_machine_snapshot_raw_event
@@ -46,7 +43,7 @@ from zentral.contrib.osquery.tasks import build_file_carving_session_archive
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
-from zentral.utils.time import naive_utcnow
+from zentral.utils.time import naive_utcfromtimestamp, naive_utcnow
 
 from .views.utils import (
     prepare_file_carving_session_if_necessary,
@@ -503,10 +500,7 @@ class LogView(BaseNodeView):
                     "serial_number": self.machine.serial_number,
                     "reference": self.enrolled_machine.node_key,
                     "public_ip_address": self.ip,
-                    "last_seen": make_naive(
-                        datetime.fromtimestamp(int(last_inventory_snapshot_record["unixTime"]), pytz.UTC),
-                        timezone=pytz.UTC,
-                    )
+                    "last_seen": naive_utcfromtimestamp(int(last_inventory_snapshot_record["unixTime"])),
                 }
                 business_unit = self.enrollment.secret.get_api_enrollment_business_unit()
                 if business_unit:

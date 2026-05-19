@@ -1,5 +1,5 @@
-from datetime import datetime
 import logging
+
 from django.core.exceptions import SuspiciousOperation
 from django.shortcuts import get_object_or_404
 from django.views.generic import View
@@ -7,6 +7,7 @@ from realms.backends.views import finalize_session, ras_finalization_error
 from realms.exceptions import RealmUserError
 from realms.models import Realm, RealmAuthenticationSession
 
+from zentral.utils.time import naive_utcfromtimestamp
 
 logger = logging.getLogger("zentral.realms.backends.openidc.views")
 
@@ -53,7 +54,7 @@ class AuthorizationCodeFlowRedirectView(View):
 
         # use the 'exp' claim as default session expiry
         try:
-            expires_at = datetime.fromtimestamp(realm_user.claims["exp"])
+            expires_at = naive_utcfromtimestamp(realm_user.claims["exp"])
         except (KeyError, TypeError, ValueError):
             expires_at = None
 
