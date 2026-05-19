@@ -10,7 +10,6 @@ attrs==25.3.0
 azure-core==1.38.0
 azure-identity==1.19.0
 azure-storage-blob==12.24.0
-backports.zstd==1.1.0
 billiard==4.2.1
 boto3==1.43.8
 botocore==1.43.8
