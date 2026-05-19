@@ -154,4 +154,4 @@ XlsxWriter==3.2.0
 xmlschema==2.5.1
 yarl==1.20.1
 zipp==3.23.0
-zstandard==0.23.0
+zstandard==0.25.0
