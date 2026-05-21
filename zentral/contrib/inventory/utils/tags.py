@@ -1,12 +1,13 @@
 import uuid
+
+import psycopg2.extras
 from django.db import connection, transaction
 from django.db.models.query import QuerySet
+from django.http import HttpRequest
 from django.utils.text import slugify
-import psycopg2.extras
+
 from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.core.events.base import EventMetadata, EventRequest
-from django.http import HttpRequest
-
 
 __all__ = [
     "add_machine_tags",
@@ -14,6 +15,7 @@ __all__ = [
     "send_machine_tag_events",
     "send_machine_tag_events_with_event_request",
     "set_machine_taxonomy_tags",
+    "set_machine_taxonomy_tags_and_yield_events",
 ]
 
 
@@ -23,16 +25,7 @@ def fetch_tags_if_required(tags):
     return tags
 
 
-def send_machine_tag_events(results, request: HttpRequest = None) -> None:
-    if not results:
-        return
-    event_request = None
-    if request:
-        event_request = EventRequest.build_from_request(request)
-    return send_machine_tag_events_with_event_request(results, event_request)
-
-
-def send_machine_tag_events_with_event_request(results, event_request: EventRequest = None) -> None:
+def iter_machine_tag_events_with_event_request(results, event_request):
     if not results:
         return
     event_uuid = uuid.uuid4()
@@ -46,7 +39,7 @@ def send_machine_tag_events_with_event_request(results, event_request: EventRequ
         }
         if taxonomy_pk:
             payload["taxonomy"] = {"pk": taxonomy_pk, "name": taxonomy_name}
-        event = MachineTagEvent(
+        yield MachineTagEvent(
             EventMetadata(
                 uuid=event_uuid,
                 index=event_index,
@@ -55,8 +48,26 @@ def send_machine_tag_events_with_event_request(results, event_request: EventRequ
             ),
             payload,
         )
-        event.post()
         event_index += 1
+
+
+def iter_machine_tag_events(results, request=None):
+    if not results:
+        return
+    event_request = None
+    if request:
+        event_request = EventRequest.build_from_request(request)
+    yield from iter_machine_tag_events_with_event_request(results, event_request)
+
+
+def send_machine_tag_events(results, request: HttpRequest = None) -> None:
+    for event in iter_machine_tag_events(results, request):
+        event.post()
+
+
+def send_machine_tag_events_with_event_request(results, event_request: EventRequest = None) -> None:
+    for event in iter_machine_tag_events_with_event_request(results, event_request):
+        event.post()
 
 
 def add_machine_tags(serial_number, tags, request=None):
@@ -114,7 +125,7 @@ def remove_machine_tags(serial_number, tags, request=None):
     return len(results)
 
 
-def set_machine_taxonomy_tags(serial_number, taxonomy, tag_names, request=None):
+def _set_machine_taxonomy_tags(serial_number, taxonomy, tag_names):
     query = (
         "with taxonomy_tags(name, slug, color) as ("
         "  values %%s"
@@ -170,12 +181,22 @@ def set_machine_taxonomy_tags(serial_number, taxonomy, tag_names, request=None):
              for name in tag_names),
             fetch=True
         )
+    return [
+        (sn, action, tag_id, tag_name, taxonomy.pk, taxonomy.name)
+        for (sn, action, tag_id, tag_name) in results
+    ]
+
+
+def set_machine_taxonomy_tags(serial_number, taxonomy, tag_names, request=None):
+    results = _set_machine_taxonomy_tags(serial_number, taxonomy, tag_names)
 
     def send_machine_tag_updated_events():
-        send_machine_tag_events(
-            [(serial_number, action, tag_id, tag_name, taxonomy.pk, taxonomy.name)
-             for (serial_number, action, tag_id, tag_name) in results],
-            request
-        )
+        send_machine_tag_events(results, request)
 
     transaction.on_commit(send_machine_tag_updated_events)
+
+
+def set_machine_taxonomy_tags_and_yield_events(serial_number, taxonomy, tag_names, request=None):
+    results = _set_machine_taxonomy_tags(serial_number, taxonomy, tag_names)
+
+    yield from iter_machine_tag_events(results, request)

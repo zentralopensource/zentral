@@ -1,8 +1,11 @@
 import logging
+
 from django.core.cache import cache
 from django.db import transaction
+
 from zentral.contrib.inventory.models import MachineGroup, MachineSnapshot, MachineSnapshotCommit, Taxonomy
-from zentral.contrib.inventory.utils import commit_machine_snapshot_and_yield_events, set_machine_taxonomy_tags
+from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_yield_events,
+                                             set_machine_taxonomy_tags_and_yield_events)
 from zentral.contrib.jamf.api_client import APIClient, APIClientError
 from zentral.core.events import event_cls_from_type
 from zentral.core.secret_engines import decrypt_str, DecryptionError
@@ -87,7 +90,7 @@ class WebhookEventPreprocessor(object):
                     taxonomy = self._get_taxonomy(taxonomy_id)
                     if taxonomy:
                         # TODO: serialize and deserialize request for MachineTagEvent
-                        set_machine_taxonomy_tags(serial_number, taxonomy, tag_names)
+                        yield from set_machine_taxonomy_tags_and_yield_events(serial_number, taxonomy, tag_names)
 
     def get_inventory_groups(self, client, device_type, jamf_id, is_smart):
         kwargs = {"reference": client.group_reference(device_type, jamf_id, is_smart)}
