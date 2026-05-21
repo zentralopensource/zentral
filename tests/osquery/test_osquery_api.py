@@ -684,6 +684,82 @@ class OsqueryAPIViewsTestCase(TestCase):
             {'build': '19H1824', 'major': 10, 'minor': 15, 'name': 'macOS', 'patch': 7, 'version': '(a)'}
         )
 
+    def test_system_info_cpu_count_negative_str_cleanup(self):
+        tree = {}
+        snapshot = self.get_default_inventory_query_snapshot("macos")
+        snapshot[1]["cpu_logical_cores"] = "-1"
+        update_tree_with_inventory_query_snapshot(tree, snapshot)
+        self.assertEqual(
+            tree["system_info"],
+            {'computer_name': 'godzilla',
+             'cpu_brand': 'Intel(R) Core(TM)2 Duo CPU T9600 @2.80GHz',
+             'cpu_logical_cores': None,
+             'cpu_physical_cores': 2,
+             'cpu_subtype': 'Intel 80486',
+             'cpu_type': 'i486',
+             'hardware_model': 'MacBookPro5,1',
+             'hardware_serial': '0123456789',
+             'hostname': 'godzilla.box',
+             'physical_memory': '8589934592'}
+        )
+
+    def test_system_info_cpu_count_positive_int_ok(self):
+        tree = {}
+        snapshot = self.get_default_inventory_query_snapshot("macos")
+        snapshot[1]["cpu_physical_cores"] = 17
+        update_tree_with_inventory_query_snapshot(tree, snapshot)
+        self.assertEqual(
+            tree["system_info"],
+            {'computer_name': 'godzilla',
+             'cpu_brand': 'Intel(R) Core(TM)2 Duo CPU T9600 @2.80GHz',
+             'cpu_logical_cores': 2,
+             'cpu_physical_cores': 17,
+             'cpu_subtype': 'Intel 80486',
+             'cpu_type': 'i486',
+             'hardware_model': 'MacBookPro5,1',
+             'hardware_serial': '0123456789',
+             'hostname': 'godzilla.box',
+             'physical_memory': '8589934592'}
+        )
+
+    def test_system_info_cpu_count_whatev_cleanup(self):
+        tree = {}
+        snapshot = self.get_default_inventory_query_snapshot("macos")
+        snapshot[1]["cpu_logical_cores"] = {"yolo": "fomo"}
+        update_tree_with_inventory_query_snapshot(tree, snapshot)
+        self.assertEqual(
+            tree["system_info"],
+            {'computer_name': 'godzilla',
+             'cpu_brand': 'Intel(R) Core(TM)2 Duo CPU T9600 @2.80GHz',
+             'cpu_logical_cores': None,
+             'cpu_physical_cores': 2,
+             'cpu_subtype': 'Intel 80486',
+             'cpu_type': 'i486',
+             'hardware_model': 'MacBookPro5,1',
+             'hardware_serial': '0123456789',
+             'hostname': 'godzilla.box',
+             'physical_memory': '8589934592'}
+        )
+
+    def test_system_info_cpu_count_whatev2_cleanup(self):
+        tree = {}
+        snapshot = self.get_default_inventory_query_snapshot("macos")
+        snapshot[1]["cpu_logical_cores"] = "undeuxtrois"
+        update_tree_with_inventory_query_snapshot(tree, snapshot)
+        self.assertEqual(
+            tree["system_info"],
+            {'computer_name': 'godzilla',
+             'cpu_brand': 'Intel(R) Core(TM)2 Duo CPU T9600 @2.80GHz',
+             'cpu_logical_cores': None,
+             'cpu_physical_cores': 2,
+             'cpu_subtype': 'Intel 80486',
+             'cpu_type': 'i486',
+             'hardware_model': 'MacBookPro5,1',
+             'hardware_serial': '0123456789',
+             'hostname': 'godzilla.box',
+             'physical_memory': '8589934592'}
+        )
+
     def test_osx_apps_and_os_version_schedule(self):
         em = self.force_enrolled_machine()
         self.post_default_inventory_query_snapshot(em.node_key, platform="macos")

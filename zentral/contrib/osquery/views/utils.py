@@ -80,6 +80,20 @@ def update_system_info(tree, t):
          "cpu_logical_cores", "physical_memory"}
     )
     if system_info:
+        for key in ("cpu_logical_cores", "cpu_physical_cores"):
+            try:
+                val = int(system_info[key])
+            except KeyError:
+                pass
+            except (TypeError, ValueError):
+                logger.debug("Invalid %s type", key)
+                system_info[key] = None
+            else:
+                if val < 1:
+                    logger.debug("Invalid %s: %s", key, val)
+                    system_info[key] = None
+                else:
+                    system_info[key] = val
         tree['system_info'] = system_info
 
 
