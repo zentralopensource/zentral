@@ -4,7 +4,7 @@
 # - Make venv and install requirements
 #
 
-FROM python:3.10-bookworm AS base-builder
+FROM python:3.14-trixie AS base-builder
 
 # zentral apt dependencies
 RUN apt-get update && \

@@ -11,7 +11,7 @@ ARG APP_VERSION=unknown
 # - Make venv and install common requirements
 #
 
-FROM python:3.10-bookworm AS base-builder
+FROM python:3.14-trixie AS base-builder
 
 # zentral apt dependencies
 RUN apt-get update && \
@@ -112,7 +112,7 @@ RUN pip install -r requirements_gcp.txt
 # - copy tini, mkbom and xar from stage 0
 #
 
-FROM python:3.10-slim-bookworm AS base-runner
+FROM python:3.14-slim-trixie AS base-runner
 
 # zentral apt dependencies
 RUN apt-get update && \
@@ -125,10 +125,10 @@ RUN apt-get update && \
 # xmlsec1 for PySAML2
             xmlsec1 \
 # extra dependencies for python crypto / WebAuthn
-            libssl3 \
+            libssl3t64 \
             libffi8 \
 # dep for python-ldap
-            libldap-2.5-0 \
+            libldap2 \
             libsasl2-2 && \
 # clean cache
     rm -rf /var/lib/apt/lists/*
