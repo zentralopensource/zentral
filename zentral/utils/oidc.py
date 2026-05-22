@@ -53,6 +53,7 @@ def verify_jws(token, issuer, audience, openid_configuration, exception_class=No
             leeway=TIMESTAMP_LEEWAY,
             options={
                 "require": ["iss", "aud", "exp"],
+                "enforce_minimum_key_length": True,
             },
         )
     except jwt.PyJWTError:

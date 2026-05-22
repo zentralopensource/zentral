@@ -1,4 +1,0 @@
-[[IgnoredVulns]]
-id = "PYSEC-2025-183"
-ignoreUntil = 2026-06-01
-reason = "We only accept a subset of encryption & signature alogorithms, and key lengths."
