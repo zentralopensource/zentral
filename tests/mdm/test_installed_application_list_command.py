@@ -1,16 +1,27 @@
-from datetime import datetime
 import os.path
 import plistlib
+from datetime import datetime
 from unittest.mock import call, patch
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import InstalledApplicationList
 from zentral.contrib.mdm.commands.scheduling import _update_extra_inventory, load_command
-from zentral.contrib.mdm.models import (Artifact, Blueprint, Channel,
-                                        DeviceArtifact, DeviceCommand, Platform,
-                                        RequestStatus, TargetArtifact)
+from zentral.contrib.mdm.models import (
+    Artifact,
+    Blueprint,
+    Channel,
+    DeviceArtifact,
+    DeviceCommand,
+    Platform,
+    RequestStatus,
+    TargetArtifact,
+)
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_blueprint_artifact, force_dep_enrollment_session
 
 
@@ -151,7 +162,7 @@ class InstalledApplicationListCommandTestCase(TestCase):
 
     def test_process_acknowledged_response(self):
         self.assertEqual(self.enrolled_device.blueprint.collect_apps, Blueprint.InventoryItemCollectionOption.ALL)
-        start = datetime.utcnow()
+        start = naive_utcnow()
         cmd = InstalledApplicationList.create_for_target(
             Target(self.dep_enrollment_session.enrolled_device),
             kwargs={"update_inventory": True}
@@ -185,8 +196,8 @@ class InstalledApplicationListCommandTestCase(TestCase):
     # _update_extra_inventory
 
     def test_update_extra_inventory_do_not_collect_apps_noop(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.device_information_updated_at = naive_utcnow()
+        self.enrolled_device.security_info_updated_at = naive_utcnow()
         self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.NO
         self.assertEqual(self.enrolled_device.blueprint.collect_certificates,
                          Blueprint.InventoryItemCollectionOption.NO)
@@ -200,8 +211,8 @@ class InstalledApplicationListCommandTestCase(TestCase):
         ))
 
     def test_update_extra_inventory_managed_apps_updated_at_none(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.device_information_updated_at = naive_utcnow()
+        self.enrolled_device.security_info_updated_at = naive_utcnow()
         self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.MANAGED_ONLY
         self.assertEqual(self.enrolled_device.blueprint.collect_certificates,
                          Blueprint.InventoryItemCollectionOption.NO)
@@ -218,8 +229,8 @@ class InstalledApplicationListCommandTestCase(TestCase):
         self.assertTrue(cmd.update_inventory)
 
     def test_update_extra_inventory_all_apps_updated_at_old(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.device_information_updated_at = naive_utcnow()
+        self.enrolled_device.security_info_updated_at = naive_utcnow()
         self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.ALL
         self.assertEqual(self.enrolled_device.blueprint.collect_certificates,
                          Blueprint.InventoryItemCollectionOption.NO)
@@ -236,14 +247,14 @@ class InstalledApplicationListCommandTestCase(TestCase):
         self.assertTrue(cmd.update_inventory)
 
     def test_update_extra_inventory_managed_apps_noop(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.device_information_updated_at = naive_utcnow()
+        self.enrolled_device.security_info_updated_at = naive_utcnow()
         self.enrolled_device.blueprint.collect_apps = Blueprint.InventoryItemCollectionOption.MANAGED_ONLY
         self.assertEqual(self.enrolled_device.blueprint.collect_certificates,
                          Blueprint.InventoryItemCollectionOption.NO)
         self.assertEqual(self.enrolled_device.blueprint.collect_profiles,
                          Blueprint.InventoryItemCollectionOption.NO)
-        self.enrolled_device.apps_updated_at = datetime.utcnow()
+        self.enrolled_device.apps_updated_at = naive_utcnow()
         self.assertIsNone(_update_extra_inventory(
             Target(self.enrolled_device),
             self.dep_enrollment_session,

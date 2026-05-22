@@ -1,10 +1,12 @@
-from datetime import datetime, timedelta
-from django.urls import reverse
-from django.test import TestCase
-
-from prometheus_client.parser import text_string_to_metric_families
 import uuid
+from datetime import timedelta
+
+from django.test import TestCase
+from django.urls import reverse
 from django_celery_results.models import TaskResult
+from prometheus_client.parser import text_string_to_metric_families
+
+from zentral.utils.time import naive_utcnow
 
 
 class PrometheusViewsTestCase(TestCase):
@@ -20,8 +22,8 @@ class PrometheusViewsTestCase(TestCase):
             content_type='application/json',
             content_encoding='utf-8',
             result={},
-            date_created=datetime.utcnow() - timedelta(days=1, seconds=10),
-            date_done=datetime.utcnow() - timedelta(days=1),
+            date_created=naive_utcnow() - timedelta(days=1, seconds=10),
+            date_done=naive_utcnow() - timedelta(days=1),
             meta='{"children": []}'
         )
         TaskResult.objects.create(
@@ -32,8 +34,8 @@ class PrometheusViewsTestCase(TestCase):
             content_type='application/json',
             content_encoding='utf-8',
             result={},
-            date_created=datetime.utcnow() - timedelta(days=1, seconds=10),
-            date_done=datetime.utcnow() - timedelta(days=1),
+            date_created=naive_utcnow() - timedelta(days=1, seconds=10),
+            date_done=naive_utcnow() - timedelta(days=1),
             meta='{"children": []}'
         )
         TaskResult.objects.create(
@@ -44,8 +46,8 @@ class PrometheusViewsTestCase(TestCase):
             content_type='application/json',
             content_encoding='utf-8',
             result={},
-            date_created=datetime.utcnow() - timedelta(days=1, seconds=10),
-            date_done=datetime.utcnow() - timedelta(days=1),
+            date_created=naive_utcnow() - timedelta(days=1, seconds=10),
+            date_done=naive_utcnow() - timedelta(days=1),
             meta='{"children": []}'
         )
         TaskResult.objects.create(
@@ -56,8 +58,8 @@ class PrometheusViewsTestCase(TestCase):
             content_type='application/json',
             content_encoding='utf-8',
             result={},
-            date_created=datetime.utcnow() - timedelta(days=1, seconds=10),
-            date_done=datetime.utcnow() - timedelta(days=1),
+            date_created=naive_utcnow() - timedelta(days=1, seconds=10),
+            date_done=naive_utcnow() - timedelta(days=1),
             meta='{"children": []}'
         )
     # utils

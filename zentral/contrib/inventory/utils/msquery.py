@@ -1,28 +1,31 @@
-from collections import OrderedDict
 import csv
-from datetime import datetime, timedelta
-from itertools import chain
 import json
 import logging
 import os
 import re
 import tempfile
 import urllib.parse
+import weakref
 import zipfile
+from collections import OrderedDict
+from datetime import datetime, timedelta
+from itertools import chain
+
+import xlsxwriter
 from dateutil import parser
 from django import forms
 from django.db import connection
 from django.http import QueryDict
 from django.urls import reverse
-from django.utils.text import slugify, Truncator
-import weakref
-import xlsxwriter
+from django.utils.text import Truncator, slugify
+
 from zentral.contrib.inventory.conf import EC2, os_version_display, os_version_version_display
 from zentral.contrib.inventory.models import MetaMachine
-from zentral.core.compliance_checks.models import ComplianceCheck, Status as ComplianceCheckStatus
+from zentral.core.compliance_checks.models import ComplianceCheck
+from zentral.core.compliance_checks.models import Status as ComplianceCheckStatus
 from zentral.core.incidents.models import Severity, Status
 from zentral.utils.text import decode_args, encode_args
-
+from zentral.utils.time import naive_utcnow
 
 __all__ = [
     'AndroidAppFilter',
@@ -1115,7 +1118,7 @@ class LastSeenFilter(BaseMSFilter):
         if self.value:
             try:
                 days = max(1, int(self.value.replace("d", "")))
-                self.min_last_seen = datetime.utcnow() - timedelta(days=days)
+                self.min_last_seen = naive_utcnow() - timedelta(days=days)
             except Exception:
                 raise MSQueryValueError(self.get_query_kwarg())
         # If DateTimeFilter is already present in the query, and no filtering value is set,

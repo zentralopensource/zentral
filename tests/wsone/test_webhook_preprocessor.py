@@ -227,5 +227,5 @@ class WSOneWebhookPreprocessorTestCase(TestCase):
         events = list(self.preprocessor.process_raw_event(raw_event))
         self.assertEqual(len(events), 1)
         event = events[0]
-        self.assertEqual(event.metadata.created_at, datetime(2022, 3, 9, 5, 52, 6, 399000))
+        self.assertEqual(event.metadata.created_at, datetime(2022, 3, 9, 5, 52, 6, 399160))
         self.assertEqual(event.metadata.event_type, "wsone_mdm_enrollment_complete")

@@ -1,17 +1,21 @@
-from datetime import datetime, timedelta
 import plistlib
+from datetime import timedelta
 from unittest.mock import patch
+
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_der_private_key
 from cryptography.x509 import load_der_x509_certificate
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import SecurityInfo, SetupFileVault
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.commands.scheduling import _get_next_queued_command, _setup_filevault
 from zentral.contrib.mdm.models import Channel, Command, DeviceCommand, Platform, RequestStatus
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_blueprint, force_dep_enrollment_session, force_filevault_config
 
 
@@ -334,7 +338,7 @@ class SetupFileVaultCommandTestCase(TestCase):
         filevault_config = force_filevault_config()
         self.enrolled_device.blueprint = force_blueprint(filevault_config=filevault_config)
         cmd = SetupFileVault.create_for_target(Target(self.enrolled_device))
-        cmd.db_command.time = datetime.utcnow() - timedelta(hours=5)
+        cmd.db_command.time = naive_utcnow() - timedelta(hours=5)
         cmd.db_command.save()
         cmd.process_response(
             {"UDID": self.enrolled_device.udid,

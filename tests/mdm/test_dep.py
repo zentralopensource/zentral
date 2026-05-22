@@ -1,13 +1,17 @@
+import uuid
 from datetime import datetime
 from unittest.mock import Mock, patch
-import uuid
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep import define_dep_profile, sync_dep_virtual_server_devices
 from zentral.contrib.mdm.dep_client import CursorIterator
 from zentral.contrib.mdm.models import DEPDevice
 from zentral.contrib.mdm.tasks import define_dep_profile_task
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
 
 
@@ -92,7 +96,7 @@ class TestDEPEnrollment(TestCase):
         server.token.sync_cursor = sync_cursor  # → sync
         server.token.save()
         self.assertIsNone(server.token.last_synced_at)
-        start = datetime.utcnow()
+        start = naive_utcnow()
         dep_devices = list(sync_dep_virtual_server_devices(server))
         client.sync_devices.assert_called_once_with(sync_cursor)
         self.assertEqual(len(dep_devices), 1)

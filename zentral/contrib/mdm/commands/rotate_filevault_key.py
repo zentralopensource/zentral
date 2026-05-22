@@ -1,18 +1,21 @@
-from datetime import datetime, timedelta
 import logging
+from datetime import timedelta
 from uuid import uuid4
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption, load_der_private_key
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, load_der_private_key
 from cryptography.x509.oid import NameOID
 from django.db import transaction
+
 from zentral.contrib.mdm.crypto import decrypt_cms_payload
 from zentral.contrib.mdm.events import post_filevault_prk_updated_event
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt, encrypt
-from .base import register_command, Command, CommandBaseForm
+from zentral.utils.time import naive_utcnow
 
+from .base import Command, CommandBaseForm, register_command
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.rotate_filevault_key")
 
@@ -34,7 +37,7 @@ def get_encryption_cert_der_bytes(encryption_key):
     builder = builder.issuer_name(x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, 'Zentral')
     ]))
-    now = datetime.utcnow()
+    now = naive_utcnow()
     builder = builder.not_valid_before(now - timedelta(days=1))
     builder = builder.not_valid_after(now + timedelta(days=1))
     builder = builder.serial_number(x509.random_serial_number())

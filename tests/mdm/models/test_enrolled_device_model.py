@@ -1,11 +1,11 @@
 import uuid
-from datetime import datetime
 
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from tests.mdm.utils import force_push_certificate
 from zentral.contrib.mdm.models import EnrolledDevice
+from zentral.utils.time import naive_utcnow
 
 
 class TestMDMEnrolledDeviceModel(TestCase):
@@ -141,7 +141,7 @@ class TestMDMEnrolledDeviceModel(TestCase):
             udid=uuid.uuid4(),
             serial_number="0123456789",
             push_certificate=force_push_certificate(),
-            blocked_at=datetime.utcnow(),
+            blocked_at=naive_utcnow(),
         )
         self.assertIsNone(enrolled_device.current_enrollment_session)
         self.assertIsNone(enrolled_device.current_enrollment)

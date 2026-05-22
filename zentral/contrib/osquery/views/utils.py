@@ -1,13 +1,16 @@
-from datetime import datetime
 import logging
 import uuid
-from zentral.contrib.inventory.conf import (cleanup_windows_os_version,
-                                            macos_version_from_build,
-                                            windows_version_from_build)
+from datetime import datetime
+
+from zentral.contrib.inventory.conf import (
+    cleanup_windows_os_version,
+    macos_version_from_build,
+    windows_version_from_build,
+)
 from zentral.contrib.inventory.models import PrincipalUserSource
 from zentral.contrib.osquery.models import FileCarvingSession
 from zentral.utils.certificates import parse_text_dn
-
+from zentral.utils.time import naive_utcfromtimestamp
 
 logger = logging.getLogger("zentral.contrib.osquery.views.utils")
 
@@ -242,8 +245,8 @@ def collect_certificate(certificates, t):
         "organizational_unit": get_dn_value_from_dn_d(subject_d, "OU"),
         "domain": get_domain_from_dn_d(subject_d),
         "sha_1": t["sha1"],
-        "valid_from": datetime.utcfromtimestamp(int(t["not_valid_before"])),
-        "valid_until": datetime.utcfromtimestamp(int(t["not_valid_after"])),
+        "valid_from": naive_utcfromtimestamp(int(t["not_valid_before"])),
+        "valid_until": naive_utcfromtimestamp(int(t["not_valid_after"])),
         "signed_by": {
             "common_name": get_dn_value_from_dn_d(issuer_d, "CN"),
             "organization": get_dn_value_from_dn_d(issuer_d, "O"),

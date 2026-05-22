@@ -1,18 +1,29 @@
-from datetime import datetime, timedelta
-from functools import reduce
 import operator
-from unittest.mock import Mock, patch
 import uuid
+from datetime import timedelta
+from functools import reduce
+from unittest.mock import Mock, patch
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import User
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import DEPDevice, DEPEnrollment
-from .utils import (force_acme_issuer, force_dep_enrollment, force_dep_device, force_dep_virtual_server,
-                    force_push_certificate, force_realm, force_scep_issuer)
+from zentral.utils.time import naive_utcnow
+
+from .utils import (
+    force_acme_issuer,
+    force_dep_device,
+    force_dep_enrollment,
+    force_dep_virtual_server,
+    force_push_certificate,
+    force_realm,
+    force_scep_issuer,
+)
 
 
 class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
@@ -252,7 +263,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase):
         push_certificate = force_push_certificate()
         scep_issuer = force_scep_issuer()
         dep_virtual_server = force_dep_virtual_server()
-        dep_virtual_server.token.access_token_expiry = datetime.utcnow() - timedelta(seconds=10)
+        dep_virtual_server.token.access_token_expiry = naive_utcnow() - timedelta(seconds=10)
         dep_virtual_server.token.save()
         realm = force_realm()
         response = self.client.post(reverse("mdm:create_dep_enrollment"),

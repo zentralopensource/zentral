@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta
-from django.urls import reverse
+
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from prometheus_client.parser import text_string_to_metric_families
-from zentral.core.compliance_checks.models import ComplianceCheck, MachineStatus, Status
+
 from zentral.conf import settings
+from zentral.core.compliance_checks.models import ComplianceCheck, MachineStatus, Status
+from zentral.utils.time import naive_utcnow
 
 
 class ComplianceChecksMetricsViewsTestCase(TestCase):
@@ -21,7 +24,7 @@ class ComplianceChecksMetricsViewsTestCase(TestCase):
                 compliance_check=cc,
                 compliance_check_version=cc.version,
                 status=Status.OK.value if failed is False else Status.FAILED.value,
-                status_time=datetime.utcnow() - timedelta(days=age_days)
+                status_time=naive_utcnow() - timedelta(days=age_days)
             )
         return cc
 

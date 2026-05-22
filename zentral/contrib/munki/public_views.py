@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.core.cache import cache
 from django.core.exceptions import SuspiciousOperation
@@ -19,7 +19,7 @@ from zentral.utils.api_views import APIAuthError, JSONPostAPIView
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.json import remove_null_character
 from zentral.utils.os_version import make_comparable_os_version
-from zentral.utils.time import parse_naive_datetime
+from zentral.utils.time import naive_utcnow, parse_naive_datetime
 
 from .compliance_checks import (
     prune_out_of_scope_machine_statuses,
@@ -174,7 +174,7 @@ class JobDetailsView(BaseView):
         response_d["tags"] = [t[1] for t in m.tag_pks_and_names]
 
         munki_state = None
-        now = datetime.utcnow()
+        now = naive_utcnow()
         try:
             munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
         except MunkiState.DoesNotExist:
@@ -243,7 +243,7 @@ class JobDetailsView(BaseView):
 
 class PostJobView(BaseView):
     def do_post(self, data):
-        request_time = datetime.utcnow()
+        request_time = naive_utcnow()
 
         # lock enrolled machine
         EnrolledMachine.objects.select_for_update().filter(serial_number=self.machine_serial_number)

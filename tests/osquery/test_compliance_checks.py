@@ -1,12 +1,15 @@
 from datetime import datetime
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
+
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator, sync_query_compliance_check
 from zentral.contrib.osquery.events import OsqueryCheckStatusUpdated
 from zentral.contrib.osquery.models import DistributedQuery, Pack, PackQuery, Query
 from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
+from zentral.utils.time import naive_utcnow
 
 
 class OsqueryComplianceChecksTestCase(TestCase):
@@ -33,7 +36,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
                 query=query,
                 query_version=query.version,
                 sql=query.sql,
-                valid_from=datetime.utcnow()
+                valid_from=naive_utcnow()
             )
         return query, pack, distributed_query
 
@@ -41,7 +44,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         query, _, _ = self._force_query(force_pack=True)
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
-        cc_status_agg.add_result(query.pk, query.version, datetime.utcnow(), [{"ztl_status": Status.OK.value}])
+        cc_status_agg.add_result(query.pk, query.version, naive_utcnow(), [{"ztl_status": Status.OK.value}])
         events = list(cc_status_agg.commit())
         self.assertEqual(len(events), 0)
         ms_qs = MachineStatus.objects.filter(compliance_check=query.compliance_check, serial_number=serial_number)
@@ -92,7 +95,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         compliance_check = query.compliance_check
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         cc_status_agg.add_result(
             query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}], distributed_query.pk
         )
@@ -127,7 +130,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         query, pack, _ = self._force_query(force_pack=True, force_compliance_check=True)
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [])
         events = list(cc_status_agg.commit())
         self.assertEqual(len(events), 2)
@@ -159,7 +162,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time,
                                  [{"ztl_status": Status.OK.name},
                                   {}])
@@ -176,7 +179,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time,
                                  [{"ztl_status": Status.OK.name},
                                   {"ztl_status": "_NOT_A_VALID_STATUS"}])
@@ -193,7 +196,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time,
                                  [{"ztl_status": Status.OK.name},
                                   {"ztl_status": Status.FAILED.name}])
@@ -211,7 +214,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
         cc_status_agg.add_result(query.pk, query.version, datetime(2001, 1, 1), [{"ztl_status": Status.FAILED.name}])
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}])
         events = list(cc_status_agg.commit())
         self.assertEqual(len(events), 2)
@@ -226,7 +229,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}])
         cc_status_agg.add_result(query.pk, query.version, datetime(2001, 1, 1), [{"ztl_status": Status.FAILED.name}])
         events = list(cc_status_agg.commit())
@@ -241,7 +244,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
     def test_scheduled_compliance_check_one_outdated_failed_tuple(self):
         query, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
         serial_number = get_random_string(12)
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         existing_ms = MachineStatus.objects.create(
             serial_number=serial_number,
             compliance_check=query.compliance_check,
@@ -267,7 +270,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
         query.save()
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
-        cc_status_agg.add_result(query.pk, 1, datetime.utcnow(), [{"ztl_status": Status.FAILED.name}])
+        cc_status_agg.add_result(query.pk, 1, naive_utcnow(), [{"ztl_status": Status.FAILED.name}])
         events = list(cc_status_agg.commit())
         self.assertEqual(len(events), 0)
         ms_qs = MachineStatus.objects.filter(compliance_check=query.compliance_check, serial_number=serial_number)
@@ -284,7 +287,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
             status=Status.OK.value,
             status_time=datetime(2001, 1, 1)
         )
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.OK.name}])
         events = list(cc_status_agg.commit())
         self.assertEqual(len(events), 0)
@@ -307,7 +310,7 @@ class OsqueryComplianceChecksTestCase(TestCase):
             status=Status.OK.value,
             status_time=datetime(2001, 1, 1)
         )
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         cc_status_agg.add_result(query.pk, query.version, status_time, [{"ztl_status": Status.FAILED.name}])
         events = list(cc_status_agg.commit())
         self.assertEqual(len(events), 2)
@@ -332,8 +335,8 @@ class OsqueryComplianceChecksTestCase(TestCase):
         query2, _, _ = self._force_query(force_pack=True, force_compliance_check=True)
         serial_number = get_random_string(12)
         cc_status_agg = ComplianceCheckStatusAggregator(serial_number)
-        status_time1 = datetime.utcnow()
-        status_time2 = datetime.utcnow()
+        status_time1 = naive_utcnow()
+        status_time2 = naive_utcnow()
         cc_status_agg.add_result(query1.pk, query1.version, status_time1, [{"ztl_status": Status.OK.name}])
         cc_status_agg.add_result(query2.pk, query2.version, status_time2, [{"ztl_status": Status.FAILED.name}])
         events = list(cc_status_agg.commit())

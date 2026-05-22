@@ -1,13 +1,27 @@
-from datetime import datetime
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
-from zentral.contrib.monolith.models import (CachedPkgInfo,
-                                             Manifest, ManifestCatalog, ManifestSubManifest,
-                                             PkgInfo, PkgInfoName, SubManifest)
+from zentral.contrib.monolith.models import (
+    CachedPkgInfo,
+    Manifest,
+    ManifestCatalog,
+    ManifestSubManifest,
+    PkgInfo,
+    PkgInfoName,
+    SubManifest,
+)
 from zentral.contrib.munki.models import ManagedInstall
-from .utils import (force_catalog, force_pkg_info, force_manifest_enrollment_package, force_repository,
-                    force_sub_manifest_pkg_info, force_category)
+from zentral.utils.time import naive_utcnow
+
+from .utils import (
+    force_catalog,
+    force_category,
+    force_manifest_enrollment_package,
+    force_pkg_info,
+    force_repository,
+    force_sub_manifest_pkg_info,
+)
 
 
 def sorted_objects(object_list):
@@ -68,20 +82,20 @@ class MonolithModelsTestCase(TestCase):
             machine_serial_number=get_random_string(12),
             name=cls.pkginfo_name_1.name,
             installed_version=cls.pkginfo_1_1.version,
-            installed_at=datetime.utcnow()
+            installed_at=naive_utcnow()
         )
         for i in range(3):
             ManagedInstall.objects.create(
                 machine_serial_number=get_random_string(12),
                 name=cls.pkginfo_name_1.name,
                 installed_version=cls.pkginfo_1_2.version,
-                installed_at=datetime.utcnow()
+                installed_at=naive_utcnow()
             )
         ManagedInstall.objects.create(
             machine_serial_number=get_random_string(12),
             name=cls.pkginfo_name_2.name,
             installed_version=cls.pkginfo_2_1.version,
-            installed_at=datetime.utcnow()
+            installed_at=naive_utcnow()
         )
 
     # repository backend kwargs

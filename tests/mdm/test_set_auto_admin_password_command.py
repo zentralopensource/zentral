@@ -1,9 +1,10 @@
-from datetime import datetime
 import plistlib
 from unittest.mock import patch
 from uuid import uuid4
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import SetAutoAdminPassword
@@ -11,6 +12,8 @@ from zentral.contrib.mdm.commands.set_auto_admin_password import generate_passwo
 from zentral.contrib.mdm.events import AdminPasswordUpdatedEvent
 from zentral.contrib.mdm.models import Channel, Command, Platform
 from zentral.core.secret_engines import decrypt_str
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_dep_enrollment_session
 
 
@@ -118,7 +121,7 @@ class SetAutoAdminPasswordCommandTestCase(TestCase):
     def test_build_command_auto_rotation_existing_sent_command(self):
         cmd = SetAutoAdminPassword.create_for_auto_rotation(Target(self.enrolled_device), 60)
         self.assertIsInstance(cmd, SetAutoAdminPassword)
-        cmd.db_command.time = datetime.utcnow()
+        cmd.db_command.time = naive_utcnow()
         cmd.db_command.save()
         cmd2 = SetAutoAdminPassword.create_for_auto_rotation(Target(self.enrolled_device), 60)
         self.assertIsInstance(cmd2, SetAutoAdminPassword)

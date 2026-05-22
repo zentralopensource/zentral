@@ -1,13 +1,32 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.santa.ballot_box import (AnonymousVoter, BallotBox, DuplicateVoteError,
-                                              ResetNotAllowedError, Voter, VotingError, VotingNotAllowedError)
+
+from zentral.contrib.santa.ballot_box import (
+    AnonymousVoter,
+    BallotBox,
+    DuplicateVoteError,
+    ResetNotAllowedError,
+    Voter,
+    VotingError,
+    VotingNotAllowedError,
+)
 from zentral.contrib.santa.events import SantaBallotEvent, SantaRuleUpdateEvent, SantaTargetStateUpdateEvent
 from zentral.contrib.santa.models import Ballot, Rule, Target, TargetState
 from zentral.contrib.santa.utils import update_voting_rules
-from .utils import (add_file_to_test_class, force_ballot, force_configuration, force_enrolled_machine,
-                    force_realm_group, force_realm_user, force_target, force_voting_group)
+from zentral.utils.time import naive_utcnow
+
+from .utils import (
+    add_file_to_test_class,
+    force_ballot,
+    force_configuration,
+    force_enrolled_machine,
+    force_realm_group,
+    force_realm_user,
+    force_target,
+    force_voting_group,
+)
 
 
 class SantaBallotBoxTestCase(TestCase):
@@ -37,7 +56,7 @@ class SantaBallotBoxTestCase(TestCase):
 
     def test_voter_enrolled_machines(self):
         _, realm_user = force_realm_user()
-        now = datetime.utcnow()
+        now = naive_utcnow()
         to_old = now - timedelta(days=46)
         force_enrolled_machine(primary_user=get_random_string(12), last_seen=now)
         em = force_enrolled_machine(primary_user=realm_user.username, last_seen=now)
@@ -49,7 +68,7 @@ class SantaBallotBoxTestCase(TestCase):
         realm, realm_user = force_realm_user()
         configuration = force_configuration(voting_realm=realm)
         configuration2 = force_configuration()
-        now = datetime.utcnow()
+        now = naive_utcnow()
         force_enrolled_machine(primary_user=realm_user.username, last_seen=now, configuration=configuration)
         force_enrolled_machine(primary_user=realm_user.username, last_seen=now, configuration=configuration2)
         voter = Voter(realm_user)
@@ -269,7 +288,7 @@ class SantaBallotBoxTestCase(TestCase):
             configuration=configuration,
             score=0,
             state=TargetState.State.UNTRUSTED,
-            reset_at=datetime.utcnow(),
+            reset_at=naive_utcnow(),
         )
         self.assertEqual(
             BallotBox.for_realm_user(self.file_target, realm_user, all_configurations=True).existing_votes,
@@ -1006,7 +1025,7 @@ class SantaBallotBoxTestCase(TestCase):
         ts = TargetState.objects.get(target=self.file_target, configuration=configuration)
         ts.score = 0
         ts.state = TargetState.State.UNTRUSTED
-        ts.reset_at = datetime.utcnow()
+        ts.reset_at = naive_utcnow()
         ts.save()
         configuration.default_voting_weight = 3
         configuration.save()
@@ -1031,7 +1050,7 @@ class SantaBallotBoxTestCase(TestCase):
             target=self.file_target,
             configuration=configuration,
             state=TargetState.State.UNTRUSTED,
-            reset_at=datetime.utcnow()
+            reset_at=naive_utcnow()
         )
         configuration2 = force_configuration(voting_realm=realm)
         # second target state in unrelated configurations must not interfere

@@ -1,14 +1,15 @@
-from datetime import datetime
 import enum
+
 from django.contrib.postgres.fields import ArrayField
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import F, Q
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+
 from zentral.contrib.inventory.models import BaseEnrollment, Tag
 from zentral.utils.os_version import make_comparable_os_version
-
+from zentral.utils.time import naive_utcnow
 
 # configuration
 
@@ -155,7 +156,7 @@ class MunkiState(models.Model):
     force_full_sync_at = models.DateTimeField(null=True)
 
     def force_full_sync(self):
-        self.force_full_sync_at = datetime.utcnow()
+        self.force_full_sync_at = naive_utcnow()
         self.save()
 
 

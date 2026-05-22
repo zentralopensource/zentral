@@ -1,14 +1,16 @@
-from datetime import datetime, timedelta
 import logging
 import os
+from datetime import timedelta
+
 import clickhouse_connect
 from django.utils.functional import cached_property
 from django.utils.timezone import is_naive, make_aware, make_naive
 from kombu.utils import json
 from rest_framework import serializers
+
 from zentral.core.events import event_from_event_d, event_types
 from zentral.core.stores.backends.base import BaseStore, serialize_needles
-
+from zentral.utils.time import naive_utcnow
 
 logger = logging.getLogger('zentral.core.stores.backends.clickhouse')
 
@@ -309,7 +311,7 @@ class ClickHouseStore(BaseStore):
             if not is_naive(day):
                 day = make_naive(day)
             data[day] = (result["events"], result["machines"])
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = naive_utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         buckets = []
         for days in range(-1 * bucket_number + 1, 1):
             day = today + timedelta(days=days)

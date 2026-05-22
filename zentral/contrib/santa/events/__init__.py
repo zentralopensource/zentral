@@ -1,5 +1,5 @@
-from datetime import datetime
 import logging
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import File
 from zentral.contrib.santa.models import Bundle, EnrolledMachine, Target
@@ -7,7 +7,7 @@ from zentral.contrib.santa.utils import add_bundle_binary_targets, update_metabu
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.utils.certificates import APPLE_DEV_ID_ISSUER_CN, parse_apple_dev_id
 from zentral.utils.text import shard
-
+from zentral.utils.time import naive_utcfromtimestamp, naive_utcnow
 
 logger = logging.getLogger('zentral.contrib.santa.events')
 
@@ -274,7 +274,7 @@ def _build_certificate_tree_from_santa_event_cert(in_d):
                                 ("valid_until", "valid_until", True)):
         val = in_d.get(from_a)
         if is_dt:
-            val = datetime.utcfromtimestamp(val)
+            val = naive_utcfromtimestamp(val)
         out_d[to_a] = val
     return out_d
 
@@ -479,7 +479,7 @@ def _create_bundle_binaries(events):
             if binary_target_count > bundle.binary_count:
                 logger.error("Bundle %s as wrong number of binary targets", bundle_sha256)
             elif binary_target_count == bundle.binary_count:
-                bundle.uploaded_at = datetime.utcnow()
+                bundle.uploaded_at = naive_utcnow()
                 save_bundle = True
                 uploaded_bundles.add(bundle)
         if save_bundle:
@@ -511,7 +511,7 @@ def _flatten_process_signing_chain(process_d):
 
 def _post_santa_events(enrolled_machine, user_agent, ip, events):
     def get_created_at(payload):
-        return datetime.utcfromtimestamp(payload['execution_time'])
+        return naive_utcfromtimestamp(payload['execution_time'])
 
     def prepare_santa_event(payload):
         _flatten_process_signing_chain(payload)
@@ -544,7 +544,7 @@ def _post_santa_events(enrolled_machine, user_agent, ip, events):
 
 def _post_santa_file_access_events(enrolled_machine, user_agent, ip, events):
     def get_created_at(payload):
-        return datetime.utcfromtimestamp(payload["access_time"])
+        return naive_utcfromtimestamp(payload["access_time"])
 
     def prepare_santa_file_access_event(payload):
         for process_d in payload.get("process_chain", []):

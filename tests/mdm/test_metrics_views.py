@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.test import TestCase
 from django.urls import reverse
@@ -15,6 +15,7 @@ from zentral.contrib.mdm.models import (
     TargetArtifact,
     UserArtifact,
 )
+from zentral.utils.time import naive_utcnow
 
 from .utils import (
     force_artifact,
@@ -126,8 +127,8 @@ class MDMMetricsViewsTestCase(TestCase):
         force_dep_enrollment_session(mbu, authenticated=True, completed=True)
         session, _, _ = force_dep_enrollment_session(mbu, authenticated=True, completed=True)
         enrolled_device = session.enrolled_device
-        enrolled_device.blocked_at = datetime.utcnow() - timedelta(days=1)
-        enrolled_device.last_seen_at = datetime.utcnow() - timedelta(days=28)
+        enrolled_device.blocked_at = naive_utcnow() - timedelta(days=1)
+        enrolled_device.last_seen_at = naive_utcnow() - timedelta(days=28)
         enrolled_device.supervised = True
         enrolled_device.blueprint = force_blueprint()
         enrolled_device.save()
@@ -160,7 +161,7 @@ class MDMMetricsViewsTestCase(TestCase):
             mbu, authenticated=True, completed=True
         )
         enrolled_device = session.enrolled_device
-        enrolled_device.last_seen_at = datetime.utcnow() - timedelta(days=28)
+        enrolled_device.last_seen_at = naive_utcnow() - timedelta(days=28)
         enrolled_device.save()
         device_artifact, (device_av,) = force_artifact()
         DeviceArtifact.objects.create(
@@ -170,7 +171,7 @@ class MDMMetricsViewsTestCase(TestCase):
         )
         user_artifact, (user_av,) = force_artifact(channel=Channel.USER)
         enrolled_user = force_enrolled_user(enrolled_device)
-        enrolled_user.last_seen_at = datetime.utcnow() - timedelta(days=13)
+        enrolled_user.last_seen_at = naive_utcnow() - timedelta(days=13)
         enrolled_user.save()
         UserArtifact.objects.create(
             enrolled_user=enrolled_user,

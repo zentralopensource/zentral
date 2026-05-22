@@ -1,12 +1,15 @@
-from datetime import datetime
 import plistlib
-from unittest.mock import call, Mock, patch
+from unittest.mock import Mock, call, patch
+
 from django.db.models.expressions import CombinedExpression
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.monolith.models import PkgInfo, PkgInfoCategory, PkgInfoName
 from zentral.contrib.monolith.repository_backends import load_repository_backend
 from zentral.core.events.base import AuditEvent
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_catalog, force_manifest, force_pkg_info, force_repository
 
 
@@ -47,7 +50,7 @@ class MonolithRepositoriesTestCase(TestCase):
         name = get_random_string(12)
         requires_pin_name = get_random_string(12)
         update_for_pin_name = get_random_string(12)
-        now = datetime.utcnow()
+        now = naive_utcnow()
         repository = self._load_repository(
             db_repository,
             [{"catalogs": [catalog.name],

@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
 import logging
 import os.path
+from datetime import timedelta
+
 from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.storage.blob import BlobSasPermissions, BlobServiceClient, generate_blob_sas
@@ -8,9 +9,11 @@ from django import forms
 from django.http import HttpResponseRedirect
 from django.utils.functional import cached_property
 from rest_framework import serializers
-from zentral.contrib.monolith.exceptions import RepositoryError
-from .base import BaseRepository
 
+from zentral.contrib.monolith.exceptions import RepositoryError
+from zentral.utils.time import naive_utcnow
+
+from .base import BaseRepository
 
 logger = logging.getLogger("zentral.contrib.monolith.repository_backends.azure")
 
@@ -88,7 +91,7 @@ class AzureRepository(BaseRepository):
 
     def get_user_delegation_key(self):
         key, expiry = self._user_delegation_key
-        now = datetime.utcnow()
+        now = naive_utcnow()
         if expiry is None or (expiry - now) < self.min_user_delegation_key_validity:
             expiry = now + self.user_delegation_key_validity
             key = self._blob_service_client.get_user_delegation_key(key_start_time=now, key_expiry_time=expiry)
@@ -136,6 +139,6 @@ class AzureRepository(BaseRepository):
             container_name=self.container,
             blob_name=blob_name,
             permission=BlobSasPermissions(read=True),
-            expiry=datetime.utcnow() + self.signed_url_validity
+            expiry=naive_utcnow() + self.signed_url_validity
         )
         return HttpResponseRedirect(f"{self._account_url}/{self.container}/{blob_name}?{sas}")

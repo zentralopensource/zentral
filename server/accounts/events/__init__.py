@@ -1,9 +1,10 @@
-from datetime import datetime
 import logging
 import uuid
-from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
-from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 
+from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
+
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
+from zentral.utils.time import naive_utcnow
 
 logger = logging.getLogger("zentral.accounts.events")
 
@@ -135,7 +136,7 @@ def post_verification_device_event(request, user, action, verification_device=No
 
 def post_group_membership_updates(request, added_groups, removed_groups, user=None):
     event_request = EventRequest.build_from_request(request)
-    created_at = datetime.utcnow()
+    created_at = naive_utcnow()
     event_uuid = uuid.uuid4()
     event_index = 0
     base_payload = {}

@@ -1,14 +1,16 @@
-from datetime import datetime
 import logging
+
 from cryptography.hazmat.primitives.serialization import load_der_private_key
 from django.db import transaction
+
 from zentral.contrib.mdm.crypto import decrypt_cms_payload
 from zentral.contrib.mdm.events import post_filevault_prk_updated_event, post_recovery_password_event
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.utils.json import prepare_loaded_plist
-from .base import register_command, Command, CommandBaseForm
-from .restart_device import RestartDevice
+from zentral.utils.time import naive_utcnow
 
+from .base import Command, CommandBaseForm, register_command
+from .restart_device import RestartDevice
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.security_info")
 
@@ -100,7 +102,7 @@ class SecurityInfo(Command):
             ))
 
         self.enrolled_device.security_info = prepare_loaded_plist(security_info)
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.security_info_updated_at = naive_utcnow()
         # management status
         management_status = security_info.get("ManagementStatus")
         if management_status:

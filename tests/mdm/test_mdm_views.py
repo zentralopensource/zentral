@@ -62,6 +62,7 @@ from zentral.contrib.mdm.models import (
     TargetArtifact,
     UserEnrollmentSession,
 )
+from zentral.utils.time import naive_utcnow
 
 from .utils import (
     MACOS_14_CLIENT_CAPABILITIES,
@@ -673,9 +674,9 @@ class MDMViewsTestCase(TestCase):
         self.assertIsNone(ed.last_notified_at)
         self.assertIsNone(ed.notification_queued_at)
         ed.last_ip = "127.0.0.1"
-        ed.last_seen_at = datetime.utcnow()
-        ed.last_notified_at = datetime.utcnow()
-        ed.notification_queued_at = datetime.utcnow()
+        ed.last_seen_at = naive_utcnow()
+        ed.last_notified_at = naive_utcnow()
+        ed.notification_queued_at = naive_utcnow()
         ed.save()
         # new enrollment but not a re-enrollment session
         session, udid, serial_number = force_dep_enrollment_session(
@@ -2293,7 +2294,7 @@ class MDMViewsTestCase(TestCase):
         session, udid, serial_number = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True
         )
-        now = datetime.utcnow()
+        now = naive_utcnow()
         enrolled_device = EnrolledDevice.objects.get(udid=udid)
         enrolled_device.device_information_updated_at = now
         enrolled_device.security_info_updated_at = now
@@ -2314,7 +2315,7 @@ class MDMViewsTestCase(TestCase):
         session, udid, serial_number = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True
         )
-        now = datetime.utcnow()
+        now = naive_utcnow()
         enrolled_device = EnrolledDevice.objects.get(udid=udid)
         self.assertIsNone(enrolled_device.device_information_updated_at)
         self.assertIsNone(enrolled_device.security_info_updated_at)
@@ -2343,7 +2344,7 @@ class MDMViewsTestCase(TestCase):
             blueprint=blueprint,
             artifact_type=Artifact.Type.STORE_APP,
         )
-        now = datetime.utcnow()
+        now = naive_utcnow()
         # inventory up to date
         enrolled_device = EnrolledDevice.objects.get(udid=udid)
         enrolled_device.device_information_updated_at = now
@@ -2381,7 +2382,7 @@ class MDMViewsTestCase(TestCase):
             artifact_type=Artifact.Type.STORE_APP,
         )
         location_asset = av.store_app.location_asset
-        now = datetime.utcnow()
+        now = naive_utcnow()
         # inventory up to date
         enrolled_device = EnrolledDevice.objects.get(udid=udid)
         enrolled_device.device_information_updated_at = now
@@ -2410,7 +2411,7 @@ class MDMViewsTestCase(TestCase):
         enrolled_user = force_enrolled_user(session.enrolled_device)
         self.assertIsNone(enrolled_user.last_ip)
         self.assertIsNone(enrolled_user.last_seen_at)
-        now = datetime.utcnow()
+        now = naive_utcnow()
         payload = {"UDID": udid, "Status": "Idle", "UserID": enrolled_user.user_id}
         response = self._put(reverse("mdm_public:connect"), payload, session)
         self.assertEqual(response.content, b"")
@@ -2423,10 +2424,10 @@ class MDMViewsTestCase(TestCase):
         session, udid, serial_number = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True
         )
-        session.enrolled_device.cert_not_valid_after = datetime.utcnow() + timedelta(
+        session.enrolled_device.cert_not_valid_after = naive_utcnow() + timedelta(
             days=1
         )
-        now = datetime.utcnow()
+        now = naive_utcnow()
         session.enrolled_device.device_information_updated_at = now
         session.enrolled_device.security_info_updated_at = now
         session.enrolled_device.save()
@@ -2465,7 +2466,7 @@ class MDMViewsTestCase(TestCase):
         session, udid, serial_number = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True
         )
-        now = datetime.utcnow()
+        now = naive_utcnow()
         enrolled_device = EnrolledDevice.objects.get(udid=udid)
         enrolled_device.device_information_updated_at = now
         enrolled_device.security_info_updated_at = now
@@ -2500,7 +2501,7 @@ class MDMViewsTestCase(TestCase):
             self.mbu, authenticated=True, completed=True
         )
         enrolled_device = EnrolledDevice.objects.get(udid=udid)
-        enrolled_device.blocked_at = datetime.utcnow()
+        enrolled_device.blocked_at = naive_utcnow()
         enrolled_device.save()
         payload = {"UDID": udid, "Status": "Idle"}
         response = self._put(reverse("mdm_public:connect"), payload, session)

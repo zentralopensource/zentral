@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta
 from unittest.mock import Mock
+
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.events import InventoryHeartbeat
 from zentral.contrib.osquery.events import OsqueryRequestEvent
-from zentral.core.events.base import EventMetadata, EventRequest, EventRequestUser, BaseEvent, register_event_type
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, EventRequestUser, register_event_type
 from zentral.utils.text import encode_args
+from zentral.utils.time import naive_utcnow
 
 
 class TestEvent1(BaseEvent):
@@ -43,11 +46,11 @@ def make_event(idx=0, first_type=True, with_request=True, objects=None, probe_pk
 
 
 def get_from_dt():
-    return datetime.utcnow() - timedelta(days=1)
+    return naive_utcnow() - timedelta(days=1)
 
 
 def get_to_dt():
-    return datetime.utcnow() + timedelta(days=1)
+    return naive_utcnow() + timedelta(days=1)
 
 
 class BaseTestStore(object):
@@ -298,7 +301,7 @@ class BaseTestStore(object):
             get_random_string(12), "osquery/5.20.0", "203.0.113.17",
             [{"request_type": "distributed_read"},
              {"request_type": "distributed_read"}],
-            get_created_at=lambda p: datetime.utcnow()
+            get_created_at=lambda p: naive_utcnow()
         ):
             self.store.store(ore)
         aggs = self.store.get_app_hist_data("day", 15, "osquery")

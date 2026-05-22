@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import uuid
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -11,12 +12,14 @@ from dateutil import parser
 from django.db import connection, transaction
 from django.urls import reverse
 from django.utils import timezone
+
 from zentral.conf import settings
 from zentral.utils.certificates import split_certificate_chain
+from zentral.utils.time import naive_utcnow
+
 from .crypto import decrypt_cms_payload_with_pem_privkey
 from .dep_client import DEPClient, DEPClientError
 from .models import DEPDevice, DEPEnrollment
-
 
 logger = logging.getLogger("zentral.contrib.mdm.dep")
 
@@ -285,7 +288,7 @@ def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
                                       serial_number__in=success_devices)
                               .update(profile_uuid=default_enrollment.uuid,
                                       profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
-                                      profile_assign_time=datetime.datetime.utcnow(),
+                                      profile_assign_time=naive_utcnow(),
                                       enrollment=default_enrollment))
 
 
@@ -346,7 +349,7 @@ def define_dep_profile(dep_enrollment: DEPEnrollment):
                                   serial_number__in=result["devices"]["success"])
                           .update(profile_uuid=dep_enrollment.uuid,
                                   profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
-                                  profile_assign_time=datetime.datetime.utcnow(),
+                                  profile_assign_time=naive_utcnow(),
                                   enrollment=dep_enrollment))
 
     # mark unaccessible devices as deleted
@@ -385,5 +388,5 @@ def disown_dep_device(dep_device):
     except AssertionError:
         raise DEPClientError("Unknown result")
     if result == "SUCCESS":
-        DEPDevice.objects.filter(pk=dep_device.pk).update(disowned_at=datetime.datetime.utcnow())
+        DEPDevice.objects.filter(pk=dep_device.pk).update(disowned_at=naive_utcnow())
     return result

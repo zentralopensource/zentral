@@ -1,17 +1,20 @@
-from datetime import datetime
+import uuid
 from importlib import import_module
 from unittest.mock import patch
-import uuid
+
 from django.conf import settings
 from django.http import HttpRequest
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
 from realms.backends.views import finalize_session
 from realms.models import RealmAuthenticationSession
+
 from zentral.contrib.santa.ballot_box import BallotBox
 from zentral.contrib.santa.events import SantaBallotEvent, SantaTargetStateUpdateEvent
 from zentral.contrib.santa.models import Ballot, Rule, Target
+from zentral.utils.time import naive_utcnow
+
 from .utils import add_file_to_test_class, force_configuration, force_enrolled_machine, force_realm, force_realm_user
 
 
@@ -27,7 +30,7 @@ class SantaSetupViewsTestCase(TestCase):
         cls.em = force_enrolled_machine(
             configuration=cls.configuration,
             primary_user=cls.realm_user.username,
-            last_seen=datetime.utcnow(),
+            last_seen=naive_utcnow(),
         )
         add_file_to_test_class(cls)
 

@@ -1,28 +1,44 @@
-from datetime import datetime
 import json
-from unittest.mock import patch
 import uuid
+from datetime import datetime
+from unittest.mock import patch
+
 from django.test import TestCase
-from django.urls import reverse, NoReverseMatch
+from django.urls import NoReverseMatch, reverse
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
 from server.urls import build_urlpatterns_for_zentral_apps
+
 from zentral.conf import settings
 from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineSnapshot, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME
-from zentral.contrib.osquery.events import (OsqueryEnrollmentEvent, OsqueryRequestEvent, OsqueryResultEvent,
-                                            OsqueryCheckStatusUpdated, OsqueryFileCarvingEvent)
-from zentral.contrib.osquery.models import (Configuration, ConfigurationPack,
-                                            DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
-                                            EnrolledMachine, Enrollment, FileCarvingSession,
-                                            Query, Pack, PackQuery)
+from zentral.contrib.osquery.events import (
+    OsqueryCheckStatusUpdated,
+    OsqueryEnrollmentEvent,
+    OsqueryFileCarvingEvent,
+    OsqueryRequestEvent,
+    OsqueryResultEvent,
+)
+from zentral.contrib.osquery.models import (
+    Configuration,
+    ConfigurationPack,
+    DistributedQuery,
+    DistributedQueryMachine,
+    DistributedQueryResult,
+    EnrolledMachine,
+    Enrollment,
+    FileCarvingSession,
+    Pack,
+    PackQuery,
+    Query,
+)
 from zentral.contrib.osquery.views.utils import update_tree_with_inventory_query_snapshot
 from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
-
+from zentral.utils.time import naive_utcnow
 
 INVENTORY_QUERY_SNAPSHOT = [
     {'build': '19H1824',
@@ -222,7 +238,7 @@ class OsqueryAPIViewsTestCase(TestCase):
                 query=query,
                 query_version=query.version,
                 sql=query.sql,
-                valid_from=datetime.utcnow()
+                valid_from=naive_utcnow()
             )
         return query, pack, distributed_query
 
@@ -891,22 +907,22 @@ class OsqueryAPIViewsTestCase(TestCase):
         dq = DistributedQuery.objects.create(sql="select username from users;",
                                              # no minimum osquery version
                                              # no platforms
-                                             valid_from=datetime.utcnow(),
+                                             valid_from=naive_utcnow(),
                                              query_version=1)
         dq2 = DistributedQuery.objects.create(sql="select * from osquery_schedule;",
                                               minimum_osquery_version="17.0.0",  # OK
                                               platforms=["darwin"],  # OK
-                                              valid_from=datetime.utcnow(),
+                                              valid_from=naive_utcnow(),
                                               query_version=1)
         DistributedQuery.objects.create(sql="select username from users;",
                                         minimum_osquery_version="18.0.0",  # too high
                                         platforms=["darwin"],  # OK
-                                        valid_from=datetime.utcnow(),
+                                        valid_from=naive_utcnow(),
                                         query_version=1)
         DistributedQuery.objects.create(sql="select username from users;",
                                         minimum_osquery_version="17.0.0",  # OK
                                         platforms=["linux"],  # wrong platform
-                                        valid_from=datetime.utcnow(),
+                                        valid_from=naive_utcnow(),
                                         query_version=1)
         response = self.post_as_json("distributed_read", {"node_key": em.node_key})
         self.assertEqual(response.status_code, 200)
@@ -943,7 +959,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     def test_distributed_write_no_compliance_check(self):
         em = self.force_enrolled_machine()
         dq = DistributedQuery.objects.create(sql="select username from users;",
-                                             valid_from=datetime.utcnow(),
+                                             valid_from=naive_utcnow(),
                                              query_version=1)
         dqm = DistributedQueryMachine.objects.create(distributed_query=dq, serial_number=em.serial_number)
         response = self.post_as_json("distributed_write",

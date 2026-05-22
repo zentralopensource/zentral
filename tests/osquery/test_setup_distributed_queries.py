@@ -1,16 +1,23 @@
-from datetime import datetime
-from functools import reduce
 import operator
-from unittest.mock import patch
 import uuid
+from functools import reduce
+from unittest.mock import patch
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import User
-from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
-                                            FileCarvingSession, Query)
+
+from zentral.contrib.osquery.models import (
+    DistributedQuery,
+    DistributedQueryMachine,
+    DistributedQueryResult,
+    FileCarvingSession,
+    Query,
+)
+from zentral.utils.time import naive_utcnow
 
 
 class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
@@ -46,7 +53,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
             query=query,
             query_version=query.version,
             sql=query.sql,
-            valid_from=datetime.utcnow(),
+            valid_from=naive_utcnow(),
         )
 
     def _force_query(self):
@@ -79,7 +86,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self._login("osquery.add_distributedquery", "osquery.view_distributedquery")
         response = self.client.post(
             "{}?q={}".format(reverse("osquery:create_distributed_query"), query.pk),
-            {"valid_from": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
              "shard": "100"},
             follow=True
         )
@@ -96,7 +103,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self._login("osquery.add_distributedquery", "osquery.view_distributedquery")
         response = self.client.post(
             "{}?q={}".format(reverse("osquery:create_distributed_query"), query.pk),
-            {"valid_from": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
              "valid_until": "2021-02-18 20:55:00",
              "shard": "100"},
             follow=True
@@ -135,7 +142,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         self._login("osquery.add_distributedquery", "osquery.view_distributedquery")
         response = self.client.post(
             "{}?q={}".format(reverse("osquery:create_distributed_query"), distributed_query.query.pk),
-            {"valid_from": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
              "shard": "100"},
             follow=True
         )
@@ -150,10 +157,10 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
     def test_create_distributed_halt_current_post(self):
         distributed_query = self._force_distributed_query()
         self._login("osquery.add_distributedquery", "osquery.view_distributedquery")
-        pre_post_dt = datetime.utcnow()
+        pre_post_dt = naive_utcnow()
         response = self.client.post(
             "{}?q={}".format(reverse("osquery:create_distributed_query"), distributed_query.query.pk),
-            {"valid_from": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
              "shard": "100",
              "halt_current_runs": "on"},
             follow=True
@@ -166,7 +173,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase):
         distributed_query.refresh_from_db()
         self.assertFalse(distributed_query.is_active())
         self.assertTrue(distributed_query.valid_until > pre_post_dt)
-        self.assertTrue(distributed_query.valid_until < datetime.utcnow())
+        self.assertTrue(distributed_query.valid_until < naive_utcnow())
 
     # update distributed query
 

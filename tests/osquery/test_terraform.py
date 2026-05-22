@@ -1,11 +1,12 @@
-from datetime import datetime
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
+
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Configuration, DistributedQuery, Pack, PackQuery, Query
 from zentral.contrib.osquery.terraform import ConfigurationResource, QueryResource
+from zentral.utils.time import naive_utcnow
 
 
 class OsqueryTerraformTestCase(TestCase):
@@ -45,7 +46,7 @@ class OsqueryTerraformTestCase(TestCase):
                 query=query,
                 query_version=query.version,
                 sql=query.sql,
-                valid_from=datetime.utcnow()
+                valid_from=naive_utcnow()
             )
         return query, pack, distributed_query
 

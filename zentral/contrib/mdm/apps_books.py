@@ -1,24 +1,31 @@
-from datetime import datetime
-from itertools import islice
 import logging
 import threading
+from itertools import islice
+from urllib.parse import urljoin
+
+import psycopg2.extras
+import requests
+from base.utils import deployment_info
 from django.core.cache import cache
 from django.db import connection, transaction
 from django.urls import reverse
 from django.utils.functional import SimpleLazyObject
-import psycopg2.extras
-import requests
-from urllib.parse import urljoin
-from base.utils import deployment_info
+
 from zentral.conf import settings
 from zentral.core.events.base import EventMetadata
 from zentral.utils.requests import CustomHTTPAdapter
-from .events import (AssetCreatedEvent, AssetUpdatedEvent,
-                     DeviceAssignmentCreatedEvent, DeviceAssignmentDeletedEvent,
-                     LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
+from zentral.utils.time import naive_utcnow
+
+from .events import (
+    AssetCreatedEvent,
+    AssetUpdatedEvent,
+    DeviceAssignmentCreatedEvent,
+    DeviceAssignmentDeletedEvent,
+    LocationAssetCreatedEvent,
+    LocationAssetUpdatedEvent,
+)
 from .incidents import MDMAssetAvailabilityIncident
 from .models import Asset, DEPDevice, Location, LocationAsset
-
 
 logger = logging.getLogger("zentral.contrib.mdm.apps_books")
 
@@ -579,7 +586,7 @@ def bulk_insert_device_assignments(location_asset, serial_numbers):
         "on conflict do nothing "
         "returning serial_number"
     )
-    now = datetime.utcnow()
+    now = naive_utcnow()
     sni = iter(serial_numbers)
     while True:
         batch = list(islice(sni, BATCH_DB_OPS_SIZE))

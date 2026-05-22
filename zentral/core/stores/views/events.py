@@ -1,12 +1,14 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
+
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core import signing
 from django.http import HttpResponseRedirect
 from django.views.generic import TemplateView, View
+
 from zentral.core.events import event_types
 from zentral.core.stores.conf import stores
+from zentral.utils.time import naive_utcnow
 from zentral.utils.views import UserPaginationMixin
-
 
 #
 # The following views must be combined with a Mixin for each kind of object.
@@ -60,7 +62,7 @@ class EventsViewMixin(PermissionRequiredMixin):
             else:
                 raise ValueError("Missing time range")
         kwargs["to_dt"] = None
-        now = datetime.utcnow()
+        now = naive_utcnow()
         if time_range == "now-24h":
             kwargs["from_dt"] = now - timedelta(hours=24)
         elif time_range == "now-7d":

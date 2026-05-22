@@ -1,17 +1,19 @@
-from datetime import datetime
-from functools import reduce
 import operator
+from functools import reduce
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
-from accounts.models import User
+
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaMachine
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Query
 from zentral.core.compliance_checks.models import MachineStatus, Status
 from zentral.utils.provisioning import provision
+from zentral.utils.time import naive_utcnow
 
 
 class InventoryComplianceChecksViewsTestCase(TestCase):
@@ -87,7 +89,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             compliance_check=query.compliance_check,
             compliance_check_version=query.compliance_check.version,
             status=Status.OK.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         self._login(
             'compliance_checks.view_machinestatus',
@@ -106,7 +108,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             compliance_check=query.compliance_check,
             compliance_check_version=query.compliance_check.version,
             status=Status.OK.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         self._login(
             'compliance_checks.view_machinestatus',
@@ -133,7 +135,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             compliance_check=query.compliance_check,
             compliance_check_version=query.compliance_check.version,
             status=Status.FAILED.value,
-            status_time=datetime.utcnow()
+            status_time=naive_utcnow()
         )
         self._login(
             'compliance_checks.view_machinestatus',

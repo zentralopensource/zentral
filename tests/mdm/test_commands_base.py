@@ -1,14 +1,17 @@
-from datetime import datetime
 import os.path
 import plistlib
 import uuid
 from unittest.mock import patch
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.models import Channel, Command, DeviceCommand, EnrolledUser, UserCommand
 from zentral.contrib.mdm.commands.base import get_command, load_command
 from zentral.contrib.mdm.commands.profile_list import ProfileList
+from zentral.contrib.mdm.models import Channel, Command, DeviceCommand, EnrolledUser, UserCommand
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_dep_enrollment_session
 
 
@@ -56,7 +59,7 @@ class TestMDMCommandsBase(TestCase):
         with open(os.path.join(os.path.dirname(__file__), "testdata/profile_list.plist"), "rb") as f:
             result = plistlib.load(f)
         result["UDID"] = self.enrolled_device.udid.upper()
-        result_time = datetime.utcnow()
+        result_time = naive_utcnow()
         db_command = DeviceCommand.objects.create(
             uuid=result["CommandUUID"],
             enrolled_device=self.enrolled_device,

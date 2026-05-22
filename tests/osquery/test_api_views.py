@@ -1,23 +1,35 @@
-from datetime import datetime
-from functools import reduce
 import json
 import operator
+from datetime import datetime
+from functools import reduce
 from unittest.mock import patch
+
+from accounts.models import APIToken, User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.utils.text import slugify
 from django.utils.http import http_date
-from django.test import TestCase
-from accounts.models import APIToken, User
+from django.utils.text import slugify
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
-from zentral.contrib.osquery.models import (Configuration, DistributedQuery, Enrollment, Pack, PackQuery, Query,
-                                            AutomaticTableConstruction, FileCategory, ConfigurationPack)
+from zentral.contrib.osquery.models import (
+    AutomaticTableConstruction,
+    Configuration,
+    ConfigurationPack,
+    DistributedQuery,
+    Enrollment,
+    FileCategory,
+    Pack,
+    PackQuery,
+    Query,
+)
 from zentral.core.compliance_checks.models import ComplianceCheck
+from zentral.utils.time import naive_utcnow
 
 
 class APIViewsTestCase(TestCase):
@@ -2450,7 +2462,7 @@ class APIViewsTestCase(TestCase):
             query=query,
             query_version=query.version,
             sql=query.sql,
-            valid_from=datetime.utcnow(),
+            valid_from=naive_utcnow(),
         )
 
     def test_export_distributed_query_results_401(self):

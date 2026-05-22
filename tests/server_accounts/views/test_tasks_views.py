@@ -1,11 +1,13 @@
+import uuid
+from datetime import timedelta
+
+from accounts.models import User, UserTask
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import User, UserTask
 from django_celery_results.models import TaskResult
 
-from datetime import datetime, timedelta
-import uuid
+from zentral.utils.time import naive_utcnow
 
 
 class AccountTasksViewsTestCase(TestCase):
@@ -39,9 +41,9 @@ class AccountTasksViewsTestCase(TestCase):
             task_name='zentral.test.user_task',
             task_id=str(uuid.uuid4()),
             result='{"result_error": "Result.DoesNotExist"}',
-            date_created=datetime.utcnow() - timedelta(days=1, seconds=10),
-            date_started=datetime.utcnow() - timedelta(days=1, seconds=20),
-            date_done=datetime.utcnow() - timedelta(days=1)
+            date_created=naive_utcnow() - timedelta(days=1, seconds=10),
+            date_started=naive_utcnow() - timedelta(days=1, seconds=20),
+            date_done=naive_utcnow() - timedelta(days=1)
         )
         UserTask.objects.create(
                     user=User.objects.get(id=cls.ui_user.id),
@@ -51,8 +53,8 @@ class AccountTasksViewsTestCase(TestCase):
             task_name='zentral.test.admin_task',
             task_id=str(uuid.uuid4()),
             result='{"filepath": "export/some_file.csv"}',
-            date_created=datetime.utcnow() - timedelta(days=1, seconds=10),
-            date_done=datetime.utcnow() - timedelta(days=1)
+            date_created=naive_utcnow() - timedelta(days=1, seconds=10),
+            date_done=naive_utcnow() - timedelta(days=1)
         )
 
     # auth utils

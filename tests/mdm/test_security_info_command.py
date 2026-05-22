@@ -1,23 +1,29 @@
 import copy
-from datetime import datetime
 import os.path
 import plistlib
+from datetime import datetime
 from unittest.mock import patch
-from cryptography.x509 import load_der_x509_certificate
+
 from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.x509 import load_der_x509_certificate
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import SecurityInfo
 from zentral.contrib.mdm.commands.scheduling import _update_base_inventory
 from zentral.contrib.mdm.commands.setup_filevault import get_escrow_key_certificate_der_bytes
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
-from zentral.contrib.mdm.events import (FileVaultPRKUpdatedEvent,
-                                        RecoveryPasswordClearedEvent,
-                                        RecoveryPasswordSetEvent,
-                                        RecoveryPasswordUpdatedEvent)
+from zentral.contrib.mdm.events import (
+    FileVaultPRKUpdatedEvent,
+    RecoveryPasswordClearedEvent,
+    RecoveryPasswordSetEvent,
+    RecoveryPasswordUpdatedEvent,
+)
 from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
+from zentral.utils.time import naive_utcnow
+
 from .utils import force_dep_enrollment_session
 
 
@@ -91,7 +97,7 @@ class SecurityInfoCommandTestCase(TestCase):
         self.assertIsNone(self.enrolled_device.security_info_updated_at)
 
     def test_process_acknowledged_response(self):
-        start = datetime.utcnow()
+        start = naive_utcnow()
         self.assertIsNone(self.enrolled_device.security_info)
         self.assertIsNone(self.enrolled_device.security_info_updated_at)
         cmd = SecurityInfo.create_for_device(self.enrolled_device)
@@ -109,7 +115,7 @@ class SecurityInfoCommandTestCase(TestCase):
         self.assertTrue(self.enrolled_device.bootstrap_token_required_for_kext_approval)
 
     def test_process_acknowledged_response_btafa_allowed(self):
-        start = datetime.utcnow()
+        start = naive_utcnow()
         self.assertIsNone(self.enrolled_device.security_info)
         self.assertIsNone(self.enrolled_device.security_info_updated_at)
         cmd = SecurityInfo.create_for_device(self.enrolled_device)
@@ -121,7 +127,7 @@ class SecurityInfoCommandTestCase(TestCase):
         self.assertTrue(self.enrolled_device.bootstrap_token_allowed_for_authentication)
 
     def test_process_acknowledged_response_btafa_not_supported(self):
-        start = datetime.utcnow()
+        start = naive_utcnow()
         self.assertIsNone(self.enrolled_device.security_info)
         self.assertIsNone(self.enrolled_device.security_info_updated_at)
         cmd = SecurityInfo.create_for_device(self.enrolled_device)
@@ -442,7 +448,7 @@ class SecurityInfoCommandTestCase(TestCase):
         self.assertEqual(len(events), 0)
 
     def test_process_acknowledged_ios_response(self):
-        start = datetime.utcnow()
+        start = naive_utcnow()
         self.assertIsNone(self.enrolled_device.security_info)
         self.assertIsNone(self.enrolled_device.security_info_updated_at)
         self.enrolled_device.dep_enrollment = True
@@ -464,7 +470,7 @@ class SecurityInfoCommandTestCase(TestCase):
     # _update_base_inventory
 
     def test_update_base_inventory_security_info_updated_at_old(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
+        self.enrolled_device.device_information_updated_at = naive_utcnow()
         self.enrolled_device.security_info_updated_at = datetime(2000, 1, 1)
         cmd = _update_base_inventory(
             Target(self.enrolled_device),
@@ -474,8 +480,8 @@ class SecurityInfoCommandTestCase(TestCase):
         self.assertIsInstance(cmd, SecurityInfo)
 
     def test_update_base_inventory_security_info_updated_at_ok_no_inventory_items_collection_noop(self):
-        self.enrolled_device.device_information_updated_at = datetime.utcnow()
-        self.enrolled_device.security_info_updated_at = datetime.utcnow()
+        self.enrolled_device.device_information_updated_at = naive_utcnow()
+        self.enrolled_device.security_info_updated_at = naive_utcnow()
         self.assertEqual(self.blueprint.collect_apps, Blueprint.InventoryItemCollectionOption.NO)
         self.assertEqual(self.blueprint.collect_certificates, Blueprint.InventoryItemCollectionOption.NO)
         self.assertEqual(self.blueprint.collect_profiles, Blueprint.InventoryItemCollectionOption.NO)

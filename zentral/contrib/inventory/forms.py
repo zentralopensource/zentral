@@ -1,29 +1,39 @@
-from datetime import datetime, timedelta
 import json
+from datetime import timedelta
+
+import jmespath
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.http import QueryDict
 from django.urls import reverse
 from django.utils.text import slugify
-import jmespath
+
 from zentral.utils.text import get_version_sort_key
+from zentral.utils.time import naive_utcnow
+
 from .conf import PLATFORM_CHOICES
-from .models import (CurrentMachineSnapshot,
-                     EnrollmentSecret,
-                     MetaMachine,
-                     MetaBusinessUnit, MetaBusinessUnitTag,
-                     Source, Tag,
-                     JMESPathCheck)
-from .utils import (add_machine_tags,
-                    AndroidAppFilter,
-                    BundleFilter,
-                    DebPackageFilter,
-                    IOSAppFilter,
-                    LastSeenFilter,
-                    MSQuery,
-                    ProgramFilter,
-                    SourceFilter)
+from .models import (
+    CurrentMachineSnapshot,
+    EnrollmentSecret,
+    JMESPathCheck,
+    MetaBusinessUnit,
+    MetaBusinessUnitTag,
+    MetaMachine,
+    Source,
+    Tag,
+)
+from .utils import (
+    AndroidAppFilter,
+    BundleFilter,
+    DebPackageFilter,
+    IOSAppFilter,
+    LastSeenFilter,
+    MSQuery,
+    ProgramFilter,
+    SourceFilter,
+    add_machine_tags,
+)
 
 
 class MachineGroupSearchForm(forms.Form):
@@ -316,7 +326,7 @@ class BaseAppSearchForm(forms.Form):
     def get_last_seen(self):
         last_seen = self.cleaned_data.get("last_seen")
         if last_seen:
-            return datetime.utcnow() - timedelta(days=int(last_seen.replace("d", "")))
+            return naive_utcnow() - timedelta(days=int(last_seen.replace("d", "")))
 
     def get_ms_query_filters(self, result, version=None):
         """Return a list of MSQuery filters for an app or one of its versions

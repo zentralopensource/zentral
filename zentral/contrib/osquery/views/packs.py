@@ -1,5 +1,5 @@
-from datetime import datetime
 import logging
+
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Count
@@ -7,9 +7,10 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+
 from zentral.contrib.osquery.forms import PackForm, PackQueryForm, UploadPackForm
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
-
+from zentral.utils.time import naive_utcnow
 
 logger = logging.getLogger('zentral.contrib.osquery.views.packs')
 
@@ -119,7 +120,7 @@ class AddPackQueryView(PermissionRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        self.object.pack.updated_at = datetime.utcnow()
+        self.object.pack.updated_at = naive_utcnow()
         self.object.pack.save()
         return response
 
@@ -142,7 +143,7 @@ class UpdatePackQueryView(PermissionRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        self.object.pack.updated_at = datetime.utcnow()
+        self.object.pack.updated_at = naive_utcnow()
         self.object.pack.save()
         return response
 

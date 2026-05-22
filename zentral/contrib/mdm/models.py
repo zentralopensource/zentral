@@ -46,7 +46,7 @@ from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
 from zentral.utils.os_version import make_comparable_os_version
 from zentral.utils.payloads import get_payload_identifier
 from zentral.utils.storage import select_dist_storage
-from zentral.utils.time import naive_truncated_isoformat
+from zentral.utils.time import naive_truncated_isoformat, naive_utcnow
 
 from .cert_issuer_backends import CertIssuerBackend, get_cert_issuer_backend
 from .exceptions import EnrollmentSessionStatusError
@@ -462,7 +462,7 @@ class Blueprint(models.Model):
         return reverse("mdm:blueprint", args=(self.pk,))
 
     def get_inventory_interval_display(self):
-        now = datetime.datetime.utcnow()
+        now = naive_utcnow()
         return timesince(now - datetime.timedelta(seconds=self.inventory_interval), now=now)
 
     def _get_inventory_item_collection_option_display(self, attr):
@@ -1093,7 +1093,7 @@ class EnrolledDevice(models.Model):
             self.filevault_prk = None
             return
         self.filevault_prk = encrypt_str(filevault_prk, **self._get_secret_engine_kwargs("filevault_prk"))
-        self.filevault_prk_updated_at = datetime.datetime.utcnow()
+        self.filevault_prk_updated_at = naive_utcnow()
 
     def get_recovery_password(self):
         if not self.recovery_password:
@@ -1105,7 +1105,7 @@ class EnrolledDevice(models.Model):
             self.recovery_password = None
             return
         self.recovery_password = encrypt_str(recovery_password, **self._get_secret_engine_kwargs("recovery_password"))
-        self.recovery_password_updated_at = datetime.datetime.utcnow()
+        self.recovery_password_updated_at = naive_utcnow()
 
     def get_pending_firmware_password(self):
         if not self.pending_firmware_password:
@@ -1122,7 +1122,7 @@ class EnrolledDevice(models.Model):
             pending_firmware_password,
             **self._get_secret_engine_kwargs("pending_firmware_password")
         )
-        self.pending_firmware_password_created_at = datetime.datetime.utcnow()
+        self.pending_firmware_password_created_at = naive_utcnow()
 
     def get_admin_password(self):
         if not self.admin_password:
@@ -1135,7 +1135,7 @@ class EnrolledDevice(models.Model):
             self.admin_password_updated_at = None
             return
         self.admin_password = encrypt_str(admin_password, **self._get_secret_engine_kwargs("admin_password"))
-        self.admin_password_updated_at = datetime.datetime.utcnow()
+        self.admin_password_updated_at = naive_utcnow()
 
     def get_device_lock_pin(self):
         if not self.device_lock_pin:
@@ -1148,7 +1148,7 @@ class EnrolledDevice(models.Model):
             self.device_lock_pin_updated_at = None
             return
         self.device_lock_pin = encrypt_str(device_lock_pin, **self._get_secret_engine_kwargs("device_lock_pin"))
-        self.device_lock_pin_updated_at = datetime.datetime.utcnow()
+        self.device_lock_pin_updated_at = naive_utcnow()
 
     def rewrap_secrets(self):
         if self.bootstrap_token:
@@ -1177,7 +1177,7 @@ class EnrolledDevice(models.Model):
 
     def block(self):
         if not self.blocked_at:
-            self.blocked_at = datetime.datetime.utcnow()
+            self.blocked_at = naive_utcnow()
             self.save()
 
     def unblock(self):

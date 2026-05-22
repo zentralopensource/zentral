@@ -1,13 +1,10 @@
 import logging
-from datetime import datetime, timezone
 
-from dateutil import parser
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.decorators import method_decorator
-from django.utils.timezone import is_aware, make_naive
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
 from realms.backends.views import finalize_session, ras_finalization_error
@@ -18,6 +15,8 @@ from saml2.metadata import entity_descriptor
 from saml2.response import AuthnResponse, VerificationError
 from saml2.sigver import SignatureError
 from saml2.validate import ResponseLifetimeExceed
+
+from zentral.utils.time import naive_utcfromtimestamp, parse_naive_datetime
 
 # adapted from https://github.com/jpf/okta-pysaml2-example/blob/master/app.py
 
@@ -124,16 +123,14 @@ class AssertionConsumerServiceView(BaseSPView):
         if nooa:
             if isinstance(nooa, int):
                 try:
-                    expires_at = datetime.fromtimestamp(nooa)
+                    expires_at = naive_utcfromtimestamp(nooa)
                 except OverflowError:
                     pass
             else:
                 try:
-                    expires_at = parser.parse(nooa)
-                except (TypeError, parser.ParserError):
+                    expires_at = parse_naive_datetime(nooa)
+                except Exception:
                     pass
-        if expires_at and is_aware(expires_at):
-            expires_at = make_naive(expires_at, timezone.utc)
 
         # finalize the authentication session
         return finalize_session(ras, request, realm_user, expires_at)

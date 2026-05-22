@@ -1,19 +1,22 @@
+import operator
+import uuid
 from datetime import datetime
 from functools import reduce
-import operator
 from unittest.mock import patch
-import uuid
+
+from accounts.models import User
 from django.contrib.auth.models import Group, Permission
 from django.db.models import Q
+from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
-from accounts.models import User
+
 from zentral.contrib.inventory.compliance_checks import InventoryJMESPathCheck
 from zentral.contrib.inventory.models import JMESPathCheck, MachineSnapshotCommit, MachineTag, MetaMachine, Source, Tag
 from zentral.core.compliance_checks.models import ComplianceCheck, MachineStatus, Status
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
+from zentral.utils.time import naive_utcnow
 
 
 class InventoryComplianceChecksViewsTestCase(TestCase):
@@ -675,7 +678,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             compliance_check=cc.compliance_check,
             compliance_check_version=cc.compliance_check.version,
             status=Status.OK.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
         )
         response = self.client.get(self.machine.get_absolute_url())
         self.assertEqual(response.status_code, 200)
@@ -706,7 +709,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             compliance_check=cc.compliance_check,
             compliance_check_version=cc.compliance_check.version,
             status=Status.OK.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
         )
         # add machine status for another machine also in scope
         other_machine_serial_number = get_random_string(12)
@@ -715,7 +718,7 @@ class InventoryComplianceChecksViewsTestCase(TestCase):
             compliance_check=cc.compliance_check,
             compliance_check_version=cc.compliance_check.version,
             status=Status.OK.value,
-            status_time=datetime.utcnow(),
+            status_time=naive_utcnow(),
         )
         for tag in tags[:3]:
             MachineTag.objects.get_or_create(serial_number=other_machine_serial_number, tag=tag)

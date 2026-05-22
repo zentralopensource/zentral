@@ -1,12 +1,19 @@
-from datetime import datetime
 import logging
 import uuid
-from django.db import IntegrityError, transaction
-from zentral.core.events.base import EventMetadata, EventRequest
-from .models import Incident, MachineIncident, Severity, Status
-from .events import (IncidentCreatedEvent, IncidentSeverityUpdatedEvent, IncidentStatusUpdatedEvent,
-                     MachineIncidentCreatedEvent, MachineIncidentStatusUpdatedEvent)
 
+from django.db import IntegrityError, transaction
+
+from zentral.core.events.base import EventMetadata, EventRequest
+from zentral.utils.time import naive_utcnow
+
+from .events import (
+    IncidentCreatedEvent,
+    IncidentSeverityUpdatedEvent,
+    IncidentStatusUpdatedEvent,
+    MachineIncidentCreatedEvent,
+    MachineIncidentStatusUpdatedEvent,
+)
+from .models import Incident, MachineIncident, Severity, Status
 
 logger = logging.getLogger("zentral.core.incidents.utils")
 
@@ -29,7 +36,7 @@ def open_incident(incident_update):
                     key=incident_update.key,
                     severity=incident_update.severity.value,
                     status=Status.OPEN.value,
-                    status_time=datetime.utcnow()
+                    status_time=naive_utcnow()
                 )
         except IntegrityError as e:
             # it was created in the meantime. fetch it
@@ -80,7 +87,7 @@ def close_open_incident(incident_update):
         "status_time": incident.status_time
     }
     incident.status = Status.CLOSED.value
-    incident.status_time = datetime.utcnow()
+    incident.status_time = naive_utcnow()
     incident.save()
     event_payload = incident.serialize_for_event()
     event_payload["previous_status"] = previous_status
@@ -127,7 +134,7 @@ def close_open_machine_incident(incident_update, serial_number):
             "status_time": incident.status_time
         }
         incident.status = Status.CLOSED.value
-        incident.status_time = datetime.utcnow()
+        incident.status_time = naive_utcnow()
         incident.save()
         event_payload = incident.serialize_for_event()
         event_payload["previous_status"] = previous_status
@@ -143,7 +150,7 @@ def open_machine_incident(incident_update, serial_number):
         serial_number=serial_number,
         status__in=Status.open_values(),
         defaults={"status": Status.OPEN.value,
-                  "status_time": datetime.utcnow()}
+                  "status_time": naive_utcnow()}
     )
     if created:
         event_payload = machine_incident.serialize_for_event()
@@ -198,7 +205,7 @@ def update_incident_status(incident, new_status, request):
     previous_status = {"status": incident.status,
                        "status_time": incident.status_time}
     incident.status = new_status.value
-    incident.status_time = datetime.utcnow()
+    incident.status_time = naive_utcnow()
     incident.save()
 
     # build event
@@ -220,7 +227,7 @@ def update_machine_incident_status(machine_incident, new_status, request):
     previous_status = {"status": machine_incident.status,
                        "status_time": machine_incident.status_time}
     machine_incident.status = new_status.value
-    machine_incident.status_time = datetime.utcnow()
+    machine_incident.status_time = naive_utcnow()
     machine_incident.save()
 
     # build event

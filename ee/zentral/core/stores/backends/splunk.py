@@ -1,20 +1,22 @@
-from datetime import datetime, timedelta
-from kombu.utils import json
 import logging
 import time
 import uuid
+from datetime import datetime, timedelta
 from urllib.parse import urlencode, urljoin
-from defusedxml.ElementTree import fromstring, ParseError
+
+import requests
+from base.utils import deployment_info
+from defusedxml.ElementTree import ParseError, fromstring
 from django.utils.functional import cached_property
 from django.utils.timezone import is_aware, make_naive
-import requests
+from kombu.utils import json
 from rest_framework import serializers
-from base.utils import deployment_info
+
 from zentral.core.events import event_from_event_d, event_types
 from zentral.core.stores.backends.base import BaseStore
 from zentral.core.stores.backends.http import HTTPHeaderSerializer, HTTPURLField
 from zentral.utils.requests import CustomHTTPAdapter
-
+from zentral.utils.time import naive_utcfromtimestamp, naive_utcnow
 
 logger = logging.getLogger('zentral.core.stores.backends.splunk')
 
@@ -316,7 +318,7 @@ class SplunkStore(BaseStore):
             heartbeats.append(
                 (event_types["inventory_heartbeat"],
                  result["inventory.source.name"],
-                 [(None, datetime.utcfromtimestamp(float(result["max(_time)"])))])
+                 [(None, naive_utcfromtimestamp(float(result["max(_time)"])))])
             )
         # other events
         other_event_filters = self._build_filters(serial_number=serial_number,
@@ -332,7 +334,7 @@ class SplunkStore(BaseStore):
                 logger.error("Unknown event type %s", result["sourcetype"])
                 continue
             event_uas.setdefault(event_type_class, []).append(
-                (result["request.user_agent"], datetime.utcfromtimestamp(float(result["max(_time)"])))
+                (result["request.user_agent"], naive_utcfromtimestamp(float(result["max(_time)"])))
             )
         for event_type_class, ua_max_dates in event_uas.items():
             heartbeats.append((event_type_class, None, ua_max_dates))
@@ -401,7 +403,7 @@ class SplunkStore(BaseStore):
         else:
             logger.error("Unsupported interval %s", interval)
             return []
-        now = datetime.utcnow()
+        now = naive_utcnow()
         from_dt = now - timedelta(seconds=bucket_seconds * bucket_number)
         from_dt = from_dt.replace(**from_dt_truncation)
         filters = self._build_filters(tag=tag)

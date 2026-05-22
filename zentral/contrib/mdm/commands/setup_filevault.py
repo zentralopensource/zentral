@@ -1,17 +1,20 @@
-from datetime import datetime, timedelta
 import logging
 import plistlib
 import uuid
+from datetime import timedelta
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption, load_der_private_key
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, load_der_private_key
 from cryptography.x509.oid import NameOID
+
 from zentral.contrib.mdm.models import Channel, FileVaultConfig, Platform
 from zentral.utils.payloads import sign_payload
-from .base import register_command, Command
-from .security_info import SecurityInfo
+from zentral.utils.time import naive_utcnow
 
+from .base import Command, register_command
+from .security_info import SecurityInfo
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.setup_filevault")
 
@@ -37,7 +40,7 @@ def get_escrow_key_certificate_der_bytes(enrolled_device):
     builder = builder.issuer_name(x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, 'Zentral')
     ]))
-    now = datetime.utcnow()
+    now = naive_utcnow()
     builder = builder.not_valid_before(now - timedelta(days=1))
     builder = builder.not_valid_after(now + timedelta(days=20 * 366))  # ~20 years
     builder = builder.serial_number(x509.random_serial_number())

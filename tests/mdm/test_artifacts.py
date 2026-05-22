@@ -1,26 +1,47 @@
 import copy
 import plistlib
-from unittest.mock import patch
 import uuid
-from datetime import date, datetime, timedelta, time
+from datetime import date, datetime, time, timedelta
+from unittest.mock import patch
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.declarations import get_artifact_version_server_token
-from zentral.contrib.mdm.models import (Asset, Artifact, ArtifactVersion, ArtifactVersionTag,
-                                        Blueprint, BlueprintArtifact,
-                                        Channel, DeviceArtifact,
-                                        EnrolledDevice, EnrolledUser, EnterpriseApp,
-                                        Location, LocationAsset,
-                                        Platform, Profile, PushCertificate,
-                                        StoreApp, TargetArtifact,
-                                        UserArtifact)
-from .utils import (build_status_report,
-                    force_artifact, force_blueprint_artifact,
-                    force_software_update, force_software_update_enforcement,
-                    MACOS_13_CLIENT_CAPABILITIES, MACOS_14_CLIENT_CAPABILITIES)
+from zentral.contrib.mdm.models import (
+    Artifact,
+    ArtifactVersion,
+    ArtifactVersionTag,
+    Asset,
+    Blueprint,
+    BlueprintArtifact,
+    Channel,
+    DeviceArtifact,
+    EnrolledDevice,
+    EnrolledUser,
+    EnterpriseApp,
+    Location,
+    LocationAsset,
+    Platform,
+    Profile,
+    PushCertificate,
+    StoreApp,
+    TargetArtifact,
+    UserArtifact,
+)
+from zentral.utils.time import naive_utcnow
 
+from .utils import (
+    MACOS_13_CLIENT_CAPABILITIES,
+    MACOS_14_CLIENT_CAPABILITIES,
+    build_status_report,
+    force_artifact,
+    force_blueprint_artifact,
+    force_software_update,
+    force_software_update_enforcement,
+)
 
 PROFILE_TEMPLATE = {
     'PayloadContent': [{
@@ -432,7 +453,7 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da.artifact_version, av2)
         self.assertEqual(da.status, TargetArtifact.Status.INSTALLED)
         # sanity check
-        self.assertTrue(datetime.utcnow() < da.installed_at + timedelta(days=artifact.reinstall_interval))
+        self.assertTrue(naive_utcnow() < da.installed_at + timedelta(days=artifact.reinstall_interval))
         # since above is True, no reinstall
         self.assertIsNone(target.next_to_install())
 
@@ -449,10 +470,10 @@ class TestMDMArtifacts(TestCase):
         da = da_qs.first()
         self.assertEqual(da.artifact_version, av2)
         self.assertEqual(da.status, TargetArtifact.Status.INSTALLED)
-        da.installed_at = datetime.utcnow() - timedelta(days=artifact.reinstall_interval) - timedelta(days=1)
+        da.installed_at = naive_utcnow() - timedelta(days=artifact.reinstall_interval) - timedelta(days=1)
         da.save()
         # sanity check
-        self.assertFalse(datetime.utcnow() < da.installed_at + timedelta(days=artifact.reinstall_interval))
+        self.assertFalse(naive_utcnow() < da.installed_at + timedelta(days=artifact.reinstall_interval))
         # since above is False, reinstall
         self.assertEqual(target.next_to_install(), av2)
 
@@ -867,7 +888,7 @@ class TestMDMArtifacts(TestCase):
     def test_device_activation_software_update_enforcement_one_time_included(self):
         self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         target = Target(self.enrolled_device)
-        sue = force_software_update_enforcement(os_version="15", local_datetime=datetime.utcnow())
+        sue = force_software_update_enforcement(os_version="15", local_datetime=naive_utcnow())
         self.blueprint1.software_update_enforcements.add(sue)
         activation = target.activation
         self.assertEqual(sorted(activation.keys()), ["Identifier", "Payload", "ServerToken", "Type"])
@@ -1053,9 +1074,9 @@ class TestMDMArtifacts(TestCase):
 
     # update_target_artifact
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifact_no_reinstall(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = (
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifact_no_reinstall(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = (
             datetime(2001, 2, 3, 4, 5, 6),
             datetime(2002, 3, 4, 5, 6, 7),
         )
@@ -1084,9 +1105,9 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da.retry_count, 0)
         self.assertEqual(da.max_retry_count, 2)
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifact_same_uii_no_reinstall(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = (
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifact_same_uii_no_reinstall(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = (
             datetime(2001, 2, 3, 4, 5, 6),
             datetime(2002, 3, 4, 5, 6, 7),
         )
@@ -1123,9 +1144,9 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da.retry_count, 0)
         self.assertEqual(da.max_retry_count, 2)
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifact_uii_diff_reinstall(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = (
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifact_uii_diff_reinstall(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = (
             datetime(2001, 2, 3, 4, 5, 6),
             datetime(2002, 3, 4, 5, 6, 7),
         )
@@ -1170,9 +1191,9 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da.retry_count, 0)
         self.assertEqual(da.max_retry_count, 2)
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifact_failed_reinstall_reset(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = (
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifact_failed_reinstall_reset(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = (
             datetime(2001, 2, 3, 4, 5, 6),
             datetime(2002, 3, 4, 5, 6, 7),
         )
@@ -1215,9 +1236,9 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da.retry_count, 1)
         self.assertEqual(da.max_retry_count, 2)
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifact_install_over_failed_update(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = (
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifact_install_over_failed_update(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = (
             datetime(2001, 2, 3, 4, 5, 6),
             datetime(2002, 3, 4, 5, 6, 7),
         )
@@ -1261,9 +1282,9 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da.retry_count, 1)
         self.assertEqual(da.max_retry_count, 3)
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifact_upgrade_update(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = (
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifact_upgrade_update(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = (
             datetime(2001, 2, 3, 4, 5, 6),
             datetime(2002, 3, 4, 5, 6, 7),
         )
@@ -1306,9 +1327,9 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da2.retry_count, 0)
         self.assertEqual(da2.max_retry_count, 2)
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifact_max_retry_count(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = (
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifact_max_retry_count(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = (
             datetime(2001, 2, 3, 4, 5, 6),
             datetime(2002, 3, 4, 5, 6, 7),
             datetime(2003, 4, 5, 6, 7, 8),
@@ -1392,9 +1413,9 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da.retry_count, 2)  # not 3!
         self.assertEqual(da.max_retry_count, 2)
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifact_upgrade_over_failed_install(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = (
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifact_upgrade_over_failed_install(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = (
             datetime(2001, 2, 3, 4, 5, 6),
             datetime(2002, 3, 4, 5, 6, 7),
         )
@@ -1439,9 +1460,9 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(da2.retry_count, 0)
         self.assertEqual(da2.max_retry_count, 2)
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifact_failed_upgrade_over_failed_install(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = (
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifact_failed_upgrade_over_failed_install(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = (
             datetime(2001, 2, 3, 4, 5, 6),
             datetime(2002, 3, 4, 5, 6, 7),
         )
@@ -1500,9 +1521,9 @@ class TestMDMArtifacts(TestCase):
     # update_target_artifacts_from_status_report
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifacts_from_status_report_installed_updated(self, patched_datetime, post_event):
-        patched_datetime.utcnow.side_effect = [datetime(2001, 2, 3, 4, 5, 6),
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifacts_from_status_report_installed_updated(self, patched_naive_utcnow, post_event):
+        patched_naive_utcnow.side_effect = [datetime(2001, 2, 3, 4, 5, 6),
                                                datetime(2002, 3, 4, 5, 6, 7),
                                                datetime(2003, 4, 5, 6, 7, 8),]
         _, profile_a, (profile_av2, profile_av) = self._force_blueprint_artifact(version_count=2)
@@ -1626,9 +1647,9 @@ class TestMDMArtifacts(TestCase):
             (TargetArtifact.Status.INSTALLED, datetime(2002, 3, 4, 5, 6, 7), (10, 5, 3), 0)
         )
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifacts_from_status_report_uninstalled(self, patched_datetime):
-        patched_datetime.utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifacts_from_status_report_uninstalled(self, patched_naive_utcnow):
+        patched_naive_utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
         status_report = build_status_report([(profile_av, True, False, None)])
         self.enrolled_device.os_version = "10.5.2"
@@ -1640,9 +1661,9 @@ class TestMDMArtifacts(TestCase):
             (TargetArtifact.Status.UNINSTALLED, None, (0, 0, 0), 0)
         )
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifacts_from_status_report_valid_unknown_no_retry(self, patched_datetime):
-        patched_datetime.utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifacts_from_status_report_valid_unknown_no_retry(self, patched_naive_utcnow):
+        patched_naive_utcnow.return_value = datetime(2001, 2, 3, 4, 5, 6)
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
         status_report = build_status_report([(profile_av, "unknown", True, None)])
         target = Target(self.enrolled_device)
@@ -1653,9 +1674,9 @@ class TestMDMArtifacts(TestCase):
             (TargetArtifact.Status.AWAITING_CONFIRMATION, None, (0, 0, 0), 0)
         )
 
-    @patch("zentral.contrib.mdm.artifacts.datetime")
-    def test_update_target_artifacts_from_status_report_failed_then_installed(self, patched_datetime):
-        patched_datetime.utcnow.side_effect = [datetime(2001, 2, 3, 4, 5, 6), datetime(2002, 3, 4, 5, 6, 7)]
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_update_target_artifacts_from_status_report_failed_then_installed(self, patched_naive_utcnow):
+        patched_naive_utcnow.side_effect = [datetime(2001, 2, 3, 4, 5, 6), datetime(2002, 3, 4, 5, 6, 7)]
         _, profile_a, (profile_av,) = self._force_blueprint_artifact()
         # failed
         reasons = [{"details": {"Error": "Yolo Fomo"},

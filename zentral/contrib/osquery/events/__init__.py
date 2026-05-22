@@ -1,10 +1,11 @@
-from datetime import datetime
 import logging
 import uuid
-from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
+
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
-from zentral.contrib.osquery.models import parse_result_name, EnrolledMachine, PackQuery, QueryType
+from zentral.contrib.osquery.models import EnrolledMachine, PackQuery, QueryType, parse_result_name
 from zentral.contrib.osquery.tags import TagUpdateAggregator
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
+from zentral.utils.time import naive_utcfromtimestamp
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
 
@@ -203,7 +204,7 @@ def post_file_carve_events(msn, user_agent, ip, payloads):
 
 
 def _get_record_created_at(payload):
-    return datetime.utcfromtimestamp(float(payload.pop('unixTime')))
+    return naive_utcfromtimestamp(float(payload.pop('unixTime')))
 
 
 def _iter_cleaned_up_records(records):

@@ -18,6 +18,7 @@ from zentral.contrib.munki.events import MunkiScriptCheckStatusUpdated
 from zentral.contrib.munki.models import ScriptCheck
 from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
+from zentral.utils.time import naive_utcnow
 
 from .utils import force_script_check
 
@@ -166,13 +167,13 @@ class MunkiComplianceChecksTestCase(TestCase):
 
     @patch("zentral.contrib.munki.compliance_checks.logger.error")
     def test_update_machine_munki_script_check_statuses_unknown_script_check(self, logger_error):
-        update_machine_munki_script_check_statuses("123", [{"pk": 0}], datetime.utcnow())
+        update_machine_munki_script_check_statuses("123", [{"pk": 0}], naive_utcnow())
         logger_error.assert_called_once_with("Machine %s: unknown script check %s in result", "123", 0)
 
     @patch("zentral.contrib.munki.compliance_checks.logger.error")
     def test_update_machine_munki_script_check_statuses_unknown_status(self, logger_error):
         sc = force_script_check()
-        update_machine_munki_script_check_statuses("123", [{"pk": sc.pk, "status": "yolo"}], datetime.utcnow())
+        update_machine_munki_script_check_statuses("123", [{"pk": sc.pk, "status": "yolo"}], naive_utcnow())
         logger_error.assert_called_once_with("Machine %s: unknown status value for script check %s in result",
                                              "123", sc.pk)
 
@@ -182,7 +183,7 @@ class MunkiComplianceChecksTestCase(TestCase):
         sc.compliance_check.version = 2
         sc.compliance_check.save()
         update_machine_munki_script_check_statuses(
-            "123", [{"pk": sc.pk, "status": Status.OK.value, "version": 1}], datetime.utcnow()
+            "123", [{"pk": sc.pk, "status": Status.OK.value, "version": 1}], naive_utcnow()
         )
         logger_info.assert_called_once_with("Machine %s: result for outdated script check %s", "123", sc.pk)
 
@@ -199,7 +200,7 @@ class MunkiComplianceChecksTestCase(TestCase):
         )
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             update_machine_munki_script_check_statuses(
-                serial_number, [{"pk": sc.pk, "status": Status.OK.value, "version": 1}], datetime.utcnow()
+                serial_number, [{"pk": sc.pk, "status": Status.OK.value, "version": 1}], naive_utcnow()
             )
         self.assertEqual(len(callbacks), 0)
         ms_qs = MachineStatus.objects.filter(serial_number=serial_number)
@@ -218,7 +219,7 @@ class MunkiComplianceChecksTestCase(TestCase):
             status=Status.OK.value,
             status_time=datetime(2000, 1, 1)
         )
-        status_time = datetime.utcnow()
+        status_time = naive_utcnow()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             update_machine_munki_script_check_statuses(
                 serial_number, [{"pk": sc.pk, "status": Status.FAILED.value, "version": 1}], status_time

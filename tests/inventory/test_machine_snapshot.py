@@ -1,22 +1,37 @@
 import copy
 from datetime import datetime, timedelta
+
 from dateutil import parser
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils.timezone import is_aware, make_naive
-from zentral.contrib.inventory.conf import (DESKTOP, MACOS, MOBILE, LAPTOP, SERVER, VM,
-                                            os_version_display, os_version_version_display, update_ms_tree_type)
-from zentral.contrib.inventory.models import (BusinessUnit,
-                                              Certificate,
-                                              CurrentMachineSnapshot,
-                                              MachineSnapshot, MachineSnapshotCommit,
-                                              MachineTag,
-                                              MetaBusinessUnitTag,
-                                              MetaMachine,
-                                              Source,
-                                              Tag)
+
+from zentral.contrib.inventory.conf import (
+    DESKTOP,
+    LAPTOP,
+    MACOS,
+    MOBILE,
+    SERVER,
+    VM,
+    os_version_display,
+    os_version_version_display,
+    update_ms_tree_type,
+)
+from zentral.contrib.inventory.models import (
+    BusinessUnit,
+    Certificate,
+    CurrentMachineSnapshot,
+    MachineSnapshot,
+    MachineSnapshotCommit,
+    MachineTag,
+    MetaBusinessUnitTag,
+    MetaMachine,
+    Source,
+    Tag,
+)
 from zentral.contrib.inventory.utils.db import inventory_events_from_machine_snapshot_commit
 from zentral.utils.mt_models import MTOError
+from zentral.utils.time import naive_utcnow
 
 
 @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
@@ -357,7 +372,7 @@ class MachineSnapshotTestCase(TestCase):
         tree = copy.deepcopy(self.machine_snapshot)
         module = self.source["module"]
         age = 7200
-        last_seen = datetime.utcnow() - timedelta(seconds=age)
+        last_seen = naive_utcnow() - timedelta(seconds=age)
         tree["last_seen"] = last_seen
         msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         mm = MetaMachine(self.serial_number + "e12908e1209")
@@ -546,7 +561,7 @@ class MachineSnapshotTestCase(TestCase):
 
     def test_last_seen(self):
         tree = copy.deepcopy(self.machine_snapshot)
-        last_seen = datetime.utcnow()
+        last_seen = naive_utcnow()
         tree["last_seen"] = last_seen
         msc, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         self.assertEqual(msc.last_seen, last_seen)
@@ -555,7 +570,7 @@ class MachineSnapshotTestCase(TestCase):
         msc2, ms2, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         self.assertEqual(msc2, None)
         tree = copy.deepcopy(self.machine_snapshot)
-        last_seen3 = datetime.utcnow()
+        last_seen3 = naive_utcnow()
         tree["last_seen"] = last_seen3
         msc3, ms3, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         self.assertEqual(msc3.last_seen, last_seen3)

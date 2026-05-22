@@ -1,15 +1,24 @@
 import datetime
 from unittest.mock import Mock, patch
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.santa.events import (_build_file_tree_from_santa_event,
-                                          _create_bundle_binaries,
-                                          _create_missing_bundles,
-                                          _update_targets,
-                                          EventMetadata,
-                                          SantaEnrollmentEvent, SantaEventEvent, SantaFileAccessEvent,
-                                          SantaRuleSetUpdateEvent, SantaRuleUpdateEvent)
+
+from zentral.contrib.santa.events import (
+    EventMetadata,
+    SantaEnrollmentEvent,
+    SantaEventEvent,
+    SantaFileAccessEvent,
+    SantaRuleSetUpdateEvent,
+    SantaRuleUpdateEvent,
+    _build_file_tree_from_santa_event,
+    _create_bundle_binaries,
+    _create_missing_bundles,
+    _update_targets,
+)
 from zentral.contrib.santa.models import Bundle, Configuration, Target
+from zentral.utils.time import naive_utcnow
+
 from .utils import new_sha256
 
 
@@ -668,7 +677,7 @@ class SantaEventTestCase(TestCase):
         Bundle.objects.create(
             target=t,
             binary_count=event_d["file_bundle_binary_count"],
-            uploaded_at=datetime.datetime.utcnow()
+            uploaded_at=naive_utcnow()
         )
         _create_bundle_binaries([event_d])
         logger_error.assert_called_once_with("Bundle %s already uploaded", event_d["file_bundle_hash"])

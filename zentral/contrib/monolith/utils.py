@@ -1,12 +1,13 @@
-from datetime import datetime
 import hashlib
 import logging
 import plistlib
-from django.core.files.base import ContentFile
-from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
-from zentral.utils.osx_package import get_tls_hostname
-from zentral.utils.text import shard as compute_shard
 
+from django.core.files.base import ContentFile
+
+from zentral.utils.osx_package import get_tls_hostname
+from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
+from zentral.utils.text import shard as compute_shard
+from zentral.utils.time import naive_utc_fromisoformat
 
 logger = logging.getLogger('zentral.contrib.monolith.utils')
 
@@ -158,7 +159,7 @@ def filter_catalog_data(catalog_data, serial_number, tag_names):
         if test_pkginfo_catalog_inclusion(pkginfo, serial_number, tag_names):
             force_install_after_date = pkginfo.get("force_install_after_date")
             if isinstance(force_install_after_date, str):
-                pkginfo["force_install_after_date"] = datetime.fromisoformat(force_install_after_date)
+                pkginfo["force_install_after_date"] = naive_utc_fromisoformat(force_install_after_date)
             filtered_catalog_data.append(pkginfo)
     return filtered_catalog_data
 
