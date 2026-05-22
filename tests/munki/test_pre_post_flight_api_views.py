@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
 
@@ -48,6 +49,122 @@ class MunkiAPIViewsTestCase(TestCase):
                                 content_type="application/json",
                                 **extra)
 
+    def _get_as_json(self, url, **extra):
+        return self.client.get(url, content_type="application/json", **extra)
+
+    # enrollment
+
+    def test_enrollment_missing_auth_header_err(self):
+        response = self._get_as_json(reverse("munki_public:enrollment"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_wrong_auth_token_err(self):
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION=get_random_string(23))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_empty_secret_err(self):
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret  ")
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_does_not_exist_err(self):
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(get_random_string(34)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_revoked_secret_err(self):
+        enrollment = force_enrollment(configuration=self.configuration)
+        enrollment.secret.revoked_at = timezone.now()
+        enrollment.secret.save()
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(enrollment.secret.secret))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_expired_secret_err(self):
+        enrollment = force_enrollment(configuration=self.configuration)
+        enrollment.secret.expired_at = timezone.now() - timedelta(seconds=1)
+        enrollment.secret.save()
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(enrollment.secret.secret))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_used_up_secret_err(self):
+        enrollment = force_enrollment(configuration=self.configuration)
+        enrollment.secret.quota = 1
+        enrollment.secret.request_count = 1
+        enrollment.secret.save()
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(enrollment.secret.secret))
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrollment_post_not_allowed(self):
+        response = self.client.post(
+            reverse("munki_public:enrollment"),
+            HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(self.enrollment.secret.secret),
+        )
+        self.assertEqual(response.status_code, 405)
+
+    def test_enrollment_ok(self):
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}"
+                                     .format(self.enrollment.secret.secret))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "application/json")
+        json_response = response.json()
+        self.assertCountEqual(["pk", "version"], json_response.keys())
+        self.assertEqual(json_response["pk"], self.enrollment.id)
+        self.assertEqual(json_response["version"], self.enrollment.version)
+
+    @patch("zentral.contrib.munki.public_views.post_enrollment_info_request_event")
+    def test_enrollment_ok_posts_event(self, post_event):
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}"
+                                     .format(self.enrollment.secret.secret))
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        model, _, _, payload = post_event.call_args.args
+        self.assertEqual(model, "munki_enrollment")
+        self.assertEqual(payload, {"status": "ok", "enrollment": {"pk": self.enrollment.pk}})
+        self.assertIsNone(post_event.call_args.kwargs.get("machine_serial_number"))
+
+    @patch("zentral.contrib.munki.public_views.post_enrollment_info_request_event")
+    def test_enrollment_ok_with_serial_number_posts_event(self, post_event):
+        serial_number = get_random_string(12)
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}"
+                                     .format(self.enrollment.secret.secret),
+                                     HTTP_X_ZENTRAL_SERIAL_NUMBER=serial_number)
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        self.assertEqual(post_event.call_args.kwargs.get("machine_serial_number"), serial_number)
+
+    @patch("zentral.contrib.inventory.public_views.post_enrollment_info_request_event")
+    def test_enrollment_missing_auth_header_posts_event(self, post_event):
+        response = self._get_as_json(reverse("munki_public:enrollment"))
+        self.assertEqual(response.status_code, 403)
+        post_event.assert_called_once()
+        model, _, _, payload = post_event.call_args.args
+        self.assertEqual(model, "munki_enrollment")
+        self.assertEqual(payload["status"], "denied")
+        self.assertEqual(payload["reason"], "Missing or invalid Authorization header")
+        self.assertNotIn("enrollment", payload)
+
+    @patch("zentral.contrib.inventory.public_views.post_enrollment_info_request_event")
+    def test_enrollment_revoked_secret_posts_event_with_pk(self, post_event):
+        enrollment = force_enrollment(configuration=self.configuration)
+        enrollment.secret.revoked_at = timezone.now()
+        enrollment.secret.save()
+        response = self._get_as_json(reverse("munki_public:enrollment"),
+                                     HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}".format(enrollment.secret.secret))
+        self.assertEqual(response.status_code, 403)
+        post_event.assert_called_once()
+        model, _, _, payload = post_event.call_args.args
+        self.assertEqual(model, "munki_enrollment")
+        self.assertEqual(payload["status"], "denied")
+        self.assertEqual(payload["reason"], "revoked")
+        self.assertEqual(payload["enrollment"], {"pk": enrollment.pk})
+
     # enroll
 
     def test_enroll_bad_request_empty(self):
@@ -80,6 +197,32 @@ class MunkiAPIViewsTestCase(TestCase):
             set(self.enrollment.secret.tags.all())
         )
 
+    @patch("zentral.contrib.munki.public_views.post_munki_enrollment_event")
+    def test_enroll_first_time_posts_enrollment_event(self, post_event):
+        serial_number = get_random_string(32)
+        response = self._post_as_json(reverse("munki_public:enroll"),
+                                      {"secret": self.enrollment.secret.secret,
+                                       "uuid": str(uuid.uuid4()),
+                                       "serial_number": serial_number})
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        msn, _, _, payload = post_event.call_args.args
+        self.assertEqual(msn, serial_number)
+        self.assertEqual(payload, {"action": "enrollment"})
+
+    @patch("zentral.contrib.munki.public_views.post_munki_enrollment_event")
+    def test_enroll_existing_machine_posts_reenrollment_event(self, post_event):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self._post_as_json(reverse("munki_public:enroll"),
+                                      {"secret": self.enrollment.secret.secret,
+                                       "uuid": str(uuid.uuid4()),
+                                       "serial_number": enrolled_machine.serial_number})
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        msn, _, _, payload = post_event.call_args.args
+        self.assertEqual(msn, enrolled_machine.serial_number)
+        self.assertEqual(payload, {"action": "re-enrollment"})
+
     # job details
 
     def test_job_details_missing_auth_header_err(self):
@@ -109,6 +252,20 @@ class MunkiAPIViewsTestCase(TestCase):
                                       {"machine_serial_number": data_sn},
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.munki.public_views.post_machine_conflict_event")
+    def test_job_details_machine_conflict_posts_event(self, post_event):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        data_sn = get_random_string(9)
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": data_sn},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 403)
+        post_event.assert_called_once()
+        _, source, reported_sn, enrolled_sn, _ = post_event.call_args.args
+        self.assertEqual(source, "zentral.contrib.munki")
+        self.assertEqual(reported_sn, data_sn)
+        self.assertEqual(enrolled_sn, enrolled_machine.serial_number)
 
     def test_job_details_not_json(self):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
@@ -158,6 +315,20 @@ class MunkiAPIViewsTestCase(TestCase):
             "tags": [],
         }
         self.assertEqual(expected_response, response.json())
+
+    @patch("zentral.contrib.munki.public_views.post_munki_request_event")
+    def test_job_details_posts_request_event(self, post_event):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+        post_event.assert_called_once()
+        msn, _, _ = post_event.call_args.args
+        self.assertEqual(msn, enrolled_machine.serial_number)
+        self.assertEqual(post_event.call_args.kwargs,
+                         {"request_type": "job_details",
+                          "enrollment": {"pk": self.enrollment.pk}})
 
     def test_job_details_deflate(self):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
