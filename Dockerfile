@@ -56,7 +56,7 @@ RUN set -eux ; \
 # as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
 RUN set -eux ; \
     \
-    curl -fsSL https://github.com/zentralopensource/bomutils/archive/03652e9ba61afc6bfd328e6b114a00d7125f0d5f.tar.gz | tar xvz ; \
+    curl -fsSL https://github.com/hogliux/bomutils/archive/c247002e2f49878bab32dd0fcf805810ae0992cb.tar.gz | tar xvz ; \
     cd bomutils-* ; \
     make ; make install ; \
     cd .. ; rm -rf bomutils-*
