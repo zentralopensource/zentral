@@ -78,7 +78,7 @@ jmespath==1.1.0
 kombu==5.4.2
 lark==1.3.1
 lz4==4.4.5
-MarkupSafe==3.0.2
+MarkupSafe==3.0.3
 matplotlib-inline==0.1.7
 maxminddb==2.7.0
 microsoft-kiota-abstractions==1.10.1
