@@ -116,7 +116,7 @@ pyarrow==24.0.0
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
 pycparser==3.0
-pycurl==7.45.3
+pycurl==7.46.0
 Pygments==2.20.0
 PyJWT==2.13.0
 pyOpenSSL==26.0.0
