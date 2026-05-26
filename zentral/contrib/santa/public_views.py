@@ -249,10 +249,18 @@ class PreflightView(BaseSyncView):
         return enrolled_machine
 
     def _commit_machine_snapshot(self):
+        try:
+            build = self.request_data["os_build"]
+            os_version = self.request_data["os_version"]
+            computer_name = self.request_data['hostname']
+        except KeyError as e:
+            logger.error("Missing '%s' key in '%s' preflight data",
+                         e.args[0], self.enrolled_machine.serial_number)
+            raise SuspiciousOperation("Missing key")
+
         # os version
-        build = self.request_data["os_build"]
         os_version = dict(zip(('major', 'minor', 'patch'),
-                              (int(s) for s in self.request_data['os_version'].split('.'))))
+                              (int(s) for s in os_version.split('.'))))
         os_version.update({'name': 'macOS', 'build': build})
         try:
             os_version.update(macos_version_from_build(build))
@@ -265,7 +273,7 @@ class PreflightView(BaseSyncView):
                 'reference': self.hardware_uuid,
                 'serial_number': self.enrolled_machine.serial_number,
                 'os_version': os_version,
-                'system_info': {'computer_name': self.request_data['hostname']},
+                'system_info': {'computer_name': computer_name},
                 'public_ip_address': self.ip,
                 }
 

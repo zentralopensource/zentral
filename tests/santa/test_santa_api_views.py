@@ -127,6 +127,13 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 400)
 
+    def test_preflight_missing_os_build(self):
+        for key in ("os_build", "os_version", "hostname"):
+            data, serial_number, hardware_uuid = self._get_preflight_data()
+            data.pop(key)
+            response = self.post_as_json("preflight", hardware_uuid, data)
+            self.assertEqual(response.status_code, 400)
+
     def test_preflight_no_mtls(self):
         self.configuration.client_certificate_auth = True
         self.configuration.save()
