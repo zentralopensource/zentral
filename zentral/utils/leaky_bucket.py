@@ -9,6 +9,19 @@ class LeakyBucket:
         self._lock = threading.Lock()
         self._state = (time.monotonic(), self.capacity)
 
+    # multiprocessing fix
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state["_lock"]
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._lock = threading.Lock()
+
+    # end multiprocessing fix
+
     def _unsafe_update_state(self):
         last_updated_at, last_volume = self._state
         updated_at = time.monotonic()

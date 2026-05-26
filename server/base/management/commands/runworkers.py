@@ -1,10 +1,13 @@
 import json
 import logging
+import multiprocessing
 from multiprocessing import Process
 import random
 import time
-import yaml
+
 from django.core.management.base import BaseCommand
+import yaml
+
 from zentral.core.queues.workers import get_workers
 
 
@@ -20,6 +23,8 @@ class Command(BaseCommand):
         self.processes = {}
         self.prometheus_targets = {}
         self.processes_to_restart = {}
+        multiprocessing.set_start_method('forkserver')
+        multiprocessing.set_forkserver_preload(["server.multiprocessing_preload"])
 
     def add_arguments(self, parser):
         parser.add_argument('--list-workers', action='store_true', dest='list_workers', default=False,
