@@ -190,9 +190,15 @@ class Engine:
     def _register_module_legacy_perm_action(self, app_config: AppConfig) -> None:
         namespace = self._get_app_config_namespace(app_config)
         action_id = "NOOP"
+        # NOOP is the action the engine consults for has_module_perms — the
+        # "does this user have any permission in this app?" check Django uses
+        # for navigation rendering. Anyone with admin / user / viewer access
+        # to the app's models needs that check to grant; otherwise an admin
+        # policy that grants every concrete action in the module would still
+        # leave the user unable to see the module in the sidebar.
         self.module_legacy_perm_actions[app_config.label] = self.register_action(
             action_id, namespace,
-            [ActionGroupBasename.VIEWER],
+            [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
             LEGACY_PERM_APPLIES_TO,
         )
 

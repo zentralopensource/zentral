@@ -498,6 +498,12 @@ class PBACEngineTestCase(TestCase):
         found_user_actions = 0
         global_user_action_group = engine.get_action_group(ActionGroupBasename.USER)
         for (action_id, namespace_id), action in engine.actions.items():
+            # NOOP is the module-level placeholder used by has_module_perms.
+            # It belongs to admin/user/viewer in every namespace by design,
+            # so it isn't part of this "which concrete actions are User?"
+            # assertion.
+            if action_id == "NOOP":
+                continue
             user_action_group = engine.get_action_group(
                 ActionGroupBasename.USER,
                 engine.get_namespace(namespace_id)
@@ -732,6 +738,22 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
                 action.applies_to, LEGACY_PERM_APPLIES_TO,
                 f"{app_label!r} -> {action!r} missing LEGACY_PERM_APPLIES_TO",
             )
+
+    def test_noop_action_belongs_to_admin_user_and_viewer_groups(self):
+        # has_module_perms only grants when the user matches the NOOP
+        # action, so NOOP has to be in every action group: an admin-only
+        # policy that grants ``Action::"GlobalAdminActions"`` must still
+        # let the user see the module's navigation entries.
+        for app_label, action in engine.module_legacy_perm_actions.items():
+            parent_ids = {p.id for p in action.parents}
+            for expected in (
+                "AdminActions", "UserActions", "ViewerActions",
+                "GlobalAdminActions", "GlobalUserActions", "GlobalViewerActions",
+            ):
+                self.assertIn(
+                    expected, parent_ids,
+                    f"{app_label!r} NOOP missing {expected!r} in parents={parent_ids!r}",
+                )
 
     def test_system_entity_type_registered(self):
         self.assertIs(engine.entity_types[("System", None)], SYSTEM)
