@@ -78,6 +78,33 @@ class PolicyModelTestCase(TestCase):
         p.clean()
         self.assertIn('Action::"GlobalAdminActions"', p.source)
 
+    # PolicyManager.referencing_role / referencing_user
+
+    def test_referencing_role_finds_policies_quoting_the_pk(self):
+        # Insertion order on purpose differs from the expected name order
+        # so the assertion catches a missing order_by.
+        Policy.objects.create(name="zeta", source='permit (principal in Role::"42", action, resource);')
+        Policy.objects.create(name="alpha", source='permit (principal in Role::"42", action, resource);')
+        Policy.objects.create(name="r-7", source='permit (principal in Role::"7", action, resource);')
+        Policy.objects.create(name="user", source='permit (principal == User::"42", action, resource);')
+        qs = Policy.objects.referencing_role(42)
+        self.assertEqual([p.name for p in qs], ["alpha", "zeta"])
+
+    def test_referencing_role_does_not_match_prefix_substring(self):
+        # Role::"7" must not match against a substring of Role::"72" —
+        # the trailing quote keeps them distinct.
+        Policy.objects.create(name="r-72", source='permit (principal in Role::"72", action, resource);')
+        self.assertFalse(Policy.objects.referencing_role(7).exists())
+
+    def test_referencing_user_matches_user_and_service_account(self):
+        # Insertion order on purpose differs from the expected name order
+        # so the assertion catches a missing order_by.
+        Policy.objects.create(name="u-1", source='permit (principal == User::"1", action, resource);')
+        Policy.objects.create(name="sa-1", source='permit (principal == ServiceAccount::"1", action, resource);')
+        Policy.objects.create(name="u-2", source='permit (principal == User::"2", action, resource);')
+        qs = Policy.objects.referencing_user(1)
+        self.assertEqual([p.name for p in qs], ["sa-1", "u-1"])
+
     def test_serialize_for_event_keys_only(self):
         p = force_policy()
         self.assertEqual(

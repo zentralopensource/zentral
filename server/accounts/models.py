@@ -381,6 +381,15 @@ class PolicyManager(models.Manager):
     def for_update(self):
         return self.not_provisioned()
 
+    def referencing_role(self, pk):
+        return self.filter(source__contains=f'Role::"{pk}"').order_by("name")
+
+    def referencing_user(self, pk):
+        return self.filter(
+            Q(source__contains=f'User::"{pk}"')
+            | Q(source__contains=f'ServiceAccount::"{pk}"')
+        ).order_by("name")
+
 
 class Policy(models.Model):
     class Type(models.TextChoices):

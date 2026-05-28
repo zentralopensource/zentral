@@ -9,7 +9,7 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from accounts.forms import GroupForm
-from accounts.models import ProvisionedRole
+from accounts.models import Policy, ProvisionedRole
 
 logger = logging.getLogger("zentral.accounts.views.groups")
 
@@ -66,6 +66,10 @@ class GroupView(PermissionRequiredMixin, DetailView):
         )
         ctx["role_mappings"] = role_mappings
         ctx["role_mapping_count"] = role_mappings.count()
+        # PBAC policies that reference this role
+        policies = Policy.objects.referencing_role(self.object.pk)
+        ctx["policies"] = policies
+        ctx["policy_count"] = policies.count()
         try:
             self.object.provisioned_role
         except ObjectDoesNotExist:

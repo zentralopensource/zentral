@@ -256,6 +256,54 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
             self.assertContains(response, text)
         self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
 
+    # user detail — policies that reference the user
+
+    def test_view_user_lists_policies_referencing_user(self):
+        from accounts.models import Policy
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal == User::"{self.user.pk}", action, resource);\n',
+        )
+        # A policy referencing a different user — must NOT appear.
+        other_user = User.objects.create_user(
+            get_random_string(12), f"{get_random_string(12)}@zentral.io", get_random_string(12),
+        )
+        other_policy = Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal == User::"{other_user.pk}", action, resource);\n',
+        )
+        self.login("accounts.view_user", "accounts.view_policy")
+        response = self.client.get(reverse("accounts:user", args=(self.user.pk,)))
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        self.assertContains(response, p.name)
+        self.assertContains(response, reverse("accounts:policy", args=(p.pk,)))
+        self.assertNotContains(response, other_policy.name)
+
+    def test_view_service_account_lists_policies_referencing_it(self):
+        from accounts.models import Policy
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source=(
+                f'permit (principal == ServiceAccount::"{self.service_account.pk}", '
+                'action, resource);\n'
+            ),
+        )
+        self.login("accounts.view_user", "accounts.view_policy")
+        response = self.client.get(reverse("accounts:user", args=(self.service_account.pk,)))
+        self.assertContains(response, p.name)
+        self.assertContains(response, reverse("accounts:policy", args=(p.pk,)))
+
+    def test_view_user_policies_section_hidden_without_view_policy_perm(self):
+        from accounts.models import Policy
+        Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal == User::"{self.user.pk}", action, resource);\n',
+        )
+        self.login("accounts.view_user")  # no accounts.view_policy
+        response = self.client.get(reverse("accounts:user", args=(self.user.pk,)))
+        # The row's <th>Polic…</th> shouldn't be in the rendered HTML.
+        self.assertNotContains(response, "<th>Polic")
+
     # profile
 
     def test_profile_login_redirect(self):

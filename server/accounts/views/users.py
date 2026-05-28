@@ -14,7 +14,7 @@ from accounts.forms import (
     ServiceAccountForm,
     UpdateUserForm,
 )
-from accounts.models import User
+from accounts.models import Policy, User
 from zentral.core.events.base import AuditEvent
 from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit
 
@@ -87,6 +87,11 @@ class UserView(PermissionRequiredMixin, DetailView):
         )
         ctx["verification_devices"] = self.object.get_verification_devices()
         ctx["verification_device_count"] = len(ctx["verification_devices"])
+        # PBAC policies that reference this user (either User::"<pk>"
+        # or ServiceAccount::"<pk>").
+        policies = Policy.objects.referencing_user(self.object.pk)
+        ctx["policies"] = policies
+        ctx["policy_count"] = policies.count()
         return ctx
 
 

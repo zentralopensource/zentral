@@ -100,6 +100,22 @@
         </td>
         </tr>
         {% endif %}
+        {% if perms.accounts.view_policy %}
+        <tr>
+        <th>Polic{{ policy_count|pluralize:"y,ies" }}</th>
+        <td>
+            {% if policy_count %}
+            <ul class="list-inline">
+            {% for policy in policies %}
+            <li><a href="{{ policy.get_absolute_url }}">{{ policy.name }}</a></li>
+            {% endfor %}
+            </ul>
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        </tr>
+        {% endif %}
         <tr>
             <th>Global items per page</th>
             <td>{{ object.items_per_page }}</td>

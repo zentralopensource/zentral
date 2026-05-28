@@ -71,4 +71,24 @@
 
 {% include "realms/_role_mappings.html" with hide_role="True" %}
 
+{% if perms.accounts.view_policy %}
+<h3>Polic{{ policy_count|pluralize:"y,ies" }} ({{ policy_count }})</h3>
+{% if policy_count %}
+<table class="table table-striped align-middle table-hover">
+  <thead>
+    <th>Policy</th>
+    <th>Active?</th>
+  </thead>
+  <tbody>
+    {% for policy in policies %}
+    <tr>
+      <td><a href="{{ policy.get_absolute_url }}">{{ policy.name }}</a></td>
+      <td>{{ policy.is_active|yesno }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
+
 {% endblock %}

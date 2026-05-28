@@ -2,7 +2,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from accounts.models import ProvisionedRole, User
+from accounts.models import Policy, ProvisionedRole, User
 from tests.zentral_test_utils.login_case import LoginCase
 
 
@@ -134,6 +134,36 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
         for text in (reverse("accounts:delete_group", args=(self.group.pk,)),
                      reverse("accounts:update_group", args=(self.group.pk,))):
             self.assertContains(response, text)
+
+    # referenced policies
+
+    def test_view_group_lists_referencing_policies(self):
+        # A policy mentioning Role::"<pk>" must show up on the role's
+        # detail page with a link to the policy.
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal in Role::"{self.group.pk}", action, resource);\n',
+        )
+        # And one that references a *different* role — must NOT appear.
+        other_role = Group.objects.create(name=get_random_string(12))
+        other_policy = Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal in Role::"{other_role.pk}", action, resource);\n',
+        )
+        self.login("auth.view_group", "accounts.view_policy")
+        response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
+        self.assertContains(response, p.name)
+        self.assertContains(response, reverse("accounts:policy", args=(p.pk,)))
+        self.assertNotContains(response, other_policy.name)
+
+    def test_view_group_policies_section_hidden_without_view_policy_perm(self):
+        Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal in Role::"{self.group.pk}", action, resource);\n',
+        )
+        self.login("auth.view_group")  # no accounts.view_policy
+        response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
+        self.assertNotContains(response, "<h3>Polic")
 
     def test_view_provisioned_group_no_perms_get(self):
         self.login("auth.view_group")
