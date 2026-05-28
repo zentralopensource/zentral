@@ -21,7 +21,7 @@
   <div class="d-flex align-items-center mb-1">
     <h3>Polic{{ page_obj.paginator.count|pluralize:"y,ies" }} ({{ page_obj.paginator.count }})</h3>
     <div class="ms-auto">
-      {% if perms.accounts.add_policy %}
+      {% if request.user.is_superuser and not request.realm_authentication_session.is_remote %}
         {% url 'accounts:create_policy' as url %}
         {% button 'CREATE' url "Create a new policy" %}
       {% endif %}
@@ -47,13 +47,15 @@
             <td>{{ policy.description|default:"-" }}</td>
             <td>{{ policy.is_active|yesno }}</td>
             <td class="text-end py-0">
-              {% if policy.can_be_updated and perms.accounts.change_policy %}
-                {% url 'accounts:update_policy' policy.pk as url %}
-                {% button 'UPDATE' url "Edit policy" %}
-              {% endif %}
-              {% if policy.can_be_deleted and perms.accounts.delete_policy %}
-                {% url 'accounts:delete_policy' policy.pk as url %}
-                {% button 'DELETE' url "Delete policy" %}
+              {% if request.user.is_superuser and not request.realm_authentication_session.is_remote %}
+                {% if policy.can_be_updated %}
+                  {% url 'accounts:update_policy' policy.pk as url %}
+                  {% button 'UPDATE' url "Edit policy" %}
+                {% endif %}
+                {% if policy.can_be_deleted %}
+                  {% url 'accounts:delete_policy' policy.pk as url %}
+                  {% button 'DELETE' url "Delete policy" %}
+                {% endif %}
               {% endif %}
             </td>
           </tr>

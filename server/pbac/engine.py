@@ -206,7 +206,14 @@ class Engine:
         namespace = self._get_app_config_namespace(app_config)
         object_name = model._meta.object_name
         opts = model._meta
+        # Models can opt specific default operations out of PBAC mapping by
+        # listing them in pbac_excluded_default_permissions. Used for near-root
+        # capabilities (e.g. Policy mutations) that must be gated outside the
+        # policy system they would otherwise bound.
+        excluded = getattr(model, "pbac_excluded_default_permissions", ())
         for operation in opts.default_permissions:
+            if operation in excluded:
+                continue
             group_basenames = [ActionGroupBasename.ADMIN]
             if operation == "add":
                 action_action = "create"

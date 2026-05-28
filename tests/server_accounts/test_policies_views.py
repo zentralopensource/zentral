@@ -5,6 +5,7 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase
 
 from accounts.models import Policy, User
+from realms.models import Realm, RealmUser
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.events.base import AuditEvent
 from .utils import force_policy
@@ -19,6 +20,20 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.com", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.add(cls.group)
+        # realm + matching realm user (used by tests that need a remote session)
+        cls.realm = Realm.objects.create(
+            name=get_random_string(12),
+            enabled_for_login=True,
+            backend="ldap",
+            username_claim="username",
+            email_claim="email",
+        )
+        cls.realm_user = RealmUser.objects.create(
+            realm=cls.realm,
+            claims={"username": cls.user.username, "email": cls.user.email},
+            username=cls.user.username,
+            email=cls.user.email,
+        )
 
     # LoginCase implementation
 
@@ -30,6 +45,16 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
 
     def _get_url_namespace(self):
         return "accounts"
+
+    def _get_realm(self):
+        return self.realm
+
+    def _get_realm_user(self):
+        return self.realm_user
+
+    def _promote_user_to_superuser(self):
+        self.user.is_superuser = True
+        self.user.save()
 
     # list
 
@@ -57,12 +82,8 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         get_paginate_by.return_value = 1
         force_policy()
         force_policy()
-        self.login(
-            "accounts.view_policy",
-            "accounts.add_policy",
-            "accounts.change_policy",
-            "accounts.delete_policy",
-        )
+        self._promote_user_to_superuser()
+        self.login("accounts.view_policy")
         response = self.client.get(self.build_url("policies"))
         p_first = Policy.objects.order_by("name").first()
         self.assertEqual(response.status_code, 200)
@@ -74,25 +95,61 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("accounts:delete_policy", args=(p_first.pk,)))
         self.assertContains(response, reverse("accounts:update_policy", args=(p_first.pk,)))
 
+    @patch("accounts.views.policies.PoliciesView.get_paginate_by")
+    def test_policies_no_modify_buttons_for_non_superuser(self, get_paginate_by):
+        # A non-superuser, even one who can see the list, must not see any
+        # mutation buttons — those are gated on superuser + local session.
+        get_paginate_by.return_value = 1
+        p = force_policy()
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("accounts:create_policy"))
+        self.assertNotContains(response, reverse("accounts:update_policy", args=(p.pk,)))
+        self.assertNotContains(response, reverse("accounts:delete_policy", args=(p.pk,)))
+
+    @patch("accounts.views.policies.PoliciesView.get_paginate_by")
+    def test_policies_no_modify_buttons_for_remote_session_superuser(self, get_paginate_by):
+        get_paginate_by.return_value = 1
+        p = force_policy()
+        self._promote_user_to_superuser()
+        self.login("accounts.view_policy", realm_user=True)
+        response = self.client.get(self.build_url("policies"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["request"].realm_authentication_session.is_remote)
+        self.assertNotContains(response, reverse("accounts:create_policy"))
+        self.assertNotContains(response, reverse("accounts:update_policy", args=(p.pk,)))
+        self.assertNotContains(response, reverse("accounts:delete_policy", args=(p.pk,)))
+
     # create
 
     def test_create_policy_redirect(self):
         self.login_redirect("create_policy")
 
     def test_create_policy_permission_denied(self):
+        # No superuser → forbidden, even for an authenticated user.
         self.login()
         response = self.client.get(self.build_url("create_policy"))
         self.assertEqual(response.status_code, 403)
 
+    def test_create_policy_remote_session_superuser_forbidden(self):
+        # Even a superuser logged in through a realm cannot author policies.
+        self._promote_user_to_superuser()
+        self.login(realm_user=True)
+        response = self.client.get(self.build_url("create_policy"))
+        self.assertEqual(response.status_code, 403)
+
     def test_create_policy_get(self):
-        self.login("accounts.add_policy")
+        self._promote_user_to_superuser()
+        self.login()
         response = self.client.get(self.build_url("create_policy"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "accounts/policy_form.html")
         self.assertContains(response, "Create policy")
 
     def test_create_policy_missing_fields(self):
-        self.login("accounts.add_policy")
+        self._promote_user_to_superuser()
+        self.login()
         response = self.client.post(self.build_url("create_policy"), {"source": ""})
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "accounts/policy_form.html")
@@ -101,7 +158,8 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         self.assertFormError(response.context["form"], "source", err_msg)
 
     def test_create_policy_invalid_source(self):
-        self.login("accounts.add_policy")
+        self._promote_user_to_superuser()
+        self.login()
         response = self.client.post(
             self.build_url("create_policy"),
             {"name": get_random_string(12),
@@ -117,10 +175,8 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_policy(self, post_event, send_notification):
-        self.login(
-            "accounts.add_policy",
-            "accounts.view_policy",
-        )
+        self._promote_user_to_superuser()
+        self.login("accounts.view_policy")
         name = get_random_string(12)
         description = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -191,11 +247,8 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
 
     def test_view_policy_all_links(self):
         p = force_policy()
-        self.login(
-            "accounts.view_policy",
-            "accounts.change_policy",
-            "accounts.delete_policy",
-        )
+        self._promote_user_to_superuser()
+        self.login("accounts.view_policy")
         response = self.client.get(self.build_url("policy", p.pk))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "accounts/policy_detail.html")
@@ -337,15 +390,20 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         response = self.client.get(self.build_url("update_policy", p.pk))
         self.assertEqual(response.status_code, 403)
 
+    def test_update_policy_remote_session_superuser_forbidden(self):
+        p = force_policy()
+        self._promote_user_to_superuser()
+        self.login(realm_user=True)
+        response = self.client.get(self.build_url("update_policy", p.pk))
+        self.assertEqual(response.status_code, 403)
+
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_policy(self, post_event, send_notification):
         p = force_policy()
         prev_value = p.serialize_for_event()
-        self.login(
-            "accounts.change_policy",
-            "accounts.view_policy",
-        )
+        self._promote_user_to_superuser()
+        self.login("accounts.view_policy")
         name = get_random_string(12)
         description = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -405,15 +463,20 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         response = self.client.get(self.build_url("delete_policy", p.pk))
         self.assertEqual(response.status_code, 403)
 
+    def test_delete_policy_remote_session_superuser_forbidden(self):
+        p = force_policy()
+        self._promote_user_to_superuser()
+        self.login(realm_user=True)
+        response = self.client.get(self.build_url("delete_policy", p.pk))
+        self.assertEqual(response.status_code, 403)
+
     @patch("base.notifier.Notifier.send_notification")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_policy(self, post_event, send_notification):
         p = force_policy()
         prev_value = p.serialize_for_event()
-        self.login(
-            "accounts.delete_policy",
-            "accounts.view_policy",
-        )
+        self._promote_user_to_superuser()
+        self.login("accounts.view_policy")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 self.build_url("delete_policy", p.pk),

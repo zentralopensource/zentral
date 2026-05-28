@@ -11,7 +11,13 @@ from django.views.generic import DetailView
 from accounts.forms import PolicyForm
 from accounts.models import Policy, User
 from pbac.utils import signal_policy_change
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
+from zentral.utils.views import (
+    CreateViewWithAudit,
+    DeleteViewWithAudit,
+    LocalSuperuserRequiredMixin,
+    UpdateViewWithAudit,
+    UserPaginationListView,
+)
 
 
 logger = logging.getLogger("zentral.accounts.views.policies")
@@ -122,8 +128,14 @@ class PoliciesView(PermissionRequiredMixin, UserPaginationListView):
         return ctx
 
 
-class CreatePolicyView(PermissionRequiredMixin, CreateViewWithAudit):
-    permission_required = 'accounts.add_policy'
+# Policy mutation is gated by LocalSuperuserRequiredMixin, not by a CEDAR-grantable
+# permission: the ability to author policies is effectively root (anyone with it can
+# write themselves into any role), so the gate must live outside the policy system
+# it would otherwise bound. accounts.add_policy / change_policy / delete_policy
+# still exist on the model but are not consulted for these views.
+
+
+class CreatePolicyView(LocalSuperuserRequiredMixin, CreateViewWithAudit):
     model = Policy
     form_class = PolicyForm
 
@@ -141,8 +153,7 @@ class PolicyView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdatePolicyView(PermissionRequiredMixin, UpdateViewWithAudit):
-    permission_required = 'accounts.change_policy'
+class UpdatePolicyView(LocalSuperuserRequiredMixin, UpdateViewWithAudit):
     form_class = PolicyForm
 
     def get_queryset(self):
@@ -152,8 +163,7 @@ class UpdatePolicyView(PermissionRequiredMixin, UpdateViewWithAudit):
         signal_policy_change()
 
 
-class DeletePolicyView(PermissionRequiredMixin, DeleteViewWithAudit):
-    permission_required = 'accounts.delete_policy'
+class DeletePolicyView(LocalSuperuserRequiredMixin, DeleteViewWithAudit):
     model = Policy
     success_url = reverse_lazy("accounts:policies")
 

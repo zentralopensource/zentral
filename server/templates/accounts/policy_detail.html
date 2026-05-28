@@ -19,13 +19,15 @@
     <div class="d-flex align-items-center mb-3">
       <h3 class="m-0 fs-5 text-secondary">Policy</h3>
       <div class="ms-auto">
-        {% if object.can_be_updated and perms.accounts.change_policy %}
-          {% url 'accounts:update_policy' policy.pk as url %}
-          {% button 'UPDATE' url "Edit policy" %}
-        {% endif %}
-        {% if object.can_be_deleted and perms.accounts.delete_policy %}
-          {% url 'accounts:delete_policy' policy.pk as url %}
-          {% button 'DELETE' url "Delete policy" %}
+        {% if request.user.is_superuser and not request.realm_authentication_session.is_remote %}
+          {% if object.can_be_updated %}
+            {% url 'accounts:update_policy' policy.pk as url %}
+            {% button 'UPDATE' url "Edit policy" %}
+          {% endif %}
+          {% if object.can_be_deleted %}
+            {% url 'accounts:delete_policy' policy.pk as url %}
+            {% button 'DELETE' url "Delete policy" %}
+          {% endif %}
         {% endif %}
       </div>
     </div>

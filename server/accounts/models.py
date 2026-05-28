@@ -395,6 +395,12 @@ class Policy(models.Model):
     class Type(models.TextChoices):
         CEDAR = "CEDAR", _("Cedar")
 
+    # Policy mutation is effectively root — see views/policies.py — so the
+    # add/change/delete operations are not exposed as PBAC actions and cannot
+    # be CEDAR-granted. They're enforced via LocalSuperuserRequiredMixin in
+    # the views instead.
+    pbac_excluded_default_permissions = ("add", "change", "delete")
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     provisioning_uid = models.CharField(max_length=256, unique=True, null=True, editable=False)
     name = models.CharField(unique=True, validators=[MinLengthValidator(1)])

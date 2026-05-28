@@ -120,6 +120,22 @@ def server_error(request, *args, **kwargs):
     return django_server_error(request)
 
 
+class LocalSuperuserRequiredMixin(AccessMixin):
+    """Require an authenticated superuser logged in with a local (non-realm)
+    session. Used for capabilities that effectively grant root — like editing
+    PBAC policies — which must be gated outside the policy system that they
+    are meant to bound. Anonymous requests are redirected to login; everything
+    else gets 403.
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        if not request.user.is_superuser or request.realm_authentication_session.is_remote:
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+
 class PBACViewMixin(AccessMixin):
     pbac_request_class = None
 
