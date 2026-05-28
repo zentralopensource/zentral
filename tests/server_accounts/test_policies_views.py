@@ -207,41 +207,84 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
     # source linkification
 
     def test_view_policy_links_role_principal(self):
-        # force_policy seeds a `permit (principal in Role::"0", ...);`.
-        # The Source pre-block should turn the Role::"0" into a link to
-        # the Group/Role detail view.
-        p = force_policy()
+        # The anchor must wrap the whole ``Role::"<pk>"`` reference, not
+        # just the pk. The Role's name shows up as a native title=...
+        # tooltip when we can resolve the pk.
+        role = Group.objects.create(name="ops")
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal in Role::"{role.pk}", action, resource);\n',
+        )
         self.login("accounts.view_policy")
         response = self.client.get(self.build_url("policy", p.pk))
         self.assertContains(
             response,
-            f'Role::"<a href="{reverse("accounts:group", args=[0])}">0</a>"',
+            f'<a href="{reverse("accounts:group", args=[role.pk])}" '
+            f'title="ops">Role::&quot;{role.pk}&quot;</a>',
+            html=False,
+        )
+
+    def test_view_policy_escapes_tooltip_when_principal_name_has_quotes(self):
+        # Group names are operator-controlled and can contain anything
+        # — make sure the title= attribute is HTML-escaped so a name
+        # like ``yolo"fomo`` can't break out of the attribute and
+        # inject arbitrary markup.
+        role = Group.objects.create(name='yolo"fomo')
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal in Role::"{role.pk}", action, resource);\n',
+        )
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policy", p.pk))
+        self.assertContains(response, 'title="yolo&quot;fomo"')
+        # The raw name with an unescaped quote must NOT appear.
+        self.assertNotContains(response, 'title="yolo"fomo"')
+
+    def test_view_policy_links_role_principal_without_tooltip_when_missing(self):
+        # If the policy references a Role::"<pk>" whose Group doesn't
+        # exist anymore, the link still renders but without a title=
+        # attribute.
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source='permit (principal in Role::"999999", action, resource);\n',
+        )
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policy", p.pk))
+        self.assertContains(
+            response,
+            f'<a href="{reverse("accounts:group", args=[999999])}">Role::&quot;999999&quot;</a>',
             html=False,
         )
 
     def test_view_policy_links_user_principal(self):
+        u = User.objects.create_user("bobsmith", "bob@zentral.com", get_random_string(12))
         p = Policy.objects.create(
             name=get_random_string(12),
-            source='permit (principal == User::"42", action, resource);\n',
+            source=f'permit (principal == User::"{u.pk}", action, resource);\n',
         )
         self.login("accounts.view_policy")
         response = self.client.get(self.build_url("policy", p.pk))
         self.assertContains(
             response,
-            f'User::"<a href="{reverse("accounts:user", args=[42])}">42</a>"',
+            f'<a href="{reverse("accounts:user", args=[u.pk])}" '
+            f'title="bobsmith">User::&quot;{u.pk}&quot;</a>',
             html=False,
         )
 
     def test_view_policy_links_service_account_principal(self):
+        sa = User.objects.create(
+            username="ci-bot", email="ci@zentral.com", is_service_account=True,
+        )
         p = Policy.objects.create(
             name=get_random_string(12),
-            source='permit (principal == ServiceAccount::"7", action, resource);\n',
+            source=f'permit (principal == ServiceAccount::"{sa.pk}", action, resource);\n',
         )
         self.login("accounts.view_policy")
         response = self.client.get(self.build_url("policy", p.pk))
         self.assertContains(
             response,
-            f'ServiceAccount::"<a href="{reverse("accounts:user", args=[7])}">7</a>"',
+            f'<a href="{reverse("accounts:user", args=[sa.pk])}" '
+            f'title="ci-bot">ServiceAccount::&quot;{sa.pk}&quot;</a>',
             html=False,
         )
 
