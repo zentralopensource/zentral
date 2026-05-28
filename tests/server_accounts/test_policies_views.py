@@ -204,6 +204,84 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, self.build_url("update_policy", p.pk))
         self.assertContains(response, self.build_url("delete_policy", p.pk))
 
+    # source linkification
+
+    def test_view_policy_links_role_principal(self):
+        # force_policy seeds a `permit (principal in Role::"0", ...);`.
+        # The Source pre-block should turn the Role::"0" into a link to
+        # the Group/Role detail view.
+        p = force_policy()
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policy", p.pk))
+        self.assertContains(
+            response,
+            f'Role::"<a href="{reverse("accounts:group", args=[0])}">0</a>"',
+            html=False,
+        )
+
+    def test_view_policy_links_user_principal(self):
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source='permit (principal == User::"42", action, resource);\n',
+        )
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policy", p.pk))
+        self.assertContains(
+            response,
+            f'User::"<a href="{reverse("accounts:user", args=[42])}">42</a>"',
+            html=False,
+        )
+
+    def test_view_policy_links_service_account_principal(self):
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source='permit (principal == ServiceAccount::"7", action, resource);\n',
+        )
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policy", p.pk))
+        self.assertContains(
+            response,
+            f'ServiceAccount::"<a href="{reverse("accounts:user", args=[7])}">7</a>"',
+            html=False,
+        )
+
+    def test_view_policy_does_not_link_actions_or_resources(self):
+        # MDM::Action::"viewAdminPassword" should not be linked; same
+        # for resource-type references. Only Role / User / ServiceAccount
+        # principals get anchor tags.
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source=(
+                'permit (\n'
+                '  principal,\n'
+                '  action == MDM::Action::"viewAdminPassword",\n'
+                '  resource == Inventory::Machine::"ABC123"\n'
+                ');\n'
+            ),
+        )
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policy", p.pk))
+        # source_html is the linkified policy text the template renders
+        # inside the <pre>. The full HTML response has unrelated anchor
+        # tags (navigation, breadcrumbs, ...), so we scope the
+        # assertion to the rendered source string itself.
+        self.assertNotIn("<a href=", response.context["source_html"])
+        self.assertIn('MDM::Action::&quot;viewAdminPassword&quot;', response.context["source_html"])
+        self.assertIn('Inventory::Machine::&quot;ABC123&quot;', response.context["source_html"])
+
+    def test_view_policy_non_numeric_principal_id_not_linked(self):
+        # A Role::"<provisioning-uid>" reference that wasn't substituted
+        # to a numeric pk shouldn't produce a broken /accounts/roles/X/
+        # link — render as plain text instead.
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source='permit (principal in Role::"unresolved-uid", action, resource);\n',
+        )
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policy", p.pk))
+        self.assertContains(response, 'Role::&quot;unresolved-uid&quot;')
+        self.assertNotContains(response, 'href="/accounts/roles/unresolved-uid')
+
     # update
 
     def test_update_policy_login_redirect(self):
