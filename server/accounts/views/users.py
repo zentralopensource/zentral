@@ -107,6 +107,13 @@ class UpdateUserView(PermissionRequiredMixin, UpdateViewWithAudit):
         else:
             return UpdateUserForm
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        if not self.object.is_service_account:
+            kwargs["request_user"] = self.request.user
+            kwargs["request_session_is_remote"] = self.request.realm_authentication_session.is_remote
+        return kwargs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["title"] = "Update {} {}".format(self.object.get_type_display(), self.object)

@@ -12,6 +12,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
+from realms.models import Realm, RealmUser
 from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.conf import ConfigDict, settings
@@ -49,6 +50,20 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
                                                        "{}@zentral.io".format(get_random_string(12)),
                                                        get_random_string(12),
                                                        is_service_account=True)
+        # realm + matching realm user for ui_user (used by tests that need a remote session)
+        cls.realm = Realm.objects.create(
+            name=get_random_string(12),
+            enabled_for_login=True,
+            backend="ldap",
+            username_claim="username",
+            email_claim="email",
+        )
+        cls.realm_user = RealmUser.objects.create(
+            realm=cls.realm,
+            claims={"username": cls.ui_user.username, "email": cls.ui_user.email},
+            username=cls.ui_user.username,
+            email=cls.ui_user.email,
+        )
 
     def _create_expected_updated_event_serialization(self, prev_user, changed_user):
         return {"action": "updated",
@@ -86,6 +101,12 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     def _get_url_namespace(self):
         return "accounts"
+
+    def _get_realm(self):
+        return self.realm
+
+    def _get_realm_user(self):
+        return self.realm_user
 
     # simple login
 
@@ -516,7 +537,12 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         response = self.client.get(reverse("accounts:update_user", args=(0,)))
         self.assertEqual(response.status_code, 404)
 
+    def _promote_ui_user_to_superuser(self):
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+
     def test_user_update_get(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user")
         response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
         self.assertContains(response, "Update user {}".format(self.user))
@@ -524,9 +550,10 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertIn("username", form.fields)
         self.assertIn("email", form.fields)
         self.assertNotIn("description", form.fields)
-        self.assertIn("is_superuser", form.fields)  # not a superuser → editable
+        self.assertIn("is_superuser", form.fields)  # local superuser requester → can grant
 
     def test_remote_user_update_get(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user")
         response = self.client.get(reverse("accounts:update_user", args=(self.remote_user.id,)))
         self.assertContains(response, "Update user {}".format(self.remote_user))
@@ -534,12 +561,18 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertNotIn("username", form.fields)
         self.assertNotIn("email", form.fields)
         self.assertNotIn("description", form.fields)
-        self.assertIn("is_superuser", form.fields)  # not a superuser → editable
+        self.assertIn("is_superuser", form.fields)  # local superuser requester → can grant
 
     def test_unique_superuser_update_get(self):
+        # ui_user is the only superuser and edits itself: it must not be able
+        # to remove its own superuser flag, otherwise the system would be left
+        # with no superuser at all.
+        self.superuser.is_superuser = False
+        self.superuser.save()
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user")
-        response = self.client.get(reverse("accounts:update_user", args=(self.superuser.id,)))
-        self.assertContains(response, "Update user {}".format(self.superuser))
+        response = self.client.get(reverse("accounts:update_user", args=(self.ui_user.id,)))
+        self.assertContains(response, "Update user {}".format(self.ui_user))
         form = response.context["form"]
         self.assertIn("username", form.fields)
         self.assertIn("email", form.fields)
@@ -552,6 +585,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
                                  "{}@zentral.io".format(get_random_string(12)),
                                  get_random_string(12),
                                  is_superuser=True)
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user")
         response = self.client.get(reverse("accounts:update_user", args=(self.superuser.id,)))
         self.assertContains(response, "Update user {}".format(self.superuser))
@@ -559,7 +593,88 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertIn("username", form.fields)
         self.assertIn("email", form.fields)
         self.assertNotIn("description", form.fields)
-        self.assertIn("is_superuser", form.fields)  # not unique superuser → not editable
+        self.assertIn("is_superuser", form.fields)  # not unique superuser → editable
+
+    def test_non_superuser_requester_cannot_see_is_superuser(self):
+        # ui_user has change_user perm but is not a superuser
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
+        form = response.context["form"]
+        self.assertNotIn("is_superuser", form.fields)
+
+    def test_remote_session_superuser_requester_cannot_see_is_superuser(self):
+        # Even a local superuser, if logged in through a realm (remote
+        # session), cannot grant superuser status.
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.change_user", realm_user=True)
+        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
+        form = response.context["form"]
+        self.assertTrue(response.context["request"].realm_authentication_session.is_remote)
+        self.assertNotIn("is_superuser", form.fields)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_non_superuser_requester_cannot_grant_superuser(self, post_event):
+        # smuggling is_superuser=True through a POST must be ignored
+        self.login("accounts.change_user", "accounts.view_user")
+        self.assertFalse(self.user.is_superuser)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": self.user.username,
+                 "email": self.user.email,
+                 "items_per_page": 10,
+                 "is_superuser": "on"},
+                follow=True,
+            )
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_superuser)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertFalse(event.payload["object"]["new_value"]["is_superuser"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_remote_session_superuser_requester_cannot_grant_superuser(self, post_event):
+        # smuggling is_superuser=True through a POST from a remote session must be ignored
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.change_user", "accounts.view_user", realm_user=True)
+        # realm-based login itself posts a LoginEvent; drop it so the audit
+        # event is the only call we assert on.
+        post_event.reset_mock()
+        self.assertFalse(self.user.is_superuser)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": self.user.username,
+                 "email": self.user.email,
+                 "items_per_page": 10,
+                 "is_superuser": "on"},
+                follow=True,
+            )
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_superuser)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertFalse(event.payload["object"]["new_value"]["is_superuser"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_local_superuser_requester_can_grant_superuser(self, post_event):
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.change_user", "accounts.view_user")
+        self.assertFalse(self.user.is_superuser)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": self.user.username,
+                 "email": self.user.email,
+                 "items_per_page": 10,
+                 "is_superuser": "on"},
+                follow=True,
+            )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_superuser)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertTrue(event.payload["object"]["new_value"]["is_superuser"])
 
     def test_service_account_update_get(self):
         self.login("accounts.change_user")
