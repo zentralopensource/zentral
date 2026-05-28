@@ -83,3 +83,9 @@ docker compose -f docker-compose.yml -f docker-compose.tests.yml run --rm \
 - **Line length: 119** (both [pyproject.toml](pyproject.toml) ruff config and [tox.ini](tox.ini) flake8 config)
 - Ruff is configured with `select = ["E", "F"]`, `ignore = ["E741"]`
 - Match the surrounding code's style — most modules are plain Django + DRF, no heavy framework abstractions
+
+### Comments
+
+- **Default to no comments.** Don't comment methods, classes, or anything self-explanatory — well-named identifiers already say what the code does.
+- Only add a comment when it explains *why*: a corner case, a non-obvious constraint, a workaround, or something that looks simpler than it actually is and would trip up a future reader.
+- Don't write docstrings or comments that just restate the signature. Don't reference tasks, PRs, or callers in comments — that context belongs in commit messages.
