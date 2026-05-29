@@ -95,6 +95,49 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("accounts:delete_policy", args=(p_first.pk,)))
         self.assertContains(response, reverse("accounts:update_policy", args=(p_first.pk,)))
 
+    # schema
+
+    def test_policies_schema_redirect(self):
+        self.login_redirect("policies_schema")
+
+    def test_policies_schema_permission_denied(self):
+        self.login()
+        response = self.client.get(self.build_url("policies_schema"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_policies_schema_ok(self):
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "accounts/policies_schema.html")
+        # The schema page must list every engine namespace.
+        from pbac.engine import engine
+        for ns_id in engine.namespaces:
+            self.assertContains(response, ns_id)
+        # And at least a representative concrete action — the schema page is
+        # the only thing in the UI that surfaces these.
+        self.assertContains(response, "viewPolicy")
+
+    def test_policies_schema_no_excluded_actions(self):
+        # createPolicy / updatePolicy / deletePolicy are not registered as PBAC
+        # actions (see Policy.pbac_excluded_default_permissions); they must not
+        # appear on the schema page.
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        body = response.content.decode()
+        self.assertNotIn("createPolicy", body)
+        self.assertNotIn("updatePolicy", body)
+        self.assertNotIn("deletePolicy", body)
+
+    def test_policies_schema_filter_controls_present(self):
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        self.assertContains(response, 'id="schema-filter-namespace"')
+        self.assertContains(response, 'id="schema-filter-group"')
+        self.assertContains(response, 'id="schema-filter-search"')
+        for basename in ("Admin", "User", "Viewer"):
+            self.assertContains(response, f'<option value="{basename}">{basename}</option>', html=False)
+
     @patch("accounts.views.policies.PoliciesView.get_paginate_by")
     def test_policies_no_modify_buttons_for_non_superuser(self, get_paginate_by):
         # A non-superuser, even one who can see the list, must not see any

@@ -21,6 +21,9 @@
   <div class="d-flex align-items-center mb-1">
     <h3>Polic{{ page_obj.paginator.count|pluralize:"y,ies" }} ({{ page_obj.paginator.count }})</h3>
     <div class="ms-auto">
+      <a href="{% url 'accounts:policies_schema' %}" class="btn btn-sm btn-outline-secondary me-1">
+        Schema
+      </a>
       {% if request.user.is_superuser and not request.realm_authentication_session.is_remote %}
         {% url 'accounts:create_policy' as url %}
         {% button 'CREATE' url "Create a new policy" %}

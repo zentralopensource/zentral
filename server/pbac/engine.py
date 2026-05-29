@@ -32,6 +32,18 @@ class ActionGroupBasename(Enum):
     def __str__(self):
         return self.value
 
+    @classmethod
+    def from_group_id(cls, group_id):
+        """Inverse of ``get_action_group``'s id construction. Each basename is
+        registered twice — namespace-scoped as ``<value>Actions`` and globally
+        as ``Global<value>Actions`` — and both forms resolve back here. Returns
+        ``None`` if ``group_id`` isn't a known action-group id.
+        """
+        for basename in cls:
+            if group_id in (f"{basename.value}Actions", f"Global{basename.value}Actions"):
+                return basename
+        return None
+
 
 class ActionRegistrationConflict(ValueError):
     pass

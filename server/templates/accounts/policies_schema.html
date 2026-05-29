@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/">Home</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'accounts:policies' %}">Policies</a></li>
+      <li class="breadcrumb-item active">Schema</li>
+    </ol>
+  </nav>
+
+  <h3>PBAC schema</h3>
+  <p class="text-secondary">
+    The principals, resources, and actions that policies can reference. Action group
+    membership (Admin / User / Viewer) determines which built-in action groups grants the
+    action.
+  </p>
+
+  <div class="row g-2 mb-3" id="schema-filters">
+    <div class="col-md-3">
+      <label class="form-label mb-1" for="schema-filter-namespace">Namespace</label>
+      <select id="schema-filter-namespace" class="form-select form-select-sm">
+        <option value="">All</option>
+        {% for ns in namespaces %}
+          <option value="{{ ns.id|default_if_none:'' }}">{{ ns.display }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label mb-1" for="schema-filter-group">Action group</label>
+      <select id="schema-filter-group" class="form-select form-select-sm">
+        <option value="">All</option>
+        {% for basename in action_group_basenames %}
+          <option value="{{ basename }}">{{ basename }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label mb-1" for="schema-filter-search">Search</label>
+      <input type="search" id="schema-filter-search" class="form-control form-control-sm"
+             placeholder="action id, entity type, principal, resource…" autocomplete="off">
+    </div>
+  </div>
+
+  <div id="schema-namespaces">
+    {% for ns in namespaces %}
+      <section class="schema-namespace mb-4" data-namespace="{{ ns.id|default_if_none:'' }}">
+        <h4 class="border-bottom pb-1">{{ ns.display }}</h4>
+
+        {% if ns.entity_types %}
+          <h5 class="fs-6 text-secondary mt-3">Entity types ({{ ns.entity_types|length }})</h5>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+              <thead>
+                <tr>
+                  <th style="width:25%">Type</th>
+                  <th style="width:25%">Parents</th>
+                  <th>Attributes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for et in ns.entity_types %}
+                  <tr class="schema-entity-type"
+                      data-search="{{ et.qualified_name|lower }} {% for p in et.parents %}{{ p|lower }} {% endfor %}">
+                    <td><code>{{ et.qualified_name }}</code></td>
+                    <td>
+                      {% if et.parents %}
+                        {% for p in et.parents %}<code>{{ p }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
+                      {% else %}<span class="text-secondary">—</span>{% endif %}
+                    </td>
+                    <td>
+                      {% if et.attrs %}
+                        {% for name, spec in et.attrs %}<code>{{ name }}: {{ spec }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
+                      {% else %}<span class="text-secondary">—</span>{% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+
+        {% if ns.actions %}
+          <h5 class="fs-6 text-secondary mt-3">Actions ({{ ns.actions|length }})</h5>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+              <thead>
+                <tr>
+                  <th style="width:25%">Action</th>
+                  <th style="width:15%">Groups</th>
+                  <th style="width:25%">Principals</th>
+                  <th>Resources</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for action in ns.actions %}
+                  <tr class="schema-action"
+                      data-groups="{{ action.group_basenames|join:' ' }}"
+                      data-search="{{ action.id|lower }} {{ action.qualified_id|lower }} {% for p in action.principals %}{{ p|lower }} {% endfor %}{% for r in action.resources %}{{ r|lower }} {% endfor %}">
+                    <td><code>{{ action.id }}</code></td>
+                    <td>
+                      {% for basename in action.group_basenames %}
+                        <span class="badge bg-secondary">{{ basename }}</span>
+                      {% empty %}
+                        <span class="text-secondary">—</span>
+                      {% endfor %}
+                    </td>
+                    <td>
+                      {% if action.principals %}
+                        {% for p in action.principals %}<code>{{ p }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
+                      {% else %}<span class="text-secondary">—</span>{% endif %}
+                    </td>
+                    <td>
+                      {% if action.resources %}
+                        {% for r in action.resources %}<code>{{ r }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
+                      {% else %}<span class="text-secondary">—</span>{% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+
+  <p class="text-secondary d-none" id="schema-empty-state">No schema items match the current filters.</p>
+{% endblock %}
+
+{% block extrajs %}
+<script nonce="{{ request.csp_nonce }}">
+    (function () {
+      const nsSelect = document.getElementById("schema-filter-namespace");
+      const groupSelect = document.getElementById("schema-filter-group");
+      const searchInput = document.getElementById("schema-filter-search");
+      const namespaces = document.querySelectorAll(".schema-namespace");
+      const emptyState = document.getElementById("schema-empty-state");
+
+      function applyFilters() {
+        const ns = nsSelect.value;
+        const group = groupSelect.value;
+        const search = searchInput.value.trim().toLowerCase();
+        let anyVisible = false;
+
+        namespaces.forEach(function (nsEl) {
+          const nsMatches = !ns || nsEl.dataset.namespace === ns;
+          let nsHasVisibleRows = false;
+
+          // Entity types: only the search filter applies (they don't have an
+          // action group).
+          nsEl.querySelectorAll(".schema-entity-type").forEach(function (row) {
+            const matches = nsMatches
+              && !group  // hide entity types when a specific action group is selected
+              && (!search || row.dataset.search.indexOf(search) !== -1);
+            row.style.display = matches ? "" : "none";
+            if (matches) nsHasVisibleRows = true;
+          });
+
+          // Actions: namespace + group + search.
+          nsEl.querySelectorAll(".schema-action").forEach(function (row) {
+            const groupTokens = (row.dataset.groups || "").split(/\s+/);
+            const matches = nsMatches
+              && (!group || groupTokens.indexOf(group) !== -1)
+              && (!search || row.dataset.search.indexOf(search) !== -1);
+            row.style.display = matches ? "" : "none";
+            if (matches) nsHasVisibleRows = true;
+          });
+
+          // Hide each table whose tbody has no visible rows, and the section
+          // header if neither table has any matches.
+          nsEl.querySelectorAll("table").forEach(function (table) {
+            const hasVisible = Array.from(
+              table.querySelectorAll("tbody tr")
+            ).some(function (r) { return r.style.display !== "none"; });
+            const wrapper = table.closest(".table-responsive");
+            const heading = wrapper ? wrapper.previousElementSibling : null;
+            if (wrapper) wrapper.style.display = hasVisible ? "" : "none";
+            if (heading && heading.tagName === "H5") heading.style.display = hasVisible ? "" : "none";
+          });
+
+          nsEl.style.display = nsHasVisibleRows ? "" : "none";
+          if (nsHasVisibleRows) anyVisible = true;
+        });
+
+        emptyState.classList.toggle("d-none", anyVisible);
+      }
+
+      nsSelect.addEventListener("change", applyFilters);
+      groupSelect.addEventListener("change", applyFilters);
+      searchInput.addEventListener("input", applyFilters);
+    })();
+</script>
+{% endblock %}

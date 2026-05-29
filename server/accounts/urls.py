@@ -59,6 +59,8 @@ urlpatterns = [
     # manage policies
     path('policies/', views.PoliciesView.as_view(),
          name='policies'),
+    path('policies/schema/', views.PoliciesSchemaView.as_view(),
+         name='policies_schema'),
     path('policies/create/', views.CreatePolicyView.as_view(),
          name='create_policy'),
     path('policies/<uuid:pk>/', views.PolicyView.as_view(),

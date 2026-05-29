@@ -6,10 +6,12 @@ from django.contrib.auth.models import Group
 from django.urls import NoReverseMatch, reverse, reverse_lazy
 from django.utils.html import escape, format_html
 from django.utils.safestring import mark_safe
-from django.views.generic import DetailView
+from django.views.generic import DetailView, TemplateView
 
 from accounts.forms import PolicyForm
 from accounts.models import Policy, User
+from pbac.engine import ActionGroupBasename, engine
+from pbac.schema import build_schema_ir
 from pbac.utils import signal_policy_change
 from zentral.utils.views import (
     CreateViewWithAudit,
@@ -125,6 +127,68 @@ class PoliciesView(PermissionRequiredMixin, UserPaginationListView):
         bc.append((reset_link, "Policies"))
         bc.append((None, "page {} of {}".format(page.number, page.paginator.num_pages)))
         ctx["breadcrumbs"] = bc
+        return ctx
+
+
+class PoliciesSchemaView(PermissionRequiredMixin, TemplateView):
+    permission_required = 'accounts.view_policy'
+    template_name = "accounts/policies_schema.html"
+
+    @staticmethod
+    def build_namespaces(ir):
+        """Translate a SchemaIR into a flat list of namespaces ready for
+        template rendering. Each namespace bundles its entity types and its
+        concrete actions (action groups themselves are dropped — they're an
+        internal schema mechanism, not something operators reason about
+        directly).
+        """
+        namespaces = []
+        for ns_id in sorted(ir.namespaces, key=lambda k: (k is None, k or "")):
+            ns = ir.namespaces[ns_id]
+            entity_types = [
+                {
+                    "name": et.name,
+                    "qualified_name": et.qualified_name,
+                    "parents": list(et.parents),
+                    "attrs": [(name, str(spec)) for name, spec in sorted(et.attrs.items())],
+                }
+                for _, et in sorted(ns.entity_types.items())
+            ]
+            actions = []
+            for action_id, action in sorted(ns.actions.items()):
+                if action.applies_to is None:
+                    # Action group entity (e.g. AdminActions); skip — represented as
+                    # badges on the concrete actions that belong to it.
+                    continue
+                basenames = sorted({
+                    bn.value for bn in (ActionGroupBasename.from_group_id(gid) for gid, _ in action.member_of)
+                    if bn is not None
+                })
+                actions.append({
+                    "id": action_id,
+                    "qualified_id": f'{ns_id}::Action::"{action_id}"' if ns_id else f'Action::"{action_id}"',
+                    "group_basenames": basenames,
+                    "principals": list(action.applies_to.principals),
+                    "resources": list(action.applies_to.resources),
+                    "context": (
+                        sorted((name, str(spec)) for name, spec in action.applies_to.context.items())
+                        if action.applies_to.context else []
+                    ),
+                })
+            if not entity_types and not actions:
+                continue
+            namespaces.append({
+                "id": ns_id,
+                "display": ns_id or "(global)",
+                "entity_types": entity_types,
+                "actions": actions,
+            })
+        return namespaces
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["namespaces"] = self.build_namespaces(build_schema_ir(engine))
+        ctx["action_group_basenames"] = list(ActionGroupBasename)
         return ctx
 
 

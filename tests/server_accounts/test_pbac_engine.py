@@ -10,9 +10,7 @@ from pbac.engine import (
 from pbac.types import (
     AppliesTo,
     AttrSpec,
-    EntityType,
     LEGACY_PERM_APPLIES_TO,
-    PrincipalType,
     ResourceType,
     ROLE,
     SERVICE_ACCOUNT,
@@ -22,6 +20,21 @@ from pbac.types import (
 
 
 class PBACEngineTestCase(TestCase):
+    def test_action_group_basename_from_group_id(self):
+        # Both id forms the engine registers — namespace-scoped and global —
+        # resolve back to the same basename.
+        self.assertIs(ActionGroupBasename.from_group_id("AdminActions"), ActionGroupBasename.ADMIN)
+        self.assertIs(ActionGroupBasename.from_group_id("GlobalAdminActions"), ActionGroupBasename.ADMIN)
+        self.assertIs(ActionGroupBasename.from_group_id("UserActions"), ActionGroupBasename.USER)
+        self.assertIs(ActionGroupBasename.from_group_id("GlobalUserActions"), ActionGroupBasename.USER)
+        self.assertIs(ActionGroupBasename.from_group_id("ViewerActions"), ActionGroupBasename.VIEWER)
+        self.assertIs(ActionGroupBasename.from_group_id("GlobalViewerActions"), ActionGroupBasename.VIEWER)
+
+    def test_action_group_basename_from_group_id_unknown(self):
+        self.assertIsNone(ActionGroupBasename.from_group_id("NOOP"))
+        self.assertIsNone(ActionGroupBasename.from_group_id("Admin"))  # missing "Actions" suffix
+        self.assertIsNone(ActionGroupBasename.from_group_id(""))
+
     def test_legacy_perm_actions(self):
         self.assertEqual(
             sorted(engine.legacy_perm_actions.keys()),
