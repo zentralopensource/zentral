@@ -54,6 +54,7 @@ from .models import (
     Location,
     LocationAsset,
     OTAEnrollment,
+    PackageRef,
     Platform,
     Profile,
     ProvisioningProfile,
@@ -978,6 +979,7 @@ class DeclarationSerializer(ArtifactVersionSerializer):
 
     def create(self, validated_data):
         refs = validated_data["declaration"].pop("refs")
+        package_refs = validated_data["declaration"].pop("package_refs")
         with transaction.atomic(durable=True):
             artifact_version = super().create(validated_data)
             instance = Declaration.objects.create(
@@ -987,6 +989,8 @@ class DeclarationSerializer(ArtifactVersionSerializer):
             # update refs
             for key, ref_artifact in refs.items():
                 DeclarationRef.objects.create(declaration=instance, key=key, artifact=ref_artifact)
+            for key, ref_package in package_refs.items():
+                PackageRef.objects.create(declaration=instance, key=key, package=ref_package)
         with transaction.atomic(durable=True):
             for blueprint in artifact_version.artifact.blueprints():
                 update_blueprint_serialized_artifacts(blueprint)
@@ -994,6 +998,7 @@ class DeclarationSerializer(ArtifactVersionSerializer):
 
     def update(self, instance, validated_data):
         refs = validated_data["declaration"].pop("refs")
+        package_refs = validated_data["declaration"].pop("package_refs")
         with transaction.atomic(durable=True):
             super().update(instance, validated_data)
             for attr, value in validated_data["declaration"].items():
@@ -1011,6 +1016,17 @@ class DeclarationSerializer(ArtifactVersionSerializer):
             for decl_ref in DeclarationRef.objects.filter(declaration=instance):
                 if tuple(decl_ref.key) not in seen_keys:
                     decl_ref.delete()
+            seen_package_keys = []
+            for key, ref_package in package_refs.items():
+                PackageRef.objects.update_or_create(
+                    declaration=instance,
+                    key=key,
+                    defaults={"package": ref_package}
+                )
+                seen_package_keys.append(tuple(key))
+            for pkg_ref in PackageRef.objects.filter(declaration=instance):
+                if tuple(pkg_ref.key) not in seen_package_keys:
+                    pkg_ref.delete()
         with transaction.atomic(durable=True):
             for blueprint in instance.artifact_version.artifact.blueprints():
                 update_blueprint_serialized_artifacts(blueprint)

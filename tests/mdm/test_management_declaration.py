@@ -267,6 +267,47 @@ class MDMDeclarationManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(ref.artifact, data_asset_artifact)
         self.assertEqual(ref.key, ["DataAssetReference"])
 
+    def test_create_declaration_post_persists_package_ref(self):
+        # Posting a com.apple.configuration.package source with a
+        # ztl:<Package-UUID> ManifestURL must persist a PackageRef row through
+        # BaseDeclarationForm.save_refs.
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from zentral.contrib.mdm.models import Package
+        package = Package.objects.create(
+            name=get_random_string(12),
+            description="",
+            type=Package.Type.PKG,
+            file=SimpleUploadedFile("p.pkg", b"x"),
+            filename="p.pkg",
+            sha256=get_random_string(64, "0123456789abcdef"),
+            size=1,
+            product_id=get_random_string(12),
+            product_version="1.0",
+            bundles=[],
+            manifest={"items": [{"assets": [{"kind": "software-package"}]}]},
+        )
+        self.login("mdm.add_artifact", "mdm.view_artifact")
+        response = self.client.post(
+            reverse("mdm:create_configuration"),
+            {"source": json.dumps({
+                "Identifier": get_random_string(12),
+                "Type": "com.apple.configuration.package",
+                "Payload": {"ManifestURL": f"ztl:{package.pk}"},
+             }),
+             "name": get_random_string(12),
+             "channel": str(Channel.DEVICE),
+             "platforms": [str(Platform.MACOS)]},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/artifact_detail.html")
+        artifact = response.context["object"]
+        declaration = artifact.artifactversion_set.first().declaration
+        pkg_refs = declaration.packageref_set.all()
+        self.assertEqual(pkg_refs.count(), 1)
+        self.assertEqual(pkg_refs.first().package, package)
+        self.assertEqual(pkg_refs.first().key, ["ManifestURL"])
+
     # upgrade declaration POST
 
     def test_upgrade_declaration_get_redirect(self):

@@ -50,6 +50,7 @@ from zentral.contrib.mdm.models import (
     LocationAsset,
     OTAEnrollment,
     OTAEnrollmentSession,
+    PackageRef,
     Platform,
     Profile,
     ProvisioningProfile,
@@ -929,6 +930,8 @@ def force_artifact(
             else:
                 for path, ref_artifact in info["refs"].items():
                     DeclarationRef.objects.create(declaration=declaration, key=path, artifact=ref_artifact)
+                for path, ref_package in info.get("package_refs", {}).items():
+                    PackageRef.objects.create(declaration=declaration, key=path, package=ref_package)
     return artifact, artifact_versions
 
 

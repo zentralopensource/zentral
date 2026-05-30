@@ -22,7 +22,7 @@
                 {% url 'mdm:update_package' object.pk as url %}
                 {% button 'UPDATE' url "Edit Package" %}
             {% endif %}
-            {% if perms.mdm.delete_package %}
+            {% if perms.mdm.delete_package and object.can_be_deleted %}
                 {% url 'mdm:delete_package' object.pk as url %}
                 {% button 'DELETE' url "Delete Package" %}
             {% endif %}

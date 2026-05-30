@@ -8,8 +8,10 @@ from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
+from django.core.files.uploadedfile import SimpleUploadedFile
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, ArtifactVersionTag,
-                                        DeclarationRef, DeviceArtifact, TargetArtifact)
+                                        DeclarationRef, DeviceArtifact, Package, PackageRef,
+                                        TargetArtifact)
 from zentral.core.events.base import AuditEvent
 from .utils import force_artifact, force_blueprint_artifact, force_dep_enrollment_session
 
@@ -573,3 +575,115 @@ class MDMDeclarationsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(ArtifactVersion.objects.filter(pk=av.pk).count(), 0)
         blueprint.refresh_from_db()
         self.assertEqual(len(blueprint.serialized_artifacts[str(artifact.pk)]["versions"]), 0)
+
+    # PackageRef coverage: declaration serializer create/update
+
+    def _force_package(self):
+        return Package.objects.create(
+            name=get_random_string(12),
+            description="",
+            type=Package.Type.PKG,
+            file=SimpleUploadedFile("p.pkg", b"x"),
+            filename="p.pkg",
+            sha256=get_random_string(64, "0123456789abcdef"),
+            size=1,
+            product_id=get_random_string(12),
+            product_version="1.0",
+            bundles=[],
+            manifest={"items": [{"assets": [{"kind": "software-package"}]}]},
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_declaration_with_package_ref(self, post_event):
+        package = self._force_package()
+        _, artifact, _ = force_blueprint_artifact(
+            artifact_type=Artifact.Type.CONFIGURATION,
+            version_count=0,
+        )
+        self.set_permissions("mdm.add_declaration")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(
+                reverse("mdm_api:declarations"),
+                data={"artifact": str(artifact.pk),
+                      "source": {"Identifier": get_random_string(12),
+                                 "ServerToken": get_random_string(36),
+                                 "Type": "com.apple.configuration.package",
+                                 "Payload": {"ManifestURL": f"ztl:{package.pk}"}},
+                      "macos": True,
+                      "macos_min_version": "26.0",
+                      "shard_modulo": 100,
+                      "default_shard": 100,
+                      "version": 1},
+            )
+        self.assertEqual(response.status_code, 201)
+        av = artifact.artifactversion_set.first()
+        # the PackageRef created loop ran (serializers.py)
+        self.assertEqual(av.declaration.packageref_set.count(), 1)
+        ref = av.declaration.packageref_set.first()
+        self.assertEqual(ref.package, package)
+        self.assertEqual(ref.key, ["ManifestURL"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_declaration_swaps_package_ref(self, post_event):
+        package0 = self._force_package()
+        package1 = self._force_package()
+        _, artifact, (av,) = force_blueprint_artifact(
+            artifact_type=Artifact.Type.CONFIGURATION,
+            decl_type="com.apple.configuration.package",
+            decl_payload={"ManifestURL": f"ztl:{package0.pk}"},
+        )
+        # force_artifact persists PackageRef rows via its info["package_refs"] hook.
+        self.assertEqual(av.declaration.packageref_set.count(), 1)
+        self.assertEqual(av.declaration.packageref_set.first().package, package0)
+        self.set_permissions("mdm.change_declaration")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(
+                reverse("mdm_api:declaration", args=(av.pk,)),
+                data={"artifact": str(artifact.pk),
+                      "source": {"Identifier": av.declaration.identifier,
+                                 "ServerToken": av.declaration.server_token,
+                                 "Type": "com.apple.configuration.package",
+                                 "Payload": {"ManifestURL": f"ztl:{package1.pk}"}},
+                      "macos": True,
+                      "macos_min_version": "26.0",
+                      "shard_modulo": 100,
+                      "default_shard": 100,
+                      "version": 1},
+            )
+        self.assertEqual(response.status_code, 200)
+        av.refresh_from_db()
+        # the PackageRef update_or_create + delete-stale loops ran:
+        # exactly one PackageRef remains, pointing at package1.
+        self.assertEqual(av.declaration.packageref_set.count(), 1)
+        self.assertEqual(av.declaration.packageref_set.first().package, package1)
+        self.assertFalse(PackageRef.objects.filter(declaration=av.declaration, package=package0).exists())
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_declaration_drops_package_ref(self, post_event):
+        package = self._force_package()
+        _, artifact, (av,) = force_blueprint_artifact(
+            artifact_type=Artifact.Type.CONFIGURATION,
+            decl_type="com.apple.configuration.package",
+            decl_payload={"ManifestURL": f"ztl:{package.pk}"},
+        )
+        self.assertEqual(av.declaration.packageref_set.count(), 1)
+        # Update to a payload without a ManifestURL ztl: ref → the stale
+        # PackageRef must be deleted by the seen_package_keys cleanup loop.
+        self.set_permissions("mdm.change_declaration")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(
+                reverse("mdm_api:declaration", args=(av.pk,)),
+                data={"artifact": str(artifact.pk),
+                      "source": {"Identifier": av.declaration.identifier,
+                                 "ServerToken": av.declaration.server_token,
+                                 "Type": "com.apple.configuration.package",
+                                 "Payload": {"ManifestURL": "https://external.example/m.plist"}},
+                      "macos": True,
+                      "macos_min_version": "26.0",
+                      "shard_modulo": 100,
+                      "default_shard": 100,
+                      "version": 1},
+            )
+        self.assertEqual(response.status_code, 200)
+        av.refresh_from_db()
+        self.assertEqual(av.declaration.packageref_set.count(), 0)

@@ -135,6 +135,7 @@ class MDMDeclarationLinkersTestCase(TestCase):
             info,
             {'identifier': '123',
              'payload': {},
+             'package_refs': {},
              'refs': {},
              'server_token': '456',
              'type': 'com.apple.asset.data'}
@@ -155,6 +156,7 @@ class MDMDeclarationLinkersTestCase(TestCase):
             info,
             {'identifier': '123',
              'payload': {},
+             'package_refs': {},
              'refs': {},
              'type': 'com.apple.asset.data'}
         )
@@ -178,6 +180,7 @@ class MDMDeclarationLinkersTestCase(TestCase):
              'payload': {
                  'StandardConfigurations': [f'ztl:{artifact.pk}'],
              },
+             'package_refs': {},
              'refs': {("StandardConfigurations", "0"): artifact},
              'server_token': "456",
              'type': 'com.apple.activation.simple'}
@@ -205,6 +208,7 @@ class MDMDeclarationLinkersTestCase(TestCase):
                  'ServiceType': 'com.apple.sudo',
                  'DataAssetReference': f'ztl:{artifact.pk}',
              },
+             'package_refs': {},
              'refs': {("DataAssetReference",): artifact},
              'server_token': "456",
              'type': 'com.apple.configuration.services.configuration-files'}
@@ -229,6 +233,7 @@ class MDMDeclarationLinkersTestCase(TestCase):
                  'ServiceType': 'com.apple.sudo',
                  'DataAssetReference': f'ztl:{artifact.pk}',
              },
+             'package_refs': {},
              'refs': {("DataAssetReference",): artifact},
              'server_token': "456",
              'type': 'com.apple.configuration.services.configuration-files'}
@@ -321,6 +326,7 @@ class MDMDeclarationLinkersTestCase(TestCase):
                  'ServiceType': 'com.apple.sudo',
                  'DataAssetReference': identifier,
              },
+             'package_refs': {},
              'refs': {("DataAssetReference",): artifact},
              'server_token': "456",
              'type': 'com.apple.configuration.services.configuration-files'}
@@ -347,6 +353,7 @@ class MDMDeclarationLinkersTestCase(TestCase):
              'payload': {
                  'StandardConfigurations': [identifier],
              },
+             'package_refs': {},
              'refs': {("StandardConfigurations", "0"): artifact},
              'server_token': "456",
              'type': 'com.apple.activation.simple'}

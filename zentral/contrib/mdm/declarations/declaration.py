@@ -1,8 +1,11 @@
 import logging
+from django.urls import reverse
+from zentral.conf import settings
 from zentral.contrib.mdm.models import Artifact, Declaration
 from zentral.contrib.mdm.payloads import substitute_variables
 from .exceptions import DeclarationError
 from .linkers import declaration_linkers, get_declaration_info
+from .packages import dump_package_manifest_token
 from .utils import artifact_pk_from_identifier_and_model, get_artifact_identifier, get_artifact_version_server_token
 
 
@@ -39,7 +42,8 @@ def build_declaration(enrollment_session, target, declaration_identifier):
     if not d_artifact_version:
         raise DeclarationError(f'Could not find Declaration artifact {artifact_pk}')
     try:
-        declaration = (Declaration.objects.prefetch_related("declarationref_set__artifact")
+        declaration = (Declaration.objects.prefetch_related("declarationref_set__artifact",
+                                                            "packageref_set__package")
                                           .get(artifact_version__pk=d_artifact_version["pk"]))
     except Declaration.DoesNotExist:
         raise DeclarationError(f'Declaration for artifact version {d_artifact_version["pk"]} does not exist')
@@ -48,12 +52,26 @@ def build_declaration(enrollment_session, target, declaration_identifier):
     # substitute references to other declarations
     references = {tuple(ref.key): get_artifact_identifier({"pk": str(ref.artifact.pk), "type": ref.artifact.type})
                   for ref in declaration.declarationref_set.all()}
-    if references:
+    # substitute ManifestURL package references with signed package_manifest URLs
+    manifest_url_refs = {
+        tuple(ref.key): "https://{}{}".format(
+            settings["api"]["fqdn"],
+            reverse(
+                "mdm_public:package_manifest",
+                args=(dump_package_manifest_token(enrollment_session, target, ref.package.pk),),
+            ),
+        )
+        for ref in declaration.packageref_set.all()
+    }
+    if references or manifest_url_refs:
         try:
             linker = declaration_linkers[declaration.type]
         except KeyError:
             raise DeclarationError(f'Unknown declaration type {declaration.type}')
-        payload = linker.substitute_refs(declaration.payload, references)
+        if references:
+            payload = linker.substitute_refs(payload, references)
+        if manifest_url_refs:
+            payload = linker.substitute_manifest_urls(payload, manifest_url_refs)
     # substitute variables
     payload = substitute_variables(payload, enrollment_session, target.enrolled_user)
     return {

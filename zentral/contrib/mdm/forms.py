@@ -50,6 +50,7 @@ from .models import (
     LocationAsset,
     OTAEnrollment,
     Package,
+    PackageRef,
     Platform,
     Profile,
     ProvisioningProfile,
@@ -797,12 +798,15 @@ class BaseDeclarationForm(forms.ModelForm):
                 self.add_error("source", str(e))
             else:
                 self.cleaned_data["refs"] = info.pop("refs")
+                self.cleaned_data["package_refs"] = info.pop("package_refs")
                 for attr, val in info.items():
                     setattr(self.instance, attr, val)
 
     def save_refs(self):
         for path, ref_artifact in self.cleaned_data["refs"].items():
             DeclarationRef.objects.create(declaration=self.instance, key=path, artifact=ref_artifact)
+        for path, ref_package in self.cleaned_data["package_refs"].items():
+            PackageRef.objects.create(declaration=self.instance, key=path, package=ref_package)
 
 
 class CreateDeclarationForm(BaseDeclarationForm):

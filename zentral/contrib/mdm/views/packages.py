@@ -44,6 +44,9 @@ class DeletePackageView(PermissionRequiredMixin, DeleteViewWithAudit):
     model = Package
     success_url = reverse_lazy("mdm:packages")
 
+    def get_queryset(self):
+        return Package.objects.can_be_deleted()
+
 
 class DownloadPackageView(PermissionRequiredMixin, View):
     permission_required = "mdm.view_package"

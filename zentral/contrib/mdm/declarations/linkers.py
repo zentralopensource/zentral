@@ -3,11 +3,20 @@ import os
 import logging
 import uuid
 from yaml import load, SafeLoader
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.functional import SimpleLazyObject
-from zentral.contrib.mdm.models import Artifact, Declaration
+from zentral.contrib.mdm.models import Artifact, Declaration, Package
 
 
-__all__ = ["_find_zentral_ref_artifact", "declaration_linkers", "get_declaration_info"]
+__all__ = [
+    "_find_zentral_ref_artifact",
+    "_find_zentral_ref_package",
+    "declaration_linkers",
+    "get_declaration_info",
+]
+
+
+ZTL_REF_PREFIX = "ztl:"
 
 
 logger = logging.getLogger("zentral.contrib.mdm.declarations.linkers")
@@ -29,9 +38,15 @@ class DeclarationLinker:
             raise ValueError
         # parse the refs
         self.refs = {}
+        # def-paths whose leaf key is named "ManifestURL" — these can carry
+        # ztl:<Package-UUID> references resolved at build time to a signed
+        # package_manifest public URL.
+        self.manifest_url_paths = set()
         for path, key in self._iter_keys():
             for assettype in key.get("assettypes", []):
                 self.refs.setdefault(tuple(path), []).append(assettype)
+            if key.get("key") == "ManifestURL":
+                self.manifest_url_paths.add(tuple(path))
         if self.type == "com.apple.activation.simple":
             self.refs[("StandardConfigurations", "*")] = ["com.apple.configuration.*"]
 
@@ -92,6 +107,34 @@ class DeclarationLinker:
                 pass
         return root
 
+    def iter_manifest_url_refs(self, root, callback, def_path=None, path=None):
+        if def_path is None:
+            def_path = []
+        if path is None:
+            path = []
+        if isinstance(root, dict):
+            for key, val in root.items():
+                self.iter_manifest_url_refs(val, callback, def_path + [key], path + [key])
+        elif isinstance(root, list):
+            for i, val in enumerate(root):
+                self.iter_manifest_url_refs(val, callback, def_path + ["*"], path + [str(i)])
+        elif tuple(def_path) in self.manifest_url_paths:
+            callback(tuple(path), root)
+
+    def substitute_manifest_urls(self, root, manifest_urls, path=None):
+        if path is None:
+            path = []
+        if isinstance(root, dict):
+            root = {k: self.substitute_manifest_urls(v, manifest_urls, path + [k]) for k, v in root.items()}
+        elif isinstance(root, list):
+            root = [self.substitute_manifest_urls(v, manifest_urls, path + [str(i)]) for i, v in enumerate(root)]
+        else:
+            try:
+                root = manifest_urls[tuple(path)]
+            except KeyError:
+                pass
+        return root
+
 
 def load_declaration_linkers():
     linkers = {}
@@ -114,8 +157,16 @@ def load_declaration_linkers():
 declaration_linkers = SimpleLazyObject(load_declaration_linkers)
 
 
+def _find_zentral_ref_package(value):
+    package_pk = value.removeprefix(ZTL_REF_PREFIX)
+    try:
+        return Package.objects.get(pk=package_pk)
+    except (Package.DoesNotExist, ValueError, DjangoValidationError):
+        raise ValueError(f"Unknown zentral package: {package_pk}")
+
+
 def _find_zentral_ref_artifact(value, types):
-    artifact_pk = value.removeprefix("ztl:")
+    artifact_pk = value.removeprefix(ZTL_REF_PREFIX)
     try:
         artifact = Artifact.objects.get(pk=artifact_pk)
     except Artifact.DoesNotExist:
@@ -222,10 +273,21 @@ def get_declaration_info(source, channel, platforms, ensure_server_token=False):
 
     linker.iter_refs(payload, add_ref)
 
+    package_refs = {}
+
+    def add_package_ref(path, value):
+        if not isinstance(value, str) or not value.startswith(ZTL_REF_PREFIX):
+            # plain external URL — leave as-is, do not persist a PackageRef.
+            return
+        package_refs[path] = _find_zentral_ref_package(value)
+
+    linker.iter_manifest_url_refs(payload, add_package_ref)
+
     return {
         "type": type,
         "identifier": identifier,
         "server_token": server_token,
         "payload": payload,
         "refs": refs,
+        "package_refs": package_refs,
     }

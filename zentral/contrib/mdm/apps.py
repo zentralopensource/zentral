@@ -33,6 +33,7 @@ class ZentralMDMAppConfig(ZentralAppConfig):
         "pushcertificate",
         "otaenrollment",
         "package",
+        "packageref",
         "realmgrouptagmapping",
         "recoverypasswordconfig",
         "scepissuer",

@@ -3090,6 +3090,16 @@ def package_path(instance, filename):
     return f"mdm/packages/{instance.pk}.pkg"
 
 
+class PackageManager(models.Manager):
+    def can_be_deleted(self):
+        # PackageRef is the only consumer that holds a Package today. When a new
+        # consumer is added (e.g. an MDM command pointing at ManifestURL without
+        # a Declaration), add an Exists(...) clause here so referenced packages
+        # are still blocked from deletion through the admin guard — same pattern
+        # as Artifact.objects.can_be_deleted.
+        return self.filter(~Exists(PackageRef.objects.filter(package=OuterRef("pk"))))
+
+
 class Package(models.Model):
     class Type(models.TextChoices):
         IPA = "IPA"
@@ -3098,6 +3108,8 @@ class Package(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=256)
     description = models.TextField(blank=True)
+
+    objects = PackageManager()
 
     type = models.CharField(max_length=3, choices=Type.choices)
     file = models.FileField(upload_to=package_path, storage=select_dist_storage)
@@ -3122,6 +3134,9 @@ class Package(models.Model):
 
     def get_absolute_url(self):
         return reverse("mdm:package", args=(self.pk,))
+
+    def can_be_deleted(self):
+        return Package.objects.can_be_deleted().filter(pk=self.pk).exists()
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": str(self.id), "name": self.name}
@@ -3151,6 +3166,15 @@ def post_delete_package(sender, instance, *args, **kwargs):
         instance.file.delete(save=False)
     except Exception:
         logger.exception("Could not delete package file")
+
+
+class PackageRef(models.Model):
+    declaration = models.ForeignKey(Declaration, on_delete=models.CASCADE)
+    key = ArrayField(models.CharField(max_length=256, validators=[MinLengthValidator(1)]))
+    package = models.ForeignKey(Package, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = (("declaration", "key"),)
 
 
 class StoreApp(models.Model):
