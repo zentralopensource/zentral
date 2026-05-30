@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:packages' %}">Packages</a></li>
+  <li class="breadcrumb-item active">{{ object.name }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object.name }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Package</h3>
+        <div class="ms-auto">
+            {% url 'mdm:download_package' object.pk as url %}
+            {% button 'DOWNLOAD' url "Download Package" %}
+            {% if perms.mdm.change_package %}
+                {% url 'mdm:update_package' object.pk as url %}
+                {% button 'UPDATE' url "Edit Package" %}
+            {% endif %}
+            {% if perms.mdm.delete_package %}
+                {% url 'mdm:delete_package' object.pk as url %}
+                {% button 'DELETE' url "Delete Package" %}
+            {% endif %}
+        </div>
+    </div>
+
+    <table class="table-object-properties">
+    <tbody>
+        <tr>
+        <th width="240px">Name</th>
+        <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+        <th>Description</th>
+        <td>{{ object.description|linebreaksbr|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>Type</th>
+        <td>{{ object.type }}</td>
+        </tr>
+        <tr>
+        <th>Filename</th>
+        <td>{{ object.filename }}</td>
+        </tr>
+        <tr>
+        <th>Source URI</th>
+        <td>{{ object.source_uri|default:"-" }}</td>
+        </tr>
+        <tr>
+        <th>SHA256</th>
+        <td><code>{{ object.sha256 }}</code></td>
+        </tr>
+        <tr>
+        <th>Size</th>
+        <td>{{ object.size|filesizeformat }}</td>
+        </tr>
+        <tr>
+        <th>Product ID</th>
+        <td>{{ object.product_id }}</td>
+        </tr>
+        <tr>
+        <th>Product version</th>
+        <td>{{ object.product_version }}</td>
+        </tr>
+        <tr>
+        <th>Bundle{{ object.bundles|length|pluralize }}</th>
+        <td>
+            {% if object.bundles %}
+            <table class="table table-condensed">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Version</th>
+                  <th>Path</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for bundle in object.bundles %}
+                <tr>
+                  <td>{{ bundle.id }}</td>
+                  <td>{{ bundle.version_str }}{% if bundle.version != bundle.version_str %} / {{ bundle.version }}{% endif %}</td>
+                  <td>{{ bundle.path|default:"-" }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        </tr>
+    </tbody>
+    </table>
+
+    {% created_updated_at object %}
+
+</div>
+
+{% endblock %}

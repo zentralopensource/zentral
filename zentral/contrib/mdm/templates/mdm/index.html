@@ -29,6 +29,9 @@
 {% if perms.mdm.view_asset %}
 <p><a href="{% url 'mdm:assets' %}">Store apps</a></p>
 {% endif %}
+{% if perms.mdm.view_package %}
+<p><a href="{% url 'mdm:packages' %}">Packages</a></p>
+{% endif %}
 {% if perms.mdm.view_blueprint %}
 <p><a href="{% url 'mdm:blueprints' %}">Blueprints</a></p>
 {% endif %}

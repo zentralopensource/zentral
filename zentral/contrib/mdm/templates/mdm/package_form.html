@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:packages' %}">Packages</a></li>
+  <li class="breadcrumb-item active">create</li>
+</ol>
+
+<h3>Create package</h3>
+
+<form method="post" enctype="multipart/form-data" class="upload-form">{% csrf_token %}
+  {{ form }}
+  <p>
+    <a class="btn btn-outline-secondary" href="{% url 'mdm:packages' %}">Cancel</a>
+    <button type="submit" class="btn btn-primary">Upload</button>
+  </p>
+</form>
+{% endblock %}

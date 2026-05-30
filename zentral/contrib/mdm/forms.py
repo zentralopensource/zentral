@@ -49,6 +49,7 @@ from .models import (
     Location,
     LocationAsset,
     OTAEnrollment,
+    Package,
     Platform,
     Profile,
     ProvisioningProfile,
@@ -717,6 +718,59 @@ class UpgradeEnterpriseAppForm(BaseEnterpriseAppForm):
                      "manifest"):
             setattr(self.instance, attr, self.cleaned_data[attr])
         return super().save()
+
+
+class CreatePackageForm(forms.ModelForm):
+    file = forms.FileField(required=True,
+                           help_text="macOS distribution package (.pkg) "
+                                     "or iOS/iPadOS/tvOS application archive (.ipa)")
+
+    class Meta:
+        model = Package
+        fields = ("name", "description", "file")
+
+    def clean(self):
+        super().clean()
+        uploaded = self.cleaned_data.get("file")
+        if not uploaded:
+            return
+        try:
+            _, _, pkg_data = read_package_info(uploaded, compute_sha256=True)
+        except Exception as e:
+            raise forms.ValidationError(f"Invalid app: {e}")
+        sha256 = pkg_data["package_sha256"]
+        if Package.objects.filter(sha256=sha256).exists():
+            self.add_error("file", "A package with the same SHA256 already exists.")
+            return
+        # read_package_info has already validated the extension as .pkg or .ipa
+        ext = os.path.splitext(uploaded.name)[1].lower()
+        self.cleaned_data["type"] = Package.Type.IPA if ext == ".ipa" else Package.Type.PKG
+        self.cleaned_data["filename"] = uploaded.name
+        self.cleaned_data["sha256"] = sha256
+        self.cleaned_data["size"] = pkg_data["package_size"]
+        self.cleaned_data["product_id"] = pkg_data["product_id"]
+        self.cleaned_data["product_version"] = pkg_data["product_version"]
+        self.cleaned_data["bundles"] = pkg_data["bundles"]
+        self.cleaned_data["manifest"] = pkg_data["manifest"]
+
+    def save(self):
+        cleaned_data = self.cleaned_data
+        for attr in ("type",
+                     "sha256",
+                     "size",
+                     "filename",
+                     "product_id",
+                     "product_version",
+                     "bundles",
+                     "manifest"):
+            setattr(self.instance, attr, cleaned_data[attr])
+        return super().save()
+
+
+class UpdatePackageForm(forms.ModelForm):
+    class Meta:
+        model = Package
+        fields = ("name", "description")
 
 
 class BaseDeclarationForm(forms.ModelForm):

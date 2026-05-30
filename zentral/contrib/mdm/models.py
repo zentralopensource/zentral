@@ -3086,6 +3086,73 @@ def post_delete_enterprise_app(sender, instance, *args, **kwargs):
         logger.exception("Could not delete enteprise app package")
 
 
+def package_path(instance, filename):
+    return f"mdm/packages/{instance.pk}.pkg"
+
+
+class Package(models.Model):
+    class Type(models.TextChoices):
+        IPA = "IPA"
+        PKG = "PKG"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=256)
+    description = models.TextField(blank=True)
+
+    type = models.CharField(max_length=3, choices=Type.choices)
+    file = models.FileField(upload_to=package_path, storage=select_dist_storage)
+    source_uri = models.TextField(default="")
+    sha256 = models.CharField(max_length=64, unique=True)
+    size = models.BigIntegerField()
+    filename = models.TextField()
+    product_id = models.TextField()
+    product_version = models.TextField()
+    bundles = models.JSONField(default=list)
+    manifest = models.JSONField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+        indexes = [models.Index(fields=["product_id", "product_version"])]
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("mdm:package", args=(self.pk,))
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": str(self.id), "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "description": self.description,
+            "type": self.type,
+            "sha256": self.sha256,
+            "size": self.size,
+            "filename": self.filename,
+            "product_id": self.product_id,
+            "product_version": self.product_version,
+            "bundles": self.bundles,
+            "manifest": self.manifest,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        })
+        if self.source_uri:
+            d["source_uri"] = self.source_uri
+        return d
+
+
+@receiver(post_delete, sender=Package)
+def post_delete_package(sender, instance, *args, **kwargs):
+    try:
+        instance.file.delete(save=False)
+    except Exception:
+        logger.exception("Could not delete package file")
+
+
 class StoreApp(models.Model):
     artifact_version = models.OneToOneField(ArtifactVersion, related_name="store_app", on_delete=models.CASCADE)
     location_asset = models.ForeignKey(LocationAsset, on_delete=models.CASCADE)
