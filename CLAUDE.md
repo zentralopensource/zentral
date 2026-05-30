@@ -78,6 +78,16 @@ docker compose -f docker-compose.yml -f docker-compose.tests.yml run --rm \
 
 `--keepdb` reuses the test database across runs and skips the (slow) migration replay — the first invocation is unchanged, subsequent ones start in seconds. If migrations are renamed/squashed or the DB ends up wedged, drop the flag for one run to rebuild from scratch.
 
+## Docs
+
+User-facing docs live in [docs/](docs/), built with [mkdocs](https://www.mkdocs.org/) (config: [mkdocs.yml](mkdocs.yml)). After editing anything under `docs/`, validate with:
+
+```
+mkdocs build --strict
+```
+
+`--strict` promotes warnings (broken anchors, missing image paths, missing files) to errors. Plain `mkdocs build` reports the same issues as INFO/WARNING but still writes to `build/` (note: this project sets `site_dir: build/`, not the default `site/`). `mkdocs serve` gives a live preview at http://localhost:8000.
+
 ## Style & linting
 
 - **Line length: 119** (both [pyproject.toml](pyproject.toml) ruff config and [tox.ini](tox.ini) flake8 config)
