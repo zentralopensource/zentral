@@ -8,18 +8,34 @@ First you need to configure an [OKTA realm](../okta_saml/), with the `SCIM enabl
 
 ## Provision a Zentral service account
 
-The SCIM synchronization is part of the Zentral API. To let Okta authenticate with Zentral, you need to setup a Zentral role and a Zentral service account.
-
-### Role
-
-In Zentral, roles are used to give permissions to the users or service accounts. Create a role with the following permissions:
-
-* `realms.realmgroup` add, change, delete, view
-* `realms.realmuser` add, change, delete, view
+The SCIM synchronization is part of the Zentral API. To let Okta authenticate with Zentral, you need to set up a Zentral service account and a PBAC policy authorizing it.
 
 ### Service account
 
-A Zentral service account is a Zentral user that cannot log into the admin console. Create a service account for your SCIM integration. Pick a name, a description, and add it to the role you have just created. Do not forget to note the API token. You will need it later to configure the Okta application.
+A Zentral service account is a Zentral user that cannot log into the admin console. Create a service account for your SCIM integration. Pick a name and a description. Do not forget to note the API token — you will need it later to configure the Okta application. Note also the service account's numeric primary key (visible in the URL of the service-account detail page).
+
+### Policy
+
+Create a [PBAC policy](pbac.md) targeting the service account directly, granting it the eight Realms actions SCIM needs to create, update, delete and view both Realm Groups and Realm Users:
+
+```
+permit (
+  principal == ServiceAccount::"<okta-scim-service-account-pk>",
+  action in [
+    Realms::Action::"createRealmGroup",
+    Realms::Action::"updateRealmGroup",
+    Realms::Action::"deleteRealmGroup",
+    Realms::Action::"viewRealmGroup",
+    Realms::Action::"createRealmUser",
+    Realms::Action::"updateRealmUser",
+    Realms::Action::"deleteRealmUser",
+    Realms::Action::"viewRealmUser"
+  ],
+  resource
+);
+```
+
+Substitute `<okta-scim-service-account-pk>` with the pk of the service account you just created. `==` (rather than `in`) targets that specific service account; no Role indirection needed.
 
 ## Update the Okta Application
 
