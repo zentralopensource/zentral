@@ -144,6 +144,38 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, package.name)
         self.assertContains(response, "some description")
         self.assertContains(response, package.product_id)
+        # UUID is rendered for easy copying.
+        self.assertContains(response, str(package.id))
+        # cross-link section is present, empty
+        self.assertContains(response, "Referenced by 0 declarations")
+
+    def test_package_detail_lists_referencing_artifact_versions(self):
+        from zentral.contrib.mdm.models import (
+            Artifact, ArtifactVersion, Channel, Declaration, PackageRef, Platform,
+        )
+        package = self._force_package()
+        artifact = Artifact.objects.create(
+            name="ref-artifact",
+            type=Artifact.Type.CONFIGURATION,
+            channel=Channel.DEVICE,
+            platforms=[Platform.MACOS],
+        )
+        artifact_version = ArtifactVersion.objects.create(artifact=artifact, version=1, macos=True)
+        declaration = Declaration.objects.create(
+            artifact_version=artifact_version,
+            type="com.apple.configuration.package",
+            identifier=get_random_string(12),
+            server_token=get_random_string(12),
+            payload={"ManifestURL": f"ztl:{package.pk}"},
+        )
+        PackageRef.objects.create(declaration=declaration, key=("ManifestURL",), package=package)
+        self.login("mdm.view_package", "mdm.view_artifact", "mdm.view_artifactversion")
+        response = self.client.get(reverse("mdm:package", args=(package.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Referenced by 1 declaration")
+        self.assertContains(response, reverse("mdm:artifact", args=(artifact.pk,)))
+        self.assertContains(response, reverse("mdm:artifact_version", args=(artifact.pk, artifact_version.pk)))
+        self.assertContains(response, "ref-artifact")
 
     # create
 

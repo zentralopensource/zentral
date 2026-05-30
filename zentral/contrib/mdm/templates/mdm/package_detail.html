@@ -32,7 +32,11 @@
     <table class="table-object-properties">
     <tbody>
         <tr>
-        <th width="240px">Name</th>
+        <th width="240px">ID</th>
+        <td><code>{{ object.id }}</code></td>
+        </tr>
+        <tr>
+        <th>Name</th>
         <td>{{ object.name }}</td>
         </tr>
         <tr>
@@ -96,6 +100,44 @@
         </tr>
     </tbody>
     </table>
+
+    <h3 class="m-0 fs-5 text-secondary mt-3 mb-2">
+        Referenced by {{ package_refs_count }} declaration{{ package_refs_count|pluralize }}
+    </h3>
+    {% if package_refs_count %}
+    <table class="table table-object-properties">
+      <thead>
+        <tr>
+          <th>Artifact</th>
+          <th>Version</th>
+          <th>Key</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ref in package_refs %}
+        {% with ref.declaration.artifact_version as artifact_version %}
+        <tr>
+          <td>
+            {% if perms.mdm.view_artifact %}
+            <a href="{{ artifact_version.artifact.get_absolute_url }}">{{ artifact_version.artifact }}</a>
+            {% else %}
+            {{ artifact_version.artifact }}
+            {% endif %}
+          </td>
+          <td>
+            {% if perms.mdm.view_artifactversion %}
+            <a href="{% url 'mdm:artifact_version' artifact_version.artifact.pk artifact_version.pk %}">v{{ artifact_version.version }}</a>
+            {% else %}
+            v{{ artifact_version.version }}
+            {% endif %}
+          </td>
+          <td>{{ ref.key|join:"." }}</td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
 
     {% created_updated_at object %}
 

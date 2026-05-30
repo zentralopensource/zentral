@@ -31,6 +31,17 @@ class PackageView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_package"
     model = Package
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["package_refs"] = (
+            self.object.packageref_set
+                       .select_related("declaration__artifact_version__artifact")
+                       .order_by("declaration__artifact_version__artifact__name",
+                                 "declaration__artifact_version__version")
+        )
+        ctx["package_refs_count"] = ctx["package_refs"].count()
+        return ctx
+
 
 class UpdatePackageView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_package"

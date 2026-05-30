@@ -23,3 +23,38 @@
   </td>
   {% endwith %}
 </tr>
+{% with declaration.packageref_set.all as package_refs %}
+{% if package_refs %}
+<tr>
+  <th>Package reference{{ package_refs|length|pluralize }}</th>
+  <td>
+    <table class="table table-condensed">
+      <thead>
+        <tr>
+          <th>Key</th>
+          <th>Package</th>
+          <th>Product ID</th>
+          <th>Product version</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ref in package_refs %}
+        <tr>
+          <td>{{ ref.key|join:"." }}</td>
+          <td>
+            {% if perms.mdm.view_package %}
+            <a href="{{ ref.package.get_absolute_url }}">{{ ref.package }}</a>
+            {% else %}
+            {{ ref.package }}
+            {% endif %}
+          </td>
+          <td>{{ ref.package.product_id }}</td>
+          <td>{{ ref.package.product_version }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </td>
+</tr>
+{% endif %}
+{% endwith %}

@@ -4,11 +4,15 @@ from functools import lru_cache
 from io import BytesIO
 from urllib.parse import urlparse
 
+from accounts.models import User
+from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from tests.utils.packages import build_dummy_package
+from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.artifacts import Target
@@ -35,13 +39,27 @@ from .utils import force_dep_enrollment_session
 PACKAGE_DECL_TYPE = "com.apple.configuration.package"
 
 
-class PackageDeclarationLinkerTestCase(TestCase):
+class PackageDeclarationLinkerTestCase(TestCase, LoginCase):
     maxDiff = None
 
     @classmethod
     def setUpTestData(cls):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
+        cls.user = User.objects.create_user("zoidberg", "zoidberg@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
+        cls.user.groups.set([cls.group])
+
+    # LoginCase
+
+    def _get_user(self):
+        return self.user
+
+    def _get_group(self):
+        return self.group
+
+    def _get_url_namespace(self):
+        return "mdm"
 
     # helpers
 
@@ -245,3 +263,20 @@ class PackageDeclarationLinkerTestCase(TestCase):
         package = self._force_package()
         self.assertTrue(package.can_be_deleted())
         self.assertIn(package, Package.objects.can_be_deleted())
+
+    # UI cross-link: ArtifactVersion detail -> Package
+
+    def test_artifact_version_detail_links_to_referenced_package(self):
+        artifact, artifact_version, declaration, package = self._make_declaration_artifact("ztl:placeholder")
+        self.login("mdm.view_artifactversion", "mdm.view_artifact", "mdm.view_package")
+        response = self.client.get(
+            reverse("mdm:artifact_version", args=(artifact.pk, artifact_version.pk))
+        )
+        self.assertEqual(response.status_code, 200)
+        # Package reference row is rendered and links to the package detail page,
+        # with product_id and product_version visible inline.
+        self.assertContains(response, "Package reference")
+        self.assertContains(response, reverse("mdm:package", args=(package.pk,)))
+        self.assertContains(response, package.name)
+        self.assertContains(response, package.product_id)
+        self.assertContains(response, package.product_version)
