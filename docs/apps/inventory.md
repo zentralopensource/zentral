@@ -255,7 +255,7 @@ This boolean is used to toggle the inclusion of the principal user in the event 
 ### `/api/inventory/machines/<url_safe_serial_number>/meta/`
 
 * method: GET
-* required permission: `inventory.view_machinesnapshot`
+* PBAC action: `Inventory::Action::"viewMachineSnapshot"`
 
 Use this endpoint to get general information about a machine.
 
@@ -305,11 +305,11 @@ Some examples:
 ### `/api/inventory/machines/tags/`
 
 * method: POST
-* required permissions:
-    * `inventory.add_tag`
-    * `inventory.add_taxonomy`
-    * `inventory.add_machinetag`
-    * `inventory.delete_machinetag`
+* PBAC actions:
+    * `Inventory::Action::"createTag"`
+    * `Inventory::Action::"createTaxonomy"`
+    * `Inventory::Action::"createMachineTag"`
+    * `Inventory::Action::"deleteMachineTag"`
 
 Use this endpoint to tag machines using serial numbers or principal user information (unique IDs or principal names). Three different operations are possible: `ADD`, `REMOVE`, `SET`. For the `SET` operation, the `taxonomy` attribute is required. For the `REMOVE` operation, the `taxonomy` attribute must not be used. For the `ADD` operation and `REMOVE` operation, the `names` attribute must not be empty. To scope the machines, use either `serial_numbers` or `principal_users`.
 
@@ -365,8 +365,8 @@ The response format is:
 ### `/api/inventory/cleanup/`
 
 * method: POST
-* required permissions:
-	* `inventory.delete_machinesnapshot`
+* PBAC actions:
+	* `Inventory::Action::"deleteMachineSnapshot"`
 * optional parameter:
 	* `days`: The number of days (`1` → `3660`) of history to keep. Defaults to `30` or the value of `snapshot_retention_days` in the inventory app config.
 
@@ -394,8 +394,8 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* required permission:
-    * `inventory.change_machinesnapshot`
+* PBAC action:
+    * `Inventory::Action::"updateMachineSnapshot"`
 
 Use this endpoint to archive machines using their serial numbers. The inventory data will be kept in the database, in case the machines show up again, but the machines will not be displayed when browsing or exporting the inventory. Up to 1000 machines can be archived per API call.
 
@@ -420,8 +420,8 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* required permission:
-    * `inventory.delete_machinesnapshot`
+* PBAC action:
+    * `Inventory::Action::"deleteMachineSnapshot"`
 
 Use this endpoint to prune machines using their serial numbers. The inventory data will be removed from the database. Up to 1000 machines can be pruned per API call.
 
@@ -448,8 +448,8 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* required permission:
-    * `inventory.view_androidapp`
+* PBAC action:
+    * `Inventory::Action::"viewAndroidApp"`
 * optional parameters:
     * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
     * `source`: The ID of an inventory source. Only Android apps collected via this source will be included in the export.
@@ -482,8 +482,8 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* required permission:
-    * `inventory.view_debpackage`
+* PBAC action:
+    * `Inventory::Action::"viewDebPackage"`
 * optional parameters:
     * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
     * `source`: The ID of an inventory source. Only Debian packages collected via this source will be included in the export.
@@ -516,8 +516,8 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* required permission:
-    * `inventory.view_iosapp`
+* PBAC action:
+    * `Inventory::Action::"viewIOSApp"`
 * optional parameters:
     * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
     * `source`: The ID of an inventory source. Only iOS apps collected via this source will be included in the export.
@@ -550,9 +550,9 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* required permission:
-    * `inventory.view_osxapp`
-    * `inventory.view_osxappinstance`
+* PBAC action:
+    * `Inventory::Action::"viewOSXApp"`
+    * `Inventory::Action::"viewOSXAppInstance"`
 * optional parameters:
     * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
     * `source`: The ID of an inventory source. Only macOS apps collected via this source will be included in the export.
@@ -585,9 +585,9 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* required permission:
-    * `inventory.view_program`
-    * `inventory.view_programinstance`
+* PBAC action:
+    * `Inventory::Action::"viewProgram"`
+    * `Inventory::Action::"viewProgramInstance"`
 * optional parameters:
     * `export_format`: `csv` or `xlsx`. Defaults to `xlsx`.
     * `source`: The ID of an inventory source. Only Windows programs collected via this source will be included in the export.
@@ -619,8 +619,8 @@ Response:
 ### `/api/inventory/machines/export_android_apps/`
 
 * method: POST
-* required permission:
-	* `inventory.view_androidapp`
+* PBAC action:
+	* `Inventory::Action::"viewAndroidApp"`
 * optional parameter:
 	* `source_name`: The name of an inventory source. Only machines with Android apps collected via this source will be included in the export.
 
@@ -646,8 +646,8 @@ Response:
 ### `/api/inventory/machines/export_deb_packages/`
 
 * method: POST
-* required permission:
-	* `inventory.view_debpackage`
+* PBAC action:
+	* `Inventory::Action::"viewDebPackage"`
 * optional parameter:
 	* `source_name`: The name of an inventory source. Only machines with Debian packages collected via this source will be included in the export.
 
@@ -674,8 +674,8 @@ Response:
 ### `/api/inventory/machines/export_ios_apps/`
 
 * method: POST
-* required permission:
-	* `inventory.view_iosapp`
+* PBAC action:
+	* `Inventory::Action::"viewIOSApp"`
 * optional parameter:
 	* `source_name`: The name of an inventory source. Only machines with iOS apps collected via this source will be included in the export.
 
@@ -702,9 +702,9 @@ Response:
 ### `/api/inventory/machines/export_macos_app_instances/`
 
 * method: POST
-* required permissions:
-	* `inventory.view_osxapp`
-	* `inventory.view_osxappinstance`
+* PBAC actions:
+	* `Inventory::Action::"viewOSXApp"`
+	* `Inventory::Action::"viewOSXAppInstance"`
 * optional parameter:
 	* `source_name`: The name of an inventory source. Only machines with macOS apps collected via this source will be included in the export.
 
@@ -731,9 +731,9 @@ Response:
 ### `/api/inventory/machines/export_program_instances/`
 
 * method: POST
-* required permissions:
-	* `inventory.view_program`
-	* `inventory.view_programinstance`
+* PBAC actions:
+	* `Inventory::Action::"viewProgram"`
+	* `Inventory::Action::"viewProgramInstance"`
 * optional parameter:
 	* `source_name`: The name of an inventory source. Only machines with Windows programs collected via this source will be included in the export.
 
@@ -760,8 +760,8 @@ Response:
 ### `/api/inventory/machines/export_snapshots/`
 
 * method: POST
-* required permissions:
-	* `inventory.view_machinesnapshot`
+* PBAC actions:
+	* `Inventory::Action::"viewMachineSnapshot"`
 * optional parameter:
 	* `source_name`: The name of an inventory source. Only machine snapshots collected via this source will be included in the export.
 
@@ -788,8 +788,8 @@ Response:
 ### `/api/inventory/full_export/`
 
 * method: POST
-* required permissions:
-	* `inventory.view_machinesnapshot`
+* PBAC actions:
+	* `Inventory::Action::"viewMachineSnapshot"`
 
 Use this endpoint to trigger a full inventory export (ZIP archive of `.jsonl`. files).
 

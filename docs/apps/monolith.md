@@ -132,8 +132,8 @@ During a sync, monolith will import all the available [pkginfo files](https://gi
 
 * method: POST
 * Content-Type: application/json
-* Required permission:
-    * `monolith.sync_repository`
+* PBAC action:
+    * `Monolith::Action::"syncRepository"`
 
 Example:
 
@@ -154,7 +154,7 @@ Response:
 #### List all manifests
 
 * method: GET
-* Required permission: `monolith.view_manifest`
+* PBAC action: `Monolith::Action::"viewManifest"`
 * Optional filter parameters:
     * `name`: name of the manifest
     * `meta_business_unit_id`: ID of the meta business unit
@@ -196,7 +196,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `monolith.add_manifest`
+* PBAC action: `Monolith::Action::"createManifest"`
 
 Examples:
 
@@ -236,7 +236,7 @@ Response:
 #### Get a manifest
 
 * method: GET
-* Required permission: `monolith.view_manifest`
+* PBAC action: `Monolith::Action::"viewManifest"`
 * `<int:pk>`: the primary key of the manifest
 
 Example:
@@ -264,7 +264,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `monolith.change_manifest`
+* PBAC action: `Monolith::Action::"updateManifest"`
 * `<int:pk>`: the primary key of the manifest
 
 Example:
@@ -303,7 +303,7 @@ Response:
 #### Delete a manifest
 
 * method: DELETE
-* Required permission: `monolith.delete_manifest`
+* PBAC action: `Monolith::Action::"deleteManifest"`
 * `<int:pk>`: the primary key of the manifest.
 
 Example
@@ -321,7 +321,7 @@ Response (204 No Content)
 #### List all catalogs
 
 * method: GET
-* Required permission: `monolith.view_catalog`
+* PBAC action: `Monolith::Action::"viewCatalog"`
 * Optional filter parameter:
     * `name`: name of the catalog
 
@@ -356,7 +356,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `monolith.add_catalog`
+* PBAC action: `Monolith::Action::"createCatalog"`
 
 Examples:
 
@@ -396,7 +396,7 @@ Response:
 #### Get a catalog
 
 * method: GET
-* Required permission: `monolith.view_catalog`
+* PBAC action: `Monolith::Action::"viewCatalog"`
 * `<int:pk>`: the primary key of the catalog
 
 Example:
@@ -424,7 +424,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `monolith.change_catalog`
+* PBAC action: `Monolith::Action::"updateCatalog"`
 * `<int:pk>`: the primary key of the catalog
 
 Example:
@@ -463,7 +463,7 @@ Response:
 #### Delete a catalog
 
 * method: DELETE
-* Required permission: `monolith.delete_catalog`
+* PBAC action: `Monolith::Action::"deleteCatalog"`
 * `<int:pk>`: the primary key of the catalog.
 
 Example
@@ -481,7 +481,7 @@ Response (204 No Content)
 #### List all conditions
 
 * method: GET
-* Required permission: `monolith.view_condition`
+* PBAC action: `Monolith::Action::"viewCondition"`
 * Optional filter parameter:
     * `name`: name of the condition
 
@@ -515,7 +515,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `monolith.add_condition`
+* PBAC action: `Monolith::Action::"createCondition"`
 
 Examples:
 
@@ -554,7 +554,7 @@ Response:
 #### Get a condition
 
 * method: GET
-* Required permission: `monolith.view_condition`
+* PBAC action: `Monolith::Action::"viewCondition"`
 * `<int:pk>`: the primary key of the condition
 
 Example:
@@ -581,7 +581,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `monolith.change_condition`
+* PBAC action: `Monolith::Action::"updateCondition"`
 * `<int:pk>`: the primary key of the condition
 
 Example:
@@ -619,7 +619,7 @@ Response:
 #### Delete a condition
 
 * method: DELETE
-* Required permission: `monolith.delete_condition`
+* PBAC action: `Monolith::Action::"deleteCondition"`
 * `<int:pk>`: the primary key of the condition.
 
 Example
@@ -637,7 +637,7 @@ Response (204 No Content)
 #### List all enrollments
 
 * method: GET
-* Required permission: `monolith.view_enrollment`
+* PBAC action: `Monolith::Action::"viewEnrollment"`
 * Optional filter parameter:
     * `manifest_id`: primary key of the manifest
 
@@ -686,7 +686,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `monolith.add_enrollment`
+* PBAC action: `Monolith::Action::"createEnrollment"`
 
 Examples:
 
@@ -741,7 +741,7 @@ Response:
 #### Get an enrollment
 
 * method: GET
-* Required permission: `monolith.view_enrollment`
+* PBAC action: `Monolith::Action::"viewEnrollment"`
 * `<int:pk>`: the primary key of the enrollment
 
 Example:
@@ -781,7 +781,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `monolith.change_enrollment`
+* PBAC action: `Monolith::Action::"updateEnrollment"`
 * `<int:pk>`: the primary key of the enrollment
 
 Example:
@@ -836,7 +836,7 @@ Response:
 #### Delete an enrollment
 
 * method: DELETE
-* Required permission: `monolith.delete_enrollment`
+* PBAC action: `Monolith::Action::"deleteEnrollment"`
 * `<int:pk>`: the primary key of the enrollment.
 
 Example
@@ -854,7 +854,7 @@ Response (204 No Content)
 #### List all manifest catalogs
 
 * method: GET
-* Required permission: `monolith.view_manifestcatalog`
+* PBAC action: `Monolith::Action::"viewManifestCatalog"`
 * Optional filter parameters:
     * `manifest_id` ID of the manifest
     * `catalog_id` ID of the catalog
@@ -894,7 +894,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `monolith.add_manifestcatalog`
+* PBAC action: `Monolith::Action::"createManifestCatalog"`
 
 Examples:
 
@@ -933,7 +933,7 @@ Response:
 #### Get a manifest catalog
 
 * method: GET
-* Required permission: `monolith.view_manifestcatalog`
+* PBAC action: `Monolith::Action::"viewManifestCatalog"`
 * `<int:pk>`: the primary key of the manifest catalog
 
 Example:
@@ -959,7 +959,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `monolith.change_manifestcatalog`
+* PBAC action: `Monolith::Action::"updateManifestCatalog"`
 * `<int:pk>`: the primary key of the manifest catalog
 
 Example:
@@ -997,7 +997,7 @@ Response:
 #### Delete a manifest catalog
 
 * method: DELETE
-* Required permission: `monolith.delete_manifestcatalog`
+* PBAC action: `Monolith::Action::"deleteManifestCatalog"`
 * `<int:pk>`: the primary key of the manifest catalog.
 
 Example
@@ -1015,7 +1015,7 @@ Response (204 No Content)
 #### List all manifest sub manifests
 
 * method: GET
-* Required permission: `monolith.view_manifestsubmanifest`
+* PBAC action: `Monolith::Action::"viewManifestSubManifest"`
 * Optional filter parameters:
     * `manifest_id` ID of the manifest
     * `sub_manifest_id` ID of the sub manifest
@@ -1055,7 +1055,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `monolith.add_manifestsubmanifest`
+* PBAC action: `Monolith::Action::"createManifestSubManifest"`
 
 Examples:
 
@@ -1094,7 +1094,7 @@ Response:
 #### Get a manifest sub manifest
 
 * method: GET
-* Required permission: `monolith.view_manifestsubmanifest`
+* PBAC action: `Monolith::Action::"viewManifestSubManifest"`
 * `<int:pk>`: the primary key of the manifest sub manifest
 
 Example:
@@ -1120,7 +1120,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `monolith.change_manifestsubmanifest`
+* PBAC action: `Monolith::Action::"updateManifestSubManifest"`
 * `<int:pk>`: the primary key of the manifest sub manifest
 
 Example:
@@ -1158,7 +1158,7 @@ Response:
 #### Delete a manifest sub manifest
 
 * method: DELETE
-* Required permission: `monolith.delete_manifestsubmanifest`
+* PBAC action: `Monolith::Action::"deleteManifestSubManifest"`
 * `<int:pk>`: the primary key of the manifest sub manifest.
 
 Example
@@ -1176,7 +1176,7 @@ Response (204 No Content)
 #### List all sub manifests
 
 * method: GET
-* Required permission: `monolith.view_submanifest`
+* PBAC action: `Monolith::Action::"viewSubManifest"`
 * Optional filter parameter:
     * `name` mame of the manifest
 
@@ -1211,7 +1211,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `monolith.add_submanifest`
+* PBAC action: `Monolith::Action::"createSubManifest"`
 
 Examples:
 
@@ -1251,7 +1251,7 @@ Response:
 #### Get a sub manifest
 
 * method: GET
-* Required permission: `monolith.view_submanifest`
+* PBAC action: `Monolith::Action::"viewSubManifest"`
 * `<int:pk>`: the primary key of the sub manifest
 
 Example:
@@ -1279,7 +1279,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `monolith.change_submanifest`
+* PBAC action: `Monolith::Action::"updateSubManifest"`
 * `<int:pk>`: the primary key of the sub manifest
 
 Example:
@@ -1319,7 +1319,7 @@ Response:
 #### Delete a sub manifest
 
 * method: DELETE
-* Required permission: `monolith.delete_submanifest`
+* PBAC action: `Monolith::Action::"deleteSubManifest"`
 * `<int:pk>`: the primary key of the sub manifest.
 
 Example
@@ -1337,7 +1337,7 @@ Response (204 No Content)
 #### List all sub manifest pkg infos
 
 * method: GET
-* Required permission: `monolith.view_submanifestpkginfo`
+* PBAC action: `Monolith::Action::"viewSubManifestPkgInfo"`
 * Optional filter parameter:
     * `sub_manifest_id` primary key of the mame of the sub manifest
 
@@ -1387,7 +1387,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `monolith.add_submanifestpkginfo`
+* PBAC action: `Monolith::Action::"createSubManifestPkgInfo"`
 
 Examples:
 
@@ -1439,7 +1439,7 @@ Response:
 #### Get a sub manifest pkg info
 
 * method: GET
-* Required permission: `monolith.view_submanifestpkginfo`
+* PBAC action: `Monolith::Action::"viewSubManifestPkgInfo"`
 * `<int:pk>`: the primary key of the sub manifest pkg info
 
 Example:
@@ -1475,7 +1475,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `monolith.change_submanifestpkginfo`
+* PBAC action: `Monolith::Action::"updateSubManifestPkgInfo"`
 * `<int:pk>`: the primary key of the sub manifest pkg info
 
 Example:
@@ -1534,7 +1534,7 @@ Response:
 #### Delete a sub manifest pkg info
 
 * method: DELETE
-* Required permission: `monolith.delete_submanifest`
+* PBAC action: `Monolith::Action::"deleteSubManifest"`
 * `<int:pk>`: the primary key of the sub manifest pkg info.
 
 Example

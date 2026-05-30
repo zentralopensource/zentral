@@ -395,7 +395,7 @@ A Recovery Password Configuration can only be deleted if it is not linked to any
 ### `/api/mdm/dep/devices/`
 
  * method: `GET`
- * required permission: `mdm.view_depdevice`
+ * PBAC action: `MDM::Action::"viewDEPDevice"`
  * available filters:
     * `device_family`
     * `enrollment`
@@ -459,7 +459,9 @@ Response:
 ### `/api/mdm/dep/devices/<int:pk>/`
 
  * methods: `GET`, `PUT`
- * required permission: `mdm.view_depdevice`, `mdm.change_depdevice`
+ * PBAC actions:
+    * `MDM::Action::"viewDEPDevice"`
+    * `MDM::Action::"updateDEPDevice"`
 
 Use this endpoint to get a DEP device detail information and change its enrollment.
 
@@ -540,7 +542,7 @@ Response:
 ### `/api/mdm/dep/devices/<int:pk>/disown/`
 
  * methods: `POST`
- * required permission: `mdm.disown_depdevice`
+ * PBAC action: `MDM::Action::"disownDEPDevice"`
 
 Use this endpoint to get a DEP device detail information and change its enrollment.
 
@@ -564,7 +566,7 @@ Response:
 ### `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`
 
  * method: `POST`
- * required permission: `mdm.view_depvirtualserver`
+ * PBAC action: `MDM::Action::"viewDEPVirtualServer"`
 
 Use this endpoint to trigger a DEP virtual server devices sync.
 
@@ -591,7 +593,7 @@ Response:
 ### `/api/mdm/devices/`
 
  * method: `GET`
- * required permission: `mdm.view_enrolleddevice`
+ * PBAC action: `MDM::Action::"viewEnrolledDevice"`
  * available filters:
      * `serial_number`
      * `udid`
@@ -684,7 +686,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/admin_password/`
 
  * method: `GET`
- * required permission: `mdm.view_admin_password`
+ * PBAC action: `MDM::Action::"viewAdminPassword"`
 
 Returns the decrypted auto admin password for an MDM enrolled device.
 
@@ -708,7 +710,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/block/`
 
  * method: `POST`
- * required permission: `mdm.change_enrolleddevice`
+ * PBAC action: `MDM::Action::"updateEnrolledDevice"`
 
 Blocks an enrolled device. Releases it from the MDM and denies further MDM enrollments. A serialized device is returned.
 
@@ -778,7 +780,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/unblock/`
 
  * method: `POST`
- * required permission: `mdm.change_enrolleddevice`
+ * PBAC action: `MDM::Action::"updateEnrolledDevice"`
 
 Unblocks an enrolled device. The device can enroll again. A serialized device is returned.
 
@@ -848,7 +850,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/erase/`
 
  * method: `POST`
- * required permission: `mdm.add_devicecommand`
+ * PBAC action: `MDM::Action::"createDeviceCommand"`
  * arguments:
      * `disallow_proximity_setup`
      * `preserve_data_plan`
@@ -894,7 +896,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/filevault_prk/`
 
  * method: `GET`
- * required permission: `mdm.view_filevault_prk`
+ * PBAC action: `MDM::Action::"viewFileVaultPRK"`
 
 Returns the decrypted FileVault PRK for an MDM enrolled device.
 
@@ -918,7 +920,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/device_lock_pin/`
 
  * method: `GET`
- * required permission: `mdm.view_device_lock_pin`
+ * PBAC action: `MDM::Action::"viewDeviceLockPIN"`
 
 Returns the device lock pin for an MDM enrolled device.
 
@@ -943,7 +945,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/lock/`
 
  * method: `POST`
- * required permission: `mdm.add_devicecommand`
+ * PBAC action: `MDM::Action::"createDeviceCommand"`
  * arguments:
      * `message`
      * `phone_number`
@@ -989,7 +991,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/recovery_password/`
 
  * method: `GET`
- * required permission: `mdm.view_recovery_password`
+ * PBAC action: `MDM::Action::"viewRecoveryPassword"`
 
 Returns the decrypted recovery lock or firmware password for an MDM enrolled device.
 
@@ -1013,7 +1015,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/send_custom_command/`
 
  * method: `POST`
- * required permission: `mdm.add_devicecommand`
+ * PBAC action: `MDM::Action::"createDeviceCommand"`
  * arguments:
      * `command`
 
@@ -1056,7 +1058,7 @@ Response:
 ### `/api/mdm/devices/commands/`
 
  * method: `GET`
- * required permission: `mdm.view_devicecommand`
+ * PBAC action: `MDM::Action::"viewDeviceCommand"`
  * available filters:
      * `name`
      * `enrolled_device`
@@ -1115,7 +1117,7 @@ Response:
 ### `/api/mdm/devices/commands/<uuid.uuid>/`
 
  * method: `GET`
- * required permission: `mdm.view_devicecommand`
+ * PBAC action: `MDM::Action::"viewDeviceCommand"`
 
 Fetches one MDM device command.
 
@@ -1150,7 +1152,7 @@ Response:
 ### `/api/mdm/locations/`
 
  * method: `GET`
- * required permission: `mdm.view_location`
+ * PBAC action: `MDM::Action::"viewLocation"`
  * available filters:
      * `name`
      * `organization_name`
@@ -1188,7 +1190,7 @@ Result:
 ### `/api/mdm/location_assets/`
 
  * method: `GET`
- * required permission: `mdm.view_locationasset`
+ * PBAC action: `MDM::Action::"viewLocationAsset"`
  * available filters:
      * `adam_id`
      * `pricing_param`
@@ -1225,10 +1227,10 @@ Result:
 ### `/api/mdm/software_updates/sync/`
 
  * method: `POST`
- * required permission:
-    * `mdm.add_softwareupdate`
-    * `mdm.change_softwareupdate`
-    * `mdm.delete_softwareupdate`
+ * PBAC action:
+    * `MDM::Action::"createSoftwareUpdate"`
+    * `MDM::Action::"updateSoftwareUpdate"`
+    * `MDM::Action::"deleteSoftwareUpdate"`
 
 Use this endpoint to trigger a Software Updates sync.
 
@@ -1253,7 +1255,7 @@ Response:
 ### `/api/mdm/users/commands/`
 
  * method: `GET`
- * required permission: `mdm.view_usercommand`
+ * PBAC action: `MDM::Action::"viewUserCommand"`
  * available filters:
      * `name`
      * `enrolled_user`
@@ -1312,7 +1314,7 @@ Response:
 ### `/api/mdm/users/commands/<uuid.uuid>/`
 
  * method: `GET`
- * required permission: `mdm.view_usercommand`
+ * PBAC action: `MDM::Action::"viewUserCommand"`
 
 Fetches one MDM user command.
 

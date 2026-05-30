@@ -239,7 +239,7 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `santa.view_rule`
+* PBAC action: `Santa::Action::"viewRule"`
 * Optional search parameters:
   * `target_type`: the type (`BINARY`, `CERTIFICATE`, …) of the rule target.
   * `target_identifier`: the identifier of the rule target.
@@ -316,7 +316,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `santa.add_rule`
+* PBAC action: `Santa::Action::"createRule"`
 
 Use this endpoint to add a new Santa rule.
 
@@ -396,7 +396,7 @@ Response:
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `santa.view_rule`
+* PBAC action: `Santa::Action::"viewRule"`
 * `<int:pk>`: the primary key of the rule.
 
 Example
@@ -439,7 +439,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `santa.edit_rule`
+* PBAC action: `Santa::Action::"updateRule"`
 
 Use this endpoint to update a Santa rule.
 
@@ -518,7 +518,7 @@ Response:
 #### Delete a rule
 
 * method: DELETE
-* Required permission: `santa.delete_rule`
+* PBAC action: `Santa::Action::"deleteRule"`
 * `<int:pk>`: the primary key of the rule.
 
 Use this endpoint to delete a Santa rule.
@@ -841,7 +841,7 @@ Nothing was changed:
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `santa.view_configuration`
+* PBAC action: `Santa::Action::"viewConfiguration"`
 * Optional filter parameter:
     * `name`: the name of the configuration target.
 
@@ -889,7 +889,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `santa.add_configuration`
+* PBAC action: `Santa::Action::"createConfiguration"`
 
 Example
 
@@ -955,7 +955,7 @@ Response:
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `santa.view_configuration`
+* PBAC action: `Santa::Action::"viewConfiguration"`
 * `<int:pk>`: the primary key of the configuration.
 
 Example
@@ -995,7 +995,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `santa.change_configuration`
+* PBAC action: `Santa::Action::"updateConfiguration"`
 * `<int:pk>`: the primary key of the configuration.
 
 Example
@@ -1059,7 +1059,7 @@ Response:
 #### Delete Santa configuration.
 
 * method: DELETE
-* Required permission: `santa.delete_configuration`
+* PBAC action: `Santa::Action::"deleteConfiguration"`
 * `<int:pk>`: the primary key of the configuration.
 
 Example
@@ -1076,7 +1076,7 @@ $ curl -X DELETE \
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `santa.view_enrollment`
+* PBAC action: `Santa::Action::"viewEnrollment"`
 * Optional filter parameter:
     * `configuration_id`: the id of the configuration target.
 
@@ -1128,7 +1128,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `santa.add_enrollment`
+* PBAC action: `Santa::Action::"createEnrollment"`
 
 Example
 
@@ -1184,7 +1184,7 @@ Response:
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `santa.view_enrollment`
+* PBAC action: `Santa::Action::"viewEnrollment"`
 * `<int:pk>`: the primary key of the enrollments.
 
 Example
@@ -1224,7 +1224,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `santa.change_enrollment`
+* PBAC action: `Santa::Action::"updateEnrollment"`
 * `<int:pk>`: the primary key of the configuration.
 
 Example
@@ -1277,7 +1277,7 @@ Response:
 #### Delete Santa enrollment.
 
 * method: DELETE
-* Required permission: `santa.delete_enrollment`
+* PBAC action: `Santa::Action::"deleteEnrollment"`
 * `<int:pk>`: the primary key of the configuration.
 
 Example
@@ -1293,7 +1293,7 @@ $ curl -X DELETE \
 #### Download Santa enrollment plist file.
 
 * method: GET
-* Required permission: `santa.view_enrollment`
+* PBAC action: `Santa::Action::"viewEnrollment"`
 * `<int:pk>`: the primary key of the configuration.
 
 Example
@@ -1309,7 +1309,7 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 #### Download Santa enrollment configuration profile file.
 
 * method: GET
-* Required permission: `santa.view_enrollment`
+* PBAC action: `Santa::Action::"viewEnrollment"`
 * `<int:pk>`: the primary key of the enrollment.
 
 Example

@@ -46,8 +46,8 @@ To receive events in Zentral, and trigger the automatic device synchronizations,
 
 * method: GET
 * Content-Type: application/json
-* required permissions:
-    * `wsone.view_instance`
+* PBAC actions:
+    * `WorkspaceONE::Action::"viewInstance"`
 
 Use this endpoint to list all available Zentral Workspace ONE instances.
 
@@ -80,8 +80,8 @@ Response:
 
 * method: GET
 * Content-Type: application/json
-* required permissions:
-    * `wsone.view_instance`
+* PBAC actions:
+    * `WorkspaceONE::Action::"viewInstance"`
 
 Use this endpoint to get a specific Zentral Workspace ONE instance.
 
@@ -112,9 +112,9 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* required permissions:
-    * `wsone.view_instance`
-    * `inventory.change_machinesnapshot`
+* PBAC actions:
+    * `WorkspaceONE::Action::"viewInstance"`
+    * `Inventory::Action::"updateMachineSnapshot"`
 
 Use this endpoint to start the inventory synchronization for a specific Zentral Workspace ONE instance. A task id and URL to check the synchronization task status will be returned.
 

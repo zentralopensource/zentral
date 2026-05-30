@@ -27,7 +27,7 @@ Number of failed installs for each package.
 #### List all configurations
 
 * method: GET
-* required permissions: `munki.view_configuration`
+* PBAC actions: `Munki::Action::"viewConfiguration"`
 * Optional filter parameter:
     * `name`: name of the configuration
 
@@ -80,7 +80,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `munki.add_configuration`
+* PBAC action: `Munki::Action::"createConfiguration"`
 
 Example:
 
@@ -150,7 +150,7 @@ Response:
 #### Get a configuration
 
 * method: GET
-* required permission: `munki.view_configuration`
+* PBAC action: `Munki::Action::"viewConfiguration"`
 * `<int:pk>`: the primary key of the configuration
 
 Example:
@@ -194,7 +194,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `munki.change_configuration`
+* PBAC action: `Munki::Action::"updateConfiguration"`
 * `<int:pk>`: the primary key of the configuration
 
 Example:
@@ -263,7 +263,7 @@ Response:
 #### Delete a configuration
 
 * method: DELETE
-* Required permission: `munki.delete_configuration`
+* PBAC action: `Munki::Action::"deleteConfiguration"`
 * `<int:pk>`: the primary key of the configuration
 
 ```bash
@@ -280,7 +280,7 @@ Response (204 No Content)
 #### List all enrollments
 
 * method: GET
-* required permission: `munki.view_enrollment`
+* PBAC action: `Munki::Action::"viewEnrollment"`
 * Optional filter parameter:
     * `configuration_id`: primary key of the configuration
 
@@ -330,7 +330,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* required permission: `munki.add_enrollment`
+* PBAC action: `Munki::Action::"createEnrollment"`
 
 Example:
 
@@ -384,7 +384,7 @@ Response:
 #### Get an enrollment
 
 * method: GET
-* required permission: `munki.view_enrollment`
+* PBAC action: `Munki::Action::"viewEnrollment"`
 * `<int:pk>`: the primary key of the enrollment
 
 ```bash
@@ -422,7 +422,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* required permission: `munki.change_enrollment`
+* PBAC action: `Munki::Action::"updateEnrollment"`
 * `<int:pk>`: the primary key of the enrollment
 
 Example:
@@ -475,7 +475,7 @@ Response:
 #### Delete an enrollment
 
 * method: DELETE
-* required permission: `munki.delete_enrollment`
+* PBAC action: `Munki::Action::"deleteEnrollment"`
 * `<int:pk>`: the primary key of the enrollment
 
 Example:
@@ -493,7 +493,7 @@ Response (204 No Content)
 #### Download a Zentral enrollment package
 
 * method: GET
-* required permission: `munki.view_enrollment`
+* PBAC action: `Munki::Action::"viewEnrollment"`
 
 Example:
 

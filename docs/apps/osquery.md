@@ -40,7 +40,7 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_automatictableconstruction`
+* PBAC action: `Osquery::Action::"viewAutomaticTableConstruction"`
 * Optional filter parameter:
     * `name`: name of the ATC.
     * `configuration_id`: primary key of the configuration.
@@ -92,7 +92,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `osquery.add_automatictableconstruction`
+* PBAC action: `Osquery::Action::"createAutomaticTableConstruction"`
 
 Example:
 
@@ -156,7 +156,7 @@ Response:
 
 method: GET
 Content-Type: application/json
-Required permission: `osquery.view_automatictableconstruction`
+PBAC action: `Osquery::Action::"viewAutomaticTableConstruction"`
 `<int:pk>`: the primary key of the ATC.
 
 Example
@@ -196,7 +196,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `osquery.update_automatictableconstruction`
+* PBAC action: `Osquery::Action::"updateAutomaticTableConstruction"`
 * `<int:pk>`: the primary key of the ATC.
 
 Example
@@ -264,7 +264,7 @@ Response:
 #### Delete a ATC.
 
 * method: DELETE
-* Required permission: `osquery.delete_automatictableconstruction`
+* PBAC action: `Osquery::Action::"deleteAutomaticTableConstruction"`
 * `<int:pk>`: the primary key of the ATC.
 
 Example
@@ -283,7 +283,7 @@ Response (204 No Content)
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_configuration`
+* PBAC action: `Osquery::Action::"viewConfiguration"`
 * Optional filter parameter:
     * `name`: Name of the configuration.
 
@@ -332,7 +332,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `osquery.add_configuration`
+* PBAC action: `Osquery::Action::"createConfiguration"`
 * Required fields:
     * `name`: Name of the configuration.
 
@@ -400,7 +400,7 @@ Response:
 
 method: GET
 Content-Type: application/json
-Required permission: `osquery.view_configuration`
+PBAC action: `Osquery::Action::"viewConfiguration"`
 `<int:pk>`: The primary key of the configuration.
 
 Example
@@ -441,7 +441,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `osquery.update_configuration`
+* PBAC action: `Osquery::Action::"updateConfiguration"`
 * `<int:pk>`: The primary key of the configuration.
 * Required fields:
     * `name`: Name of the configuration.
@@ -499,7 +499,7 @@ Response:
 #### Delete a Configuration.
 
 * method: DELETE
-* Required permission: `osquery.delete_configuration`
+* PBAC action: `Osquery::Action::"deleteConfiguration"`
 * `<int:pk>`: The primary key of the configuration.
 
 Example
@@ -518,7 +518,7 @@ Response (204 No Content)
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_configurationpack`
+* PBAC action: `Osquery::Action::"viewConfigurationPack"`
 * Optional filter parameter:
     * `pack_id`: primary key of the pack.
     * `configuration_id`: primary key of the configuration.
@@ -558,7 +558,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `osquery.add_configurationpack`
+* PBAC action: `Osquery::Action::"createConfigurationPack"`
 * Required fields:
     * `pack`: primary key of an existing pack.
     * `configuration`: primary key of an existing configuration.
@@ -607,7 +607,7 @@ Response:
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_configurationpack`
+* PBAC action: `Osquery::Action::"viewConfigurationPack"`
 * `<int:pk>`: The primary key of the configuration pack.
 
 Example
@@ -636,7 +636,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `osquery.update_configurationpack`
+* PBAC action: `Osquery::Action::"updateConfigurationPack"`
 * `<int:pk>`: The primary key of the configurationpack.
 * Required fields:
     * `pack`: primary key of an existing pack.
@@ -683,7 +683,7 @@ Response:
 #### Delete a Configuration Pack.
 
 * method: DELETE
-* Required permission: `osquery.delete_configurationpack`
+* PBAC action: `Osquery::Action::"deleteConfigurationPack"`
 * `<int:pk>`: The primary key of the configuration pack.
 
 Example
@@ -702,7 +702,7 @@ Response (204 No Content)
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_filecategory`
+* PBAC action: `Osquery::Action::"viewFileCategory"`
 * Optional filter parameter:
 	* `name`: name of the FileCategory.
     * `configuration_id`: primary key of the configuration.
@@ -746,7 +746,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `osquery.add_filecategory`
+* PBAC action: `Osquery::Action::"createFileCategory"`
 
 Example:
 
@@ -801,7 +801,7 @@ Response:
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_filecategory`
+* PBAC action: `Osquery::Action::"viewFileCategory"`
 * `<int:pk>`: the primary key of the FileCategory.
 
 Example
@@ -839,7 +839,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `osquery.update_filecategory`
+* PBAC action: `Osquery::Action::"updateFileCategory"`
 * `<int:pk>`: the primary key of the FileCategory.
 
 Example
@@ -894,7 +894,7 @@ Response:
 #### Delete a FileCategory.
 
 * method: DELETE
-* Required permission: `osquery.delete_filecategory`
+* PBAC action: `Osquery::Action::"deleteFileCategory"`
 * `<int:pk>`: the primary key of the FileCategory.
 
 Example
@@ -913,7 +913,7 @@ Response (204 No Content)
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_pack`
+* PBAC action: `Osquery::Action::"viewPack"`
 * Optional filter parameter:
     * `name`: Name of the pack.
     * `configuration_id`: primary key of the configuration.
@@ -956,7 +956,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `osquery.add_pack`
+* PBAC action: `Osquery::Action::"createPack"`
 * Required fields:
     * `name`: Name of the pack.
 
@@ -1006,7 +1006,7 @@ Response:
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_pack`
+* PBAC action: `Osquery::Action::"viewPack"`
 * `<int:pk>`: The primary key of the pack.
 
 Example
@@ -1040,7 +1040,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `osquery.update_pack`
+* PBAC action: `Osquery::Action::"updatePack"`
 * `<int:pk>`: The primary key of the pack.
 * Required fields:
     * `name`: Name of the pack.
@@ -1088,7 +1088,7 @@ Response:
 #### Delete a Pack.
 
 * method: DELETE
-* Required permission: `osquery.delete_pack`
+* PBAC action: `Osquery::Action::"deletePack"`
 * `<int:pk>`: The primary key of the pack.
 
 Example
@@ -1314,7 +1314,7 @@ You should get a response close to this one:
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_query`
+* PBAC action: `Osquery::Action::"viewQuery"`
 * Optional filter parameter:
     * `name`: name of the query.
 
@@ -1357,7 +1357,7 @@ Response:
 
 * method: POST
 * Content-Type: application/json
-* Required permission: `osquery.add_query`
+* PBAC action: `Osquery::Action::"createQuery"`
 
 > **_NOTE:_** `compliance_check_enabled: true` only possible if sql query contains `ztl_status`.
 
@@ -1418,7 +1418,7 @@ Response:
 
 * method: GET
 * Content-Type: application/json
-* Required permission: `osquery.view_query`
+* PBAC action: `Osquery::Action::"viewQuery"`
 * `<int:pk>`: the primary key of the query.
 
 Example
@@ -1452,7 +1452,7 @@ Response:
 
 * method: PUT
 * Content-Type: application/json
-* Required permission: `osquery.update_query`
+* PBAC action: `Osquery::Action::"updateQuery"`
 * `<int:pk>`: the primary key of the query.
 
 Example
@@ -1497,7 +1497,7 @@ Response:
 #### Delete a query.
 
 * method: DELETE
-* Required permission: `osquery.delete_query`
+* PBAC action: `Osquery::Action::"deleteQuery"`
 * `<int:pk>`: the primary key of the query.
 
 Example
@@ -1515,8 +1515,8 @@ Response (204 No Content)
 #### Trigger a Osquery run export task.
 
 * method: POST
-* required permissions:
-    * `osquery.view_distributedqueryresult`
+* PBAC actions:
+    * `Osquery::Action::"viewDistributedQueryResult"`
 * optional parameter:
     * `export_format`: One of `csv`, `ndjson` or `json`. Defaults to `csv`.
 

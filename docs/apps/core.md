@@ -7,7 +7,7 @@ The Zentral core app supports common functionalities for other apps.
 ### `/api/task_result/<uuid:task_id>/`
 
 * method: GET
-* required permission: none
+* PBAC action: none
 
 Use this endpoint to get the status of a task. If the task generates a file, a `download_url` attribute will be included. The `download_url` will redirect to the exported file (for example, a signed S3 URL if Zentral is configured with a S3 bucket). A process should wait for a task if `unready` is true.
 
@@ -39,7 +39,7 @@ Result:
 ### `/api/task_result/<uuid:task_id>/download/`
 
 * method: GET
-* required permission: none
+* PBAC action: none
 
 Use this endpoint to download the result of a task. A process waiting for a task result should only hit this endpoint when the URL is present in a task response (see [above](#apitask_resulttask_uuid)).
 
@@ -54,7 +54,7 @@ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 ### `/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/`
 
 * method: POST
-* required permission: none
+* PBAC action: none
 
 Use this endpoint to exchange an OIDC identity token (Signed JWT) for a short-lived API token.
 
