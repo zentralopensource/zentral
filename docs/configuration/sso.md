@@ -68,28 +68,28 @@ Note: Do not mix Realm Group mappings and SCIM. Use one method based on your IdP
 
 ## Roles
 
-Roles define what actions users can perform and what resources they can access within Zentral. You can map sets of permissions to roles in Zentral for Role-Based Access Control.  
- 
+Roles are named labels that group users and service accounts. A Role on its own grants no access — you authorize it by writing a [PBAC policy](pbac.md) that references it.
 
-* A Role like "Editors" might have permissions to add, change, delete and view items in the Zentral console  
-* A Role like "Viewers" might only have view permissions for the same items and settings
+* A Role like "Editors" might be the principal of a policy granting every admin action across the inventory and MDM apps.
+* A Role like "Viewers" might be the principal of a policy granting every view action across all apps.
 
-A Role mapping assigns a Role to a Realm Group. Members of a Realm Group, inherit the permissions defined in the Role mapped to that Realm Group. Zentral evaluates Role mappings when Realm Group memberships change.
+A Role mapping assigns a Role to a Realm Group. Members of a Realm Group inherit the Role mapped to that Realm Group — and through that Role, any PBAC policies targeting it. Zentral evaluates Role mappings when Realm Group memberships change.
 
-### Create a Role 
+### Create a Role
 
-1. Select "Roles" from the platform settings menu in the top right corner  
-2. Click the \+ icon to create a new Role and give it a name  
-3. Assign permissions to this role from the list. Use command+click to multi-select or select all and use command+click to deselect.  
-4. Click Save
+1. Select "Roles" from the platform settings menu in the top right corner.
+2. Click the \+ icon to create a new Role and give it a name.
+3. Click Save.
+
+The Role is now an empty label. To grant it access, see [Writing a policy](pbac.md#writing-a-policy).
 
 ### Create a Role Mapping
 
-1. Select "Groups" from the menu in the top right corner   
-2. Click on the Group’s Name you want to map the Role to  
-3. Click the \+ icon to create a new Role mapping  
-4. Select the Realm Group and select the Role  
-5. Click Save
+1. Select "Groups" from the menu in the top right corner.
+2. Click on the Group's Name you want to map the Role to.
+3. Click the \+ icon to create a new Role mapping.
+4. Select the Realm Group and select the Role.
+5. Click Save.
 
 ## SSO Setup Guides
 
