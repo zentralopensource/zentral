@@ -54,6 +54,7 @@ from .models import (
     Location,
     LocationAsset,
     OTAEnrollment,
+    Package,
     PackageRef,
     Platform,
     Profile,
@@ -1442,3 +1443,96 @@ class DEPEnrollmentCustomViewSerializer(serializers.ModelSerializer):
             "custom_view",
             "weight"
         ]
+
+
+class PackageSerializer(serializers.ModelSerializer):
+    source_uri = serializers.CharField(required=False, allow_blank=True, default="")
+    sha256 = serializers.CharField(required=False)
+
+    class Meta:
+        model = Package
+        fields = [
+            "id",
+            "name",
+            "description",
+            "type",
+            "source_uri",
+            "sha256",
+            "size",
+            "filename",
+            "product_id",
+            "product_version",
+            "bundles",
+            "manifest",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "type",
+            "size",
+            "filename",
+            "product_id",
+            "product_version",
+            "bundles",
+            "manifest",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, data):
+        data = super().validate(data)
+        if self.instance is None:
+            # create: source_uri + sha256 are required and drive the server-side download
+            source_uri = data.get("source_uri")
+            if not source_uri:
+                raise serializers.ValidationError({"source_uri": "This field is required."})
+            sha256 = data.get("sha256")
+            if not sha256:
+                raise serializers.ValidationError({"sha256": "This field is required."})
+            if Package.objects.filter(sha256=sha256).exists():
+                raise serializers.ValidationError(
+                    {"sha256": "A package with the same SHA256 already exists."}
+                )
+            try:
+                filename, tmp_file = download_external_resource(source_uri, sha256, (".pkg", ".ipa"))
+                _, _, pkg_data = read_package_info(tmp_file)
+            except ValueError as e:
+                # ValueError carries operator-facing validation messages
+                # (unknown URI scheme, unsupported extension, hash mismatch).
+                raise serializers.ValidationError({"source_uri": str(e)})
+            except Exception:
+                # Surface a generic message; the actual exception may carry
+                # internal state (boto3 traceback, file paths, …). The full
+                # exception is logged server-side for diagnosis.
+                logger.exception("Could not download or validate package from %s", source_uri)
+                raise serializers.ValidationError(
+                    {"source_uri": "Could not download or validate the package."}
+                )
+            _, ext = os.path.splitext(filename)
+            data["type"] = Package.Type.IPA if ext.lower() == ".ipa" else Package.Type.PKG
+            data["filename"] = filename
+            data["sha256"] = sha256
+            data["size"] = pkg_data["package_size"]
+            data["product_id"] = pkg_data["product_id"]
+            data["product_version"] = pkg_data["product_version"]
+            data["bundles"] = pkg_data["bundles"]
+            data["manifest"] = pkg_data["manifest"]
+            data["_file"] = File(tmp_file)
+        else:
+            # update: file is immutable. source_uri and sha256 cannot change post-create.
+            for ro_attr in ("source_uri", "sha256"):
+                if ro_attr in data and data[ro_attr] and data[ro_attr] != getattr(self.instance, ro_attr):
+                    raise serializers.ValidationError(
+                        {ro_attr: "Cannot be changed after creation."}
+                    )
+                data.pop(ro_attr, None)
+        return data
+
+    def create(self, validated_data):
+        uploaded_file = validated_data.pop("_file")
+        try:
+            instance = Package.objects.create(file=uploaded_file, **validated_data)
+        finally:
+            os.unlink(uploaded_file.name)
+        return instance
