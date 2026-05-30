@@ -3,6 +3,7 @@ __pycache__
 *.sw[op]
 *credentials.json
 .ruff_cache
+build/
 
 /.*
 !/.gitignore
