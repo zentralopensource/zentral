@@ -41,7 +41,7 @@ Result:
 * method: GET
 * PBAC action: none
 
-Use this endpoint to download the result of a task. A process waiting for a task result should only hit this endpoint when the URL is present in a task response (see [above](#apitask_resulttask_uuid)).
+Use this endpoint to download the result of a task. A process waiting for a task result should only hit this endpoint when the URL is present in a task response (see [above](#apitask_resultuuidtask_id)).
 
 Example:
 
