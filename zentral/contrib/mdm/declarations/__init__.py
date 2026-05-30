@@ -5,6 +5,7 @@ from .exceptions import *  # NOQA
 from .legacy_profile import *  # NOQA
 from .linkers import *  # NOQA
 from .management import *  # NOQA
+from .packages import *  # NOQA
 from .protocol import *  # NOQA
 from .software_update import *  # NOQA
 from .status_report import *  # NOQA

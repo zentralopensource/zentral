@@ -47,6 +47,12 @@ urlpatterns = [
     path('device_commands/<uuid:uuid>/enterprise_app/',
          public_views.EnterpriseAppDownloadView.as_view(),
          name="enterprise_app_download"),
+    path('packages/<str:token>/manifest/',
+         public_views.PackageManifestView.as_view(),
+         name="package_manifest"),
+    path('packages/<str:token>/file/',
+         public_views.PackageFileView.as_view(),
+         name="package_file"),
 
     # OTA enrollment / ota views
     path('ota_enrollment/<int:pk>/enroll/',

@@ -1,4 +1,5 @@
 import base64
+import copy
 import json
 import logging
 import plistlib
@@ -7,7 +8,7 @@ from urllib.parse import unquote
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 from django.core import signing
-from django.core.exceptions import SuspiciousOperation
+from django.core.exceptions import ObjectDoesNotExist, SuspiciousOperation
 from django.http import (
     FileResponse,
     Http404,
@@ -16,9 +17,11 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils.functional import cached_property
 from django.views.generic import View
 
+from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import add_machine_tags
 from zentral.contrib.mdm.apps_books import ensure_target_asset_assignments
@@ -37,9 +40,12 @@ from zentral.contrib.mdm.crypto import (
 from zentral.contrib.mdm.declarations import (
     DeclarationError,
     build_declaration_response,
+    dump_package_file_token,
     load_cert_asset_token,
     load_data_asset_token,
     load_legacy_profile_token,
+    load_package_file_token,
+    load_package_manifest_token,
 )
 from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.mdm.inventory import (
@@ -47,7 +53,6 @@ from zentral.contrib.mdm.inventory import (
     update_realm_user_machine_tags,
 )
 from zentral.contrib.mdm.models import (
-    ArtifactVersion,
     Channel,
     DEPEnrollmentSession,
     DeviceCommand,
@@ -506,7 +511,10 @@ class DownloadView(View):
             self.enrolled_device = self.enrollment_session.enrolled_device
         except signing.BadSignature:
             raise SuspiciousOperation("Bad token signature")
-        except ArtifactVersion.DoesNotExist:
+        except ObjectDoesNotExist:
+            logger.error("%s: token loader %s could not resolve a referenced object",
+                         self.__class__.__name__, self.get_token_loader().__name__,
+                         extra={"request": self.request})
             raise Http404
         return self.build_response()
 
@@ -595,3 +603,45 @@ class EnterpriseAppDownloadView(View):
             return HttpResponseRedirect(self._file_storage.url(package_file.name))
         else:
             return FileResponse(self._file_storage.open(package_file.name), as_attachment=True)
+
+
+class PackageManifestView(DownloadView):
+    def get_token_loader(self):
+        return load_package_manifest_token
+
+    def build_response(self):
+        # rebuild the manifest with a fresh package_file URL each time. The
+        # token-time-independence guarantees the same ManifestURL keeps working
+        # across regenerations, but the file URL embedded inside is rebuilt with
+        # whatever the current token format is. deepcopy the stored manifest so
+        # we never mutate Package.manifest (the JSONField returns the same dict
+        # reference if Django ever caches the model instance across requests).
+        package = self.object
+        manifest = copy.deepcopy(package.manifest)
+        file_token = dump_package_file_token(self.enrollment_session,
+                                             Target(self.enrolled_device, self.enrolled_user),
+                                             package.pk)
+        manifest["items"][0]["assets"][0]["url"] = "https://{}{}".format(
+            settings["api"]["fqdn"],
+            reverse("mdm_public:package_file", args=(file_token,)),
+        )
+        return HttpResponse(plistlib.dumps(manifest), content_type="application/x-plist")
+
+
+class PackageFileView(DownloadView):
+    def get_token_loader(self):
+        return load_package_file_token
+
+    @cached_property
+    def _file_storage(self):
+        return select_dist_storage()
+
+    @cached_property
+    def _redirect_to_files(self):
+        return file_storage_has_signed_urls(self._file_storage)
+
+    def build_response(self):
+        package = self.object
+        if self._redirect_to_files:
+            return HttpResponseRedirect(self._file_storage.url(package.file.name))
+        return FileResponse(self._file_storage.open(package.file.name), as_attachment=True)
