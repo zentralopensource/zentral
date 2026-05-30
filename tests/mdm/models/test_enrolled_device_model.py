@@ -189,3 +189,35 @@ class TestMDMEnrolledDeviceModel(TestCase):
         self.assertIsNone(enrolled_device.admin_guid)
         self.assertIsNone(enrolled_device.admin_shortname)
         self.assertFalse(enrolled_device.admin_password_escrowed)
+
+    def test_enrolled_device_serialize_for_event_keys_only(self):
+        enrolled_device = EnrolledDevice.objects.create(
+            udid=str(uuid.uuid4()),
+            serial_number="SN123",
+            platform="macOS",
+            name="Workstation",
+            push_certificate=force_push_certificate(),
+        )
+        self.assertEqual(
+            enrolled_device.serialize_for_event(keys_only=True),
+            {"pk": enrolled_device.pk, "udid": enrolled_device.udid, "serial_number": "SN123"},
+        )
+
+    def test_enrolled_user_serialize_for_event_keys_only(self):
+        from zentral.contrib.mdm.models import EnrolledUser
+        enrolled_device = EnrolledDevice.objects.create(
+            udid=str(uuid.uuid4()),
+            serial_number=get_random_string(12),
+            push_certificate=force_push_certificate(),
+        )
+        enrolled_user = EnrolledUser.objects.create(
+            enrolled_device=enrolled_device,
+            user_id=get_random_string(36),
+            long_name="Long",
+            short_name="short",
+            token=b"x" * 16,
+        )
+        self.assertEqual(
+            enrolled_user.serialize_for_event(keys_only=True),
+            {"pk": enrolled_user.pk, "user_id": enrolled_user.user_id},
+        )

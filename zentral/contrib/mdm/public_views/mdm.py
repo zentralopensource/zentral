@@ -16,7 +16,6 @@ from django.http import (
     HttpResponseRedirect,
     JsonResponse,
 )
-from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.functional import cached_property
 from django.views.generic import View
@@ -48,6 +47,7 @@ from zentral.contrib.mdm.declarations import (
     load_package_manifest_token,
 )
 from zentral.contrib.mdm.events import MDMRequestEvent
+from zentral.contrib.mdm.events.downloads import post_mdm_download_event
 from zentral.contrib.mdm.inventory import (
     ms_tree_from_payload,
     update_realm_user_machine_tags,
@@ -499,27 +499,47 @@ class ConnectView(MDMView):
 
 
 class DownloadView(View):
+    # concrete subclasses set these — used to build the MDMDownloadEvent payload.
+    target_type = None
+    target_key = None
+
     def get_token_loader(self):
         raise NotImplementedError
 
     def build_response(self):
         raise NotImplementedError
 
-    def get(self, response, *args, **kwargs):
+    def get(self, request, *args, **kwargs):
         try:
             self.object, self.enrollment_session, self.enrolled_user = self.get_token_loader()(kwargs["token"])
             self.enrolled_device = self.enrollment_session.enrolled_device
         except signing.BadSignature:
+            post_mdm_download_event(request, outcome="bad_token")
             raise SuspiciousOperation("Bad token signature")
         except ObjectDoesNotExist:
             logger.error("%s: token loader %s could not resolve a referenced object",
                          self.__class__.__name__, self.get_token_loader().__name__,
-                         extra={"request": self.request})
+                         extra={"request": request})
+            post_mdm_download_event(request, outcome="not_found")
             raise Http404
-        return self.build_response()
+        response = self.build_response()
+        post_mdm_download_event(
+            request,
+            outcome="success",
+            target_type=self.target_type,
+            target_key=self.target_key,
+            target_payload=self.object.serialize_for_event(),
+            enrolled_device=self.enrolled_device,
+            enrolled_user=self.enrolled_user,
+            response_kind="redirect" if response.status_code == 302 else "stream",
+        )
+        return response
 
 
 class CertCredentialView(DownloadView):
+    target_key = "cert_asset"
+    # ACMECredentialView and SCEPCredentialView set target_type
+
     def get_token_loader(self):
         return load_cert_asset_token
 
@@ -531,6 +551,8 @@ class CertCredentialView(DownloadView):
 
 
 class ACMECredentialView(CertCredentialView):
+    target_type = "cert_credential_acme"
+
     def update_cert_payload(self, cert_payload):
         if not self.object.acme_issuer:
             raise SuspiciousOperation("Certificate Asset without ACME issuer")
@@ -547,6 +569,8 @@ class ACMECredentialView(CertCredentialView):
 
 
 class SCEPCredentialView(CertCredentialView):
+    target_type = "cert_credential_scep"
+
     def update_cert_payload(self, cert_payload):
         if not self.object.scep_issuer:
             raise SuspiciousOperation("Certificate Asset without SCEP issuer")
@@ -556,6 +580,9 @@ class SCEPCredentialView(CertCredentialView):
 
 
 class DataAssetDownloadView(DownloadView):
+    target_type = "data_asset"
+    target_key = "data_asset"
+
     def get_token_loader(self):
         return load_data_asset_token
 
@@ -576,6 +603,9 @@ class DataAssetDownloadView(DownloadView):
 
 
 class ProfileDownloadView(DownloadView):
+    target_type = "profile"
+    target_key = "profile"
+
     def get_token_loader(self):
         return load_legacy_profile_token
 
@@ -585,7 +615,6 @@ class ProfileDownloadView(DownloadView):
 
 
 # TODO limit access
-# TODO DownloadEnterpriseAppEvent with mdm namespace
 class EnterpriseAppDownloadView(View):
     @cached_property
     def _file_storage(self):
@@ -595,17 +624,37 @@ class EnterpriseAppDownloadView(View):
     def _redirect_to_files(self):
         return file_storage_has_signed_urls(self._file_storage)
 
-    def get(self, response, *args, **kwargs):
-        device_command = get_object_or_404(DeviceCommand.objects.select_related("artifact_version__enterprise_app"),
-                                           name="InstallEnterpriseApplication", uuid=kwargs["uuid"])
-        package_file = device_command.artifact_version.enterprise_app.package
+    def get(self, request, *args, **kwargs):
+        try:
+            device_command = (DeviceCommand.objects
+                                           .select_related("artifact_version__enterprise_app",
+                                                           "enrolled_device")
+                                           .get(name="InstallEnterpriseApplication", uuid=kwargs["uuid"]))
+        except DeviceCommand.DoesNotExist:
+            post_mdm_download_event(request, outcome="not_found")
+            raise Http404
+        enterprise_app = device_command.artifact_version.enterprise_app
+        package_file = enterprise_app.package
         if self._redirect_to_files:
-            return HttpResponseRedirect(self._file_storage.url(package_file.name))
+            response = HttpResponseRedirect(self._file_storage.url(package_file.name))
         else:
-            return FileResponse(self._file_storage.open(package_file.name), as_attachment=True)
+            response = FileResponse(self._file_storage.open(package_file.name), as_attachment=True)
+        post_mdm_download_event(
+            request,
+            outcome="success",
+            target_type="enterprise_app",
+            target_key="enterprise_app",
+            target_payload=enterprise_app.serialize_for_event(),
+            enrolled_device=device_command.enrolled_device,
+            response_kind="redirect" if response.status_code == 302 else "stream",
+        )
+        return response
 
 
 class PackageManifestView(DownloadView):
+    target_type = "package_manifest"
+    target_key = "package"
+
     def get_token_loader(self):
         return load_package_manifest_token
 
@@ -629,6 +678,9 @@ class PackageManifestView(DownloadView):
 
 
 class PackageFileView(DownloadView):
+    target_type = "package_file"
+    target_key = "package"
+
     def get_token_loader(self):
         return load_package_file_token
 

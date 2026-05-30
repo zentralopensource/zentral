@@ -1408,6 +1408,13 @@ class EnrolledDevice(models.Model):
             return True
         return False
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "udid": self.udid, "serial_number": self.serial_number}
+        if keys_only:
+            return d
+        d.update({"platform": self.platform, "name": self.name})
+        return d
+
 
 class EnrolledUser(models.Model):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="users")
@@ -1439,6 +1446,13 @@ class EnrolledUser(models.Model):
 
     def get_absolute_url(self):
         return reverse("mdm:enrolled_user", args=(self.enrolled_device.pk, self.pk,))
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "user_id": self.user_id}
+        if keys_only:
+            return d
+        d.update({"long_name": self.long_name, "short_name": self.short_name})
+        return d
 
 
 # Common base model for the DEP, OTA and user enrollment sessions

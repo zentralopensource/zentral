@@ -1,6 +1,7 @@
 from .admin_password import *  # NOQA
 from .apps_books import *  # NOQA
 from .artifacts import *  # NOQA
+from .downloads import *  # NOQA
 from .filevault import *  # NOQA
 from .management import *  # NOQA
 from .mdm import *  # NOQA
