@@ -94,11 +94,11 @@ Use `excluded_event_filters` instead.
 
 Use `included_event_filters` instead.
 
-### `events_url_authorized_groups`
+### `events_url_authorized_roles`
 
 **OPTIONAL**
 
-A list of group names. Empty by default (i.e. all users will get the links). Can be used to display the links to the events in the store to only a subset of Zentral users, if not all users have direct access to the store.
+A list of [Role](pbac.md) names. Empty by default (i.e. all users will get the links). Can be used to display the links to the events in the store to only a subset of Zentral users, if not all users have direct access to the store.
 
 ## HTTP backend options
 
