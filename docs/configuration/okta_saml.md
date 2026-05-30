@@ -65,6 +65,6 @@ In the `General` tab of the app, update the SAML settings:
 
 Check that everything works: click the 'Test' button (icon to the right of the realm name) on the Zentral Realm detail page. It will trigger an authentication with the IdP and display the claims Zentral receives with their mappings.
 
-## Role Base Access Control (RBAC)
+## Policy-Based Access Control (PBAC)
 
-See [Realm Group and Roles setup](../sso/#realm-groups) for more information.
+See [PBAC](../pbac/) for the access-control model, and [Realm Groups and Roles](../sso/#realm-groups) for mapping Realm Groups to Roles.
