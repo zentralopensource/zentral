@@ -22,7 +22,12 @@ from zentral.contrib.mdm.declarations import (
     get_declaration_info,
 )
 from zentral.contrib.mdm.declarations.declaration import build_declaration
-from zentral.contrib.mdm.declarations.packages import load_package_manifest_token
+from zentral.contrib.mdm.declarations.packages import (
+    dump_package_file_token,
+    dump_package_manifest_token,
+    load_package_file_token,
+    load_package_manifest_token,
+)
 from zentral.contrib.mdm.models import (
     Artifact,
     ArtifactVersion,
@@ -33,7 +38,7 @@ from zentral.contrib.mdm.models import (
     Platform,
 )
 
-from .utils import force_dep_enrollment_session
+from .utils import force_dep_enrollment_session, force_enrolled_user
 
 
 PACKAGE_DECL_TYPE = "com.apple.configuration.package"
@@ -130,6 +135,20 @@ class PackageDeclarationLinkerTestCase(TestCase, LoginCase):
         self.assertEqual(result["ManifestURL"], "https://example.com/manifest")
         self.assertEqual(result["InstallBehavior"], {"Install": "Required"})
 
+    def test_substitute_manifest_urls_walks_lists(self):
+        # The recursive walker handles arrays for symmetry with substitute_refs,
+        # even though Apple's current schemas never put a ManifestURL inside an
+        # array.
+        linker = declaration_linkers[PACKAGE_DECL_TYPE]
+        result = linker.substitute_manifest_urls(
+            {"items": [{"ManifestURL": "ztl:placeholder"}, {"ManifestURL": "ztl:other"}]},
+            {("items", "0", "ManifestURL"): "https://a.example", ("items", "1", "ManifestURL"): "https://b.example"},
+        )
+        self.assertEqual(
+            result,
+            {"items": [{"ManifestURL": "https://a.example"}, {"ManifestURL": "https://b.example"}]},
+        )
+
     # _find_zentral_ref_package
 
     def test_find_zentral_ref_package_resolves(self):
@@ -144,6 +163,26 @@ class PackageDeclarationLinkerTestCase(TestCase, LoginCase):
     def test_find_zentral_ref_package_invalid_uuid(self):
         with self.assertRaisesMessage(ValueError, "Unknown zentral package"):
             _find_zentral_ref_package("ztl:not-a-uuid")
+
+    # token dump/load with an enrolled_user
+
+    def test_package_token_with_enrolled_user_roundtrip(self):
+        # When the target carries an EnrolledUser, the token embeds eupk and the
+        # loader returns the same EnrolledUser. Covers the eupk branch in
+        # _dump_token and the matching load_*_token path.
+        package = self._force_package()
+        session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        target = Target(session.enrolled_device, enrolled_user)
+        manifest_token = dump_package_manifest_token(session, target, package.pk)
+        loaded_pkg, loaded_session, loaded_user = load_package_manifest_token(manifest_token)
+        self.assertEqual(loaded_pkg, package)
+        self.assertEqual(loaded_session.pk, session.pk)
+        self.assertEqual(loaded_user, enrolled_user)
+        # also exercise the file-token side
+        file_token = dump_package_file_token(session, target, package.pk)
+        _, _, file_loaded_user = load_package_file_token(file_token)
+        self.assertEqual(file_loaded_user, enrolled_user)
 
     # get_declaration_info: package_refs extraction
 

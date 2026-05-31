@@ -430,3 +430,16 @@ class MDMDeclarationLinkersTestCase(TestCase):
                 Channel.DEVICE, [Platform.MACOS, Platform.IOS]
             )
         self.assertEqual(cm.exception.args[0], f"Referenced artifact {identifier} not available for all platforms.")
+
+
+    def test_find_zentral_ref_artifact_cert_asset_acme(self):
+        # _find_zentral_ref_artifact's CERT_ASSET branch returns the artifact
+        # when the requested type is com.apple.asset.credential.acme.
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.CERT_ASSET)
+        result = _find_zentral_ref_artifact(f"ztl:{artifact.pk}", ["com.apple.asset.credential.acme"])
+        self.assertEqual(result, artifact)
+
+    def test_find_zentral_ref_artifact_cert_asset_scep(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.CERT_ASSET)
+        result = _find_zentral_ref_artifact(f"ztl:{artifact.pk}", ["com.apple.asset.credential.scep"])
+        self.assertEqual(result, artifact)
