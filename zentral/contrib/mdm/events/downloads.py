@@ -2,6 +2,7 @@ import logging
 from zentral.core.events import register_event_type
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
 from zentral.contrib.mdm.declarations.exceptions import (
+    TokenDeviceInactiveError,
     TokenSessionNotFoundError,
     TokenSignatureError,
     TokenTargetNotFoundError,
@@ -114,6 +115,14 @@ def post_mdm_download_error_event(request, view, exception):
         if enrolled_device is not None:
             payload["enrolled_device"] = enrolled_device.serialize_for_event()
         payload["enrolled_user"] = {"pk": str(exception.user_pk)}
+    elif isinstance(exception, TokenDeviceInactiveError):
+        enrolled_device = exception.enrollment_session.enrolled_device
+        payload["outcome"] = "device_inactive"
+        payload["target_type"] = view.target_type
+        payload[view.target_key] = exception.target.serialize_for_event()
+        if enrolled_device is not None:
+            payload["enrolled_device"] = enrolled_device.serialize_for_event()
+        payload["reason"] = exception.reason
     else:
         raise ValueError(f"Unexpected exception: {type(exception).__name__}")
     metadata = EventMetadata(

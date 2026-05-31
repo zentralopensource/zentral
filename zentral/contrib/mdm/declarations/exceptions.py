@@ -5,6 +5,7 @@ __all__ = [
     "TokenTargetNotFoundError",
     "TokenSessionNotFoundError",
     "TokenUserNotFoundError",
+    "TokenDeviceInactiveError",
 ]
 
 
@@ -48,3 +49,19 @@ class TokenUserNotFoundError(TokenError):
         self.enrollment_session = enrollment_session
         self.user_pk = user_pk
         super().__init__(f"Token enrolled user not found: {user_pk}")
+
+
+class TokenDeviceInactiveError(TokenError):
+    """Token resolved cleanly but the enrolled device is no longer
+    fetch-eligible. The reason discriminates between operator-imposed
+    (blocked) and device-imposed (checked_out) states."""
+
+    REASONS = frozenset({"blocked", "checked_out"})
+
+    def __init__(self, target, enrollment_session, reason):
+        if reason not in self.REASONS:
+            raise ValueError(f"Unknown TokenDeviceInactiveError reason: {reason}")
+        self.target = target
+        self.enrollment_session = enrollment_session
+        self.reason = reason
+        super().__init__(f"Device inactive: {reason}")

@@ -7,6 +7,7 @@ from .exceptions import (TokenSessionNotFoundError,
                          TokenSignatureError,
                          TokenTargetNotFoundError,
                          TokenUserNotFoundError)
+from .utils import _check_device_inactive
 
 
 __all__ = [
@@ -62,6 +63,7 @@ def _load_token(token, salt):
                                    .get(pk=payload["espk"]))
     except ObjectDoesNotExist:
         raise TokenSessionNotFoundError(package, payload["esm"], payload["espk"])
+    _check_device_inactive(package, enrollment_session)
     enrolled_user = None
     if "eupk" in payload:
         try:

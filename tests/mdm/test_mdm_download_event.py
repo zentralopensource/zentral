@@ -292,6 +292,78 @@ class MDMDownloadEventTestCase(TestCase):
         # both reference the same package
         self.assertEqual(ev1.payload["package"]["pk"], ev2.payload["package"]["pk"])
 
+    # device_inactive: blocked and checked_out
+
+    def test_device_inactive_blocked_emits_event(self, post_event):
+        from django.utils.timezone import now
+        package = self.package
+        session = self._build_session()
+        token = dump_package_manifest_token(session, Target(session.enrolled_device), package.pk)
+        session.enrolled_device.blocked_at = now()
+        session.enrolled_device.save()
+        response = self.client.get(reverse("mdm_public:package_manifest", args=(token,)))
+        self.assertEqual(response.status_code, 404)
+        event = self._captured_event(post_event)
+        self.assertEqual(event.payload["outcome"], "device_inactive")
+        self.assertEqual(event.payload["reason"], "blocked")
+        self.assertEqual(event.payload["target_type"], "package_manifest")
+        self.assertEqual(event.payload["package"]["pk"], str(package.pk))
+        self.assertEqual(
+            event.payload["enrolled_device"]["udid"], session.enrolled_device.udid
+        )
+        # machine_serial_number on metadata
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], session.enrolled_device.serial_number)
+
+    def test_device_inactive_checked_out_emits_event(self, post_event):
+        from django.utils.timezone import now
+        package = self.package
+        session = self._build_session()
+        token = dump_package_manifest_token(session, Target(session.enrolled_device), package.pk)
+        session.enrolled_device.checkout_at = now()
+        session.enrolled_device.save()
+        response = self.client.get(reverse("mdm_public:package_manifest", args=(token,)))
+        self.assertEqual(response.status_code, 404)
+        event = self._captured_event(post_event)
+        self.assertEqual(event.payload["outcome"], "device_inactive")
+        self.assertEqual(event.payload["reason"], "checked_out")
+
+    # device_inactive on artifact_version loader
+
+    def test_artifact_version_loader_device_inactive(self, post_event):
+        from django.utils.timezone import now
+        from zentral.contrib.mdm.declarations.exceptions import TokenDeviceInactiveError
+        from .utils import force_artifact
+        artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.PROFILE)
+        session = self._build_session()
+        token = dump_artifact_version_token(
+            session, Target(session.enrolled_device), artifact_version.pk,
+            "zentral_legacy_profile",
+        )
+        session.enrolled_device.blocked_at = now()
+        session.enrolled_device.save()
+        with self.assertRaises(TokenDeviceInactiveError) as cm:
+            load_artifact_version_token(token, Artifact.Type.PROFILE, "zentral_legacy_profile")
+        self.assertEqual(cm.exception.reason, "blocked")
+        self.assertEqual(cm.exception.target.pk, artifact_version.pk)
+        self.assertEqual(cm.exception.enrollment_session.pk, session.pk)
+
+    # exception class: reject unknown reason
+
+    def test_token_device_inactive_error_rejects_unknown_reason(self, post_event):
+        from zentral.contrib.mdm.declarations.exceptions import TokenDeviceInactiveError
+        with self.assertRaises(ValueError):
+            TokenDeviceInactiveError(target=None, enrollment_session=None, reason="bogus")
+
+    def test_check_device_inactive_no_device(self, post_event):
+        # A session that hasn't acquired its EnrolledDevice yet must not trip
+        # the device-state guard.
+        from types import SimpleNamespace
+        from zentral.contrib.mdm.declarations.utils import _check_device_inactive
+        session = SimpleNamespace(enrolled_device=None)
+        # no exception raised
+        self.assertIsNone(_check_device_inactive(target=None, enrollment_session=session))
+
     # artifact_version loader: session_not_found and user_not_found
 
     def test_artifact_version_loader_session_not_found(self, post_event):

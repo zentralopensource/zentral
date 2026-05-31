@@ -18,10 +18,24 @@ from zentral.contrib.mdm.models import (
 from zentral.utils.payloads import get_payload_identifier
 from zentral.utils.time import naive_utcnow
 
-from .exceptions import (TokenSessionNotFoundError,
+from .exceptions import (TokenDeviceInactiveError,
+                         TokenSessionNotFoundError,
                          TokenSignatureError,
                          TokenTargetNotFoundError,
                          TokenUserNotFoundError)
+
+
+def _check_device_inactive(target, enrollment_session):
+    """Raise TokenDeviceInactiveError if the session's enrolled device is no
+    longer fetch-eligible (blocked by an operator, or checked out)."""
+    device = enrollment_session.enrolled_device
+    if device is None:
+        return
+    if device.blocked_at is not None:
+        raise TokenDeviceInactiveError(target, enrollment_session, "blocked")
+    if device.checkout_at is not None:
+        raise TokenDeviceInactiveError(target, enrollment_session, "checked_out")
+
 
 __all__ = [
     "artifact_pk_from_identifier_and_model",
@@ -164,6 +178,7 @@ def load_artifact_version_token(token, artifact_type, salt):
                                    .get(pk=payload["espk"]))
     except ObjectDoesNotExist:
         raise TokenSessionNotFoundError(artifact_version, payload["esm"], payload["espk"])
+    _check_device_inactive(artifact_version, enrollment_session)
     enrolled_user = None
     if "eupk" in payload:
         try:
