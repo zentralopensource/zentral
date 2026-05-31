@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.contrib.contenttypes.models import ContentType
 from django.core import signing
+from django.core.exceptions import ObjectDoesNotExist
 
 from zentral.contrib.mdm.models import (
     Artifact,
@@ -16,6 +17,11 @@ from zentral.contrib.mdm.models import (
 )
 from zentral.utils.payloads import get_payload_identifier
 from zentral.utils.time import naive_utcnow
+
+from .exceptions import (TokenSessionNotFoundError,
+                         TokenSignatureError,
+                         TokenTargetNotFoundError,
+                         TokenUserNotFoundError)
 
 __all__ = [
     "artifact_pk_from_identifier_and_model",
@@ -135,25 +141,33 @@ def dump_artifact_version_token(enrollment_session, target, artifact_version_pk,
 
 
 def load_artifact_version_token(token, artifact_type, salt):
-    payload = signing.loads(token, salt=salt)
-    # artifact version
-    artifact_version = ArtifactVersion.objects.select_related(
-        "cert_asset",
-        "data_asset",
-        "profile"
-    ).get(
-        pk=payload["avpk"],
-        artifact__type=artifact_type,
-    )
-    # enrollment session
-    es_ct = ContentType.objects.get_by_natural_key("mdm", payload["esm"])
-    enrollment_session = (es_ct.model_class()
-                               .objects
-                               .select_related("enrolled_device", "realm_user")
-                               .get(pk=payload["espk"]))
-    # enrolled user
     try:
-        enrolled_user = EnrolledUser.objects.get(pk=payload["eupk"])
-    except KeyError:
-        enrolled_user = None
+        payload = signing.loads(token, salt=salt)
+    except signing.BadSignature as e:
+        raise TokenSignatureError(str(e)) from e
+    try:
+        artifact_version = ArtifactVersion.objects.select_related(
+            "cert_asset",
+            "data_asset",
+            "profile"
+        ).get(
+            pk=payload["avpk"],
+            artifact__type=artifact_type,
+        )
+    except ArtifactVersion.DoesNotExist:
+        raise TokenTargetNotFoundError(payload["avpk"])
+    try:
+        es_ct = ContentType.objects.get_by_natural_key("mdm", payload["esm"])
+        enrollment_session = (es_ct.model_class()
+                                   .objects
+                                   .select_related("enrolled_device", "realm_user")
+                                   .get(pk=payload["espk"]))
+    except ObjectDoesNotExist:
+        raise TokenSessionNotFoundError(artifact_version, payload["esm"], payload["espk"])
+    enrolled_user = None
+    if "eupk" in payload:
+        try:
+            enrolled_user = EnrolledUser.objects.get(pk=payload["eupk"])
+        except EnrolledUser.DoesNotExist:
+            raise TokenUserNotFoundError(artifact_version, enrollment_session, payload["eupk"])
     return artifact_version, enrollment_session, enrolled_user

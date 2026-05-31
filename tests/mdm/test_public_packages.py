@@ -90,8 +90,8 @@ class PackagePublicViewsTestCase(TestCase):
         session = self._build_session()
         target = Target(session.enrolled_device)
         token = dump_package_manifest_token(session, target, package.pk)
-        from django.core.signing import BadSignature
-        with self.assertRaises(BadSignature):
+        from zentral.contrib.mdm.declarations.exceptions import TokenSignatureError
+        with self.assertRaises(TokenSignatureError):
             load_package_file_token(token)
 
     def test_file_token_cannot_be_loaded_as_manifest_token(self):
@@ -99,8 +99,8 @@ class PackagePublicViewsTestCase(TestCase):
         session = self._build_session()
         target = Target(session.enrolled_device)
         token = dump_package_file_token(session, target, package.pk)
-        from django.core.signing import BadSignature
-        with self.assertRaises(BadSignature):
+        from zentral.contrib.mdm.declarations.exceptions import TokenSignatureError
+        with self.assertRaises(TokenSignatureError):
             load_package_manifest_token(token)
 
     def test_manifest_token_stable_across_calls(self):

@@ -10,15 +10,26 @@ from tests.utils.packages import build_dummy_package
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.artifacts import Target
+from zentral.contrib.mdm.declarations.exceptions import (
+    TokenSessionNotFoundError,
+    TokenUserNotFoundError,
+)
 from zentral.contrib.mdm.declarations.packages import (
     dump_package_file_token,
     dump_package_manifest_token,
 )
-from zentral.contrib.mdm.events.downloads import MDMDownloadEvent
-from zentral.contrib.mdm.models import Package
+from zentral.contrib.mdm.declarations.utils import (
+    dump_artifact_version_token,
+    load_artifact_version_token,
+)
+from zentral.contrib.mdm.events.downloads import (
+    MDMDownloadEvent,
+    post_mdm_download_error_event,
+)
+from zentral.contrib.mdm.models import Artifact, Package
 from zentral.core.events.base import EventMetadata
 
-from .utils import force_dep_enrollment_session
+from .utils import force_dep_enrollment_session, force_enrolled_user
 
 
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -99,6 +110,21 @@ class MDMDownloadEventTestCase(TestCase):
         event = MDMDownloadEvent(EventMetadata(), {"outcome": "bad_token"})
         self.assertEqual(event.get_linked_objects_keys(), {})
 
+    def test_get_linked_objects_keys_enrollment_session(self, post_event):
+        event = MDMDownloadEvent(
+            EventMetadata(),
+            {
+                "outcome": "session_not_found",
+                "target_type": "package_manifest",
+                "package": {"pk": "pkg-uuid"},
+                "enrollment_session": {"model": "depenrollmentsession", "pk": "42"},
+            },
+        )
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"mdm_package": [("pkg-uuid",)], "mdm_depenrollmentsession": [("42",)]},
+        )
+
     # success path: package_manifest
 
     def test_package_manifest_success_emits_event(self, post_event):
@@ -161,17 +187,87 @@ class MDMDownloadEventTestCase(TestCase):
         # request captured (the view that was hit is still resolvable)
         self.assertEqual(metadata["request"]["view"], "mdm_public:package_manifest")
 
-    # not_found: posts an event, returns 404
+    # target_not_found: posts an event with the missing pk, returns 404
 
-    def test_not_found_emits_event(self, post_event):
+    def test_target_not_found_emits_event(self, post_event):
         session = self._build_session()
-        token = dump_package_manifest_token(session, Target(session.enrolled_device), uuid.uuid4())
+        missing_pk = uuid.uuid4()
+        token = dump_package_manifest_token(session, Target(session.enrolled_device), missing_pk)
         response = self.client.get(reverse("mdm_public:package_manifest", args=(token,)))
         self.assertEqual(response.status_code, 404)
         event = self._captured_event(post_event)
-        self.assertEqual(event.payload["outcome"], "not_found")
-        self.assertNotIn("target_type", event.payload)
+        self.assertEqual(event.payload["outcome"], "target_not_found")
+        self.assertEqual(event.payload["target_type"], "package_manifest")
+        # The target key carries a sparse dict — only the pk.
+        self.assertEqual(event.payload["package"], {"pk": str(missing_pk)})
+        # No enrolled_device — the loader never got that far.
         self.assertNotIn("enrolled_device", event.payload)
+        # linked_objects still picks up the package via its pk.
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"mdm_package": [str(missing_pk)]})
+
+    # session_not_found: target resolves, session lookup fails
+
+    def test_session_not_found_emits_event(self, post_event):
+        package = self.package
+        session = self._build_session()
+        token = dump_package_manifest_token(session, Target(session.enrolled_device), package.pk)
+        # nuke the session after the token was minted
+        session_pk = session.pk
+        session_model_name = session._meta.model_name
+        session.delete()
+        response = self.client.get(reverse("mdm_public:package_manifest", args=(token,)))
+        self.assertEqual(response.status_code, 404)
+        event = self._captured_event(post_event)
+        self.assertEqual(event.payload["outcome"], "session_not_found")
+        self.assertEqual(event.payload["target_type"], "package_manifest")
+        # full package dict because the target DID resolve.
+        self.assertEqual(event.payload["package"]["pk"], str(package.pk))
+        self.assertEqual(event.payload["package"]["product_id"], package.product_id)
+        # missing session info
+        self.assertEqual(event.payload["enrollment_session"]["model"], session_model_name)
+        self.assertEqual(event.payload["enrollment_session"]["pk"], str(session_pk))
+        # no enrolled_device — session didn't resolve, so no device pulled either.
+        self.assertNotIn("enrolled_device", event.payload)
+        metadata = event.metadata.serialize()
+        # both the package and the missing session show up as linked objects.
+        self.assertEqual(
+            metadata["objects"],
+            {
+                "mdm_package": [str(package.pk)],
+                f"mdm_{session_model_name}": [str(session_pk)],
+            },
+        )
+
+    # user_not_found: target + session resolve, enrolled_user lookup fails
+
+    def test_user_not_found_emits_event(self, post_event):
+        package = self.package
+        session = self._build_session()
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        token = dump_package_manifest_token(
+            session, Target(session.enrolled_device, enrolled_user), package.pk
+        )
+        # nuke the user after the token was minted
+        user_pk = enrolled_user.pk
+        enrolled_user.delete()
+        response = self.client.get(reverse("mdm_public:package_manifest", args=(token,)))
+        self.assertEqual(response.status_code, 404)
+        event = self._captured_event(post_event)
+        self.assertEqual(event.payload["outcome"], "user_not_found")
+        self.assertEqual(event.payload["target_type"], "package_manifest")
+        # full dicts for the things that resolved
+        self.assertEqual(event.payload["package"]["pk"], str(package.pk))
+        self.assertEqual(event.payload["enrolled_device"]["udid"], session.enrolled_device.udid)
+        # sparse enrolled_user — just the pk.
+        self.assertEqual(event.payload["enrolled_user"], {"pk": str(user_pk)})
+        metadata = event.metadata.serialize()
+        # the missing user is still queryable via linked_objects.
+        self.assertEqual(
+            metadata["objects"]["mdm_enrolleduser"], [str(user_pk)]
+        )
+        # machine_serial_number is set because the device DID resolve.
+        self.assertEqual(metadata["machine_serial_number"], session.enrolled_device.serial_number)
 
     # success path crosses through to file URL too
 
@@ -195,3 +291,56 @@ class MDMDownloadEventTestCase(TestCase):
         self.assertEqual(ev2.payload["target_type"], "package_file")
         # both reference the same package
         self.assertEqual(ev1.payload["package"]["pk"], ev2.payload["package"]["pk"])
+
+    # artifact_version loader: session_not_found and user_not_found
+
+    def test_artifact_version_loader_session_not_found(self, post_event):
+        from .utils import force_artifact
+        artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.PROFILE)
+        session = self._build_session()
+        token = dump_artifact_version_token(
+            session, Target(session.enrolled_device), artifact_version.pk,
+            "zentral_legacy_profile",
+        )
+        session_pk = session.pk
+        session_model_name = session._meta.model_name
+        session.delete()
+        with self.assertRaises(TokenSessionNotFoundError) as cm:
+            load_artifact_version_token(token, Artifact.Type.PROFILE, "zentral_legacy_profile")
+        self.assertEqual(cm.exception.target.pk, artifact_version.pk)
+        self.assertEqual(cm.exception.session_model, session_model_name)
+        self.assertEqual(cm.exception.session_pk, session_pk)
+
+    def test_artifact_version_loader_user_not_found(self, post_event):
+        from .utils import force_artifact
+        artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.PROFILE)
+        session = self._build_session()
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        token = dump_artifact_version_token(
+            session, Target(session.enrolled_device, enrolled_user), artifact_version.pk,
+            "zentral_legacy_profile",
+        )
+        user_pk = enrolled_user.pk
+        enrolled_user.delete()
+        with self.assertRaises(TokenUserNotFoundError) as cm:
+            load_artifact_version_token(token, Artifact.Type.PROFILE, "zentral_legacy_profile")
+        self.assertEqual(cm.exception.target.pk, artifact_version.pk)
+        self.assertEqual(cm.exception.enrollment_session.pk, session.pk)
+        self.assertEqual(cm.exception.user_pk, user_pk)
+
+    # safeguard: unexpected exception type → ValueError
+
+    def test_post_mdm_download_error_event_unexpected_exception(self, post_event):
+        class NotATokenError(Exception):
+            pass
+
+        # Build a fake request that has the minimum attrs EventRequest needs.
+        from django.test import RequestFactory
+        request = RequestFactory().get("/foo/")
+
+        class StubView:
+            target_type = "package_manifest"
+            target_key = "package"
+
+        with self.assertRaises(ValueError):
+            post_mdm_download_error_event(request, StubView(), NotATokenError())

@@ -7,8 +7,7 @@ from urllib.parse import unquote
 
 from cryptography import x509
 from cryptography.x509.oid import NameOID
-from django.core import signing
-from django.core.exceptions import ObjectDoesNotExist, SuspiciousOperation
+from django.core.exceptions import SuspiciousOperation
 from django.http import (
     FileResponse,
     Http404,
@@ -46,8 +45,15 @@ from zentral.contrib.mdm.declarations import (
     load_package_file_token,
     load_package_manifest_token,
 )
+from zentral.contrib.mdm.declarations.exceptions import (
+    TokenError,
+    TokenSignatureError,
+)
 from zentral.contrib.mdm.events import MDMRequestEvent
-from zentral.contrib.mdm.events.downloads import post_mdm_download_event
+from zentral.contrib.mdm.events.downloads import (
+    post_mdm_download_error_event,
+    post_mdm_download_event,
+)
 from zentral.contrib.mdm.inventory import (
     ms_tree_from_payload,
     update_realm_user_machine_tags,
@@ -513,14 +519,14 @@ class DownloadView(View):
         try:
             self.object, self.enrollment_session, self.enrolled_user = self.get_token_loader()(kwargs["token"])
             self.enrolled_device = self.enrollment_session.enrolled_device
-        except signing.BadSignature:
-            post_mdm_download_event(request, outcome="bad_token")
-            raise SuspiciousOperation("Bad token signature")
-        except ObjectDoesNotExist:
-            logger.error("%s: token loader %s could not resolve a referenced object",
+        except TokenError as e:
+            logger.error("%s: token loader %s raised %s",
                          self.__class__.__name__, self.get_token_loader().__name__,
+                         type(e).__name__,
                          extra={"request": request})
-            post_mdm_download_event(request, outcome="not_found")
+            post_mdm_download_error_event(request, self, e)
+            if isinstance(e, TokenSignatureError):
+                raise SuspiciousOperation("Bad token signature")
             raise Http404
         response = self.build_response()
         post_mdm_download_event(

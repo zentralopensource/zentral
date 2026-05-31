@@ -1,7 +1,12 @@
 import logging
 from django.contrib.contenttypes.models import ContentType
-from django.core.signing import Signer
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.signing import BadSignature, Signer
 from zentral.contrib.mdm.models import EnrolledUser, Package
+from .exceptions import (TokenSessionNotFoundError,
+                         TokenSignatureError,
+                         TokenTargetNotFoundError,
+                         TokenUserNotFoundError)
 
 
 __all__ = [
@@ -41,17 +46,28 @@ def _dump_token(enrollment_session, target, package_pk, salt):
 
 
 def _load_token(token, salt):
-    payload = Signer(salt=salt).unsign_object(token)
-    package = Package.objects.get(pk=payload["pk"])
-    es_ct = ContentType.objects.get_by_natural_key("mdm", payload["esm"])
-    enrollment_session = (es_ct.model_class()
-                               .objects
-                               .select_related("enrolled_device", "realm_user")
-                               .get(pk=payload["espk"]))
     try:
-        enrolled_user = EnrolledUser.objects.get(pk=payload["eupk"])
-    except KeyError:
-        enrolled_user = None
+        payload = Signer(salt=salt).unsign_object(token)
+    except BadSignature as e:
+        raise TokenSignatureError(str(e)) from e
+    try:
+        package = Package.objects.get(pk=payload["pk"])
+    except Package.DoesNotExist:
+        raise TokenTargetNotFoundError(payload["pk"])
+    try:
+        es_ct = ContentType.objects.get_by_natural_key("mdm", payload["esm"])
+        enrollment_session = (es_ct.model_class()
+                                   .objects
+                                   .select_related("enrolled_device", "realm_user")
+                                   .get(pk=payload["espk"]))
+    except ObjectDoesNotExist:
+        raise TokenSessionNotFoundError(package, payload["esm"], payload["espk"])
+    enrolled_user = None
+    if "eupk" in payload:
+        try:
+            enrolled_user = EnrolledUser.objects.get(pk=payload["eupk"])
+        except EnrolledUser.DoesNotExist:
+            raise TokenUserNotFoundError(package, enrollment_session, payload["eupk"])
     return package, enrollment_session, enrolled_user
 
 
