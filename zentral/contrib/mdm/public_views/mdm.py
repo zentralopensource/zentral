@@ -665,21 +665,26 @@ class PackageManifestView(DownloadView):
         return load_package_manifest_token
 
     def build_response(self):
-        # rebuild the manifest with a fresh package_file URL each time. The
+        # Rebuild the manifest with a fresh package_file URL each time. The
         # token-time-independence guarantees the same ManifestURL keeps working
         # across regenerations, but the file URL embedded inside is rebuilt with
         # whatever the current token format is. deepcopy the stored manifest so
         # we never mutate Package.manifest (the JSONField returns the same dict
         # reference if Django ever caches the model instance across requests).
+        # Inject the whole-file SHA-256 alongside the existing md5 chunks. Per
+        # Apple's ManifestURL spec, when both are present the device prefers
+        # SHA-256 and ignores the MD5 keys.
         package = self.object
         manifest = copy.deepcopy(package.manifest)
         file_token = dump_package_file_token(self.enrollment_session,
                                              Target(self.enrolled_device, self.enrolled_user),
                                              package.pk)
-        manifest["items"][0]["assets"][0]["url"] = "https://{}{}".format(
+        asset = manifest["items"][0]["assets"][0]
+        asset["url"] = "https://{}{}".format(
             settings["api"]["fqdn"],
             reverse("mdm_public:package_file", args=(file_token,)),
         )
+        asset["sha256"] = package.sha256
         return HttpResponse(plistlib.dumps(manifest), content_type="application/x-plist")
 
 

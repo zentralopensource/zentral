@@ -146,11 +146,13 @@ class PackagePublicViewsTestCase(TestCase):
         token = dump_package_manifest_token(session, Target(session.enrolled_device), package.pk)
         response = self.client.get(reverse("mdm_public:package_manifest", args=(token,)))
         self.assertEqual(response.status_code, 200)
-        # response carries an injected "url"; the stored manifest does not.
+        # response carries injected "url" + "sha256"; the stored manifest carries neither.
         plist_assets_0 = plistlib.loads(response.content)["items"][0]["assets"][0]
         self.assertIn("url", plist_assets_0)
+        self.assertIn("sha256", plist_assets_0)
         package.refresh_from_db()
         self.assertNotIn("url", package.manifest["items"][0]["assets"][0])
+        self.assertNotIn("sha256", package.manifest["items"][0]["assets"][0])
         self.assertEqual(package.manifest["items"][0]["assets"][0], original_assets_0)
 
     def test_package_manifest_view_returns_plist(self):
@@ -174,6 +176,8 @@ class PackagePublicViewsTestCase(TestCase):
         file_token = path.rstrip("/").rsplit("/", 2)[-2]
         loaded_package, _, _ = load_package_file_token(file_token)
         self.assertEqual(loaded_package, package)
+        # Apple's ManifestURL spec prefers SHA-256 when present.
+        self.assertEqual(assets[0]["sha256"], package.sha256)
 
     # file view
 
