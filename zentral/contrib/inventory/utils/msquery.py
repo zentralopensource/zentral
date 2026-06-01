@@ -136,6 +136,12 @@ class BaseMSFilter:
         if self.value is not None:
             qd[self.get_query_kwarg()] = self.value
 
+    def populate_remove_url_query_dict(self, query_dict):
+        # Default: drop only this filter's own key. multi_instance filters
+        # whose key encodes position (TagFilter: t, t1, t2, …) override this
+        # to also shift trailing keys.
+        query_dict.pop(self.get_query_kwarg(), None)
+
     # process grouping results
 
     def filter_grouping_results(self, grouping_results):
@@ -412,12 +418,29 @@ class TagFilter(BaseMSFilter):
     optional = True
     many = True
     multi_instance = True
-    # class-level token used as the sf token and as the default-loop sf membership key;
-    # the actual per-instance query-dict key is provided by get_query_kwarg().
     query_kwarg = "t"
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, msquery, idx, query_dict, **kwargs):
+        # Position among TagFilter instances already on the msquery. Used to
+        # derive a distinct query-dict key per block: the first block keeps
+        # the bare `t` key (native backward compat with pre-multi-instance
+        # ?t=<pk> URLs) and subsequent blocks suffix the position (t1, t2…).
+        self._tag_position = sum(1 for f in msquery.filters if isinstance(f, TagFilter))
+        super().__init__(msquery, idx, query_dict, **kwargs)
+        if self.value and self.value != self.none_value:
+            try:
+                int(self.value)
+            except (TypeError, ValueError):
+                # Garbage value in QD — coerce to empty and ask for a redirect
+                # so the URL canonicalizes. Pop the bad key so the redirect
+                # URL doesn't echo it back.
+                self.value = None
+                msquery._redirect = True
+                try:
+                    query_dict.pop(self.get_query_kwarg(), None)
+                except AttributeError:
+                    # immutable QueryDict — redirect path isn't exercised here.
+                    pass
         self.expression = (
             "jsonb_build_object("
             f"'id', t{self.idx}.id, "
@@ -430,8 +453,21 @@ class TagFilter(BaseMSFilter):
         self.grouping_set = (f"t{self.idx}.id", f"tag_j_{self.idx}")
         self.title = self._build_title()
 
+    def get_query_kwarg(self):
+        # First block keeps the bare `t` key so old single-instance bookmarks
+        # (?sf=…-t-…&t=<pk>) still bind their value to it without translation.
+        if self._tag_position == 0:
+            return self.query_kwarg
+        return f"{self.query_kwarg}{self._tag_position}"
+
+    def serialize(self):
+        # sf carries configuration only — every block serializes to the bare
+        # class token. The per-block value lives under get_query_kwarg() in
+        # the query dict.
+        return self.query_kwarg
+
     def _build_title(self):
-        if self.value is None:
+        if not self.value:
             return "Tags"
         if self.value == self.none_value:
             return "Tags · No tag"
@@ -443,37 +479,6 @@ class TagFilter(BaseMSFilter):
         if tag.meta_business_unit_id and tag.meta_business_unit.name:
             label = f"{tag.meta_business_unit.name}/{label}"
         return f"Tags · {label}"
-
-    # the "no tag" sentinel sf-encodes as "0" (no tag pk is 0).
-    none_value_sf_token = "0"
-
-    def get_query_kwarg(self):
-        # kept distinct per instance so unrelated query-dict keys (page, etc.) don't collide;
-        # the value itself is encoded in sf, not in query_dict.
-        return f"t{self.idx}"
-
-    def serialize(self):
-        if self.value is None:
-            return self.query_kwarg
-        if self.value == self.none_value:
-            return f"{self.query_kwarg}.{self.none_value_sf_token}"
-        return f"{self.query_kwarg}.{self.value}"
-
-    @classmethod
-    def parse_sf_value(cls, raw):
-        # Map the sf suffix back to a constructor `value` kwarg.
-        # Returns None for invalid input so the caller can trigger a redirect.
-        if raw == cls.none_value_sf_token:
-            return {"value": cls.none_value}
-        try:
-            int(raw)
-        except (TypeError, ValueError):
-            return None
-        return {"value": raw}
-
-    def populate_canonical_query_dict(self, qd):
-        # Value is already encoded in sf; nothing to add to the query dict.
-        return
 
     def joins(self):
         # When this block already targets a specific tag pk, push the constraint
@@ -533,8 +538,8 @@ class TagFilter(BaseMSFilter):
             return grouping_value["id"]
 
     def _values_selected_in_other_blocks(self):
-        # Tag values picked in OTHER TagFilter instances. Selecting them again here
-        # would just AND the same constraint with itself.
+        # Tag values picked in OTHER TagFilter instances. Selecting one of them
+        # here would just AND the same constraint with itself.
         return {
             f.value
             for f in self.msquery.filters
@@ -542,36 +547,39 @@ class TagFilter(BaseMSFilter):
         }
 
     def grouping_choices_from_grouping_results(self, grouping_results):
+        # Same set as the base produces, minus rows that would re-select a tag
+        # already pinned in another block.
+        base_choices = super().grouping_choices_from_grouping_results(grouping_results)
         sibling_values = self._values_selected_in_other_blocks()
-        choices = []
-        for grouping_result in self.filter_grouping_results(grouping_results):
-            grouping_value = self.grouping_value_from_grouping_result(grouping_result)
-            label = self.label_for_grouping_value(grouping_value)
-            raw = self.query_kwarg_value_from_grouping_value(grouping_value)
-            target_value = self.none_value if raw is None else str(raw)
-            is_active = self.value == target_value
-            if not is_active and target_value in sibling_values:
-                # already picked in another block — don't offer it here
-                continue
-            new_qd = self.query_dict.copy()
-            new_qd.pop("page", None)
-            new_qd["sf"] = self._serialize_filters_with_self_value(None if is_active else target_value)
-            if is_active:
-                up_query_dict, down_query_dict = new_qd, None
-            else:
-                up_query_dict, down_query_dict = None, new_qd
-            choices.append((label, grouping_result["count"], down_query_dict, up_query_dict))
-        return choices
+        if not sibling_values:
+            return base_choices
+        kwarg = self.get_query_kwarg()
+        return [
+            choice for choice in base_choices
+            # active in *this* block — keep so the user can still toggle it off
+            if choice[3] is not None
+            or choice[2].get(kwarg) not in sibling_values
+        ]
 
-    def _serialize_filters_with_self_value(self, new_value):
-        # Build the sf string with this block's value temporarily replaced.
-        # Mutates self.value briefly; restored before return.
-        saved = self.value
-        self.value = new_value
-        try:
-            return self.msquery.serialize_filters()
-        finally:
-            self.value = saved
+    def populate_remove_url_query_dict(self, query_dict):
+        # Removing this block shifts every later TagFilter one position down
+        # (t2 → t1, t3 → t2, …). Reshuffle the keys so the URL stays canonical
+        # on the next request — otherwise the surviving blocks would silently
+        # lose their value after a removal.
+        query_dict.pop(self.get_query_kwarg(), None)
+        later = sorted(
+            (f for f in self.msquery.filters
+             if isinstance(f, TagFilter) and f._tag_position > self._tag_position),
+            key=lambda f: f._tag_position,
+        )
+        for f in later:
+            old_key = f.get_query_kwarg()
+            new_position = f._tag_position - 1
+            new_key = self.query_kwarg if new_position == 0 else f"{self.query_kwarg}{new_position}"
+            if old_key in query_dict:
+                value = query_dict[old_key]
+                del query_dict[old_key]
+                query_dict[new_key] = value
 
     def process_fetched_record(self, record, for_filtering):
         tags = record.setdefault("tags", [])
@@ -1624,6 +1632,11 @@ class MSQuery:
 
     def force_filter(self, filter_class, **filter_kwargs):
         """replace an existing filter from the same class or add it"""
+        # multi_instance classes derive a per-instance key by counting prior
+        # instances on the msquery at construction time; replacing one in place
+        # would leave that count stale and silently corrupt the URL.
+        if filter_class.multi_instance:
+            raise ValueError(f"force_filter is not supported for multi_instance filter {filter_class.__name__}")
         found_f = None
         for idx, f in enumerate(self.filters):
             if isinstance(f, filter_class):
@@ -1648,17 +1661,12 @@ class MSQuery:
                 if default:
                     self.add_filter(filter_class)
                     continue
-                prefix = filter_class.query_kwarg
-                value_prefix = f"{prefix}."
+                # sf carries one bare token per instance; the value (if any)
+                # lives in the query dict under the per-instance key derived
+                # by the filter itself (t, t1, t2, …).
                 for token in serialized_filters:
-                    if token == prefix:
+                    if token == filter_class.query_kwarg:
                         self.add_filter(filter_class)
-                    elif token.startswith(value_prefix):
-                        kwargs = filter_class.parse_sf_value(token[len(value_prefix):])
-                        if kwargs is None:
-                            self._redirect = True
-                        else:
-                            self.add_filter(filter_class, **kwargs)
             elif default or not filter_class.optional or filter_class.query_kwarg in serialized_filters:
                 self.add_filter(filter_class)
         for filter_class in self.extra_filters:
@@ -1860,7 +1868,7 @@ class MSQuery:
                 if f.optional:
                     remove_filter_query_dict = self.query_dict.copy()
                     remove_filter_query_dict.pop("page", None)
-                    remove_filter_query_dict.pop(f.get_query_kwarg(), None)
+                    f.populate_remove_url_query_dict(remove_filter_query_dict)
                     remove_filter_query_dict["sf"] = self.serialize_filters(filter_to_remove=f)
                     f_r_link = "?{}".format(urllib.parse.urlencode(remove_filter_query_dict))
                 else:
