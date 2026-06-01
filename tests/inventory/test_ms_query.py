@@ -455,3 +455,59 @@ class TagFilterMultiBlockTestCase(TestCase):
         msquery = self._msquery()
         with self.assertRaisesRegex(ValueError, "multi_instance"):
             msquery.force_filter(TagFilter, value=str(self.tag_a.pk))
+
+    # coverage backfill for branches the main behavior tests don't reach
+
+    def test_title_includes_mbu_when_tag_has_mbu(self):
+        from zentral.contrib.inventory.models import MetaBusinessUnit
+        mbu = MetaBusinessUnit.objects.create(name="dept-x")
+        tag = Tag.objects.create(name="ops", meta_business_unit=mbu)
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={tag.pk}")
+        self.assertEqual(self._tag_filters(msquery)[0].title, "Tags · dept-x/ops")
+
+    def test_invalid_value_with_immutable_query_dict_does_not_crash(self):
+        # request.GET is immutable. A garbage `t=` value must coerce to
+        # empty and request a redirect without raising on the QD pop.
+        qd = QueryDict("sf=mbu-t-mis-tp-pf-hm-osv&t=garbage")  # immutable by default
+        msquery = MSQuery(qd)
+        self.assertIsNone(self._tag_filters(msquery)[0].value)
+        self.assertTrue(msquery._redirect)
+
+    def test_canonical_insert_position_appends_unknown_class(self):
+        # _canonical_insert_position falls back to "append" when the filter's
+        # class is in neither default_filters nor extra_filters.
+        from zentral.contrib.inventory.utils.msquery import BundleFilter
+        msquery = self._msquery()
+        bundle_filter = BundleFilter(msquery, len(msquery.filters), msquery.query_dict, bundle_name="x")
+        pos = msquery._canonical_insert_position(list(msquery.filters), bundle_filter)
+        self.assertEqual(pos, len(msquery.filters))
+
+    def test_canonical_insert_position_lands_before_higher_class_filter(self):
+        # Drop pf from sf, then re-add via available_filters. The new
+        # Platforms entry must land between tp and hm — exercises the loop
+        # in _canonical_insert_position that returns the index of the
+        # first existing filter with a higher class order.
+        msquery = self._msquery("sf=mbu-t-mis-tp-hm-osv")
+        for title, link in msquery.available_filters():
+            if title == "Platforms":
+                self.assertIn("sf=mbu-t-mis-tp-pf-hm-osv", link)
+                return
+        self.fail("Platforms entry missing from available_filters")
+
+    def test_fetch_without_tag_filter_skips_bulk_tag_query(self):
+        # An sf without `t` skips the default TagFilter. The fetch path
+        # must not run the MachineTag bulk query — only the main fetching
+        # query — and must not attach a tags field.
+        msquery = self._msquery("sf=mbu-mis-tp-pf-hm-osv")
+        self.assertEqual(self._tag_filters(msquery), [])
+        with self.assertNumQueries(1):
+            machines = list(msquery.fetch())
+        self.assertEqual(len(machines), 3)
+        for _, machine_snapshots in machines:
+            for ms in machine_snapshots:
+                self.assertNotIn("tags", ms)
+
+    def test_fetch_tags_by_serial_empty_set_returns_empty_dict(self):
+        msquery = self._msquery()
+        with self.assertNumQueries(0):
+            self.assertEqual(msquery._fetch_tags_by_serial(set()), {})
