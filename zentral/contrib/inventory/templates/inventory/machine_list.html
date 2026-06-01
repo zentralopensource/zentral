@@ -30,13 +30,13 @@
             {% if link %}
             <a href="{{ link }}" class="btn btn-primary m-1">
                 <span class="bi bi-plus" aria-hidden="true"></span>
-                {{ anchor_text }}
+                {{ anchor_text }}
             </a>
             {% else %}
             <a class="btn btn-primary m-1 disabled" aria-disabled="true" tabindex="-1"
-               title="Fill the existing empty {{ anchor_text|lower }} block before adding another">
+               title="Fill the existing empty {{ anchor_text|lower }} block before adding another">
                 <span class="bi bi-plus" aria-hidden="true"></span>
-                {{ anchor_text }}
+                {{ anchor_text }}
             </a>
             {% endif %}
             {% endfor %}
@@ -46,7 +46,7 @@
                 <div class="col-md">
                     <div class="d-flex justify-content-between form-floating">
                         {{ android_app_filter_form.display_name }}
-                        <label for="id_{{ android_app_filter_form.prefix }}-name" class="form-label fw-bold">Android app name</label>
+                        <label for="id_{{ android_app_filter_form.prefix }}-name" class="form-label fw-bold">Android app name</label>
                     </div>
                 </div>
                 <div class="col-md">
@@ -67,13 +67,13 @@
                 <div class="col-md">
                     <div class="d-flex justify-content-between form-floating">
                         {{ bundle_filter_form.bundle_id }}
-                        <label for="id_{{ bundle_filter_form.prefix }}-bundle_id" class="form-label fw-bold">Bundle ID</label>
+                        <label for="id_{{ bundle_filter_form.prefix }}-bundle_id" class="form-label fw-bold">Bundle ID</label>
                     </div>
                 </div>
                 <div class="col-md">
                     <div class="d-flex justify-content-between form-floating">
                         {{ bundle_filter_form.bundle_name }}
-                        <label for="id_{{ bundle_filter_form.prefix }}-bundle_name" class="form-label fw-bold">Bundle name</label>
+                        <label for="id_{{ bundle_filter_form.prefix }}-bundle_name" class="form-label fw-bold">Bundle name</label>
                     </div>
                 </div>
                 <div class="col-md">
@@ -94,7 +94,7 @@
                 <div class="col-md">
                     <div class="d-flex justify-content-between form-floating">
                         {{ deb_package_filter_form.name }}
-                        <label for="id_{{ deb_package_filter_form.prefix }}-name" class="form-label fw-bold">Debian package name</label>
+                        <label for="id_{{ deb_package_filter_form.prefix }}-name" class="form-label fw-bold">Debian package name</label>
                     </div>
                 </div>
                 <div class="col-md">
@@ -115,7 +115,7 @@
                 <div class="col-md">
                     <div class="d-flex justify-content-between form-floating">
                         {{ ios_app_filter_form.name }}
-                        <label for="id_{{ ios_app_filter_form.prefix }}-name" class="form-label fw-bold">iOS app name</label>
+                        <label for="id_{{ ios_app_filter_form.prefix }}-name" class="form-label fw-bold">iOS app name</label>
                     </div>
                 </div>
                 <div class="col-md">
@@ -136,7 +136,7 @@
                 <div class="col-md">
                     <div class="d-flex justify-content-between form-floating">
                         {{ program_filter_form.name }}
-                        <label for="id_{{ program_filter_form.prefix }}-name" class="form-label fw-bold">Program name</label>
+                        <label for="id_{{ program_filter_form.prefix }}-name" class="form-label fw-bold">Program name</label>
                     </div>
                 </div>
                 <div class="col-md">
@@ -184,7 +184,7 @@
     <form id="inventory-form" method="GET" class="align-items-center">
     <div class="row g-6 me-2 mb-2">
       {% for key, val in search_form_qd.items %}
-      <input type="hidden" name="{{ key }}" value="{{ val }}">
+      <input type="hidden" name="{{ key }}" value="{{ val }}">
       {% endfor %}
       <div class="col-md p-2">
         <div class="form-floating">
@@ -194,19 +194,19 @@
       </div>
       <div class="col-md p-2">
         <div class="form-floating">
-            <input type="text" id="id_name" value="{{ msquery.query_dict.cn }}" name="cn" class="form-control">
+            <input type="text" id="id_name" value="{{ msquery.query_dict.cn }}" name="cn" class="form-control">
             <label for="id_name" class="form-label fw-bold">Name</label>
         </div>
       </div>
       <div class="col-md p-2">
         <div class="form-floating">
-            <input type="text" id="id_principal_user_name" value="{{ msquery.query_dict.pu }}" name="pu" class="form-control" autocomplete="off">
+            <input type="text" id="id_principal_user_name" value="{{ msquery.query_dict.pu }}" name="pu" class="form-control" autocomplete="off">
             <label for="id_principal_user_name" class="form-label fw-bold">Principal user</label>
         </div>
       </div>
       <div class="col-md p-2">
         <div class="form-floating">
-            <input type="text" id="id_mac_address" value="{{ msquery.query_dict.ma }}" name="ma" class="form-control" autocomplete="off">
+            <input type="text" id="id_mac_address" value="{{ msquery.query_dict.ma }}" name="ma" class="form-control" autocomplete="off">
             <label for="id_mac_address" class="form-label fw-bold">MAC address</label>
         </div>
       </div>
@@ -288,10 +288,10 @@
                         <a title="{{ label }}" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}" class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover">
                             {{ label }}
                         </a>
-                        <span class="badge text-bg-secondary py-2">{{ count }}</span>
+                        <span class="badge text-bg-secondary py-2">{{ count }}</span>
                     </div>
-                    <div class="d-flex progress" role="progressbar" aria-label="Basic example" aria-valuenow="{{ percentage|to_int }}" aria-valuemin="0" aria-valuemax="100" style="height: 3px">
-                        <div class="progress-bar" style="width:{{ percentage|to_int }}%"></div>
+                    <div class="d-flex progress" role="progressbar" aria-label="Basic example" aria-valuenow="{{ percentage|to_int }}" aria-valuemin="0" aria-valuemax="100" style="height: 3px">
+                        <div class="progress-bar" style="width:{{ percentage|to_int }}%"></div>
                     </div>
                 </div>
             {% endfor %}
@@ -314,28 +314,28 @@
     {% for machine_snapshot in machine_snapshots %}
     <tr>
       {% if forloop.first %}
-      <td rowspan="{{ machine_snapshots|length }}">
+      <td rowspan="{{ machine_snapshots|length }}">
         {% base_machine_type_icon machine_snapshot.type %}
         {% base_machine_platform_icon machine_snapshot.platform %}
 	    <a href="{% url 'inventory:machine' machine_snapshot.urlsafe_serial_number %}">
           {{ serial_number|privacywrapper }}
         </a>
         </td>
-        <td rowspan="{{ machine_snapshots|length }}">
+        <td rowspan="{{ machine_snapshots|length }}">
         {% if machine_snapshot.max_incident_severity.value %}
         {% incident_severity machine_snapshot.max_incident_severity.value %}
         {% endif %}
         {% for tag in machine_snapshot.tags %}
-        {% base_inventory_tag tag.display_name tag.color %}
+        {% base_inventory_tag tag.display_name tag.color %}
         {% endfor %}
       </td>
       {% endif %}
       <td>{{ machine_snapshot.system_info.computer_name|default:"" }}</td>
       <td>{{ machine_snapshot.principal_user.principal_name|default:"" }}</td>
-      <td>{{ machine_snapshot.system_info.hardware_model|default:"" }}</td>
-      <td>{{ machine_snapshot.os_version.display_name }}</td>
+      <td>{{ machine_snapshot.system_info.hardware_model|default:"" }}</td>
+      <td>{{ machine_snapshot.os_version.display_name }}</td>
       <td>
-        {{ machine_snapshot.source.display_name }}
+        {{ machine_snapshot.source.display_name }}
       </td>
       <td>
         {{ machine_snapshot.last_seen }}
