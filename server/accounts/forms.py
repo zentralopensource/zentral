@@ -1,29 +1,33 @@
 import json
 import logging
 from urllib.parse import urlparse
+
 import celpy
+import pyotp
 from celpy import celtypes
 from django import forms
 from django.conf import settings as django_settings
-from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm as DjangoPasswordResetForm,  UsernameField
+from django.contrib.auth.forms import AuthenticationForm, UsernameField
+from django.contrib.auth.forms import PasswordResetForm as DjangoPasswordResetForm
 from django.contrib.auth.models import Group
 from django.core import signing, validators
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from django.utils.crypto import get_random_string
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 from django.utils.translation import gettext_lazy as _
-import pyotp
 from webauthn import generate_authentication_options, options_to_json, verify_authentication_response
 from webauthn.helpers import parse_authentication_credential_json
 from webauthn.helpers.structs import PublicKeyCredentialDescriptor
+
 from zentral.conf import settings as zentral_settings
 from zentral.conf.config import ConfigList
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
+from zentral.utils.forms import SelectMultipleWithDisabledOptions
 from zentral.utils.oidc import get_openid_configuration_from_issuer_uri
+
 from .models import APIToken, OIDCAPITokenIssuer, Policy, User, UserTOTP, UserWebAuthn
 from .password_reset import handler as password_reset_handler
-
 
 logger = logging.getLogger("zentral.accounts.forms")
 
@@ -98,7 +102,94 @@ class ServiceAccountNameValidator(validators.RegexValidator):
     flags = 0
 
 
-class ServiceAccountForm(forms.ModelForm):
+class RoleMembershipGrantMixin:
+    """Form mixin for ModelForms that expose a ``groups`` field on the User
+    model. Captures the requesting user from form kwargs, relabels the field
+    to match Zentral's "Roles" terminology, hides rule-violating choices in
+    the rendered widget, and provides a validation hook that rejects
+    role-membership grants the requester isn't entitled to make.
+
+    Place it before the ``forms.ModelForm`` (or any other form base) in the
+    MRO so its ``__init__`` runs first and pops ``request_user`` before the
+    underlying form sees the kwargs.
+    """
+
+    GROUPS_WIDGET_SIZE = 10
+
+    def __init__(self, *args, **kwargs):
+        self.request_user = kwargs.pop("request_user", None)
+        super().__init__(*args, **kwargs)
+        self._disable_ungrantable_group_options()
+        self._prepare_groups_field()
+
+    def _prepare_groups_field(self, field_name="groups"):
+        if field_name not in self.fields:
+            return
+        field = self.fields[field_name]
+        field.label = "Roles"
+        field.help_text = "The roles this user belongs to."
+        field.widget.attrs["size"] = self.GROUPS_WIDGET_SIZE
+
+    def _disable_ungrantable_group_options(self, field_name="groups"):
+        """Mark groups the requester can't grant as ``disabled`` in the
+        rendered widget. The set we *can't* disable is groups the target user
+        already belongs to — those must stay selectable so the actor can
+        leave them on (or remove them; removals are unrestricted). Superusers
+        and the no-requester case are exempt — the full choice set renders
+        normally.
+        """
+        if self.request_user is None or self.request_user.is_superuser:
+            return
+        if field_name not in self.fields:
+            return
+        field = self.fields[field_name]
+        all_pks = set(field.queryset.values_list("pk", flat=True))
+        current_pks = (
+            set(self.instance.groups.values_list("pk", flat=True))
+            if self.instance.pk else set()
+        )
+        actor_pks = set(self.request_user.groups.values_list("pk", flat=True))
+        disabled = all_pks - current_pks - actor_pks
+        if not disabled:
+            return
+        field.widget = SelectMultipleWithDisabledOptions(disabled_values=disabled)
+        # Reassigning the widget `choices`
+        field.widget.choices = field.choices
+
+    def _validate_group_additions(self, field_name="groups"):
+        """Reject group additions the requester isn't entitled to make.
+
+        A non-superuser editing another user's group set may only add groups
+        they themselves belong to — the in-code expression of escalation
+        prevention: you can't grant memberships you don't have. Superusers
+        (and forms instantiated without a request_user, e.g. management
+        commands or tests) are exempt.
+
+        Removals are intentionally unrestricted — escalation risk is granting,
+        not revoking.
+        """
+        if self.request_user is None or self.request_user.is_superuser:
+            return
+        new_groups = self.cleaned_data.get(field_name)
+        if not new_groups:
+            return
+        current_pks = (
+            set(self.instance.groups.values_list("pk", flat=True))
+            if self.instance.pk else set()
+        )
+        actor_pks = set(self.request_user.groups.values_list("pk", flat=True))
+        disallowed = sorted(
+            g.name for g in new_groups
+            if g.pk not in current_pks and g.pk not in actor_pks
+        )
+        if disallowed:
+            self.add_error(
+                field_name,
+                "You cannot grant role membership you don't have: " + ", ".join(disallowed) + ".",
+            )
+
+
+class ServiceAccountForm(RoleMembershipGrantMixin, forms.ModelForm):
     name_validator = ServiceAccountNameValidator()
     username = forms.CharField(
         label="Name",
@@ -127,16 +218,16 @@ class ServiceAccountForm(forms.ModelForm):
                     self.add_error("username", "A user with this name already exists.")
             self.instance.email = email
         self.instance.is_service_account = True
+        self._validate_group_additions()
 
 
-class UpdateUserForm(forms.ModelForm):
+class UpdateUserForm(RoleMembershipGrantMixin, forms.ModelForm):
     class Meta:
         model = User
         fields = ("username", "email", "is_superuser", "groups", "items_per_page")
         field_classes = {'username': UsernameField}
 
     def __init__(self, *args, **kwargs):
-        self.request_user = kwargs.pop("request_user", None)
         self.request_session_is_remote = kwargs.pop("request_session_is_remote", True)
         super().__init__(*args, **kwargs)
         if not self.instance.username_and_email_editable():
@@ -156,6 +247,11 @@ class UpdateUserForm(forms.ModelForm):
             and self.request_user.is_superuser
             and not self.request_session_is_remote
         )
+
+    def clean(self):
+        cleaned = super().clean()
+        self._validate_group_additions()
+        return cleaned
 
 
 class UpdateProfileForm(forms.Form):

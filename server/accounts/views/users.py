@@ -56,6 +56,11 @@ class CreateServiceAccountView(PermissionRequiredMixin, CreateViewWithAudit):
         ctx["title"] = "Create service account"
         return ctx
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request_user"] = self.request.user
+        return kwargs
+
 
 class UserView(PermissionRequiredMixin, DetailView):
     permission_required = "accounts.view_user"
@@ -109,8 +114,8 @@ class UpdateUserView(PermissionRequiredMixin, UpdateViewWithAudit):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
+        kwargs["request_user"] = self.request.user
         if not self.object.is_service_account:
-            kwargs["request_user"] = self.request.user
             kwargs["request_session_is_remote"] = self.request.realm_authentication_session.is_remote
         return kwargs
 
