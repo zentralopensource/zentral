@@ -476,29 +476,38 @@ class TagFilter(BaseMSFilter):
         return
 
     def joins(self):
-        return [(f"left join lateral ("
-                 "select distinct * "
-                 "from inventory_tag "
-                 "where exists ("
-                 "select mt.id "
-                 "from inventory_machinetag as mt "
-                 "where mt.serial_number = ms.serial_number "
-                 "and mt.tag_id = inventory_tag.id"
-                 ")"
-                 f") t{self.idx} on TRUE"),
+        # When this block already targets a specific tag pk, push the constraint
+        # into the lateral subquery so it returns at most one row per machine
+        # instead of the full tag set. Without this, composing N TagFilter blocks
+        # cross-joins their lateral outputs and inflates the inner-query row count
+        # to O(tags_per_machine ^ N) per machine.
+        inner_conditions = ["exists ("
+                            "select mt.id "
+                            "from inventory_machinetag as mt "
+                            "where mt.serial_number = ms.serial_number "
+                            "and mt.tag_id = inventory_tag.id"
+                            ")"]
+        lateral_args = []
+        if self.value and self.value != self.none_value:
+            inner_conditions.append("inventory_tag.id = %s")
+            lateral_args.append(self.value)
+        lateral = (
+            f"left join lateral ("
+            f"select distinct * from inventory_tag where {' and '.join(inner_conditions)}"
+            f") t{self.idx} on TRUE"
+        )
+        return [(lateral, lateral_args),
                 f"left join inventory_metabusinessunit as tmbu{self.idx} "
                 f"on (tmbu{self.idx}.id = t{self.idx}.meta_business_unit_id)"]
 
     def wheres(self):
         if self.value:
-            if self.value != self.none_value:
-                yield f"t{self.idx}.id = %s"
-            else:
+            if self.value == self.none_value:
                 yield f"t{self.idx}.id is null"
-
-    def where_args(self):
-        if self.value and self.value != self.none_value:
-            yield self.value
+            else:
+                # Constraint already lives in the lateral above; we only need to
+                # drop rows where the lateral produced no match.
+                yield f"t{self.idx}.id is not null"
 
     def grouping_value_from_grouping_result(self, grouping_result):
         gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
@@ -563,7 +572,6 @@ class TagFilter(BaseMSFilter):
             return self.msquery.serialize_filters()
         finally:
             self.value = saved
-
 
     def process_fetched_record(self, record, for_filtering):
         tags = record.setdefault("tags", [])

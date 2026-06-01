@@ -82,6 +82,60 @@ class TagFilterMultiBlockTestCase(TestCase):
         msquery = self._msquery("sf=mbu-t.notanint-mis-tp-pf-hm-osv")
         self.assertTrue(msquery._redirect)
 
+    # lateral-join shape
+
+    def test_constrained_block_pushes_tag_id_into_lateral(self):
+        # A block with a selected tag should produce a lateral subquery that
+        # already filters by inventory_tag.id, so each lateral emits at most
+        # one row per machine instead of the whole tag set.
+        msquery = self._msquery(f"sf=mbu-t.{self.tag_a.pk}-mis-tp-pf-hm-osv")
+        tag_filter = self._tag_filters(msquery)[0]
+        (lateral, lateral_args), _ = tag_filter.joins()
+        self.assertIn(f"t{tag_filter.idx} on TRUE", lateral)
+        self.assertIn("inventory_tag.id = %s", lateral)
+        self.assertEqual(lateral_args, [str(self.tag_a.pk)])
+
+    def test_unconstrained_block_keeps_open_lateral(self):
+        # An empty block has no value to push down; the lateral must stay open
+        # so its grouping set still surfaces every tag of the matching machines.
+        msquery = self._msquery("sf=mbu-t-mis-tp-pf-hm-osv")
+        tag_filter = self._tag_filters(msquery)[0]
+        (lateral, lateral_args), _ = tag_filter.joins()
+        self.assertNotIn("inventory_tag.id = %s", lateral)
+        self.assertEqual(lateral_args, [])
+
+    def test_no_tag_block_does_not_push_into_lateral(self):
+        # The "no tag" branch checks for absence of any tag (t{idx}.id is null)
+        # and cannot be expressed inside the lateral; it must stay in the outer
+        # WHERE clause and leave the lateral open.
+        msquery = self._msquery("sf=mbu-t.0-mis-tp-pf-hm-osv")
+        tag_filter = self._tag_filters(msquery)[0]
+        (lateral, lateral_args), _ = tag_filter.joins()
+        self.assertNotIn("inventory_tag.id = %s", lateral)
+        self.assertEqual(lateral_args, [])
+        self.assertIn(f"t{tag_filter.idx}.id is null", list(tag_filter.wheres()))
+
+    def test_constrained_block_args_carried_to_grouping_query(self):
+        # The lateral arg must reach the final query through
+        # _iter_unique_joins_with_args so the SQL is correctly parameterized.
+        msquery = self._msquery(f"sf=mbu-t.{self.tag_a.pk}-t.{self.tag_b.pk}-mis-tp-pf-hm-osv")
+        query, args = msquery._build_grouping_query_with_args()
+        self.assertEqual(query.count("inventory_tag.id = %s"), 2)
+        # both tag pks must appear in the placeholder args (order follows
+        # filter order, but we don't pin it here).
+        self.assertIn(str(self.tag_a.pk), args)
+        self.assertIn(str(self.tag_b.pk), args)
+
+    def test_constrained_block_drops_outer_equality_clause(self):
+        # The outer WHERE for a constrained block must reduce to a NOT NULL
+        # check — keeping the equality there would duplicate the parameter
+        # and re-introduce the wide-lateral behavior in cost-based planners.
+        msquery = self._msquery(f"sf=mbu-t.{self.tag_a.pk}-mis-tp-pf-hm-osv")
+        tag_filter = self._tag_filters(msquery)[0]
+        wheres = list(tag_filter.wheres())
+        self.assertEqual(wheres, [f"t{tag_filter.idx}.id is not null"])
+        self.assertEqual(list(tag_filter.where_args()), [])
+
     # multi-block AND semantics
 
     def test_two_blocks_both_with_values_intersect(self):
