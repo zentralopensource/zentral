@@ -25,6 +25,10 @@ The API endpoint for the monolith catalog list is paginated now. Remember to upg
 
 Non-superusers can no longer grant a user or service account a role they don't belong to themselves — the rule covers every UI path that assigns roles: editing a user, creating a service account, and editing a service account. Removing existing memberships is unaffected. Operators who delegated user management without granting the underlying roles will need to either add those roles to the delegate or perform the assignment as a superuser.
 
+#### 🧨 Inventory export tags column
+
+The "Tags" column in the inventory export now matches the UI badges via `str(tag)` — taxonomied tags appear as `taxonomy: name` (e.g. `env: prod`) instead of the plain `name` (or `mbu/name`) the previous export emitted.
+
 ### Bug fixes
 
 Replaced slow Santa `zentral_santa_targets_*`  metrics with `zentral_santa_target_states` metrics.

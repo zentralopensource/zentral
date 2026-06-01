@@ -2,7 +2,7 @@ from django.http import QueryDict
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
-from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, Tag
+from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, Tag, Taxonomy
 from zentral.contrib.inventory.utils import MSQuery
 from zentral.contrib.inventory.utils.msquery import TagFilter
 
@@ -29,9 +29,13 @@ class TagFilterMultiBlockTestCase(TestCase):
         cls.tag_a = Tag.objects.create(name="tag-a")
         cls.tag_b = Tag.objects.create(name="tag-b")
         cls.tag_c = Tag.objects.create(name="tag-c")
-        # serial 0: a + b
+        # Extra tag on serial 0 used by the "show unmatched tags" test —
+        # serial 0 has it but no filter ever matches on it.
+        cls.tag_d = Tag.objects.create(name="tag-d")
+        # serial 0: a + b + d
         MachineTag.objects.create(serial_number=cls.serials[0], tag=cls.tag_a)
         MachineTag.objects.create(serial_number=cls.serials[0], tag=cls.tag_b)
+        MachineTag.objects.create(serial_number=cls.serials[0], tag=cls.tag_d)
         # serial 1: a only
         MachineTag.objects.create(serial_number=cls.serials[1], tag=cls.tag_a)
         # serial 2: no tags
@@ -324,16 +328,75 @@ class TagFilterMultiBlockTestCase(TestCase):
 
     # fetch shows tags
 
-    def test_fetch_accumulates_tags_across_blocks(self):
-        msquery = self._msquery(
-            f"sf=mbu-t-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}&t1={self.tag_b.pk}"
-        )
+    def test_fetch_shows_full_machine_tag_set(self):
+        # Serial 0 has tag-a, tag-b, tag-d. Filtering on just tag-a should
+        # still surface every tag of the machine in the rendered row —
+        # the row reflects the machine, not the filter.
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}")
         for serial_number, machine_snapshots in msquery.fetch():
-            self.assertEqual(serial_number, self.serials[0])
-            tag_names = {t["name"] for ms in machine_snapshots for t in ms.get("tags", [])}
-            self.assertEqual(tag_names, {"tag-a", "tag-b"})
+            if serial_number != self.serials[0]:
+                continue
+            tag_names = {t.name for ms in machine_snapshots for t in ms.get("tags", [])}
+            self.assertEqual(tag_names, {"tag-a", "tag-b", "tag-d"})
+            # All entries are Tag model instances — the template tag and
+            # the export both consume them directly via str()/attrs.
+            for ms in machine_snapshots:
+                for t in ms.get("tags", []):
+                    self.assertIsInstance(t, Tag)
             return
-        self.fail("expected one machine in result set")
+        self.fail("expected serial 0 in result set")
+
+    def test_fetch_taxonomy_loaded_on_tag(self):
+        taxonomy = Taxonomy.objects.create(name="env")
+        tag = Tag.objects.create(name="prod", taxonomy=taxonomy)
+        MachineTag.objects.create(serial_number=self.serials[1], tag=tag)
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={tag.pk}")
+        for serial_number, machine_snapshots in msquery.fetch():
+            if serial_number != self.serials[1]:
+                continue
+            by_name = {t.name: t for ms in machine_snapshots for t in ms.get("tags", [])}
+            self.assertIn("prod", by_name)
+            # taxonomy was select_related — no extra query when accessed
+            with self.assertNumQueries(0):
+                self.assertEqual(by_name["prod"].taxonomy.name, "env")
+            # str(tag) matches Tag.__str__: "taxonomy: name"
+            self.assertEqual(str(by_name["prod"]), "env: prod")
+            return
+        self.fail("expected serial 1 in result set")
+
+    def test_export_tag_column_matches_ui_via_str_tag(self):
+        # The export pipes str(tag), the same string the UI badge renders —
+        # so taxonomied tags appear as "taxonomy: name". This is a breaking
+        # change vs. the previous export (which only emitted the bare name,
+        # or "mbu/name" for MBU-anchored tags), traded for consistency
+        # between what users see on screen and in their exports.
+        taxonomy = Taxonomy.objects.create(name="env")
+        prod_tag = Tag.objects.create(name="prod", taxonomy=taxonomy)
+        MachineTag.objects.create(serial_number=self.serials[0], tag=prod_tag)
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}")
+        machines_sheet = next(iter(msquery.export_sheets_data()))
+        _, headers, rows = machines_sheet
+        tag_col = headers.index("Tags")
+        row_by_serial = {row[2]: row for row in rows}  # SN is column index 2
+        self.assertEqual(
+            set(row_by_serial[self.serials[0]][tag_col].split("|")),
+            {"tag-a", "tag-b", "tag-d", "env: prod"},
+        )
+
+    def test_fetch_paginate_false_streams_in_chunks(self):
+        # Belt-and-suspenders for the export path (paginate=False). Lower
+        # itersize so we actually cross the batch boundary with our small
+        # fixture — exercises the multi-batch enrichment code.
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}")
+        msquery.itersize = 1
+        seen_by_serial = {}
+        for serial_number, machine_snapshots in msquery.fetch(paginate=False):
+            seen_by_serial[serial_number] = {
+                t.name for ms in machine_snapshots for t in ms.get("tags", [])
+            }
+        self.assertEqual(set(seen_by_serial), {self.serials[0], self.serials[1]})
+        self.assertEqual(seen_by_serial[self.serials[0]], {"tag-a", "tag-b", "tag-d"})
+        self.assertEqual(seen_by_serial[self.serials[1]], {"tag-a"})
 
     # block title
 

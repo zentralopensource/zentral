@@ -326,7 +326,7 @@
         {% incident_severity machine_snapshot.max_incident_severity.value %}
         {% endif %}
         {% for tag in machine_snapshot.tags %}
-        {% base_inventory_tag tag.display_name tag.color %}
+        {% inventory_tag tag %}
         {% endfor %}
       </td>
       {% endif %}

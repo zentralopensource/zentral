@@ -20,7 +20,7 @@ from django.urls import reverse
 from django.utils.text import Truncator, slugify
 
 from zentral.contrib.inventory.conf import EC2, os_version_display, os_version_version_display
-from zentral.contrib.inventory.models import MetaMachine, Tag
+from zentral.contrib.inventory.models import MachineTag, MetaMachine, Tag
 from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.core.compliance_checks.models import Status as ComplianceCheckStatus
 from zentral.core.incidents.models import Severity, Status
@@ -582,21 +582,11 @@ class TagFilter(BaseMSFilter):
                 query_dict[new_key] = value
 
     def process_fetched_record(self, record, for_filtering):
-        tags = record.setdefault("tags", [])
-        for tag in record.pop(f"tag_j_{self.idx}", []):
-            if not tag["id"]:
-                continue
-            display_name = tag["name"]
-            if not tag["meta_business_unit"]["id"]:
-                tag["meta_business_unit"] = None
-            else:
-                display_name = "/".join(s for s in (tag["meta_business_unit"]["name"], display_name) if s)
-            if for_filtering:
-                tag = display_name
-            else:
-                tag["display_name"] = display_name
-            if tag not in tags:
-                tags.append(tag)
+        # Tags are populated in bulk by MSQuery.fetch() from inventory_machinetag
+        # so each row carries the machine's full tag set (not just the ones any
+        # block is matching on). Drop the per-block lateral output so the
+        # field doesn't linger on the record.
+        record.pop(f"tag_j_{self.idx}", None)
 
 
 class BundleFilter(BaseMSFilter):
@@ -1978,11 +1968,50 @@ class MSQuery:
                 yield dict(zip(columns, row))
 
     def fetch(self, paginate=True, for_filtering=False):
+        # Stream the cursor's records in batches so we can bulk-load tags
+        # per batch without materializing every machine into memory. The
+        # batch size matches the cursor's fetch size, which keeps both the
+        # IN clause and the in-memory buffer bounded — important on the
+        # paginate=False path used by the inventory export.
+        has_tag_filter = any(isinstance(f, TagFilter) for f in self.filters)
+        batch = []
         for record in self._make_fetching_query(paginate):
+            batch.append(record)
+            if len(batch) >= self.itersize:
+                yield from self._enrich_and_yield(batch, for_filtering, has_tag_filter)
+                batch = []
+        if batch:
+            yield from self._enrich_and_yield(batch, for_filtering, has_tag_filter)
+
+    def _enrich_and_yield(self, records, for_filtering, has_tag_filter):
+        if has_tag_filter:
+            tags_by_serial = self._fetch_tags_by_serial({r["serial_number"] for r in records})
+        else:
+            tags_by_serial = {}
+        for record in records:
             for machine_snapshot in record["machine_snapshots"]:
                 for f in self.filters:
                     f.process_fetched_record(machine_snapshot, for_filtering)
+                if has_tag_filter:
+                    machine_snapshot["tags"] = tags_by_serial.get(record["serial_number"], [])
             yield record["serial_number"], record["machine_snapshots"]
+
+    def _fetch_tags_by_serial(self, serial_numbers):
+        # Returns Tag model instances per serial — the template uses the
+        # `inventory_tag` template tag (which renders str(tag) + color)
+        # and the export pipes str(tag). Same shape on both surfaces.
+        if not serial_numbers:
+            return {}
+        qs = (MachineTag.objects
+              .filter(serial_number__in=serial_numbers)
+              .select_related("tag",
+                              "tag__meta_business_unit",
+                              "tag__taxonomy",
+                              "tag__taxonomy__meta_business_unit"))
+        by_serial = {}
+        for mt in qs:
+            by_serial.setdefault(mt.serial_number, []).append(mt.tag)
+        return by_serial
 
     # export
     def export_sheets_data(self):
@@ -2047,7 +2076,7 @@ class MSQuery:
                     pu_pn = pu_dn = ""
                 row.extend([pu_pn, pu_dn])
                 row.append(
-                    "|".join(dn for dn in (t.get("display_name") for t in machine_snapshot.get("tags", [])) if dn)
+                    "|".join(str(t) for t in machine_snapshot.get("tags", []))
                 )
                 row.append(machine_snapshot.get("last_seen"))
                 if include_max_incident_severity:
