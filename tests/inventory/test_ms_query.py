@@ -218,13 +218,40 @@ class TagFilterMultiBlockTestCase(TestCase):
         titles = [title for title, _ in msquery.available_filters()]
         self.assertIn("Tags", titles)
 
-    def test_add_filter_link_appends_t_token(self):
+    def test_add_filter_link_inserts_new_t_adjacent_to_existing(self):
+        # Canonical sf groups same-class tokens together — the new `t` must
+        # be inserted next to the existing one, not appended at the end.
         msquery = self._msquery("sf=mbu-t-mis-tp-pf-hm-osv")
         for title, link in msquery.available_filters():
             if title == "Tags":
-                self.assertEqual(link.count("sf=mbu-t-mis-tp-pf-hm-osv-t"), 1)
+                self.assertIn("sf=mbu-t-t-mis-tp-pf-hm-osv", link)
                 return
         self.fail("Tags entry missing from available_filters")
+
+    # canonical sf rigidity
+
+    def test_non_contiguous_t_tokens_trigger_redirect(self):
+        # `-t-…-t` with non-`t` tokens in between is non-canonical. The
+        # filter behavior is the same (multi_instance parsing is position-
+        # insensitive) but the user should land on the canonical URL.
+        msquery = self._msquery("sf=mbu-t-mis-tp-pf-hm-osv-t")
+        self.assertEqual(len(self._tag_filters(msquery)), 2)
+        self.assertTrue(msquery._redirect)
+
+    def test_non_contiguous_redirect_url_groups_t_tokens(self):
+        msquery = self._msquery("sf=mbu-t-mis-tp-pf-hm-osv-t")
+        redirect = msquery.redirect_url()
+        self.assertIsNotNone(redirect)
+        self.assertIn("sf=mbu-t-t-mis-tp-pf-hm-osv", redirect)
+        # parsing the canonical target lands on a stable state
+        next_qd = QueryDict(redirect.lstrip("?"), mutable=True)
+        next_msquery = MSQuery(next_qd)
+        self.assertFalse(next_msquery._redirect)
+        self.assertEqual(len(self._tag_filters(next_msquery)), 2)
+
+    def test_contiguous_t_tokens_do_not_redirect(self):
+        msquery = self._msquery("sf=mbu-t-t-mis-tp-pf-hm-osv")
+        self.assertFalse(msquery._redirect)
 
     # canonical query dict
 

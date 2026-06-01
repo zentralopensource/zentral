@@ -1664,9 +1664,15 @@ class MSQuery:
                 # sf carries one bare token per instance; the value (if any)
                 # lives in the query dict under the per-instance key derived
                 # by the filter itself (t, t1, t2, …).
-                for token in serialized_filters:
-                    if token == filter_class.query_kwarg:
-                        self.add_filter(filter_class)
+                positions = [i for i, t in enumerate(serialized_filters) if t == filter_class.query_kwarg]
+                # Canonical sf groups same-class tokens together. If they're
+                # interspersed with other classes' tokens (e.g. a stale
+                # bookmark, or a URL hand-edited), trigger a redirect so the
+                # next request lands on the canonical form.
+                if positions and positions != list(range(positions[0], positions[-1] + 1)):
+                    self._redirect = True
+                for _ in positions:
+                    self.add_filter(filter_class)
             elif default or not filter_class.optional or filter_class.query_kwarg in serialized_filters:
                 self.add_filter(filter_class)
         for filter_class in self.extra_filters:
@@ -1700,11 +1706,35 @@ class MSQuery:
                     self.add_filter(ComplianceCheckStatusFilter, compliance_check_pk=cc_pk)
 
     def serialize_filters(self, filter_to_add=None, filter_to_remove=None, include_hidden=False):
+        filters = list(self.filters)
+        if filter_to_add is not None:
+            filters.insert(self._canonical_insert_position(filters, filter_to_add), filter_to_add)
         return encode_args(
-            (f.serialize() for f in chain(self.filters, [filter_to_add])
-             if f and f.optional and not f == filter_to_remove and (include_hidden or not f.hidden)),
+            (f.serialize() for f in filters
+             if f.optional and f is not filter_to_remove and (include_hidden or not f.hidden)),
             delimiter="-"
         )
+
+    def _canonical_insert_position(self, filters, new_filter):
+        # Multi_instance siblings stay grouped; otherwise land at the class's
+        # default-order slot so the resulting sf matches what _deserialize_filters
+        # would produce on the way back in.
+        new_class = type(new_filter)
+        same_class_positions = [i for i, f in enumerate(filters) if isinstance(f, new_class)]
+        if same_class_positions:
+            return same_class_positions[-1] + 1
+        ordered_classes = list(self.default_filters) + list(self.extra_filters)
+        try:
+            target = ordered_classes.index(new_class)
+        except ValueError:
+            return len(filters)
+        for i, f in enumerate(filters):
+            try:
+                if ordered_classes.index(type(f)) > target:
+                    return i
+            except ValueError:
+                continue
+        return len(filters)
 
     def get_url(self, page=None):
         qd = self.query_dict.copy()
