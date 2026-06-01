@@ -1997,9 +1997,10 @@ class MSQuery:
             yield record["serial_number"], record["machine_snapshots"]
 
     def _fetch_tags_by_serial(self, serial_numbers):
-        # Returns Tag model instances per serial — the template uses the
-        # `inventory_tag` template tag (which renders str(tag) + color)
-        # and the export pipes str(tag). Same shape on both surfaces.
+        # Returns Tag model instances per serial, ordered by tag.name so
+        # the row badges and the export column are deterministic. Not the
+        # same order as str(tag) (taxonomy/mbu prefixes don't participate)
+        # — traded for not having to compute str(tag) ahead of time.
         if not serial_numbers:
             return {}
         qs = (MachineTag.objects
@@ -2007,7 +2008,8 @@ class MSQuery:
               .select_related("tag",
                               "tag__meta_business_unit",
                               "tag__taxonomy",
-                              "tag__taxonomy__meta_business_unit"))
+                              "tag__taxonomy__meta_business_unit")
+              .order_by("tag__name"))
         by_serial = {}
         for mt in qs:
             by_serial.setdefault(mt.serial_number, []).append(mt.tag)

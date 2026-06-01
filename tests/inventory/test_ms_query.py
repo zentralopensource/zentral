@@ -331,17 +331,18 @@ class TagFilterMultiBlockTestCase(TestCase):
     def test_fetch_shows_full_machine_tag_set(self):
         # Serial 0 has tag-a, tag-b, tag-d. Filtering on just tag-a should
         # still surface every tag of the machine in the rendered row —
-        # the row reflects the machine, not the filter.
+        # the row reflects the machine, not the filter. Tags come back
+        # sorted by str(tag) so the row order is deterministic.
         msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}")
         for serial_number, machine_snapshots in msquery.fetch():
             if serial_number != self.serials[0]:
                 continue
-            tag_names = {t.name for ms in machine_snapshots for t in ms.get("tags", [])}
-            self.assertEqual(tag_names, {"tag-a", "tag-b", "tag-d"})
-            # All entries are Tag model instances — the template tag and
-            # the export both consume them directly via str()/attrs.
             for ms in machine_snapshots:
-                for t in ms.get("tags", []):
+                tags = ms.get("tags", [])
+                self.assertEqual([t.name for t in tags], ["tag-a", "tag-b", "tag-d"])
+                # All entries are Tag model instances — the template tag
+                # and the export consume them directly via str()/attrs.
+                for t in tags:
                     self.assertIsInstance(t, Tag)
             return
         self.fail("expected serial 0 in result set")
@@ -359,7 +360,8 @@ class TagFilterMultiBlockTestCase(TestCase):
             # taxonomy was select_related — no extra query when accessed
             with self.assertNumQueries(0):
                 self.assertEqual(by_name["prod"].taxonomy.name, "env")
-            # str(tag) matches Tag.__str__: "taxonomy: name"
+            # str(tag) is what the template's inventory_tag tag and the
+            # export both consume — matches Tag.__str__: "taxonomy: name".
             self.assertEqual(str(by_name["prod"]), "env: prod")
             return
         self.fail("expected serial 1 in result set")
@@ -369,7 +371,9 @@ class TagFilterMultiBlockTestCase(TestCase):
         # so taxonomied tags appear as "taxonomy: name". This is a breaking
         # change vs. the previous export (which only emitted the bare name,
         # or "mbu/name" for MBU-anchored tags), traded for consistency
-        # between what users see on screen and in their exports.
+        # between what users see on screen and in their exports. Tags are
+        # sorted case-insensitively by str(tag), so "env: prod" (e) lands
+        # before tag-a/b/d (t).
         taxonomy = Taxonomy.objects.create(name="env")
         prod_tag = Tag.objects.create(name="prod", taxonomy=taxonomy)
         MachineTag.objects.create(serial_number=self.serials[0], tag=prod_tag)
@@ -379,8 +383,8 @@ class TagFilterMultiBlockTestCase(TestCase):
         tag_col = headers.index("Tags")
         row_by_serial = {row[2]: row for row in rows}  # SN is column index 2
         self.assertEqual(
-            set(row_by_serial[self.serials[0]][tag_col].split("|")),
-            {"tag-a", "tag-b", "tag-d", "env: prod"},
+            row_by_serial[self.serials[0]][tag_col],
+            "env: prod|tag-a|tag-b|tag-d",
         )
 
     def test_fetch_paginate_false_streams_in_chunks(self):
