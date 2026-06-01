@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 from unittest.mock import patch
 
 import pyotp
@@ -766,6 +767,228 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"accounts_user": [str(self.service_account.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+
+    # role-membership grant restrictions
+
+    def test_user_update_groups_field_labeled_as_roles(self):
+        # Zentral UI uses "Roles", not Django's auto-generated "Groups".
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
+        field = response.context["form"].fields["groups"]
+        self.assertEqual(field.label, "Roles")
+        self.assertEqual(field.help_text, "The roles this user belongs to.")
+        self.assertEqual(field.widget.attrs.get("size"), 10)
+
+    def test_service_account_create_groups_field_labeled_as_roles(self):
+        self.login("accounts.add_user")
+        response = self.client.get(reverse("accounts:create_service_account"))
+        field = response.context["form"].fields["groups"]
+        self.assertEqual(field.label, "Roles")
+        self.assertEqual(field.help_text, "The roles this user belongs to.")
+        self.assertEqual(field.widget.attrs.get("size"), 10)
+
+    def test_mixin_methods_noop_when_groups_field_is_absent(self):
+        # Defensive guards: if a form using the mixin doesn't expose a "groups"
+        # field, _prepare_groups_field and _disable_ungrantable_group_options
+        # must early-return cleanly instead of raising KeyError. Triggered by
+        # calling them with a field_name that isn't present on the form.
+        from accounts.forms import ServiceAccountForm
+        form = ServiceAccountForm(request_user=self.ui_user)
+        form._prepare_groups_field(field_name="not_a_field")
+        form._disable_ungrantable_group_options(field_name="not_a_field")
+        # If we got here without raising, the guards did their job.
+        self.assertNotIn("not_a_field", form.fields)
+
+    def _role_option_tag(self, html, pk):
+        """Return the rendered ``<option>`` tag for a role/group pk in the
+        roles ``<select>``, or None if it isn't rendered at all. Asserting on
+        the real HTML — not just ``widget.disabled_values`` — is what catches
+        the choices-not-wired-up regression: the widget can carry the correct
+        disabled_values yet render zero options (so nothing is disabled because
+        nothing is rendered).
+        """
+        match = re.search(r'<option value="{}"[^>]*>'.format(pk), html)
+        return match.group(0) if match else None
+
+    def test_user_update_widget_disables_ungrantable_groups(self):
+        # The widget mirrors the validation rule so operators see upfront
+        # which groups they can't grant. Groups the target already belongs to
+        # stay selectable (so the actor can remove or keep them).
+        ungrantable = Group.objects.create(name=get_random_string(12))
+        already_assigned = Group.objects.create(name=get_random_string(12))
+        self.user.groups.add(already_assigned)
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
+        widget = response.context["form"].fields["groups"].widget
+        self.assertIn(ungrantable.pk, widget.disabled_values)
+        self.assertNotIn(self.ui_group.pk, widget.disabled_values)  # actor's own group
+        self.assertNotIn(already_assigned.pk, widget.disabled_values)  # already on target
+        # the disabled_values attribute must actually reach the rendered HTML
+        html = response.content.decode()
+        ungrantable_option = self._role_option_tag(html, ungrantable.pk)
+        self.assertIsNotNone(ungrantable_option)
+        self.assertIn("disabled", ungrantable_option)
+        own_option = self._role_option_tag(html, self.ui_group.pk)
+        self.assertIsNotNone(own_option)
+        self.assertNotIn("disabled", own_option)
+        assigned_option = self._role_option_tag(html, already_assigned.pk)
+        self.assertIsNotNone(assigned_option)
+        self.assertNotIn("disabled", assigned_option)
+
+    def test_user_update_widget_not_filtered_for_superuser(self):
+        # Superusers see the unmodified default widget — no disabled options.
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+        group = Group.objects.create(name=get_random_string(12))
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
+        widget = response.context["form"].fields["groups"].widget
+        self.assertFalse(hasattr(widget, "disabled_values"))
+        # the option still renders, just without the disabled attribute
+        html = response.content.decode()
+        option = self._role_option_tag(html, group.pk)
+        self.assertIsNotNone(option)
+        self.assertNotIn("disabled", option)
+
+    def test_service_account_create_widget_disables_ungrantable_groups(self):
+        # Same rule applies on the creation path — without it, "create a SA
+        # in role X" is the escalation vector.
+        ungrantable = Group.objects.create(name=get_random_string(12))
+        self.login("accounts.add_user")
+        response = self.client.get(reverse("accounts:create_service_account"))
+        widget = response.context["form"].fields["groups"].widget
+        self.assertIn(ungrantable.pk, widget.disabled_values)
+        self.assertNotIn(self.ui_group.pk, widget.disabled_values)
+        # the disabled_values attribute must actually reach the rendered HTML
+        html = response.content.decode()
+        ungrantable_option = self._role_option_tag(html, ungrantable.pk)
+        self.assertIsNotNone(ungrantable_option)
+        self.assertIn("disabled", ungrantable_option)
+        own_option = self._role_option_tag(html, self.ui_group.pk)
+        self.assertIsNotNone(own_option)
+        self.assertNotIn("disabled", own_option)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_update_cannot_add_group_actor_is_not_member_of(self, post_event):
+        # Non-superuser must not grant memberships they don't have themselves.
+        other_group = Group.objects.create(name=get_random_string(12))
+        self.login("accounts.change_user", "accounts.view_user")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": self.user.username,
+                 "email": self.user.email,
+                 "items_per_page": 10,
+                 "groups": [other_group.pk]},
+            )
+        self.assertFormError(
+            response.context["form"], "groups",
+            f"You cannot grant role membership you don't have: {other_group.name}.",
+        )
+        self.user.refresh_from_db()
+        self.assertNotIn(other_group, self.user.groups.all())
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_update_can_add_group_actor_is_member_of(self, post_event):
+        # Granting a group the actor already belongs to is fine.
+        self.login("accounts.change_user", "accounts.view_user")
+        self.assertNotIn(self.ui_group, self.user.groups.all())
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": self.user.username,
+                 "email": self.user.email,
+                 "items_per_page": 10,
+                 "groups": [self.ui_group.pk]},
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertIn(self.ui_group, self.user.groups.all())
+        self.assertEqual(len(callbacks), 1)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_update_can_remove_group_actor_is_not_member_of(self, post_event):
+        # Removal is intentionally not restricted by the rule — escalation risk
+        # is granting, not revoking. The actor here is not in other_group, but
+        # the target user is, and the actor is allowed to take them out.
+        other_group = Group.objects.create(name=get_random_string(12))
+        self.user.groups.add(other_group)
+        self.login("accounts.change_user", "accounts.view_user")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": self.user.username,
+                 "email": self.user.email,
+                 "items_per_page": 10,
+                 "groups": []},
+                follow=True,
+            )
+        self.user.refresh_from_db()
+        self.assertNotIn(other_group, self.user.groups.all())
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_superuser_update_can_add_any_group(self, post_event):
+        # Superusers are exempt from the grant-without-hold check.
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+        other_group = Group.objects.create(name=get_random_string(12))
+        self.assertNotIn(other_group, self.ui_user.groups.all())
+        self.login("accounts.change_user", "accounts.view_user")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": self.user.username,
+                 "email": self.user.email,
+                 "items_per_page": 10,
+                 "groups": [other_group.pk]},
+                follow=True,
+            )
+        self.user.refresh_from_db()
+        self.assertIn(other_group, self.user.groups.all())
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_service_account_update_cannot_add_group_actor_is_not_member_of(self, post_event):
+        # Same rule for the service-account form.
+        other_group = Group.objects.create(name=get_random_string(12))
+        self.login("accounts.change_user", "accounts.view_user")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:update_user", args=(self.service_account.id,)),
+                {"username": self.service_account.username,
+                 "description": "",
+                 "groups": [other_group.pk]},
+            )
+        self.assertFormError(
+            response.context["form"], "groups",
+            f"You cannot grant role membership you don't have: {other_group.name}.",
+        )
+        self.service_account.refresh_from_db()
+        self.assertNotIn(other_group, self.service_account.groups.all())
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_service_account_create_cannot_assign_group_actor_is_not_member_of(self, post_event):
+        # Creation path — the rule must apply at creation time too, otherwise
+        # "create a service account in role X" becomes the escalation vector.
+        other_group = Group.objects.create(name=get_random_string(12))
+        self.login("accounts.add_user")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:create_service_account"),
+                {"username": "ci-bot-" + get_random_string(6),
+                 "description": "",
+                 "groups": [other_group.pk]},
+            )
+        self.assertFormError(
+            response.context["form"], "groups",
+            f"You cannot grant role membership you don't have: {other_group.name}.",
+        )
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
     # delete
 
