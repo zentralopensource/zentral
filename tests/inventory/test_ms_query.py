@@ -213,15 +213,26 @@ class TagFilterMultiBlockTestCase(TestCase):
 
     # available_filters
 
-    def test_available_filters_includes_tags_when_present(self):
+    def test_available_filters_disables_tags_when_an_empty_block_exists(self):
+        # An empty block is a free slot — stacking another would just add
+        # an unconstrained lateral join. The entry stays visible so users
+        # see Tags is a known filter, but the link is None so the template
+        # renders it disabled.
         msquery = self._msquery("sf=mbu-t-mis-tp-pf-hm-osv")
-        titles = [title for title, _ in msquery.available_filters()]
-        self.assertIn("Tags", titles)
+        entries = dict(msquery.available_filters())
+        self.assertIn("Tags", entries)
+        self.assertIsNone(entries["Tags"])
+
+    def test_available_filters_offers_tags_once_existing_block_has_value(self):
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}")
+        entries = dict(msquery.available_filters())
+        self.assertIn("Tags", entries)
+        self.assertIsNotNone(entries["Tags"])
 
     def test_add_filter_link_inserts_new_t_adjacent_to_existing(self):
         # Canonical sf groups same-class tokens together — the new `t` must
         # be inserted next to the existing one, not appended at the end.
-        msquery = self._msquery("sf=mbu-t-mis-tp-pf-hm-osv")
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}")
         for title, link in msquery.available_filters():
             if title == "Tags":
                 self.assertIn("sf=mbu-t-t-mis-tp-pf-hm-osv", link)

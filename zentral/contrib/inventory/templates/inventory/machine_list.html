@@ -27,10 +27,18 @@
       <div class="modal-body">
         <div>
           {% for anchor_text, link in msquery.available_filters %}
+            {% if link %}
             <a href="{{ link }}" class="btn btn-primary m-1">
                 <span class="bi bi-plus" aria-hidden="true"></span>
                 {{ anchor_text }}
             </a>
+            {% else %}
+            <a class="btn btn-primary m-1 disabled" aria-disabled="true" tabindex="-1"
+               title="Fill the existing empty {{ anchor_text|lower }} block before adding another">
+                <span class="bi bi-plus" aria-hidden="true"></span>
+                {{ anchor_text }}
+            </a>
+            {% endif %}
             {% endfor %}
         </div>
         <form method="POST" class="form-inline my-2">{% csrf_token %}

@@ -1778,16 +1778,29 @@ class MSQuery:
         return "?{}".format(urllib.parse.urlencode(self.get_canonical_query_dict()))
 
     def available_filters(self):
+        # Each entry is (title, link). A link of None means "shown but
+        # disabled" — used for multi_instance classes that still have an
+        # empty slot, so the user knows the filter exists but can't stack
+        # another empty one on top.
         links = []
         idx = len(self.filters)
         for filter_class in chain(self.default_filters, self.extra_filters):
-            if not filter_class.multi_instance and any(isinstance(f, filter_class) for f in self.filters):
-                continue
+            instances = [f for f in self.filters if isinstance(f, filter_class)]
+            disabled = False
+            if instances:
+                if not filter_class.multi_instance:
+                    # Already present and not stackable — drop entirely.
+                    continue
+                if any(f.value is None for f in instances):
+                    disabled = True
             available_filter = filter_class(self, idx, self.query_dict)
-            available_filter_qd = self.query_dict.copy()
-            available_filter_qd["sf"] = self.serialize_filters(filter_to_add=available_filter)
-            links.append((available_filter.title,
-                          "?{}".format(urllib.parse.urlencode(available_filter_qd))))
+            if disabled:
+                link = None
+            else:
+                available_filter_qd = self.query_dict.copy()
+                available_filter_qd["sf"] = self.serialize_filters(filter_to_add=available_filter)
+                link = "?{}".format(urllib.parse.urlencode(available_filter_qd))
+            links.append((available_filter.title, link))
             idx += 1
         return links
 
