@@ -20,7 +20,7 @@ from django.urls import reverse
 from django.utils.text import Truncator, slugify
 
 from zentral.contrib.inventory.conf import EC2, os_version_display, os_version_version_display
-from zentral.contrib.inventory.models import MetaMachine
+from zentral.contrib.inventory.models import MetaMachine, Tag
 from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.core.compliance_checks.models import Status as ComplianceCheckStatus
 from zentral.core.incidents.models import Severity, Status
@@ -69,6 +69,7 @@ class BaseMSFilter:
     redirect_if_single_result = False
     query_kwarg = None
     many = False
+    multi_instance = False
     non_grouping_expression = None
     expression = None
     grouping_set = None
@@ -130,6 +131,10 @@ class BaseMSFilter:
 
     def serialize(self):
         return self.get_query_kwarg()
+
+    def populate_canonical_query_dict(self, qd):
+        if self.value is not None:
+            qd[self.get_query_kwarg()] = self.value
 
     # process grouping results
 
@@ -406,20 +411,72 @@ class TagFilter(BaseMSFilter):
     title = "Tags"
     optional = True
     many = True
+    multi_instance = True
+    # class-level token used as the sf token and as the default-loop sf membership key;
+    # the actual per-instance query-dict key is provided by get_query_kwarg().
     query_kwarg = "t"
-    expression = (
-        "jsonb_build_object("
-        "'id', t.id, "
-        "'name', t.name, "
-        "'color', t.color, "
-        "'meta_business_unit', "
-        "jsonb_build_object('id', tmbu.id, 'name', tmbu.name)"
-        ") as tag_j"
-    )
-    grouping_set = ("t.id", "tag_j")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.expression = (
+            "jsonb_build_object("
+            f"'id', t{self.idx}.id, "
+            f"'name', t{self.idx}.name, "
+            f"'color', t{self.idx}.color, "
+            "'meta_business_unit', "
+            f"jsonb_build_object('id', tmbu{self.idx}.id, 'name', tmbu{self.idx}.name)"
+            f") as tag_j_{self.idx}"
+        )
+        self.grouping_set = (f"t{self.idx}.id", f"tag_j_{self.idx}")
+        self.title = self._build_title()
+
+    def _build_title(self):
+        if self.value is None:
+            return "Tags"
+        if self.value == self.none_value:
+            return "Tags · No tag"
+        try:
+            tag = Tag.objects.select_related("meta_business_unit").get(pk=int(self.value))
+        except (Tag.DoesNotExist, TypeError, ValueError):
+            return "Tags"
+        label = tag.name or "?"
+        if tag.meta_business_unit_id and tag.meta_business_unit.name:
+            label = f"{tag.meta_business_unit.name}/{label}"
+        return f"Tags · {label}"
+
+    # the "no tag" sentinel sf-encodes as "0" (no tag pk is 0).
+    none_value_sf_token = "0"
+
+    def get_query_kwarg(self):
+        # kept distinct per instance so unrelated query-dict keys (page, etc.) don't collide;
+        # the value itself is encoded in sf, not in query_dict.
+        return f"t{self.idx}"
+
+    def serialize(self):
+        if self.value is None:
+            return self.query_kwarg
+        if self.value == self.none_value:
+            return f"{self.query_kwarg}.{self.none_value_sf_token}"
+        return f"{self.query_kwarg}.{self.value}"
+
+    @classmethod
+    def parse_sf_value(cls, raw):
+        # Map the sf suffix back to a constructor `value` kwarg.
+        # Returns None for invalid input so the caller can trigger a redirect.
+        if raw == cls.none_value_sf_token:
+            return {"value": cls.none_value}
+        try:
+            int(raw)
+        except (TypeError, ValueError):
+            return None
+        return {"value": raw}
+
+    def populate_canonical_query_dict(self, qd):
+        # Value is already encoded in sf; nothing to add to the query dict.
+        return
 
     def joins(self):
-        return [("left join lateral ("
+        return [(f"left join lateral ("
                  "select distinct * "
                  "from inventory_tag "
                  "where exists ("
@@ -428,15 +485,16 @@ class TagFilter(BaseMSFilter):
                  "where mt.serial_number = ms.serial_number "
                  "and mt.tag_id = inventory_tag.id"
                  ")"
-                 ") t on TRUE"),
-                "left join inventory_metabusinessunit as tmbu on (tmbu.id = t.meta_business_unit_id)"]
+                 f") t{self.idx} on TRUE"),
+                f"left join inventory_metabusinessunit as tmbu{self.idx} "
+                f"on (tmbu{self.idx}.id = t{self.idx}.meta_business_unit_id)"]
 
     def wheres(self):
         if self.value:
             if self.value != self.none_value:
-                yield "t.id = %s"
+                yield f"t{self.idx}.id = %s"
             else:
-                yield "t.id is null"
+                yield f"t{self.idx}.id is null"
 
     def where_args(self):
         if self.value and self.value != self.none_value:
@@ -465,9 +523,51 @@ class TagFilter(BaseMSFilter):
         if grouping_value:
             return grouping_value["id"]
 
+    def _values_selected_in_other_blocks(self):
+        # Tag values picked in OTHER TagFilter instances. Selecting them again here
+        # would just AND the same constraint with itself.
+        return {
+            f.value
+            for f in self.msquery.filters
+            if isinstance(f, TagFilter) and f is not self and f.value
+        }
+
+    def grouping_choices_from_grouping_results(self, grouping_results):
+        sibling_values = self._values_selected_in_other_blocks()
+        choices = []
+        for grouping_result in self.filter_grouping_results(grouping_results):
+            grouping_value = self.grouping_value_from_grouping_result(grouping_result)
+            label = self.label_for_grouping_value(grouping_value)
+            raw = self.query_kwarg_value_from_grouping_value(grouping_value)
+            target_value = self.none_value if raw is None else str(raw)
+            is_active = self.value == target_value
+            if not is_active and target_value in sibling_values:
+                # already picked in another block — don't offer it here
+                continue
+            new_qd = self.query_dict.copy()
+            new_qd.pop("page", None)
+            new_qd["sf"] = self._serialize_filters_with_self_value(None if is_active else target_value)
+            if is_active:
+                up_query_dict, down_query_dict = new_qd, None
+            else:
+                up_query_dict, down_query_dict = None, new_qd
+            choices.append((label, grouping_result["count"], down_query_dict, up_query_dict))
+        return choices
+
+    def _serialize_filters_with_self_value(self, new_value):
+        # Build the sf string with this block's value temporarily replaced.
+        # Mutates self.value briefly; restored before return.
+        saved = self.value
+        self.value = new_value
+        try:
+            return self.msquery.serialize_filters()
+        finally:
+            self.value = saved
+
+
     def process_fetched_record(self, record, for_filtering):
-        tags = []
-        for tag in record.pop("tag_j", []):
+        tags = record.setdefault("tags", [])
+        for tag in record.pop(f"tag_j_{self.idx}", []):
             if not tag["id"]:
                 continue
             display_name = tag["name"]
@@ -481,7 +581,6 @@ class TagFilter(BaseMSFilter):
                 tag["display_name"] = display_name
             if tag not in tags:
                 tags.append(tag)
-        record["tags"] = tags
 
 
 class BundleFilter(BaseMSFilter):
@@ -1537,7 +1636,22 @@ class MSQuery:
             default = True
             self._redirect = True
         for filter_class in self.default_filters:
-            if default or not filter_class.optional or filter_class.query_kwarg in serialized_filters:
+            if filter_class.multi_instance:
+                if default:
+                    self.add_filter(filter_class)
+                    continue
+                prefix = filter_class.query_kwarg
+                value_prefix = f"{prefix}."
+                for token in serialized_filters:
+                    if token == prefix:
+                        self.add_filter(filter_class)
+                    elif token.startswith(value_prefix):
+                        kwargs = filter_class.parse_sf_value(token[len(value_prefix):])
+                        if kwargs is None:
+                            self._redirect = True
+                        else:
+                            self.add_filter(filter_class, **kwargs)
+            elif default or not filter_class.optional or filter_class.query_kwarg in serialized_filters:
                 self.add_filter(filter_class)
         for filter_class in self.extra_filters:
             if filter_class.query_kwarg in serialized_filters:
@@ -1606,8 +1720,7 @@ class MSQuery:
         qd = QueryDict(mutable=True)
         qd["sf"] = self.serialize_filters(include_hidden=True)
         for f in self.filters:
-            if f.value is not None:
-                qd[f.get_query_kwarg()] = f.value
+            f.populate_canonical_query_dict(qd)
         return qd
 
     def get_urlencoded_canonical_query_dict(self):
@@ -1622,16 +1735,14 @@ class MSQuery:
         links = []
         idx = len(self.filters)
         for filter_class in chain(self.default_filters, self.extra_filters):
-            for f in self.filters:
-                if isinstance(f, filter_class):
-                    break
-            else:
-                available_filter = filter_class(self, idx, self.query_dict)
-                available_filter_qd = self.query_dict.copy()
-                available_filter_qd["sf"] = self.serialize_filters(filter_to_add=available_filter)
-                links.append((available_filter.title,
-                              "?{}".format(urllib.parse.urlencode(available_filter_qd))))
-                idx += 1
+            if not filter_class.multi_instance and any(isinstance(f, filter_class) for f in self.filters):
+                continue
+            available_filter = filter_class(self, idx, self.query_dict)
+            available_filter_qd = self.query_dict.copy()
+            available_filter_qd["sf"] = self.serialize_filters(filter_to_add=available_filter)
+            links.append((available_filter.title,
+                          "?{}".format(urllib.parse.urlencode(available_filter_qd))))
+            idx += 1
         return links
 
     # common things for grouping and fetching

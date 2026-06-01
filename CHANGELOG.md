@@ -3,6 +3,10 @@
 
 ### Features
 
+#### Inventory
+
+Added facet search for tags on the machine list — multiple tag filters now compose with AND.
+
 #### MDM
 
 Added `zentral_mdm_target_artifacts_bucket` metrics.
