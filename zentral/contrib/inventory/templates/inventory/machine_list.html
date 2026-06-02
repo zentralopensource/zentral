@@ -251,7 +251,7 @@
   <div class="col-md-3">
     <div class="inv-filter {% if f_up_link %} panel-info{% endif %}">
         <div class="card-header filter-title d-flex justify-content-between">
-            <div class="py-1">
+            <div class="py-1 filter-title-text" title="{{ f.title }}">
                 {{ f.title }}
             </div>
             <div class="{% if not f_up_link %} panel-heading-btns{% endif %}"{% if not f_up_link %} style="display:none"{% endif %}>
@@ -285,10 +285,10 @@
           {% for label, count, percentage, down_link, up_link in f_links %}
                 <div data-label="{{ label }}" data-count="{{ count }}">
                     <div class="d-flex justify-content-between py-2">
-                        <a title="{{ label }}" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}" class="link-underline link-underline-opacity-0 link-underline-opacity-100-hover">
+                        <a title="{{ label }}" href="{% if up_link %}{{ up_link }}{% else %}{{ down_link }}{% endif %}" class="filter-choice-label link-underline link-underline-opacity-0 link-underline-opacity-100-hover">
                             {{ label }}
                         </a>
-                        <span class="badge text-bg-secondary py-2">{{ count }}</span>
+                        <span class="filter-choice-count badge text-bg-secondary py-2">{{ count }}</span>
                     </div>
                     <div class="d-flex progress" role="progressbar" aria-label="Basic example" aria-valuenow="{{ percentage|to_int }}" aria-valuemin="0" aria-valuemax="100" style="height: 3px">
                         <div class="progress-bar" style="width:{{ percentage|to_int }}%"></div>

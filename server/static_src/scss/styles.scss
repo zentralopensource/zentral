@@ -308,6 +308,32 @@ td > p:last-child, td > table:last-child {
     overflow-y: auto;
 }
 
+// Single-line ellipsis for the filter card title — long tag names (e.g.
+// "Tags · taxonomy/name") would otherwise hard-clip at the card edge with
+// no visual cue. min-width:0 lets the flex item shrink past its content.
+.filter-title-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// Facet row labels wrap mid-word so a long tag name stays inside the card
+// instead of overflowing horizontally. The native title attribute on the
+// anchor still exposes the full text on hover.
+.filter-choice-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+// Without this the count badge inherits the flex-item default of
+// align-items: stretch and grows to match a multi-line wrapped label —
+// pin it to the top so it stays compact regardless of the label's height.
+.filter-choice-count {
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+
 // Registration views
 
 .reg-container {
