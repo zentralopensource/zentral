@@ -120,7 +120,7 @@ class TagFilterMultiBlockTestCase(TestCase):
     def test_constrained_block_pushes_tag_id_into_lateral(self):
         msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}")
         tag_filter = self._tag_filters(msquery)[0]
-        (lateral, lateral_args), _ = tag_filter.joins()
+        [(lateral, lateral_args)] = tag_filter.joins()
         self.assertIn(f"t{tag_filter.idx} on TRUE", lateral)
         self.assertIn("inventory_tag.id = %s", lateral)
         self.assertEqual(lateral_args, [str(self.tag_a.pk)])
@@ -128,14 +128,14 @@ class TagFilterMultiBlockTestCase(TestCase):
     def test_unconstrained_block_keeps_open_lateral(self):
         msquery = self._msquery("sf=mbu-t-mis-tp-pf-hm-osv")
         tag_filter = self._tag_filters(msquery)[0]
-        (lateral, lateral_args), _ = tag_filter.joins()
+        [(lateral, lateral_args)] = tag_filter.joins()
         self.assertNotIn("inventory_tag.id = %s", lateral)
         self.assertEqual(lateral_args, [])
 
     def test_no_tag_block_does_not_push_into_lateral(self):
         msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={TagFilter.none_value}")
         tag_filter = self._tag_filters(msquery)[0]
-        (lateral, lateral_args), _ = tag_filter.joins()
+        [(lateral, lateral_args)] = tag_filter.joins()
         self.assertNotIn("inventory_tag.id = %s", lateral)
         self.assertEqual(lateral_args, [])
         self.assertIn(f"t{tag_filter.idx}.id is null", list(tag_filter.wheres()))
@@ -418,9 +418,38 @@ class TagFilterMultiBlockTestCase(TestCase):
 
     def test_title_falls_back_when_tag_missing(self):
         # int-castable pk that doesn't exist in DB — passes ctor validation
-        # but Tag.objects.get raises, so title falls back to "Tags".
+        # but the lookup yields nothing, so title falls back to "Tags".
         msquery = self._msquery("sf=mbu-t-mis-tp-pf-hm-osv&t=999999999")
         self.assertEqual(self._tag_filters(msquery)[0].title, "Tags")
+
+    def test_title_without_grouping_uses_targeted_lookup(self):
+        # Title read before any grouping work must NOT trigger the (much
+        # larger) grouping query — only a single targeted Tag fetch.
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}")
+        self.assertIsNone(msquery._tags_by_pk_cache)
+        with self.assertNumQueries(1):
+            self.assertEqual(self._tag_filters(msquery)[0].title, "Tags · tag-a")
+        # Cache stays unset — the fallback didn't populate it.
+        self.assertIsNone(msquery._tags_by_pk_cache)
+
+    def test_title_after_grouping_reuses_bulk_cache(self):
+        # Once the bulk map is warm (typical view flow: count() then
+        # grouping_links()), title access is a free dict lookup.
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_a.pk}")
+        list(msquery.grouping_links())
+        self.assertIsNotNone(msquery._tags_by_pk_cache)
+        with self.assertNumQueries(0):
+            self.assertEqual(self._tag_filters(msquery)[0].title, "Tags · tag-a")
+
+    def test_title_renders_for_tag_no_machine_carries(self):
+        # tag-c is on no machine. The block's title must still resolve —
+        # exercises the "include filter-value pks in the bulk map" branch
+        # of _tags_by_pk (the grouping row for an empty match emits NULL,
+        # not the chosen pk, so without that branch the title would fall
+        # back to "Tags" instead of "Tags · tag-c").
+        msquery = self._msquery(f"sf=mbu-t-mis-tp-pf-hm-osv&t={self.tag_c.pk}")
+        list(msquery.grouping_links())
+        self.assertEqual(self._tag_filters(msquery)[0].title, "Tags · tag-c")
 
     # sibling exclusion
 
@@ -511,3 +540,14 @@ class TagFilterMultiBlockTestCase(TestCase):
         msquery = self._msquery()
         with self.assertNumQueries(0):
             self.assertEqual(msquery._fetch_tags_by_serial(set()), {})
+
+    def test_tags_by_pk_returns_empty_when_no_pks_to_load(self):
+        # No TagFilter on the msquery — the loop over filters contributes
+        # no pks, so the bulk Tag query is skipped and we cache {} for
+        # subsequent calls.
+        msquery = self._msquery("sf=mbu-mis-tp-pf-hm-osv")
+        self.assertEqual(self._tag_filters(msquery), [])
+        self.assertEqual(msquery._tags_by_pk(), {})
+        # Second call returns the cached empty dict without re-running.
+        with self.assertNumQueries(0):
+            self.assertEqual(msquery._tags_by_pk(), {})

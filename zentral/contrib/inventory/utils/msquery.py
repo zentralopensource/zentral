@@ -414,7 +414,8 @@ class MachineGroupFilter(BaseMSFilter):
 
 
 class TagFilter(BaseMSFilter):
-    title = "Tags"
+    # title is a @property (see below) so it can read from
+    # MSQuery._tags_by_pk() and share the bulk Tag lookup with facet labels.
     optional = True
     many = True
     multi_instance = True
@@ -441,17 +442,12 @@ class TagFilter(BaseMSFilter):
                 except AttributeError:
                     # immutable QueryDict — redirect path isn't exercised here.
                     pass
-        self.expression = (
-            "jsonb_build_object("
-            f"'id', t{self.idx}.id, "
-            f"'name', t{self.idx}.name, "
-            f"'color', t{self.idx}.color, "
-            "'meta_business_unit', "
-            f"jsonb_build_object('id', tmbu{self.idx}.id, 'name', tmbu{self.idx}.name)"
-            f") as tag_j_{self.idx}"
-        )
-        self.grouping_set = (f"t{self.idx}.id", f"tag_j_{self.idx}")
-        self.title = self._build_title()
+        # The lateral exposes only the tag pk — name/color/mbu/taxonomy come
+        # from MSQuery._tags_by_pk(), a single bulk query that select_relateds
+        # the full chain and feeds both the facet labels and this block's
+        # title. Saves one join per TagFilter on the big query.
+        self.expression = f"t{self.idx}.id as tag_id_{self.idx}"
+        self.grouping_set = (f"t{self.idx}.id", f"tag_id_{self.idx}")
 
     def get_query_kwarg(self):
         # First block keeps the bare `t` key so old single-instance bookmarks
@@ -466,19 +462,31 @@ class TagFilter(BaseMSFilter):
         # the query dict.
         return self.query_kwarg
 
-    def _build_title(self):
+    @property
+    def title(self):
+        # When the bulk map is already populated (normal view flow: count()
+        # and grouping_links() warm it up), reuse it. Otherwise fall back
+        # to a single targeted Tag fetch so reading a title doesn't pull
+        # the grouping query along — that one matters for any caller that
+        # only needs the title (tests, programmatic access).
         if not self.value:
             return "Tags"
         if self.value == self.none_value:
             return "Tags · No tag"
-        try:
-            tag = Tag.objects.select_related("meta_business_unit").get(pk=int(self.value))
-        except (Tag.DoesNotExist, TypeError, ValueError):
-            return "Tags"
-        label = tag.name or "?"
-        if tag.meta_business_unit_id and tag.meta_business_unit.name:
-            label = f"{tag.meta_business_unit.name}/{label}"
-        return f"Tags · {label}"
+        # __init__ already coerced non-int-castable values to None, so any
+        # value reaching here is guaranteed int-castable.
+        pk = int(self.value)
+        cache = self.msquery._tags_by_pk_cache
+        if cache is not None:
+            tag = cache.get(pk)
+        else:
+            try:
+                tag = Tag.objects.select_related(
+                    "meta_business_unit", "taxonomy__meta_business_unit"
+                ).get(pk=pk)
+            except Tag.DoesNotExist:
+                tag = None
+        return f"Tags · {tag}" if tag else "Tags"
 
     def joins(self):
         # When this block already targets a specific tag pk, push the constraint
@@ -501,9 +509,9 @@ class TagFilter(BaseMSFilter):
             f"select distinct * from inventory_tag where {' and '.join(inner_conditions)}"
             f") t{self.idx} on TRUE"
         )
-        return [(lateral, lateral_args),
-                f"left join inventory_metabusinessunit as tmbu{self.idx} "
-                f"on (tmbu{self.idx}.id = t{self.idx}.meta_business_unit_id)"]
+        # No tmbu join — render-side enrichment in MSQuery._tags_by_pk()
+        # carries meta_business_unit and taxonomy through select_related.
+        return [(lateral, lateral_args)]
 
     def wheres(self):
         if self.value:
@@ -514,28 +522,15 @@ class TagFilter(BaseMSFilter):
                 # drop rows where the lateral produced no match.
                 yield f"t{self.idx}.id is not null"
 
-    def grouping_value_from_grouping_result(self, grouping_result):
-        gv = json.loads(super().grouping_value_from_grouping_result(grouping_result))
-        if gv["id"] is None:
-            return None
-        elif gv["meta_business_unit"]["id"] is None:
-            gv["meta_business_unit"] = None
-        return gv
-
     def label_for_grouping_value(self, grouping_value):
-        if not grouping_value:
+        # grouping_value is the tag's pk (or None for the no-tag row). The
+        # full Tag instance — with mbu and taxonomy — comes from the
+        # msquery-level bulk lookup, and the badge label is just str(tag),
+        # matching how tags render everywhere else in the UI.
+        if grouping_value is None:
             return self.none_value
-        label = grouping_value["name"] or "?"
-        mbu = grouping_value.get("meta_business_unit")
-        if mbu:
-            mbu_name = mbu.get("name")
-            if mbu_name:
-                label = "{}/{}".format(mbu_name, label)
-        return label
-
-    def query_kwarg_value_from_grouping_value(self, grouping_value):
-        if grouping_value:
-            return grouping_value["id"]
+        tag = self.msquery._tags_by_pk().get(grouping_value)
+        return str(tag) if tag else "?"
 
     def _values_selected_in_other_blocks(self):
         # Tag values picked in OTHER TagFilter instances. Selecting one of them
@@ -586,7 +581,7 @@ class TagFilter(BaseMSFilter):
         # so each row carries the machine's full tag set (not just the ones any
         # block is matching on). Drop the per-block lateral output so the
         # field doesn't linger on the record.
-        record.pop(f"tag_j_{self.idx}", None)
+        record.pop(f"tag_id_{self.idx}", None)
 
 
 class BundleFilter(BaseMSFilter):
@@ -1604,6 +1599,7 @@ class MSQuery:
         self._deserialize_filters(self.query_dict.get("sf"))
         self._grouping_results = None
         self._count = None
+        self._tags_by_pk_cache = None
         self._grouping_links = None
 
     # filters configuration
@@ -1857,6 +1853,40 @@ class MSQuery:
             self._grouping_results = self._make_grouping_query()
         return self._grouping_results
 
+    def _tags_by_pk(self):
+        # One bulk Tag lookup keyed by pk — the single render-side enrichment
+        # for everything tag-related on the grouping side: facet labels
+        # (label_for_grouping_value) and block titles (TagFilter.title).
+        # The join we dropped from the lateral lives in this much smaller
+        # query instead.
+        if self._tags_by_pk_cache is None:
+            pks = set()
+            grouping_results = self._get_grouping_results()
+            for f in self.filters:
+                if not isinstance(f, TagFilter):
+                    continue
+                # Pks appearing as facet rows for this block.
+                column = f"tag_id_{f.idx}"
+                for gr in grouping_results:
+                    pk = gr.get(column)
+                    if pk is not None:
+                        pks.add(pk)
+                # The block's own selected pk, so its title renders even
+                # when no machine carries the picked tag (the grouping
+                # row for an empty match emits NULL, not the chosen pk).
+                # __init__ already coerced non-int-castable values to None.
+                if f.value and f.value != f.none_value:
+                    pks.add(int(f.value))
+            if pks:
+                self._tags_by_pk_cache = {
+                    t.pk: t for t in Tag.objects.filter(pk__in=pks).select_related(
+                        "meta_business_unit", "taxonomy__meta_business_unit"
+                    )
+                }
+            else:
+                self._tags_by_pk_cache = {}
+        return self._tags_by_pk_cache
+
     def count(self):
         if self._count is None:
             all_grouping_aliases = [f.grouping_alias for f in self.filters]
@@ -2005,9 +2035,7 @@ class MSQuery:
             return {}
         qs = (MachineTag.objects
               .filter(serial_number__in=serial_numbers)
-              .select_related("tag",
-                              "tag__meta_business_unit",
-                              "tag__taxonomy",
+              .select_related("tag__meta_business_unit",
                               "tag__taxonomy__meta_business_unit")
               .order_by("tag__name"))
         by_serial = {}
