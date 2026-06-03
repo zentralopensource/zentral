@@ -14,7 +14,7 @@ from .models import Platform
 logger = logging.getLogger("zentral.contrib.mdm.app_manifest")
 
 
-MD5_SIZE = 10 * 2**20  # 10MB
+HASH_CHUNK_SIZE = 4 * 2**20  # 4MB
 
 
 def validate_configuration(configuration):
@@ -159,35 +159,48 @@ def read_ipa_info(tmp_filepath):
     return name, platforms, ea_data
 
 
-def get_md5s(package_file, md5_size=MD5_SIZE, compute_sha256=False):
+def compute_package_hashes(package_file, chunk_size=HASH_CHUNK_SIZE, compute_sha256=False):
+    """Stream the file once, returning chunked MD5/SHA-256 digests over the
+    same chunk boundaries, plus the total package size.
+
+    With compute_sha256=True, also returns the SHA-256 digest over the whole
+    file (used as the Package/EnterpriseApp identifying hash, distinct from
+    the per-chunk digests).
+    """
     file_chunk_size = 64 * 2**10  # 64KB
-    md5_size = (md5_size // file_chunk_size) * file_chunk_size
+    chunk_size = (chunk_size // file_chunk_size) * file_chunk_size
     md5s = []
-    h = md5()
-    if compute_sha256:
-        h2 = sha256()
+    sha256s = []
+    md5_h = md5()
+    sha256_h = sha256()
+    file_sha256_h = sha256() if compute_sha256 else None
     current_size = 0
     package_size = 0
     package_file.seek(0)
     while True:
-        chunk = package_file.read(2**10 * 64)
+        chunk = package_file.read(file_chunk_size)
         if not chunk:
             break
-        h.update(chunk)
-        if compute_sha256:
-            h2.update(chunk)
+        md5_h.update(chunk)
+        sha256_h.update(chunk)
+        if file_sha256_h is not None:
+            file_sha256_h.update(chunk)
         chunk_length = len(chunk)
         current_size += chunk_length
         package_size += chunk_length
-        if current_size == md5_size:
-            md5s.append(h.hexdigest())
-            h = md5()
+        if current_size == chunk_size:
+            md5s.append(md5_h.hexdigest())
+            sha256s.append(sha256_h.hexdigest())
+            md5_h = md5()
+            sha256_h = sha256()
             current_size = 0
     if current_size:
-        md5s.append(h.hexdigest())
+        md5s.append(md5_h.hexdigest())
+        sha256s.append(sha256_h.hexdigest())
         if len(md5s) == 1:
-            md5_size = current_size
-    return md5_size, md5s, package_size, h2.hexdigest() if compute_sha256 else None
+            chunk_size = current_size
+    file_sha256 = file_sha256_h.hexdigest() if file_sha256_h is not None else None
+    return chunk_size, md5s, sha256s, package_size, file_sha256
 
 
 def build_manifest_metadata(name, ext, ea_data):
@@ -239,10 +252,16 @@ def read_package_info(package_file, compute_sha256=False):
     finally:
         if cleanup_tmp_file:
             os.unlink(tmp_filepath)
-    md5_size, md5s, package_size, package_sha256 = get_md5s(package_file, compute_sha256=compute_sha256)
+    chunk_size, md5s, sha256s, package_size, package_sha256 = compute_package_hashes(
+        package_file, compute_sha256=compute_sha256,
+    )
     metadata = build_manifest_metadata(name, ext, ea_data)
-    manifest = {"items": [{"assets": [{"kind": "software-package", "md5-size": md5_size, "md5s": md5s}],
-                           "metadata": metadata}]}
+    # md5-size and sha256-size share a single chunk boundary because we compute
+    # both hashers in lockstep over the same chunks.
+    asset = {"kind": "software-package",
+             "md5-size": chunk_size, "md5s": md5s,
+             "sha256-size": chunk_size, "sha256s": sha256s}
+    manifest = {"items": [{"assets": [asset], "metadata": metadata}]}
     ea_data["manifest"] = manifest
     ea_data["package_size"] = package_size
     if compute_sha256:

@@ -671,9 +671,8 @@ class PackageManifestView(DownloadView):
         # whatever the current token format is. deepcopy the stored manifest so
         # we never mutate Package.manifest (the JSONField returns the same dict
         # reference if Django ever caches the model instance across requests).
-        # Inject the whole-file SHA-256 alongside the existing md5 chunks. Per
-        # Apple's ManifestURL spec, when both are present the device prefers
-        # SHA-256 and ignores the MD5 keys.
+        # The stored manifest already carries chunked md5s and sha256s; devices
+        # prefer SHA-256 per Apple's ManifestURL spec.
         package = self.object
         manifest = copy.deepcopy(package.manifest)
         file_token = dump_package_file_token(self.enrollment_session,
@@ -684,7 +683,6 @@ class PackageManifestView(DownloadView):
             settings["api"]["fqdn"],
             reverse("mdm_public:package_file", args=(file_token,)),
         )
-        asset["sha256"] = package.sha256
         return HttpResponse(plistlib.dumps(manifest), content_type="application/x-plist")
 
 

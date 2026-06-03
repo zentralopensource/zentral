@@ -1,10 +1,11 @@
 import plistlib
 import zipfile
+from hashlib import md5, sha256
 from io import BytesIO
 
 from django.test import SimpleTestCase
 
-from zentral.contrib.mdm.app_manifest import build_manifest_metadata, read_ipa_info
+from zentral.contrib.mdm.app_manifest import build_manifest_metadata, compute_package_hashes, read_ipa_info
 from zentral.contrib.mdm.models import Platform
 
 
@@ -228,3 +229,60 @@ class ReadIPAInfoTestCase(SimpleTestCase):
         with self.assertRaises(ValueError) as cm:
             read_ipa_info(buf)
         self.assertIn("Info.plist", str(cm.exception))
+
+
+class ComputePackageHashesTestCase(SimpleTestCase):
+    def test_single_chunk_file(self):
+        payload = b"hello"
+        chunk_size, md5s, sha256s, package_size, file_sha256 = compute_package_hashes(BytesIO(payload))
+        self.assertEqual(chunk_size, len(payload))
+        self.assertEqual(md5s, [md5(payload).hexdigest()])
+        self.assertEqual(sha256s, [sha256(payload).hexdigest()])
+        self.assertEqual(package_size, len(payload))
+        self.assertIsNone(file_sha256)
+
+    def test_multi_chunk_file_md5s_and_sha256s_in_lockstep(self):
+        chunk_size = 64 * 1024
+        payload = b"A" * (3 * chunk_size)
+        returned_chunk_size, md5s, sha256s, package_size, _ = compute_package_hashes(
+            BytesIO(payload), chunk_size=chunk_size,
+        )
+        self.assertEqual(returned_chunk_size, chunk_size)
+        self.assertEqual(package_size, len(payload))
+        self.assertEqual(len(md5s), 3)
+        self.assertEqual(len(sha256s), 3)
+        expected_md5 = md5(b"A" * chunk_size).hexdigest()
+        expected_sha256 = sha256(b"A" * chunk_size).hexdigest()
+        self.assertEqual(md5s, [expected_md5] * 3)
+        self.assertEqual(sha256s, [expected_sha256] * 3)
+
+    def test_multi_chunk_file_partial_final_chunk(self):
+        chunk_size = 64 * 1024
+        payload = b"A" * (2 * chunk_size) + b"B" * 10
+        returned_chunk_size, md5s, sha256s, package_size, _ = compute_package_hashes(
+            BytesIO(payload), chunk_size=chunk_size,
+        )
+        self.assertEqual(returned_chunk_size, chunk_size)
+        self.assertEqual(package_size, len(payload))
+        self.assertEqual(len(md5s), 3)
+        self.assertEqual(len(sha256s), 3)
+        self.assertEqual(md5s[2], md5(b"B" * 10).hexdigest())
+        self.assertEqual(sha256s[2], sha256(b"B" * 10).hexdigest())
+
+    def test_compute_sha256_returns_whole_file_digest(self):
+        payload = b"hello world"
+        _, _, _, _, file_sha256 = compute_package_hashes(BytesIO(payload), compute_sha256=True)
+        self.assertEqual(file_sha256, sha256(payload).hexdigest())
+
+    def test_compute_sha256_false_returns_none(self):
+        _, _, _, _, file_sha256 = compute_package_hashes(BytesIO(b"x"))
+        self.assertIsNone(file_sha256)
+
+    def test_chunk_size_floored_to_file_chunk_size(self):
+        # chunk_size is rounded down to a multiple of file_chunk_size (64KB).
+        chunk_size = 64 * 1024
+        returned_chunk_size, md5s, _, _, _ = compute_package_hashes(
+            BytesIO(b"A" * (2 * chunk_size)), chunk_size=chunk_size + 10,
+        )
+        self.assertEqual(returned_chunk_size, chunk_size)
+        self.assertEqual(len(md5s), 2)
