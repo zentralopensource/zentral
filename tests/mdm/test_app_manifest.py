@@ -21,8 +21,8 @@ class BuildManifestMetadataTestCase(SimpleTestCase):
 
     # happy path
 
-    def test_pkg_minimal(self):
-        metadata = build_manifest_metadata("Test", ".pkg", self._ea_data())
+    def test_minimal(self):
+        metadata = build_manifest_metadata("Test", self._ea_data())
         self.assertEqual(
             metadata,
             {"kind": "software",
@@ -31,9 +31,9 @@ class BuildManifestMetadataTestCase(SimpleTestCase):
              "bundle-version": "1.0"},
         )
 
-    def test_ipa_minimal(self):
+    def test_with_platform_identifier(self):
         metadata = build_manifest_metadata(
-            "Test", ".ipa", self._ea_data(platform_identifier="com.apple.platform.iphoneos"),
+            "Test", self._ea_data(platform_identifier="com.apple.platform.iphoneos"),
         )
         self.assertEqual(
             metadata,
@@ -48,96 +48,55 @@ class BuildManifestMetadataTestCase(SimpleTestCase):
 
     def test_platform_identifier_popped_from_ea_data(self):
         ea_data = self._ea_data(platform_identifier="com.apple.platform.iphoneos")
-        build_manifest_metadata("Test", ".ipa", ea_data)
+        build_manifest_metadata("Test", ea_data)
         self.assertNotIn("platform_identifier", ea_data)
 
     def test_platform_identifier_omitted_when_missing(self):
-        metadata = build_manifest_metadata("Test", ".pkg", self._ea_data())
+        metadata = build_manifest_metadata("Test", self._ea_data())
         self.assertNotIn("platform-identifier", metadata)
 
     def test_platform_identifier_omitted_when_empty(self):
-        metadata = build_manifest_metadata("Test", ".ipa", self._ea_data(platform_identifier=""))
+        metadata = build_manifest_metadata("Test", self._ea_data(platform_identifier=""))
         self.assertNotIn("platform-identifier", metadata)
 
-    # metadata.items (sub-bundles)
+    # metadata.items is marked "removed" in Apple's manifesturl.yaml schema;
+    # we never emit it, even when bundles describe sub-payloads.
 
-    def test_pkg_with_bundles_emits_items(self):
+    def test_metadata_items_never_emitted(self):
         ea_data = self._ea_data(bundles=[
             {"id": "io.zentral.test.app", "version_str": "1.0", "version": "1", "path": "/a"},
             {"id": "io.zentral.test.helper", "version_str": "1.1", "version": "2", "path": "/b"},
         ])
-        metadata = build_manifest_metadata("Test", ".pkg", ea_data)
-        self.assertEqual(
-            metadata["items"],
-            [{"kind": "software", "bundle-identifier": "io.zentral.test.app", "bundle-version": "1.0"},
-             {"kind": "software", "bundle-identifier": "io.zentral.test.helper", "bundle-version": "1.1"}],
-        )
-
-    def test_pkg_without_bundles_omits_items(self):
-        metadata = build_manifest_metadata("Test", ".pkg", self._ea_data())
-        self.assertNotIn("items", metadata)
-
-    def test_pkg_skips_bundle_with_empty_id(self):
-        ea_data = self._ea_data(bundles=[
-            {"id": "", "version_str": "1.0", "version": "1", "path": "/a"},
-            {"id": "io.zentral.test.app", "version_str": "1.0", "version": "1", "path": "/b"},
-        ])
-        metadata = build_manifest_metadata("Test", ".pkg", ea_data)
-        self.assertEqual(
-            metadata["items"],
-            [{"kind": "software", "bundle-identifier": "io.zentral.test.app", "bundle-version": "1.0"}],
-        )
-
-    def test_pkg_skips_bundle_with_empty_version(self):
-        ea_data = self._ea_data(bundles=[
-            {"id": "io.zentral.test.app", "version_str": "", "version": "1", "path": "/a"},
-        ])
-        metadata = build_manifest_metadata("Test", ".pkg", ea_data)
-        self.assertNotIn("items", metadata)
-
-    def test_pkg_all_bundles_filtered_omits_items(self):
-        ea_data = self._ea_data(bundles=[
-            {"id": "", "version_str": "1.0", "version": "1", "path": "/a"},
-            {"id": "io.zentral.test.app", "version_str": "", "version": "2", "path": "/b"},
-        ])
-        metadata = build_manifest_metadata("Test", ".pkg", ea_data)
-        self.assertNotIn("items", metadata)
-
-    def test_ipa_never_emits_items_even_with_bundles(self):
-        ea_data = self._ea_data(
-            platform_identifier="com.apple.platform.iphoneos",
-            bundles=[{"id": "io.zentral.test", "version_str": "1.0", "version": "1"}],
-        )
-        metadata = build_manifest_metadata("Test", ".ipa", ea_data)
+        metadata = build_manifest_metadata("Test", ea_data)
         self.assertNotIn("items", metadata)
 
     # required-key validation
 
     def test_empty_title_rejected(self):
         with self.assertRaises(ValueError) as cm:
-            build_manifest_metadata("", ".pkg", self._ea_data())
+            build_manifest_metadata("", self._ea_data())
         self.assertIn("title", str(cm.exception))
 
     def test_empty_product_id_rejected(self):
         with self.assertRaises(ValueError) as cm:
-            build_manifest_metadata("Test", ".pkg", self._ea_data(product_id=""))
+            build_manifest_metadata("Test", self._ea_data(product_id=""))
         self.assertIn("bundle-identifier", str(cm.exception))
 
     def test_empty_product_version_rejected(self):
         with self.assertRaises(ValueError) as cm:
-            build_manifest_metadata("Test", ".pkg", self._ea_data(product_version=""))
+            build_manifest_metadata("Test", self._ea_data(product_version=""))
         self.assertIn("bundle-version", str(cm.exception))
 
     def test_multiple_missing_keys_all_reported(self):
         with self.assertRaises(ValueError) as cm:
-            build_manifest_metadata("", ".pkg", self._ea_data(product_id="", product_version=""))
+            build_manifest_metadata("", self._ea_data(product_id="", product_version=""))
         msg = str(cm.exception)
         for k in ("title", "bundle-identifier", "bundle-version"):
             self.assertIn(k, msg)
 
     def test_non_string_title_rejected(self):
         with self.assertRaises(ValueError):
-            build_manifest_metadata(None, ".pkg", self._ea_data())
+            build_manifest_metadata(None, self._ea_data())
 
 
 class ReadIPAInfoTestCase(SimpleTestCase):

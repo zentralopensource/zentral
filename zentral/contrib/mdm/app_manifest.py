@@ -203,7 +203,7 @@ def compute_package_hashes(package_file, chunk_size=HASH_CHUNK_SIZE, compute_sha
     return chunk_size, md5s, sha256s, package_size, file_sha256
 
 
-def build_manifest_metadata(name, ext, ea_data):
+def build_manifest_metadata(name, ea_data):
     """Assemble the manifest.items[0].metadata block from reader output.
 
     Pops `platform_identifier` from ea_data. Raises ValueError if any required
@@ -223,17 +223,6 @@ def build_manifest_metadata(name, ext, ea_data):
     missing = sorted(k for k, v in metadata.items() if not isinstance(v, str) or not v)
     if missing:
         raise ValueError(f"Missing required manifest metadata: {', '.join(missing)}")
-    # metadata.items describes sub-payloads. .pkg distributions can install
-    # multiple apps whose CFBundleIdentifier/Version differ from the outer
-    # installer.
-    if ext == ".pkg":
-        items = [
-            {"kind": "software", "bundle-identifier": b["id"], "bundle-version": b["version_str"]}
-            for b in ea_data["bundles"]
-            if b.get("id") and b.get("version_str")
-        ]
-        if items:
-            metadata["items"] = items
     return metadata
 
 
@@ -255,7 +244,7 @@ def read_package_info(package_file, compute_sha256=False):
     chunk_size, md5s, sha256s, package_size, package_sha256 = compute_package_hashes(
         package_file, compute_sha256=compute_sha256,
     )
-    metadata = build_manifest_metadata(name, ext, ea_data)
+    metadata = build_manifest_metadata(name, ea_data)
     # md5-size and sha256-size share a single chunk boundary because we compute
     # both hashers in lockstep over the same chunks.
     asset = {"kind": "software-package",
