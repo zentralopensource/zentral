@@ -1,28 +1,35 @@
 import plistlib
+import subprocess
 import zipfile
 from hashlib import md5, sha256
 from io import BytesIO
+from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from zentral.contrib.mdm.app_manifest import build_manifest_metadata, compute_package_hashes, read_ipa_info
+from zentral.contrib.mdm.app_manifest import (
+    build_manifest_metadata,
+    compute_package_hashes,
+    read_distribution_info,
+    read_ipa_info,
+)
 from zentral.contrib.mdm.models import Platform
 
 
 class BuildManifestMetadataTestCase(SimpleTestCase):
-    def _ea_data(self, **overrides):
-        ea_data = {
+    def _pkg_data(self, **overrides):
+        pkg_data = {
             "product_id": "io.zentral.test",
             "product_version": "1.0",
             "bundles": [],
         }
-        ea_data.update(overrides)
-        return ea_data
+        pkg_data.update(overrides)
+        return pkg_data
 
     # happy path
 
     def test_minimal(self):
-        metadata = build_manifest_metadata("Test", self._ea_data())
+        metadata = build_manifest_metadata("Test", self._pkg_data())
         self.assertEqual(
             metadata,
             {"kind": "software",
@@ -33,7 +40,7 @@ class BuildManifestMetadataTestCase(SimpleTestCase):
 
     def test_with_platform_identifier(self):
         metadata = build_manifest_metadata(
-            "Test", self._ea_data(platform_identifier="com.apple.platform.iphoneos"),
+            "Test", self._pkg_data(platform_identifier="com.apple.platform.iphoneos"),
         )
         self.assertEqual(
             metadata,
@@ -46,57 +53,57 @@ class BuildManifestMetadataTestCase(SimpleTestCase):
 
     # platform-identifier
 
-    def test_platform_identifier_popped_from_ea_data(self):
-        ea_data = self._ea_data(platform_identifier="com.apple.platform.iphoneos")
-        build_manifest_metadata("Test", ea_data)
-        self.assertNotIn("platform_identifier", ea_data)
+    def test_platform_identifier_popped_from_pkg_data(self):
+        pkg_data = self._pkg_data(platform_identifier="com.apple.platform.iphoneos")
+        build_manifest_metadata("Test", pkg_data)
+        self.assertNotIn("platform_identifier", pkg_data)
 
     def test_platform_identifier_omitted_when_missing(self):
-        metadata = build_manifest_metadata("Test", self._ea_data())
+        metadata = build_manifest_metadata("Test", self._pkg_data())
         self.assertNotIn("platform-identifier", metadata)
 
     def test_platform_identifier_omitted_when_empty(self):
-        metadata = build_manifest_metadata("Test", self._ea_data(platform_identifier=""))
+        metadata = build_manifest_metadata("Test", self._pkg_data(platform_identifier=""))
         self.assertNotIn("platform-identifier", metadata)
 
     # metadata.items is marked "removed" in Apple's manifesturl.yaml schema;
     # we never emit it, even when bundles describe sub-payloads.
 
     def test_metadata_items_never_emitted(self):
-        ea_data = self._ea_data(bundles=[
+        pkg_data = self._pkg_data(bundles=[
             {"id": "io.zentral.test.app", "version_str": "1.0", "version": "1", "path": "/a"},
             {"id": "io.zentral.test.helper", "version_str": "1.1", "version": "2", "path": "/b"},
         ])
-        metadata = build_manifest_metadata("Test", ea_data)
+        metadata = build_manifest_metadata("Test", pkg_data)
         self.assertNotIn("items", metadata)
 
     # required-key validation
 
     def test_empty_title_rejected(self):
         with self.assertRaises(ValueError) as cm:
-            build_manifest_metadata("", self._ea_data())
+            build_manifest_metadata("", self._pkg_data())
         self.assertIn("title", str(cm.exception))
 
     def test_empty_product_id_rejected(self):
         with self.assertRaises(ValueError) as cm:
-            build_manifest_metadata("Test", self._ea_data(product_id=""))
+            build_manifest_metadata("Test", self._pkg_data(product_id=""))
         self.assertIn("bundle-identifier", str(cm.exception))
 
     def test_empty_product_version_rejected(self):
         with self.assertRaises(ValueError) as cm:
-            build_manifest_metadata("Test", self._ea_data(product_version=""))
+            build_manifest_metadata("Test", self._pkg_data(product_version=""))
         self.assertIn("bundle-version", str(cm.exception))
 
     def test_multiple_missing_keys_all_reported(self):
         with self.assertRaises(ValueError) as cm:
-            build_manifest_metadata("", self._ea_data(product_id="", product_version=""))
+            build_manifest_metadata("", self._pkg_data(product_id="", product_version=""))
         msg = str(cm.exception)
         for k in ("title", "bundle-identifier", "bundle-version"):
             self.assertIn(k, msg)
 
     def test_non_string_title_rejected(self):
         with self.assertRaises(ValueError):
-            build_manifest_metadata(None, self._ea_data())
+            build_manifest_metadata(None, self._pkg_data())
 
 
 class ReadIPAInfoTestCase(SimpleTestCase):
@@ -123,26 +130,26 @@ class ReadIPAInfoTestCase(SimpleTestCase):
         return info_plist
 
     def test_emits_platform_identifier_from_dt_platform_name(self):
-        name, platforms, ea_data = self._read(self._default_info_plist())
+        name, platforms, pkg_data = self._read(self._default_info_plist())
         self.assertEqual(name, "TestApp")
-        self.assertEqual(ea_data["product_id"], "com.example.test")
-        self.assertEqual(ea_data["product_version"], "1.0")
-        self.assertEqual(ea_data["platform_identifier"], "com.apple.platform.iphoneos")
+        self.assertEqual(pkg_data["product_id"], "com.example.test")
+        self.assertEqual(pkg_data["product_version"], "1.0")
+        self.assertEqual(pkg_data["platform_identifier"], "com.apple.platform.iphoneos")
         self.assertEqual(
-            ea_data["bundles"],
+            pkg_data["bundles"],
             [{"id": "com.example.test", "version_str": "1.0", "version": "1"}],
         )
         self.assertEqual(platforms, [Platform.IOS])
 
-    def test_no_metadata_key_in_ea_data(self):
-        # Before the refactor, read_ipa_info populated ea_data["metadata"]; that
+    def test_no_metadata_key_in_pkg_data(self):
+        # Before the refactor, read_ipa_info populated pkg_data["metadata"]; that
         # block now lives in build_manifest_metadata. Guard against regression.
-        _, _, ea_data = self._read(self._default_info_plist())
-        self.assertNotIn("metadata", ea_data)
+        _, _, pkg_data = self._read(self._default_info_plist())
+        self.assertNotIn("metadata", pkg_data)
 
     def test_platform_identifier_reflects_dt_platform_name_verbatim(self):
-        _, _, ea_data = self._read(self._default_info_plist(DTPlatformName="appletvos"))
-        self.assertEqual(ea_data["platform_identifier"], "com.apple.platform.appletvos")
+        _, _, pkg_data = self._read(self._default_info_plist(DTPlatformName="appletvos"))
+        self.assertEqual(pkg_data["platform_identifier"], "com.apple.platform.appletvos")
 
     def test_device_family_scalar_accepted(self):
         _, platforms, _ = self._read(self._default_info_plist(UIDeviceFamily=2))
@@ -245,3 +252,64 @@ class ComputePackageHashesTestCase(SimpleTestCase):
         )
         self.assertEqual(returned_chunk_size, chunk_size)
         self.assertEqual(len(md5s), 2)
+
+
+class ReadDistributionInfoTestCase(SimpleTestCase):
+    """Direct unit tests for read_distribution_info.
+
+    build_dummy_package doesn't produce a Distribution with <bundle> elements,
+    so we mock subprocess.run (the xar extraction) to inject the XML directly.
+    """
+
+    def _read(self, xml_bytes):
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout=xml_bytes, stderr=b"")
+        with patch("zentral.contrib.mdm.app_manifest.subprocess.run", return_value=completed):
+            return read_distribution_info("/dev/null")
+
+    def test_bundles_populated_from_bundle_elements(self):
+        xml = (b'<?xml version="1.0"?>'
+               b'<installer-script>'
+               b'<product id="io.zentral.test" version="1.0"/>'
+               b'<title>Test</title>'
+               b'<pkg-ref id="io.zentral.test.app">'
+               b'<bundle CFBundleShortVersionString="1.0"'
+               b'        CFBundleVersion="1"'
+               b'        id="io.zentral.test.app"'
+               b'        path="Applications/Test.app"/>'
+               b'<bundle CFBundleShortVersionString="1.1"'
+               b'        CFBundleVersion="2"'
+               b'        id="io.zentral.test.helper"'
+               b'        path="Applications/Test.app/Contents/Helpers/Helper.app"/>'
+               b'</pkg-ref>'
+               b'</installer-script>')
+        name, platforms, pkg_data = self._read(xml)
+        self.assertEqual(name, "Test")
+        self.assertEqual(platforms, [Platform.MACOS])
+        self.assertEqual(pkg_data["product_id"], "io.zentral.test")
+        self.assertEqual(pkg_data["product_version"], "1.0")
+        self.assertEqual(
+            pkg_data["bundles"],
+            [{"version_str": "1.0", "version": "1",
+              "id": "io.zentral.test.app", "path": "Applications/Test.app"},
+             {"version_str": "1.1", "version": "2",
+              "id": "io.zentral.test.helper",
+              "path": "Applications/Test.app/Contents/Helpers/Helper.app"}],
+        )
+
+    def test_bundle_with_missing_attr_skipped(self):
+        # A <bundle> missing one of the required attributes is logged and skipped,
+        # while well-formed siblings still make it into pkg_data["bundles"].
+        xml = (b'<?xml version="1.0"?>'
+               b'<installer-script>'
+               b'<product id="io.zentral.test" version="1.0"/>'
+               b'<bundle CFBundleShortVersionString="1.0"'
+               b'        id="io.zentral.test.broken"'
+               b'        path="x"/>'  # missing CFBundleVersion
+               b'<bundle CFBundleShortVersionString="1.0"'
+               b'        CFBundleVersion="1"'
+               b'        id="io.zentral.test.app"'
+               b'        path="Applications/Test.app"/>'
+               b'</installer-script>')
+        _, _, pkg_data = self._read(xml)
+        self.assertEqual(len(pkg_data["bundles"]), 1)
+        self.assertEqual(pkg_data["bundles"][0]["id"], "io.zentral.test.app")
